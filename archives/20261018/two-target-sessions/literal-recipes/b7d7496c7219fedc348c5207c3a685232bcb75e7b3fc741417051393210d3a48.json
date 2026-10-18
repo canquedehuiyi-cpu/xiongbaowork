@@ -1,0 +1,1 @@
+{"after":"        const byte = bytes[index];\n        if (byte === undefined)\n          throw new BrowserFailure(\"The masked PNG is incomplete.\");\n        crc ^= byte;","before":"        crc ^= bytes[index]!;","count":1,"path":"openbot/runner/src/browser.ts"}

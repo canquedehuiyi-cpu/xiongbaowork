@@ -1,0 +1,1 @@
+{"after":"export const WAKE_UP_MIN_DELAY_MS = ORIGINAL_WAKE_UP_MIN_DELAY_MS;\nexport const WAKE_UP_MAX_DELAY_MS = ORIGINAL_WAKE_UP_MAX_DELAY_MS;","before":"export const WAKE_UP_MIN_DELAY_MS = 60_000;\nexport const WAKE_UP_MAX_DELAY_MS = 7 * 24 * 60 * 60_000;","count":1,"path":"openbot/server/src/agents/wake-up.ts"}

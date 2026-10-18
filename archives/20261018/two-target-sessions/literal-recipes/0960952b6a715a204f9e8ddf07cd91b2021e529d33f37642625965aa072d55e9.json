@@ -1,0 +1,1 @@
+{"after":"            fail(Error(\"SOURCE_BRIDGE_TOTAL_LIMIT\"), \"FRAME_ACCOUNT\");\n            throw error;","before":"            fail(Error(\"SOURCE_BRIDGE_TOTAL_LIMIT\"));\n            throw error;","count":1,"path":"openbot/server/src/wakerflows/source-bwrap-containment.ts"}

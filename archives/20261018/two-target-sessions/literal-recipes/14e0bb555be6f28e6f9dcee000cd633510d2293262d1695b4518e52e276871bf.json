@@ -1,0 +1,1 @@
+{"after":"        kind: \"model\", provider: bindingProvider,\n        keyId: `${modelName}:${protocol}:${mode}:${randomUUID()}`,","before":"        kind: \"model\", provider: bindingProvider, keyId: modelName,","path":"openbot/server/tests/pipeline-control.integration.test.ts"}

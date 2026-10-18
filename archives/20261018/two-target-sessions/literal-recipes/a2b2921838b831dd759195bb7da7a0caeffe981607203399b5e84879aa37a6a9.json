@@ -1,0 +1,1 @@
+{"after":"    collectRuntime?.(true);\n    observeSourcePrivateCloneStage(privateObserver, \"PRE_POST_COLLECTED\");\n    return cloneHandlerResult(fields.value.value, privateObserver);","before":"    collectRuntime?.(true);\n    return cloneHandlerResult(fields.value.value, privateObserver);","count":1,"path":"openbot/server/src/wakerflows/source-runtime-inline-handler-guest.ts"}

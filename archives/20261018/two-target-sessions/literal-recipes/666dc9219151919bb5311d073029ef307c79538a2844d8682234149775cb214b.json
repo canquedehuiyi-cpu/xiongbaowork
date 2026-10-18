@@ -1,0 +1,1 @@
+{"after":"    verify: async (request) => {\n      if (request.type !== \"security.verify\")\n        throw new Error(\"The browser permit fixture requires an original security verification.\");\n      requests.push(request);","before":"    verify: async (request) => {\n      requests.push(request);","path":"openbot/server/tests/runner-browser-permit.test.ts"}

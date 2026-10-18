@@ -1,0 +1,1 @@
+{"after":"                固定工具动作使用所选员工的已分配设备和现有审批。HTTP\n                动作需兼容且已就绪的设备；未就绪不会执行，返回最多4096字节正文。结果未知时不会自动重试。","before":"                固定工具动作使用所选员工的已分配设备和现有审批。HTTP 设备需 Node\n                18+；返回最多4096字节正文。结果未知时不会自动重试。","count":1,"path":"openbot/app/src/components/wakerflows/graph-editor.tsx"}

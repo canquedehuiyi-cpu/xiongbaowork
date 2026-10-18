@@ -1,0 +1,1 @@
+{"after":"import { originalKnowledgeToolParameters } from \"../models/tool-schema-origin\";","before":"import { sourceSchema } from \"./validation\";","count":1,"path":"openbot/server/src/knowledge/write-tool.ts"}

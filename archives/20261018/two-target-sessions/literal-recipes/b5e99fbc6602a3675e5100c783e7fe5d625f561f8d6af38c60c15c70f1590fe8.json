@@ -1,0 +1,1 @@
+{"after":"if (!owner?.admitted || !isOwnedRecordingControl(control, token))","before":"if (!owner || !owner.admitted || !isOwnedRecordingControl(control, token))","path":"openbot/runner/src/security.ts"}

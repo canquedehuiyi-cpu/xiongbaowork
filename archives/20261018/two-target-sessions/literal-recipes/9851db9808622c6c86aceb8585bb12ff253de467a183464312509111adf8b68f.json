@@ -1,0 +1,1 @@
+{"after":"  type RunnerSecurityVerification,\n  type RunnerIsolatedVerification,","before":"  type RunnerSecurityVerification,","path":"openbot/server/tests/runner-security.test.ts"}

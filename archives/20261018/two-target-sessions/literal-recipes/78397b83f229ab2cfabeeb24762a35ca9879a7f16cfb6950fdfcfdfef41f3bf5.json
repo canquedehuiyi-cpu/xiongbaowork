@@ -1,0 +1,1 @@
+{"after":"            fail(Error(\"SOURCE_BRIDGE_CLOSED\"), \"STDIN_WRITE\");\n            throw Error(\"SOURCE_BRIDGE_CLOSED\");","before":"            fail(Error(\"SOURCE_BRIDGE_CLOSED\"));\n            throw Error(\"SOURCE_BRIDGE_CLOSED\");","count":1,"path":"openbot/server/src/wakerflows/source-bwrap-containment.ts"}

@@ -1,0 +1,1 @@
+{"after":"    ledger.push({name,status,errorCode,cleanup:closed,\n      ...(scope.tlsDiagnostic ? {tlsDiagnostic:{...scope.tlsDiagnostic}} : {}),observed:{\n","before":"    ledger.push({name,status,errorCode,cleanup:closed,observed:{\n","count":1,"path":"openbot/runner/tests/native-http-dial.integration.test.ts"}

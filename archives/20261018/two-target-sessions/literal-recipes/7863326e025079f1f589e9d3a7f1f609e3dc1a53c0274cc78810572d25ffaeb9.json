@@ -1,0 +1,1 @@
+{"after":"async function refused(work:Promise<unknown>, allowed:readonly string[], diagnostic?:TlsDiagnostic) {\n","before":"async function refused(work:Promise<unknown>, allowed:readonly string[]) {\n","count":1,"path":"openbot/runner/tests/native-http-dial.integration.test.ts"}

@@ -1,0 +1,1 @@
+{"after":"    graph: saved.graph,\n    projectionValue: decodeSourceDriverValue(saved.projection),\n","before":"    json: stringifyValue({\n      graph: saved.graph,\n      projection: decodeSourceDriverValue(saved.projection),\n    }),\n","path":"openbot/server/src/wakerflows/source-runtime-inline-handler-guest.ts"}

@@ -1,0 +1,1 @@
+{"after":"if (!owner?.admitted || ![\"resume\", \"capture\", \"finalize\"].includes(phase))","before":"if (!owner || !owner.admitted || ![\"resume\", \"capture\", \"finalize\"].includes(phase))","path":"openbot/runner/src/security.ts"}

@@ -1,0 +1,1 @@
+{"after":"export type SourcePrivateCloneStage =\n  | \"RESULT_CONSTRUCTED\"\n  | \"PRE_POST_COLLECTED\"\n  | \"NATIVE_POST_RETURNED\"","before":"export type SourcePrivateCloneStage =\n  | \"RESULT_CONSTRUCTED\"\n  | \"NATIVE_POST_RETURNED\"","count":1,"path":"openbot/server/src/wakerflows/source-runtime-clone-compression.ts"}

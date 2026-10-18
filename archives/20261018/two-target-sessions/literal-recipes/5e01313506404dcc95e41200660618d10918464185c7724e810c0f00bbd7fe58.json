@@ -1,0 +1,1 @@
+{"after":"      credentialId = credential.id;\n      const [model] = await runAsTenant(owner, () => f.database.insert(modelRegistry).values({","before":"      const [model] = await runAsTenant(owner, () => f.database.insert(modelRegistry).values({","path":"openbot/server/tests/pipeline-control.integration.test.ts"}

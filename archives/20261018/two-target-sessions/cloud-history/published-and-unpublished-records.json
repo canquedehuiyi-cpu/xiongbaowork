@@ -1,0 +1,2602 @@
+{
+  "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+  "visible_history_complete": true,
+  "turns_read": 177,
+  "records": [
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14b2c-6612-7085-a4ad-00dfdbef52b7",
+      "position_from_newest": 0,
+      "reported_summary": "ACK。冻结全部待写 objects/refs/PR/run，通道恢复也不续执行旧授权。stage1/media/69 均为 0 mutation；后续仅只读提供既有配方与证据，不恢复旧 handle、不并写或重跑。",
+      "reported_sha1_values": [],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14b29-5fb5-76c5-b108-8d33d249d770",
+      "position_from_newest": 1,
+      "reported_summary": "通道仍未恢复：会话 `84391` 继续返回 `Unknown process id`，当前没有可调用的 GitHub API 工具。\n\nstage1、媒体及候选69均未执行任何 mutation。候选69授权已记录：sole C68、仅复用 WW driver，预期树 `0cc1228fe3b4c51f0ddd35c26c334f0422ddd8da`。恢复合法通道后按既定顺序继续；旧 UI `af09…` 保持冻结，未运行或改写。",
+      "reported_sha1_values": [
+        "0cc1228fe3b4c51f0ddd35c26c334f0422ddd8da"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14b26-2239-7426-8a49-0d330cc98320",
+      "position_from_newest": 2,
+      "reported_summary": "本轮尚未发布任何对象或分支，遇到实际通道阻断：\n\n- 原云端 RAM 会话 `84391` 返回 `Unknown process id 84391`。\n- 当前可用工具中没有 GitHub API connector 或线程通信工具，无法 fresh 读取授权帖、源码和分支状态。\n\n未搜索凭据、未落盘恢复、未重发 mutation，所有旧分支保持不动。需恢复原合法云端 API 通道后，再按 #14/6238679584 顺序发布 stage1 和媒体源；无需重新审批源码范围。",
+      "reported_sha1_values": [],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14b18-0af5-72ef-b742-df0da9bab62c",
+      "position_from_newest": 3,
+      "reported_summary": "已按顺序发布，三者均独立以 C67 为父提交，文件 CAS、整树和非所属文件均回读核同：\n\n- S2：`b4235eb5e7a81e4039dfa38a3a3058bd61fd77eb`\n- WW：`925e9a9ba1fa079f303aee7f2f3fde8a1cac3c23`\n- UI：`423e085a9daf1bfe146eec94cb7407cb74ccbbdd`\n\n回执：#14/6238542397、6238573321、6238594015。\n\n未创建 PR 或派发运行。UI 源分支创建后，平台自动产生失败 run `39058284650`，jobs=0；已如实报 Root，未重试，不签生成通过。",
+      "reported_sha1_values": [
+        "423e085a9daf1bfe146eec94cb7407cb74ccbbdd",
+        "925e9a9ba1fa079f303aee7f2f3fde8a1cac3c23",
+        "b4235eb5e7a81e4039dfa38a3a3058bd61fd77eb"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14af9-2d76-766a-b4a2-6bc84ba5a71f",
+      "position_from_newest": 4,
+      "reported_summary": "C68已发布并完成唯一 [PR27](https://github.com/xiongpinji/xiongbao-Wake-/pull/27) CI窗口：\n\n- 源SHA：`e6818b57a9ddc9bd8051e63a7dc6080e50c86573`\n- Run：`39056211817`，attempt1，终态FAILURE：4成功、6失败、3跳过。\n- H与image均自然跳过，未重跑。[终态回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6238306772)\n\nS4/S3独立13M也已发布：`4662aef7e9a660bbfc0e81f69e10c7c6931be0e5`。\n\nUI V2返修仅RAM，完整7处可逆delta/CAS/tree已交[6238296854](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6238296854)，待非作者续审。",
+      "reported_sha1_values": [
+        "4662aef7e9a660bbfc0e81f69e10c7c6931be0e5",
+        "e6818b57a9ddc9bd8051e63a7dc6080e50c86573"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6238296854",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6238306772",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/27"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14af5-8add-7124-877a-6626be134c2f",
+      "position_from_newest": 5,
+      "reported_summary": "O1三叶SOURCE已发布并冻结：\n\n- SHA：`04199a3a918cf95c1d4870fa3b53f5d09d36b6d6`\n- Tree：`e30a168a4bfe8403b0236d7e3d8df31b464e15c4`\n- 分支：`codex/review-map-pre-post-observation-c67-20261018`\n\n已核唯一父C67、四literal正逆、三叶CAS、2777非owned不变。Actions/checks均0，未启动运行。\n\n[回执6237931346](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237931346) 已fresh核同。UI载体仍仅RAM，等待具体peer意见。",
+      "reported_sha1_values": [
+        "04199a3a918cf95c1d4870fa3b53f5d09d36b6d6",
+        "e30a168a4bfe8403b0236d7e3d8df31b464e15c4"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237931346"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14ae1-042a-73b0-8a12-9362782d985f",
+      "position_from_newest": 6,
+      "reported_summary": "S7七叶SOURCE已发布并冻结：\n\n- SHA：`f70e41cdd3f1f10aa1d06a75f1cb4b5ab28d637a`\n- Tree：`6f994bd3c06e0b65dd3304c3bbc15fd8fd81184e`\n- 唯一父C67；89段正逆、七叶CAS、2773非owned均核同，Actions/checks为0。\n\n[实际回执6237822991](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237822991) 已fresh核同。\n\nUI生成载体仍仅RAM：[完整稿6237732903](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237732903)，未建对象或运行。",
+      "reported_sha1_values": [
+        "6f994bd3c06e0b65dd3304c3bbc15fd8fd81184e",
+        "f70e41cdd3f1f10aa1d06a75f1cb4b5ab28d637a"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237732903",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237822991"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14ad1-2f58-70e8-b773-efe53f414ff5",
+      "position_from_newest": 7,
+      "reported_summary": "媒体r4唯一FF预检已完成：\n\n- Run：`39052135104`，attempt1\n- Job：`117452695071`\n- 平台结果：SUCCESS，全部步骤成功\n- Artifact：`12108195803`，43924B\n\n[完整回执6237237222](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237237222) 已fresh核同。未下载原件；真实proposal、闭合和ready状态待Root独核，不签录屏或产品交付通过。未重推、dispatch或重跑。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237237222"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14acb-7fff-70e6-be3b-f5ba98a85d86",
+      "position_from_newest": 8,
+      "reported_summary": "媒体r4 SOURCE-only已发布并冻结：\n\n- SHA：`2295aa354dc433e50b1e31f923d51cdef6bff0bf`\n- Tree：`e60c8707d5f049453877f592ab98f25be39cbf32`\n- 分支：`codex/review-recording-media-config-eq-r4-e96-20261018`\n\n已核三处literal正逆、69251B完整CAS、唯一父r3、1M及2781非owned不变。Actions/checks均0，未创建执行ref或运行。\n\n[回执6237159765](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237159765) 已fresh核同。",
+      "reported_sha1_values": [
+        "2295aa354dc433e50b1e31f923d51cdef6bff0bf",
+        "e60c8707d5f049453877f592ab98f25be39cbf32"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6237159765"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14abb-9866-7794-9374-75ac0a2b37bf",
+      "position_from_newest": 9,
+      "reported_summary": "C67已发布并启动唯一 [Draft PR26](https://github.com/xiongpinji/xiongbao-Wake-/pull/26)：\n\n- 源SHA：`5e52197249f8f7c432255550000e439ae9cc5d76`\n- tested merge：`6ac17b1bbfd856d5dddadf85d883666088e17e78`，双亲66+67、树同67。\n- H67：`39050850121`／job `117448940806`，运行中。\n- CI67：`39050850175`，运行中，均attempt1。\n\n[回执6236954117](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236954117) 已fresh核同。媒体r3独立run已失败，原件待Root独取；未重跑任何窗口。",
+      "reported_sha1_values": [
+        "5e52197249f8f7c432255550000e439ae9cc5d76",
+        "6ac17b1bbfd856d5dddadf85d883666088e17e78"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236954117",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/26"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14ab1-587c-7578-a1db-1458798716de",
+      "position_from_newest": 10,
+      "reported_summary": "媒体r3 SOURCE-only已发布并冻结：\n\n- SHA：`e96f0e23d2c590afb94a8f9023b8823f22c5f868`\n- Tree：`6059535a00e505fca4fe6382b908d8b222b527f4`\n- 分支：`codex/review-recording-media-explicit-caller-r3-032c-20261018`\n\n已核16处literal正逆、69249B完整CAS、唯一父032c、1M及2781非owned不变。Actions/checks均0，未创建执行ref或运行。\n\n[回执6236696109](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236696109) 已fresh核同。",
+      "reported_sha1_values": [
+        "6059535a00e505fca4fe6382b908d8b222b527f4",
+        "e96f0e23d2c590afb94a8f9023b8823f22c5f868"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236696109"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a91-b43c-710b-9d0a-c0b225a0fe36",
+      "position_from_newest": 11,
+      "reported_summary": "媒体唯一FF已执行，正常ACK且未重推：\n\n- Run：`39047179628`，attempt1\n- Job：`117438133706`\n- 结果：FAILURE；allocation与checkout成功，资源观察/预检步骤失败，metadata保留成功。\n- Artifact：`12106526420`，12225B；未下载原件，具体首因与物理闭合待Root核验。\n\n[完整回执6236196003](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236196003) 已fresh核同。C66 CI/H均已终态失败；CI为3成功、7失败、3跳过，未取消或重跑。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236196003"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a89-52fe-73ce-b41a-752bd5b496db",
+      "position_from_newest": 12,
+      "reported_summary": "媒体r2 SOURCE-only已发布：\n\n- SHA：`032ccefb0099cb0ae89df81cb389fee59e37f39d`\n- Tree：`4da930747109975f4a56c3f9da83c6986b023d4b`\n- 分支：`codex/review-recording-media-preflight-r2-e356-20261017`\n\n已核唯一父e356、1A、2781非owned不变、64245B原文CAS精确。未触发媒体运行。[回执6236076334](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236076334) 已fresh核同。\n\nC66的CI/H仍运行；static、app、server1已成功，其余结果按当前run独立记录。",
+      "reported_sha1_values": [
+        "032ccefb0099cb0ae89df81cb389fee59e37f39d",
+        "4da930747109975f4a56c3f9da83c6986b023d4b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6236076334"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a7c-5743-7514-9f9e-f52d06dc6bde",
+      "position_from_newest": 13,
+      "reported_summary": "Candidate66 已发布并冻结：\n\n- SHA：`13add54d72fdabc7fb425b773ba45f8d3f914117`\n- Tree：`d5da493d77d7a85a2b58d9a6a74a6cef6318da24`\n- 分支：`codex/review-delivery-candidate66-health-writer-fixtures-map-c65-20261017`\n\n已核唯一父65、精确12M、2768非owned tuple不变、12份原文CAS及7个pin匹配。Actions/checks均0，未创建PR或运行。\n\n[完整回执6235845293](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235845293) 已fresh核同。",
+      "reported_sha1_values": [
+        "13add54d72fdabc7fb425b773ba45f8d3f914117",
+        "d5da493d77d7a85a2b58d9a6a74a6cef6318da24"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235845293"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a63-8ea1-76c4-b0aa-da9db65afe1f",
+      "position_from_newest": 14,
+      "reported_summary": "两份独立RAM已交板并fresh核同：\n\n- H诊断：[6235486584](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235486584)，5 literal，83176B；保留完整health60，失败后同原work预算内最多5s只读采集。\n- CI第四库：[6235490324](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235490324)，仅3 literal，94743B。\n\n两包均含完整正逆literal、CAS与独立整树根，待非作者审查。未创建源码对象/ref或运行，未重取H65原件。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235486584",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235490324"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a59-de94-7584-a0f6-a8b753e91e25",
+      "position_from_newest": 15,
+      "reported_summary": "已创建唯一 [Draft PR24](https://github.com/xiongpinji/xiongbao-Wake-/pull/24)，630B正文及身份核验一致。\n\n- tested merge：`819e53a35c553b15b7274818a00c1d77ef3cdea4`，双亲64+65、完整树同65。\n- H65：`39042682019`／job `117425161310`，attempt1，运行中。\n- CI65：`39042682049`，attempt1，运行中。\n\n[回执6235363999](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235363999) 已fresh核同。请Root附PR并独取新H原件；未重跑或另建窗口。",
+      "reported_sha1_values": [
+        "819e53a35c553b15b7274818a00c1d77ef3cdea4"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235363999",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/24"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a52-5adc-710a-860f-9f6164f17555",
+      "position_from_newest": 16,
+      "reported_summary": "Candidate65 已发布并冻结：\n\n- SHA：`a83ad6de9fe1b5f6b0f5b413f82bacc160e9563f`\n- Tree：`7f27895659e1b4f1a3776e5ccb516d3cfc81f310`\n- 分支：`codex/review-delivery-candidate65-reviewed-migrate-pin-c64-20261017`\n\n已核唯一父64、driver单叶精确修复、2779非owned tuple不变、完整Merkle一致。Actions/checks均0，未创建PR或运行。\n\n[完整回执6235279166](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235279166) 已fresh回读一致。",
+      "reported_sha1_values": [
+        "7f27895659e1b4f1a3776e5ccb516d3cfc81f310",
+        "a83ad6de9fe1b5f6b0f5b413f82bacc160e9563f"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235279166"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a50-1b6c-746a-a8f3-8ab9b22fcc19",
+      "position_from_newest": 17,
+      "reported_summary": "65 RAM已核同：唯一 pin 替换、80495B、blob `556dabd4bf07a26dd051d2f860ae4f45660ec183`，tree `7f27895659e1b4f1a3776e5ccb516d3cfc81f310`；全部7 pins匹配64。\n\nS5 PASS `6235231831`已读。依条件等待Root原通道确认，尚未创建对象/ref或运行。\n\nCI64现终态：3成功、7失败、3跳过。[回执6235247698](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235247698)。",
+      "reported_sha1_values": [
+        "556dabd4bf07a26dd051d2f860ae4f45660ec183",
+        "7f27895659e1b4f1a3776e5ccb516d3cfc81f310"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235247698"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a47-f79d-7430-b7ae-dd8e132f3182",
+      "position_from_newest": 18,
+      "reported_summary": "已创建唯一 [Draft PR23](https://github.com/xiongpinji/xiongbao-Wake-/pull/23)，正文630B及身份核验一致。\n\n- tested merge：`0fbdd1a6c20dffc6bde16e3b84b0ce8f16737a81`，双亲63+64，完整树同64。\n- CI64：`39041300029`，attempt1，运行中。\n- H64：`39041300126`／job `117421181047`，attempt1，已失败；尚未读取日志或推断原因。\n\n[完整回执6235152261](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235152261) 已回读一致。请Root附PR并独取H原件；未重跑、取消或另建窗口。",
+      "reported_sha1_values": [
+        "0fbdd1a6c20dffc6bde16e3b84b0ce8f16737a81"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235152261",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/23"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a3d-9e27-7738-8c8e-54337358e4cb",
+      "position_from_newest": 19,
+      "reported_summary": "Candidate64 已发布并冻结：\n\n- SHA：`c66bb45dd0857945307c50c35b5755fd5e293dc6`\n- Tree：`74171b697c0fd73635c3c49b6e70ebc2c0887ea5`\n- 分支：`codex/review-delivery-candidate64-startup-types-fixtures-c63-20261017`\n- 已核：唯一父63、六叶精确修改、2774非 owned tuple不变、完整2780叶 Merkle一致。\n- Actions/checks均为0；未创建PR或启动运行。\n\n完整CAS回执：[6235076277](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235076277)，已fresh回读一致。",
+      "reported_sha1_values": [
+        "74171b697c0fd73635c3c49b6e70ebc2c0887ea5",
+        "c66bb45dd0857945307c50c35b5755fd5e293dc6"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6235076277"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a2d-a636-7397-a921-8a9b63412049",
+      "position_from_newest": 20,
+      "reported_summary": "已全文核收并回板：[6234848146](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234848146)。\n\n确认63双窗已失败终态；私密原文通道已由 Root 验证，新首错为 PG16.15 的 `pg_toast_16486 is not a sequence`。CASE 修复仍属候选，交 Main 独占处理。\n\n未重复读取日志、ZIP或draft，未改源或重跑。63与旧token冻结，只接 Root 后续精确 manifest 和新窗口。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234848146"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a1c-c157-7000-87a4-1c1cdba3e068",
+      "position_from_newest": 21,
+      "reported_summary": "已创建唯一 [Draft PR #22](https://github.com/xiongpinji/xiongbao-Wake-/pull/22)：\n\n- H63 run：`39037985068`，job `117411564587`\n- CI63 run：`39037985077`\n- 均为 `pull_request` attempt1\n- Tested merge：`0489020761c729959dadaf80aebf7ba28ed492d0`，双亲62＋63，完整树同63\n\nH 绑定与三次 checkout 已成功，诊断运行中，publisher 尚 pending。完整回执：[6234654023](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234654023)。已请 Root 附任务；未另发 Release、重跑或取 ZIP。",
+      "reported_sha1_values": [
+        "0489020761c729959dadaf80aebf7ba28ed492d0"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234654023",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/22"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a12-b153-7606-901a-e04ebd4684b3",
+      "position_from_newest": 22,
+      "reported_summary": "两个 source 均已发布并回读核同：\n\n- H两叶：`38ce059d4b84fca02643c4c77a6e44152ca95c14`，回执 [6234556210](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234556210)。\n- Candidate63：`5d5d8d0620c362db3805260bc4f83c1704ca5ca6`，树 `5463552f53a19e618c62502d0c6a6c4ab6668bf0`，完整10map回执 [6234569692](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234569692)。\n\n63唯一父62，准确10M、2770非owned保留，runs/checks为0。未创建PR、运行或发布draft Release。",
+      "reported_sha1_values": [
+        "38ce059d4b84fca02643c4c77a6e44152ca95c14",
+        "5463552f53a19e618c62502d0c6a6c4ab6668bf0",
+        "5d5d8d0620c362db3805260bc4f83c1704ca5ca6"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234556210",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234569692"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a0f-2562-761c-bc60-f7fa68f46fb7",
+      "position_from_newest": 23,
+      "reported_summary": "v3 已交：[6234483009](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234483009)。\n\n仅修两项剩余 P2：回执目录改为强制核验并写入；capsule 缺失早返前先核原 binding/clock，未证原清理帽则非零 UNKNOWN。HTTP、TERM/INT 主体及 workflow 未改。\n\n含4段最小 delta、完整两叶 CAS，新树 `b0f3a6a1a6899b661cd88e6b2e6db88b76fc0c16`。未写源码对象、Release、PR或启动运行，交 ci 窄续审。",
+      "reported_sha1_values": [
+        "b0f3a6a1a6899b661cd88e6b2e6db88b76fc0c16"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234483009"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14a01-5597-7501-b201-155e4fa319a2",
+      "position_from_newest": 24,
+      "reported_summary": "H 两叶 RAM v2 已交：[6234389578](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234389578)。\n\n已修固定 HTTP 5秒绝对截止，以及 TERM/INT 的有界清理、回执和非零取消退出；workflow after 不变。含7段新 literal、两叶 CAS、新树 `bee849b21879dfc5fe80f07bcb6f14287f133924`，交 ci 窄复审。\n\n未写源码对象、Release、PR，也未执行慢流或信号测试。",
+      "reported_sha1_values": [
+        "bee849b21879dfc5fe80f07bcb6f14287f133924"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234389578"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a149e3-c8d1-7009-94ce-0760b73523d8",
+      "position_from_newest": 25,
+      "reported_summary": "两叶 RAM 方案已交 [6234117591](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234117591)，含完整 literal、CAS、权限条件、Root 回读链与时钟说明。\n\n采用 Root 已证 draft 私密读链；正文限32KiB、transcript限16KiB、publisher限30秒，token不进入产品进程。新 draft 仍须实际回读和匿名负控。\n\n仅完成字符串正逆与 Merkle 核对；未写源码对象或 Release，未创建PR、运行canary或重取ZIP。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6234117591"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a149d4-dfd9-768f-8d03-8bc1783d82b7",
+      "position_from_newest": 26,
+      "reported_summary": "已创建唯一 [Draft PR #21](https://github.com/xiongpinji/xiongbao-Wake-/pull/21)：\n\n- H run：`39032655386`，job `117396093286`\n- 完整 CI run：`39032655466`\n- 均为 `pull_request` attempt1\n- Tested merge：`3debacfca3e92f6c32a9d06b6403bb15e57941d1`，双亲60＋62，完整树同62\n\nH 绑定与三次 checkout 已成功，诊断步骤运行中。完整回执：[6233889745](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233889745)。已请 Root 附任务；未重跑、取消或取 ZIP。",
+      "reported_sha1_values": [
+        "3debacfca3e92f6c32a9d06b6403bb15e57941d1"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233889745",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/21"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a149d0-3264-740e-bb6e-7b599cdcbe35",
+      "position_from_newest": 27,
+      "reported_summary": "62 已发布，完整 7map 与全树证明：[6233843233](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233843233)。\n\n- SHA：`0b77b7f9f3b4da2ebecdc13761104f33161a6a40`\n- Tree：`19242a8841086481f429a235e5fcd00ce48d23ac`\n- Ref：`codex/review-delivery-candidate62-startup-mrr-fixtures-c60-20261017`\n\n唯一父60；准确7M；2780叶、2773非owned tuple核同。runs/checks为0，未创建PR或启动运行，旧refs未动。",
+      "reported_sha1_values": [
+        "0b77b7f9f3b4da2ebecdc13761104f33161a6a40",
+        "19242a8841086481f429a235e5fcd00ce48d23ac"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233843233"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a149b0-9701-70bd-98a2-160e86e28694",
+      "position_from_newest": 28,
+      "reported_summary": "已回板最小预检方案：[6233528776](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233528776)。\n\n私密持久落点目前为 **UNKNOWN**：现有配置未证明存储路径、ACL、保留合同或可回读能力。未创建存储、写文件、运行 collector 或读取凭据；后续须先明确已有落点，再由 Root 批准最小 canary 回读与清理验证。\n\nmetadata：H60 step6 已失败；CI60 static/server1 成功，server5/6 仍运行。未取日志或 ZIP，未重跑或取消。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233528776"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a149aa-b353-7730-8c88-8edf156118a1",
+      "position_from_newest": 29,
+      "reported_summary": "已创建唯一 [Draft PR #20](https://github.com/xiongpinji/xiongbao-Wake-/pull/20)：\n\n- H run：`39029718534`，job `117387565333`\n- 完整 CI run：`39029718528`\n- 均为 `pull_request` attempt1\n- Tested merge：`524b40c3bfe07eeb569f4c451ebc5bf8ee3707b6`，双亲58＋60，完整树同60\n\nH 事件绑定与三次 checkout 已成功，诊断步骤运行中。完整回执：[6233482872](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233482872)。已请 Root 附任务；未重跑、取消或取别人 artifact。",
+      "reported_sha1_values": [
+        "524b40c3bfe07eeb569f4c451ebc5bf8ee3707b6"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233482872",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/20"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a149a6-1c71-7332-ad3b-a0a5c2fdba62",
+      "position_from_newest": 30,
+      "reported_summary": "60 已发布，完整 5map 回执：[6233441027](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233441027)。\n\n- SHA：`1ab8e1b52fa5a1540ad3e6d1b3d967ec28cdf5f9`\n- Tree：`63ed18b3a7e24cb45fcf84f1433c1bf9856345fb`\n- Ref：`codex/review-delivery-candidate60-inputs-map-cleanup-c58-20261017`\n\nsole58；准确 5M；2780 叶、2775 非 owned tuple 核同。59 和旧 refs 未动，runs/checks 为 0；未创建 PR 或启动运行。",
+      "reported_sha1_values": [
+        "1ab8e1b52fa5a1540ad3e6d1b3d967ec28cdf5f9",
+        "63ed18b3a7e24cb45fcf84f1433c1bf9856345fb"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233441027"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14990-b717-739c-9466-2444d0219335",
+      "position_from_newest": 31,
+      "reported_summary": "58 已发布，完整 recipe 回执：[6233238348](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233238348)。\n\n- SHA：`b6139a27b36b44a0f8a7bd5e190f83c765edeefd`\n- Tree：`3df8d148ffdac6f4de77655662b0ec8446e0f887`\n- Ref：`codex/review-delivery-candidate58-complete-c57-20261017`\n\nsole57；19M2A；2780 叶、2759 非 owned tuple 核同，H 四叶原样保留。runs/checks 均为 0，未创建 PR 或启动运行。",
+      "reported_sha1_values": [
+        "3df8d148ffdac6f4de77655662b0ec8446e0f887",
+        "b6139a27b36b44a0f8a7bd5e190f83c765edeefd"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233238348"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1498c-34ff-7433-a4fb-c8607d33e844",
+      "position_from_newest": 32,
+      "reported_summary": "已创建唯一 [Draft PR #19](https://github.com/xiongpinji/xiongbao-Wake-/pull/19)，精确模板核对通过。\n\n- H run：`39027588473`，job `117381524330`\n- 原 CI run：`39027588449`\n- 均为 `pull_request` attempt 1\n- Tested merge：`ed5cf27295c84db2b13a0e57d6b9b582b848f153`，双亲55＋57，完整树同57\n\nH 已通过事件绑定和三次 checkout，正在执行诊断与清理，尚未签构建或 GET 通过。完整回执 [6233197762](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233197762)，已请 Root 补 attach。未重跑或另开窗口。",
+      "reported_sha1_values": [
+        "ed5cf27295c84db2b13a0e57d6b9b582b848f153"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233197762",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/19"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14984-af6e-74c5-9f48-4fd39822c9f7",
+      "position_from_newest": 33,
+      "reported_summary": "57 已完成发布，无需重发：\n\n- SHA：`60b56ea02fd630b2be8e8d68463cea3e07626154`\n- Tree：`4f52ad45f005c30930ea0b950e6892349ec99adc`\n- Ref：`codex/review-image-business-candidate57-c55-20261017`\n- sole55；准确 1M3A；2774 非 owned tuple 保留；runs/checks 均为 0。\n\n完整回执：[6233140190](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233140190)。未开 PR、VM 或执行 HTTP GET。",
+      "reported_sha1_values": [
+        "4f52ad45f005c30930ea0b950e6892349ec99adc",
+        "60b56ea02fd630b2be8e8d68463cea3e07626154"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233140190"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1497c-6380-75b4-8ba4-a1e62d9c6378",
+      "position_from_newest": 34,
+      "reported_summary": "已发布单叶修正，回执：[6233043617](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233043617)。\n\n- SHA：`d860c814e2fa96f2c6520271cd45b0cde6b99031`\n- Tree：`21df8790080a045eeda1ab86304483220c7a0771`\n- 分支：`codex/review-delivery-candidate56-manifest-c55-20261017`\n\nsole55，仅补清单一行，474→475；2774 非 owned tuple 保留。runs/checks 为 0，未重跑。\n\nCI55 已终态失败：10 FAIL、3 SKIPPED；六 server 在清单入口被拒，业务测试未验证。",
+      "reported_sha1_values": [
+        "21df8790080a045eeda1ab86304483220c7a0771",
+        "d860c814e2fa96f2c6520271cd45b0cde6b99031"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233043617"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14979-9d67-75c0-8fdb-fcfb003f32e7",
+      "position_from_newest": 35,
+      "reported_summary": "已回板 [6233003710](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233003710)：\n\n- 六 server、static、SourceOS 已失败；仅核 metadata，未取日志或推断计数。\n- app、Windows 仍运行，未取消或重跑。\n- H nullable-r3 已获 S2 `SOURCE_DELTA_PASS`；整体验证仍待 Main driver 与跨叶审查。\n\n六 server 首因由 ci 唯一摄取，等具体证据与修权后再改源码。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6233003710"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14976-6b9b-77a6-a8fe-ec8b77bafcc3",
+      "position_from_newest": 36,
+      "reported_summary": "已启动唯一 CI 窗口：\n\n- [Draft PR #18](https://github.com/xiongpinji/xiongbao-Wake-/pull/18)\n- Run `39026095619`，`pull_request` attempt `1`，当前运行中\n- Tested merge：`7711d400636804ce8cda2fc3b207b5fd6409c0f3`\n- 双亲严格为 54＋55；完整 2775 叶与 55 树一致\n- Linux/Windows jobs 已实际执行\n\n完整 job 身份回执：[6232981751](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232981751)。已请 Root 补 attach；未 dispatch、重跑、合并或部署。",
+      "reported_sha1_values": [
+        "7711d400636804ce8cda2fc3b207b5fd6409c0f3"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232981751",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/18"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14972-353f-71c1-9e2e-c477abc0770e",
+      "position_from_newest": 37,
+      "reported_summary": "55 已发布，完整 21map 回执：[6232935377](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232935377)。\n\n- SHA：`e28f02dfdabfa4121452435ba631f055094f98ca`\n- Tree：`0d047df33fbae9db9ad5753580a011841b74fd8a`\n- 分支：`codex/review-delivery-candidate55-ci-c54-20261017`\n- sole54；20M1A；2754 非 owned tuple 保留；runs/checks 均为 0。\n\nH nullable-r3 也已独立发布：`ab1e20d91869380ba54f15896072c7c1dda5c919`，交 S2 差量审查。\n\n未创建 PR 或启动运行，下一步由 Root 指定固定 SHA 窗口。",
+      "reported_sha1_values": [
+        "0d047df33fbae9db9ad5753580a011841b74fd8a",
+        "ab1e20d91869380ba54f15896072c7c1dda5c919",
+        "e28f02dfdabfa4121452435ba631f055094f98ca"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232935377"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14967-c305-757f-a0d0-a04853332061",
+      "position_from_newest": 38,
+      "reported_summary": "H workflow r2 已发布：\n\n`3767345e7e9e8f996c8437f56c5dfb062148d402`\n\n回执 [#6232851724](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232851724)，runs/checks 均为 0，交 S2 接口审查。\n\n55 的 21 路径配方与 CAS 已回板 [#6232859822](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232859822)，预期树 `0d047df33fbae9db9ad5753580a011841b74fd8a`。仅待 S5 两处 cleanup r2 小审，尚未发布；无 PR、CI 或目标执行。",
+      "reported_sha1_values": [
+        "0d047df33fbae9db9ad5753580a011841b74fd8a",
+        "3767345e7e9e8f996c8437f56c5dfb062148d402"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232851724",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232859822"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14950-c0ec-7028-9770-a97c10a2babd",
+      "position_from_newest": 39,
+      "reported_summary": "已完成并回板：\n\n- C-r2：`01334cd4007700bdff787da7e9e44ac09a913451`，Main 限定源码审查通过。\n- H workflow：`847b2e193dc6c0c8ed8121a79f095a354a8d07d9`，独立 review 已发布，runs/checks 均为 0。\n- 55 的固定 20 路径 CAS 已核对；尚未发布，等待 migrate 与两处清理返修的实际提交及小审。\n\n未创建 PR、启动 CI 或运行目标程序；原运行失败保留。",
+      "reported_sha1_values": [
+        "01334cd4007700bdff787da7e9e44ac09a913451",
+        "847b2e193dc6c0c8ed8121a79f095a354a8d07d9"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14922-adba-7375-bd08-bcb27b135ae0",
+      "position_from_newest": 40,
+      "reported_summary": "Candidate53 已发布：\n\n- SHA：`70e1d2139a12db58387322c8c3871a9a5ba3294b`\n- Tree：`678ec9e386376f32d915b5c8295f6bfeb59143a5`\n- 13叶：12M/1A，2750非 owned tuple 保留，完整回读核同，0 runs/checks。\n\n回执：[6232184288](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232184288)。未创建 PR 或触发 CI。\n\nnative24及可选I4组已仅在 RAM 重绑实际53：[6232207558](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232207558)，未发布后继源码。",
+      "reported_sha1_values": [
+        "678ec9e386376f32d915b5c8295f6bfeb59143a5",
+        "70e1d2139a12db58387322c8c3871a9a5ba3294b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232184288",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232207558"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14922-adba-7375-bd08-bcb27b135ae0",
+      "position_from_newest": 40,
+      "reported_summary": "已完成 A/C 源码发布并完整回读：\n\n- **候选54**：`f4f2e1bd6f00157aee7202112a4774992d129115`，36叶25M/11A，0 runs/checks。[回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232494092)\n- **C workflow 独立 review**：`54c481bf543e74e9b67938828d4bb34f1cc24637`，仅 ci.yml 1M，0 runs/checks，待独立 peer。[回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232563666)\n\nCI53 已终态 **FAIL：1S/8F/1C/3skip**；未取消、重跑或新开 CI。源码发布不代表动态通过。",
+      "reported_sha1_values": [
+        "54c481bf543e74e9b67938828d4bb34f1cc24637",
+        "f4f2e1bd6f00157aee7202112a4774992d129115"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232494092",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232563666"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1491a-5693-7587-acea-7bbc6f33fd52",
+      "position_from_newest": 41,
+      "reported_summary": "已交只含12叶的聚焦配方：[6232080806](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232080806)。\n\nsole52、全部 before 已 fresh 核同；11M/1A，拟树仍为 `7eec106b6f90d7749b7cd5271aceda832682ee1b`，2751 非 owned tuple 保留。\n\n五包 peer 已齐；I4/P、routine helper、leases 均未夹入。未创建源码对象、PR 或 CI。",
+      "reported_sha1_values": [
+        "7eec106b6f90d7749b7cd5271aceda832682ee1b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232080806"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14914-38a8-7313-ae86-87f5d544b5a5",
+      "position_from_newest": 42,
+      "reported_summary": "候选53完整 RAM 配方已交并回读核同：[6232063001](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232063001)。\n\n- 五包均已源审通过：12叶，11M/1A，2751非 owned tuple 保留。\n- 拟树：`7eec106b6f90d7749b7cd5271aceda832682ee1b`\n- 唯一 overlay 保留52的 `committed?.kind` 修复。\n- I4 r3/P4/P5另列独立12路径依赖组，附完整 CAS 与组合根，未自动纳入。\n\n未创建源码对象、ref、PR 或运行窗口。",
+      "reported_sha1_values": [
+        "7eec106b6f90d7749b7cd5271aceda832682ee1b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6232063001"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148fe-742e-7025-8705-4558930231ec",
+      "position_from_newest": 43,
+      "reported_summary": "Candidate52 已发布：\n\n- SHA：`da550ec1ed65c8ab3580137058c51aab6bc152dc`\n- Tree：`b89b2555b917ea259205af25dd9db5413ab6eb11`\n- 分支：`codex/review-delivery-candidate52-static-pub-c51-20261017`\n\n38 叶完整 CAS、2762 叶树、2724 非 owned tuple 已回读核同，**0 runs / 0 checks**。回执：[6231817508](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231817508)。\n\n0121 metadata 尚未补齐，明确为 **SOURCE_PARTIAL**；S5 可据此实际 head 准备两叶元数据。未创建 PR 或运行 CI。",
+      "reported_sha1_values": [
+        "b89b2555b917ea259205af25dd9db5413ab6eb11",
+        "da550ec1ed65c8ab3580137058c51aab6bc152dc"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231817508"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148f4-70b2-771f-aa46-52bdec996e91",
+      "position_from_newest": 44,
+      "reported_summary": "已回 Root：[6231700269](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231700269)。\n\n- 候选52完整 CAS/共叶 literal 配方沿用 `6231655643`，更新已通过的 peer 状态。\n- A3 已标实际发布，I4/P及未闭包不擅纳入。\n- H2 排程：先闭合 S5 的0121元数据，再形成含 r3/P 的真实产品 parent；之后才分配后继迁移号。\n- 若 parent 已含 P4，D 实际新增为 **7M2A**。\n\n未创建对象、ref、迁移或运行窗口。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231700269"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148eb-32f9-7513-9a42-efb52af40497",
+      "position_from_newest": 45,
+      "reported_summary": "候选52完整 RAM 配方已交并回读核同：[6231655643](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231655643)。\n\n- sole51，38 叶：36M/2A，2724 非 owned tuple 保留。\n- 拟树：`b89b2555b917ea259205af25dd9db5413ab6eb11`。\n- 已列完整 CAS、来源及重叠 literal；保留完整 publication 与 Main19。\n- assemble 同形泛型替换实际 count2、0121 journal/snapshot及角色运行配置待 Root 明确定案。\n\n未创建源码对象、ref、PR 或运行窗口；冻结分支未改。",
+      "reported_sha1_values": [
+        "b89b2555b917ea259205af25dd9db5413ab6eb11"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231655643"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148c5-8ff7-7574-8ab1-a08417bd5f1b",
+      "position_from_newest": 46,
+      "reported_summary": "已创建[草稿 PR #16](https://github.com/xiongpinji/xiongbao-Wake-/pull/16)，head：`723cddfca9cb7bb9245997bde0edfae869db2415`。\n\n[自动 CI 39013988001](https://github.com/xiongpinji/xiongbao-Wake-/actions/runs/39013988001) attempt1 已结束 **FAIL：3 成功、6 失败、1 cancelled、3 跳过**。merge SHA `8cfc641593d4968d6528df5e07210e08a93342f5` 的树已核与 candidate51 一致。\n\n完整回执：[6231518237](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231518237)。未重跑、未取消、未修改冻结分支；日志由 Root 唯一核取。",
+      "reported_sha1_values": [
+        "723cddfca9cb7bb9245997bde0edfae869db2415",
+        "8cfc641593d4968d6528df5e07210e08a93342f5"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/actions/runs/39013988001",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231518237",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/16"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148c0-093f-75a7-91eb-f4392745540a",
+      "position_from_newest": 47,
+      "reported_summary": "Candidate51 已发布：\n\n- 分支：`codex/review-delivery-candidate51-ci-c50-20261017`\n- SHA：`723cddfca9cb7bb9245997bde0edfae869db2415`\n- Tree：`5f05e03f0fe613f4ed8198a4d64935b695ec66ac`\n- 唯一父：candidate50 `08333ea1…`\n\n六叶完整 CAS、2760 叶树及 2754 非 owned tuple 已回读核同，**0 runs / 0 checks**。完整回执：[6231207933](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231207933)。\n\n未创建 PR、触发 CI 或修改冻结 refs。",
+      "reported_sha1_values": [
+        "5f05e03f0fe613f4ed8198a4d64935b695ec66ac",
+        "723cddfca9cb7bb9245997bde0edfae869db2415"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231207933"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148ad-f66e-7509-940b-5e4f5d58652d",
+      "position_from_newest": 48,
+      "reported_summary": "已全文读取并回执 [#14/6231015795](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231015795)。\n\n剩余三项均已终态 FAIL，交 Root 唯一取日志：\n\n- app：`117334848999`\n- OS：`117334849343`\n- Windows：`117334849196`\n\n六个 server shard 已纠正为清单门在派发前拒绝，不计真实用例失败。未重复下载日志、改源码或重跑；CI 两叶保持其他作者独占。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6231015795"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a148a0-654f-7668-8c07-18f0114293f4",
+      "position_from_newest": 49,
+      "reported_summary": "已创建[草稿 PR #15](https://github.com/xiongpinji/xiongbao-Wake-/pull/15)，head 为 `08333ea1f21ac93407e596218b355ece9aece1e7`。\n\n真实标准 runner 已运行；[CI 39011515550](https://github.com/xiongpinji/xiongbao-Wake-/actions/runs/39011515550) attempt1 最终 **FAIL：10 失败、3 跳过**。准确任务与失败阶段已回执 [#14/6230975651](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230975651)，待 Root 唯一核取完整日志。\n\n另确证测试清单漏一项，最小修复仍仅在 RAM。未重跑、未改冻结分支、未合并。`attach_artifact` 工具不可用，未伪造附件。",
+      "reported_sha1_values": [
+        "08333ea1f21ac93407e596218b355ece9aece1e7"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/actions/runs/39011515550",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230975651",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/15"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14898-9612-73c4-b554-4917e30083e5",
+      "position_from_newest": 50,
+      "reported_summary": "[恢复方案与工具权限报告](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230825807) 已交 Root。\n\n当前只有状态读取、草稿读取/保存工具，缺少策略应用及代理恢复入口。已提供现存实例、版本和 spec1 的准确定位，供平台执行同配置网络恢复。\n\n未证实必须人类账户操作；没有新增凭据、配置变更或再次探测。CLI 继续 HOLD。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230825807"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1488c-8967-70c9-9fe3-8cbdc108cf8a",
+      "position_from_newest": 51,
+      "reported_summary": "候选50已发布：`08333ea1f21ac93407e596218b355ece9aece1e7`。\n\n[完整交接收据](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230748256)：65叶＝53M＋12A，2760 blob；2695个非 owned tuple、491个原有分支保持不变，CAS、迁移元数据及完整树核验一致。\n\nruns/checks 均为0；未运行项目、合并或部署。CLI网络仍 UNKNOWN/HOLD。",
+      "reported_sha1_values": [
+        "08333ea1f21ac93407e596218b355ece9aece1e7"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230748256"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1487f-30b3-71f5-ab26-acb28c916665",
+      "position_from_newest": 52,
+      "reported_summary": "新资源门通过，但浅源码获取失败：`git fetch` exit 128，无法连接现有代理 `proxy:8080`，尚未到达 GitHub。\n\n已按规则停止，未重试。Bun、依赖和五个 case 均 **NOT_RUN**；原件及资源记录已保留。\n\n[完整报告](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230597238)",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230597238"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1487a-4ab3-755c-a012-6f42e443d56b",
+      "position_from_newest": 53,
+      "reported_summary": "本窗已按资源条件停止，五个 case 全部 **NOT_RUN**。\n\n有效内存约 4.80 GiB；磁盘仅 3.84 GiB，低于要求的 4 GiB。未安装、克隆或启动测试，未重试。\n\n[Root 完整报告](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230530625) 已保存原命令、stdout 和证据校验值。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230530625"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14863-01c9-76c8-9374-c982c113b423",
+      "position_from_newest": 54,
+      "reported_summary": "已发布六叶独立 review，准确提交：\n\n`cc3ec72932dfab2f5e13777c61f8a4a308b564b8`\n\n[完整回执与 CAS](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230494135)：6M、2744 非 owned 叶保持相同，全文回读、正逆重放及完整树核验一致；runs/checks 均为 0。\n\n类型、格式、测试、PG、浏览器及 provider 全部 **NOT_RUN**。51 叶输入已只读验收，未集成、未创建 formal。",
+      "reported_sha1_values": [
+        "cc3ec72932dfab2f5e13777c61f8a4a308b564b8"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230494135"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1483f-f2ef-7462-8ba8-896e0a8e97f0",
+      "position_from_newest": 55,
+      "reported_summary": "已发布 WF 完整6M2A review：\n\n- 分支：`codex/review-wakerflow-generation-intent-c49-20261017`\n- SHA：`41d43d425c69885cc0c41f65461beb06d4c7b527`\n- sole49；八叶 raw/CAS、完整树及2742个非 owned tuple 已复核，runs/checks=0。\n\n[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230280258)\n\n涵盖持久意图、草稿 UUID 恢复、actor/版本门及原 receipt 恢复。未建 formal、未运行；类型、格式、PG和原生双页验证均 **NOT_RUN**，待独立 peer。",
+      "reported_sha1_values": [
+        "41d43d425c69885cc0c41f65461beb06d4c7b527"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6230280258"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1482e-8d11-77be-88e5-a9f1de1aca16",
+      "position_from_newest": 56,
+      "reported_summary": "H5 四叶独审完成：[SOURCE_PASS 回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229818924)。\n\n未发现新增 P1/P2；已核删除/绑定锁序、fresh 校验、system SELECT-only 合同及双连接 COMMIT barrier 测试源码。四叶 CAS、完整树和2734个非 owned tuple 一致。\n\n真实 PG、类型检查与 H5 验收均 **NOT_RUN**；未修改源码、创建对象或启动运行。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229818924"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1481f-c8f3-75eb-ac0f-f2769e611bae",
+      "position_from_newest": 57,
+      "reported_summary": "Candidate49 已发布：\n\n- 分支：`codex/review-delivery-candidate49-combined-c48-20261017`\n- SHA：`c277684989022563e28b21d84e11161ca4d88217`\n- 树：`2dad3e50ab8fea97a34e725fb9e68928bf71c49a`\n- sole48，35M8A0D；43叶 raw/CAS、完整2748叶树及全部非 owned tuple 已复核。\n\n非 owned 正确数量为 **2705**，原2697算术差异已登记。 [完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229710459)\n\nruns/checks=0；未建 formal、未运行，main/canonical 不变。",
+      "reported_sha1_values": [
+        "2dad3e50ab8fea97a34e725fb9e68928bf71c49a",
+        "c277684989022563e28b21d84e11161ca4d88217"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229710459"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14818-bb58-7544-aef7-56a6e005bf1b",
+      "position_from_newest": 58,
+      "reported_summary": "V3 已发布：`a3564abb02e8fcf75b2b806e9e8b60e1590677ec`，[actual 回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229605831)。reader 完整性五门已加入，旧 ref 保持，runs/checks=0，供 S5 增量复审。\n\n[25叶 RAM 集成矩阵](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229615399)已交：预期树 `ea1dcb48bc8f5233f2aae64d378c675ca82f28f2`，25M、2715 非 owned tuple 不变；仅 fixture 有预期重叠。尚未创建集成对象/ref，未运行。已读 Root 平台停窗及 active-skip HOLD 决定。",
+      "reported_sha1_values": [
+        "a3564abb02e8fcf75b2b806e9e8b60e1590677ec",
+        "ea1dcb48bc8f5233f2aae64d378c675ca82f28f2"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229605831",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229615399"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1480b-bef0-73f1-9460-daab2a848bbf",
+      "position_from_newest": 59,
+      "reported_summary": "两个独立 review 已发布，均 sole48：\n\n- fixture：`f1eb7b528e02494dc84a67d58f3b7c4057e76020`，[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229465594)\n- helper24 V2：`22f54576a7ec6b21f90ad0081a41cfb2bbcdd08e`，[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229467038)\n\n完整 raw/CAS、预期树、父提交及全部非 owned tuple 已复核；两者 runs/checks=0。未建 formal、未运行，main/canonical 保持原值。",
+      "reported_sha1_values": [
+        "22f54576a7ec6b21f90ad0081a41cfb2bbcdd08e",
+        "f1eb7b528e02494dc84a67d58f3b7c4057e76020"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229465594",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229467038"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14807-1bba-72af-872d-120bb162bcb2",
+      "position_from_newest": 60,
+      "reported_summary": "[V2 完整稿、5 处 literal 差分及 CAS/root](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229409734)已提交。\n\n- 改用 `ls-tree -r -l -z` 批量取长度，保留逐叶原始字节校验。\n- checkout 前固定 `autocrlf=false/eol=lf`；实际 `.gitattributes` 与 LF 设置兼容，不做 CRLF 归一化冒充原件。\n- V2：8061B，预期树 `4485169c13659239fda1c2cabf898e81d42f4c54`。\n- 原预算与全部测试门不变；尚无对象/ref/运行。",
+      "reported_sha1_values": [
+        "4485169c13659239fda1c2cabf898e81d42f4c54"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229409734"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14804-e9ab-77a6-9953-5ca29dcd8ae3",
+      "position_from_newest": 61,
+      "reported_summary": "已交[单叶 fixture 修稿及完整 CAS](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229389697)。\n\n实际失败发生在混合 Map 的 `structuredClone` 前置步骤，尚未进入该例 S-buffer。修稿直接构建等价新鲜 Map，保留全部 alias、holes、数值、字符串、52 处断言及原 5 秒预算。\n\n目前仅 RAM，未创建对象/ref、未运行。helper24 独立保持绑定冻结48。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229389697"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a147f5-7854-7746-b80b-7a5bd3ac2ef9",
+      "position_from_newest": 62,
+      "reported_summary": "已发布 Candidate48：\n\n- 分支：`codex/review-delivery-candidate48-ci-trace-c47-20261017`\n- SHA：`175664d60040df1d7865189d9c723e544eac0e10`\n- 4M2A，2734 个非 owned tuple 保持一致；全部实际 CAS、完整树及父提交已复核，runs/checks=0。\n- [完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229295795)\n\n[helper24 双 OS 串行控制 RAM 稿](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229308298)已交审，未创建控制对象或运行。未修改 main/canonical，未声明测试通过。",
+      "reported_sha1_values": [
+        "175664d60040df1d7865189d9c723e544eac0e10"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229295795",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229308298"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a147e1-bb98-729c-a451-dc676feeac5e",
+      "position_from_newest": 63,
+      "reported_summary": "已完成：\n\n- 新10例控制已发布：`fa93ffad3c5239bf663bdb96276c694c3c5aa3d5`，完整 CAS/root 回读一致，formal404、runs/checks0。[实际回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229000687)\n- S5 V3.1 实际源码独审 **SOURCE_PASS，无确认 P1/P2**；原 callee/Promise/throw、17 names/97 expects、预算与清理合同保持。[审查回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229029242)\n\n未改作者叶、合入48或启动运行；诊断尚不证明首10s已修复。",
+      "reported_sha1_values": [
+        "fa93ffad3c5239bf663bdb96276c694c3c5aa3d5"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229000687",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6229029242"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a147d4-d0f9-7409-a799-d35391e3f8c3",
+      "position_from_newest": 64,
+      "reported_summary": "已交最终 RAM V1.2：[单 literal 完整包](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228876016)。\n\n入口仅改为 `bun test --timeout 5000 ./tests/source-clone-buffer.test.ts`，其余字节不变。\n\n- 67684B；SHA256 `e6719968591bc272ee5123664d9e10c41e76a7eaf89b8fd58b207be58b2c2ae6`\n- 预期树 `a3ed92476280fe7807ecc6cbd84e46cade9c092f`\n\n10 case、24 pins、strict 门保持。未创建对象/ref或运行，未碰 S5 两叶。",
+      "reported_sha1_values": [
+        "a3ed92476280fe7807ecc6cbd84e46cade9c092f"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228876016"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a147d0-17e0-7023-a83b-d9e37aa2d743",
+      "position_from_newest": 65,
+      "reported_summary": "两条独立 review 已发布并完整回读：\n\n- STATIC47：`de6eacbd0852b687cd5f31227628a9caa6ea7941` — [回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228829007)\n- OS47：`88d3f0c8a0ddd8caa6535e9909053707a7b85a69` — [回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228830867)\n\n均 sole47、only1A、2738产品叶不变，raw/CAS/root 精确吻合。回读时 formal 404、runs/checks 0；未合树、未运行，新10例控制未发布。",
+      "reported_sha1_values": [
+        "88d3f0c8a0ddd8caa6535e9909053707a7b85a69",
+        "de6eacbd0852b687cd5f31227628a9caa6ea7941"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228829007",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228830867"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a147c4-da12-74fe-afb3-01195632aa8f",
+      "position_from_newest": 66,
+      "reported_summary": "Candidate47 已发布：\n\n- HEAD：`f09b98a1220566390dd74e94324a8f845fb3a3b7`\n- Tree：`48b7d8ca9c0ead65fbe958ec51fc6e4d4c673213`\n- 分支：`codex/review-delivery-candidate47-sbuffer-c46-20261017`\n\n四叶完整回读一致，manifest 473条、原472条全留，2734非 owned 叶不变，runs/checks为0。[实际回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228723954)\n\n仅 RAM 已交：[STATIC47](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228741011)、[OS47](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228741911)、[新测试10例最终增量包](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228753689)。未创建控制对象或运行；性能与C仍未证。",
+      "reported_sha1_values": [
+        "48b7d8ca9c0ead65fbe958ec51fc6e4d4c673213",
+        "f09b98a1220566390dd74e94324a8f845fb3a3b7"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228723954",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228741011",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228741911",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228753689"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a147aa-fc21-7323-87e9-42b762fd37ae",
+      "position_from_newest": 67,
+      "reported_summary": "S-buffer V2 独审：**SOURCE_PASS，无确认算法/安全 P1/P2；性能仍 UNKNOWN**。\n\n已核 owned grammar、UTF-8/键序等价、分配前上限、完整写入、拒绝优先级及实质差分测试。[完整审查](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228475085)\n\n作者实际分支 `7d6e67aca6c5a5b2371a3e9bc05b64d917fd8097` 的三叶与审查对象一致，2735非 owned 叶保留。[实际补证](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228481200)\n\n集成前仍须登记新测试到 manifest，保留原472条。未改作者叶、创建对象或运行目标。",
+      "reported_sha1_values": [
+        "7d6e67aca6c5a5b2371a3e9bc05b64d917fd8097"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228475085",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228481200"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1479f-83a0-705f-ad85-f5c09e18cac4",
+      "position_from_newest": 68,
+      "reported_summary": "原17-45已终态 **FAILURE**：run `38993833422` / job `117281826730` / attempt 1。\n\n完整测试、严格报告及最终17结果门失败；迁移/角色校验、source双端、原始日志保存和严格 private Release 归档步骤成功。实际测试计数与首因待 Root 唯一完整日志核收。\n\n已交[终态回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228353514)。未取日志、重跑或触发其他窗口。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228353514"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14797-46a0-71cd-b094-5190cbf17a07",
+      "position_from_newest": 69,
+      "reported_summary": "Candidate46 已按三处真实 formatter 修正发布：\n\n- HEAD：`26bd4b3ccc55d78305f750703e95f40e673e8eb8`\n- Tree：`e1824b9b6e7809f3ecca25f0a3a3a952d4debb2b`\n- 分支：`codex/review-delivery-candidate46-format-c45-20261017`\n\n完整回读确认仅1叶修改、2736叶不变，runs/checks 为0。[实际回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228323246)\n\n[STATIC46 完整 RAM](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228323673) 已交；未创建控制对象/formal或运行，未复制 OS46/原17-46。T1 peer、C引用设计也已分别交回执。",
+      "reported_sha1_values": [
+        "26bd4b3ccc55d78305f750703e95f40e673e8eb8",
+        "e1824b9b6e7809f3ecca25f0a3a3a952d4debb2b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228323246",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228323673"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14792-7d10-71c9-ba35-856a4c0c6d11",
+      "position_from_newest": 70,
+      "reported_summary": "三条独立 review 已发布，均 sole45、仅新增1叶、2737原文件不变，完整 raw/CAS/root 回读一致：\n\n- STATIC：`052c2e84adaa6758fc7b97f21c16772b0d8a7283` — [回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228212091)\n- OS166+107：`42d8e8409931ed9c18d85b7e61c9e5d4088040b9` — [回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228213320)\n- 原17：`7e47f1fe7d019ebc598866caa1389251e275d45f` — [回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228214640)\n\nSTATIC 已先即时回报。各回读时 formal 404、runs/checks 0；未合树、未运行。",
+      "reported_sha1_values": [
+        "052c2e84adaa6758fc7b97f21c16772b0d8a7283",
+        "42d8e8409931ed9c18d85b7e61c9e5d4088040b9",
+        "7e47f1fe7d019ebc598866caa1389251e275d45f"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228212091",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228213320",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228214640"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14787-7a68-71e0-8814-19b8293df387",
+      "position_from_newest": 71,
+      "reported_summary": "H44 独立审查结论：**SOURCE_PASS，无确认 P1/P2**。[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228122114)\n\n已核 41 组 literal 正逆、27 叶 CAS、14 个分片、39 源 pins、2227 叶 context及六 JSON DAG。最终根 `a832d43494fb9e1bef16da458f8e50d52991b04a`，原2737产品叶完整保留，原76/144/119/8+plans及预算守恒。\n\n未修改作者叶、创建对象/ref或执行目标；不签运行、启动或业务通过。",
+      "reported_sha1_values": [
+        "a832d43494fb9e1bef16da458f8e50d52991b04a"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228122114"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14787-7a68-71e0-8814-19b8293df387",
+      "position_from_newest": 71,
+      "reported_summary": "Candidate45 已发布：\n\n- HEAD：`43cf9261e4eadc54a5351707cc07cd758b9f5fc9`\n- Tree：`f912d7d5b2dcc03ffc914bbdfcdee3db9aee2d18`\n- 分支：`codex/review-delivery-candidate45-observers-c44-20261017`\n\n三叶完整回读一致，2734 非 owned 叶不变，runs/checks 均为 0。[实际回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228134873)\n\n三份独立控制均已交完整 RAM：[STATIC](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228148767)、[166+107](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228149477)、[原17](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228150645)。未创建控制对象/formal或运行；45 不继承44绿。",
+      "reported_sha1_values": [
+        "43cf9261e4eadc54a5351707cc07cd758b9f5fc9",
+        "f912d7d5b2dcc03ffc914bbdfcdee3db9aee2d18"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228134873",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228148767",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228149477",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228150645"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14785-b2cb-710e-a9ff-07af0405c828",
+      "position_from_newest": 72,
+      "reported_summary": "最终格式 RAM 已交 **V2.2.1**：[完整增量链与 CAS](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228092872)。\n\n- 78683B，SHA256：`e09fb430852d480032f6e355edef5ea6af968658da11720ddd801f12ad5985f4`\n- 单叶预期树：`0dd9cbf301fc9b62b55dab7e1c72c9bd1b2a6f04`\n- 已收全 onLoad 调用尾逗号、长 URL 换行，并显式纠正 filter 属性尾逗号遗漏。\n- 字符串、模板及块外源码保持不变。\n\n旧 V2.2 明确非最终。未运行 formatter，未创建对象、候选或 VM。",
+      "reported_sha1_values": [
+        "0dd9cbf301fc9b62b55dab7e1c72c9bd1b2a6f04"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228092872"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1477d-d114-7355-9038-42be09e4ca6a",
+      "position_from_newest": 73,
+      "reported_summary": "已交两项：\n\n- Main 格式 RAM **V2.1**：78485B，SHA256 `bee4349bce7a7b9f9bd266288c89a90d976834f0ce4193abc21075d3f4bd3535`；单叶预期根 `947cfcd28db2f9deddd082c37be2a0858e6bf51b`。[单 literal 完整包](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228040420)\n- S5 格式 V2 独审 **SOURCE_PASS**，三处可选尾逗号及全部 CAS/正逆/root 核同，97 expects、观测语义和预算保持。[回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228041081)\n\n均未运行 formatter，不签实际格式通过；0 Git 对象/ref/VM，未发布 candidate45。",
+      "reported_sha1_values": [
+        "947cfcd28db2f9deddd082c37be2a0858e6bf51b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228040420",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6228041081"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14773-bfd7-77fe-883c-597fc70ff672",
+      "position_from_newest": 74,
+      "reported_summary": "已完成两项：\n\n- S3 V2 两项 P2 均闭合，独立结论 **SOURCE_PASS**；完整 CAS/正逆/root 核同。[回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227907361)\n- Main 观测稿已仅 RAM 重绑 actual44，after 保持 77352B，单叶预期根 `e7ef314a398e6c1808ef86f89b1ebf95b4e8f396`。[完整包](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227916431)\n\n原时限、业务调用、SQL、权限及负控不变；计数不代表 COMMIT 或物理关闭成功。未创建源码对象/ref、未执行目标或复取日志。",
+      "reported_sha1_values": [
+        "e7ef314a398e6c1808ef86f89b1ebf95b4e8f396"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227907361",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227916431"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14769-3bc5-7131-83aa-6053b7e906eb",
+      "position_from_newest": 75,
+      "reported_summary": "OS44 已终态 **FAILURE**：run `38989645256` / job `117268953023` / attempt 1。\n\n失败步骤为严格零失败 summary 门和 artifact 上传。integration 步骤虽显示 success，但真实测试计数、失败原因仍待 Root 完整原件核验，不能据此签绿。\n\n已交 [终态回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227834187)。未取官方日志、未重跑或改 ref。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227834187"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14766-8a98-7413-8901-ad821a81ef65",
+      "position_from_newest": 76,
+      "reported_summary": "独审发现 **2 项 P2，V1 暂不 SOURCE_PASS**：[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227782297)。\n\n- `MIGRATE_CONTEXT` 将 `postgres` 的 type-only import 错列为运行时依赖。\n- 后续未知异常仅拒绝小写 `error:`，`TypeError:` 等会被跳过，仍保留确定分类。\n\n两叶分片、九组 literal 正逆、CAS/Merkle 均吻合；原 14 case 和 283 条断言全部保留。未改源码、创建对象或执行目标。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227782297"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14763-dbee-776d-9c7a-c0f311ecc8a9",
+      "position_from_newest": 77,
+      "reported_summary": "STATIC44 元数据终态 **SUCCESS**：\n\n- Run：`38989250190`，attempt 1\n- Job：`117267694732`\n- Head：`acd3a12cfe119c08b0022ca7887ebbd5fe77df76`\n- 完整 types、lint、format、source 双端及结果门步骤均成功\n\n已交 [终态回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227747875)。未取官方日志、未重跑；完整原件由 Root 独核。OS10744 未触发。",
+      "reported_sha1_values": [
+        "acd3a12cfe119c08b0022ca7887ebbd5fe77df76"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227747875"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14760-a661-765c-a385-895ea1615d47",
+      "position_from_newest": 78,
+      "reported_summary": "两条独立 review 已发布，各以 actual44 为唯一父提交：\n\n- STATIC：`acd3a12cfe119c08b0022ca7887ebbd5fe77df76`，[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227705452)\n- OS166+107：`aa3378ef8989c6b220a7b9a4c3db039db3325bab`，[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227707412)\n\n两者均完整 raw/CAS/tree 回读一致，仅新增各自 1 个 YAML，2737 个原文件不变；formal 仍 404，runs/checks 均为 0。未合树、未运行，Main、CI.yml、COORD 未改。",
+      "reported_sha1_values": [
+        "aa3378ef8989c6b220a7b9a4c3db039db3325bab",
+        "acd3a12cfe119c08b0022ca7887ebbd5fe77df76"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227705452",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227707412"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1475a-3d5d-71af-8f0e-73df2668ed42",
+      "position_from_newest": 79,
+      "reported_summary": "Candidate44 已发布：\n\n- 分支：`codex/review-delivery-candidate44-map-r1-c43-20261017`\n- HEAD：`09a5e845044bc42d3b9627393ebce2932a7ee739`\n- Tree：`50d4f90b0477e2d75cccfe04f448aa0933b61751`\n- 唯一父：`fed4e16e72b16f3d8f29d031253f2a25252ee967`\n\n完整回读确认仅 stdio 叶修改、2736 叶不变、CAS/正逆一致，runs/checks 均为 0。[实际回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227638912)。\n\n[STATIC 完整 RAM](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227639490) 与 [166+107 完整 RAM](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227640747) 已按实际44重绑，四 test pins fresh 全文核同。未创建控制对象/formal、未运行；保护 refs 未改，44 不继承旧结果。",
+      "reported_sha1_values": [
+        "09a5e845044bc42d3b9627393ebce2932a7ee739",
+        "50d4f90b0477e2d75cccfe04f448aa0933b61751",
+        "fed4e16e72b16f3d8f29d031253f2a25252ee967"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227638912",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227639490",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227640747"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14753-b760-75da-9924-579ea6829a9e",
+      "position_from_newest": 80,
+      "reported_summary": "R1 独立审查结论：**SOURCE_PASS，无确认 P1/P2**。[完整回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227567685)\n\n已核两处 literal 正逆、完整 CAS、单叶根 `50d4f90b0477e2d75cccfe04f448aa0933b61751`、2736 非 owned 叶不变；8 条记录最大共 864 ASCII 字节，原拒绝门与业务后缀保持不变。\n\n未创建对象或运行。采样开销、Bun 行为及实际类型/lint 仍未验证；43 两控制继续仅 RAM。",
+      "reported_sha1_values": [
+        "50d4f90b0477e2d75cccfe04f448aa0933b61751"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227567685"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14751-3fb4-73d2-acd4-7df97a248a8a",
+      "position_from_newest": 81,
+      "reported_summary": "已完整读取 Issue 14 正文及 Root 最新决定，并登记 [S1 ACK](https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227520554)。\n\n43 两份控制包保留原 ID、继续仅 RAM；未创建新对象、ref 或运行，未集入 R1。后续仅凭 Root 精确授权，按实际最终候选重绑。Main、COORD 和其他作者路径保持不动。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/14#issuecomment-6227520554"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14746-cb62-7718-ba51-2ceda100ecbe",
+      "position_from_newest": 82,
+      "reported_summary": "Candidate43 已按精确授权发布：\n\n- 分支：`codex/review-delivery-candidate43-main-signal-c42-20261017`\n- HEAD：`fed4e16e72b16f3d8f29d031253f2a25252ee967`\n- Tree：`f685f7587f4cbd5b3933fbff9d8e578443fbd9e0`\n- 唯一父提交：`77d9497e469a40fef28508dd89ae969a0f980198`\n\n完整回读确认：仅指定 Main signal 源文件修改，2736 个非 owned 文件不变，runs/checks 均为 0。[源码回执](https://github.com/xiongpinji/xiongbao-Wake-/issues/6#issuecomment-6227401624)。\n\n实际43的 [STATIC RAM](https://github.com/xiongpinji/xiongbao-Wake-/issues/6#issuecomment-6227402806) 和 [OS107 RAM](https://github.com/xiongpinji/xiongbao-Wake-/issues/6#issuecomment-6227403431) 已交。未创建控制对象、formal 或运行；43 尚无运行验证，不继承42结果。Main、集成及 COORD 未修改。",
+      "reported_sha1_values": [
+        "77d9497e469a40fef28508dd89ae969a0f980198",
+        "f685f7587f4cbd5b3933fbff9d8e578443fbd9e0",
+        "fed4e16e72b16f3d8f29d031253f2a25252ee967"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/6#issuecomment-6227401624",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/6#issuecomment-6227402806",
+        "https://github.com/xiongpinji/xiongbao-Wake-/issues/6#issuecomment-6227403431"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1473a-84cd-70e7-9f7e-5ce938d4e855",
+      "position_from_newest": 83,
+      "reported_summary": "已交精确源码链和两 literal 生产方向：[6227292801](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6227292801)。\n\n确定问题：Main适配器每次 check 新建合并 signal，破坏 backend433 锁定的 signal 身份；仅缓存合并 signal 仍会与 activation 原 signal 冲突。\n\n候选保留原 control/activation 身份，仅将合并 signal 用于取消等待门；guard、Stop、私有映射不改。完整正逆/CAS已核，运行交错尚未验证。\n\n观察稿继续 HOLD。0对象/ref/run/目标执行。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6227292801"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14729-daf3-76b7-a508-0ed4c6a86b36",
+      "position_from_newest": 84,
+      "reported_summary": "单叶有限观测 RAM 已交：[6227077901](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6227077901)，含完整 literals、CAS、两片全文及边界说明。\n\n- after：77352B，blob `1e0fdfcbc666e8f61badc38ff7efa510365201f7`\n- only1M root：`14c5986083945fb9b3d6b9a240da6c45a804151a`\n- 全文回读、正逆核同；原计时、预算、P/D/R及两帧保持。\n\nreserve 返回 Promise 未增探测，明确不据此断言挂起；settled 包含 reject，不签 COMMIT成功。0对象/ref/run/目标执行。",
+      "reported_sha1_values": [
+        "14c5986083945fb9b3d6b9a240da6c45a804151a",
+        "1e0fdfcbc666e8f61badc38ff7efa510365201f7"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6227077901"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14616-4f71-72de-bd16-913fabf83ef5",
+      "position_from_newest": 85,
+      "reported_summary": "candidate42 已发布并完整回读：\n\n- HEAD：`77d9497e469a40fef28508dd89ae969a0f980198`\n- Tree：`b7d2953b9ed7bdb857ee76e4298957dd82a1661b`\n- 仅 `--smol` 单flag变更；2736非 owned 叶不变，runs/checks 为0。\n\n回执：[6222669115](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222669115)。\n\nSTATIC/OS107 准确绑定 RAM：[6222670513](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222670513)、[6222671226](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222671226)。未创建测试对象/formal或运行；41窗口未受干预，42未继承其结果。",
+      "reported_sha1_values": [
+        "77d9497e469a40fef28508dd89ae969a0f980198",
+        "b7d2953b9ed7bdb857ee76e4298957dd82a1661b"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222669115",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222670513",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222671226"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14613-fd11-769c-b959-375959d0f20c",
+      "position_from_newest": 86,
+      "reported_summary": "两个独立 review 已发布，均 sole actual41：\n\n- STATIC：`30b018a9195f8a5dc6cdc5b0699b9813e5a409b0`；回执 [6222616366](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222616366)\n- OS107：`490c953817b4918385ca8480e636cb7743ab5128`；回执 [6222619255](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222619255)\n\n各全文 raw/CAS/tree 核同，仅各自1A，2737产品叶不变；formal 404、runs/checks 为0。未触发运行，保护 refs 未动。",
+      "reported_sha1_values": [
+        "30b018a9195f8a5dc6cdc5b0699b9813e5a409b0",
+        "490c953817b4918385ca8480e636cb7743ab5128"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222616366",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222619255"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14608-387d-7216-a00c-1bfc32b6c20e",
+      "position_from_newest": 87,
+      "reported_summary": "candidate41 已发布并完整回读：\n\n- HEAD：`e215dcd58c20ff9956caae416e02b04d6c0df545`\n- Tree：`1922f3d2e25d59a4227e09de3af8807e952df211`\n- 单叶正逆/全文 CAS 核同，2736 非 owned 叶不变；runs/checks 为0。\n\n回执：[6222409940](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222409940)。\n\n同源 STATIC/OS107 完整绑定 RAM 已交：[6222411599](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222411599)、[6222412310](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222412310)。未创建控制对象/formal，未运行或修改数据库权限。",
+      "reported_sha1_values": [
+        "1922f3d2e25d59a4227e09de3af8807e952df211",
+        "e215dcd58c20ff9956caae416e02b04d6c0df545"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222409940",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222411599",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222412310"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14606-9f2c-76e7-9b49-e8898c75365f",
+      "position_from_newest": 88,
+      "reported_summary": "41完整占位模板已备：\n\n- STATIC：[6222370875](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222370875)\n- OS107：[6222371664](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222371664)\n- 原17选源规则更新：[6222372110](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222372110)\n\n统一等待 actual41；不先跑40、不建格式41、不猜 SHA。原命令、pins门、预算和严格保存门保持，当前无对象/ref或运行。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222370875",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222371664",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222372110"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14601-7c3b-76b6-b851-d5e638ecb09e",
+      "position_from_newest": 89,
+      "reported_summary": "candidate40 已发布并完整回读：\n\n- HEAD：`3eb4cc7fd17be6c1833f0f43aafb547737c1f2fe`\n- Tree：`02eb074c9f3e27e3eb124c2c5c382067450f51e4`\n- 唯一 src 叶正逆及全文 CAS 核同；2736 非 owned 叶不变，S5 test 保持51811B。\n\n回执：[6222279375](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222279375)。runs/checks 为0，保护 refs 未动，未运行。\n\n40为类型修复；FORMAT39 若0patch，最终17用40；若有patch，待 Root 准确重放后用41。",
+      "reported_sha1_values": [
+        "02eb074c9f3e27e3eb124c2c5c382067450f51e4",
+        "3eb4cc7fd17be6c1833f0f43aafb547737c1f2fe"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222279375"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145f8-9bad-72ff-933c-de702ed4decb",
+      "position_from_newest": 90,
+      "reported_summary": "单 literal RAM 修稿已交 [6222167705](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222167705)，基于 actual39。\n\n保留 `projectionArgs.length` 的存在性语义，分别传入或省略 projection，不再将 observer 传给 validator；全部原断言不变。\n\n- after：29507B，blob `56adcc9d4ba5b9b72d1c0e82758945a47ee0fb99`\n- 预期 tree：`02eb074c9f3e27e3eb124c2c5c382067450f51e4`\n\n全文正逆/CAS 已核同；S5 test 保持51811B。未创建对象/ref，未执行检查或重跑。",
+      "reported_sha1_values": [
+        "02eb074c9f3e27e3eb124c2c5c382067450f51e4",
+        "56adcc9d4ba5b9b72d1c0e82758945a47ee0fb99"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222167705"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145f4-05a5-762f-8227-6258809f7124",
+      "position_from_newest": 91,
+      "reported_summary": "两个独立 review 已发布，均 sole actual38：\n\n- STATIC：`416262151655af767ade52e5c965b355e0a5de0c`；回执 [6222023834](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222023834)\n- OS107：`b5b9c239fbaf7b5bb41b652a8a53daffbb8584d3`；回执 [6222026989](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222026989)\n\n各完整 raw/CAS/tree 核同，仅新增各自控制，2737 产品叶不变；formal 404、runs/checks 为 0。未创建 formal、未运行，保护 refs 未动。",
+      "reported_sha1_values": [
+        "416262151655af767ade52e5c965b355e0a5de0c",
+        "b5b9c239fbaf7b5bb41b652a8a53daffbb8584d3"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222023834",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6222026989"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145f2-b128-74d8-b187-37b55a8f40fa",
+      "position_from_newest": 92,
+      "reported_summary": "已锁定：STATIC/OS107 按 actual38 独立推进，不等 S5。旧 cleanup 稿禁止集入39；V2独立 PASS 保留，待修订后的 ledger/sticky barrier 精确包及 Root 新 grant 才接入。当前不新增源码或运行。",
+      "reported_sha1_values": [],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145ef-50a2-7665-8894-db1d9b2a6717",
+      "position_from_newest": 93,
+      "reported_summary": "candidate38 已发布并完整回读：\n\n- HEAD：`a104411cf22c2c4915cfc440f8bdfc0181ef2c32`\n- Tree：`38c372841b2578d6efe7e3c02f4e118f71a7569d`\n- 四叶、5 hunk 正逆及全文 CAS 核同；2733 非 owned 叶不变，测试叶保持50490B。\n\n回执：[6221956038](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221956038)。\n\nSTATIC/OS107 已绑定 actual38，仅 RAM：[6221957341](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221957341)、[6221958207](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221958207)。未夹 S5 变更，未创建控制对象/formal 或运行。",
+      "reported_sha1_values": [
+        "38c372841b2578d6efe7e3c02f4e118f71a7569d",
+        "a104411cf22c2c4915cfc440f8bdfc0181ef2c32"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221956038",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221957341",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221958207"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145ec-7b20-75f1-815c-340800a537ef",
+      "position_from_newest": 94,
+      "reported_summary": "已按此顺序保持：先接 FORMAT37 的实际结果，0diff 用37，有 patch 则按准确包集入38；STATIC/OS107随后直接绑定该格式源，不等 S5。\n\nS5 V2 与 per-test cleanup 留待同 batch 重基及 peer 核准后接入，不覆盖当前格式叶，不提前发布或运行。",
+      "reported_sha1_values": [],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145ea-a304-7571-a09e-59a40fea1367",
+      "position_from_newest": 95,
+      "reported_summary": "最终格式37或38的完整占位 RAM 模板已交：\n\n- STATIC：[6221846815](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221846815)\n- OS107：[6221847541](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221847541)\n\n原命令、166 unit、107四文件、PG、预算及严格保存门均保持；编号、SHA/tree、ref 和四 test pins 待实际格式结果后绑定。未创建对象/ref，未运行 raw37 或重跑旧窗口。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221846815",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221847541"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145dd-f28f-77f6-b6f7-259e88719671",
+      "position_from_newest": 96,
+      "reported_summary": "candidate37 已发布并完整回读：\n\n- HEAD：`c4e2a206ffa06c049d28a524d7b868952f9e0647`\n- Tree：`0c43a87ad1df06f66cda75a1dd2fb456e7bd0204`\n- Sole parent：actual36 `8069a28629cfb9440d811ebee46b200e1eb4de06`\n\n七叶全文/CAS 核同，2730 非 owned 叶及 472 manifest 不变；runs/checks 为 0，保护 refs 未动。未混入 helper24，未运行。\n\n回执：[6221616321](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221616321)。下一步先 FORMAT37，再按实际格式结果确定专项测试源。",
+      "reported_sha1_values": [
+        "0c43a87ad1df06f66cda75a1dd2fb456e7bd0204",
+        "8069a28629cfb9440d811ebee46b200e1eb4de06",
+        "c4e2a206ffa06c049d28a524d7b868952f9e0647"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221616321"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145ce-211c-757b-9ab4-2c61568dee8f",
+      "position_from_newest": 97,
+      "reported_summary": "已签收计数纠正及 S5 准稿，回执：[6221275147](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221275147)。\n\n完整 CI `38939209573` 最新仍为 in_progress：server-test(5) `117102300125` 尚在 Head tests；其余状态已登记。P0不能证明未进入 prepare，409 分支仍 UNKNOWN。\n\n未取官方日志、重跑、改引用或发布待审源码。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6221275147"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145bd-1807-720b-9512-2664ad3ae581",
+      "position_from_newest": 98,
+      "reported_summary": "F36 新原件已核收：[6220959542](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220959542)。\n\n- STATIC36 七 outcomes 成功，wholeTracked 前后一致。\n- OS107：100P/7F、715 expects、108.85s，native exit 1。\n- Main4 四例已变为 HTTP409、prepare0/5030/SDK0；旧503结论不再用于 F36。\n- Map3 仍为同 IID 的 OOM；本轮优化未解决失败。\n- bounded 原件 bytes/SHA 完整核同；测试失败与 quota 独立记录。\n\n37集成槽固定 actual36，等待新最小包与 Root 精确授权。未新增控制、产品对象或运行。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220959542"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145b3-2f6f-723a-92b0-b984ec8d8ba7",
+      "position_from_newest": 99,
+      "reported_summary": "两窗终态已登记：\n\n- STATIC36：run `38937796558` / job `117097571385`，SUCCESS；回执 [6220807086](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220807086)。\n- OS10736：run `38937818766` / job `117097642212`，FAILURE；首失败为严格零失败 summary，artifact 上传随后也失败；回执 [6220842687](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220842687)。\n\n真实计数、native 和失败原因待 Root 官方原件核验，不归为仅 quota。officialGET、重跑和引用修改均为 0。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220807086",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220842687"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145ae-7c79-73ea-a434-88483086d0f5",
+      "position_from_newest": 100,
+      "reported_summary": "两个独立 review 已发布，均 sole actual36：\n\n- STATIC：`7acf5a0fde8e83f6a1431015238b2a96e50a08aa`；回执 [6220685436](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220685436)\n- OS107：`42e8f4fa489f57fa68d60d24f436aee5b93b3099`；回执 [6220688710](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220688710)\n\n各全文 raw/CAS/tree 核同，仅新增各自控制，2737 产品叶不变；formal 404、runs/checks 为 0。未创建 formal、未运行，保护 refs 未动。",
+      "reported_sha1_values": [
+        "42e8f4fa489f57fa68d60d24f436aee5b93b3099",
+        "7acf5a0fde8e83f6a1431015238b2a96e50a08aa"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220685436",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220688710"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145a9-a002-759f-84ec-9cf707d16263",
+      "position_from_newest": 101,
+      "reported_summary": "candidate36 已发布并完整回读：\n\n- HEAD：`8069a28629cfb9440d811ebee46b200e1eb4de06`\n- Tree：`b6480e6e2625312c11586f527a211d38541fdcb5`\n- 唯一格式叶、3 hunk 正逆及完整 CAS 核同；2736 非 owned 叶不变，runs/checks 为 0。\n\n回执：[6220606011](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220606011)。\n\n同源 STATIC/107 完整绑定 RAM 已交：[6220607818](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220607818)、[6220608974](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220608974)。未创建控制对象/formal，未运行。",
+      "reported_sha1_values": [
+        "8069a28629cfb9440d811ebee46b200e1eb4de06",
+        "b6480e6e2625312c11586f527a211d38541fdcb5"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220606011",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220607818",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220608974"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145a5-240c-7777-b6ad-9de758bd5d12",
+      "position_from_newest": 102,
+      "reported_summary": "FORMAT35 已 completed SUCCESS：\n\n- Run：`38935874599`\n- Job：`117091103681`\n- push attempt 1，全部步骤 success，无失败阶段。\n\n回执：[6220509708](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220509708)。officialGET、重跑和引用修改均为 0。完整 pack/native/CAS 待 Root 核签；STATIC/107 占位稿及四 test pins 待真实36绑定，未签产品验收。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220509708"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a145a1-5cc5-7250-91f5-556005667698",
+      "position_from_newest": 103,
+      "reported_summary": "FORMAT35 review 已发布并完整回读：\n\n- HEAD：`78086afdbe0207d83d3b293c66177c8ed93ea9f3`\n- Tree：`7df17a271c82068ff096dc31588d5ea5320f6cf6`\n- 22266B raw/CAS 核同；仅 1A，2737 产品叶不变。formal 404、runs/checks 为 0。\n\n回执：[6220436325](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220436325)。\n\nformatted36 应用槽及 STATIC/107 完整占位模板已交：[6220445579](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220445579)、[6220446541](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220446541)。未创建 formal 或运行。",
+      "reported_sha1_values": [
+        "78086afdbe0207d83d3b293c66177c8ed93ea9f3",
+        "7df17a271c82068ff096dc31588d5ea5320f6cf6"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220436325",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220445579",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220446541"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1459c-00c8-755c-803e-94517da32e51",
+      "position_from_newest": 104,
+      "reported_summary": "candidate35 已发布：\n\n- HEAD：`91cecf0b797037e8532f7d8657fcecefd1f801d9`\n- Tree：`93afcad8f5d3396a4874ddb2283cdccfdbc0a28e`\n- 10 叶完整 raw/CAS 核同，2727 非 owned 叶及 472 manifest 不变；runs/checks 为 0。\n\n回执：[6220351061](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220351061)。\n\n十叶 FORMAT 已绑定 actual35，仅 RAM：22266B，blob `0c2dfd1f6a49b977ebb73e33d0e56416d8d1bac5`，预期 tree `7df17a271c82068ff096dc31588d5ea5320f6cf6`。完整稿：[6220351913](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220351913)。未创建控制对象/formal，未运行。",
+      "reported_sha1_values": [
+        "0c2dfd1f6a49b977ebb73e33d0e56416d8d1bac5",
+        "7df17a271c82068ff096dc31588d5ea5320f6cf6",
+        "91cecf0b797037e8532f7d8657fcecefd1f801d9",
+        "93afcad8f5d3396a4874ddb2283cdccfdbc0a28e"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220351061",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220351913"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14596-d517-7088-b50c-f67ecf96ddfa",
+      "position_from_newest": 105,
+      "reported_summary": "九叶 RAM 已核同 Root 预期 tree `1cee3173ea800597ba9c93f537fc41045e0f29e4`，回执 [6220243837](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220243837)。9 路径不重叠，2728 非 owned 叶不变；第十 test 叶已锁 before CAS，待准确包。\n\n十叶 FORMAT 完整占位稿已交 [6220244626](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220244626)：沿原成功模型，保留工具、预算、全部拒签及完整原件门，尚未绑定源，不可运行。\n\n无源码对象/ref 或执行操作。",
+      "reported_sha1_values": [
+        "1cee3173ea800597ba9c93f537fc41045e0f29e4"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220243837",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220244626"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14592-7ea1-72a6-b610-6c208402097d",
+      "position_from_newest": 106,
+      "reported_summary": "已交八叶组合 RAM：[6220166470](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220166470)。\n\nMain6 已准稿与 S5 两叶 before/after、literal 正逆及完整 raw 均核同，路径互不重叠。八叶 tree：`f1f88d03f4dfc2770a2bbb03dcf3089bc8b4dca2`；2729 非 owned 叶不变。\n\nMap 第九叶仍待准确包，未伪称九叶最终 root。未创建产品对象/ref 或运行；待 Map 包及 Root 精确组合批准。",
+      "reported_sha1_values": [
+        "f1f88d03f4dfc2770a2bbb03dcf3089bc8b4dca2"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220166470"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14590-f564-7025-bd4b-44c26970a700",
+      "position_from_newest": 107,
+      "reported_summary": "增量集成槽已交 [#6/6220130989](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220130989)。\n\n- S3 六叶全部 before/after raw、15 literal 正逆及 offset 核同；更正后的 tree `8dc0931e5b2b94287bf6316e7cbd9f95125aa0b8` 独算一致，语义尾审仍 pending。\n- S5 `db/client.ts`、`approvals/policy.ts` 的 actual34 before CAS 已锁定，与 S3 六叶不重叠。\n- Map 槽保留 quota owner，待准确路径及最终包，不猜 CAS。\n\n未创建对象/ref 或运行；Root 精确源批后可直接集入。",
+      "reported_sha1_values": [
+        "8dc0931e5b2b94287bf6316e7cbd9f95125aa0b8"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6220130989"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14587-017a-7500-ba60-ad88f16944eb",
+      "position_from_newest": 108,
+      "reported_summary": "原件已核收并登记 [#6/6219943002](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219943002)：\n\n- STATIC34：七 outcomes 全成功，wholeTracked 前后相同。\n- OS10734：100P/7F/0skip、715 expects、99.94s，native exit 1；原 166 unit 全通过。\n- 七例索引与 callsite 已列全：Map3 为 `SOURCE_EXECUTION_STOPPED`；Main4 为 `ROOT_SDK_CONFIG`、HTTP503 `PREDISPATCH_CHECK`。\n- 两份 bounded 原件 bytes/SHA 完整重构核同；summary 真失败与 artifact quota 独立记录。\n\n整合槽固定 actual34，等待 owner 准确修稿及 Root 源批。无官方日志 GET、源码修改或重跑。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219943002"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1457f-e93c-72a1-8934-3b7c7f770b9e",
+      "position_from_newest": 109,
+      "reported_summary": "两窗终态已登记：\n\n- STATIC34：run `38930571288` / job `117073184867`，SUCCESS；回执 [6219810385](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219810385)。\n- OS10734：run `38930595195` / job `117073270663`，FAILURE；首失败步骤为零失败 summary 门，随后 artifact 上传也失败；回执 [6219838684](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219838684)。\n\n具体测试计数、原错误及上传失败原因待 Root 唯一官方原件核验，不能归为仅 quota。officialGET、重触发、引用修改均为 0。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219810385",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219838684"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1457a-974b-73d4-b693-dfc6bae492c9",
+      "position_from_newest": 110,
+      "reported_summary": "两个独立 review 已发布，均 sole actual34：\n\n- STATIC：`000436b8a316723219fd3fc9c622d8954ef64634`；回执 [6219651407](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219651407)\n- OS107：`6224767411c972b9c6d050e5fa7e95e2d890028d`；回执 [6219656121](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219656121)\n\n各完整 raw/CAS/tree 核同，仅新增各自控制，2737 产品叶不变；formal 404、runs/checks 为 0。未创建 formal、未运行，保护 refs 未动。",
+      "reported_sha1_values": [
+        "000436b8a316723219fd3fc9c622d8954ef64634",
+        "6224767411c972b9c6d050e5fa7e95e2d890028d"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219651407",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219656121"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14574-e606-7596-b3a9-9df40f125315",
+      "position_from_newest": 111,
+      "reported_summary": "candidate34 已发布并完整回读：\n\n- HEAD：`337c5de9e0168d87be4c86b53f63b8a490d02921`\n- Tree：`64d236eeebc7b935397d6e547b86e9d70c214a02`\n- 3 叶、17 hunk 正逆及全文 CAS 核同；2734 非 owned 叶不变，runs/checks 为 0。\n\n回执：[6219529733](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219529733)。\n\n同源 STATIC/107 完整 RAM 稿已交：[6219544242](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219544242)、[6219545394](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219545394)。未创建控制对象/formal，未运行。",
+      "reported_sha1_values": [
+        "337c5de9e0168d87be4c86b53f63b8a490d02921",
+        "64d236eeebc7b935397d6e547b86e9d70c214a02"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219529733",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219544242",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219545394"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14570-dad5-728b-9e43-540282cce2f8",
+      "position_from_newest": 112,
+      "reported_summary": "FORMAT33 元数据已到终态 SUCCESS：\n\n- Run `38928381781` / job `117065754820`\n- push、attempt 1；全部步骤 success。\n- official log GET 为 0；完整 pack、native 退出码及格式 CAS 待 Root 唯一取件核签，未签产品验收。\n\n回执：[6219444224](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219444224)。\n\n最终源占位 RAM 已交：STATIC [6219442603](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219442603)、OS107 [6219443282](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219443282)。原命令、166+107、PG、预算和严格 artifact 门保持；未发布或运行占位稿。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219442603",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219443282",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219444224"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1456e-c043-75d2-bc9c-50deb3d603e2",
+      "position_from_newest": 113,
+      "reported_summary": "FORMAT33 review 已发布：\n\n- HEAD：`07ad0c99d03841815fe9d2456de6a0b92ab589a2`\n- Tree：`c22ec154cfba2018a5e33705f1ec7fbd3485a274`\n- Sole parent：`29ef20cbaa63b29adda44b67ae478b599a48ec33`\n\n完整 21939B YAML/CAS 核同；仅新增控制文件，2737 源叶不变。formal 404、runs/checks 为 0，保护 refs 未动；未启动运行。\n\n回执：[6219394974](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219394974)。",
+      "reported_sha1_values": [
+        "07ad0c99d03841815fe9d2456de6a0b92ab589a2",
+        "29ef20cbaa63b29adda44b67ae478b599a48ec33",
+        "c22ec154cfba2018a5e33705f1ec7fbd3485a274"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219394974"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1456b-106e-7139-9f48-9b474a111b30",
+      "position_from_newest": 114,
+      "reported_summary": "candidate33 已发布并完成回读：\n\n- HEAD：`29ef20cbaa63b29adda44b67ae478b599a48ec33`\n- Tree：`2f0b6a0caa2d0c72b10abfab4eba1bb7b73f193c`\n- 分支：`codex/review-delivery-candidate33-runtime-fixtures-c32-20261016`\n- 五叶 raw/CAS 精确一致，2732 非 owned 叶不变，runs/checks 为 0。\n\n源码回执：[6219329411](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219329411)。\n\nFORMAT 已绑定 actual33，仅 RAM：21939B，blob `e6ad32a0fa7bca83ebf3ab32f5c63a1aee325fd1`，预期 tree `c22ec154cfba2018a5e33705f1ec7fbd3485a274`。完整稿：[6219330068](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219330068)。未创建控制对象/formal，未运行。",
+      "reported_sha1_values": [
+        "29ef20cbaa63b29adda44b67ae478b599a48ec33",
+        "2f0b6a0caa2d0c72b10abfab4eba1bb7b73f193c",
+        "c22ec154cfba2018a5e33705f1ec7fbd3485a274",
+        "e6ad32a0fa7bca83ebf3ab32f5c63a1aee325fd1"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219329411",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219330068"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14568-99bd-70a2-9776-0f4151867f72",
+      "position_from_newest": 115,
+      "reported_summary": "最终 V3 五叶 RAM 已交 [#6/6219263962](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219263962)。\n\n- 组合 tree：`2f0b6a0caa2d0c72b10abfab4eba1bb7b73f193c`\n- S5 test：49695B，blob `d4d4b79f4d38c60d5702cc567887c580c048f64c`\n- 21 literal 正逆、完整 test raw 和 CAS 全核同；support、Main4、Map 保持已核版本。\n- 5 叶修改，2732 非 owned 叶不变。\n\n未创建对象/ref 或运行；等待 Root 精确发布许可。",
+      "reported_sha1_values": [
+        "2f0b6a0caa2d0c72b10abfab4eba1bb7b73f193c",
+        "d4d4b79f4d38c60d5702cc567887c580c048f64c"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219263962"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14564-00a5-7629-81cb-813c27d0b75f",
+      "position_from_newest": 116,
+      "reported_summary": "已冻结 S5 v2，不发布其组合 tree。仅等待 test 叶 V3 新 CAS；support 保持 `ac2c7b5fc8a6832073ad164e035d690a844f317f`，Main4/Map 不变、不重复审查。\n\nFORMAT 草稿保留，最终绑定新 source 身份后重算 CAS/root。当前无对象、ref 或运行操作。",
+      "reported_sha1_values": [
+        "ac2c7b5fc8a6832073ad164e035d690a844f317f"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14560-a46b-755b-8ba3-c4d466beedba",
+      "position_from_newest": 117,
+      "reported_summary": "五叶最终 v2 RAM 已完成，回执：[6219121161](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219121161)。\n\n- sole base：actual32 `0f9969f2eb09f4c761708f1d20252ffda0dd538e`\n- 组合 tree：`d311bae528a91879713d56f4fff698e6987d54e8`\n- 5 叶修改、2732 非 owned 叶不变；全部 before/after 全文正逆及 CAS 核同。\n- Main4 仅 v2，S5 仅最终 v2；472 manifest、Docker32 和锁文件不变。\n\n未创建对象/ref、未运行。五叶 FORMAT 模板待 actual33 后准确绑定；下一步等待 Root 精确源码发布许可。",
+      "reported_sha1_values": [
+        "0f9969f2eb09f4c761708f1d20252ffda0dd538e",
+        "d311bae528a91879713d56f4fff698e6987d54e8"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6219121161"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14559-6979-73d6-901c-101c80840a6c",
+      "position_from_newest": 118,
+      "reported_summary": "已交 [#6/6218979942](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218979942)：\n\n- actual32 五叶 before CAS 已核实，路径互不重叠。\n- Map v2 标为 SOURCE_PASS；Main4 v2 待独审；S5 v2 待准确稿，旧 v1 排除。\n- 完整五叶 FORMAT RAM 模板：21936B，保留两遍写入、非写检查、原件保存及全部拒签门；源身份明确未绑定，不可运行。\n\n未创建对象/ref，未重复 boot32 或 dispatch。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218979942"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1454c-ef33-7687-b06d-68e6b14f176d",
+      "position_from_newest": 119,
+      "reported_summary": "candidate32 已按许可发布：\n\n- 分支：`codex/review-delivery-candidate32-docker-runner-c31-20261016`\n- HEAD：`0f9969f2eb09f4c761708f1d20252ffda0dd538e`\n- Tree：`d45bfadc9690cd445fe54e9d4ee64b86b8c2208d`\n- 唯一父提交：`66f8360239b9057b9c12046d926cc0588acf0b2a`\n\n完整 raw/CAS、2737 叶及其余 2736 叶不变均已回读核实；保护 refs 未动，runs/checks 均为 0。未创建 formal、未运行构建或启动验证。\n\n回执：[6218713914](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218713914)。",
+      "reported_sha1_values": [
+        "0f9969f2eb09f4c761708f1d20252ffda0dd538e",
+        "66f8360239b9057b9c12046d926cc0588acf0b2a",
+        "d45bfadc9690cd445fe54e9d4ee64b86b8c2208d"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218713914"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14546-a93e-72fd-86a3-831c0e0fd997",
+      "position_from_newest": 120,
+      "reported_summary": "已交 RAM 修稿至 [#6/6218613435](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218613435)，全文回读一致。\n\n- source31 主 Dockerfile 仅新增两条 COPY：`runner/src` 与 `runner/package.json`，保留全部 33 源文件及邻接 C/worker。\n- after：15422B，blob `62b5beb12c9a6952cd2db96d3bac6f47fc247610`\n- 预期 tree：`d45bfadc9690cd445fe54e9d4ee64b86b8c2208d`\n\n未创建源码对象/ref，未运行构建。旧 runner 注释的矛盾已注明；等待 Root 精确 SOURCE_ONLY 发布许可。",
+      "reported_sha1_values": [
+        "62b5beb12c9a6952cd2db96d3bac6f47fc247610",
+        "d45bfadc9690cd445fe54e9d4ee64b86b8c2208d"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218613435"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14541-1fd1-702d-927a-32f7d6adc6ff",
+      "position_from_newest": 121,
+      "reported_summary": "当前被云端认证阻断：actual31 的四个配置文件和 relay blob `e5c36178…` 均实际返回 **HTTP 401 Unauthorized**，复核仍同。尚未成功读取原文，不能提交可信的闭包补丁，也无法向 #6 登记。\n\n请 Root 恢复本会话云端认证，或直接转交 Dockerfile、`.dockerignore`、相关 package manifests、runtime-workers 脚本及运行时依赖源码包；无需用户审批或发送密钥。\n\n未改源码、创建对象、构建或读取本机。已按 Root 原件将缺模块视为迁移完成后的启动阻断，不继续归因于迁移。",
+      "reported_sha1_values": [],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14535-fb31-705d-95b3-971e34f0eae2",
+      "position_from_newest": 122,
+      "reported_summary": "完整核验已交 [6218296142](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218296142)，含七个失败的准确名称、原错误、栈及 Main4 诊断。\n\n- **107：100 PASS / 7 FAIL / 0 skip，715 expects，native 1**。\n- Date、array hole、unsupported schema 三项均实际 PASS。\n- Map3 仍 `SOURCE_EXECUTION_STOPPED`，底层首因未捕获。\n- Main4 全失败：HTTP 503、SDK starts=0；commit/stop/lost-commit 报响应早于子事务，drift 报原 SDK 未准入。\n- source 三文件帧及两份完整日志 bytes/SHA 均核同；OS 无独立 source-after receipt，不冒签前后全源同。\n- reader FD 已关，process closure 仍 `NOT_VERIFIED`。测试 summary 真失败，artifact quota 另行失败。\n\n未重复官方 GET、改产品或重跑。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218296142"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1452f-385d-77f5-9318-b5ed60663759",
+      "position_from_newest": 123,
+      "reported_summary": "两窗均已终态，均为首次 push / attempt 1：\n\n- **STATIC31 SUCCESS**：run `38918607048` / job `117032411754`，完整 types、lint、format、源码双验步骤均成功。\n- **OS10731 FAILURE**：run `38918627894` / job `117032483548`，零失败 summary 门失败；artifact 上传也失败，artifacts=0。容器清理步骤成功。\n\n真实测试计数、首错/native、源码 digest 和 FD 闭合仍待 Root 唯一官方日志核定，不能由步骤状态推定。\n\n回执：[STATIC](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218095553)、[OS107](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218156343)、[artifact 补核](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218167926)。未取官方日志、重跑或改源。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218095553",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218156343",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6218167926"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14527-559d-707a-a57a-919d6f47b3fb",
+      "position_from_newest": 124,
+      "reported_summary": "两条 candidate31 review 已发布并完整回读：\n\n- STATIC：`b83ee4fc80926b0983da1dd828267062c73a99ac`，回执 [6217918312](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217918312)\n- OS107：`6b2af5f5384a977a12446c895c3e0481ced9f84e`，回执 [6217921532](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217921532)\n\n各 sole 均为 `66f8360239b9057b9c12046d926cc0588acf0b2a`。raw/CAS、全树命中许可，各仅 1 add、2737 产品 tuple 不变；回读时 formal 404、runs/checks 0，保护 refs 未动。\n\n未运行；旧30控制保持冻结，原严格门和预算保持。",
+      "reported_sha1_values": [
+        "66f8360239b9057b9c12046d926cc0588acf0b2a",
+        "6b2af5f5384a977a12446c895c3e0481ced9f84e",
+        "b83ee4fc80926b0983da1dd828267062c73a99ac"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217918312",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217921532"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1451e-66fd-704e-aeb2-14f84100910c",
+      "position_from_newest": 125,
+      "reported_summary": "candidate31 已发布：\n\n- HEAD：`66f8360239b9057b9c12046d926cc0588acf0b2a`\n- tree：`6f79896233687e74b5d38c0201ba454ee551a221`\n- sole：`0bb47584b0f663ff248019a3761e6904e3afe946`\n\n仅 worker pin 单叶修改；实际 worker/C raw、literal 正逆和全树回读通过，2736 非 owned tuple 保持，runs/checks 为 0。回执：[6217739554](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217739554)。\n\n同源完整 RAM 控制：[STATIC 6217762884](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217762884)、[OS107 6217766180](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217766180)。旧30控制未发布或运行；未将全部失败归因于 pin。",
+      "reported_sha1_values": [
+        "0bb47584b0f663ff248019a3761e6904e3afe946",
+        "66f8360239b9057b9c12046d926cc0588acf0b2a",
+        "6f79896233687e74b5d38c0201ba454ee551a221"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217739554",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217762884",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217766180"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14517-5502-741d-b96c-5a973ef24ec9",
+      "position_from_newest": 126,
+      "reported_summary": "candidate30 三叶已正常发布，未被新指令打断：\n\n- HEAD：`0bb47584b0f663ff248019a3761e6904e3afe946`\n- tree：`91141d45a0ad948cddb4382eace606a60be94342`\n- 回执：[6217588851](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217588851)\n\n三份 raw/CAS、全树回读一致，2734 非 owned tuple 保持，runs/checks 为 0。\n\nSTATIC/107 已生成的 RAM 稿已冻结，未创建对象或运行；等待 candidate31 的 worker pin 精确许可及 actual 后统一改绑。冻结回执：[6217622695](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217622695)。",
+      "reported_sha1_values": [
+        "0bb47584b0f663ff248019a3761e6904e3afe946",
+        "91141d45a0ad948cddb4382eace606a60be94342"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217588851",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217622695"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14509-ad9b-71f6-bd7d-36d84b928f57",
+      "position_from_newest": 127,
+      "reported_summary": "两叶 candidate30 RAM 包已交 [6217304948](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217304948)。\n\n- helper 唯一改动：`start().then(...)` → `Promise.resolve(start()).then(...)`，兼容真实同步/异步 Response，并恢复 `reply` 类型推断；无 any/cast，其他字节不变。\n- shell 严格采用已审 ignore V2，未接旧 end 稿。\n\n两叶完整 literal/hunk 正逆、CAS 均核对通过。预期产品树：`a285636ba32ecb576d36ca76fd537bb94454db30`，2735 非 owned tuple 保持。\n\n未创建对象/ref 或运行；STATIC 失败及 Windows causeUNKNOWN 保留。",
+      "reported_sha1_values": [
+        "a285636ba32ecb576d36ca76fd537bb94454db30"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217304948"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144ff-b2f1-7634-b3ea-86d6a84c6e3b",
+      "position_from_newest": 128,
+      "reported_summary": "两条独立 review 已发布并完成回读：\n\n- STATIC：`e973b36d0860dcb3e39b97d908f60530c4ed7ba4`，回执 [6217099017](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217099017)\n- OS107：`0778423a67c0b4f009606ebda7ecb950de9fce38`，回执 [6217105026](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217105026)\n\n各 sole 均为 `ab293df9b53d5bbb6c9456d79b4f0e083fa3b2d4`。完整 raw/tree 命中许可，各仅 1 add、2737 产品 tuple 不变；回读时 formal 404、runs/checks 0，保护 refs 未动。未运行，原 strict artifact 门保持。",
+      "reported_sha1_values": [
+        "0778423a67c0b4f009606ebda7ecb950de9fce38",
+        "ab293df9b53d5bbb6c9456d79b4f0e083fa3b2d4",
+        "e973b36d0860dcb3e39b97d908f60530c4ed7ba4"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217099017",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217105026"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144fb-79c2-7431-9e22-9fe6784eb2ab",
+      "position_from_newest": 129,
+      "reported_summary": "candidate29 已发布：\n\n- HEAD：`ab293df9b53d5bbb6c9456d79b4f0e083fa3b2d4`\n- tree：`2583b4ab803d01a75e3056d107b71c580a1bfc10`\n- 分支：`codex/review-delivery-candidate29-format3-c28-20261016`\n\n三份 raw/CAS、全树回读一致；3 修改、2734 tuple 不变，runs/checks 为 0。回执：[6217011154](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217011154)。\n\n同源完整 RAM 控制已交：[STATIC 6217037152](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217037152)、[OS107 6217038486](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217038486)。OS 四文件 pins 已按最终源更新。控制未发布、未运行；7/17 保持 S3 独占。",
+      "reported_sha1_values": [
+        "2583b4ab803d01a75e3056d107b71c580a1bfc10",
+        "ab293df9b53d5bbb6c9456d79b4f0e083fa3b2d4"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217011154",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217037152",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6217038486"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144f9-7b63-743a-bac2-9ed2f8b936d1",
+      "position_from_newest": 130,
+      "reported_summary": "candidate29 精确 SOURCE_ONLY 包已交 [6216957285](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216957285)。\n\n完整 pack/patch 哈希、三文件全部 hunk 正逆、前后 raw/CAS、产品及控制树均独核一致。\n\n- sole 拟定源：`3182eb8a0110e0b0e586a0e7d2d5a29ca566522a`\n- 产品 tree：`2583b4ab803d01a75e3056d107b71c580a1bfc10`\n- 2737 叶：3 修改、2734 tuple 不变。\n- 两遍退出 `[0,0]`，最终检查 `0`。\n\n未创建对象/ref 或运行；待 Root 精确源码许可后发布，再绑定 STATIC/107。",
+      "reported_sha1_values": [
+        "2583b4ab803d01a75e3056d107b71c580a1bfc10",
+        "3182eb8a0110e0b0e586a0e7d2d5a29ca566522a"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216957285"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144ef-526e-7261-ac24-f073fe2dff4e",
+      "position_from_newest": 131,
+      "reported_summary": "FORMAT28 review 已发布：\n\n- HEAD：`1bec309688e28c3af89ddf5f0d7202ae2bac44f5`\n- tree：`b672a4cc8df1de611ffedebee274b30e9f5aff2f`\n- sole：`3182eb8a0110e0b0e586a0e7d2d5a29ca566522a`\n- 分支：`codex/review-format-pack-candidate28-3182-20261016`\n\n21495B raw/CAS 与完整树回读一致，仅新增一个 YAML，2737 产品 tuple 不变。回读时 formal 为 404、runs/checks 均 0，受保护 refs 未动。\n\n完整回执：[6216760577](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216760577)。未创建 formal 或运行。",
+      "reported_sha1_values": [
+        "1bec309688e28c3af89ddf5f0d7202ae2bac44f5",
+        "3182eb8a0110e0b0e586a0e7d2d5a29ca566522a",
+        "b672a4cc8df1de611ffedebee274b30e9f5aff2f"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216760577"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144e0-4a15-7334-ad4f-e6d7a8e99560",
+      "position_from_newest": 132,
+      "reported_summary": "candidate28 已发布：\n\n- HEAD：`3182eb8a0110e0b0e586a0e7d2d5a29ca566522a`\n- tree：`4cd5a747b639b64a6d6c45518ddeaed194422047`\n- sole：`f95a858f112988bf81942f67922f504fc82ca8f5`\n\n唯一 V2.2 两叶的 12 literal 正逆、raw/CAS 与全树回读通过；2735 非 owned tuple、99719B driver 保持，runs/checks 为 0。回执：[6216464642](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216464642)。\n\n整体 FORMAT 完整 RAM 稿已交 [6216479060](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216479060)，五组纯身份替换、原门及预算保持；未创建控制对象或运行。",
+      "reported_sha1_values": [
+        "3182eb8a0110e0b0e586a0e7d2d5a29ca566522a",
+        "4cd5a747b639b64a6d6c45518ddeaed194422047",
+        "f95a858f112988bf81942f67922f504fc82ca8f5"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216464642",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216479060"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144d8-0d72-7219-9cd3-a3e191b33047",
+      "position_from_newest": 133,
+      "reported_summary": "candidate27 已按单 Windows 叶许可发布：\n\n- HEAD：`f95a858f112988bf81942f67922f504fc82ca8f5`\n- tree：`fce11260b0baef9abccefe6527189744d0493008`\n- sole：`4744abf8de2cd22f7c1c7ee3b183249001e66ff2`\n\n99719B raw/CAS 回读一致；仅 1 修改、2736 非 owned tuple 不变，runs/checks 为 0。回执：[6216362142](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216362142)。\n\nS5 V1 未接入。FORMAT26 保持 RAM、不运行；STATIC/OS107 纯身份模板已备于 [6216331084](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216331084)，等待最终实际源。",
+      "reported_sha1_values": [
+        "4744abf8de2cd22f7c1c7ee3b183249001e66ff2",
+        "f95a858f112988bf81942f67922f504fc82ca8f5",
+        "fce11260b0baef9abccefe6527189744d0493008"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216331084",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216362142"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144cb-d729-7204-8812-33c7f05d0186",
+      "position_from_newest": 134,
+      "reported_summary": "七叶候选已发布：\n\n- HEAD：`4744abf8de2cd22f7c1c7ee3b183249001e66ff2`\n- tree：`8d661b84bc6eeef18cf946ce635b911706d5448d`\n- 分支：`codex/review-delivery-candidate26-sevenleaf-fdbc-20261016`\n\n七份 raw/CAS、单叶格式 patch 正逆及完整树核对通过；7 修改、2730 非 owned tuple 不变，runs/checks 为 0。回执：[6216130548](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216130548)。\n\n整体 FORMAT 完整 RAM 稿已交 [6216144539](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216144539)，仅五组身份替换，原门和预算保持；未发布控制或运行。",
+      "reported_sha1_values": [
+        "4744abf8de2cd22f7c1c7ee3b183249001e66ff2",
+        "8d661b84bc6eeef18cf946ce635b911706d5448d"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216130548",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6216144539"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144bf-a895-74a4-b3c9-bb2e52f34c36",
+      "position_from_newest": 135,
+      "reported_summary": "本窗已终态 SUCCESS：\n\n- run：`38902671338`\n- job：`116978475340`\n- head：`af038b7278697c3f46e76c65cd1ea51230e95e18`\n- push / attempt 1，全部阶段成功。\n\n专用 `fetch_workflow_job_logs` 实际未暴露，已在 [6215813140](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215813140) 移交唯一日志读取权给 Root，并在 [6215819978](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215819978) 补齐准确身份。\n\n未尝试普通日志 URL。实际格式叶数、pack/CAS 待原件核定；未发布产物或准备 STATIC/107。",
+      "reported_sha1_values": [
+        "af038b7278697c3f46e76c65cd1ea51230e95e18"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215813140",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215819978"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144b4-de22-756c-b787-a3b48de50692",
+      "position_from_newest": 136,
+      "reported_summary": "FORMAT review 已发布：\n\n- HEAD：`af038b7278697c3f46e76c65cd1ea51230e95e18`\n- tree：`db5b650eb80afde8fa77f11e7c7636a3b4f4712d`\n- sole：`fdbc66c67ead6be8e99ab8b46fdb98fc14461e84`\n- 分支：`codex/review-format-pack-candidate25-fdbc-20261016`\n\n21495B raw/CAS 与完整树回读一致，仅新增一个 YAML，2737 产品 tuple 不变。回读时 formal 为 404、runs/checks 均 0，受保护 refs 未动。\n\n完整回执：[6215627539](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215627539)。未运行或准备新 STATIC/107。",
+      "reported_sha1_values": [
+        "af038b7278697c3f46e76c65cd1ea51230e95e18",
+        "db5b650eb80afde8fa77f11e7c7636a3b4f4712d",
+        "fdbc66c67ead6be8e99ab8b46fdb98fc14461e84"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215627539"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144ae-395c-7176-981a-be6e25fd4bd4",
+      "position_from_newest": 137,
+      "reported_summary": "candidate25 已发布：\n\n- HEAD：`fdbc66c67ead6be8e99ab8b46fdb98fc14461e84`\n- tree：`3083b33ef503e004ab7807d2d913b45c52e96ad8`\n- 分支：`codex/review-delivery-candidate25-4c90-20261016`\n\n四叶完整 raw/CAS、literal 正逆及全树回读一致；4 修改、2733 tuple 不变，runs/checks 为 0。回执：[6215528925](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215528925)。\n\n绑定实际 head 的完整 FORMAT RAM 稿已交 [6215542444](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215542444)：五组纯机械替换，原门和预算不变。控制未发布、未运行；未另开 STATIC/107。",
+      "reported_sha1_values": [
+        "3083b33ef503e004ab7807d2d913b45c52e96ad8",
+        "fdbc66c67ead6be8e99ab8b46fdb98fc14461e84"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215528925",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215542444"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a144a5-56e6-76d1-a1b5-5a50aff16e08",
+      "position_from_newest": 138,
+      "reported_summary": "已交单叶 RAM 重基稿：[6215343713](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215343713)。\n\n确认原脚本在 `4c90b1f7` 上仍为原 9505B/blob `8bcde384…`。仅固定断言 `115→119` 一个字符，after blob：\n\n`d163084cc7ebaac5fe2b89b38df4e51f451d0ed9`\n\n预期整树：`580a8036938cea32d09d6b5959e63aaf5c137ff3`。\n\n真实 journal 119 项及对应 SQL 路径、31 个 assert、60 秒子进程和 5 秒关闭预算均核对；SQL/journal 不变。未创建对象/ref、运行或触碰其他作者文件。",
+      "reported_sha1_values": [
+        "580a8036938cea32d09d6b5959e63aaf5c137ff3",
+        "d163084cc7ebaac5fe2b89b38df4e51f451d0ed9"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215343713"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1449f-d99d-70f6-a2d5-29d589787bfd",
+      "position_from_newest": 139,
+      "reported_summary": "新 21 叶格式源已发布：\n\n- HEAD：`4c90b1f7a02a0600e2a6c1d39f21bc61efcdc71b`\n- tree：`a19f28c8c2195fc1fe6a65a403d2b9eac99a42d6`\n- 分支：`codex/review-delivery-format21-eccf-20261016`\n\npack/patch 哈希、21 份 raw 前后 CAS、双向 hunk 重构及产品/控制整树均独核一致。实际 2737 叶：21 修改、2716 tuple 不变，无 collector YAML；runs/checks 为 0，受保护 refs 未动。\n\n完整回执：[6215260703](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215260703)。未混入其他修复，新源类型/runtime 尚未运行，STATIC 失败结论保留。",
+      "reported_sha1_values": [
+        "4c90b1f7a02a0600e2a6c1d39f21bc61efcdc71b",
+        "a19f28c8c2195fc1fe6a65a403d2b9eac99a42d6"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6215260703"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14490-6c35-77c6-a049-6d41bebe436d",
+      "position_from_newest": 140,
+      "reported_summary": "双窗已终态：\n\n- FORMAT `38896672314`：SUCCESS，全部阶段成功；实际变更数及 pack/CAS 尚待完整原件独核。\n- STATIC `38896680701`：FAILURE。workspace types 通过；integration types、lint、format 失败；源码后绑定通过。\n\n官方 annotation 出现泛型回调类型错误：`(work: () => unknown) => unknown` 不兼容 `<T>(work: () => T) => T`，但未给可信源文件路径，不能据此抢修。\n\n已登记 [6214956732](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214956732)、[6214967085](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214967085)，请求专用工具转交完整日志/pack。未重跑或改源；不签全 CI。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214956732",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214967085"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14489-e4a1-77cb-bbe0-a6b682d9b932",
+      "position_from_newest": 141,
+      "reported_summary": "两份 v2 review 均已发布并完成回读：\n\n- FORMAT：`c716ce030032a037948227677454698c531a4416`，回执 [6214840750](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214840750)\n- STATIC：`32e73662b5486072f9118941382c1426981a437e`，回执 [6214845428](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214845428)\n\n各 sole parent 均为 `eccf57794fab848b93a31ea3c595100e38a8cb47`；完整 raw/tree 命中许可，各仅新增一个 YAML，2737 产品 tuple 不变。回读时 formal 均 404、runs/checks 均 0。未运行或移动受保护 refs。",
+      "reported_sha1_values": [
+        "32e73662b5486072f9118941382c1426981a437e",
+        "c716ce030032a037948227677454698c531a4416",
+        "eccf57794fab848b93a31ea3c595100e38a8cb47"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214840750",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214845428"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14481-74d0-719a-b2f0-ac77b2dd5c14",
+      "position_from_newest": 142,
+      "reported_summary": "candidate23 已发布：\n\n- HEAD：`eccf57794fab848b93a31ea3c595100e38a8cb47`\n- tree：`73c2b10c17372f4de1c50b32508cafcd3ed13e70`\n- sole：`2192aef3d569e244dbc244de6977227541c62ea2`\n\n四份 raw/CAS、2737 全树和 472 清单回读一致；3 改 1 新增、2733 tuple 不变，runs/checks 为 0。回执：[6214677393](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214677393)。\n\n两份完整控制 **v2 RAM 稿**已交 [6214701588](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214701588)，补齐前后两处严格 `GITHUB_WORKFLOW` 名称断言。v1 不发布；控制均未创建对象/ref 或运行。",
+      "reported_sha1_values": [
+        "2192aef3d569e244dbc244de6977227541c62ea2",
+        "73c2b10c17372f4de1c50b32508cafcd3ed13e70",
+        "eccf57794fab848b93a31ea3c595100e38a8cb47"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214677393",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214701588"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1447d-3e6f-7726-bc3f-84b674346e4c",
+      "position_from_newest": 143,
+      "reported_summary": "candidate23 精确 RAM 稿已交 [#6/6214615650](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214615650)。\n\n- S3 实际源已确认：`a40e873302e464ed56d6d505778d9561274e2e2c`，三叶完整 raw/CAS 一致。\n- 拟 sole：`2192aef3d569e244dbc244de6977227541c62ea2`\n- 精确 tree：`73c2b10c17372f4de1c50b32508cafcd3ed13e70`\n- 2737 叶：3 改、1 新增，2733 原 tuple 不变。\n- manifest 472 项与组合树发现集合逐项一致，原 471 行及 LF 保留。\n\n完整四 CAS、manifest literal、472 数组均已附。未创建源码对象/ref 或运行；两控制待 candidate23 actual 后改绑。",
+      "reported_sha1_values": [
+        "2192aef3d569e244dbc244de6977227541c62ea2",
+        "73c2b10c17372f4de1c50b32508cafcd3ed13e70",
+        "a40e873302e464ed56d6d505778d9561274e2e2c"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214615650"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14476-082a-77f9-a450-e2316dbeba12",
+      "position_from_newest": 144,
+      "reported_summary": "已在 [#6/6214468973](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214468973) 登记准备状态。\n\n旧 e920 两控制保持 RAM，未创建对象/ref 或运行。candidate22 实际 head/tree 到后，只机械改绑并重算两份精确 CAS/root；原命令、门、reader 和预算保持。清单修复及 S3 owned 文件均未触碰。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214468973"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1446a-7f02-72b4-aefa-933e7932b2b1",
+      "position_from_newest": 145,
+      "reported_summary": "21 叶候选已发布：\n\n- 分支：`codex/review-delivery-candidate-21-8ffb-20261016`\n- HEAD：`e92060adf1b540b7ce6ccb348f0a8dd94d611e3d`\n- tree：`72603912974f7c41b88937cce000f7ca5211623f`\n\n完整 2736 叶回读一致：17 改、4 新增、2715 tuple 不变；受保护 refs 未动，runs/checks 均为 0。回执：[6214285625](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214285625)。\n\n已另交绑定实际 head 的完整 RAM 稿：[format collector](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214304966)、[完整 static](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214305766)，未发布或运行。\n\nS2 NoExact、Windows 双 JUnit、C3 health 仍未解，不宣称候选通过或交付。",
+      "reported_sha1_values": [
+        "72603912974f7c41b88937cce000f7ca5211623f",
+        "e92060adf1b540b7ce6ccb348f0a8dd94d611e3d"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214285625",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214304966",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214305766"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1445e-b435-72f2-a279-d7eec87ff4a4",
+      "position_from_newest": 146,
+      "reported_summary": "最终 19 叶 RAM 候选已交 [#6/6214060280](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214060280)。\n\n- sole 拟定父提交：`8ffb66ea73e74ecc3eb938039f4b063f52e40b51`\n- 精确候选 tree：`15bb0d326fc2b36b71a9850b1e8f0da79f53f4da`\n- 2736 叶：15 修改、4 新增、2717 原 tuple 不变。\n- Git v2 实际 ref/九叶 CAS 已核；全部 19 叶 raw/CAS 一致，无功能 owner 同路径冲突。\n- 未导入新控制 YAML；S1 TS、CI、锁文件保持。\n\nRuntime81/Main4 留作独立后继层。未创建对象/ref、运行或宣称全 CI 通过。",
+      "reported_sha1_values": [
+        "15bb0d326fc2b36b71a9850b1e8f0da79f53f4da",
+        "8ffb66ea73e74ecc3eb938039f4b063f52e40b51"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6214060280"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14456-b54f-7301-b292-e44c7d81c362",
+      "position_from_newest": 147,
+      "reported_summary": "不包含。`9e507e15` 仅修改：\n\n- `openbot/server/tests/support/wf-native-action-channel.ts` → blob `c336ae868712e5226dfc2c7e0d1e1ff2bc3bebb8`\n- `openbot/server/tests/support/wf7-action-fixture.ts` → blob `5c07d8cb38f3c8d54f5f9046bf6a55735ba518c2`\n\n它修的是 WF7 workspace 的真实授权、设备连接 SQL lifecycle 与物理后端，未修 Main caller/modelTenant callback。\n\n`source-main-application-fixture.ts` 在 D、9e50、OS4e5d 三源完全相同：blob `d03a054fe863c30f3a81102db4508cebd4594b01`，40286B；L194 已有 `AsyncResource.bind`。Main4 同因尚未证实，应独立指定 owner。\n\n准确指纹及关键源码：[6213902268](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213902268)。",
+      "reported_sha1_values": [
+        "5c07d8cb38f3c8d54f5f9046bf6a55735ba518c2",
+        "c336ae868712e5226dfc2c7e0d1e1ff2bc3bebb8",
+        "d03a054fe863c30f3a81102db4508cebd4594b01"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213902268"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14452-0bf0-717f-b1cc-4c458f8d2768",
+      "position_from_newest": 148,
+      "reported_summary": "已交 [#6/6213844618](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213844618)：\n\n- S2 `507462e2` 三叶实际 raw/CAS 核对通过，已替换 pending。\n- 当前暂定树：`50236bd30437c20fd007b0a7850d33ade022f909`，2733 叶、9 改 1 新增；Git v2 九叶仍 pending。\n- collector 六组机械 literal 正逆验证通过；真实 candidate SHA/tree/叶数明确留槽，未冒充最终 CAS。\n- 已列 CI 七个 artifact 上传站点、原路径及严格替代证据方案的待定合同。\n\nC3 保持实际失败。未创建源码对象/ref、改 CI 或运行。",
+      "reported_sha1_values": [
+        "50236bd30437c20fd007b0a7850d33ade022f909"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213844618"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14445-df20-7218-8bce-2d25109a14d3",
+      "position_from_newest": 149,
+      "reported_summary": "RAM 整合矩阵已交 [#6/6213604729](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213604729)。\n\n- sole 拟定基底：`8ffb66ea73e74ecc3eb938039f4b063f52e40b51`\n- 已核准来源可选 7 叶；其余 2725 tuple 保持。\n- 仅这 7 叶的暂定树：`2bf145ce8bac0e63655cd8daa90b68924d0bd4fa`\n- S2 三叶、S3-Git v2 九叶明确 pending，最终 root 未定。\n- 未发现已选功能 owner 同路径争用。\n\n已附精确 CAS、格式重叠及 artifact 配额风险分析。证据通道建议保留完整原件、native/closure 严格门；未改 CI、创建对象/ref 或执行测试。",
+      "reported_sha1_values": [
+        "2bf145ce8bac0e63655cd8daa90b68924d0bd4fa",
+        "8ffb66ea73e74ecc3eb938039f4b063f52e40b51"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213604729"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14439-2034-746a-9107-3d7af0bd828b",
+      "position_from_newest": 150,
+      "reported_summary": "已发布独立格式源码基底：\n\n- 分支：`codex/review-format93-source-cd93-20261016`\n- HEAD：`8ffb66ea73e74ecc3eb938039f4b063f52e40b51`\n- tree：`1e0cd564d6f32ed35c1be5331e72bfbb935d26a3`\n- 唯一父提交：`cd935f05e33a59e36dacafb0b9e06a6575b6950d`\n\n回读全部 93 份 raw/CAS 一致；2732 叶中恰 93 修改、2639 tuple 不变。受保护 refs 未动，Actions/checks 均为 0，未执行代码。\n\n完整回执：[#6/6213352536](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213352536)。",
+      "reported_sha1_values": [
+        "1e0cd564d6f32ed35c1be5331e72bfbb935d26a3",
+        "8ffb66ea73e74ecc3eb938039f4b063f52e40b51",
+        "cd935f05e33a59e36dacafb0b9e06a6575b6950d"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213352536"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1442c-88a7-76c9-8716-e63df62db0bb",
+      "position_from_newest": 151,
+      "reported_summary": "完整 pack/patch 已独立核验，93 文件均从实际 before blob 经完整 patch 在 RAM 重构，前后 CAS 与完整树全部一致。两遍退出 `[0,0]`、最终检查 `0`；retention 与 `physicalCleanupVerified=false` 保留。\n\n交接原件：\n\n- 核验及冲突：[6213146262](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213146262)\n- 完整 93 项 CAS：[6213146807](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213146807)\n- 最新 Windows 补核：[6213169028](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213169028)\n\n共 10 个路径需保留功能新稿；其余 83 个仍须核最终基底 CAS。未覆盖源码、建 ref 或重跑；仅签格式收集范围，不签全 CI。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213146262",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213146807",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6213169028"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1441f-cc4f-7278-9ed7-ca040cf1b086",
+      "position_from_newest": 152,
+      "reported_summary": "已确认准确 run `38882775570` / job `116913219800` 官方 SUCCESS，尚未签收完整格式 pack，也未宣称全 CI 通过。\n\n当前会话未提供 `fetch_workflow_job_logs` 或 GitHub 搜索工具。已在 [#6/6212884074](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6212884074) 请求 res2/Root 交付可重组的完整帧及运行原件，未重试已知 403 下载入口。\n\n收到后继续核验 pack/patch 哈希、逐文件 CAS、两遍退出码、最终检查和源码绑定，并列出与各功能线的实际冲突。未重跑、改源码或覆盖其他作者文件。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6212884074"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14413-2642-768f-8406-1facbe8dde01",
+      "position_from_newest": 153,
+      "reported_summary": "已按 lease 发布 review：\n\n- 分支：`codex/review-format-pack-s1-v3-20261016`\n- HEAD：`cd935f05e33a59e36dacafb0b9e06a6575b6950d`\n- tree：`f8b8a0b546d6b82657fc77737903b1ec647d7b61`\n- 唯一父提交：`583824a1ba4b07781819f381a7bad67bdcd0b2e4`\n\n完整 21232B raw 回读一致；2732 叶中原 2731 tuple 不变。回读时 formal 为 404、Actions/checks 均为 0，未运行。\n\n完整回执：[#6/6212647384](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6212647384)。",
+      "reported_sha1_values": [
+        "583824a1ba4b07781819f381a7bad67bdcd0b2e4",
+        "cd935f05e33a59e36dacafb0b9e06a6575b6950d",
+        "f8b8a0b546d6b82657fc77737903b1ec647d7b61"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6212647384"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1440a-a0a9-7222-963d-301c3465de61",
+      "position_from_newest": 154,
+      "reported_summary": "已提交可审批 RAM 稿：[#6/6212493522](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6212493522)。\n\n- 真实根因：首次格式化后仍有四文件差异；packer 完整发包后因 `formatComplete=false` 主动退出，无 Traceback。\n- 候选：固定最多两遍相同格式化命令，逐遍保留退出码；原非写检查、所有拒签及预算保持。\n- 新稿：21232B，SHA256 `dc476a8dc83a1c7ffa099988a949de8831b5032ae53917d0b6663bd41d76c79f`。\n- 六组 literal 正逆验证通过，其余 2731 叶不变。\n\n未创建源码对象/ref，未运行；第二遍是否收敛仍需新窗口实测。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6212493522"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143ff-bdee-7386-a4be-24d9247a94d1",
+      "position_from_newest": 155,
+      "reported_summary": "已核对运行 head `a46d9a87` 的 workflow，准确为 20659 字节，SHA256 与已签 v2 一致。\n\n官方日志下载实际被代理拒绝：`Tunnel connection failed: 403 Forbidden`。已在 #6/6212268653 请求四项检查完整诊断及 packer traceback；现有摘要不足以确定根因。\n\n尚未修改源码、创建对象或重跑。收到原始异常后才能给出有证据支持的最小 RAM 修稿，保留全部检查、凭据检测和预算。",
+      "reported_sha1_values": [],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143f0-7bc0-70fb-951c-9d292ce4bb86",
+      "position_from_newest": 156,
+      "reported_summary": "准确 v2 SOURCE_ONLY review 已发布：\n\n- 分支：`codex/review-format-pack-s1-20261016`\n- SHA：`a46d9a87e3a5bcbf0fbab52d2a1f2c7c14202821`\n- tree：`0a51a26b7ebc590f3cebdd1215c9f0763e8ccaef`\n- [完整回执 6211971076](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211971076)\n\nfresh 回读确认完整 raw 与批准的20,659B/hash相同，原2731叶不变；保护 refs 保持，formal仍404，Actions/checks为0。未运行 formatter 或CI。",
+      "reported_sha1_values": [
+        "0a51a26b7ebc590f3cebdd1215c9f0763e8ccaef",
+        "a46d9a87e3a5bcbf0fbab52d2a1f2c7c14202821"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211971076"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143e8-4ba1-7347-ac1f-d9648db3a329",
+      "position_from_newest": 157,
+      "reported_summary": "独立 v2 已交：[6211823233](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211823233)。\n\n仅两处最小 literal：pack/RESULT 均加入临时存储保留状态、`physicalCleanupVerified:false` 和完成范围说明。v1 保留原样；正逆全文一致，预算不变。\n\nv2：20,659B，SHA256 `6f3c4b744bef09b0e4a9d048f7a55f6bea67de6cbac934c4be53b08a14225380`。\n\n未创建对象/ref，未运行。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211823233"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143db-140e-7006-923b-da5d607d44ff",
+      "position_from_newest": 158,
+      "reported_summary": "已交完整 format-only 收集控制 RAM：[6211641165](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211641165)。\n\n仅在临时云 worktree 格式化，输出完整补丁、逐文件 CAS 和 roundtrip 验证；使用有界日志帧传输，缺帧、遮盖或 hash 不符均拒收。未创建对象/ref、未运行，也未覆盖任何功能叶。\n\n三片原输出已重建验 hash：[6211674335](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211674335)。确认 **93 errors，只有20 headers、73未展示及5处截断**，不能据此拼全补丁。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211641165",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211674335"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143d1-4f61-734a-bd53-b703d31f0ee7",
+      "position_from_newest": 159,
+      "reported_summary": "S4 独立窄审完成：[6211426373](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211426373)。\n\n**SOURCE_PASS，仅限一次性 GitHub-hosted VM 实验源码；未确认 P1/P2。** 官方 VS17 配置、Registry32、继承链及完整 CAS/Merkle 均已核对，原 guard/断言/预算不变。\n\n关键边界：没有自动注册表回滚，不能用于复用宿主；配置成功不证明 VCTIP 残留消失。未改任何叶、创建对象或运行实验。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211426373"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143c5-b7e5-7584-86bd-713035112ae4",
+      "position_from_newest": 160,
+      "reported_summary": "两项已完成：\n\n- **静态控制已发布**：`codex/review-static-ts-s1-20261016`  \n  SHA：`583824a1ba4b07781819f381a7bad67bdcd0b2e4`  \n  [完整回执 6211144308](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211144308)。raw/tree/2730原叶及保护 refs 核对通过；formal仍404，Actions/checks为0。\n\n- **S3独立窄审：源码PASS，未确认P1/P2**。真实SDK receipt、paired/current、SQL lifecycle、workspace inspect/verify及recursive500消费者已追踪，CAS/Merkle独算吻合，原测试全文不变。[审查回执 6211251725](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211251725)\n\n未修改S3叶，未执行类型检查、测试或CI。",
+      "reported_sha1_values": [
+        "583824a1ba4b07781819f381a7bad67bdcd0b2e4"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211144308",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6211251725"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143b2-29f9-76fb-b089-dea0a6f06398",
+      "position_from_newest": 161,
+      "reported_summary": "完整 RAM 控制稿已交：[6210839435](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210839435)。\n\n- 唯一 parent：S1 `782b0d9f9e806b907f8764e5638098eac1e289eb`\n- 仅新增 `.github/workflows/static-ts-s1.yml`\n- after：14,300B，SHA256 `507e0569a4886a75e7aeb3f97cd961740fdaf3090fb2219ead8264ffd0004fa1`\n\n包含完整 workspace/integration types、锁定本地 lint/format、源码前后绑定及固定结果日志。15分钟为收紧预算提案；不用 artifacts、PG 或 provider。\n\n已回读 Root 最新决定 `6210806908`。未创建对象/ref，未执行任何检查或 CI。",
+      "reported_sha1_values": [
+        "782b0d9f9e806b907f8764e5638098eac1e289eb"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210839435"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143ae-8ed5-752d-8ed1-590904283c23",
+      "position_from_newest": 162,
+      "reported_summary": "S1 SOURCE_ONLY review 已发布：\n\n- 分支：`codex/review-static-ts-delivery-d-20261016`\n- SHA：`782b0d9f9e806b907f8764e5638098eac1e289eb`\n- tree：`fce1274e1f2831aae758b80fb793cd0bec6bf8c8`\n- [完整回执 6210736932](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210736932)\n\nfresh 回读确认唯一 parent 为 D、两叶 raw 与批准 CAS 完全相同，其余2728叶不变。保护 refs 均保持，Actions/checks 为0。未建 formal，未运行 typecheck、测试或 CI。",
+      "reported_sha1_values": [
+        "782b0d9f9e806b907f8764e5638098eac1e289eb",
+        "fce1274e1f2831aae758b80fb793cd0bec6bf8c8"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210736932"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143a6-6109-7630-8a35-ec668083f198",
+      "position_from_newest": 163,
+      "reported_summary": "已完成两项：\n\n- **删除**：`11950327471` 单次 DELETE→204，回读404；副本 `11950846848` 与冻结小件 `11975241762` 均仍200。[回执 6210583275](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210583275)\n- **S1 RAM 候选**：两个测试文件的 family narrowing／cancel 类型构造已交完整 literal、CAS、正逆及非 owned 证明。[6210642435](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210642435)\n\n唯一基准为 D；预期 tree `fce1274e1f2831aae758b80fb793cd0bec6bf8c8`。保留全部原断言与预算，其余2728叶不变。未创建源码对象/ref，未运行 typecheck、测试或 CI。",
+      "reported_sha1_values": [
+        "fce1274e1f2831aae758b80fb793cd0bec6bf8c8"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210583275",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210642435"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a143a0-638b-7726-8924-918e5850edbe",
+      "position_from_newest": 164,
+      "reported_summary": "第一批已优先交 Root：[6210484566](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210484566)。\n\n- 条件删除候选：`11950327471`，**1,525B**\n- 保留同 digest 副本：`11950846848`\n- 尚未获准确批准，**零 DELETE**\n\n没有证据支持安全删除更多大件；这批空间极小，不能宣称能解除 quota。当前 CI 未取消、未重跑、未修改。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210484566"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1439c-806a-77cc-ae15-8873be5a3e85",
+      "position_from_newest": 165,
+      "reported_summary": "盘点已完成：[6210457105](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210457105)。\n\n- 当前 352 件，共 **18,679,738B**。\n- 最小条件候选：重复源码证明 `11950327471`，**1,525B**；同 digest 副本 `11950846848` 保留。待 Root 准确批准，本轮 **零 DELETE**。\n- 保留冲突已报 [6210422264](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210422264)：WorkBuddy 声称删除冻结件 `11975991304`，我独立 GET 确认为 404；`11975241762` 仍存在。\n\n未改代码、refs 或运行 CI；未宣称 quota 已恢复。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210422264",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210457105"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14390-5fcf-74a6-8e21-ea119294d57f",
+      "position_from_newest": 166,
+      "reported_summary": "E SOURCE_ONLY review 已发布：\n\n- 分支：`codex/review-full-ci-delivery-d-20261016`\n- SHA：`eaa8d841b7db85779cb62be3ae6ed0fcad8b9296`\n- tree：`ecc9ab22ac9da705e7a014195c7fac84d40a8909`\n- [完整回执 6210250677](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210250677)\n\nfresh 回读确认唯一 parent 为 D，仅 ci 一叶变化，其余 2729 叶一致；after 为批准的 67174B/hash。Main、旧 refs 保持，future formal 仍 404，Actions/checks 均为 0。未运行 CI。",
+      "reported_sha1_values": [
+        "eaa8d841b7db85779cb62be3ae6ed0fcad8b9296",
+        "ecc9ab22ac9da705e7a014195c7fac84d40a8909"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210250677"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14388-fd43-73ad-b5b5-5b9280ecc262",
+      "position_from_newest": 167,
+      "reported_summary": "D 已发布并完成 fresh 核验：\n\n- 分支：`codex/review-delivery-source-47a-ab-20261016`\n- SHA：`9eaed314a487b21a1b897ce1fa47bc5a026a2748`\n- tree：`46585ec90b56835a8c0cf87004e16b001f7801d0`\n- [完整回执 6210103902](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210103902)\n\n唯一 parent 为 S47a；相 S 恰两叶变化，其余 2728 叶一致，A/B 完整 blob 均准确复用。Main、旧 refs 未移动，Actions/checks 均为 0。\n\n严格 CI 一次窗口的完整 RAM 候选已交 [6210120956](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210120956)，保留全部 jobs/tests/needs/预算/失败门及余下 7 处 artifact。未创建窗口控制对象或触发运行，等待 Root 精确批准。",
+      "reported_sha1_values": [
+        "46585ec90b56835a8c0cf87004e16b001f7801d0",
+        "9eaed314a487b21a1b897ce1fa47bc5a026a2748"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210103902",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6210120956"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14379-9aff-74c4-9ca0-4226ee0ea815",
+      "position_from_newest": 168,
+      "reported_summary": "两条 SOURCE_ONLY review 分支已发布，我已回读确认 refs 与 #6 回执：\n\n- **A** `codex/review-ci-source-log-proof-566c-20261016`  \n  SHA：`5e551eb1fb60dbe6298ef8b5d1e89661d6dd4395`  \n  [完整核验回执 6209880659](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209880659)\n- **B** `codex/review-windows-guard-snapshot-433-20261016`  \n  SHA：`61e7c0cce04072fe61061a7f7b87984e8ba31187`  \n  [完整核验回执 6209865308](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209865308)\n\n各自仅变更批准单叶，其余 2729 叶一致，原件 bytes/hash 均符合 lease。集成 ref 与默认 main 未移动；未建 formal/PR，未运行测试、编译或 CI，Actions/checks 均为 0。quota 与 Windows 根因仍未宣告解决。",
+      "reported_sha1_values": [
+        "5e551eb1fb60dbe6298ef8b5d1e89661d6dd4395",
+        "61e7c0cce04072fe61061a7f7b87984e8ba31187"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209865308",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209880659"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14365-1953-718c-a7e7-498ad72c93f1",
+      "position_from_newest": 169,
+      "reported_summary": "已实读编辑后的 Root 决定，并完成两路云端 RAM 候选交接：\n\n- **A 最终包**：[6209590318](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209590318)。唯一基准 `566c02e5682dda2884fa1812929908b2bf6ece9a`；仅补 held FD、有界读取及 close 后输出，保留原 SHA/matrix 契约和四处报告修正。计划文件 67137B，SHA256 `ee078f9937fbaf439960b2ef4cd5be06c24fc1b803940aed22e7fa7dfbcde9dc`。旧包 `6209334934`、`6209562854` 已标记失效。\n- **B 诊断包**：[6209559034](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209559034)。仅增加固定安全字段日志，原 guard、预算及失败逻辑不变。计划文件 47628B，SHA256 `09911c1a4544ec59a8162df972c08773e67409509e3ef36657c1732998cae2a7`。\n\n两包均已回读。未创建对象/ref，未执行测试、编译或 CI；等待 Root 精确新 lease。quota 与 Windows 拒绝根因均未宣告解决。",
+      "reported_sha1_values": [
+        "566c02e5682dda2884fa1812929908b2bf6ece9a"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209559034",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209590318"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14353-8c4c-7023-99a3-3f269ff832a2",
+      "position_from_newest": 170,
+      "reported_summary": "两路首轮已完成，基准为 `433bf3c8615d8c526f2a2d0938915d6f72438127`。\n\n- **A：可实施候选**：[6209334934](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209334934)。仅替换 `ci.yml:57/184/313/511` 四个前置上传块，覆盖九个 Linux 实例，改为有界、可还原验 hash 的官方日志帧；保留严格失败及只读权限。完整 literal 已交接。计划文件 **58591 bytes**，SHA256 `14678b7bcd846e4726dd404cebcea56625e3b77ef51b5dbc1a8fca60956a0321`。其他 artifact 仍可能因 quota 失败。\n- **B：原件阻断**：[6209326490](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209326490)。当前仅确证关闭 guard 拒绝，不能判定编译失败。run `38810690519`／job `116682856375` 日志下载返回 `Tunnel connection failed: 403 Forbidden`；已列明 Root 需补的 JSON、closure、stdout/stderr。当前 51/7 均未运行到。\n\n未创建 Git 对象、修改 refs 或运行测试/编译/CI。A 等 Root 精确新 lease；日志还原验证仍为 `NOT_RUN`。",
+      "reported_sha1_values": [
+        "433bf3c8615d8c526f2a2d0938915d6f72438127"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209326490",
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209334934"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14345-f388-7747-92d0-ee1240d822f1",
+      "position_from_newest": 171,
+      "reported_summary": "已按 Root **6209076431** 完成 SOURCE_ONLY 发布并 fresh 核验：\n\n- 分支：`codex/review-ci-report-prerequisite-433-20261016`\n- SHA：`566c02e5682dda2884fa1812929908b2bf6ece9a`\n- tree：`a145321b12f9b2fd3d78207d3da9874e1387ccc7`\n- sole-parent：`433bf3c8615d8c526f2a2d0938915d6f72438127`\n\n仅 `ci.yml` 四组修改；2730 叶中其余 **2729 tuple 全同**。准确 after **39549B / 4aa13566…98fc91 / blob6bf00f99…**，完整正逆、CAS、UTF16 坐标及树证明见 [#6209123128](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209123128)，留言已回读一致。\n\nMain/旧 refs 未动；未建 formal/PR，未运行测试或构建。仅清 secondary exit127，**quota 未解除，CI 未签绿，Gate7 仍 NOT_RUN**。",
+      "reported_sha1_values": [
+        "433bf3c8615d8c526f2a2d0938915d6f72438127",
+        "566c02e5682dda2884fa1812929908b2bf6ece9a",
+        "a145321b12f9b2fd3d78207d3da9874e1387ccc7"
+      ],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209123128"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a14337-6193-76fc-b8c8-3cbcd0222fe2",
+      "position_from_newest": 172,
+      "reported_summary": "已交 Root：[诊断及单叶 lease 请求 #6209021729](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209021729)；归属登记为 **6208909388**。\n\n- **七用例门控完整**：Main433 的 `device-safety.integration.test.ts:30` 定义 Windows 门，七处均使用。Linux 原始状态为 SKIP，验收应记 N/A，不能折算 PASS。\n- **严格 CI 分层确认**：9 个 Linux job 在证据上传前置失败，测试未运行；Windows 51 未到达。独立 55a 的 `46/5、专属7=5/2` 不混算，Gate7 仍 NOT_RUN。\n- **最小候选仅存 RAM**：`.github/workflows/ci.yml:260/264/549/551`，四组 literal，使报告步骤仅在 Head 实际执行后运行，消除连带 exit127；保留 quota 原失败，**不能宣称解除 CI 主阻断**。正逆全文校验一致。\n- 已读 **6186870971、6202632231、6201818925、6202798330、6202950212**。ZIP/完整日志下载实际被 `Tunnel connection failed: 403 Forbidden` 阻断，未冒充自行验过原件。\n\n仅云端 API+RAM；未创建 Git 对象或 refs，未运行项目。等待 Root 准确 lease，旧分支及独占文件均未动。",
+      "reported_sha1_values": [],
+      "reference_urls": [
+        "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209021729"
+      ],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a13943-a438-7618-8f8b-b9b7b2387a59",
+      "position_from_newest": 173,
+      "reported_summary": "收到，配置交接完成。最终提交为 `3d64637d9655611cc162d661ea71f0561b9e9f93`，已由你成功推送。\n\n我将停止修改该分支，保留云端源码、辅助数据库及验证原件。真实 Codespace 重建、实测与后续最小修正由你接手。",
+      "reported_sha1_values": [
+        "3d64637d9655611cc162d661ea71f0561b9e9f93"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1393e-46e1-74fe-aee0-a240a9f6d5dd",
+      "position_from_newest": 174,
+      "reported_summary": "已修复 dev 镜像名为 `xiongbao-codespaces-dev`，轻量检查通过。\n\n- 分支：`codex/github-codespaces`\n- 最终 SHA：`3d64637d9655611cc162d661ea71f0561b9e9f93`\n- 一次普通推送仍返回 GitHub 代理 503，尚未上传。\n\n已逐条输出 `XB_CONFIG_BUNDLE` metadata 和 **6 个 JSON base64 块**，每块不超过 6000 字符；重新拼接校验通过。\n\n文件：`XB_CONFIG_BUNDLE-b27abda7-3d64637.bundle`  \n大小：`22717` bytes  \nSHA256：`4f7cfb2bf3afa7ba5bdec659ec11df96a665337ae70ff5ece086a782661dee8c`\n\nbundle 仅含从 `b27abda7` 到最终 SHA 的配置提交，保留原 SHA，不含凭据或运行数据。",
+      "reported_sha1_values": [
+        "3d64637d9655611cc162d661ea71f0561b9e9f93"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a13919-a0d3-7770-b533-b18c0545c9e4",
+      "position_from_newest": 175,
+      "reported_summary": "修订已提交，但**GitHub 代理持续返回 503，推送和 PR 创建均未成功**。\n\n- 分支：`codex/github-codespaces`\n- 准确 SHA：`c448872813752642a5a85ab4ef7b85ba0c7351b8`\n- 已加入官方 Docker-in-Docker、`sshd:1`、postCreate/postStart，以及多 AI 轮流使用和并行隔离说明。\n- 已验证：独立容器冷安装、类型检查、构建、66 项测试、服务重启；容器内 Docker Client/Server 与镜像构建通过。\n- 留给你实测：最终 feature 组合重建、SSH、真实 Codespace 重开恢复及 GitHub **Private** HTTPS 预览。\n\n源码和原锁文件没有提交变更；未强推、合并 main 或删除数据库。\n\n已导出保留准确 SHA 的 [Git bundle](/workspace/codex-github-codespaces-c448872.bundle)，可上传到现有 Codespace 后安全推送：\n\n```bash\ngit fetch ./codex-github-codespaces-c448872.bundle codex/github-codespaces\ngit push origin FETCH_HEAD:refs/heads/codex/github-codespaces\n```\n\n[PR 说明](/workspace/xiongbao-codespaces-pr.md)与[验证边界](/workspace/xiongbao-Wake-/.devcontainer/VALIDATION.md)已备好。",
+      "reported_sha1_values": [
+        "c448872813752642a5a85ab4ef7b85ba0c7351b8"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    },
+    {
+      "source_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "turn_id": "01a1390b-733b-77be-8e9e-394201f79469",
+      "position_from_newest": 176,
+      "reported_summary": "云端开发环境已准备好，配置草稿已保存，尚未发布。\n\n- 提交：`b27abda7b85ed79970cfebe8043679b1715fb396`；仓库工作区干净。\n- Bun 1.3.14、Node 24.19.0、PostgreSQL 17 + pgvector 已验证。\n- 独立开发库和测试库已迁移；运行角色无超级用户或 BYPASSRLS 权限，保留 `OPENBOT_RLS_ENFORCE=refuse`。\n- 类型检查、完整 workspace 构建通过；代表性测试 **66 通过、0 失败**。\n- 安装脚本重复执行、服务重启、健康接口、员工 API 和前端页面验证通过。\n- 未连接真实模型、收费 provider 或生产数据。\n\n已保存 `install_script` 和 `start_skill`。完整 CI 未运行，未宣称 main 原有失败已修复，也不作为产品交付验收。\n\n环境标识：`ccarenv_b64_Y2NhcmVudl83MmQ2YmFlNjFjOWM4MTkxODc3NmRkMzA2MjY5MWE1YQ`\n\n请在环境设置审阅并保存配置，核对 **Only me** 后发布；当前工具无法验证可见性。新任务恢复尚未验证。",
+      "reported_sha1_values": [
+        "b27abda7b85ed79970cfebe8043679b1715fb396"
+      ],
+      "reference_urls": [],
+      "historical_report_only": true,
+      "remote_objects_retrieved_now": false
+    }
+  ],
+  "record_count": 179,
+  "validation": "historical messages; no current GitHub verification"
+}

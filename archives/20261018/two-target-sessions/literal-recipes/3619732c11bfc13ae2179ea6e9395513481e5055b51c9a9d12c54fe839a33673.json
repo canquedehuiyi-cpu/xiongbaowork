@@ -1,0 +1,1 @@
+{"after":"function permit(request: RunnerSecurityVerification | RunnerIsolatedVerification) {\n  if (request.type !== \"security.verify\")\n    throw new Error(\"The ordinary security fixture cannot issue an isolated permit.\");\n  return {","before":"function permit(request: RunnerSecurityVerification) {\n  return {","path":"openbot/server/tests/runner-security.test.ts"}

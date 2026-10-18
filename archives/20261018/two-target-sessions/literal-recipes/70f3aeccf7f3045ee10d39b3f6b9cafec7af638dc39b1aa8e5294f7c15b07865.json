@@ -1,0 +1,1 @@
+{"after":"        budget.bufferedReads -= newline + 1;\n        let failurePhase: PrivateBridgeFailurePhase = \"STDOUT_FRAME\";\n        try {","before":"        budget.bufferedReads -= newline + 1;\n        try {","count":1,"path":"openbot/server/src/wakerflows/source-bwrap-containment.ts"}

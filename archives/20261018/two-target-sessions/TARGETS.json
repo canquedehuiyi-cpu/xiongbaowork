@@ -1,0 +1,20 @@
+{
+  "targets": {
+    "01a1250f-65cf-72e2-929c-a95357d2fb09": {
+      "title": "审计并验证 WakerFlow 交付标准",
+      "host": "local",
+      "source_read": "complete local session file",
+      "session_records": 133486,
+      "existing_recovery_directory": "archives/20261018/thread-recovery"
+    },
+    "01a1390b-52ef-738e-a35d-9ecb53d62081": {
+      "title": "设置 xiongbao-Wake-",
+      "host": "durable",
+      "source_read": "complete visible thread history",
+      "turns_read": 177,
+      "pagination_complete": true
+    }
+  },
+  "wrong_source_excluded": "01a12509-372c-72e0-a953-8c4fba7b8d91",
+  "product_source_changed": false
+}

@@ -1,0 +1,103 @@
+[
+  {
+    "thread_id": "01a14353-e9ba-761a-865e-42106cf2d0b7",
+    "title": null,
+    "host": "durable",
+    "history_complete": true,
+    "turn_count": 3,
+    "records": [
+      {
+        "source_thread": "01a14353-e9ba-761a-865e-42106cf2d0b7",
+        "turn_id": "01a1437a-06b5-746d-91b5-9d82d18f1189",
+        "position_from_newest": 0,
+        "reported_summary": "A 已按准确 lease 发布：\n\n- 分支：`codex/review-ci-source-log-proof-566c-20261016`\n- SHA：`5e551eb1fb60dbe6298ef8b5d1e89661d6dd4395`\n- tree：`1628c936583a0311469b8adb4445794fa164206e`\n- sole-parent：`566c02e5682dda2884fa1812929908b2bf6ece9a`\n\n[完整 fresh 核验回执 #6209880659](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209880659)：2730 叶仅 `ci.yml` 变化，其余 2729 tuple 相同；准确 raw/hash、四 literal 正逆、四处报告修正均通过。\n\n集成 ref 保持 433，default main 保持 b12；Actions/checks 均 0。未运行、未建 PR/formal；后续 quota 仍可能阻断，未签 CI 绿。",
+        "reported_sha1_values": [
+          "1628c936583a0311469b8adb4445794fa164206e",
+          "566c02e5682dda2884fa1812929908b2bf6ece9a",
+          "5e551eb1fb60dbe6298ef8b5d1e89661d6dd4395"
+        ],
+        "reference_urls": [
+          "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209880659"
+        ],
+        "historical_report_only": true,
+        "remote_objects_retrieved_now": false
+      },
+      {
+        "source_thread": "01a14353-e9ba-761a-865e-42106cf2d0b7",
+        "turn_id": "01a14365-8dde-77b2-b887-24bc1af20e27",
+        "position_from_newest": 1,
+        "reported_summary": "最终收窄 RAM 包已交：[6209590318](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209590318)，fresh 全文一致。\n\n- 唯一基准：`566c02e5682dda2884fa1812929908b2bf6ece9a`\n- 仅四处前置传输改为 held FD、有界读取、真实 close 后输出；保留原 SHA/matrix 契约及四处报告修正。\n- after：`67137 bytes`\n- SHA256：`ee078f9937fbaf439960b2ef4cd5be06c24fc1b803940aed22e7fa7dfbcde9dc`\n- 预计 blob：`6228d5acd49b461aaf4b21f839a9a3305c1c6427`\n\n旧包 **6209334934、6209562854 均 SUPERSEDED，不得用于 lease**。完整 literal、CAS、正逆证明及拒绝表已交；无对象/ref 创建，无运行。等待新 lease，后续 quota 仍阻断，未签 CI 绿。",
+        "reported_sha1_values": [
+          "566c02e5682dda2884fa1812929908b2bf6ece9a",
+          "6228d5acd49b461aaf4b21f839a9a3305c1c6427"
+        ],
+        "reference_urls": [
+          "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209590318"
+        ],
+        "historical_report_only": true,
+        "remote_objects_retrieved_now": false
+      },
+      {
+        "source_thread": "01a14353-e9ba-761a-865e-42106cf2d0b7",
+        "turn_id": "01a14353-fbaf-70f2-9744-8f8c0b0a640d",
+        "position_from_newest": 2,
+        "reported_summary": "A 已完成可 review 的完整 RAM 候选：[6209334934](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209334934)，fresh 回读全文一致。归属登记 **6209284400**。\n\n- 仅替换 `ci.yml:57/184/313/511` 四个前置上传块，覆盖 9 Linux；image 后置块保持。\n- 计划 after：**58591 bytes**\n- SHA256：`14678b7bcd846e4726dd404cebcea56625e3b77ef51b5dbc1a8fca60956a0321`\n- 预计 blob：`3bb06e6378ec9cb2bc75c6ce2d88943896d6b19d`\n- 完整 OLD/NEW literal、允许文件及 caps、正逆全文证明、安全与恢复协议均已留言。\n\n成功证明写有界官方 job-log frames；失败保留可得 bytes/hash、阶段并严格非零，不输出未知 stderr。记录 run/attempt/job/shard，缺帧、截断或缺 complete 均不能验收。\n\n实际日志请求仍报 `URLError: <urlopen error Tunnel connection failed: 403 Forbidden>`；日志取回及执行验证 **NOT_RUN**。其余 artifact quota 仍可能使 CI 红。\n\n无对象/ref/文件写入，无测试或构建。剩余仅 Root 审查、准确新 lease，以及随后批准的验证窗口。",
+        "reported_sha1_values": [
+          "3bb06e6378ec9cb2bc75c6ce2d88943896d6b19d"
+        ],
+        "reference_urls": [
+          "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209334934"
+        ],
+        "historical_report_only": true,
+        "remote_objects_retrieved_now": false
+      }
+    ]
+  },
+  {
+    "thread_id": "01a14356-19b3-7036-bb68-77d640a940bd",
+    "title": null,
+    "host": "durable",
+    "history_complete": true,
+    "turn_count": 3,
+    "records": [
+      {
+        "source_thread": "01a14356-19b3-7036-bb68-77d640a940bd",
+        "turn_id": "01a1437a-2ace-7132-8522-cb23361754de",
+        "position_from_newest": 0,
+        "reported_summary": "已发布 SOURCE_ONLY：\n\n- 分支：`codex/review-windows-guard-snapshot-433-20261016`\n- SHA：`61e7c0cce04072fe61061a7f7b87984e8ba31187`\n- 完整交接：[6209865308](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209865308)\n\n仅修改指定 PowerShell 文件；其余 2729 叶一致，Main 保持，Actions/checks 均 0。未运行测试或 CI；原 guard 根因仍 UNKNOWN。",
+        "reported_sha1_values": [
+          "61e7c0cce04072fe61061a7f7b87984e8ba31187"
+        ],
+        "reference_urls": [
+          "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209865308"
+        ],
+        "historical_report_only": true,
+        "remote_objects_retrieved_now": false
+      },
+      {
+        "source_thread": "01a14356-19b3-7036-bb68-77d640a940bd",
+        "turn_id": "01a14365-aff1-74c6-bbfb-3d47b0d3014f",
+        "position_from_newest": 1,
+        "reported_summary": "B 完整 RAM 候选已交：[6209559034](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209559034)，fresh 回读一致。\n\n仅增强 `windows-native-test.ps1` 的安全诊断日志，保留原 guard、预算与失败逻辑。三组 literal 正逆验证通过；候选 SHA256：\n\n`09911c1a4544ec59a8162df972c08773e67409509e3ef36657c1732998cae2a7`\n\n未创建源码对象或运行测试/CI；等待 Root 精确 lease。",
+        "reported_sha1_values": [],
+        "reference_urls": [
+          "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209559034"
+        ],
+        "historical_report_only": true,
+        "remote_objects_retrieved_now": false
+      },
+      {
+        "source_thread": "01a14356-19b3-7036-bb68-77d640a940bd",
+        "turn_id": "01a14356-2be1-7456-9427-e134aa90c3a3",
+        "position_from_newest": 2,
+        "reported_summary": "B 本轮完成，阻断回执：[6209326490](https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209326490)，已 fresh 回读一致。\n\n当前仅能确证 guard 拒绝，不能判定 nmake 编译失败。官方 job `116682856375` 日志读取实际返回 `URLError: Tunnel connection failed: 403 Forbidden`。\n\n需 Root 补该次 `pgvector-build-install` 的 JSON、closure、stdout/stderr 及对应 bytes/SHA，取得原件后再申请最小修复 lease。未修改源码、对象或 refs，未运行测试、编译或 CI；当前 51/7 均仍 `NOT_REACHED`。",
+        "reported_sha1_values": [],
+        "reference_urls": [
+          "https://github.com/xiongpinji/xiongbao-Wake-/pull/6#issuecomment-6209326490"
+        ],
+        "historical_report_only": true,
+        "remote_objects_retrieved_now": false
+      }
+    ]
+  }
+]

@@ -1,0 +1,1 @@
+{"after":"  const queryParameters = originalKnowledgeToolParameters().query;","before":"  const queryParameters = z.strictObject({\n    query: z.string().trim().min(1).max(500),\n    limit: z.number().int().min(1).max(20).optional(),\n  });","count":1,"path":"openbot/server/src/execution/knowledge.ts"}

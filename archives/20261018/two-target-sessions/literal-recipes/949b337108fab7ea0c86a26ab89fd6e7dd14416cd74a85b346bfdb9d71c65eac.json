@@ -1,0 +1,1 @@
+{"after":"      if (entry?.action !== \"media.viewer.open\" || closed ||","before":"      if (!entry || entry.action !== \"media.viewer.open\" || closed ||","count":1,"path":"openbot/server/src/agents/runner-security-authority.ts"}

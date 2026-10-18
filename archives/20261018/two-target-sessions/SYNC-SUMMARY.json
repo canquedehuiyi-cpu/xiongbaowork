@@ -1,0 +1,31 @@
+{
+  "targets": {
+    "01a1250f-65cf-72e2-929c-a95357d2fb09": {
+      "title": "审计并验证 WakerFlow 交付标准",
+      "host": "local",
+      "source_read": "complete local session file",
+      "session_records": 133486,
+      "existing_recovery_directory": "archives/20261018/thread-recovery"
+    },
+    "01a1390b-52ef-738e-a35d-9ecb53d62081": {
+      "title": "设置 xiongbao-Wake-",
+      "host": "durable",
+      "source_read": "complete visible thread history",
+      "turns_read": 177,
+      "pagination_complete": true
+    }
+  },
+  "new_literal_recipes": 179,
+  "distinct_paths": 72,
+  "cloud_turns_read": 177,
+  "cloud_receipt_records": 179,
+  "internal_task_records": 30,
+  "cloud_child_sessions_read": 2,
+  "complete_add_file_helpers": 1,
+  "new_full_latest_git_blob_sources_verified": 0,
+  "original_raw_chat_transcripts_uploaded": false,
+  "recovered_code_executed": false,
+  "product_source_changed": false,
+  "previous_recovery_materials_preserved": true,
+  "first_existing_archive_commit": "d8cdfc4af40a55c9b00b1038a962e47f26812baa"
+}

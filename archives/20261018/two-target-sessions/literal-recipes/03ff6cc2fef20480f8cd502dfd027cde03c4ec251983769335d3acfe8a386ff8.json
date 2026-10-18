@@ -1,0 +1,1 @@
+{"after":"    const nested = flow.plan.graph.nodes[2];\n    if (nested?.kind !== \"flow\") throw new Error(\"Missing fixture nested node\");\n    nested.next = original.id;\n    flow.plan.graph.nodes.push(original);\n    const requests:","before":"    flow.plan.graph.nodes.push(original);\n    const requests:","count":1,"path":"openbot/app/tests/wakerflow-graph-screen.test.tsx"}

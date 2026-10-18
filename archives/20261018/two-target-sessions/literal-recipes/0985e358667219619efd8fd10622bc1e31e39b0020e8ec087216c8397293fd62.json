@@ -1,0 +1,1 @@
+{"after":"const empty = originalHostToolParameters().empty;","before":"const empty = z.object({});","count":1,"path":"openbot/server/src/host-access/tools.ts"}

@@ -131,3 +131,5 @@ Windows 宿主不能直接 `bun` 起 server，交付路径是**镜像或 Linux/W
 
 代码沿用 [MIT 许可](openbot/LICENSE)，保留 `Copyright (c) 2026 CopilotKit` 与许可文本。
 第三方依赖、品牌素材和模型服务的许可或服务条款各自适用。
+
+按用户确认的两个目标会话补充同步的修改配方与云端修复索引见 [两会话同步报告](TWO-TARGET-SYNC-REPORT.md)。

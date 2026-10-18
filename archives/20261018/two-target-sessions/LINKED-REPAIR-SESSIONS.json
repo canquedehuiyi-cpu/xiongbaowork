@@ -1,0 +1,330 @@
+{
+  "internal_task_records": [
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "capacity_design_review",
+      "task_path": "/root/capacity_design_review",
+      "source_line": 21417,
+      "source_timestamp": "2026-10-11T19:17:04.486Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "root117_replay_contract_review",
+      "task_path": "/root/root117_replay_contract_review",
+      "source_line": 22374,
+      "source_timestamp": "2026-10-12T11:53:25.153Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "migrate_c3",
+      "task_path": "/root/migrate_c3",
+      "source_line": 32902,
+      "source_timestamp": "2026-10-13T06:21:55.400Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "migrate_res1",
+      "task_path": "/root/migrate_res1",
+      "source_line": 32908,
+      "source_timestamp": "2026-10-13T06:22:32.943Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "migration_final_verify",
+      "task_path": "/root/migration_final_verify",
+      "source_line": 32914,
+      "source_timestamp": "2026-10-13T06:23:16.747Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "migrate_claude_project_data",
+      "task_path": "/root/migrate_claude_project_data",
+      "source_line": 34068,
+      "source_timestamp": "2026-10-13T08:36:20.618Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "locate_acceptance_registry",
+      "task_path": "/root/locate_acceptance_registry",
+      "source_line": 34537,
+      "source_timestamp": "2026-10-13T09:41:04.535Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "d_only_delivery_runtime",
+      "task_path": "/root/d_only_delivery_runtime",
+      "source_line": 34553,
+      "source_timestamp": "2026-10-13T09:42:45.621Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "cp1_change_review",
+      "task_path": "/root/cp1_change_review",
+      "source_line": 34765,
+      "source_timestamp": "2026-10-13T10:04:18.935Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "type_guard_fix",
+      "task_path": "/root/type_guard_fix",
+      "source_line": 54016,
+      "source_timestamp": "2026-10-14T13:01:10.700Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "root_socket_lookup",
+      "task_path": "/root/root_socket_lookup",
+      "source_line": 54602,
+      "source_timestamp": "2026-10-14T13:31:10.202Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "root_workflow_producers",
+      "task_path": "/root/root_workflow_producers",
+      "source_line": 54608,
+      "source_timestamp": "2026-10-14T13:31:27.086Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "main_assembly_patch",
+      "task_path": "/root/main_assembly_patch",
+      "source_line": 54915,
+      "source_timestamp": "2026-10-14T13:52:22.127Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "record_reservations",
+      "task_path": "/root/record_reservations",
+      "source_line": 56349,
+      "source_timestamp": "2026-10-14T16:19:11.494Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "cloud_os_slice_fix",
+      "task_path": "/root/cloud_os_slice_fix",
+      "source_line": 62103,
+      "source_timestamp": "2026-10-15T06:34:45.496Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "cloud_runtime_lint_fix",
+      "task_path": "/root/cloud_runtime_lint_fix",
+      "source_line": 62130,
+      "source_timestamp": "2026-10-15T06:37:14.677Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "cloud_app_receipt_channel_fix",
+      "task_path": "/root/cloud_app_receipt_channel_fix",
+      "source_line": 62288,
+      "source_timestamp": "2026-10-15T06:49:26.414Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "source_os_ci_readonly_diagnosis",
+      "task_path": "/root/source_os_ci_readonly_diagnosis",
+      "source_line": 64557,
+      "source_timestamp": "2026-10-15T09:45:13.446Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "native_callback_live_bridge_review",
+      "task_path": "/root/native_callback_live_bridge_review",
+      "source_line": 64564,
+      "source_timestamp": "2026-10-15T09:45:52.489Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "dod4_real_model_smoke_inventory",
+      "task_path": "/root/dod4_real_model_smoke_inventory",
+      "source_line": 64735,
+      "source_timestamp": "2026-10-15T09:58:31.292Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "dod4_cloud_smoke_implementation",
+      "task_path": "/root/dod4_cloud_smoke_implementation",
+      "source_line": 65003,
+      "source_timestamp": "2026-10-15T10:17:34.961Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "quota4c_independent_source_review",
+      "task_path": "/root/quota4c_independent_source_review",
+      "source_line": 65240,
+      "source_timestamp": "2026-10-15T10:33:02.674Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "quota4c_source_review_retry",
+      "task_path": "/root/quota4c_source_review_retry",
+      "source_line": 65301,
+      "source_timestamp": "2026-10-15T10:36:17.295Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "dod4_proxy_independent_review",
+      "task_path": "/root/dod4_proxy_independent_review",
+      "source_line": 65374,
+      "source_timestamp": "2026-10-15T10:40:18.773Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "res2_native_inspector_ports_map",
+      "task_path": "/root/res2_native_inspector_ports_map",
+      "source_line": 65578,
+      "source_timestamp": "2026-10-15T10:54:55.040Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "lostack_observer_review",
+      "task_path": "/root/lostack_observer_review",
+      "source_line": 95677,
+      "source_timestamp": "2026-10-16T12:48:05.813Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "delivery_packages",
+      "task_path": "/root/delivery_packages",
+      "source_line": 106986,
+      "source_timestamp": "2026-10-17T02:55:39.986Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "ci_artifact_unblock",
+      "task_path": "/root/ci_artifact_unblock",
+      "source_line": 106992,
+      "source_timestamp": "2026-10-17T02:55:56.218Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "main_deadline_rootcause",
+      "task_path": "/root/main_deadline_rootcause",
+      "source_line": 106998,
+      "source_timestamp": "2026-10-17T02:56:13.382Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    },
+    {
+      "parent_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+      "task_name": "map63_budget_analysis",
+      "task_path": "/root/map63_budget_analysis",
+      "source_line": 118877,
+      "source_timestamp": "2026-10-17T14:24:19.087Z",
+      "persisted_child_thread_id_returned": false,
+      "current_runtime_status": "not revalidated"
+    }
+  ],
+  "internal_task_record_count": 30,
+  "cloud_child_sessions": [
+    {
+      "parent_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "id": "01a14353-e9ba-761a-865e-42106cf2d0b7",
+      "path": "/root/ci_quota_transport",
+      "kinds": [
+        "completed",
+        "interacted",
+        "started"
+      ],
+      "history_retrieved": true
+    },
+    {
+      "parent_thread": "01a1390b-52ef-738e-a35d-9ecb53d62081",
+      "id": "01a14356-19b3-7036-bb68-77d640a940bd",
+      "path": "/root/windows_pgvector_diagnosis",
+      "kinds": [
+        "completed",
+        "interacted",
+        "started"
+      ],
+      "history_retrieved": true
+    }
+  ],
+  "related_account_cloud_sessions": [
+    {
+      "thread_id": "01a143c7-6dad-74ed-bc6c-ab231eced0a5",
+      "title": "熊宝云端 S4：Windows vctip 阻断修复",
+      "host": "durable",
+      "reference_in_audit_session_line": 90945,
+      "history_retrieved_this_sync": false
+    },
+    {
+      "thread_id": "01a143b6-171f-70c3-87bc-01fef353c0b9",
+      "title": "熊宝云端 S3：WakerFlow 原生动作修复",
+      "host": "durable",
+      "reference_in_audit_session_line": 90564,
+      "history_retrieved_this_sync": false
+    },
+    {
+      "thread_id": "01a1444e-5ee2-7649-948a-ba17eb88c0bf",
+      "title": "熊宝云端 S5：SourceOS 61项失败与模型夹具修复",
+      "host": "durable",
+      "reference_in_audit_session_line": 93360,
+      "history_retrieved_this_sync": false
+    },
+    {
+      "thread_id": "01a13b5f-c730-7349-b205-b3a4c91820b7",
+      "title": "编辑 xiongbao-Wake-",
+      "host": "durable",
+      "reference_in_audit_session_line": 57147,
+      "history_retrieved_this_sync": false
+    }
+  ],
+  "notes": "Internal task paths are source references, not recovered standalone Git repositories."
+}
