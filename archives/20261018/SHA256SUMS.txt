@@ -1,0 +1,2 @@
+cfed20861da92d062c1d5d4a0c768ac6c2e95f014904323533517fac2a550adc  xiongbao-source-recovered-20261010-11.zip
+6a53c59b6bdad0e0aff83220b5fe156ac64589e9d143f92ed5760863f1637eb8  source-manifest.json

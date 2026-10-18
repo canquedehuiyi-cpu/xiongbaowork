@@ -1,0 +1,6 @@
+#!/bin/sh
+# A refused API must stop the container, not restart forever behind a healthy init.
+code=$1
+if [ "$code" -eq 256 ]; then code=$((128 + $2)); fi
+printf '%s\n' "$code" > /run/s6-linux-init-container-results/exitcode
+exec /run/s6/basedir/bin/halt

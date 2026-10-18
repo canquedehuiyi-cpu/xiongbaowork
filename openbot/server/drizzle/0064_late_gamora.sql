@@ -1,0 +1,2 @@
+ALTER TABLE "agent_profiles" ADD COLUMN "model_ref" uuid;--> statement-breakpoint
+ALTER TABLE "agent_profiles" ADD CONSTRAINT "agent_profiles_model_ref_model_registry_id_fk" FOREIGN KEY ("model_ref") REFERENCES "public"."model_registry"("id") ON DELETE set null ON UPDATE no action;

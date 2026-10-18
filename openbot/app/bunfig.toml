@@ -1,0 +1,13 @@
+[test]
+# The same declaration as the bunfig.toml at the repository root, with the paths written relative to
+# this directory -- the twin of server/bunfig.toml.
+#
+# Bun reads bunfig.toml from the current working directory and nowhere else, so the root one applies
+# to `bun test app/` run from the root and not to `bun test` run from here. Without this file
+# tests/preload.ts never loads from inside `app`, Base UI binds its layout effect to a no-op, every
+# Dialog, Sheet and popover renders nothing, and the files that open one fail against an empty
+# <body> with no error to explain it. Measured 2026-10-09: the six app test files that failed on their
+# own went from 20 failures to 1 when run with this preload.
+#
+# tests/bunfig-preload.test.ts fails if this list and the root's stop naming the same scripts.
+preload = ["../server/scripts/test-preload.ts", "./tests/preload.ts"]

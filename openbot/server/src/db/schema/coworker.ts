@@ -1,0 +1,226 @@
+/**
+ * Coworker tables: bots, skills, routines, bot-to-bot handoff.
+ *
+ * Split by owner so two people can add tables all day without touching the same lines. Add tables
+ * here; never edit core.ts or computer.ts to do it.
+ */
+import {
+  boolean,
+  index,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { Persona } from "../../../../shared/persona";
+import { agents, users } from "./core";
+import { jsonb } from "./json";
+import { modelRegistry } from "./model";
+import { tenantId } from "./tenant";
+
+const createdAt = () =>
+  timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+const updatedAt = () =>
+  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
+
+export const agentVisibility = pgEnum("agent_visibility", [
+  "public",
+  "private",
+]);
+
+export const agentProfiles = pgTable(
+  "agent_profiles",
+  {
+    agentId: text("agent_id")
+      .primaryKey()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    tenantId: tenantId(),
+    ownerUserId: text("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    roleDescription: text("role_description").notNull(),
+    avatarSeed: text("avatar_seed").notNull(),
+    visibility: agentVisibility("visibility").notNull(),
+    /**
+     * The tenant's connected model this coworker speaks with (ticket 012).
+     * Null means the deployment default; a dangling id degrades to the same
+     * rather than refusing the turn.
+     */
+    modelRef: uuid("model_ref").references(() => modelRegistry.id, {
+      onDelete: "set null",
+    }),
+    /*
+     * The credential this Bot's agent presents when it calls a tool back.
+     *
+     * A hash, never the token. We issue it, the agent's owner holds it, and this side only ever needs
+     * to check one: storing the token itself would mean a database dump is a set of working
+     * credentials for every registered agent.
+     *
+     * Null means the agent has not been issued one and may not call tools back, which is the right
+     * default: a URL somebody pasted gets no capability until an administrator hands it one.
+     */
+    callbackTokenHash: text("callback_token_hash"),
+    callbackTokenIssuedAt: timestamp("callback_token_issued_at", {
+      withTimezone: true,
+    }),
+    /**
+     * Who this coworker is, as its owner wrote it (ticket 014).
+     *
+     * Null means no persona, which is every coworker written before this existed and is not the same
+     * thing as a persona with three empty boxes: only the first sends no section at all.
+     */
+    persona: jsonb("persona").$type<Persona | null>(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("agent_profiles_visibility_deleted_idx").on(
+      table.visibility,
+      table.deletedAt,
+    ),
+  ],
+);
+
+/**
+ * A persona kept to be given again.
+ *
+ * The reuse is the point: a tenant with six reviewers wants the same care written once, and a
+ * persona that only lives on one coworker is a persona that gets retyped — which is how the sixth
+ * one ends up with a shorter version of the rule everybody meant.
+ */
+export const personaTemplates = pgTable(
+  "persona_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    name: text("name").notNull(),
+    persona: jsonb("persona").$type<Persona>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("persona_templates_tenant_idx").on(table.tenantId),
+    uniqueIndex("persona_templates_tenant_name_idx").on(
+      table.tenantId,
+      table.name,
+    ),
+  ],
+);
+
+export const agentPreferences = pgTable(
+  "agent_preferences",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tenantId: tenantId(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.agentId] })],
+);
+
+export const routineRunStatus = pgEnum("routine_run_status", [
+  "succeeded",
+  "failed",
+  "skipped",
+  "waiting",
+]);
+
+/**
+ * A standing instruction one person gave one Bot, on a schedule.
+ *
+ * Owned rows all the way down: the owner is who the headless turn runs as, so the routine can do
+ * exactly what its owner could do in chat and nothing more. The channel is where the reply lands.
+ */
+export const routines = pgTable(
+  "routines",
+  {
+    id: text("id").primaryKey(),
+    tenantId: tenantId(),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    /**
+     * Not a foreign key. Channels soft-delete (`channels.deletedAt`), and a routine pointing at a
+     * deleted channel must survive to be shown as broken rather than vanish in a cascade.
+     */
+    channelId: text("channel_id").notNull(),
+    instruction: text("instruction").notNull(),
+    /** Five-field cron. Validated at the tool boundary; never parsed by the client. */
+    cron: text("cron").notNull(),
+    /** IANA zone the cron is read in. UTC when the person never said otherwise. */
+    timezone: text("timezone").notNull().default("UTC"),
+    enabled: boolean("enabled").notNull().default(true),
+    /** The sweep's read target. Recomputed on every write and CAS-advanced by the sweep. */
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
+    /**
+     * The last occurrence stamp the sweep advanced past — fired OR silently drained as stale.
+     * Not "when this last ran": the run history lives in routine_runs, and everything a person
+     * sees reads that table. This is the scheduler's own bookmark, kept because a CAS needs the
+     * value it compared against recorded somewhere a human can inspect when a clock looks wrong.
+     */
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    /**
+     * When this routine was last switched on, or created. The fatigue rule counts failures from
+     * here, so a routine switched off after ten failures and switched back on gets ten more chances
+     * rather than one. Not `updatedAt`, which every sweep that claims the routine moves.
+     */
+    enabledAt: timestamp("enabled_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("routines_due_idx").on(table.enabled, table.nextRunAt),
+    /** Owner-scoped reads and writes: listFor, countEnabled, and the users cascade all hit this. */
+    index("routines_by_owner_idx").on(table.ownerUserId, table.enabled),
+  ],
+);
+
+export const routineSweeps = pgTable("routine_sweeps", {
+  id: text("id").primaryKey(),
+  sweptAt: timestamp("swept_at", { withTimezone: true }).notNull().defaultNow(),
+  owner: text("owner"),
+});
+
+/** One row per firing, which is what the page's "last ran" and the fatigue rule read. */
+export const routineRuns = pgTable(
+  "routine_runs",
+  {
+    id: text("id").primaryKey(),
+    tenantId: tenantId(),
+    routineId: text("routine_id")
+      .notNull()
+      .references(() => routines.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** Null means the firing is still in flight; only a finished run has succeeded/failed/skipped. */
+    status: routineRunStatus("status"),
+    waiting: jsonb("waiting").$type<Record<string, unknown>>(),
+    /** The refusal or the throw, capped like audit payloads. Never shown raw to a person. */
+    error: text("error"),
+    /** What started this run: its schedule, a person pressing Run now, or an event trigger. */
+    source: text("source")
+      .$type<"schedule" | "run_now" | "trigger">()
+      .notNull()
+      .default("schedule"),
+  },
+  (table) => [
+    index("routine_runs_by_routine_idx").on(table.routineId, table.startedAt),
+  ],
+);

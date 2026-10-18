@@ -1,0 +1,156 @@
+# GitHub only discovers workflows here. openbot/.github/workflows is retained
+# for upstream synchronisation and does not execute in this fork.
+name: 熊宝交付 CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delivery-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    shell: bash
+    working-directory: openbot
+
+env:
+  TENANT_PACKAGE_DIR: ../examples/qoderwake
+  # Frozen before the three tracks started. Never replace with moving main.
+  DELIVERY_BASELINE_SHA: 03df9efa29cc51b64bd4a7b695dcb977ac0869f6
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx biome lint --error-on-warnings .
+      - run: bun run typecheck
+      - run: bun test test-report.test.mjs
+        working-directory: openbot/scripts/ci
+
+  server-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_b_head
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_b_head"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NODE_ENV: test
+      KEY_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      INTELLIGENCE_MODE: local
+      DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head
+      TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head
+      PGPASSWORD: ci-owner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Prepare frozen baseline and separate databases
+        run: |
+          bash scripts/ci/prepare-baseline.sh
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_b_base OWNER openbot'
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_head bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_base bun run --cwd "$RUNNER_TEMP/delivery-baseline/openbot/server" scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env
+          printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$RUNNER_TEMP/delivery-baseline/openbot/.env"
+      - name: Baseline tests (same head shard file list, own database)
+        continue-on-error: true
+        run: |
+          DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
+          TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
+            bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
+      - name: Head tests (openbot_app, one process per shard)
+        continue-on-error: true
+        run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
+      - name: Failure name multiset difference and zero-fail gate
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" "server shard ${{ matrix.shard }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: server-${{ matrix.shard }}-logs
+          path: |
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/*.log.files.txt
+
+  app-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bash scripts/ci/prepare-baseline.sh
+      - name: Baseline app tests
+        continue-on-error: true
+        run: bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" app "$RUNNER_TEMP/base.log"
+      - name: Generate configuration and run app tests
+        continue-on-error: true
+        run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log"
+      - name: Failure name multiset difference and zero-fail gate
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-logs
+          path: ${{ runner.temp }}/*.log
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - run: docker build -f Dockerfile -t openbot:trackb .
+      - name: DoD-2 and DoD-3 (no provider credentials)
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
+        run: bash scripts/ci/image-smoke.sh openbot:trackb
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: image-evidence
+          path: ${{ runner.temp }}/delivery-evidence/
+          if-no-files-found: error

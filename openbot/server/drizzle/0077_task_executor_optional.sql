@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ALTER COLUMN "executor_agent_id" DROP NOT NULL;

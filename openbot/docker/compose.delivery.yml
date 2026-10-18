@@ -1,0 +1,18 @@
+# Run from openbot/: docker compose --project-name xiongbao-local
+# --env-file .env.delivery -f docker/compose.delivery.yml up -d
+services:
+  app:
+    image: ${OPENBOT_IMAGE:-xiongbao-digital-employee:local}
+    restart: unless-stopped
+    env_file:
+      - ../.env.delivery
+    ports:
+      - "127.0.0.1:${OPENBOT_PORT:-3772}:3001"
+    volumes:
+      - database:/var/lib/postgresql
+      - workspace:/workspace
+      - profiles:/profiles
+volumes:
+  database:
+  workspace:
+  profiles:

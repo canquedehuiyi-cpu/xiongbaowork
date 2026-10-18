@@ -1,0 +1,18 @@
+# 频道即"工作台的哪一个入口"。导航五项与规格截图同构：任务看板 / @Waker / 自主工作 /
+# Waker 管理 / 能力与资源（后三项在应用侧是页面，这里声明的是对话入口与可见范围）。
+channels:
+  - id: general-assistant
+    name: 我的分身
+    description: 有事直接说，个人分身接。
+    permitted_agents: [general-assistant]
+    allowed_groups: [all]
+  - id: engineering
+    name: 研发流水线
+    description: 开发 → 审核 → 测试，员工组团干活的地方。
+    permitted_agents: [backend-engineer, code-reviewer, qa-engineer]
+    allowed_groups: [all]
+  - id: operations
+    name: 运营跟进
+    description: 日常事务、数据整理与进度盯梢。
+    permitted_agents: [ops-assistant, general-assistant]
+    allowed_groups: [all]
