@@ -1,0 +1,361 @@
+{
+  "status": "verified",
+  "checked_at": "2026-10-18T08:08:30.345530+00:00",
+  "pack": "06-migration-image-diagnostic",
+  "schema": "xiongbao-recovered-source-pack-v1",
+  "version_count": 26,
+  "path_count": 17,
+  "paths": [
+    "openbot/docker/s6/scripts/migrate.sh",
+    "openbot/docker/s6/scripts/postgres-init.sh",
+    "openbot/scripts/ci/image-business-diagnostic.py",
+    "openbot/scripts/ci/image-business-fixture.py",
+    "openbot/server/src/copilot.ts",
+    "openbot/server/src/execution/effect-lifetime.ts",
+    "openbot/server/src/knowledge/write-main-ports.ts",
+    "openbot/server/src/model-usage/facts.ts",
+    "openbot/server/src/model-usage/provider-observer.ts",
+    "openbot/server/src/models/runtime-resolver.ts",
+    "openbot/server/src/pipeline/store.ts",
+    "openbot/server/src/pipeline/turn-channel.ts",
+    "openbot/server/src/routines/run-turn.ts",
+    "openbot/server/src/threads/postgres-runner.ts",
+    "openbot/server/tests/model-token-facts.test.ts",
+    "openbot/server/tests/pipeline-control.integration.test.ts",
+    "openbot/server/tests/pipeline-turn-channel.test.ts"
+  ],
+  "source_bytes_total": 1101343,
+  "mismatch_count": 0,
+  "fragments_verified": 3,
+  "archive_directory": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950",
+  "layers": {
+    "base64": {
+      "bytes": 474264,
+      "sha256": "6a23ab1f4bb7c2d5c13a1e5c0089235a61e13526a5cf680c9d59a95514f3356e"
+    },
+    "gzip": {
+      "bytes": 355698,
+      "sha256": "4b1a1647c950eadab388ba79da99d550b28ee10bbd040772c33e08691ccf401d"
+    },
+    "json": {
+      "bytes": 1145253,
+      "sha256": "76e585e9d608a098f81fa0742aa8a99514e6d3ff88498f2470b0df2022f5ec2a"
+    }
+  },
+  "versions": [
+    {
+      "index": 0,
+      "bytes": 8412,
+      "sha256": "68297b45285e79a52c567347f904d99aa6f26e8ab5a3c58b907103f7f24fa6c2",
+      "blob": "02298324687c05a17ca8375a7cee58109b77ac93",
+      "git_hash_object": "02298324687c05a17ca8375a7cee58109b77ac93",
+      "paths": [
+        "openbot/docker/s6/scripts/migrate.sh"
+      ],
+      "filename": "02298324687c05a17ca8375a7cee58109b77ac93-68297b45285e79a52c567347f904d99aa6f26e8ab5a3c58b907103f7f24fa6c2.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/02298324687c05a17ca8375a7cee58109b77ac93-68297b45285e79a52c567347f904d99aa6f26e8ab5a3c58b907103f7f24fa6c2.txt"
+    },
+    {
+      "index": 1,
+      "bytes": 52145,
+      "sha256": "f6fe5cbbc34f1ecdf8da4130172835fd749c74f493a374344e40695c1f853d07",
+      "blob": "e496c5b51a58468c12792bd061931957390aca40",
+      "git_hash_object": "e496c5b51a58468c12792bd061931957390aca40",
+      "paths": [
+        "openbot/scripts/ci/image-business-diagnostic.py"
+      ],
+      "filename": "e496c5b51a58468c12792bd061931957390aca40-f6fe5cbbc34f1ecdf8da4130172835fd749c74f493a374344e40695c1f853d07.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/e496c5b51a58468c12792bd061931957390aca40-f6fe5cbbc34f1ecdf8da4130172835fd749c74f493a374344e40695c1f853d07.txt"
+    },
+    {
+      "index": 2,
+      "bytes": 52059,
+      "sha256": "78b70d02fa0933463db8a1dd533891d1d01714738079b646c737a34013edd8b3",
+      "blob": "2a48b326131b280c5cc58ba18ce10aa829db4271",
+      "git_hash_object": "2a48b326131b280c5cc58ba18ce10aa829db4271",
+      "paths": [
+        "openbot/scripts/ci/image-business-diagnostic.py"
+      ],
+      "filename": "2a48b326131b280c5cc58ba18ce10aa829db4271-78b70d02fa0933463db8a1dd533891d1d01714738079b646c737a34013edd8b3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/2a48b326131b280c5cc58ba18ce10aa829db4271-78b70d02fa0933463db8a1dd533891d1d01714738079b646c737a34013edd8b3.txt"
+    },
+    {
+      "index": 3,
+      "bytes": 20056,
+      "sha256": "fae669e3f1a00e7bf21e0dba54e1819d56f218423790c3ea84332e5f4e1ed80a",
+      "blob": "5cf26f5585ab6933e7285bf5be629258f06f8c45",
+      "git_hash_object": "5cf26f5585ab6933e7285bf5be629258f06f8c45",
+      "paths": [
+        "openbot/scripts/ci/image-business-fixture.py"
+      ],
+      "filename": "5cf26f5585ab6933e7285bf5be629258f06f8c45-fae669e3f1a00e7bf21e0dba54e1819d56f218423790c3ea84332e5f4e1ed80a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/5cf26f5585ab6933e7285bf5be629258f06f8c45-fae669e3f1a00e7bf21e0dba54e1819d56f218423790c3ea84332e5f4e1ed80a.txt"
+    },
+    {
+      "index": 4,
+      "bytes": 52145,
+      "sha256": "a1c9ed7a81f9cdb927328e7fd0ba12134ad7d59d0c868dac78bf155f4e7954c2",
+      "blob": "6426e7608d61ffa46021722b2d2549c46006c932",
+      "git_hash_object": "6426e7608d61ffa46021722b2d2549c46006c932",
+      "paths": [
+        "openbot/scripts/ci/image-business-diagnostic.py"
+      ],
+      "filename": "6426e7608d61ffa46021722b2d2549c46006c932-a1c9ed7a81f9cdb927328e7fd0ba12134ad7d59d0c868dac78bf155f4e7954c2.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/6426e7608d61ffa46021722b2d2549c46006c932-a1c9ed7a81f9cdb927328e7fd0ba12134ad7d59d0c868dac78bf155f4e7954c2.txt"
+    },
+    {
+      "index": 5,
+      "bytes": 33563,
+      "sha256": "d508a81d2bed34119f7766cce80ec74e4d2c1bf6c22e351543e67b5a27f116a3",
+      "blob": "4f8e9773cad9973e79a57c8c4e1c20e064209746",
+      "git_hash_object": "4f8e9773cad9973e79a57c8c4e1c20e064209746",
+      "paths": [
+        "openbot/server/src/knowledge/write-main-ports.ts"
+      ],
+      "filename": "4f8e9773cad9973e79a57c8c4e1c20e064209746-d508a81d2bed34119f7766cce80ec74e4d2c1bf6c22e351543e67b5a27f116a3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/4f8e9773cad9973e79a57c8c4e1c20e064209746-d508a81d2bed34119f7766cce80ec74e4d2c1bf6c22e351543e67b5a27f116a3.txt"
+    },
+    {
+      "index": 6,
+      "bytes": 7186,
+      "sha256": "5a379bdfe1bb763b4a75d8c5bbc4bbfe5675405b0828a641241080fac832b8de",
+      "blob": "ff15b8066b3dfab53d22274c77bc17afa42543dd",
+      "git_hash_object": "ff15b8066b3dfab53d22274c77bc17afa42543dd",
+      "paths": [
+        "openbot/docker/s6/scripts/postgres-init.sh"
+      ],
+      "filename": "ff15b8066b3dfab53d22274c77bc17afa42543dd-5a379bdfe1bb763b4a75d8c5bbc4bbfe5675405b0828a641241080fac832b8de.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/ff15b8066b3dfab53d22274c77bc17afa42543dd-5a379bdfe1bb763b4a75d8c5bbc4bbfe5675405b0828a641241080fac832b8de.txt"
+    },
+    {
+      "index": 7,
+      "bytes": 8296,
+      "sha256": "c9df13e0149a732914f60637a37ded08dcd575c6cb23fc78d4fe7a8db14f496c",
+      "blob": "4614a0f8fd76050fca5f8506bdfd1a15f83a1e83",
+      "git_hash_object": "4614a0f8fd76050fca5f8506bdfd1a15f83a1e83",
+      "paths": [
+        "openbot/docker/s6/scripts/migrate.sh"
+      ],
+      "filename": "4614a0f8fd76050fca5f8506bdfd1a15f83a1e83-c9df13e0149a732914f60637a37ded08dcd575c6cb23fc78d4fe7a8db14f496c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/4614a0f8fd76050fca5f8506bdfd1a15f83a1e83-c9df13e0149a732914f60637a37ded08dcd575c6cb23fc78d4fe7a8db14f496c.txt"
+    },
+    {
+      "index": 8,
+      "bytes": 21432,
+      "sha256": "de99d25d11b543e104d8808aba937f08afa24efbf1813d0eead6f35020363368",
+      "blob": "5b432bbd00bbf8f1e3c0817da0d58530d6f8ebc9",
+      "git_hash_object": "5b432bbd00bbf8f1e3c0817da0d58530d6f8ebc9",
+      "paths": [
+        "openbot/server/tests/model-token-facts.test.ts"
+      ],
+      "filename": "5b432bbd00bbf8f1e3c0817da0d58530d6f8ebc9-de99d25d11b543e104d8808aba937f08afa24efbf1813d0eead6f35020363368.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/5b432bbd00bbf8f1e3c0817da0d58530d6f8ebc9-de99d25d11b543e104d8808aba937f08afa24efbf1813d0eead6f35020363368.txt"
+    },
+    {
+      "index": 9,
+      "bytes": 11452,
+      "sha256": "4fbc146069667234ea315cd3051781f8f067b0dc9f6d11d38b27849d0802aa4c",
+      "blob": "0665ddc261bbe3dd97a92b3ed867300cd4fc253e",
+      "git_hash_object": "0665ddc261bbe3dd97a92b3ed867300cd4fc253e",
+      "paths": [
+        "openbot/server/src/models/runtime-resolver.ts"
+      ],
+      "filename": "0665ddc261bbe3dd97a92b3ed867300cd4fc253e-4fbc146069667234ea315cd3051781f8f067b0dc9f6d11d38b27849d0802aa4c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/0665ddc261bbe3dd97a92b3ed867300cd4fc253e-4fbc146069667234ea315cd3051781f8f067b0dc9f6d11d38b27849d0802aa4c.txt"
+    },
+    {
+      "index": 10,
+      "bytes": 12817,
+      "sha256": "2bc234c9b17d55029826ce79549f42269963ddf245a853e730ac576a7fda6cd0",
+      "blob": "268ec2820ce1433e5db66ccf7d4d45e908f4546e",
+      "git_hash_object": "268ec2820ce1433e5db66ccf7d4d45e908f4546e",
+      "paths": [
+        "openbot/server/src/model-usage/provider-observer.ts"
+      ],
+      "filename": "268ec2820ce1433e5db66ccf7d4d45e908f4546e-2bc234c9b17d55029826ce79549f42269963ddf245a853e730ac576a7fda6cd0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/268ec2820ce1433e5db66ccf7d4d45e908f4546e-2bc234c9b17d55029826ce79549f42269963ddf245a853e730ac576a7fda6cd0.txt"
+    },
+    {
+      "index": 11,
+      "bytes": 122567,
+      "sha256": "86ef28a7d5917a90d87af9927d243f062a0418868f9d804c5aafc822e4725b58",
+      "blob": "998d927c999644424b081827f13d62ea8b8d5e56",
+      "git_hash_object": "998d927c999644424b081827f13d62ea8b8d5e56",
+      "paths": [
+        "openbot/server/src/copilot.ts"
+      ],
+      "filename": "998d927c999644424b081827f13d62ea8b8d5e56-86ef28a7d5917a90d87af9927d243f062a0418868f9d804c5aafc822e4725b58.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/998d927c999644424b081827f13d62ea8b8d5e56-86ef28a7d5917a90d87af9927d243f062a0418868f9d804c5aafc822e4725b58.txt"
+    },
+    {
+      "index": 12,
+      "bytes": 54156,
+      "sha256": "571aebbea76536a6b03919d773c358212c6bcac9bc73ac5699cd63db24bd0d0d",
+      "blob": "57c51e9802b2ee9415c50c86d32694949351644d",
+      "git_hash_object": "57c51e9802b2ee9415c50c86d32694949351644d",
+      "paths": [
+        "openbot/server/tests/pipeline-control.integration.test.ts"
+      ],
+      "filename": "57c51e9802b2ee9415c50c86d32694949351644d-571aebbea76536a6b03919d773c358212c6bcac9bc73ac5699cd63db24bd0d0d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/57c51e9802b2ee9415c50c86d32694949351644d-571aebbea76536a6b03919d773c358212c6bcac9bc73ac5699cd63db24bd0d0d.txt"
+    },
+    {
+      "index": 13,
+      "bytes": 98742,
+      "sha256": "8af1c5b5d381ffd92cf417ac66cc94992da13b4908006d7da6c6fdea360d2849",
+      "blob": "8a7a51f3b030de105b3850ab44e11a901eab9c65",
+      "git_hash_object": "8a7a51f3b030de105b3850ab44e11a901eab9c65",
+      "paths": [
+        "openbot/server/src/pipeline/store.ts"
+      ],
+      "filename": "8a7a51f3b030de105b3850ab44e11a901eab9c65-8af1c5b5d381ffd92cf417ac66cc94992da13b4908006d7da6c6fdea360d2849.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/8a7a51f3b030de105b3850ab44e11a901eab9c65-8af1c5b5d381ffd92cf417ac66cc94992da13b4908006d7da6c6fdea360d2849.txt"
+    },
+    {
+      "index": 14,
+      "bytes": 42855,
+      "sha256": "6523ad2abed09ec8bae8f5657c7d278bf58b714324255efe40e56f632c2fd0df",
+      "blob": "28611529e91eb0dd921fcb7f4c322659713a1c10",
+      "git_hash_object": "28611529e91eb0dd921fcb7f4c322659713a1c10",
+      "paths": [
+        "openbot/server/tests/pipeline-control.integration.test.ts"
+      ],
+      "filename": "28611529e91eb0dd921fcb7f4c322659713a1c10-6523ad2abed09ec8bae8f5657c7d278bf58b714324255efe40e56f632c2fd0df.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/28611529e91eb0dd921fcb7f4c322659713a1c10-6523ad2abed09ec8bae8f5657c7d278bf58b714324255efe40e56f632c2fd0df.txt"
+    },
+    {
+      "index": 15,
+      "bytes": 11948,
+      "sha256": "fb785000b5af919601d9ea0f0af7267ad765fd13ce306d2ed82f8ab7fdd4d36c",
+      "blob": "fb350bef29e199be1bcaad42fedf66bfb3d863ef",
+      "git_hash_object": "fb350bef29e199be1bcaad42fedf66bfb3d863ef",
+      "paths": [
+        "openbot/server/src/execution/effect-lifetime.ts"
+      ],
+      "filename": "fb350bef29e199be1bcaad42fedf66bfb3d863ef-fb785000b5af919601d9ea0f0af7267ad765fd13ce306d2ed82f8ab7fdd4d36c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/fb350bef29e199be1bcaad42fedf66bfb3d863ef-fb785000b5af919601d9ea0f0af7267ad765fd13ce306d2ed82f8ab7fdd4d36c.txt"
+    },
+    {
+      "index": 16,
+      "bytes": 98459,
+      "sha256": "0ef83aded5cd9bfabe437a3760b6d6ba4b4d3fe8fa5291ce96fa51ad00be76c9",
+      "blob": "92721f56ee814b4c10bdea08c111c3719a23eea6",
+      "git_hash_object": "92721f56ee814b4c10bdea08c111c3719a23eea6",
+      "paths": [
+        "openbot/server/src/pipeline/store.ts"
+      ],
+      "filename": "92721f56ee814b4c10bdea08c111c3719a23eea6-0ef83aded5cd9bfabe437a3760b6d6ba4b4d3fe8fa5291ce96fa51ad00be76c9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/92721f56ee814b4c10bdea08c111c3719a23eea6-0ef83aded5cd9bfabe437a3760b6d6ba4b4d3fe8fa5291ce96fa51ad00be76c9.txt"
+    },
+    {
+      "index": 17,
+      "bytes": 97418,
+      "sha256": "1b794d1d32afe233baf536ffe96dad70d910ea3ebc1da9bd76662ba1d8006259",
+      "blob": "e8f2bb9e5e2ed3b4ebb986b067b05d52475174c1",
+      "git_hash_object": "e8f2bb9e5e2ed3b4ebb986b067b05d52475174c1",
+      "paths": [
+        "openbot/server/src/pipeline/store.ts"
+      ],
+      "filename": "e8f2bb9e5e2ed3b4ebb986b067b05d52475174c1-1b794d1d32afe233baf536ffe96dad70d910ea3ebc1da9bd76662ba1d8006259.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/e8f2bb9e5e2ed3b4ebb986b067b05d52475174c1-1b794d1d32afe233baf536ffe96dad70d910ea3ebc1da9bd76662ba1d8006259.txt"
+    },
+    {
+      "index": 18,
+      "bytes": 6228,
+      "sha256": "ffcc34e6675e67703965e499fa5074044a556931a55f308f7e4be395ab83bf23",
+      "blob": "57a13feb01d9e621712e25cb948c0fd2193f57a4",
+      "git_hash_object": "57a13feb01d9e621712e25cb948c0fd2193f57a4",
+      "paths": [
+        "openbot/server/src/pipeline/turn-channel.ts"
+      ],
+      "filename": "57a13feb01d9e621712e25cb948c0fd2193f57a4-ffcc34e6675e67703965e499fa5074044a556931a55f308f7e4be395ab83bf23.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/57a13feb01d9e621712e25cb948c0fd2193f57a4-ffcc34e6675e67703965e499fa5074044a556931a55f308f7e4be395ab83bf23.txt"
+    },
+    {
+      "index": 19,
+      "bytes": 36630,
+      "sha256": "46833d46790fe21db0d5316270024fd5cbd3aa4dfab094b8162333b812a1e3ab",
+      "blob": "04f806d1b10a1c10bd227a22d439a663caa934e9",
+      "git_hash_object": "04f806d1b10a1c10bd227a22d439a663caa934e9",
+      "paths": [
+        "openbot/server/src/routines/run-turn.ts"
+      ],
+      "filename": "04f806d1b10a1c10bd227a22d439a663caa934e9-46833d46790fe21db0d5316270024fd5cbd3aa4dfab094b8162333b812a1e3ab.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/04f806d1b10a1c10bd227a22d439a663caa934e9-46833d46790fe21db0d5316270024fd5cbd3aa4dfab094b8162333b812a1e3ab.txt"
+    },
+    {
+      "index": 20,
+      "bytes": 54513,
+      "sha256": "adea1e7527fc105724c642ce3d32a374391c748ed08e5c9839de584772b5a854",
+      "blob": "e8060ec3a1549d26f477b174db5189c169f64ffa",
+      "git_hash_object": "e8060ec3a1549d26f477b174db5189c169f64ffa",
+      "paths": [
+        "openbot/server/src/threads/postgres-runner.ts"
+      ],
+      "filename": "e8060ec3a1549d26f477b174db5189c169f64ffa-adea1e7527fc105724c642ce3d32a374391c748ed08e5c9839de584772b5a854.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/e8060ec3a1549d26f477b174db5189c169f64ffa-adea1e7527fc105724c642ce3d32a374391c748ed08e5c9839de584772b5a854.txt"
+    },
+    {
+      "index": 21,
+      "bytes": 16722,
+      "sha256": "04a01bef406aba849c99693d940fe948cae339e8bc0090652819a8fd38b3b314",
+      "blob": "176772cfb42b736ef540d0e64a61a16833cd975f",
+      "git_hash_object": "176772cfb42b736ef540d0e64a61a16833cd975f",
+      "paths": [
+        "openbot/server/src/model-usage/facts.ts"
+      ],
+      "filename": "176772cfb42b736ef540d0e64a61a16833cd975f-04a01bef406aba849c99693d940fe948cae339e8bc0090652819a8fd38b3b314.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/176772cfb42b736ef540d0e64a61a16833cd975f-04a01bef406aba849c99693d940fe948cae339e8bc0090652819a8fd38b3b314.txt"
+    },
+    {
+      "index": 22,
+      "bytes": 38184,
+      "sha256": "d02981b43b42e641a41df512f5b5ec070517d88e425f915d753f942685c78556",
+      "blob": "f762a8d3c33624ca10b5c5aba4d06a5b307f5b44",
+      "git_hash_object": "f762a8d3c33624ca10b5c5aba4d06a5b307f5b44",
+      "paths": [
+        "openbot/server/tests/pipeline-control.integration.test.ts"
+      ],
+      "filename": "f762a8d3c33624ca10b5c5aba4d06a5b307f5b44-d02981b43b42e641a41df512f5b5ec070517d88e425f915d753f942685c78556.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/f762a8d3c33624ca10b5c5aba4d06a5b307f5b44-d02981b43b42e641a41df512f5b5ec070517d88e425f915d753f942685c78556.txt"
+    },
+    {
+      "index": 23,
+      "bytes": 10201,
+      "sha256": "f5bd6852dc0ba257f78c3fdc38a459f441545494239cf40e785f8a387267b1af",
+      "blob": "bd8267d099336564e3285055b70b909293b14ec5",
+      "git_hash_object": "bd8267d099336564e3285055b70b909293b14ec5",
+      "paths": [
+        "openbot/server/tests/pipeline-turn-channel.test.ts"
+      ],
+      "filename": "bd8267d099336564e3285055b70b909293b14ec5-f5bd6852dc0ba257f78c3fdc38a459f441545494239cf40e785f8a387267b1af.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/bd8267d099336564e3285055b70b909293b14ec5-f5bd6852dc0ba257f78c3fdc38a459f441545494239cf40e785f8a387267b1af.txt"
+    },
+    {
+      "index": 24,
+      "bytes": 10910,
+      "sha256": "efccdca770229f6ff5befa1a6e5202db128c739ac63d1bc4623405dabad18523",
+      "blob": "88feab85e02abfa4feb509bf4b633020b2dd64b5",
+      "git_hash_object": "88feab85e02abfa4feb509bf4b633020b2dd64b5",
+      "paths": [
+        "openbot/server/src/execution/effect-lifetime.ts"
+      ],
+      "filename": "88feab85e02abfa4feb509bf4b633020b2dd64b5-efccdca770229f6ff5befa1a6e5202db128c739ac63d1bc4623405dabad18523.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/88feab85e02abfa4feb509bf4b633020b2dd64b5-efccdca770229f6ff5befa1a6e5202db128c739ac63d1bc4623405dabad18523.txt"
+    },
+    {
+      "index": 25,
+      "bytes": 122247,
+      "sha256": "61c74b15ed8be7cc49538338ebab352e5597b4af386480e2fd4b49f487ad0fdb",
+      "blob": "38c3b89d16add12093eeb196bfa6cea723dcf2d2",
+      "git_hash_object": "38c3b89d16add12093eeb196bfa6cea723dcf2d2",
+      "paths": [
+        "openbot/server/src/copilot.ts"
+      ],
+      "filename": "38c3b89d16add12093eeb196bfa6cea723dcf2d2-61c74b15ed8be7cc49538338ebab352e5597b4af386480e2fd4b49f487ad0fdb.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-06-migration-image-diagnostic-4b1a1647c950/versions/38c3b89d16add12093eeb196bfa6cea723dcf2d2-61c74b15ed8be7cc49538338ebab352e5597b4af386480e2fd4b49f487ad0fdb.txt"
+    }
+  ],
+  "product_source_executed": false,
+  "gitee_uploaded": false
+}

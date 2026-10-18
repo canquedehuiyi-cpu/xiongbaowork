@@ -1,0 +1,1248 @@
+{
+  "status": "verified",
+  "checked_at": "2026-10-18T08:08:01.661403+00:00",
+  "pack": "03-s5-sourceos-toolchain",
+  "schema": "xiongbao-recovered-source-pack-v1",
+  "version_count": 97,
+  "path_count": 52,
+  "paths": [
+    ".github/workflows/device-toolchain-source-metadata.yml",
+    ".github/workflows/project-execution-receipt-17-c31.yml",
+    ".github/workflows/project-execution-receipt-17-c34.yml",
+    ".github/workflows/project-execution-receipt-17-c36.yml",
+    ".github/workflows/project-execution-receipt-17-c41.yml",
+    ".github/workflows/windows-ps-none-echo-c31.yml",
+    "openbot/app/src/components/computer/live-screen.tsx",
+    "openbot/app/src/components/wakerflows/sessions.tsx",
+    "openbot/app/src/lib/plugins/mutations.ts",
+    "openbot/app/src/lib/plugins/queries.ts",
+    "openbot/app/src/routes/_authed/_app/assemble.$agentId.tsx",
+    "openbot/app/src/routes/_authed/_app/tasks.tsx",
+    "openbot/app/src/routes/_authed/admin/plugins/$key.tsx",
+    "openbot/app/src/routes/_authed/admin/skills.tsx",
+    "openbot/app/tests/assemble-install.test.tsx",
+    "openbot/app/tests/autonomous-screen.test.tsx",
+    "openbot/app/tests/live-screen-recordings.test.tsx",
+    "openbot/app/tests/plugin-assembly-publication.test.tsx",
+    "openbot/app/tests/plugin-mutation-refresh.test.ts",
+    "openbot/app/tests/query-state-pages.test.tsx",
+    "openbot/app/tests/tasks-attention-region.test.tsx",
+    "openbot/app/tests/wakerflows-screen.test.tsx",
+    "openbot/desktop/scripts/device-toolchain-sources.json",
+    "openbot/desktop/scripts/produce-device-toolchain.py",
+    "openbot/desktop/scripts/produce-device-toolchain.test.py",
+    "openbot/runner/src/linux-native-files.ts",
+    "openbot/runner/src/security.ts",
+    "openbot/server/drizzle/0120_owner_plugin_assembly.sql",
+    "openbot/server/drizzle/0121_plugin_assembly_publication.sql",
+    "openbot/server/drizzle/meta/0121_snapshot.json",
+    "openbot/server/drizzle/meta/_journal.json",
+    "openbot/server/src/audit.ts",
+    "openbot/server/src/auth/roles.ts",
+    "openbot/server/src/config.ts",
+    "openbot/server/src/db/schema/plugins.ts",
+    "openbot/server/src/index.ts",
+    "openbot/server/src/plugins/catalogue.ts",
+    "openbot/server/src/plugins/routes.ts",
+    "openbot/server/src/plugins/store.ts",
+    "openbot/server/src/tenant-package.ts",
+    "openbot/server/tests/config.test.ts",
+    "openbot/server/tests/plugin-catalogue.test.ts",
+    "openbot/server/tests/plugin-grants-validation.test.ts",
+    "openbot/server/tests/production-loader-boundary.test.ts",
+    "openbot/server/tests/project-execution.integration.test.ts",
+    "openbot/server/tests/roles.test.ts",
+    "openbot/server/tests/runner-browser-permit.test.ts",
+    "openbot/server/tests/runner-device-connection-leases.integration.test.ts",
+    "openbot/server/tests/runner-security.test.ts",
+    "openbot/server/tests/skill-ownership.integration.test.ts",
+    "openbot/server/tests/source-runtime-main.integration.test.ts",
+    "openbot/server/tests/support/project-execution-native-fixture.ts"
+  ],
+  "source_bytes_total": 5403299,
+  "mismatch_count": 0,
+  "fragments_verified": 10,
+  "archive_directory": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0",
+  "layers": {
+    "base64": {
+      "bytes": 2113144,
+      "sha256": "5d896df148aad96db15eb3e36ee9bf89b7b1ca874ad870624cacf60fcf46dbe3"
+    },
+    "gzip": {
+      "bytes": 1584857,
+      "sha256": "b33cf2115ef045cbb57f9300b671f30bec58cfd41a10e01fd0f2ab340f621710"
+    },
+    "json": {
+      "bytes": 5680072,
+      "sha256": "dba1e8aac5ff3bea661b76b76354794bf500eae8cca871b61e5a65a1c3a19967"
+    }
+  },
+  "versions": [
+    {
+      "index": 0,
+      "bytes": 23747,
+      "sha256": "024a5efc60b0763b13063b62fd448f1b99fea1fc34c6bafa61c05d4256f9b8e9",
+      "blob": "17ce04de8a89ec31b79008a1ed041bbfcd317c04",
+      "git_hash_object": "17ce04de8a89ec31b79008a1ed041bbfcd317c04",
+      "paths": [
+        ".github/workflows/device-toolchain-source-metadata.yml"
+      ],
+      "filename": "17ce04de8a89ec31b79008a1ed041bbfcd317c04-024a5efc60b0763b13063b62fd448f1b99fea1fc34c6bafa61c05d4256f9b8e9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/17ce04de8a89ec31b79008a1ed041bbfcd317c04-024a5efc60b0763b13063b62fd448f1b99fea1fc34c6bafa61c05d4256f9b8e9.txt"
+    },
+    {
+      "index": 1,
+      "bytes": 17590,
+      "sha256": "a38913bd03cb0a7ad6151527b0df2f5d1e19f378f088b41aeb9545c6d87e3598",
+      "blob": "61ddbb62f355ab11eac1c02e9b11c3567e2f3d96",
+      "git_hash_object": "61ddbb62f355ab11eac1c02e9b11c3567e2f3d96",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.test.py"
+      ],
+      "filename": "61ddbb62f355ab11eac1c02e9b11c3567e2f3d96-a38913bd03cb0a7ad6151527b0df2f5d1e19f378f088b41aeb9545c6d87e3598.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/61ddbb62f355ab11eac1c02e9b11c3567e2f3d96-a38913bd03cb0a7ad6151527b0df2f5d1e19f378f088b41aeb9545c6d87e3598.txt"
+    },
+    {
+      "index": 2,
+      "bytes": 23503,
+      "sha256": "7e83eeb02df424c4bc739ac2cdcfc5b213f2676d86f816f45c6c84c3d378ce4b",
+      "blob": "de1e85bc9434b1b14a13a7856d3cff6ed24d473c",
+      "git_hash_object": "de1e85bc9434b1b14a13a7856d3cff6ed24d473c",
+      "paths": [
+        ".github/workflows/device-toolchain-source-metadata.yml"
+      ],
+      "filename": "de1e85bc9434b1b14a13a7856d3cff6ed24d473c-7e83eeb02df424c4bc739ac2cdcfc5b213f2676d86f816f45c6c84c3d378ce4b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/de1e85bc9434b1b14a13a7856d3cff6ed24d473c-7e83eeb02df424c4bc739ac2cdcfc5b213f2676d86f816f45c6c84c3d378ce4b.txt"
+    },
+    {
+      "index": 3,
+      "bytes": 51642,
+      "sha256": "99f7c4199b55d509674916ecfa66bc140086eda9d1c5d685b4e16aa8944d019b",
+      "blob": "cd3c38b10e10edfd98f6738f102e7e9851b81a0a",
+      "git_hash_object": "cd3c38b10e10edfd98f6738f102e7e9851b81a0a",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.py"
+      ],
+      "filename": "cd3c38b10e10edfd98f6738f102e7e9851b81a0a-99f7c4199b55d509674916ecfa66bc140086eda9d1c5d685b4e16aa8944d019b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/cd3c38b10e10edfd98f6738f102e7e9851b81a0a-99f7c4199b55d509674916ecfa66bc140086eda9d1c5d685b4e16aa8944d019b.txt"
+    },
+    {
+      "index": 4,
+      "bytes": 17262,
+      "sha256": "d2ed730041b2d0c532554654fd6e8b06df7b5e4815313058eb630ebd9d12937f",
+      "blob": "3dbf6acac88342b9469258b5ab1610a7350635ac",
+      "git_hash_object": "3dbf6acac88342b9469258b5ab1610a7350635ac",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.test.py"
+      ],
+      "filename": "3dbf6acac88342b9469258b5ab1610a7350635ac-d2ed730041b2d0c532554654fd6e8b06df7b5e4815313058eb630ebd9d12937f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/3dbf6acac88342b9469258b5ab1610a7350635ac-d2ed730041b2d0c532554654fd6e8b06df7b5e4815313058eb630ebd9d12937f.txt"
+    },
+    {
+      "index": 5,
+      "bytes": 49864,
+      "sha256": "4dd9651c90d919411cd233b461429d97ed2763bdd19e296500e2076ef2eaa9f7",
+      "blob": "45479051bcdd7adbd93bcac4fa0fed21fafe4fe0",
+      "git_hash_object": "45479051bcdd7adbd93bcac4fa0fed21fafe4fe0",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.py"
+      ],
+      "filename": "45479051bcdd7adbd93bcac4fa0fed21fafe4fe0-4dd9651c90d919411cd233b461429d97ed2763bdd19e296500e2076ef2eaa9f7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/45479051bcdd7adbd93bcac4fa0fed21fafe4fe0-4dd9651c90d919411cd233b461429d97ed2763bdd19e296500e2076ef2eaa9f7.txt"
+    },
+    {
+      "index": 6,
+      "bytes": 11420,
+      "sha256": "ac15c2774d2e3f93ae453dd4932c17f9037b8be494929b284d704492543362b5",
+      "blob": "acf80a2149aec112df98528b482af1b1a4b4492c",
+      "git_hash_object": "acf80a2149aec112df98528b482af1b1a4b4492c",
+      "paths": [
+        "openbot/desktop/scripts/device-toolchain-sources.json"
+      ],
+      "filename": "acf80a2149aec112df98528b482af1b1a4b4492c-ac15c2774d2e3f93ae453dd4932c17f9037b8be494929b284d704492543362b5.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/acf80a2149aec112df98528b482af1b1a4b4492c-ac15c2774d2e3f93ae453dd4932c17f9037b8be494929b284d704492543362b5.txt"
+    },
+    {
+      "index": 7,
+      "bytes": 15821,
+      "sha256": "37cedd920e8cd6c95c703a317f13b288be4fc73621b81d5b6cd0b29fcd8a131f",
+      "blob": "dd86b83ed338f10fdd82a5cbc7f1b780cb045a79",
+      "git_hash_object": "dd86b83ed338f10fdd82a5cbc7f1b780cb045a79",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.test.py"
+      ],
+      "filename": "dd86b83ed338f10fdd82a5cbc7f1b780cb045a79-37cedd920e8cd6c95c703a317f13b288be4fc73621b81d5b6cd0b29fcd8a131f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/dd86b83ed338f10fdd82a5cbc7f1b780cb045a79-37cedd920e8cd6c95c703a317f13b288be4fc73621b81d5b6cd0b29fcd8a131f.txt"
+    },
+    {
+      "index": 8,
+      "bytes": 18285,
+      "sha256": "e98c80c6a0b53d432a6c4ecf364aab78f013e085f3cb4914e8bb0f6da12278cf",
+      "blob": "7972e1b706e6e46fff09a8e7336f8bcde2cc8ab8",
+      "git_hash_object": "7972e1b706e6e46fff09a8e7336f8bcde2cc8ab8",
+      "paths": [
+        ".github/workflows/device-toolchain-source-metadata.yml"
+      ],
+      "filename": "7972e1b706e6e46fff09a8e7336f8bcde2cc8ab8-e98c80c6a0b53d432a6c4ecf364aab78f013e085f3cb4914e8bb0f6da12278cf.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/7972e1b706e6e46fff09a8e7336f8bcde2cc8ab8-e98c80c6a0b53d432a6c4ecf364aab78f013e085f3cb4914e8bb0f6da12278cf.txt"
+    },
+    {
+      "index": 9,
+      "bytes": 40290,
+      "sha256": "86c5862d29e6403d809b99b982db1f3c25619561d8dd4eb8a13c60ad0e418a04",
+      "blob": "ac735672fd3b7a736add34c281eb7dd73f145c67",
+      "git_hash_object": "ac735672fd3b7a736add34c281eb7dd73f145c67",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.py"
+      ],
+      "filename": "ac735672fd3b7a736add34c281eb7dd73f145c67-86c5862d29e6403d809b99b982db1f3c25619561d8dd4eb8a13c60ad0e418a04.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/ac735672fd3b7a736add34c281eb7dd73f145c67-86c5862d29e6403d809b99b982db1f3c25619561d8dd4eb8a13c60ad0e418a04.txt"
+    },
+    {
+      "index": 10,
+      "bytes": 10582,
+      "sha256": "fcdc693b028dde67bec35397f602373219fc2f9e1c41c996bda0f1d71b68a851",
+      "blob": "9c04fa25bffe9407d2c336dab6fdc996744bf6db",
+      "git_hash_object": "9c04fa25bffe9407d2c336dab6fdc996744bf6db",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.test.py"
+      ],
+      "filename": "9c04fa25bffe9407d2c336dab6fdc996744bf6db-fcdc693b028dde67bec35397f602373219fc2f9e1c41c996bda0f1d71b68a851.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/9c04fa25bffe9407d2c336dab6fdc996744bf6db-fcdc693b028dde67bec35397f602373219fc2f9e1c41c996bda0f1d71b68a851.txt"
+    },
+    {
+      "index": 11,
+      "bytes": 38285,
+      "sha256": "409542fe4e6dea327e34ace250c25db728cf0785fb3006fd4ca274e0ee107e03",
+      "blob": "27c6563c01bbf6fd7b74b4a13a2f42a9496f89cc",
+      "git_hash_object": "27c6563c01bbf6fd7b74b4a13a2f42a9496f89cc",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.py"
+      ],
+      "filename": "27c6563c01bbf6fd7b74b4a13a2f42a9496f89cc-409542fe4e6dea327e34ace250c25db728cf0785fb3006fd4ca274e0ee107e03.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/27c6563c01bbf6fd7b74b4a13a2f42a9496f89cc-409542fe4e6dea327e34ace250c25db728cf0785fb3006fd4ca274e0ee107e03.txt"
+    },
+    {
+      "index": 12,
+      "bytes": 8661,
+      "sha256": "6c892252a22d9f9fded0e1367b9c65977719bc14331322c17b538d3645fba985",
+      "blob": "85d9c53ff3571fd83910d1255ec8bec735555214",
+      "git_hash_object": "85d9c53ff3571fd83910d1255ec8bec735555214",
+      "paths": [
+        "openbot/desktop/scripts/device-toolchain-sources.json"
+      ],
+      "filename": "85d9c53ff3571fd83910d1255ec8bec735555214-6c892252a22d9f9fded0e1367b9c65977719bc14331322c17b538d3645fba985.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/85d9c53ff3571fd83910d1255ec8bec735555214-6c892252a22d9f9fded0e1367b9c65977719bc14331322c17b538d3645fba985.txt"
+    },
+    {
+      "index": 13,
+      "bytes": 6882,
+      "sha256": "b739afc626ec85121388d799147ebf540b863ad338b635e66aa4661bbd35c3aa",
+      "blob": "64778f42d1f09bead6fd8a71fb01b896a455faa2",
+      "git_hash_object": "64778f42d1f09bead6fd8a71fb01b896a455faa2",
+      "paths": [
+        "openbot/desktop/scripts/produce-device-toolchain.test.py"
+      ],
+      "filename": "64778f42d1f09bead6fd8a71fb01b896a455faa2-b739afc626ec85121388d799147ebf540b863ad338b635e66aa4661bbd35c3aa.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/64778f42d1f09bead6fd8a71fb01b896a455faa2-b739afc626ec85121388d799147ebf540b863ad338b635e66aa4661bbd35c3aa.txt"
+    },
+    {
+      "index": 14,
+      "bytes": 3903,
+      "sha256": "182aca16d579e4d9fe4a358a94968f0e654857a680539bb24d2ad38cbd487a48",
+      "blob": "42bc0cc374e11e989cc4f76154d88fc9fe4c8b4e",
+      "git_hash_object": "42bc0cc374e11e989cc4f76154d88fc9fe4c8b4e",
+      "paths": [
+        "openbot/server/tests/production-loader-boundary.test.ts"
+      ],
+      "filename": "42bc0cc374e11e989cc4f76154d88fc9fe4c8b4e-182aca16d579e4d9fe4a358a94968f0e654857a680539bb24d2ad38cbd487a48.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/42bc0cc374e11e989cc4f76154d88fc9fe4c8b4e-182aca16d579e4d9fe4a358a94968f0e654857a680539bb24d2ad38cbd487a48.txt"
+    },
+    {
+      "index": 15,
+      "bytes": 66008,
+      "sha256": "6f1a6ddea33b428d38e010a46c395121a48304385345bf209e1843f02c55438a",
+      "blob": "0f4aacec6b4c8a8b7d6dbdaa36ba73057af3c27a",
+      "git_hash_object": "0f4aacec6b4c8a8b7d6dbdaa36ba73057af3c27a",
+      "paths": [
+        "openbot/runner/src/security.ts"
+      ],
+      "filename": "0f4aacec6b4c8a8b7d6dbdaa36ba73057af3c27a-6f1a6ddea33b428d38e010a46c395121a48304385345bf209e1843f02c55438a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/0f4aacec6b4c8a8b7d6dbdaa36ba73057af3c27a-6f1a6ddea33b428d38e010a46c395121a48304385345bf209e1843f02c55438a.txt"
+    },
+    {
+      "index": 16,
+      "bytes": 12612,
+      "sha256": "9cbb839e126ace8a59a0bd36f4836292102de38d8de192d1623521afbf7596d8",
+      "blob": "94d866b91b3a65b175860bc63151e7e8de8ebbbc",
+      "git_hash_object": "94d866b91b3a65b175860bc63151e7e8de8ebbbc",
+      "paths": [
+        "openbot/server/tests/runner-browser-permit.test.ts"
+      ],
+      "filename": "94d866b91b3a65b175860bc63151e7e8de8ebbbc-9cbb839e126ace8a59a0bd36f4836292102de38d8de192d1623521afbf7596d8.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/94d866b91b3a65b175860bc63151e7e8de8ebbbc-9cbb839e126ace8a59a0bd36f4836292102de38d8de192d1623521afbf7596d8.txt"
+    },
+    {
+      "index": 17,
+      "bytes": 48546,
+      "sha256": "9eb8e715a3ecdd12d4dc945733ae552538b8638cf6ac6c69002c76b4c205c862",
+      "blob": "651b2f97241479b451a28de91c2a77a1debd7aab",
+      "git_hash_object": "651b2f97241479b451a28de91c2a77a1debd7aab",
+      "paths": [
+        "openbot/server/tests/runner-security.test.ts"
+      ],
+      "filename": "651b2f97241479b451a28de91c2a77a1debd7aab-9eb8e715a3ecdd12d4dc945733ae552538b8638cf6ac6c69002c76b4c205c862.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/651b2f97241479b451a28de91c2a77a1debd7aab-9eb8e715a3ecdd12d4dc945733ae552538b8638cf6ac6c69002c76b4c205c862.txt"
+    },
+    {
+      "index": 18,
+      "bytes": 28806,
+      "sha256": "7fec8a7b62de4466052d90f56d7fba1f7128bc9718f614bc748a1e16e16a30e7",
+      "blob": "621955a75587865ea87f3932b06137fed4a798aa",
+      "git_hash_object": "621955a75587865ea87f3932b06137fed4a798aa",
+      "paths": [
+        "openbot/server/tests/runner-device-connection-leases.integration.test.ts"
+      ],
+      "filename": "621955a75587865ea87f3932b06137fed4a798aa-7fec8a7b62de4466052d90f56d7fba1f7128bc9718f614bc748a1e16e16a30e7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/621955a75587865ea87f3932b06137fed4a798aa-7fec8a7b62de4466052d90f56d7fba1f7128bc9718f614bc748a1e16e16a30e7.txt"
+    },
+    {
+      "index": 19,
+      "bytes": 52163,
+      "sha256": "10f42f62fecd20850c274365f0cea0ed1b6d58cc7450da4e8186149bdfd28d63",
+      "blob": "228e9a57984cb641a2e411054d4ed748c907f6cf",
+      "git_hash_object": "228e9a57984cb641a2e411054d4ed748c907f6cf",
+      "paths": [
+        "openbot/app/src/routes/_authed/_app/tasks.tsx"
+      ],
+      "filename": "228e9a57984cb641a2e411054d4ed748c907f6cf-10f42f62fecd20850c274365f0cea0ed1b6d58cc7450da4e8186149bdfd28d63.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/228e9a57984cb641a2e411054d4ed748c907f6cf-10f42f62fecd20850c274365f0cea0ed1b6d58cc7450da4e8186149bdfd28d63.txt"
+    },
+    {
+      "index": 20,
+      "bytes": 66696,
+      "sha256": "04d1220dd025f2bfcbec391caab1a3fa618c52164972f307284092fab0f3c82e",
+      "blob": "b474dc9afa5fa1dc7c77eae9f7e75c3d0c3dda5a",
+      "git_hash_object": "b474dc9afa5fa1dc7c77eae9f7e75c3d0c3dda5a",
+      "paths": [
+        "openbot/app/src/routes/_authed/admin/plugins/$key.tsx"
+      ],
+      "filename": "b474dc9afa5fa1dc7c77eae9f7e75c3d0c3dda5a-04d1220dd025f2bfcbec391caab1a3fa618c52164972f307284092fab0f3c82e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/b474dc9afa5fa1dc7c77eae9f7e75c3d0c3dda5a-04d1220dd025f2bfcbec391caab1a3fa618c52164972f307284092fab0f3c82e.txt"
+    },
+    {
+      "index": 21,
+      "bytes": 16201,
+      "sha256": "9dc60d6a7f21748e322193c573bb1538dc130b1438a0c953aa7edafce5b93679",
+      "blob": "eef02cb4b900d999151574d890336ea7386fd8c1",
+      "git_hash_object": "eef02cb4b900d999151574d890336ea7386fd8c1",
+      "paths": [
+        "openbot/app/src/routes/_authed/admin/skills.tsx"
+      ],
+      "filename": "eef02cb4b900d999151574d890336ea7386fd8c1-9dc60d6a7f21748e322193c573bb1538dc130b1438a0c953aa7edafce5b93679.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/eef02cb4b900d999151574d890336ea7386fd8c1-9dc60d6a7f21748e322193c573bb1538dc130b1438a0c953aa7edafce5b93679.txt"
+    },
+    {
+      "index": 22,
+      "bytes": 17074,
+      "sha256": "9422feffb51e9e71e53c212d6a4b0f8b1312c31750bc2c75d71b38721e416f53",
+      "blob": "0d2337e2f9cf3ec20b3c24793b826f7d0104a92c",
+      "git_hash_object": "0d2337e2f9cf3ec20b3c24793b826f7d0104a92c",
+      "paths": [
+        "openbot/app/tests/assemble-install.test.tsx"
+      ],
+      "filename": "0d2337e2f9cf3ec20b3c24793b826f7d0104a92c-9422feffb51e9e71e53c212d6a4b0f8b1312c31750bc2c75d71b38721e416f53.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/0d2337e2f9cf3ec20b3c24793b826f7d0104a92c-9422feffb51e9e71e53c212d6a4b0f8b1312c31750bc2c75d71b38721e416f53.txt"
+    },
+    {
+      "index": 23,
+      "bytes": 18241,
+      "sha256": "a669197774ace841e1c194a9f300b624f834fece12c09c91ddb62d472e2c7703",
+      "blob": "9fefb8a63905d9cf6f2803f52d0446b6d9d4f14b",
+      "git_hash_object": "9fefb8a63905d9cf6f2803f52d0446b6d9d4f14b",
+      "paths": [
+        "openbot/server/drizzle/meta/_journal.json"
+      ],
+      "filename": "9fefb8a63905d9cf6f2803f52d0446b6d9d4f14b-a669197774ace841e1c194a9f300b624f834fece12c09c91ddb62d472e2c7703.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/9fefb8a63905d9cf6f2803f52d0446b6d9d4f14b-a669197774ace841e1c194a9f300b624f834fece12c09c91ddb62d472e2c7703.txt"
+    },
+    {
+      "index": 24,
+      "bytes": 583049,
+      "sha256": "c382dcdb7b39a9bc7fe47394478a51dd3d25df8dcd803c6e172b9c17f27cb48f",
+      "blob": "bc185c8b7d533421aa1ee9b8b261cb9cd2e8d29a",
+      "git_hash_object": "bc185c8b7d533421aa1ee9b8b261cb9cd2e8d29a",
+      "paths": [
+        "openbot/server/drizzle/meta/0121_snapshot.json"
+      ],
+      "filename": "bc185c8b7d533421aa1ee9b8b261cb9cd2e8d29a-c382dcdb7b39a9bc7fe47394478a51dd3d25df8dcd803c6e172b9c17f27cb48f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/bc185c8b7d533421aa1ee9b8b261cb9cd2e8d29a-c382dcdb7b39a9bc7fe47394478a51dd3d25df8dcd803c6e172b9c17f27cb48f.txt"
+    },
+    {
+      "index": 25,
+      "bytes": 13100,
+      "sha256": "948b989b71b0bc516ad5d4c280fea00ca12dda35d4b4a32721688478c9f9797c",
+      "blob": "761f434676924e8ffabd7fc6719ad7ef38e0a25d",
+      "git_hash_object": "761f434676924e8ffabd7fc6719ad7ef38e0a25d",
+      "paths": [
+        "openbot/app/tests/query-state-pages.test.tsx"
+      ],
+      "filename": "761f434676924e8ffabd7fc6719ad7ef38e0a25d-948b989b71b0bc516ad5d4c280fea00ca12dda35d4b4a32721688478c9f9797c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/761f434676924e8ffabd7fc6719ad7ef38e0a25d-948b989b71b0bc516ad5d4c280fea00ca12dda35d4b4a32721688478c9f9797c.txt"
+    },
+    {
+      "index": 26,
+      "bytes": 22717,
+      "sha256": "79649c2b7a4c8966a3924ed80f335fe0e4ca395ff459e463686bf7e1ead015e3",
+      "blob": "ff78a95fd869d1702cab3210df0323ee45bf4541",
+      "git_hash_object": "ff78a95fd869d1702cab3210df0323ee45bf4541",
+      "paths": [
+        "openbot/app/tests/tasks-attention-region.test.tsx"
+      ],
+      "filename": "ff78a95fd869d1702cab3210df0323ee45bf4541-79649c2b7a4c8966a3924ed80f335fe0e4ca395ff459e463686bf7e1ead015e3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/ff78a95fd869d1702cab3210df0323ee45bf4541-79649c2b7a4c8966a3924ed80f335fe0e4ca395ff459e463686bf7e1ead015e3.txt"
+    },
+    {
+      "index": 27,
+      "bytes": 32110,
+      "sha256": "cf0a9db39668971e62c6d731562b91458b3ec8174836eae87eaee1bdc073a87d",
+      "blob": "1fccd902a896dfe1c28dd0cebda22ab67c952e54",
+      "git_hash_object": "1fccd902a896dfe1c28dd0cebda22ab67c952e54",
+      "paths": [
+        "openbot/app/tests/plugin-mutation-refresh.test.ts"
+      ],
+      "filename": "1fccd902a896dfe1c28dd0cebda22ab67c952e54-cf0a9db39668971e62c6d731562b91458b3ec8174836eae87eaee1bdc073a87d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/1fccd902a896dfe1c28dd0cebda22ab67c952e54-cf0a9db39668971e62c6d731562b91458b3ec8174836eae87eaee1bdc073a87d.txt"
+    },
+    {
+      "index": 28,
+      "bytes": 30263,
+      "sha256": "2961bd4eee568ca709b7431062a88ab4226ddb403783eab7025cb274fb400736",
+      "blob": "3f3fb9dd1d3e9aad4ea71255e73a701a79a8c27c",
+      "git_hash_object": "3f3fb9dd1d3e9aad4ea71255e73a701a79a8c27c",
+      "paths": [
+        "openbot/app/src/components/computer/live-screen.tsx"
+      ],
+      "filename": "3f3fb9dd1d3e9aad4ea71255e73a701a79a8c27c-2961bd4eee568ca709b7431062a88ab4226ddb403783eab7025cb274fb400736.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/3f3fb9dd1d3e9aad4ea71255e73a701a79a8c27c-2961bd4eee568ca709b7431062a88ab4226ddb403783eab7025cb274fb400736.txt"
+    },
+    {
+      "index": 29,
+      "bytes": 23597,
+      "sha256": "ce478ba71eea277e89bde50877ce2a98eb7b58d26ec7bffa85f40348bbbe3bbf",
+      "blob": "705e9b081c85beec5fa109839d42a5897c2f8038",
+      "git_hash_object": "705e9b081c85beec5fa109839d42a5897c2f8038",
+      "paths": [
+        "openbot/app/src/components/wakerflows/sessions.tsx"
+      ],
+      "filename": "705e9b081c85beec5fa109839d42a5897c2f8038-ce478ba71eea277e89bde50877ce2a98eb7b58d26ec7bffa85f40348bbbe3bbf.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/705e9b081c85beec5fa109839d42a5897c2f8038-ce478ba71eea277e89bde50877ce2a98eb7b58d26ec7bffa85f40348bbbe3bbf.txt"
+    },
+    {
+      "index": 30,
+      "bytes": 51977,
+      "sha256": "a2055f44f1fdfdd41207840576557716fab2a2f9d317203faf44f2f640e7aa70",
+      "blob": "5a599833405b5943419fa1073a68a47fc8c34bbc",
+      "git_hash_object": "5a599833405b5943419fa1073a68a47fc8c34bbc",
+      "paths": [
+        "openbot/app/src/routes/_authed/_app/tasks.tsx"
+      ],
+      "filename": "5a599833405b5943419fa1073a68a47fc8c34bbc-a2055f44f1fdfdd41207840576557716fab2a2f9d317203faf44f2f640e7aa70.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/5a599833405b5943419fa1073a68a47fc8c34bbc-a2055f44f1fdfdd41207840576557716fab2a2f9d317203faf44f2f640e7aa70.txt"
+    },
+    {
+      "index": 31,
+      "bytes": 11299,
+      "sha256": "34cc01322c99eaefc122b2c9220d2b7e5d538e6dd07673c9ca0992262e434305",
+      "blob": "33627e50b0c4481bfdf87366fc08c63ccec19658",
+      "git_hash_object": "33627e50b0c4481bfdf87366fc08c63ccec19658",
+      "paths": [
+        "openbot/app/tests/assemble-install.test.tsx"
+      ],
+      "filename": "33627e50b0c4481bfdf87366fc08c63ccec19658-34cc01322c99eaefc122b2c9220d2b7e5d538e6dd07673c9ca0992262e434305.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/33627e50b0c4481bfdf87366fc08c63ccec19658-34cc01322c99eaefc122b2c9220d2b7e5d538e6dd07673c9ca0992262e434305.txt"
+    },
+    {
+      "index": 32,
+      "bytes": 30381,
+      "sha256": "0a3455048dafef47ed27cd811e13a8da9dce4658af3f59d8d311ce423e694b1b",
+      "blob": "c8f4c1100945951918fcc7a0d3859796c56938b5",
+      "git_hash_object": "c8f4c1100945951918fcc7a0d3859796c56938b5",
+      "paths": [
+        "openbot/app/tests/autonomous-screen.test.tsx"
+      ],
+      "filename": "c8f4c1100945951918fcc7a0d3859796c56938b5-0a3455048dafef47ed27cd811e13a8da9dce4658af3f59d8d311ce423e694b1b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/c8f4c1100945951918fcc7a0d3859796c56938b5-0a3455048dafef47ed27cd811e13a8da9dce4658af3f59d8d311ce423e694b1b.txt"
+    },
+    {
+      "index": 33,
+      "bytes": 10111,
+      "sha256": "3360aaa313c0d5d579f5b3badf5dd3645b3f6dba76f2ccfec9e6736f1e167b3a",
+      "blob": "25c9de59f8b3ea2a805f4e1eddfe1850db50ca5d",
+      "git_hash_object": "25c9de59f8b3ea2a805f4e1eddfe1850db50ca5d",
+      "paths": [
+        "openbot/app/tests/live-screen-recordings.test.tsx"
+      ],
+      "filename": "25c9de59f8b3ea2a805f4e1eddfe1850db50ca5d-3360aaa313c0d5d579f5b3badf5dd3645b3f6dba76f2ccfec9e6736f1e167b3a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/25c9de59f8b3ea2a805f4e1eddfe1850db50ca5d-3360aaa313c0d5d579f5b3badf5dd3645b3f6dba76f2ccfec9e6736f1e167b3a.txt"
+    },
+    {
+      "index": 34,
+      "bytes": 21143,
+      "sha256": "6f5ef0986d766bd81e65a627598c960543a2fb9e4f83bef65d02f1f9b7a96267",
+      "blob": "6f164704d4e150b95469bf9c28af0ea52d0ae8e6",
+      "git_hash_object": "6f164704d4e150b95469bf9c28af0ea52d0ae8e6",
+      "paths": [
+        "openbot/app/tests/wakerflows-screen.test.tsx"
+      ],
+      "filename": "6f164704d4e150b95469bf9c28af0ea52d0ae8e6-6f5ef0986d766bd81e65a627598c960543a2fb9e4f83bef65d02f1f9b7a96267.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/6f164704d4e150b95469bf9c28af0ea52d0ae8e6-6f5ef0986d766bd81e65a627598c960543a2fb9e4f83bef65d02f1f9b7a96267.txt"
+    },
+    {
+      "index": 35,
+      "bytes": 35602,
+      "sha256": "e11caff60b815f34f0d3c8c231edfcae44deb0722d876694f5ddb9e24daf2488",
+      "blob": "464aa9ab31826f1e02fa89c5f3e9c15067a536a9",
+      "git_hash_object": "464aa9ab31826f1e02fa89c5f3e9c15067a536a9",
+      "paths": [
+        "openbot/app/src/lib/plugins/mutations.ts"
+      ],
+      "filename": "464aa9ab31826f1e02fa89c5f3e9c15067a536a9-e11caff60b815f34f0d3c8c231edfcae44deb0722d876694f5ddb9e24daf2488.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/464aa9ab31826f1e02fa89c5f3e9c15067a536a9-e11caff60b815f34f0d3c8c231edfcae44deb0722d876694f5ddb9e24daf2488.txt"
+    },
+    {
+      "index": 36,
+      "bytes": 11426,
+      "sha256": "15c3a0b87f6f90d8a8f249034bfa77e741c5ff3d178718f6561fb4f5e13d9b40",
+      "blob": "8f7926fbacc140e8d411a4f11f0ad3bf49417915",
+      "git_hash_object": "8f7926fbacc140e8d411a4f11f0ad3bf49417915",
+      "paths": [
+        "openbot/app/tests/plugin-assembly-publication.test.tsx"
+      ],
+      "filename": "8f7926fbacc140e8d411a4f11f0ad3bf49417915-15c3a0b87f6f90d8a8f249034bfa77e741c5ff3d178718f6561fb4f5e13d9b40.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/8f7926fbacc140e8d411a4f11f0ad3bf49417915-15c3a0b87f6f90d8a8f249034bfa77e741c5ff3d178718f6561fb4f5e13d9b40.txt"
+    },
+    {
+      "index": 37,
+      "bytes": 15566,
+      "sha256": "b5e389ae1c538408028eab11d120d6561f100509255c8b61fdc80b38cf0f42df",
+      "blob": "576f2e2becde5dc8b4e1f05fb10631e17180347c",
+      "git_hash_object": "576f2e2becde5dc8b4e1f05fb10631e17180347c",
+      "paths": [
+        "openbot/app/tests/assemble-install.test.tsx"
+      ],
+      "filename": "576f2e2becde5dc8b4e1f05fb10631e17180347c-b5e389ae1c538408028eab11d120d6561f100509255c8b61fdc80b38cf0f42df.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/576f2e2becde5dc8b4e1f05fb10631e17180347c-b5e389ae1c538408028eab11d120d6561f100509255c8b61fdc80b38cf0f42df.txt"
+    },
+    {
+      "index": 38,
+      "bytes": 45391,
+      "sha256": "6b9f7a2017f6b77821aad1213a1ea9bcccd17a7bf7653c14a2c9d74a0228d855",
+      "blob": "362b8d733d4f944afd53b95b1f166776fef63eec",
+      "git_hash_object": "362b8d733d4f944afd53b95b1f166776fef63eec",
+      "paths": [
+        "openbot/server/src/db/schema/plugins.ts"
+      ],
+      "filename": "362b8d733d4f944afd53b95b1f166776fef63eec-6b9f7a2017f6b77821aad1213a1ea9bcccd17a7bf7653c14a2c9d74a0228d855.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/362b8d733d4f944afd53b95b1f166776fef63eec-6b9f7a2017f6b77821aad1213a1ea9bcccd17a7bf7653c14a2c9d74a0228d855.txt"
+    },
+    {
+      "index": 39,
+      "bytes": 444937,
+      "sha256": "adf8f0f7bd6b25a99f5fa432335af5e486fea131d321be31aa73069a56f327cc",
+      "blob": "edae5145b62c4437dfcaec7dd29abcea863f18f5",
+      "git_hash_object": "edae5145b62c4437dfcaec7dd29abcea863f18f5",
+      "paths": [
+        "openbot/server/src/plugins/store.ts"
+      ],
+      "filename": "edae5145b62c4437dfcaec7dd29abcea863f18f5-adf8f0f7bd6b25a99f5fa432335af5e486fea131d321be31aa73069a56f327cc.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/edae5145b62c4437dfcaec7dd29abcea863f18f5-adf8f0f7bd6b25a99f5fa432335af5e486fea131d321be31aa73069a56f327cc.txt"
+    },
+    {
+      "index": 40,
+      "bytes": 143326,
+      "sha256": "cac4ddc57ad543ff22f8ecd218e97cc1f0c508cab94d6ee231d53e1d1e87e32e",
+      "blob": "2ea340ddbe23fdc61d2807ed4c6f166eec2d4b26",
+      "git_hash_object": "2ea340ddbe23fdc61d2807ed4c6f166eec2d4b26",
+      "paths": [
+        "openbot/server/src/plugins/routes.ts"
+      ],
+      "filename": "2ea340ddbe23fdc61d2807ed4c6f166eec2d4b26-cac4ddc57ad543ff22f8ecd218e97cc1f0c508cab94d6ee231d53e1d1e87e32e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/2ea340ddbe23fdc61d2807ed4c6f166eec2d4b26-cac4ddc57ad543ff22f8ecd218e97cc1f0c508cab94d6ee231d53e1d1e87e32e.txt"
+    },
+    {
+      "index": 41,
+      "bytes": 23557,
+      "sha256": "c186cf5d70712bdca6e4513a2415e491b5f9457212e1682d801fe98a07d1e5b1",
+      "blob": "fbd4368c080f9a622a1fc06463d5dbe12c25da93",
+      "git_hash_object": "fbd4368c080f9a622a1fc06463d5dbe12c25da93",
+      "paths": [
+        "openbot/app/src/lib/plugins/queries.ts"
+      ],
+      "filename": "fbd4368c080f9a622a1fc06463d5dbe12c25da93-c186cf5d70712bdca6e4513a2415e491b5f9457212e1682d801fe98a07d1e5b1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/fbd4368c080f9a622a1fc06463d5dbe12c25da93-c186cf5d70712bdca6e4513a2415e491b5f9457212e1682d801fe98a07d1e5b1.txt"
+    },
+    {
+      "index": 42,
+      "bytes": 36254,
+      "sha256": "dc7943c0da5065862ebbb6d02591608cd7fa4971a8e7f983e2a459b9ab9e371a",
+      "blob": "8158f67355c5b43894feedeff8216cac5d121e63",
+      "git_hash_object": "8158f67355c5b43894feedeff8216cac5d121e63",
+      "paths": [
+        "openbot/app/src/lib/plugins/mutations.ts"
+      ],
+      "filename": "8158f67355c5b43894feedeff8216cac5d121e63-dc7943c0da5065862ebbb6d02591608cd7fa4971a8e7f983e2a459b9ab9e371a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/8158f67355c5b43894feedeff8216cac5d121e63-dc7943c0da5065862ebbb6d02591608cd7fa4971a8e7f983e2a459b9ab9e371a.txt"
+    },
+    {
+      "index": 43,
+      "bytes": 11255,
+      "sha256": "c60cda15e646997d0fcb2b2b9e0f287f080767b04dcde157b1766302ce820798",
+      "blob": "0259d22005e33d33ac279e4e7f009b069cb00367",
+      "git_hash_object": "0259d22005e33d33ac279e4e7f009b069cb00367",
+      "paths": [
+        "openbot/app/src/routes/_authed/_app/assemble.$agentId.tsx"
+      ],
+      "filename": "0259d22005e33d33ac279e4e7f009b069cb00367-c60cda15e646997d0fcb2b2b9e0f287f080767b04dcde157b1766302ce820798.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/0259d22005e33d33ac279e4e7f009b069cb00367-c60cda15e646997d0fcb2b2b9e0f287f080767b04dcde157b1766302ce820798.txt"
+    },
+    {
+      "index": 44,
+      "bytes": 24531,
+      "sha256": "2e2decc14d6066fab4bf1b983112217f0444829ab1ef6a66829021f2e547f2fd",
+      "blob": "f88d33720058c9030a4539216ac185b3237a2dc9",
+      "git_hash_object": "f88d33720058c9030a4539216ac185b3237a2dc9",
+      "paths": [
+        "openbot/server/tests/plugin-grants-validation.test.ts"
+      ],
+      "filename": "f88d33720058c9030a4539216ac185b3237a2dc9-2e2decc14d6066fab4bf1b983112217f0444829ab1ef6a66829021f2e547f2fd.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/f88d33720058c9030a4539216ac185b3237a2dc9-2e2decc14d6066fab4bf1b983112217f0444829ab1ef6a66829021f2e547f2fd.txt"
+    },
+    {
+      "index": 45,
+      "bytes": 54560,
+      "sha256": "8df06c72e46e813130b61e72adca50664270b7459d1c75b17a8c0f48fe6d08fa",
+      "blob": "b0555b7d350e0c6a3676b6b4fba654d3e51eeeb5",
+      "git_hash_object": "b0555b7d350e0c6a3676b6b4fba654d3e51eeeb5",
+      "paths": [
+        "openbot/server/tests/skill-ownership.integration.test.ts"
+      ],
+      "filename": "b0555b7d350e0c6a3676b6b4fba654d3e51eeeb5-8df06c72e46e813130b61e72adca50664270b7459d1c75b17a8c0f48fe6d08fa.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/b0555b7d350e0c6a3676b6b4fba654d3e51eeeb5-8df06c72e46e813130b61e72adca50664270b7459d1c75b17a8c0f48fe6d08fa.txt"
+    },
+    {
+      "index": 46,
+      "bytes": 13822,
+      "sha256": "6ca67e585a016565f43001d14822071f740dd44730236427163baa34837f334d",
+      "blob": "b400d6dd46391ff67e93ce7c3afa32476f72a60d",
+      "git_hash_object": "b400d6dd46391ff67e93ce7c3afa32476f72a60d",
+      "paths": [
+        "openbot/app/tests/assemble-install.test.tsx"
+      ],
+      "filename": "b400d6dd46391ff67e93ce7c3afa32476f72a60d-6ca67e585a016565f43001d14822071f740dd44730236427163baa34837f334d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/b400d6dd46391ff67e93ce7c3afa32476f72a60d-6ca67e585a016565f43001d14822071f740dd44730236427163baa34837f334d.txt"
+    },
+    {
+      "index": 47,
+      "bytes": 66503,
+      "sha256": "64aa3b369f3e23c142b89a747697a0f98646189a2e793dcad3a987a9c719e223",
+      "blob": "c0caa0f58f5526f67cad3be0e46ef7e416f8ac63",
+      "git_hash_object": "c0caa0f58f5526f67cad3be0e46ef7e416f8ac63",
+      "paths": [
+        "openbot/app/src/routes/_authed/admin/plugins/$key.tsx"
+      ],
+      "filename": "c0caa0f58f5526f67cad3be0e46ef7e416f8ac63-64aa3b369f3e23c142b89a747697a0f98646189a2e793dcad3a987a9c719e223.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/c0caa0f58f5526f67cad3be0e46ef7e416f8ac63-64aa3b369f3e23c142b89a747697a0f98646189a2e793dcad3a987a9c719e223.txt"
+    },
+    {
+      "index": 48,
+      "bytes": 16008,
+      "sha256": "194a5e143ccae2af9e34ad9114b524e118c5cc5b1ea4924cd18431b55a1317b0",
+      "blob": "0a6d5dfe32f7ceda2098a807da7ac1bc8c30123f",
+      "git_hash_object": "0a6d5dfe32f7ceda2098a807da7ac1bc8c30123f",
+      "paths": [
+        "openbot/app/src/routes/_authed/admin/skills.tsx"
+      ],
+      "filename": "0a6d5dfe32f7ceda2098a807da7ac1bc8c30123f-194a5e143ccae2af9e34ad9114b524e118c5cc5b1ea4924cd18431b55a1317b0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/0a6d5dfe32f7ceda2098a807da7ac1bc8c30123f-194a5e143ccae2af9e34ad9114b524e118c5cc5b1ea4924cd18431b55a1317b0.txt"
+    },
+    {
+      "index": 49,
+      "bytes": 60880,
+      "sha256": "b9b9b13c1fc5bb4cc3b31adc5226f2faaf132769d8642601348b649cf4ba8fd7",
+      "blob": "b240c260b6f25e5e30966ec4bc3844327dc68fd5",
+      "git_hash_object": "b240c260b6f25e5e30966ec4bc3844327dc68fd5",
+      "paths": [
+        "openbot/server/src/tenant-package.ts"
+      ],
+      "filename": "b240c260b6f25e5e30966ec4bc3844327dc68fd5-b9b9b13c1fc5bb4cc3b31adc5226f2faaf132769d8642601348b649cf4ba8fd7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/b240c260b6f25e5e30966ec4bc3844327dc68fd5-b9b9b13c1fc5bb4cc3b31adc5226f2faaf132769d8642601348b649cf4ba8fd7.txt"
+    },
+    {
+      "index": 50,
+      "bytes": 9643,
+      "sha256": "a71652e3e6b051fc38b557124e11118e6044a9522436a13caa74cdb9691faf01",
+      "blob": "dbc3a15b3a5ded77b3fb3c8a657d17f46a659053",
+      "git_hash_object": "dbc3a15b3a5ded77b3fb3c8a657d17f46a659053",
+      "paths": [
+        "openbot/app/tests/plugin-assembly-publication.test.tsx"
+      ],
+      "filename": "dbc3a15b3a5ded77b3fb3c8a657d17f46a659053-a71652e3e6b051fc38b557124e11118e6044a9522436a13caa74cdb9691faf01.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/dbc3a15b3a5ded77b3fb3c8a657d17f46a659053-a71652e3e6b051fc38b557124e11118e6044a9522436a13caa74cdb9691faf01.txt"
+    },
+    {
+      "index": 51,
+      "bytes": 14100,
+      "sha256": "5eaff25eec811a27d73acf5b54f5c44da566e55d7ceaa7bdf67b485071f71c2c",
+      "blob": "eda345e7b50e0e142c3321451e738e65e2e6c84c",
+      "git_hash_object": "eda345e7b50e0e142c3321451e738e65e2e6c84c",
+      "paths": [
+        "openbot/server/drizzle/0121_plugin_assembly_publication.sql"
+      ],
+      "filename": "eda345e7b50e0e142c3321451e738e65e2e6c84c-5eaff25eec811a27d73acf5b54f5c44da566e55d7ceaa7bdf67b485071f71c2c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/eda345e7b50e0e142c3321451e738e65e2e6c84c-5eaff25eec811a27d73acf5b54f5c44da566e55d7ceaa7bdf67b485071f71c2c.txt"
+    },
+    {
+      "index": 52,
+      "bytes": 12507,
+      "sha256": "dd601bf4a1736155d78a968d33b7bb8017ea1ba44ecd6881c3c3a68c9fffbd00",
+      "blob": "3187de365c1bf9787fdaef7cf1d44a4761108f26",
+      "git_hash_object": "3187de365c1bf9787fdaef7cf1d44a4761108f26",
+      "paths": [
+        "openbot/server/src/auth/roles.ts"
+      ],
+      "filename": "3187de365c1bf9787fdaef7cf1d44a4761108f26-dd601bf4a1736155d78a968d33b7bb8017ea1ba44ecd6881c3c3a68c9fffbd00.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/3187de365c1bf9787fdaef7cf1d44a4761108f26-dd601bf4a1736155d78a968d33b7bb8017ea1ba44ecd6881c3c3a68c9fffbd00.txt"
+    },
+    {
+      "index": 53,
+      "bytes": 63426,
+      "sha256": "f967aea31fa916f89047102f8648f752b72c8a1f1aab69bb09142c4cee3b53c9",
+      "blob": "22af5b5e4f72023e4ab6cc655a7555759211d90b",
+      "git_hash_object": "22af5b5e4f72023e4ab6cc655a7555759211d90b",
+      "paths": [
+        "openbot/server/src/config.ts"
+      ],
+      "filename": "22af5b5e4f72023e4ab6cc655a7555759211d90b-f967aea31fa916f89047102f8648f752b72c8a1f1aab69bb09142c4cee3b53c9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/22af5b5e4f72023e4ab6cc655a7555759211d90b-f967aea31fa916f89047102f8648f752b72c8a1f1aab69bb09142c4cee3b53c9.txt"
+    },
+    {
+      "index": 54,
+      "bytes": 210190,
+      "sha256": "cfe45b1fd6bbe381cd407ae3246e52f43f76a25b0723460a223736b43ca0380b",
+      "blob": "6d3ae865f4883547cbd02f0d8a39a82a82a169fd",
+      "git_hash_object": "6d3ae865f4883547cbd02f0d8a39a82a82a169fd",
+      "paths": [
+        "openbot/server/src/index.ts"
+      ],
+      "filename": "6d3ae865f4883547cbd02f0d8a39a82a82a169fd-cfe45b1fd6bbe381cd407ae3246e52f43f76a25b0723460a223736b43ca0380b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/6d3ae865f4883547cbd02f0d8a39a82a82a169fd-cfe45b1fd6bbe381cd407ae3246e52f43f76a25b0723460a223736b43ca0380b.txt"
+    },
+    {
+      "index": 55,
+      "bytes": 14131,
+      "sha256": "851a526801b88858a43235776f0df524efe130054f93540f8aff3a92a202a356",
+      "blob": "933dc0f94a69955b5cad11ab6a13de2ddfa9fcff",
+      "git_hash_object": "933dc0f94a69955b5cad11ab6a13de2ddfa9fcff",
+      "paths": [
+        "openbot/server/tests/roles.test.ts"
+      ],
+      "filename": "933dc0f94a69955b5cad11ab6a13de2ddfa9fcff-851a526801b88858a43235776f0df524efe130054f93540f8aff3a92a202a356.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/933dc0f94a69955b5cad11ab6a13de2ddfa9fcff-851a526801b88858a43235776f0df524efe130054f93540f8aff3a92a202a356.txt"
+    },
+    {
+      "index": 56,
+      "bytes": 50042,
+      "sha256": "48844539967e2ef1d18ca8d4a38b1a67a7964095040f8eaaa5dfcfdbe83a91c0",
+      "blob": "14594ff7b4a0eec7a08f39244b15e93c92c536c2",
+      "git_hash_object": "14594ff7b4a0eec7a08f39244b15e93c92c536c2",
+      "paths": [
+        "openbot/server/tests/config.test.ts"
+      ],
+      "filename": "14594ff7b4a0eec7a08f39244b15e93c92c536c2-48844539967e2ef1d18ca8d4a38b1a67a7964095040f8eaaa5dfcfdbe83a91c0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/14594ff7b4a0eec7a08f39244b15e93c92c536c2-48844539967e2ef1d18ca8d4a38b1a67a7964095040f8eaaa5dfcfdbe83a91c0.txt"
+    },
+    {
+      "index": 57,
+      "bytes": 419653,
+      "sha256": "2daedad7546d026ce024597ab7bb25cae74bd611822a493bdcc21fa4d9718bb3",
+      "blob": "b4bff4a34ac50adcacaac416f92a42c7de841cb5",
+      "git_hash_object": "b4bff4a34ac50adcacaac416f92a42c7de841cb5",
+      "paths": [
+        "openbot/server/src/plugins/store.ts"
+      ],
+      "filename": "b4bff4a34ac50adcacaac416f92a42c7de841cb5-2daedad7546d026ce024597ab7bb25cae74bd611822a493bdcc21fa4d9718bb3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/b4bff4a34ac50adcacaac416f92a42c7de841cb5-2daedad7546d026ce024597ab7bb25cae74bd611822a493bdcc21fa4d9718bb3.txt"
+    },
+    {
+      "index": 58,
+      "bytes": 29676,
+      "sha256": "4551a70d7c51245f38f2e23482650df465c177d72704d10495fd3bf87f40d7d0",
+      "blob": "a076ce9807e1b84d8710e94c1a6b3aad1745a39d",
+      "git_hash_object": "a076ce9807e1b84d8710e94c1a6b3aad1745a39d",
+      "paths": [
+        "openbot/server/tests/skill-ownership.integration.test.ts"
+      ],
+      "filename": "a076ce9807e1b84d8710e94c1a6b3aad1745a39d-4551a70d7c51245f38f2e23482650df465c177d72704d10495fd3bf87f40d7d0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/a076ce9807e1b84d8710e94c1a6b3aad1745a39d-4551a70d7c51245f38f2e23482650df465c177d72704d10495fd3bf87f40d7d0.txt"
+    },
+    {
+      "index": 59,
+      "bytes": 11220,
+      "sha256": "69acc319511127e3d75a091caf38b996e5f33b1b1d3c4fee1e48a7502a0ab1ea",
+      "blob": "c42962e4c44b68593a94b29aa486cb32bc900f8d",
+      "git_hash_object": "c42962e4c44b68593a94b29aa486cb32bc900f8d",
+      "paths": [
+        "openbot/app/tests/assemble-install.test.tsx"
+      ],
+      "filename": "c42962e4c44b68593a94b29aa486cb32bc900f8d-69acc319511127e3d75a091caf38b996e5f33b1b1d3c4fee1e48a7502a0ab1ea.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/c42962e4c44b68593a94b29aa486cb32bc900f8d-69acc319511127e3d75a091caf38b996e5f33b1b1d3c4fee1e48a7502a0ab1ea.txt"
+    },
+    {
+      "index": 60,
+      "bytes": 30987,
+      "sha256": "00074771d210dfaaa82386ac74eb347089a9687be45678154e451c931118747e",
+      "blob": "d9c988789df6fec6b0127e1e23ce79fd242d6ed1",
+      "git_hash_object": "d9c988789df6fec6b0127e1e23ce79fd242d6ed1",
+      "paths": [
+        "openbot/server/src/plugins/catalogue.ts"
+      ],
+      "filename": "d9c988789df6fec6b0127e1e23ce79fd242d6ed1-00074771d210dfaaa82386ac74eb347089a9687be45678154e451c931118747e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/d9c988789df6fec6b0127e1e23ce79fd242d6ed1-00074771d210dfaaa82386ac74eb347089a9687be45678154e451c931118747e.txt"
+    },
+    {
+      "index": 61,
+      "bytes": 40195,
+      "sha256": "b7907d9b0848a1a71677e918ce719840a96b3630d707b72e7b188daf849351a1",
+      "blob": "62c7e5b58428104c98cb7d359cee71d100b7a29e",
+      "git_hash_object": "62c7e5b58428104c98cb7d359cee71d100b7a29e",
+      "paths": [
+        "openbot/server/src/db/schema/plugins.ts"
+      ],
+      "filename": "62c7e5b58428104c98cb7d359cee71d100b7a29e-b7907d9b0848a1a71677e918ce719840a96b3630d707b72e7b188daf849351a1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/62c7e5b58428104c98cb7d359cee71d100b7a29e-b7907d9b0848a1a71677e918ce719840a96b3630d707b72e7b188daf849351a1.txt"
+    },
+    {
+      "index": 62,
+      "bytes": 416438,
+      "sha256": "9fbce4142d47f0db4f699719af1983b12055123d64ffc69178e67f2ffad48ba9",
+      "blob": "90d257ba6a8446c149ebb3acdc87f77440ec9819",
+      "git_hash_object": "90d257ba6a8446c149ebb3acdc87f77440ec9819",
+      "paths": [
+        "openbot/server/src/plugins/store.ts"
+      ],
+      "filename": "90d257ba6a8446c149ebb3acdc87f77440ec9819-9fbce4142d47f0db4f699719af1983b12055123d64ffc69178e67f2ffad48ba9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/90d257ba6a8446c149ebb3acdc87f77440ec9819-9fbce4142d47f0db4f699719af1983b12055123d64ffc69178e67f2ffad48ba9.txt"
+    },
+    {
+      "index": 63,
+      "bytes": 139462,
+      "sha256": "47af3b759636428bcd1c79a8ed6d58d4f9958b18249d1e0f555534171c70ee96",
+      "blob": "9fae98fe76510f6433c10ff3b0f9df33380f091f",
+      "git_hash_object": "9fae98fe76510f6433c10ff3b0f9df33380f091f",
+      "paths": [
+        "openbot/server/src/plugins/routes.ts"
+      ],
+      "filename": "9fae98fe76510f6433c10ff3b0f9df33380f091f-47af3b759636428bcd1c79a8ed6d58d4f9958b18249d1e0f555534171c70ee96.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/9fae98fe76510f6433c10ff3b0f9df33380f091f-47af3b759636428bcd1c79a8ed6d58d4f9958b18249d1e0f555534171c70ee96.txt"
+    },
+    {
+      "index": 64,
+      "bytes": 43666,
+      "sha256": "a10519cf0df7cf34c21abcf10421038c977bd699d9419b1f6e4f2496be5c6fc3",
+      "blob": "3e335dbc2a1395bf74676e04cfa242a8ead952b3",
+      "git_hash_object": "3e335dbc2a1395bf74676e04cfa242a8ead952b3",
+      "paths": [
+        "openbot/server/src/audit.ts"
+      ],
+      "filename": "3e335dbc2a1395bf74676e04cfa242a8ead952b3-a10519cf0df7cf34c21abcf10421038c977bd699d9419b1f6e4f2496be5c6fc3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/3e335dbc2a1395bf74676e04cfa242a8ead952b3-a10519cf0df7cf34c21abcf10421038c977bd699d9419b1f6e4f2496be5c6fc3.txt"
+    },
+    {
+      "index": 65,
+      "bytes": 16052,
+      "sha256": "4917a6156218e7b17f73e66c40138b2aae6bf44a8f3d018eccab58486ad98af1",
+      "blob": "d83d9507e3f132146dc3d8707c6c8b46b6d6fbec",
+      "git_hash_object": "d83d9507e3f132146dc3d8707c6c8b46b6d6fbec",
+      "paths": [
+        "openbot/app/src/lib/plugins/queries.ts"
+      ],
+      "filename": "d83d9507e3f132146dc3d8707c6c8b46b6d6fbec-4917a6156218e7b17f73e66c40138b2aae6bf44a8f3d018eccab58486ad98af1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/d83d9507e3f132146dc3d8707c6c8b46b6d6fbec-4917a6156218e7b17f73e66c40138b2aae6bf44a8f3d018eccab58486ad98af1.txt"
+    },
+    {
+      "index": 66,
+      "bytes": 30284,
+      "sha256": "457ba58ead0c03e4beb7228dd88dafdf70c9c2bed2e057c5717f8027df227626",
+      "blob": "4ab245369805c15fa1db2343f182f805cfa73bf8",
+      "git_hash_object": "4ab245369805c15fa1db2343f182f805cfa73bf8",
+      "paths": [
+        "openbot/app/src/lib/plugins/mutations.ts"
+      ],
+      "filename": "4ab245369805c15fa1db2343f182f805cfa73bf8-457ba58ead0c03e4beb7228dd88dafdf70c9c2bed2e057c5717f8027df227626.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/4ab245369805c15fa1db2343f182f805cfa73bf8-457ba58ead0c03e4beb7228dd88dafdf70c9c2bed2e057c5717f8027df227626.txt"
+    },
+    {
+      "index": 67,
+      "bytes": 9855,
+      "sha256": "9987b1408114fa9fb47c1aa8502ad15fea5fd99f2f8dc4a41697a614f5773cf5",
+      "blob": "9b82299ae7eee34c61dcf0fef3b824a017648986",
+      "git_hash_object": "9b82299ae7eee34c61dcf0fef3b824a017648986",
+      "paths": [
+        "openbot/app/src/routes/_authed/_app/assemble.$agentId.tsx"
+      ],
+      "filename": "9b82299ae7eee34c61dcf0fef3b824a017648986-9987b1408114fa9fb47c1aa8502ad15fea5fd99f2f8dc4a41697a614f5773cf5.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/9b82299ae7eee34c61dcf0fef3b824a017648986-9987b1408114fa9fb47c1aa8502ad15fea5fd99f2f8dc4a41697a614f5773cf5.txt"
+    },
+    {
+      "index": 68,
+      "bytes": 27818,
+      "sha256": "8a1d2e7cd76a9842b786fa8006a688ab133d89feeeeb2df5bbc2c6807eee149b",
+      "blob": "1ee6b7ab7e62c27e6ec1f008384847018186d6e0",
+      "git_hash_object": "1ee6b7ab7e62c27e6ec1f008384847018186d6e0",
+      "paths": [
+        "openbot/server/tests/plugin-catalogue.test.ts"
+      ],
+      "filename": "1ee6b7ab7e62c27e6ec1f008384847018186d6e0-8a1d2e7cd76a9842b786fa8006a688ab133d89feeeeb2df5bbc2c6807eee149b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/1ee6b7ab7e62c27e6ec1f008384847018186d6e0-8a1d2e7cd76a9842b786fa8006a688ab133d89feeeeb2df5bbc2c6807eee149b.txt"
+    },
+    {
+      "index": 69,
+      "bytes": 20058,
+      "sha256": "aad4c9dc8e20ce72aea36b359c11b5f1d317c5536e2ee79e4772bec6ff65d9e2",
+      "blob": "3e55038e1529ddf2f1c04b6c634e5107fb0b3baa",
+      "git_hash_object": "3e55038e1529ddf2f1c04b6c634e5107fb0b3baa",
+      "paths": [
+        "openbot/server/tests/plugin-grants-validation.test.ts"
+      ],
+      "filename": "3e55038e1529ddf2f1c04b6c634e5107fb0b3baa-aad4c9dc8e20ce72aea36b359c11b5f1d317c5536e2ee79e4772bec6ff65d9e2.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/3e55038e1529ddf2f1c04b6c634e5107fb0b3baa-aad4c9dc8e20ce72aea36b359c11b5f1d317c5536e2ee79e4772bec6ff65d9e2.txt"
+    },
+    {
+      "index": 70,
+      "bytes": 22213,
+      "sha256": "5cdff7b074da29d9fca9bcaee0ecce37d212c32842426aa6c6de559b0c2cde73",
+      "blob": "0ceebebc13604447ed2f104476e54555a6bb0dcb",
+      "git_hash_object": "0ceebebc13604447ed2f104476e54555a6bb0dcb",
+      "paths": [
+        "openbot/server/tests/skill-ownership.integration.test.ts"
+      ],
+      "filename": "0ceebebc13604447ed2f104476e54555a6bb0dcb-5cdff7b074da29d9fca9bcaee0ecce37d212c32842426aa6c6de559b0c2cde73.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/0ceebebc13604447ed2f104476e54555a6bb0dcb-5cdff7b074da29d9fca9bcaee0ecce37d212c32842426aa6c6de559b0c2cde73.txt"
+    },
+    {
+      "index": 71,
+      "bytes": 9908,
+      "sha256": "a4cfa1d351e004e1b7d3afa08c636cb003aab53eb131ee68ed4ff27b897c139a",
+      "blob": "af27ac535a83570d538e04bb8a1c6c3cfb1a5c81",
+      "git_hash_object": "af27ac535a83570d538e04bb8a1c6c3cfb1a5c81",
+      "paths": [
+        "openbot/app/tests/assemble-install.test.tsx"
+      ],
+      "filename": "af27ac535a83570d538e04bb8a1c6c3cfb1a5c81-a4cfa1d351e004e1b7d3afa08c636cb003aab53eb131ee68ed4ff27b897c139a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/af27ac535a83570d538e04bb8a1c6c3cfb1a5c81-a4cfa1d351e004e1b7d3afa08c636cb003aab53eb131ee68ed4ff27b897c139a.txt"
+    },
+    {
+      "index": 72,
+      "bytes": 231,
+      "sha256": "f26026922f642e285f62e8fea726e9c551fb7f08938e95c6401c96421ee6a7de",
+      "blob": "1fb778954ba3b46ea3a57411a9fe4f670f81ee0e",
+      "git_hash_object": "1fb778954ba3b46ea3a57411a9fe4f670f81ee0e",
+      "paths": [
+        "openbot/server/drizzle/0120_owner_plugin_assembly.sql"
+      ],
+      "filename": "1fb778954ba3b46ea3a57411a9fe4f670f81ee0e-f26026922f642e285f62e8fea726e9c551fb7f08938e95c6401c96421ee6a7de.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/1fb778954ba3b46ea3a57411a9fe4f670f81ee0e-f26026922f642e285f62e8fea726e9c551fb7f08938e95c6401c96421ee6a7de.txt"
+    },
+    {
+      "index": 73,
+      "bytes": 48074,
+      "sha256": "bdf0f018aa6a02e0a202d1713dbe5b41b58fe9fdc3d1f9da55a2e057c1cd62f8",
+      "blob": "cd8318c81b5f516a3e3c5cd7da2975264baac0a8",
+      "git_hash_object": "cd8318c81b5f516a3e3c5cd7da2975264baac0a8",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "filename": "cd8318c81b5f516a3e3c5cd7da2975264baac0a8-bdf0f018aa6a02e0a202d1713dbe5b41b58fe9fdc3d1f9da55a2e057c1cd62f8.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/cd8318c81b5f516a3e3c5cd7da2975264baac0a8-bdf0f018aa6a02e0a202d1713dbe5b41b58fe9fdc3d1f9da55a2e057c1cd62f8.txt"
+    },
+    {
+      "index": 74,
+      "bytes": 51137,
+      "sha256": "f3640e36e540ccd3d0ae1e2b7e1b683a2322b8c81329df4edb881736153b5441",
+      "blob": "ae85e57254a9e1bf4ddc773cabe5f535fb08efcb",
+      "git_hash_object": "ae85e57254a9e1bf4ddc773cabe5f535fb08efcb",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "ae85e57254a9e1bf4ddc773cabe5f535fb08efcb-f3640e36e540ccd3d0ae1e2b7e1b683a2322b8c81329df4edb881736153b5441.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/ae85e57254a9e1bf4ddc773cabe5f535fb08efcb-f3640e36e540ccd3d0ae1e2b7e1b683a2322b8c81329df4edb881736153b5441.txt"
+    },
+    {
+      "index": 75,
+      "bytes": 37535,
+      "sha256": "15e84372540ff8a89a8974d18802ab9ab6246638fc9e80cfcfd388fce57fd62b",
+      "blob": "5d5b9d70952da99a944c7f9a19e457e07edec9a9",
+      "git_hash_object": "5d5b9d70952da99a944c7f9a19e457e07edec9a9",
+      "paths": [
+        ".github/workflows/windows-ps-none-echo-c31.yml"
+      ],
+      "filename": "5d5b9d70952da99a944c7f9a19e457e07edec9a9-15e84372540ff8a89a8974d18802ab9ab6246638fc9e80cfcfd388fce57fd62b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/5d5b9d70952da99a944c7f9a19e457e07edec9a9-15e84372540ff8a89a8974d18802ab9ab6246638fc9e80cfcfd388fce57fd62b.txt"
+    },
+    {
+      "index": 76,
+      "bytes": 39283,
+      "sha256": "a4bb7e803b8feed9b6080d24adcdeeeb9a7d98fe54251def61fbe87c5f8c3f25",
+      "blob": "6ff566fceb6b35b034a77084174a5ab9d3ea50a8",
+      "git_hash_object": "6ff566fceb6b35b034a77084174a5ab9d3ea50a8",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "filename": "6ff566fceb6b35b034a77084174a5ab9d3ea50a8-a4bb7e803b8feed9b6080d24adcdeeeb9a7d98fe54251def61fbe87c5f8c3f25.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/6ff566fceb6b35b034a77084174a5ab9d3ea50a8-a4bb7e803b8feed9b6080d24adcdeeeb9a7d98fe54251def61fbe87c5f8c3f25.txt"
+    },
+    {
+      "index": 77,
+      "bytes": 52037,
+      "sha256": "ca678f60d016f3fe6ce5a3c8daa8332797bd0fd59e30fa3e60c3c18bf89b878c",
+      "blob": "e77480b40c517347c28d707386e905199fd3bfa5",
+      "git_hash_object": "e77480b40c517347c28d707386e905199fd3bfa5",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "e77480b40c517347c28d707386e905199fd3bfa5-ca678f60d016f3fe6ce5a3c8daa8332797bd0fd59e30fa3e60c3c18bf89b878c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/e77480b40c517347c28d707386e905199fd3bfa5-ca678f60d016f3fe6ce5a3c8daa8332797bd0fd59e30fa3e60c3c18bf89b878c.txt"
+    },
+    {
+      "index": 78,
+      "bytes": 39230,
+      "sha256": "f1c4425777333de3a9a941982193af51d798159d3d4f39961e4872bac04d03b7",
+      "blob": "595c2d54fe32f0072acec737317800c949b0d300",
+      "git_hash_object": "595c2d54fe32f0072acec737317800c949b0d300",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "filename": "595c2d54fe32f0072acec737317800c949b0d300-f1c4425777333de3a9a941982193af51d798159d3d4f39961e4872bac04d03b7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/595c2d54fe32f0072acec737317800c949b0d300-f1c4425777333de3a9a941982193af51d798159d3d4f39961e4872bac04d03b7.txt"
+    },
+    {
+      "index": 79,
+      "bytes": 52509,
+      "sha256": "5549dea35504041e1c9a617c9e7410d7555f927df30f539c680032ea4dc79152",
+      "blob": "a540be0251a6b1269717418598019c1d2bfb2f5e",
+      "git_hash_object": "a540be0251a6b1269717418598019c1d2bfb2f5e",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "a540be0251a6b1269717418598019c1d2bfb2f5e-5549dea35504041e1c9a617c9e7410d7555f927df30f539c680032ea4dc79152.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/a540be0251a6b1269717418598019c1d2bfb2f5e-5549dea35504041e1c9a617c9e7410d7555f927df30f539c680032ea4dc79152.txt"
+    },
+    {
+      "index": 80,
+      "bytes": 52556,
+      "sha256": "dd0b7bfce9dde7301cb791e7dea47e8f7cb2f56cf19130cddac806a43b926202",
+      "blob": "4194dad96756185e99b4e48f3edbe221b1e1aeb6",
+      "git_hash_object": "4194dad96756185e99b4e48f3edbe221b1e1aeb6",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "4194dad96756185e99b4e48f3edbe221b1e1aeb6-dd0b7bfce9dde7301cb791e7dea47e8f7cb2f56cf19130cddac806a43b926202.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/4194dad96756185e99b4e48f3edbe221b1e1aeb6-dd0b7bfce9dde7301cb791e7dea47e8f7cb2f56cf19130cddac806a43b926202.txt"
+    },
+    {
+      "index": 81,
+      "bytes": 67331,
+      "sha256": "cdbcd42c0695400364a2d44c9fd767de2875e5692258b5a155c43e765768ca50",
+      "blob": "79bf774c811f4d80dd1acc31397d86e20799baa5",
+      "git_hash_object": "79bf774c811f4d80dd1acc31397d86e20799baa5",
+      "paths": [
+        ".github/workflows/project-execution-receipt-17-c41.yml"
+      ],
+      "filename": "79bf774c811f4d80dd1acc31397d86e20799baa5-cdbcd42c0695400364a2d44c9fd767de2875e5692258b5a155c43e765768ca50.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/79bf774c811f4d80dd1acc31397d86e20799baa5-cdbcd42c0695400364a2d44c9fd767de2875e5692258b5a155c43e765768ca50.txt"
+    },
+    {
+      "index": 82,
+      "bytes": 51811,
+      "sha256": "6ddf7c26542270cfaf1f55021b92fb56cf88b024480562813ebae0f0cd82126e",
+      "blob": "573d08ec13c920fb829a9fbdc9d75c27a6f54ec0",
+      "git_hash_object": "573d08ec13c920fb829a9fbdc9d75c27a6f54ec0",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "573d08ec13c920fb829a9fbdc9d75c27a6f54ec0-6ddf7c26542270cfaf1f55021b92fb56cf88b024480562813ebae0f0cd82126e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/573d08ec13c920fb829a9fbdc9d75c27a6f54ec0-6ddf7c26542270cfaf1f55021b92fb56cf88b024480562813ebae0f0cd82126e.txt"
+    },
+    {
+      "index": 83,
+      "bytes": 50845,
+      "sha256": "193f50ee22b92249dceafeb32afe780aa2ed4cbf1c007892fe51c47b0ab5b475",
+      "blob": "061acd2009733c162ae8df60994ff53141ec7b48",
+      "git_hash_object": "061acd2009733c162ae8df60994ff53141ec7b48",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "061acd2009733c162ae8df60994ff53141ec7b48-193f50ee22b92249dceafeb32afe780aa2ed4cbf1c007892fe51c47b0ab5b475.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/061acd2009733c162ae8df60994ff53141ec7b48-193f50ee22b92249dceafeb32afe780aa2ed4cbf1c007892fe51c47b0ab5b475.txt"
+    },
+    {
+      "index": 84,
+      "bytes": 50490,
+      "sha256": "8d88c571d8a25e5feec5296450c77ceca1b663af1f9c7eb2c822f06ff8485144",
+      "blob": "3c3bda5287f2687fd9289c591386de9079c9b5d8",
+      "git_hash_object": "3c3bda5287f2687fd9289c591386de9079c9b5d8",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "3c3bda5287f2687fd9289c591386de9079c9b5d8-8d88c571d8a25e5feec5296450c77ceca1b663af1f9c7eb2c822f06ff8485144.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/3c3bda5287f2687fd9289c591386de9079c9b5d8-8d88c571d8a25e5feec5296450c77ceca1b663af1f9c7eb2c822f06ff8485144.txt"
+    },
+    {
+      "index": 85,
+      "bytes": 50740,
+      "sha256": "e2ea1c55511b69d124715e1a849de53e47d583dbb07816690c155621b844fd0b",
+      "blob": "da686606a6eb733bce892bb936f783611dfb3230",
+      "git_hash_object": "da686606a6eb733bce892bb936f783611dfb3230",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "da686606a6eb733bce892bb936f783611dfb3230-e2ea1c55511b69d124715e1a849de53e47d583dbb07816690c155621b844fd0b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/da686606a6eb733bce892bb936f783611dfb3230-e2ea1c55511b69d124715e1a849de53e47d583dbb07816690c155621b844fd0b.txt"
+    },
+    {
+      "index": 86,
+      "bytes": 67331,
+      "sha256": "04f69f98f6464b7dc0b708b801620238ec1c2626caaab9cc8107496bae55c985",
+      "blob": "e987bdcdab63779f3e73a240166b8d7f27cee682",
+      "git_hash_object": "e987bdcdab63779f3e73a240166b8d7f27cee682",
+      "paths": [
+        ".github/workflows/project-execution-receipt-17-c36.yml"
+      ],
+      "filename": "e987bdcdab63779f3e73a240166b8d7f27cee682-04f69f98f6464b7dc0b708b801620238ec1c2626caaab9cc8107496bae55c985.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/e987bdcdab63779f3e73a240166b8d7f27cee682-04f69f98f6464b7dc0b708b801620238ec1c2626caaab9cc8107496bae55c985.txt"
+    },
+    {
+      "index": 87,
+      "bytes": 67331,
+      "sha256": "e90dedcb04183d0cba1eb7333225958e65f4bc67c0c77f7d5ec98916dfdf3022",
+      "blob": "6c04e978f9e776dcc5279e413d23cb7302ea2ab0",
+      "git_hash_object": "6c04e978f9e776dcc5279e413d23cb7302ea2ab0",
+      "paths": [
+        ".github/workflows/project-execution-receipt-17-c34.yml"
+      ],
+      "filename": "6c04e978f9e776dcc5279e413d23cb7302ea2ab0-e90dedcb04183d0cba1eb7333225958e65f4bc67c0c77f7d5ec98916dfdf3022.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/6c04e978f9e776dcc5279e413d23cb7302ea2ab0-e90dedcb04183d0cba1eb7333225958e65f4bc67c0c77f7d5ec98916dfdf3022.txt"
+    },
+    {
+      "index": 88,
+      "bytes": 49695,
+      "sha256": "a31316c5987c0f45e59d7e95d31edf3795fbf062e6b1bf7007eea1f7a615ba37",
+      "blob": "d4d4b79f4d38c60d5702cc567887c580c048f64c",
+      "git_hash_object": "d4d4b79f4d38c60d5702cc567887c580c048f64c",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "d4d4b79f4d38c60d5702cc567887c580c048f64c-a31316c5987c0f45e59d7e95d31edf3795fbf062e6b1bf7007eea1f7a615ba37.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/d4d4b79f4d38c60d5702cc567887c580c048f64c-a31316c5987c0f45e59d7e95d31edf3795fbf062e6b1bf7007eea1f7a615ba37.txt"
+    },
+    {
+      "index": 89,
+      "bytes": 49101,
+      "sha256": "dc62cc411561517ff1e92eff7f072be972b6ac5bf0775620265bceca52f2c913",
+      "blob": "92f882141e57d1a3021eaf3cdf6061336788916e",
+      "git_hash_object": "92f882141e57d1a3021eaf3cdf6061336788916e",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "92f882141e57d1a3021eaf3cdf6061336788916e-dc62cc411561517ff1e92eff7f072be972b6ac5bf0775620265bceca52f2c913.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/92f882141e57d1a3021eaf3cdf6061336788916e-dc62cc411561517ff1e92eff7f072be972b6ac5bf0775620265bceca52f2c913.txt"
+    },
+    {
+      "index": 90,
+      "bytes": 44565,
+      "sha256": "857d93b55ffa7acb4e94a2d547c3285282197e2740d638c383edeefd5e2f4d06",
+      "blob": "4c1b8a5907ef5c4ec60020c6f3c80836dd359a5e",
+      "git_hash_object": "4c1b8a5907ef5c4ec60020c6f3c80836dd359a5e",
+      "paths": [
+        "openbot/server/tests/project-execution.integration.test.ts"
+      ],
+      "filename": "4c1b8a5907ef5c4ec60020c6f3c80836dd359a5e-857d93b55ffa7acb4e94a2d547c3285282197e2740d638c383edeefd5e2f4d06.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/4c1b8a5907ef5c4ec60020c6f3c80836dd359a5e-857d93b55ffa7acb4e94a2d547c3285282197e2740d638c383edeefd5e2f4d06.txt"
+    },
+    {
+      "index": 91,
+      "bytes": 35425,
+      "sha256": "b4b736c17c4359ac8830fcf035e44054c9c47a8942ad71bd51bb328f72f6cdb1",
+      "blob": "ac2c7b5fc8a6832073ad164e035d690a844f317f",
+      "git_hash_object": "ac2c7b5fc8a6832073ad164e035d690a844f317f",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "filename": "ac2c7b5fc8a6832073ad164e035d690a844f317f-b4b736c17c4359ac8830fcf035e44054c9c47a8942ad71bd51bb328f72f6cdb1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/ac2c7b5fc8a6832073ad164e035d690a844f317f-b4b736c17c4359ac8830fcf035e44054c9c47a8942ad71bd51bb328f72f6cdb1.txt"
+    },
+    {
+      "index": 92,
+      "bytes": 67291,
+      "sha256": "7911e72be1888b533a7cadf4ea73e14a6c7a8eb28772e0cea73961f251885cdd",
+      "blob": "e969d09d752583e9c084690e2f65c4ce86850931",
+      "git_hash_object": "e969d09d752583e9c084690e2f65c4ce86850931",
+      "paths": [
+        ".github/workflows/project-execution-receipt-17-c31.yml"
+      ],
+      "filename": "e969d09d752583e9c084690e2f65c4ce86850931-7911e72be1888b533a7cadf4ea73e14a6c7a8eb28772e0cea73961f251885cdd.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/e969d09d752583e9c084690e2f65c4ce86850931-7911e72be1888b533a7cadf4ea73e14a6c7a8eb28772e0cea73961f251885cdd.txt"
+    },
+    {
+      "index": 93,
+      "bytes": 51621,
+      "sha256": "b646ee9851238570f9f1f3b3098be61a893b830b2537b053df07573279a2ea4d",
+      "blob": "72078ee8d43946bfbd6159e2d8c3c4d3d68e50a8",
+      "git_hash_object": "72078ee8d43946bfbd6159e2d8c3c4d3d68e50a8",
+      "paths": [
+        "openbot/runner/src/linux-native-files.ts"
+      ],
+      "filename": "72078ee8d43946bfbd6159e2d8c3c4d3d68e50a8-b646ee9851238570f9f1f3b3098be61a893b830b2537b053df07573279a2ea4d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/72078ee8d43946bfbd6159e2d8c3c4d3d68e50a8-b646ee9851238570f9f1f3b3098be61a893b830b2537b053df07573279a2ea4d.txt"
+    },
+    {
+      "index": 94,
+      "bytes": 47156,
+      "sha256": "d3ca1d1188484bc1df93ba5e3db4c618c2f678b0d78c40b3ea949fe4aba05f6f",
+      "blob": "2a74f6a3ecffe1a5133236b3cd8d010aa21ea4bc",
+      "git_hash_object": "2a74f6a3ecffe1a5133236b3cd8d010aa21ea4bc",
+      "paths": [
+        "openbot/server/tests/source-runtime-main.integration.test.ts"
+      ],
+      "filename": "2a74f6a3ecffe1a5133236b3cd8d010aa21ea4bc-d3ca1d1188484bc1df93ba5e3db4c618c2f678b0d78c40b3ea949fe4aba05f6f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/2a74f6a3ecffe1a5133236b3cd8d010aa21ea4bc-d3ca1d1188484bc1df93ba5e3db4c618c2f678b0d78c40b3ea949fe4aba05f6f.txt"
+    },
+    {
+      "index": 95,
+      "bytes": 47175,
+      "sha256": "685b638ad57544ad4bcc0920d0f59d45c826b5ba405c8383148e2ea871bfb010",
+      "blob": "d7455c3246903fcde3aea2f0d96bfa7ba91cb54d",
+      "git_hash_object": "d7455c3246903fcde3aea2f0d96bfa7ba91cb54d",
+      "paths": [
+        "openbot/server/tests/source-runtime-main.integration.test.ts"
+      ],
+      "filename": "d7455c3246903fcde3aea2f0d96bfa7ba91cb54d-685b638ad57544ad4bcc0920d0f59d45c826b5ba405c8383148e2ea871bfb010.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/d7455c3246903fcde3aea2f0d96bfa7ba91cb54d-685b638ad57544ad4bcc0920d0f59d45c826b5ba405c8383148e2ea871bfb010.txt"
+    },
+    {
+      "index": 96,
+      "bytes": 93826,
+      "sha256": "97727e5175085f40bf9078ebd63c826cfe03a8c306157125edb8b8f80f89f020",
+      "blob": "c85b7cfa789679e58f05f67ac113bea7823330bd",
+      "git_hash_object": "c85b7cfa789679e58f05f67ac113bea7823330bd",
+      "paths": [
+        "openbot/server/tests/source-runtime-main.integration.test.ts"
+      ],
+      "filename": "c85b7cfa789679e58f05f67ac113bea7823330bd-97727e5175085f40bf9078ebd63c826cfe03a8c306157125edb8b8f80f89f020.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-03-s5-sourceos-toolchain-b33cf2115ef0/versions/c85b7cfa789679e58f05f67ac113bea7823330bd-97727e5175085f40bf9078ebd63c826cfe03a8c306157125edb8b8f80f89f020.txt"
+    }
+  ],
+  "product_source_executed": false,
+  "gitee_uploaded": false
+}

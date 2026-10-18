@@ -1,0 +1,169 @@
+{
+  "status": "verified",
+  "checked_at": "2026-10-18T07:45:55.055224+00:00",
+  "pack": "04-observer-resolver",
+  "schema": "xiongbao-recovered-source-pack-v1",
+  "source_page_id": "page_8ee8f621c72881918565687077e778d1",
+  "version_count": 8,
+  "path_count": 6,
+  "paths": [
+    "openbot/runner/src/execute.ts",
+    "openbot/runner/src/isolated-workspace.ts",
+    "openbot/runner/src/native-http.ts",
+    "openbot/runner/tests/isolated-workspace.test.ts",
+    "openbot/runner/tests/native-http-dial.integration.test.ts",
+    "openbot/shared/runner-http.ts"
+  ],
+  "source_bytes_total": 147589,
+  "mismatch_count": 0,
+  "archive_directory": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb",
+  "versions": [
+    {
+      "index": 0,
+      "bytes": 21815,
+      "sha256": "efdced1fc71c214c62ab268c2afc268299a40b9f3538ae91b8cb9afe941823e9",
+      "blob": "21a7f11de368b704bb9131684ba1f08cb0517229",
+      "paths": [
+        "openbot/runner/tests/native-http-dial.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "21a7f11de368b704bb9131684ba1f08cb0517229-efdced1fc71c214c62ab268c2afc268299a40b9f3538ae91b8cb9afe941823e9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/21a7f11de368b704bb9131684ba1f08cb0517229-efdced1fc71c214c62ab268c2afc268299a40b9f3538ae91b8cb9afe941823e9.txt"
+    },
+    {
+      "index": 1,
+      "bytes": 8757,
+      "sha256": "4ba1d0cc522bf4e50c55adb5d4cb38edda97b3409c26c27628084faf4e6abff0",
+      "blob": "7e48f74581c832528930cd21c7b9886bf3e32a6e",
+      "paths": [
+        "openbot/shared/runner-http.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7e48f74581c832528930cd21c7b9886bf3e32a6e-4ba1d0cc522bf4e50c55adb5d4cb38edda97b3409c26c27628084faf4e6abff0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/7e48f74581c832528930cd21c7b9886bf3e32a6e-4ba1d0cc522bf4e50c55adb5d4cb38edda97b3409c26c27628084faf4e6abff0.txt"
+    },
+    {
+      "index": 2,
+      "bytes": 5204,
+      "sha256": "82004f00ed21357f14b07039eb783321884b825848b7472a750b14842d41c07a",
+      "blob": "db452b6ccfa58974b26ce8cf1c05de05b87eba5b",
+      "paths": [
+        "openbot/shared/runner-http.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "db452b6ccfa58974b26ce8cf1c05de05b87eba5b-82004f00ed21357f14b07039eb783321884b825848b7472a750b14842d41c07a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/db452b6ccfa58974b26ce8cf1c05de05b87eba5b-82004f00ed21357f14b07039eb783321884b825848b7472a750b14842d41c07a.txt"
+    },
+    {
+      "index": 3,
+      "bytes": 17120,
+      "sha256": "6dada71116d9178e7915f7e6e045b994c272d3a0e9f6968a3de1f650b949a2fe",
+      "blob": "440ff6b7ae1f709407b15d28e6b1a55713fa8b71",
+      "paths": [
+        "openbot/runner/src/native-http.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "440ff6b7ae1f709407b15d28e6b1a55713fa8b71-6dada71116d9178e7915f7e6e045b994c272d3a0e9f6968a3de1f650b949a2fe.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/440ff6b7ae1f709407b15d28e6b1a55713fa8b71-6dada71116d9178e7915f7e6e045b994c272d3a0e9f6968a3de1f650b949a2fe.txt"
+    },
+    {
+      "index": 4,
+      "bytes": 26198,
+      "sha256": "3863314b82d298706d7ce7c77aab639e03c05f428a4760152000bbb8a6b74a6a",
+      "blob": "cafdc3775388733a2f88f8c4a3a024f6bf279ea4",
+      "paths": [
+        "openbot/runner/src/execute.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "cafdc3775388733a2f88f8c4a3a024f6bf279ea4-3863314b82d298706d7ce7c77aab639e03c05f428a4760152000bbb8a6b74a6a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/cafdc3775388733a2f88f8c4a3a024f6bf279ea4-3863314b82d298706d7ce7c77aab639e03c05f428a4760152000bbb8a6b74a6a.txt"
+    },
+    {
+      "index": 5,
+      "bytes": 29339,
+      "sha256": "af6b8284227afb07010fcbf57ceef477fed50e991614a54d6c6e760e337c9d3b",
+      "blob": "f29757343482701eff19175f1767f39d51a14597",
+      "paths": [
+        "openbot/runner/tests/isolated-workspace.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f29757343482701eff19175f1767f39d51a14597-af6b8284227afb07010fcbf57ceef477fed50e991614a54d6c6e760e337c9d3b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/f29757343482701eff19175f1767f39d51a14597-af6b8284227afb07010fcbf57ceef477fed50e991614a54d6c6e760e337c9d3b.txt"
+    },
+    {
+      "index": 6,
+      "bytes": 26165,
+      "sha256": "a4009e0b3a7044f211aba8601e87619d8ecb42f8b48f769db650a9047e7efd6f",
+      "blob": "7040430b96e238026cfd128018e5afc077c04b83",
+      "paths": [
+        "openbot/runner/src/execute.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7040430b96e238026cfd128018e5afc077c04b83-a4009e0b3a7044f211aba8601e87619d8ecb42f8b48f769db650a9047e7efd6f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/7040430b96e238026cfd128018e5afc077c04b83-a4009e0b3a7044f211aba8601e87619d8ecb42f8b48f769db650a9047e7efd6f.txt"
+    },
+    {
+      "index": 7,
+      "bytes": 12991,
+      "sha256": "3c85530656a857e1530b7efeb7e53648b8ff910f52816293f5f631edfc984fbb",
+      "blob": "ec36e3667918e061b431b8345e9d1dea70f759e7",
+      "paths": [
+        "openbot/runner/src/isolated-workspace.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ec36e3667918e061b431b8345e9d1dea70f759e7-3c85530656a857e1530b7efeb7e53648b8ff910f52816293f5f631edfc984fbb.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/versions/ec36e3667918e061b431b8345e9d1dea70f759e7-3c85530656a857e1530b7efeb7e53648b8ff910f52816293f5f631edfc984fbb.txt"
+    }
+  ],
+  "layers": {
+    "base64": {
+      "bytes": 59464,
+      "sha256": "c528ec7f4ccec7502d2de365856102a27e28b72ec23c47875a9c02521dfb9315",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/04-observer-resolver.json.gz.b64"
+    },
+    "gzip": {
+      "bytes": 44597,
+      "sha256": "c124779c44cbbe2ab46800fe73a5ce69870fa081a79d676c2e9ed2406fdb15b1",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/04-observer-resolver.json.gz"
+    },
+    "json": {
+      "bytes": 155914,
+      "sha256": "c1db2995a8df3792c732060d2efa163bb77087aa34980abffe187efe0b99984d",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-04-observer-resolver-c124779c44cb/04-observer-resolver.json"
+    }
+  },
+  "product_source_executed": false,
+  "gitee_uploaded": false
+}

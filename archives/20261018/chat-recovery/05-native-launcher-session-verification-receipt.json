@@ -1,0 +1,146 @@
+{
+  "status": "verified",
+  "checked_at": "2026-10-18T08:08:19.506064+00:00",
+  "pack": "05-native-launcher-session",
+  "schema": "xiongbao-recovered-source-pack-v1",
+  "version_count": 9,
+  "path_count": 6,
+  "paths": [
+    "openbot/desktop/src-tauri/src/bin/device-native-mainline-launcher.rs",
+    "openbot/server/src/pipeline/store.ts",
+    "openbot/server/tests/pipeline-control.integration.test.ts",
+    "openbot/server/tests/pipeline-routes.test.ts",
+    "openbot/server/tests/pipeline-run.test.ts",
+    "openbot/server/tests/support/project-execution-native-fixture.ts"
+  ],
+  "source_bytes_total": 511602,
+  "mismatch_count": 0,
+  "fragments_verified": 1,
+  "archive_directory": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1",
+  "layers": {
+    "base64": {
+      "bytes": 192020,
+      "sha256": "da7f6603ea0a78b42d271457000eddb06804acbbf714fe18ccce9ba4d8ab655e"
+    },
+    "gzip": {
+      "bytes": 144013,
+      "sha256": "826a2166ada10c36c909614a1a68cb005a85b9094c10a84ec4d02bc20cc7787a"
+    },
+    "json": {
+      "bytes": 533479,
+      "sha256": "b707cb6ade7e3d275c7579b377ab3c9ce255cd4fbf42267d797bd3c6db3089c0"
+    }
+  },
+  "versions": [
+    {
+      "index": 0,
+      "bytes": 8903,
+      "sha256": "2f9cf8f7c263d032e5e61604fc348adec253b8b03d025ca6d6477e811cd5ad50",
+      "blob": "c24df7e7fedabcb2855e9b43b3465ccd29faf3e8",
+      "git_hash_object": "c24df7e7fedabcb2855e9b43b3465ccd29faf3e8",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-native-mainline-launcher.rs"
+      ],
+      "filename": "c24df7e7fedabcb2855e9b43b3465ccd29faf3e8-2f9cf8f7c263d032e5e61604fc348adec253b8b03d025ca6d6477e811cd5ad50.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/c24df7e7fedabcb2855e9b43b3465ccd29faf3e8-2f9cf8f7c263d032e5e61604fc348adec253b8b03d025ca6d6477e811cd5ad50.txt"
+    },
+    {
+      "index": 1,
+      "bytes": 100467,
+      "sha256": "6e3ef27a297e42ac324a9b8bba497d8601e70eb5e31ac8544322c3c64e20b942",
+      "blob": "bfb97e178c28a65cf3f850336c0804e62b4a7489",
+      "git_hash_object": "bfb97e178c28a65cf3f850336c0804e62b4a7489",
+      "paths": [
+        "openbot/server/src/pipeline/store.ts"
+      ],
+      "filename": "bfb97e178c28a65cf3f850336c0804e62b4a7489-6e3ef27a297e42ac324a9b8bba497d8601e70eb5e31ac8544322c3c64e20b942.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/bfb97e178c28a65cf3f850336c0804e62b4a7489-6e3ef27a297e42ac324a9b8bba497d8601e70eb5e31ac8544322c3c64e20b942.txt"
+    },
+    {
+      "index": 2,
+      "bytes": 80908,
+      "sha256": "de0d586f3c47d6eeefc32fbc81c6036c2d17d9345f7979b4a2e1efce13e329cd",
+      "blob": "6a606463a8c060aa4480cc5359d9d6ef59b5d37b",
+      "git_hash_object": "6a606463a8c060aa4480cc5359d9d6ef59b5d37b",
+      "paths": [
+        "openbot/server/tests/pipeline-run.test.ts"
+      ],
+      "filename": "6a606463a8c060aa4480cc5359d9d6ef59b5d37b-de0d586f3c47d6eeefc32fbc81c6036c2d17d9345f7979b4a2e1efce13e329cd.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/6a606463a8c060aa4480cc5359d9d6ef59b5d37b-de0d586f3c47d6eeefc32fbc81c6036c2d17d9345f7979b4a2e1efce13e329cd.txt"
+    },
+    {
+      "index": 3,
+      "bytes": 56287,
+      "sha256": "531ae66e7b127d72240fab1c4125cf667551e99de60382480088632ec7de2791",
+      "blob": "601b0bf47345dac26b1c06b64a3b630c29dce3d4",
+      "git_hash_object": "601b0bf47345dac26b1c06b64a3b630c29dce3d4",
+      "paths": [
+        "openbot/server/tests/pipeline-control.integration.test.ts"
+      ],
+      "filename": "601b0bf47345dac26b1c06b64a3b630c29dce3d4-531ae66e7b127d72240fab1c4125cf667551e99de60382480088632ec7de2791.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/601b0bf47345dac26b1c06b64a3b630c29dce3d4-531ae66e7b127d72240fab1c4125cf667551e99de60382480088632ec7de2791.txt"
+    },
+    {
+      "index": 4,
+      "bytes": 27677,
+      "sha256": "b59ffc9198b9690c994dae2353826cea480171c36dca323caff277be4a5f5cf0",
+      "blob": "44f1451f78598b851ba96b9e5b4bb5649d1f39a2",
+      "git_hash_object": "44f1451f78598b851ba96b9e5b4bb5649d1f39a2",
+      "paths": [
+        "openbot/server/tests/pipeline-routes.test.ts"
+      ],
+      "filename": "44f1451f78598b851ba96b9e5b4bb5649d1f39a2-b59ffc9198b9690c994dae2353826cea480171c36dca323caff277be4a5f5cf0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/44f1451f78598b851ba96b9e5b4bb5649d1f39a2-b59ffc9198b9690c994dae2353826cea480171c36dca323caff277be4a5f5cf0.txt"
+    },
+    {
+      "index": 5,
+      "bytes": 56162,
+      "sha256": "89bc4a590277ea9ddeffd5c9f3a1abd45bfef436bca529144705a427bd30c699",
+      "blob": "c33d5405609d507eb6244febff8e89b090532678",
+      "git_hash_object": "c33d5405609d507eb6244febff8e89b090532678",
+      "paths": [
+        "openbot/server/tests/pipeline-control.integration.test.ts"
+      ],
+      "filename": "c33d5405609d507eb6244febff8e89b090532678-89bc4a590277ea9ddeffd5c9f3a1abd45bfef436bca529144705a427bd30c699.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/c33d5405609d507eb6244febff8e89b090532678-89bc4a590277ea9ddeffd5c9f3a1abd45bfef436bca529144705a427bd30c699.txt"
+    },
+    {
+      "index": 6,
+      "bytes": 48163,
+      "sha256": "7dbdec2f25b240781458a5703e025c1822d6de253853f5e614e154b4c6bd1f4d",
+      "blob": "bf88967e5e79ef9342adc091370d582dcfbf73c5",
+      "git_hash_object": "bf88967e5e79ef9342adc091370d582dcfbf73c5",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "filename": "bf88967e5e79ef9342adc091370d582dcfbf73c5-7dbdec2f25b240781458a5703e025c1822d6de253853f5e614e154b4c6bd1f4d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/bf88967e5e79ef9342adc091370d582dcfbf73c5-7dbdec2f25b240781458a5703e025c1822d6de253853f5e614e154b4c6bd1f4d.txt"
+    },
+    {
+      "index": 7,
+      "bytes": 56249,
+      "sha256": "d79ebe9192a11fbccba22be9536ff61b7908263c60f7d423ca3ccacbfd0b73e4",
+      "blob": "dde3eda63eb09fa95f166052c5a4a33074c262cd",
+      "git_hash_object": "dde3eda63eb09fa95f166052c5a4a33074c262cd",
+      "paths": [
+        "openbot/server/tests/pipeline-control.integration.test.ts"
+      ],
+      "filename": "dde3eda63eb09fa95f166052c5a4a33074c262cd-d79ebe9192a11fbccba22be9536ff61b7908263c60f7d423ca3ccacbfd0b73e4.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/dde3eda63eb09fa95f166052c5a4a33074c262cd-d79ebe9192a11fbccba22be9536ff61b7908263c60f7d423ca3ccacbfd0b73e4.txt"
+    },
+    {
+      "index": 8,
+      "bytes": 76786,
+      "sha256": "b402a1a971764e9b9811828ced2120fcb1e58a138f13719d4dc20805ea2e025d",
+      "blob": "c0b0ce4bdb06954eeb0fc9992f48548922863346",
+      "git_hash_object": "c0b0ce4bdb06954eeb0fc9992f48548922863346",
+      "paths": [
+        "openbot/server/tests/pipeline-run.test.ts"
+      ],
+      "filename": "c0b0ce4bdb06954eeb0fc9992f48548922863346-b402a1a971764e9b9811828ced2120fcb1e58a138f13719d4dc20805ea2e025d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-05-native-launcher-session-826a2166ada1/versions/c0b0ce4bdb06954eeb0fc9992f48548922863346-b402a1a971764e9b9811828ced2120fcb1e58a138f13719d4dc20805ea2e025d.txt"
+    }
+  ],
+  "product_source_executed": false,
+  "gitee_uploaded": false
+}

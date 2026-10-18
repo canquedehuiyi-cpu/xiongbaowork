@@ -1,0 +1,1230 @@
+{
+  "status": "verified",
+  "checked_at": "2026-10-18T07:52:11.640739+00:00",
+  "pack": "01-s4-windows-security",
+  "schema": "xiongbao-recovered-source-pack-v1",
+  "version_count": 70,
+  "path_count": 55,
+  "paths": [
+    ".github/scripts/ci-evidence-reader.ps1",
+    ".github/workflows/windows-command-layers-c31.yml",
+    ".github/workflows/windows-direct-ps-baseline-c31.yml",
+    ".github/workflows/windows-direct-ps-nullstring-c31.yml",
+    ".github/workflows/windows-echo-admission-c31.yml",
+    ".github/workflows/windows-echo-node-selection-c31.yml",
+    ".github/workflows/windows-echo-runtime-c31.yml",
+    ".github/workflows/windows-echo-runtime-lf-c31.yml",
+    ".github/workflows/windows-lease-8guard-62fa.yml",
+    ".github/workflows/windows-native-51-7ff3.yml",
+    ".github/workflows/windows-native-51-bun-f027.yml",
+    ".github/workflows/windows-native-51-observer-c27.yml",
+    ".github/workflows/windows-native-51-observer-c31.yml",
+    ".github/workflows/windows-native-51-ram-278d.yml",
+    ".github/workflows/windows-ps-cache-root-c31.yml",
+    ".github/workflows/windows-ps-env-split-c31.yml",
+    ".github/workflows/windows-ps-module-root-c31.yml",
+    ".github/workflows/windows-ps-noauto-c31.yml",
+    ".github/workflows/windows-ps-none-echo-c31.yml",
+    ".github/workflows/windows-vctip-optout-0034.yml",
+    "openbot/agent-computer/src/shell.ts",
+    "openbot/app/src/components/computer/live-screen.tsx",
+    "openbot/app/src/components/wakerflows/sessions.tsx",
+    "openbot/app/tests/wakerflow-customization-screen.test.tsx",
+    "openbot/runner/src/browser.ts",
+    "openbot/runner/src/execute.ts",
+    "openbot/runner/src/recording.ts",
+    "openbot/scripts/ci/windows-native-test.ps1",
+    "openbot/scripts/ci/windows-toolchain-rename-contract.ps1",
+    "openbot/server/src/agents/runner-security-authority.ts",
+    "openbot/server/src/approvals/service.ts",
+    "openbot/server/src/auth/roles.ts",
+    "openbot/server/src/computer/routes.ts",
+    "openbot/server/src/db/client.ts",
+    "openbot/server/src/pipeline/store.ts",
+    "openbot/server/src/plugins/store.ts",
+    "openbot/server/src/routines/sweep.ts",
+    "openbot/server/src/wakerflows/source-bwrap-containment.ts",
+    "openbot/server/src/wakerflows/source-runtime-clone-compression.ts",
+    "openbot/server/src/wakerflows/source-runtime-clone-value.ts",
+    "openbot/server/src/wakerflows/source-stdio-guest.ts",
+    "openbot/server/src/wakerflows/store.ts",
+    "openbot/server/tests/copilot.test.ts",
+    "openbot/server/tests/device-safety.integration.test.ts",
+    "openbot/server/tests/egress-owner.integration.test.ts",
+    "openbot/server/tests/email-signup.test.ts",
+    "openbot/server/tests/enterprise-controls.integration.test.ts",
+    "openbot/server/tests/model-library-routes.test.ts",
+    "openbot/server/tests/paired-screen-bridge.test.ts",
+    "openbot/server/tests/runner-security.test.ts",
+    "openbot/server/tests/skill-ownership.integration.test.ts",
+    "openbot/server/tests/source-clone-buffer.test.ts",
+    "openbot/server/tests/support/role-writer.ts",
+    "openbot/server/tests/wakerflow-source-inline-handler.test.ts",
+    "openbot/server/tests/wakerflows.integration.test.ts"
+  ],
+  "source_bytes_total": 3311290,
+  "mismatch_count": 0,
+  "fragments_verified": 7,
+  "transfer_incidents": [
+    {
+      "part": 3,
+      "observed_bytes": 200000,
+      "expected_bytes": 220000,
+      "resolution": "Rewritten from retained original Page response; all fragments and full pack revalidated",
+      "preserved_invalid_copy": "/workspace/scratch/3d93691fe5e9/recovery-inbox/s4-fragments/part-3.length-mismatch-preserved.b64",
+      "cause": "undetermined"
+    }
+  ],
+  "archive_directory": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da",
+  "layers": {
+    "base64": {
+      "bytes": 1374936,
+      "sha256": "742250b98219c7ad40f13a8d5f7e197b3ef07817b197d43526ef5fc2fe72dc6d"
+    },
+    "gzip": {
+      "bytes": 1031202,
+      "sha256": "036c29d0b0da8091cb7729b1873f82a1388ed0c8b4d475056ba0b2078675091f"
+    },
+    "json": {
+      "bytes": 3441858,
+      "sha256": "dcab322bb8591e5692f75baa50c68853a26c4e4ceb7406fc9332091dd4ba4bb3"
+    }
+  },
+  "versions": [
+    {
+      "index": 0,
+      "bytes": 61160,
+      "sha256": "942173ffcae8c7a3a08f06a78181c20154bb0766b4f8c7ea75f81c000d397c1d",
+      "blob": "9ebe2d3c534373b3444e594924c87d7cccf1a6c4",
+      "paths": [
+        "openbot/server/src/wakerflows/source-bwrap-containment.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "9ebe2d3c534373b3444e594924c87d7cccf1a6c4-942173ffcae8c7a3a08f06a78181c20154bb0766b4f8c7ea75f81c000d397c1d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/9ebe2d3c534373b3444e594924c87d7cccf1a6c4-942173ffcae8c7a3a08f06a78181c20154bb0766b4f8c7ea75f81c000d397c1d.txt"
+    },
+    {
+      "index": 1,
+      "bytes": 32052,
+      "sha256": "a2b4c0a4cfec67d9b57e57b1340b2e778825a308b765c16823cdcd469fed6599",
+      "blob": "48719a33f3e061bd282d48f814b0eeec5fb4ff9c",
+      "paths": [
+        "openbot/server/src/agents/runner-security-authority.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "48719a33f3e061bd282d48f814b0eeec5fb4ff9c-a2b4c0a4cfec67d9b57e57b1340b2e778825a308b765c16823cdcd469fed6599.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/48719a33f3e061bd282d48f814b0eeec5fb4ff9c-a2b4c0a4cfec67d9b57e57b1340b2e778825a308b765c16823cdcd469fed6599.txt"
+    },
+    {
+      "index": 2,
+      "bytes": 106419,
+      "sha256": "5e3664edf53ed7151119705ea7517c917fc7edad7e6f6f8c144e85923832eddf",
+      "blob": "811d8a12c43dedfacd19293c4ed080204afb6ec8",
+      "paths": [
+        "openbot/server/tests/copilot.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "811d8a12c43dedfacd19293c4ed080204afb6ec8-5e3664edf53ed7151119705ea7517c917fc7edad7e6f6f8c144e85923832eddf.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/811d8a12c43dedfacd19293c4ed080204afb6ec8-5e3664edf53ed7151119705ea7517c917fc7edad7e6f6f8c144e85923832eddf.txt"
+    },
+    {
+      "index": 3,
+      "bytes": 9024,
+      "sha256": "74c2000839a2fd50417079cbf64e30965d11e591d59acfe422685a015b614f4e",
+      "blob": "6db8d079bd0a3dd0a31bd0611b7ada17812953bf",
+      "paths": [
+        "openbot/server/tests/egress-owner.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6db8d079bd0a3dd0a31bd0611b7ada17812953bf-74c2000839a2fd50417079cbf64e30965d11e591d59acfe422685a015b614f4e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/6db8d079bd0a3dd0a31bd0611b7ada17812953bf-74c2000839a2fd50417079cbf64e30965d11e591d59acfe422685a015b614f4e.txt"
+    },
+    {
+      "index": 4,
+      "bytes": 10540,
+      "sha256": "5fcd836359aa5215cee2cb130a96844a97eae1934673c47ee465b02d0f5f7e55",
+      "blob": "6a091024fbbb1af379f56bb676e900381c587edf",
+      "paths": [
+        "openbot/server/tests/email-signup.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6a091024fbbb1af379f56bb676e900381c587edf-5fcd836359aa5215cee2cb130a96844a97eae1934673c47ee465b02d0f5f7e55.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/6a091024fbbb1af379f56bb676e900381c587edf-5fcd836359aa5215cee2cb130a96844a97eae1934673c47ee465b02d0f5f7e55.txt"
+    },
+    {
+      "index": 5,
+      "bytes": 31227,
+      "sha256": "6564ceaae09e5cf083a4792b7db07216ad552cbb8d44d85418a32b29ad83b53c",
+      "blob": "513a11ff71e607321fd7e42db38e41797755925c",
+      "paths": [
+        "openbot/server/tests/enterprise-controls.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "513a11ff71e607321fd7e42db38e41797755925c-6564ceaae09e5cf083a4792b7db07216ad552cbb8d44d85418a32b29ad83b53c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/513a11ff71e607321fd7e42db38e41797755925c-6564ceaae09e5cf083a4792b7db07216ad552cbb8d44d85418a32b29ad83b53c.txt"
+    },
+    {
+      "index": 6,
+      "bytes": 5339,
+      "sha256": "f9a606f8db5c34189213369340b55a242e5f333c3b0c81c2784319df717a7702",
+      "blob": "6a891d775e4b03522880eec7043fa70944807972",
+      "paths": [
+        "openbot/server/tests/support/role-writer.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6a891d775e4b03522880eec7043fa70944807972-f9a606f8db5c34189213369340b55a242e5f333c3b0c81c2784319df717a7702.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/6a891d775e4b03522880eec7043fa70944807972-f9a606f8db5c34189213369340b55a242e5f333c3b0c81c2784319df717a7702.txt"
+    },
+    {
+      "index": 7,
+      "bytes": 47118,
+      "sha256": "83217b7cd76e341a97c31ab90a75e7df266c29835633446e74ed65ac242e6fc7",
+      "blob": "18e3e13c13416bfbc1d384706e81c51995289074",
+      "paths": [
+        "openbot/server/src/approvals/service.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "18e3e13c13416bfbc1d384706e81c51995289074-83217b7cd76e341a97c31ab90a75e7df266c29835633446e74ed65ac242e6fc7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/18e3e13c13416bfbc1d384706e81c51995289074-83217b7cd76e341a97c31ab90a75e7df266c29835633446e74ed65ac242e6fc7.txt"
+    },
+    {
+      "index": 8,
+      "bytes": 29700,
+      "sha256": "724f0a4900ac3481d3e65b087285afb9cc47fed06458250a7c901d4bcc13ed8f",
+      "blob": "51eedfb6867f300e5a36d3ba6031313b189fd820",
+      "paths": [
+        "openbot/runner/src/execute.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "51eedfb6867f300e5a36d3ba6031313b189fd820-724f0a4900ac3481d3e65b087285afb9cc47fed06458250a7c901d4bcc13ed8f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/51eedfb6867f300e5a36d3ba6031313b189fd820-724f0a4900ac3481d3e65b087285afb9cc47fed06458250a7c901d4bcc13ed8f.txt"
+    },
+    {
+      "index": 9,
+      "bytes": 40388,
+      "sha256": "0d4539b1fbf64a558f195abf2d66e7628ad2d10e10d7ecbeab14a0afa3553c54",
+      "blob": "87de6ed6481431d8101db6af7cc912ed6abf9161",
+      "paths": [
+        "openbot/runner/src/recording.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "87de6ed6481431d8101db6af7cc912ed6abf9161-0d4539b1fbf64a558f195abf2d66e7628ad2d10e10d7ecbeab14a0afa3553c54.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/87de6ed6481431d8101db6af7cc912ed6abf9161-0d4539b1fbf64a558f195abf2d66e7628ad2d10e10d7ecbeab14a0afa3553c54.txt"
+    },
+    {
+      "index": 10,
+      "bytes": 12493,
+      "sha256": "d268f9f1ba1e43f90ce6596db03056120b18fef0a23e43e812fc90407aa529be",
+      "blob": "d655229d060c3b0e9b2dbb34fb5d823f28a73f67",
+      "paths": [
+        "openbot/server/src/auth/roles.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "d655229d060c3b0e9b2dbb34fb5d823f28a73f67-d268f9f1ba1e43f90ce6596db03056120b18fef0a23e43e812fc90407aa529be.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/d655229d060c3b0e9b2dbb34fb5d823f28a73f67-d268f9f1ba1e43f90ce6596db03056120b18fef0a23e43e812fc90407aa529be.txt"
+    },
+    {
+      "index": 11,
+      "bytes": 98711,
+      "sha256": "2b57f32e549fd8437dd8fecd2870be830d850bf5444c4f9a1351f05e3e98a633",
+      "blob": "a72a61f319d29cfb8d02082134ffa4dd0a44cb90",
+      "paths": [
+        "openbot/server/src/pipeline/store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "a72a61f319d29cfb8d02082134ffa4dd0a44cb90-2b57f32e549fd8437dd8fecd2870be830d850bf5444c4f9a1351f05e3e98a633.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/a72a61f319d29cfb8d02082134ffa4dd0a44cb90-2b57f32e549fd8437dd8fecd2870be830d850bf5444c4f9a1351f05e3e98a633.txt"
+    },
+    {
+      "index": 12,
+      "bytes": 444911,
+      "sha256": "6b7ea916c26f6796724e458ef2005ec26a5a282c5b06437fff78391d52472a76",
+      "blob": "f59bcf12633e6914d8155b7304fc6d7163631cc6",
+      "paths": [
+        "openbot/server/src/plugins/store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f59bcf12633e6914d8155b7304fc6d7163631cc6-6b7ea916c26f6796724e458ef2005ec26a5a282c5b06437fff78391d52472a76.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/f59bcf12633e6914d8155b7304fc6d7163631cc6-6b7ea916c26f6796724e458ef2005ec26a5a282c5b06437fff78391d52472a76.txt"
+    },
+    {
+      "index": 13,
+      "bytes": 54548,
+      "sha256": "c1e4fc8bf724ba19bc3a97e7f5703721708e071cc731f087a6830b5584f95ae2",
+      "blob": "da9b479c2530281a8b2331eab34a1881d5f041f3",
+      "paths": [
+        "openbot/server/tests/skill-ownership.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "da9b479c2530281a8b2331eab34a1881d5f041f3-c1e4fc8bf724ba19bc3a97e7f5703721708e071cc731f087a6830b5584f95ae2.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/da9b479c2530281a8b2331eab34a1881d5f041f3-c1e4fc8bf724ba19bc3a97e7f5703721708e071cc731f087a6830b5584f95ae2.txt"
+    },
+    {
+      "index": 14,
+      "bytes": 141239,
+      "sha256": "b22af7e56fc9e40907720c4aab2398b19eadac337d95b7d31f780dad9956ae5a",
+      "blob": "0fcd9c083fcc9f34624c902c174e1ce8fbd9c982",
+      "paths": [
+        "openbot/server/tests/wakerflow-source-inline-handler.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "0fcd9c083fcc9f34624c902c174e1ce8fbd9c982-b22af7e56fc9e40907720c4aab2398b19eadac337d95b7d31f780dad9956ae5a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/0fcd9c083fcc9f34624c902c174e1ce8fbd9c982-b22af7e56fc9e40907720c4aab2398b19eadac337d95b7d31f780dad9956ae5a.txt"
+    },
+    {
+      "index": 15,
+      "bytes": 16033,
+      "sha256": "8d6385898d869ae804b86b9920321429a65d036da811f37a83c57ca1b152a046",
+      "blob": "8fbcf6db1c86b939f52c5a58f619ddb290998b3b",
+      "paths": [
+        "openbot/server/src/db/client.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "8fbcf6db1c86b939f52c5a58f619ddb290998b3b-8d6385898d869ae804b86b9920321429a65d036da811f37a83c57ca1b152a046.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/8fbcf6db1c86b939f52c5a58f619ddb290998b3b-8d6385898d869ae804b86b9920321429a65d036da811f37a83c57ca1b152a046.txt"
+    },
+    {
+      "index": 16,
+      "bytes": 35891,
+      "sha256": "58dd917fb3e95666aad88eefdc20344a2810eeea91e0e0b56a7cc55a40a7bf08",
+      "blob": "bdb25c42b4afcdbf614869d89fae33f7f6c67c67",
+      "paths": [
+        "openbot/server/tests/device-safety.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "bdb25c42b4afcdbf614869d89fae33f7f6c67c67-58dd917fb3e95666aad88eefdc20344a2810eeea91e0e0b56a7cc55a40a7bf08.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/bdb25c42b4afcdbf614869d89fae33f7f6c67c67-58dd917fb3e95666aad88eefdc20344a2810eeea91e0e0b56a7cc55a40a7bf08.txt"
+    },
+    {
+      "index": 17,
+      "bytes": 49388,
+      "sha256": "90435f853e97abecbcd052ebfab14a62a25fc07972eea0d39914e233272eb97c",
+      "blob": "f4c2062ff8f2a89e104214911ddfac8ba091761c",
+      "paths": [
+        "openbot/server/src/wakerflows/store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f4c2062ff8f2a89e104214911ddfac8ba091761c-90435f853e97abecbcd052ebfab14a62a25fc07972eea0d39914e233272eb97c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/f4c2062ff8f2a89e104214911ddfac8ba091761c-90435f853e97abecbcd052ebfab14a62a25fc07972eea0d39914e233272eb97c.txt"
+    },
+    {
+      "index": 18,
+      "bytes": 37770,
+      "sha256": "cc6e24cbcb495013914b612b02abc1831e8c56662725a74490e94a5f992fd8e3",
+      "blob": "6c36b033bc8a731a33e2e54423d280065cd2a818",
+      "paths": [
+        "openbot/server/tests/wakerflows.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6c36b033bc8a731a33e2e54423d280065cd2a818-cc6e24cbcb495013914b612b02abc1831e8c56662725a74490e94a5f992fd8e3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/6c36b033bc8a731a33e2e54423d280065cd2a818-cc6e24cbcb495013914b612b02abc1831e8c56662725a74490e94a5f992fd8e3.txt"
+    },
+    {
+      "index": 19,
+      "bytes": 25417,
+      "sha256": "e30ee0328a6b116aa31430bf3ad8b86da1b68261b3ef62ba3bf7f989c734ba5d",
+      "blob": "2d2fbede5e5a04ae7c5d9fbfcf0b49cfab71e197",
+      "paths": [
+        "openbot/server/src/routines/sweep.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "2d2fbede5e5a04ae7c5d9fbfcf0b49cfab71e197-e30ee0328a6b116aa31430bf3ad8b86da1b68261b3ef62ba3bf7f989c734ba5d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/2d2fbede5e5a04ae7c5d9fbfcf0b49cfab71e197-e30ee0328a6b116aa31430bf3ad8b86da1b68261b3ef62ba3bf7f989c734ba5d.txt"
+    },
+    {
+      "index": 20,
+      "bytes": 43881,
+      "sha256": "8b92200b140f9d9e8827e1c91c2ab1f7371a666dc024ac07b2d70b5a7a79694b",
+      "blob": "643fab9b627f7b211be6c650b054132db22d7aa4",
+      "paths": [
+        "openbot/server/src/computer/routes.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "643fab9b627f7b211be6c650b054132db22d7aa4-8b92200b140f9d9e8827e1c91c2ab1f7371a666dc024ac07b2d70b5a7a79694b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/643fab9b627f7b211be6c650b054132db22d7aa4-8b92200b140f9d9e8827e1c91c2ab1f7371a666dc024ac07b2d70b5a7a79694b.txt"
+    },
+    {
+      "index": 21,
+      "bytes": 20797,
+      "sha256": "9154b16b6cacb3750848db0781eaec2f80618fa266df26bec6c098e1650fd304",
+      "blob": "5c99375abf09295f2ad2795b59fabaf3e247fb7a",
+      "paths": [
+        "openbot/server/src/agents/runner-security-authority.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "5c99375abf09295f2ad2795b59fabaf3e247fb7a-9154b16b6cacb3750848db0781eaec2f80618fa266df26bec6c098e1650fd304.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/5c99375abf09295f2ad2795b59fabaf3e247fb7a-9154b16b6cacb3750848db0781eaec2f80618fa266df26bec6c098e1650fd304.txt"
+    },
+    {
+      "index": 22,
+      "bytes": 419642,
+      "sha256": "7445279e0baa48fa1a8d5987f8146968979074f1eb9466f1b42da00c71688bd0",
+      "blob": "a932e1c69c109307a3a559a20fcd71438c407604",
+      "paths": [
+        "openbot/server/src/plugins/store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "a932e1c69c109307a3a559a20fcd71438c407604-7445279e0baa48fa1a8d5987f8146968979074f1eb9466f1b42da00c71688bd0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/a932e1c69c109307a3a559a20fcd71438c407604-7445279e0baa48fa1a8d5987f8146968979074f1eb9466f1b42da00c71688bd0.txt"
+    },
+    {
+      "index": 23,
+      "bytes": 49226,
+      "sha256": "7bad441bfdb37b653706cc70315c79dfd254edb10b2c3c35674222878de263ce",
+      "blob": "d814873e9f7571c057fc9bedd4bd0674db309666",
+      "paths": [
+        "openbot/server/src/wakerflows/store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "d814873e9f7571c057fc9bedd4bd0674db309666-7bad441bfdb37b653706cc70315c79dfd254edb10b2c3c35674222878de263ce.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/d814873e9f7571c057fc9bedd4bd0674db309666-7bad441bfdb37b653706cc70315c79dfd254edb10b2c3c35674222878de263ce.txt"
+    },
+    {
+      "index": 24,
+      "bytes": 26126,
+      "sha256": "39b96659254f89332754f00a1648bf5ce355e83066b1474cad5a97c9d506b830",
+      "blob": "bad86f92b46064525716324ea0b430494c1c14e2",
+      "paths": [
+        "openbot/server/tests/model-library-routes.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "bad86f92b46064525716324ea0b430494c1c14e2-39b96659254f89332754f00a1648bf5ce355e83066b1474cad5a97c9d506b830.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/bad86f92b46064525716324ea0b430494c1c14e2-39b96659254f89332754f00a1648bf5ce355e83066b1474cad5a97c9d506b830.txt"
+    },
+    {
+      "index": 25,
+      "bytes": 55886,
+      "sha256": "62a412cdbf626320a06cdc074a2d1d33604d39b75c467965eab58e5983c2e971",
+      "blob": "3cec216f96a21a4af218a35397361c9328d46457",
+      "paths": [
+        "openbot/runner/src/browser.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "3cec216f96a21a4af218a35397361c9328d46457-62a412cdbf626320a06cdc074a2d1d33604d39b75c467965eab58e5983c2e971.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/3cec216f96a21a4af218a35397361c9328d46457-62a412cdbf626320a06cdc074a2d1d33604d39b75c467965eab58e5983c2e971.txt"
+    },
+    {
+      "index": 26,
+      "bytes": 23390,
+      "sha256": "9ef961bb1de303dac08005bc652dd5e06d728bef04345e3d24e088431d807021",
+      "blob": "db7dd34bd871327ef2a32b45c2818e0b652df83a",
+      "paths": [
+        "openbot/app/src/components/wakerflows/sessions.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "db7dd34bd871327ef2a32b45c2818e0b652df83a-9ef961bb1de303dac08005bc652dd5e06d728bef04345e3d24e088431d807021.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/db7dd34bd871327ef2a32b45c2818e0b652df83a-9ef961bb1de303dac08005bc652dd5e06d728bef04345e3d24e088431d807021.txt"
+    },
+    {
+      "index": 27,
+      "bytes": 17081,
+      "sha256": "724a3890936fe0dc3d132c9f02af18a21a8a95cb2c1407a8a1955ec71614c844",
+      "blob": "a5c2eb2435faec1a19c09f6c5da682a96c5640e9",
+      "paths": [
+        "openbot/app/tests/wakerflow-customization-screen.test.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "a5c2eb2435faec1a19c09f6c5da682a96c5640e9-724a3890936fe0dc3d132c9f02af18a21a8a95cb2c1407a8a1955ec71614c844.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/a5c2eb2435faec1a19c09f6c5da682a96c5640e9-724a3890936fe0dc3d132c9f02af18a21a8a95cb2c1407a8a1955ec71614c844.txt"
+    },
+    {
+      "index": 28,
+      "bytes": 30161,
+      "sha256": "500f8e683af76cbba78ccb6337f0de33e37319d99e615696e0462a5ee370411d",
+      "blob": "76d886736853670c0c70e4b6f7a6da275ea7a322",
+      "paths": [
+        "openbot/app/src/components/computer/live-screen.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "76d886736853670c0c70e4b6f7a6da275ea7a322-500f8e683af76cbba78ccb6337f0de33e37319d99e615696e0462a5ee370411d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/76d886736853670c0c70e4b6f7a6da275ea7a322-500f8e683af76cbba78ccb6337f0de33e37319d99e615696e0462a5ee370411d.txt"
+    },
+    {
+      "index": 29,
+      "bytes": 27296,
+      "sha256": "594aa15588ec9fdf12bb88a7a43bd91fb67cd76f5ed22788ba788d323d5cbcd6",
+      "blob": "ba97c3bd77579dde954e6fe2b667992e7a8208ae",
+      "paths": [
+        "openbot/server/tests/paired-screen-bridge.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ba97c3bd77579dde954e6fe2b667992e7a8208ae-594aa15588ec9fdf12bb88a7a43bd91fb67cd76f5ed22788ba788d323d5cbcd6.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/ba97c3bd77579dde954e6fe2b667992e7a8208ae-594aa15588ec9fdf12bb88a7a43bd91fb67cd76f5ed22788ba788d323d5cbcd6.txt"
+    },
+    {
+      "index": 30,
+      "bytes": 23155,
+      "sha256": "4dc4e9473b7cf3d3732bd3f95b27fb5ba1111a4e74aa9da42b31433b2c878f47",
+      "blob": "f840ccfbb7383b4b9d597dee53aa0fb48d4a5f6a",
+      "paths": [
+        "openbot/app/src/components/wakerflows/sessions.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f840ccfbb7383b4b9d597dee53aa0fb48d4a5f6a-4dc4e9473b7cf3d3732bd3f95b27fb5ba1111a4e74aa9da42b31433b2c878f47.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/f840ccfbb7383b4b9d597dee53aa0fb48d4a5f6a-4dc4e9473b7cf3d3732bd3f95b27fb5ba1111a4e74aa9da42b31433b2c878f47.txt"
+    },
+    {
+      "index": 31,
+      "bytes": 14208,
+      "sha256": "f93efd8d316e487c9f6ee45c2463e7597a846abd299270287c0ee7ffa0184eac",
+      "blob": "af513be8ce6cb10bd4e4eb17324f204a6e60f4fb",
+      "paths": [
+        "openbot/app/tests/wakerflow-customization-screen.test.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "af513be8ce6cb10bd4e4eb17324f204a6e60f4fb-f93efd8d316e487c9f6ee45c2463e7597a846abd299270287c0ee7ffa0184eac.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/af513be8ce6cb10bd4e4eb17324f204a6e60f4fb-f93efd8d316e487c9f6ee45c2463e7597a846abd299270287c0ee7ffa0184eac.txt"
+    },
+    {
+      "index": 32,
+      "bytes": 23206,
+      "sha256": "802cb570c1244ef1edbff27ad7136d25b40919c69b7cd41dac65d9451d040f27",
+      "blob": "2861ba2115e4771fa8b90561559ea8351225f3c0",
+      "paths": [
+        "openbot/app/src/components/wakerflows/sessions.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "2861ba2115e4771fa8b90561559ea8351225f3c0-802cb570c1244ef1edbff27ad7136d25b40919c69b7cd41dac65d9451d040f27.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/2861ba2115e4771fa8b90561559ea8351225f3c0-802cb570c1244ef1edbff27ad7136d25b40919c69b7cd41dac65d9451d040f27.txt"
+    },
+    {
+      "index": 33,
+      "bytes": 15230,
+      "sha256": "da173a61876e9dcb1cb5a0ba067591631e42cc67e2bacb42e7ea6ff2b201a392",
+      "blob": "ef753330fc7877a497ec832181fb332dcfed9339",
+      "paths": [
+        "openbot/app/tests/wakerflow-customization-screen.test.tsx"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ef753330fc7877a497ec832181fb332dcfed9339-da173a61876e9dcb1cb5a0ba067591631e42cc67e2bacb42e7ea6ff2b201a392.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/ef753330fc7877a497ec832181fb332dcfed9339-da173a61876e9dcb1cb5a0ba067591631e42cc67e2bacb42e7ea6ff2b201a392.txt"
+    },
+    {
+      "index": 34,
+      "bytes": 31850,
+      "sha256": "26fa01f7d0fec4cdd537b1e855d6c7bbc1d3ac7a4d1c9da8d8fcccf776bb33b3",
+      "blob": "d1cce6b440b372b1ec9f87f22b6c5587b1cd2af9",
+      "paths": [
+        "openbot/server/src/wakerflows/source-runtime-clone-value.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "d1cce6b440b372b1ec9f87f22b6c5587b1cd2af9-26fa01f7d0fec4cdd537b1e855d6c7bbc1d3ac7a4d1c9da8d8fcccf776bb33b3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/d1cce6b440b372b1ec9f87f22b6c5587b1cd2af9-26fa01f7d0fec4cdd537b1e855d6c7bbc1d3ac7a4d1c9da8d8fcccf776bb33b3.txt"
+    },
+    {
+      "index": 35,
+      "bytes": 6179,
+      "sha256": "8cb6e1d486435d284cb304d8ab6970f741212a43c2e3e42042f8d91d4293af07",
+      "blob": "4deece97aff4dde483bacb48d217e5b93362ab0f",
+      "paths": [
+        "openbot/server/src/wakerflows/source-runtime-clone-compression.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "4deece97aff4dde483bacb48d217e5b93362ab0f-8cb6e1d486435d284cb304d8ab6970f741212a43c2e3e42042f8d91d4293af07.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/4deece97aff4dde483bacb48d217e5b93362ab0f-8cb6e1d486435d284cb304d8ab6970f741212a43c2e3e42042f8d91d4293af07.txt"
+    },
+    {
+      "index": 36,
+      "bytes": 10590,
+      "sha256": "ff3eaed4d8b26bb5287fcbbab81c49cc0cf7e5fcfaf361ba5759f73f1fff966b",
+      "blob": "cb855d3e01080cfc5191f4e4693b3c15a34822d8",
+      "paths": [
+        "openbot/server/tests/source-clone-buffer.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "cb855d3e01080cfc5191f4e4693b3c15a34822d8-ff3eaed4d8b26bb5287fcbbab81c49cc0cf7e5fcfaf361ba5759f73f1fff966b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/cb855d3e01080cfc5191f4e4693b3c15a34822d8-ff3eaed4d8b26bb5287fcbbab81c49cc0cf7e5fcfaf361ba5759f73f1fff966b.txt"
+    },
+    {
+      "index": 37,
+      "bytes": 37589,
+      "sha256": "7ef969694b95d2c9b96ded735b68b2e6e9b301aeec656af300985200ecfc32bf",
+      "blob": "7c1797201c1b9f705ea7efd7aa5c230589b8b61d",
+      "paths": [
+        ".github/workflows/windows-ps-noauto-c31.yml",
+        ".github/workflows/windows-ps-none-echo-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7c1797201c1b9f705ea7efd7aa5c230589b8b61d-7ef969694b95d2c9b96ded735b68b2e6e9b301aeec656af300985200ecfc32bf.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/7c1797201c1b9f705ea7efd7aa5c230589b8b61d-7ef969694b95d2c9b96ded735b68b2e6e9b301aeec656af300985200ecfc32bf.txt"
+    },
+    {
+      "index": 38,
+      "bytes": 9096,
+      "sha256": "68ed9ff2311865046f9a2ccaa31b12cac812bf131774e18ed03c7e005487a83f",
+      "blob": "40c024a72fef8953b581cf21475900b3d9cd575c",
+      "paths": [
+        "openbot/server/src/wakerflows/source-stdio-guest.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "40c024a72fef8953b581cf21475900b3d9cd575c-68ed9ff2311865046f9a2ccaa31b12cac812bf131774e18ed03c7e005487a83f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/40c024a72fef8953b581cf21475900b3d9cd575c-68ed9ff2311865046f9a2ccaa31b12cac812bf131774e18ed03c7e005487a83f.txt"
+    },
+    {
+      "index": 39,
+      "bytes": 20319,
+      "sha256": "7a59d9714d8312a6f8df9c9ec755d426f28b853975c4832ca238f895d69b42c8",
+      "blob": "430806e3c459b19aab11c01b416ecdcb3c04a2fc",
+      "paths": [
+        ".github/scripts/ci-evidence-reader.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "430806e3c459b19aab11c01b416ecdcb3c04a2fc-7a59d9714d8312a6f8df9c9ec755d426f28b853975c4832ca238f895d69b42c8.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/430806e3c459b19aab11c01b416ecdcb3c04a2fc-7a59d9714d8312a6f8df9c9ec755d426f28b853975c4832ca238f895d69b42c8.txt"
+    },
+    {
+      "index": 40,
+      "bytes": 38357,
+      "sha256": "b4faf7d478c2802e3a815fb31a5527005c28ff7ca248afef12cace1486e03aee",
+      "blob": "840daf1f17e3975e9f0c04d764129739bbd6e00d",
+      "paths": [
+        ".github/workflows/windows-ps-noauto-c31.yml",
+        ".github/workflows/windows-ps-cache-root-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "840daf1f17e3975e9f0c04d764129739bbd6e00d-b4faf7d478c2802e3a815fb31a5527005c28ff7ca248afef12cace1486e03aee.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/840daf1f17e3975e9f0c04d764129739bbd6e00d-b4faf7d478c2802e3a815fb31a5527005c28ff7ca248afef12cace1486e03aee.txt"
+    },
+    {
+      "index": 41,
+      "bytes": 38368,
+      "sha256": "c3c6d3f9c1680e35e41e8de644eb57f9b9ecc3dd21c58cc1723f22eb8f81226e",
+      "blob": "075077f8b89656bedcb00f3f54a9ab4ad4c78c12",
+      "paths": [
+        ".github/workflows/windows-ps-module-root-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "075077f8b89656bedcb00f3f54a9ab4ad4c78c12-c3c6d3f9c1680e35e41e8de644eb57f9b9ecc3dd21c58cc1723f22eb8f81226e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/075077f8b89656bedcb00f3f54a9ab4ad4c78c12-c3c6d3f9c1680e35e41e8de644eb57f9b9ecc3dd21c58cc1723f22eb8f81226e.txt"
+    },
+    {
+      "index": 42,
+      "bytes": 38822,
+      "sha256": "ea6d9e59ca6e9df6d22d61c2e92dbf7a5aa16b14fdc9fba1ee509c6f1906cae9",
+      "blob": "93d21c68af9335e2eb47d1757b5c13be1b20628b",
+      "paths": [
+        ".github/workflows/windows-ps-cache-root-c31.yml",
+        ".github/workflows/windows-ps-module-root-c31.yml",
+        ".github/workflows/windows-ps-env-split-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "93d21c68af9335e2eb47d1757b5c13be1b20628b-ea6d9e59ca6e9df6d22d61c2e92dbf7a5aa16b14fdc9fba1ee509c6f1906cae9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/93d21c68af9335e2eb47d1757b5c13be1b20628b-ea6d9e59ca6e9df6d22d61c2e92dbf7a5aa16b14fdc9fba1ee509c6f1906cae9.txt"
+    },
+    {
+      "index": 43,
+      "bytes": 36907,
+      "sha256": "c3129912fd3dc73eab96bd84d590b79cc844fb04ae27ccc68262bb2649aba6c5",
+      "blob": "f0fc03ed6c60ff4e4c99a86ec23594da7a57e912",
+      "paths": [
+        ".github/workflows/windows-ps-env-split-c31.yml",
+        ".github/workflows/windows-command-layers-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f0fc03ed6c60ff4e4c99a86ec23594da7a57e912-c3129912fd3dc73eab96bd84d590b79cc844fb04ae27ccc68262bb2649aba6c5.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/f0fc03ed6c60ff4e4c99a86ec23594da7a57e912-c3129912fd3dc73eab96bd84d590b79cc844fb04ae27ccc68262bb2649aba6c5.txt"
+    },
+    {
+      "index": 44,
+      "bytes": 34591,
+      "sha256": "f7866bcac8b81cf21b071149a1ad56a95a99c9664dde11490b144595db473c9a",
+      "blob": "1defba1bcc4a87767749110b4bdbe084249bf725",
+      "paths": [
+        ".github/workflows/windows-command-layers-c31.yml",
+        ".github/workflows/windows-direct-ps-nullstring-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "1defba1bcc4a87767749110b4bdbe084249bf725-f7866bcac8b81cf21b071149a1ad56a95a99c9664dde11490b144595db473c9a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/1defba1bcc4a87767749110b4bdbe084249bf725-f7866bcac8b81cf21b071149a1ad56a95a99c9664dde11490b144595db473c9a.txt"
+    },
+    {
+      "index": 45,
+      "bytes": 33596,
+      "sha256": "bc29cf087cdb370cae0b8d5c6773a47712e1bbce9fceaa3ea4e8b6c0921a9d5b",
+      "blob": "46449ab365bce7c1a1cee19a95488a80d7b19e2b",
+      "paths": [
+        ".github/workflows/windows-direct-ps-nullstring-c31.yml",
+        ".github/workflows/windows-direct-ps-baseline-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "46449ab365bce7c1a1cee19a95488a80d7b19e2b-bc29cf087cdb370cae0b8d5c6773a47712e1bbce9fceaa3ea4e8b6c0921a9d5b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/46449ab365bce7c1a1cee19a95488a80d7b19e2b-bc29cf087cdb370cae0b8d5c6773a47712e1bbce9fceaa3ea4e8b6c0921a9d5b.txt"
+    },
+    {
+      "index": 46,
+      "bytes": 31310,
+      "sha256": "212190c69b1752a6a527b080e13b025b81bfe35531604d5e0991fc83dcad2a59",
+      "blob": "222d0558e19f2ccb021d8e7523a354116f0a9b07",
+      "paths": [
+        ".github/workflows/windows-direct-ps-baseline-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "222d0558e19f2ccb021d8e7523a354116f0a9b07-212190c69b1752a6a527b080e13b025b81bfe35531604d5e0991fc83dcad2a59.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/222d0558e19f2ccb021d8e7523a354116f0a9b07-212190c69b1752a6a527b080e13b025b81bfe35531604d5e0991fc83dcad2a59.txt"
+    },
+    {
+      "index": 47,
+      "bytes": 26571,
+      "sha256": "5fe5a948cbbd1f43426abec59063ad9e1fccd3acc8e9e74d22b497f5ec50632b",
+      "blob": "8a47bd01081867cca84e7ecba6c7972c7bababe9",
+      "paths": [
+        ".github/workflows/windows-direct-ps-baseline-c31.yml",
+        ".github/workflows/windows-echo-node-selection-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "8a47bd01081867cca84e7ecba6c7972c7bababe9-5fe5a948cbbd1f43426abec59063ad9e1fccd3acc8e9e74d22b497f5ec50632b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/8a47bd01081867cca84e7ecba6c7972c7bababe9-5fe5a948cbbd1f43426abec59063ad9e1fccd3acc8e9e74d22b497f5ec50632b.txt"
+    },
+    {
+      "index": 48,
+      "bytes": 26052,
+      "sha256": "3149b44a69457699bb8ea52f53291aec5710dfaee3fb741aa18a68c9fc8edc34",
+      "blob": "c76cf48d06842022cce6341d970f51764f90e433",
+      "paths": [
+        ".github/workflows/windows-echo-node-selection-c31.yml",
+        ".github/workflows/windows-echo-admission-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "c76cf48d06842022cce6341d970f51764f90e433-3149b44a69457699bb8ea52f53291aec5710dfaee3fb741aa18a68c9fc8edc34.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/c76cf48d06842022cce6341d970f51764f90e433-3149b44a69457699bb8ea52f53291aec5710dfaee3fb741aa18a68c9fc8edc34.txt"
+    },
+    {
+      "index": 49,
+      "bytes": 27013,
+      "sha256": "c9ba02a246f366d3d15847e0d77c75975cf4f501c32cffdb4e6bae49d1f2adc9",
+      "blob": "f66f3fe86062ed86ca2b8d847cef9ca29d60da88",
+      "paths": [
+        ".github/workflows/windows-echo-admission-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f66f3fe86062ed86ca2b8d847cef9ca29d60da88-c9ba02a246f366d3d15847e0d77c75975cf4f501c32cffdb4e6bae49d1f2adc9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/f66f3fe86062ed86ca2b8d847cef9ca29d60da88-c9ba02a246f366d3d15847e0d77c75975cf4f501c32cffdb4e6bae49d1f2adc9.txt"
+    },
+    {
+      "index": 50,
+      "bytes": 24187,
+      "sha256": "1f7704415dde2403b9f41fb67193cd3c9ec64435fc864e987c406594e1f3a518",
+      "blob": "44ea8401b9c1f057ad9d0031e69ee9328957f610",
+      "paths": [
+        ".github/workflows/windows-echo-admission-c31.yml",
+        ".github/workflows/windows-echo-runtime-lf-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "44ea8401b9c1f057ad9d0031e69ee9328957f610-1f7704415dde2403b9f41fb67193cd3c9ec64435fc864e987c406594e1f3a518.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/44ea8401b9c1f057ad9d0031e69ee9328957f610-1f7704415dde2403b9f41fb67193cd3c9ec64435fc864e987c406594e1f3a518.txt"
+    },
+    {
+      "index": 51,
+      "bytes": 23368,
+      "sha256": "5610941b15b0b863f3b97ed93009bba85d18699c03cc572836807c8ef83a2b6c",
+      "blob": "6d75780c4dd22ea8982f5d46548ae5f4765d501c",
+      "paths": [
+        ".github/workflows/windows-echo-runtime-lf-c31.yml",
+        ".github/workflows/windows-echo-runtime-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6d75780c4dd22ea8982f5d46548ae5f4765d501c-5610941b15b0b863f3b97ed93009bba85d18699c03cc572836807c8ef83a2b6c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/6d75780c4dd22ea8982f5d46548ae5f4765d501c-5610941b15b0b863f3b97ed93009bba85d18699c03cc572836807c8ef83a2b6c.txt"
+    },
+    {
+      "index": 52,
+      "bytes": 6380,
+      "sha256": "79c4758f33b56d8fb7602aabcbec9378bf4432ab50b21117a78aa41f83e786b0",
+      "blob": "133f254191e2a891672365257ac4b3d0cf183587",
+      "paths": [
+        ".github/workflows/windows-native-51-observer-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "133f254191e2a891672365257ac4b3d0cf183587-79c4758f33b56d8fb7602aabcbec9378bf4432ab50b21117a78aa41f83e786b0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/133f254191e2a891672365257ac4b3d0cf183587-79c4758f33b56d8fb7602aabcbec9378bf4432ab50b21117a78aa41f83e786b0.txt"
+    },
+    {
+      "index": 53,
+      "bytes": 25601,
+      "sha256": "b074072cb878b5dc2519ec0517195e01e9e7851f58904b54044391b75ac56458",
+      "blob": "2f6d5f6bf7197a8088a7f554063ed55e425e9cad",
+      "paths": [
+        "openbot/agent-computer/src/shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "2f6d5f6bf7197a8088a7f554063ed55e425e9cad-b074072cb878b5dc2519ec0517195e01e9e7851f58904b54044391b75ac56458.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/2f6d5f6bf7197a8088a7f554063ed55e425e9cad-b074072cb878b5dc2519ec0517195e01e9e7851f58904b54044391b75ac56458.txt"
+    },
+    {
+      "index": 54,
+      "bytes": 25507,
+      "sha256": "930240947319328643cdff256cc6cd575f2fe4a5c83e10c8547e762d33383f30",
+      "blob": "6f4b53094716559094fab7088ae738c449283055",
+      "paths": [
+        "openbot/agent-computer/src/shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6f4b53094716559094fab7088ae738c449283055-930240947319328643cdff256cc6cd575f2fe4a5c83e10c8547e762d33383f30.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/6f4b53094716559094fab7088ae738c449283055-930240947319328643cdff256cc6cd575f2fe4a5c83e10c8547e762d33383f30.txt"
+    },
+    {
+      "index": 55,
+      "bytes": 6380,
+      "sha256": "8c2f00b9a905bd209b08e39766d9ffd4d543672466447c11de2eea08d622cee4",
+      "blob": "985b3708a140b9fa61f85d237d718fc6d3611b21",
+      "paths": [
+        ".github/workflows/windows-native-51-observer-c27.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "985b3708a140b9fa61f85d237d718fc6d3611b21-8c2f00b9a905bd209b08e39766d9ffd4d543672466447c11de2eea08d622cee4.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/985b3708a140b9fa61f85d237d718fc6d3611b21-8c2f00b9a905bd209b08e39766d9ffd4d543672466447c11de2eea08d622cee4.txt"
+    },
+    {
+      "index": 56,
+      "bytes": 6376,
+      "sha256": "0772a35faf909956fcfcfaf914238566d7b626da52500b56f8ed3816bfa35dcf",
+      "blob": "e1d7f03d0b6f5c7619b2f4553c8e4b8fb503a39b",
+      "paths": [
+        ".github/workflows/windows-native-51-bun-f027.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "e1d7f03d0b6f5c7619b2f4553c8e4b8fb503a39b-0772a35faf909956fcfcfaf914238566d7b626da52500b56f8ed3816bfa35dcf.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/e1d7f03d0b6f5c7619b2f4553c8e4b8fb503a39b-0772a35faf909956fcfcfaf914238566d7b626da52500b56f8ed3816bfa35dcf.txt"
+    },
+    {
+      "index": 57,
+      "bytes": 91965,
+      "sha256": "656c44d76eafbb99d298b54a6d1f080c50d75e70058082b9f6f76077e5d67507",
+      "blob": "93ee21fd91f11aceaff1b180ccbe3e9d1ae2f695",
+      "paths": [
+        "openbot/scripts/ci/windows-native-test.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "93ee21fd91f11aceaff1b180ccbe3e9d1ae2f695-656c44d76eafbb99d298b54a6d1f080c50d75e70058082b9f6f76077e5d67507.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/93ee21fd91f11aceaff1b180ccbe3e9d1ae2f695-656c44d76eafbb99d298b54a6d1f080c50d75e70058082b9f6f76077e5d67507.txt"
+    },
+    {
+      "index": 58,
+      "bytes": 6382,
+      "sha256": "648aeeb95efa8d5e4f106030b34c8412067511680c3ebf3a953fe54c576e2505",
+      "blob": "4d41268d6738ba731a4c412c4814dbef9651297e",
+      "paths": [
+        ".github/workflows/windows-native-51-ram-278d.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "4d41268d6738ba731a4c412c4814dbef9651297e-648aeeb95efa8d5e4f106030b34c8412067511680c3ebf3a953fe54c576e2505.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/4d41268d6738ba731a4c412c4814dbef9651297e-648aeeb95efa8d5e4f106030b34c8412067511680c3ebf3a953fe54c576e2505.txt"
+    },
+    {
+      "index": 59,
+      "bytes": 88823,
+      "sha256": "0e1cfe5d80c28b15ea9f21e4cf6144996a1ec604a5366594970062aa2a9ba82e",
+      "blob": "aaae4b10367a562a8f49139f47c670b16040abc4",
+      "paths": [
+        "openbot/scripts/ci/windows-native-test.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "aaae4b10367a562a8f49139f47c670b16040abc4-0e1cfe5d80c28b15ea9f21e4cf6144996a1ec604a5366594970062aa2a9ba82e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/aaae4b10367a562a8f49139f47c670b16040abc4-0e1cfe5d80c28b15ea9f21e4cf6144996a1ec604a5366594970062aa2a9ba82e.txt"
+    },
+    {
+      "index": 60,
+      "bytes": 6255,
+      "sha256": "9c4de10b8239f051d100f30e7c9861591815611229b35954da6034a37f778fda",
+      "blob": "158438b751e71f9697f213a98a2d1e5c4af4f7ca",
+      "paths": [
+        ".github/workflows/windows-native-51-7ff3.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "158438b751e71f9697f213a98a2d1e5c4af4f7ca-9c4de10b8239f051d100f30e7c9861591815611229b35954da6034a37f778fda.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/158438b751e71f9697f213a98a2d1e5c4af4f7ca-9c4de10b8239f051d100f30e7c9861591815611229b35954da6034a37f778fda.txt"
+    },
+    {
+      "index": 61,
+      "bytes": 43802,
+      "sha256": "dd1f7d539d8a1b062f9ac33e914810cfe6c84f4a2eea942ceb605867d848318c",
+      "blob": "e49e287ca08343c8a9d2411ba8be66c0029c3b75",
+      "paths": [
+        "openbot/scripts/ci/windows-toolchain-rename-contract.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "e49e287ca08343c8a9d2411ba8be66c0029c3b75-dd1f7d539d8a1b062f9ac33e914810cfe6c84f4a2eea942ceb605867d848318c.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/e49e287ca08343c8a9d2411ba8be66c0029c3b75-dd1f7d539d8a1b062f9ac33e914810cfe6c84f4a2eea942ceb605867d848318c.txt"
+    },
+    {
+      "index": 62,
+      "bytes": 14218,
+      "sha256": "4c779982a5fb97725cecb96b9c623aa4e2477b072821fee1bd0017b7633d03e7",
+      "blob": "abc39650a69751208fde1c62aa7d7a2584578b81",
+      "paths": [
+        ".github/workflows/windows-lease-8guard-62fa.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "abc39650a69751208fde1c62aa7d7a2584578b81-4c779982a5fb97725cecb96b9c623aa4e2477b072821fee1bd0017b7633d03e7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/abc39650a69751208fde1c62aa7d7a2584578b81-4c779982a5fb97725cecb96b9c623aa4e2477b072821fee1bd0017b7633d03e7.txt"
+    },
+    {
+      "index": 63,
+      "bytes": 84147,
+      "sha256": "45e78f6021a01256909c9ef68e5d553607b37827eab0459b08f350c681ae85ed",
+      "blob": "cfac0f1c9b4a636aab563bb51eda4ae93156b752",
+      "paths": [
+        "openbot/scripts/ci/windows-native-test.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "cfac0f1c9b4a636aab563bb51eda4ae93156b752-45e78f6021a01256909c9ef68e5d553607b37827eab0459b08f350c681ae85ed.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/cfac0f1c9b4a636aab563bb51eda4ae93156b752-45e78f6021a01256909c9ef68e5d553607b37827eab0459b08f350c681ae85ed.txt"
+    },
+    {
+      "index": 64,
+      "bytes": 83473,
+      "sha256": "b5836762a470574465d43c5b1e40c99ff3c8945875b104cdd44595333b1d947b",
+      "blob": "3d8fb6e765cb7a1fa3934d44ed8007e17a364255",
+      "paths": [
+        "openbot/scripts/ci/windows-native-test.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "3d8fb6e765cb7a1fa3934d44ed8007e17a364255-b5836762a470574465d43c5b1e40c99ff3c8945875b104cdd44595333b1d947b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/3d8fb6e765cb7a1fa3934d44ed8007e17a364255-b5836762a470574465d43c5b1e40c99ff3c8945875b104cdd44595333b1d947b.txt"
+    },
+    {
+      "index": 65,
+      "bytes": 6255,
+      "sha256": "5a506092dd67bf9d7a3b9e0859d4da0b59d10fffa9420c1ef7183d3ef3f479ff",
+      "blob": "55381756d1f1dd52d5df94ca9c49cb90343d0eb9",
+      "paths": [
+        ".github/workflows/windows-vctip-optout-0034.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "55381756d1f1dd52d5df94ca9c49cb90343d0eb9-5a506092dd67bf9d7a3b9e0859d4da0b59d10fffa9420c1ef7183d3ef3f479ff.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/55381756d1f1dd52d5df94ca9c49cb90343d0eb9-5a506092dd67bf9d7a3b9e0859d4da0b59d10fffa9420c1ef7183d3ef3f479ff.txt"
+    },
+    {
+      "index": 66,
+      "bytes": 55056,
+      "sha256": "be6bef26ae07c416f6c1a3978a2e18a102e963ed41be2d8996c7137d0305403e",
+      "blob": "791ae5281618ce7f0bb03f1a8866357c8e349fc8",
+      "paths": [
+        "openbot/scripts/ci/windows-native-test.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "791ae5281618ce7f0bb03f1a8866357c8e349fc8-be6bef26ae07c416f6c1a3978a2e18a102e963ed41be2d8996c7137d0305403e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/791ae5281618ce7f0bb03f1a8866357c8e349fc8-be6bef26ae07c416f6c1a3978a2e18a102e963ed41be2d8996c7137d0305403e.txt"
+    },
+    {
+      "index": 67,
+      "bytes": 29126,
+      "sha256": "3b76512c30ff9703e91c7e4a5cb8d6a9a36e87e706d03f4b1cab78c4fdfcfb5f",
+      "blob": "b29bafb4985e3f5d93c67b54d701aea65188de14",
+      "paths": [
+        "openbot/agent-computer/src/shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b29bafb4985e3f5d93c67b54d701aea65188de14-3b76512c30ff9703e91c7e4a5cb8d6a9a36e87e706d03f4b1cab78c4fdfcfb5f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/b29bafb4985e3f5d93c67b54d701aea65188de14-3b76512c30ff9703e91c7e4a5cb8d6a9a36e87e706d03f4b1cab78c4fdfcfb5f.txt"
+    },
+    {
+      "index": 68,
+      "bytes": 48586,
+      "sha256": "e9eefc98499541a542f98c840db5e64a59fe55c91ebf634ca9225344d3d38ec9",
+      "blob": "0c7ba9f30a9ebed6e42717b659e13213d46752ca",
+      "paths": [
+        "openbot/server/tests/runner-security.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "0c7ba9f30a9ebed6e42717b659e13213d46752ca-e9eefc98499541a542f98c840db5e64a59fe55c91ebf634ca9225344d3d38ec9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/0c7ba9f30a9ebed6e42717b659e13213d46752ca-e9eefc98499541a542f98c840db5e64a59fe55c91ebf634ca9225344d3d38ec9.txt"
+    },
+    {
+      "index": 69,
+      "bytes": 109540,
+      "sha256": "cff57e8a2a03e5386386dae84ce90526ba6541d5852fe52f01eaa2ae397db3c3",
+      "blob": "cd3e5a3bc0dbd8dfd8c3f52814d5ee6c1c071b86",
+      "paths": [
+        "openbot/scripts/ci/windows-native-test.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "cd3e5a3bc0dbd8dfd8c3f52814d5ee6c1c071b86-cff57e8a2a03e5386386dae84ce90526ba6541d5852fe52f01eaa2ae397db3c3.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-01-s4-windows-security-036c29d0b0da/versions/cd3e5a3bc0dbd8dfd8c3f52814d5ee6c1c071b86-cff57e8a2a03e5386386dae84ce90526ba6541d5852fe52f01eaa2ae397db3c3.txt"
+    }
+  ],
+  "prior_04_status": "verified; existing artifact retained; not recreated",
+  "prior_04_library_file_id": "libfile_c66ac30ea0f481919128a0e81496a0c1",
+  "product_source_executed": false,
+  "gitee_uploaded": false
+}

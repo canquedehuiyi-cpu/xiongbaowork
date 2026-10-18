@@ -1,0 +1,1342 @@
+{
+  "status": "verified",
+  "checked_at": "2026-10-18T07:57:04.841261+00:00",
+  "pack": "02-s3-wakerflow-native",
+  "schema": "xiongbao-recovered-source-pack-v1",
+  "version_count": 78,
+  "path_count": 49,
+  "paths": [
+    ".github/workflows/native-git-v2-19.yml",
+    ".github/workflows/native-receipt-7-c26.yml",
+    ".github/workflows/native-receipt-7-release.yml",
+    ".github/workflows/native-receipt-7.yml",
+    ".github/workflows/product-build-startup.yml",
+    ".github/workflows/product44-context-directory-modes.yml",
+    ".github/workflows/product44-samejob-acceptance-r2.yml",
+    ".github/workflows/product44-samejob-acceptance.yml",
+    ".github/workflows/product49-samejob-acceptance-r3.yml",
+    ".github/workflows/project-execution-receipt-17-c31.yml",
+    ".github/workflows/project-execution-receipt-17-release.yml",
+    ".github/workflows/project-execution-receipt-17.yml",
+    ".github/workflows/wakerflow-actions-native-9e50.yml",
+    ".github/workflows/wakerflow-journey-c36-v3.yml",
+    ".github/workflows/wakerflow-journey-c36.yml",
+    ".github/workflows/wakerflow-journey-c38-v4.yml",
+    ".github/workflows/wakerflow-journey-c41-v5.yml",
+    "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs",
+    "openbot/desktop/src-tauri/src/device_process.rs",
+    "openbot/runner/src/device-bootstrap.ts",
+    "openbot/runner/src/execute.ts",
+    "openbot/runner/src/index.ts",
+    "openbot/runner/src/isolated-shell.ts",
+    "openbot/runner/src/projects.ts",
+    "openbot/runner/src/security.ts",
+    "openbot/runner/tests/device-bootstrap.test.ts",
+    "openbot/runner/tests/isolated-shell.test.ts",
+    "openbot/runner/tests/native-git-project.test.ts",
+    "openbot/scripts/acceptance/wakerflow-journey.mjs",
+    "openbot/scripts/ci/windows-powershell-discovery.ps1",
+    "openbot/server/scripts/prepare-source-history-fixture.ts",
+    "openbot/server/src/agents/profile-store.ts",
+    "openbot/server/src/approvals/service.ts",
+    "openbot/server/src/computer/runner-transport.ts",
+    "openbot/server/src/db/client.ts",
+    "openbot/server/src/devices/native-security.ts",
+    "openbot/server/src/devices/store.ts",
+    "openbot/server/src/knowledge/write-main-ports.ts",
+    "openbot/server/src/wakerflows/source-bwrap-containment.ts",
+    "openbot/server/src/wakerflows/source-main-resources.ts",
+    "openbot/server/tests/knowledge-write-lock-order.integration.test.ts",
+    "openbot/server/tests/native-approval-verification.test.ts",
+    "openbot/server/tests/native-git-project.test.ts",
+    "openbot/server/tests/skill-ownership.integration.test.ts",
+    "openbot/server/tests/support/project-execution-native-fixture.ts",
+    "openbot/server/tests/support/wf-native-action-channel.ts",
+    "openbot/server/tests/support/wf7-action-fixture.ts",
+    "openbot/server/tests/tenant-cross-tenant-agents.test.ts",
+    "openbot/shared/native-git-project.ts"
+  ],
+  "source_bytes_total": 3652190,
+  "mismatch_count": 0,
+  "fragments_verified": 6,
+  "archive_directory": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a",
+  "layers": {
+    "base64": {
+      "bytes": 1314152,
+      "sha256": "caf0e0d61cfbdc5d3946c6dc9ab154c3bfc789cea74d2cd49c6905974b6d1fef"
+    },
+    "gzip": {
+      "bytes": 985612,
+      "sha256": "e892412de29a1e18c440f4532a86cd9cb3e26b920b1ac1208bd6001453d78f34"
+    },
+    "json": {
+      "bytes": 3813652,
+      "sha256": "f43cf65f5c5fc0d9b3d618d1eeef10449055fa61645094943ae6fd3be15b08eb"
+    }
+  },
+  "versions": [
+    {
+      "index": 0,
+      "bytes": 11218,
+      "sha256": "4d97734d35cdc00b72d00d4ef4da411f646e573776b558c95b43f82314dfcd7b",
+      "blob": "b53485bc00cfc4716adbc404083862003d79dbc4",
+      "paths": [
+        "openbot/server/tests/tenant-cross-tenant-agents.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b53485bc00cfc4716adbc404083862003d79dbc4-4d97734d35cdc00b72d00d4ef4da411f646e573776b558c95b43f82314dfcd7b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/b53485bc00cfc4716adbc404083862003d79dbc4-4d97734d35cdc00b72d00d4ef4da411f646e573776b558c95b43f82314dfcd7b.txt"
+    },
+    {
+      "index": 1,
+      "bytes": 42420,
+      "sha256": "2c6c9b4db327e70df71dc42e327bdc9398d91e1a52e5aa15722adab211cf72c2",
+      "blob": "f00cb2fdfab362887c3556a2b45e0f23f90d4905",
+      "paths": [
+        "openbot/server/src/agents/profile-store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f00cb2fdfab362887c3556a2b45e0f23f90d4905-2c6c9b4db327e70df71dc42e327bdc9398d91e1a52e5aa15722adab211cf72c2.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/f00cb2fdfab362887c3556a2b45e0f23f90d4905-2c6c9b4db327e70df71dc42e327bdc9398d91e1a52e5aa15722adab211cf72c2.txt"
+    },
+    {
+      "index": 2,
+      "bytes": 19724,
+      "sha256": "9cdfd4458eea12cd02850d4c9ea96804328c9bedff29192eafc2d0133d433ce1",
+      "blob": "b65c27ab2a4782194cf3d1c332f38c315e47caf1",
+      "paths": [
+        "openbot/server/src/db/client.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b65c27ab2a4782194cf3d1c332f38c315e47caf1-9cdfd4458eea12cd02850d4c9ea96804328c9bedff29192eafc2d0133d433ce1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/b65c27ab2a4782194cf3d1c332f38c315e47caf1-9cdfd4458eea12cd02850d4c9ea96804328c9bedff29192eafc2d0133d433ce1.txt"
+    },
+    {
+      "index": 3,
+      "bytes": 14944,
+      "sha256": "dbe14ae9e2da19799be2343b7f88cc1212836e4423c9c4b3afb45f2215a74634",
+      "blob": "0340a59a2e230019efc7de64ec1c85a3ab536693",
+      "paths": [
+        "openbot/server/src/devices/store.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "0340a59a2e230019efc7de64ec1c85a3ab536693-dbe14ae9e2da19799be2343b7f88cc1212836e4423c9c4b3afb45f2215a74634.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/0340a59a2e230019efc7de64ec1c85a3ab536693-dbe14ae9e2da19799be2343b7f88cc1212836e4423c9c4b3afb45f2215a74634.txt"
+    },
+    {
+      "index": 4,
+      "bytes": 60554,
+      "sha256": "132e17c148cfeacc99086786bc38eb985c546c4d4b19aa802fabdd02a9134ea6",
+      "blob": "ef11d8be9c170dde9eb64564a11f40cb53c8b67d",
+      "paths": [
+        "openbot/server/scripts/prepare-source-history-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ef11d8be9c170dde9eb64564a11f40cb53c8b67d-132e17c148cfeacc99086786bc38eb985c546c4d4b19aa802fabdd02a9134ea6.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/ef11d8be9c170dde9eb64564a11f40cb53c8b67d-132e17c148cfeacc99086786bc38eb985c546c4d4b19aa802fabdd02a9134ea6.txt"
+    },
+    {
+      "index": 5,
+      "bytes": 59499,
+      "sha256": "879d796336fa3109d5c5e9651eebff02fff66236d927ea19c350d26d16e880b8",
+      "blob": "895cd741ea1e94066effaf5b985be7b2b49cf21a",
+      "paths": [
+        "openbot/server/scripts/prepare-source-history-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "895cd741ea1e94066effaf5b985be7b2b49cf21a-879d796336fa3109d5c5e9651eebff02fff66236d927ea19c350d26d16e880b8.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/895cd741ea1e94066effaf5b985be7b2b49cf21a-879d796336fa3109d5c5e9651eebff02fff66236d927ea19c350d26d16e880b8.txt"
+    },
+    {
+      "index": 6,
+      "bytes": 60619,
+      "sha256": "f35ca5d91f8e14ba925da0e9bc119d868cdb732d3a1d42285af946e1a55a3abe",
+      "blob": "9d81aabec36fd26b5ad26cbf5e12799f171a77e6",
+      "paths": [
+        "openbot/server/scripts/prepare-source-history-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "9d81aabec36fd26b5ad26cbf5e12799f171a77e6-f35ca5d91f8e14ba925da0e9bc119d868cdb732d3a1d42285af946e1a55a3abe.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/9d81aabec36fd26b5ad26cbf5e12799f171a77e6-f35ca5d91f8e14ba925da0e9bc119d868cdb732d3a1d42285af946e1a55a3abe.txt"
+    },
+    {
+      "index": 7,
+      "bytes": 54667,
+      "sha256": "439bc56da5564766d819be2f387ad2128e066aac199ae6d91babca699566ee88",
+      "blob": "ad2004f646b846fe31e8148c7209a539d52d9e41",
+      "paths": [
+        "openbot/server/tests/skill-ownership.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ad2004f646b846fe31e8148c7209a539d52d9e41-439bc56da5564766d819be2f387ad2128e066aac199ae6d91babca699566ee88.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/ad2004f646b846fe31e8148c7209a539d52d9e41-439bc56da5564766d819be2f387ad2128e066aac199ae6d91babca699566ee88.txt"
+    },
+    {
+      "index": 8,
+      "bytes": 33714,
+      "sha256": "6f2b30099b220bdd50cb3707b7dbcd5f39ca2df25148ee09c68276db1cdd75f5",
+      "blob": "e9123148992f109fe886b55d4af21447e873b1ce",
+      "paths": [
+        "openbot/server/src/knowledge/write-main-ports.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "e9123148992f109fe886b55d4af21447e873b1ce-6f2b30099b220bdd50cb3707b7dbcd5f39ca2df25148ee09c68276db1cdd75f5.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/e9123148992f109fe886b55d4af21447e873b1ce-6f2b30099b220bdd50cb3707b7dbcd5f39ca2df25148ee09c68276db1cdd75f5.txt"
+    },
+    {
+      "index": 9,
+      "bytes": 34604,
+      "sha256": "8e1854762e6eeb23908c3d5d1b7cb8546eda989d2c4919bdfa61ac4b51e5bb1b",
+      "blob": "6226477435a7674332703495ef52c0f912afbca4",
+      "paths": [
+        "openbot/server/src/wakerflows/source-main-resources.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6226477435a7674332703495ef52c0f912afbca4-8e1854762e6eeb23908c3d5d1b7cb8546eda989d2c4919bdfa61ac4b51e5bb1b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/6226477435a7674332703495ef52c0f912afbca4-8e1854762e6eeb23908c3d5d1b7cb8546eda989d2c4919bdfa61ac4b51e5bb1b.txt"
+    },
+    {
+      "index": 10,
+      "bytes": 51153,
+      "sha256": "b20c84b4b9498b2e85938578dfce1f94ca8da90512efb89cb55e015c8d071ad6",
+      "blob": "11dd7b31d6ad01d7fbd3311f3f542e538d3bc05c",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "11dd7b31d6ad01d7fbd3311f3f542e538d3bc05c-b20c84b4b9498b2e85938578dfce1f94ca8da90512efb89cb55e015c8d071ad6.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/11dd7b31d6ad01d7fbd3311f3f542e538d3bc05c-b20c84b4b9498b2e85938578dfce1f94ca8da90512efb89cb55e015c8d071ad6.txt"
+    },
+    {
+      "index": 11,
+      "bytes": 50939,
+      "sha256": "130027df86366b6bc8b77de9493bd5fc539da0d3c1cfe11decd182d76a721bee",
+      "blob": "4b11f552747a54e6ab52d6a23311b4bd34844f5c",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "4b11f552747a54e6ab52d6a23311b4bd34844f5c-130027df86366b6bc8b77de9493bd5fc539da0d3c1cfe11decd182d76a721bee.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/4b11f552747a54e6ab52d6a23311b4bd34844f5c-130027df86366b6bc8b77de9493bd5fc539da0d3c1cfe11decd182d76a721bee.txt"
+    },
+    {
+      "index": 12,
+      "bytes": 17145,
+      "sha256": "3dd988f4b03955a8da6c618369669f524b6b28c6dff46c6bb1c596f5d7bef7dc",
+      "blob": "bec1142878fbbd2a283aaecbe81372708a6fe5f9",
+      "paths": [
+        "openbot/server/tests/knowledge-write-lock-order.integration.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "bec1142878fbbd2a283aaecbe81372708a6fe5f9-3dd988f4b03955a8da6c618369669f524b6b28c6dff46c6bb1c596f5d7bef7dc.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/bec1142878fbbd2a283aaecbe81372708a6fe5f9-3dd988f4b03955a8da6c618369669f524b6b28c6dff46c6bb1c596f5d7bef7dc.txt"
+    },
+    {
+      "index": 13,
+      "bytes": 57516,
+      "sha256": "ca91c740751fa73dbf91521ec0678872b856ead7da5515d05de413c2413f969a",
+      "blob": "7a7f88d4a724ef984c0f55e49204fa3f79355d03",
+      "paths": [
+        "openbot/scripts/ci/windows-powershell-discovery.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7a7f88d4a724ef984c0f55e49204fa3f79355d03-ca91c740751fa73dbf91521ec0678872b856ead7da5515d05de413c2413f969a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/7a7f88d4a724ef984c0f55e49204fa3f79355d03-ca91c740751fa73dbf91521ec0678872b856ead7da5515d05de413c2413f969a.txt"
+    },
+    {
+      "index": 14,
+      "bytes": 57375,
+      "sha256": "ed478d0a0069a828ab3c148a99ddde8cefd4f9b163407cf9302bf1d7cabb7ca9",
+      "blob": "b736fdaf1aa3e4667fa4d63d09b80fb39a067409",
+      "paths": [
+        "openbot/scripts/ci/windows-powershell-discovery.ps1"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b736fdaf1aa3e4667fa4d63d09b80fb39a067409-ed478d0a0069a828ab3c148a99ddde8cefd4f9b163407cf9302bf1d7cabb7ca9.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/b736fdaf1aa3e4667fa4d63d09b80fb39a067409-ed478d0a0069a828ab3c148a99ddde8cefd4f9b163407cf9302bf1d7cabb7ca9.txt"
+    },
+    {
+      "index": 15,
+      "bytes": 68089,
+      "sha256": "4ac5d3994854db40ec8905ace9ab7c92cc83f22aa02f163c6ae6cc3343f5b3d0",
+      "blob": "3f156a4c3c952224a670c0802238b9ec2ae91218",
+      "paths": [
+        "openbot/runner/src/isolated-shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "3f156a4c3c952224a670c0802238b9ec2ae91218-4ac5d3994854db40ec8905ace9ab7c92cc83f22aa02f163c6ae6cc3343f5b3d0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/3f156a4c3c952224a670c0802238b9ec2ae91218-4ac5d3994854db40ec8905ace9ab7c92cc83f22aa02f163c6ae6cc3343f5b3d0.txt"
+    },
+    {
+      "index": 16,
+      "bytes": 164583,
+      "sha256": "2e2e615daee5b66a0a58debd2fb5fbd9ff5d42e29427db3ed8ad4d464751096b",
+      "blob": "7651d0fdef0d831c9d5622cf9769b6ac43e49491",
+      "paths": [
+        "openbot/desktop/src-tauri/src/device_process.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7651d0fdef0d831c9d5622cf9769b6ac43e49491-2e2e615daee5b66a0a58debd2fb5fbd9ff5d42e29427db3ed8ad4d464751096b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/7651d0fdef0d831c9d5622cf9769b6ac43e49491-2e2e615daee5b66a0a58debd2fb5fbd9ff5d42e29427db3ed8ad4d464751096b.txt"
+    },
+    {
+      "index": 17,
+      "bytes": 160655,
+      "sha256": "c63d56a6814d04bed88943910eba52724ad7865a50a7ab94ec7dde0dff18f5a7",
+      "blob": "7130bf10ffb4b562873f92f1ce3b2659e7772c36",
+      "paths": [
+        "openbot/desktop/src-tauri/src/device_process.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7130bf10ffb4b562873f92f1ce3b2659e7772c36-c63d56a6814d04bed88943910eba52724ad7865a50a7ab94ec7dde0dff18f5a7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/7130bf10ffb4b562873f92f1ce3b2659e7772c36-c63d56a6814d04bed88943910eba52724ad7865a50a7ab94ec7dde0dff18f5a7.txt"
+    },
+    {
+      "index": 18,
+      "bytes": 79612,
+      "sha256": "96ce6666bd2d6aee0dcb0b2aa9d3e2a396eec9f288b9ba10021aaae3e30b0fae",
+      "blob": "4dc49d3167552e90d7de7bb0c608c5bcac0b2178",
+      "paths": [
+        "openbot/runner/src/index.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "4dc49d3167552e90d7de7bb0c608c5bcac0b2178-96ce6666bd2d6aee0dcb0b2aa9d3e2a396eec9f288b9ba10021aaae3e30b0fae.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/4dc49d3167552e90d7de7bb0c608c5bcac0b2178-96ce6666bd2d6aee0dcb0b2aa9d3e2a396eec9f288b9ba10021aaae3e30b0fae.txt"
+    },
+    {
+      "index": 19,
+      "bytes": 11534,
+      "sha256": "fa1d1bba6855ccecb26bbc775de441b91ea018ebd32f7b1d682406194c403fc4",
+      "blob": "16c4fd8bd53d2f294e38dbdeccc1ee91f3980cc9",
+      "paths": [
+        "openbot/runner/src/device-bootstrap.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "16c4fd8bd53d2f294e38dbdeccc1ee91f3980cc9-fa1d1bba6855ccecb26bbc775de441b91ea018ebd32f7b1d682406194c403fc4.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/16c4fd8bd53d2f294e38dbdeccc1ee91f3980cc9-fa1d1bba6855ccecb26bbc775de441b91ea018ebd32f7b1d682406194c403fc4.txt"
+    },
+    {
+      "index": 20,
+      "bytes": 5538,
+      "sha256": "c37e672dbb705da6269ebcc815c80d0adbd16629d583ca47cb80a1632713aa15",
+      "blob": "b94d6f77304c9b5d73250ef14250790b0a2272d4",
+      "paths": [
+        "openbot/runner/tests/device-bootstrap.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b94d6f77304c9b5d73250ef14250790b0a2272d4-c37e672dbb705da6269ebcc815c80d0adbd16629d583ca47cb80a1632713aa15.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/b94d6f77304c9b5d73250ef14250790b0a2272d4-c37e672dbb705da6269ebcc815c80d0adbd16629d583ca47cb80a1632713aa15.txt"
+    },
+    {
+      "index": 21,
+      "bytes": 157949,
+      "sha256": "ef6f7eef3d7f73050eb6d756e4128d8418e010f8ee340174f74de3333ce4b9e5",
+      "blob": "bb06392f9c067452d396ed6c7338b1846e61fb54",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "bb06392f9c067452d396ed6c7338b1846e61fb54-ef6f7eef3d7f73050eb6d756e4128d8418e010f8ee340174f74de3333ce4b9e5.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/bb06392f9c067452d396ed6c7338b1846e61fb54-ef6f7eef3d7f73050eb6d756e4128d8418e010f8ee340174f74de3333ce4b9e5.txt"
+    },
+    {
+      "index": 22,
+      "bytes": 67128,
+      "sha256": "575a0238aee846ebf65747a8e4c41eced764d6a1d0419c02e8221f44e6281058",
+      "blob": "c9768667536f9704899cc55db38623143a26b1a1",
+      "paths": [
+        "openbot/runner/src/isolated-shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "c9768667536f9704899cc55db38623143a26b1a1-575a0238aee846ebf65747a8e4c41eced764d6a1d0419c02e8221f44e6281058.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/c9768667536f9704899cc55db38623143a26b1a1-575a0238aee846ebf65747a8e4c41eced764d6a1d0419c02e8221f44e6281058.txt"
+    },
+    {
+      "index": 23,
+      "bytes": 155478,
+      "sha256": "432e9684cc07c0ef2b9c8f2420dc62b553c58c3820cb1c367c0cf067826d1e28",
+      "blob": "aef62e8b6e3d7fc19b6c71c7a1cf8b12b3828851",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "aef62e8b6e3d7fc19b6c71c7a1cf8b12b3828851-432e9684cc07c0ef2b9c8f2420dc62b553c58c3820cb1c367c0cf067826d1e28.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/aef62e8b6e3d7fc19b6c71c7a1cf8b12b3828851-432e9684cc07c0ef2b9c8f2420dc62b553c58c3820cb1c367c0cf067826d1e28.txt"
+    },
+    {
+      "index": 24,
+      "bytes": 13365,
+      "sha256": "ed51d01f849d15c2f2eefa03c111f4b689a9cd80655b33a7ccab54e3ed494b41",
+      "blob": "5c009808da56d9bc1f532006658400e2cf694f14",
+      "paths": [
+        "openbot/runner/tests/isolated-shell.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "5c009808da56d9bc1f532006658400e2cf694f14-ed51d01f849d15c2f2eefa03c111f4b689a9cd80655b33a7ccab54e3ed494b41.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/5c009808da56d9bc1f532006658400e2cf694f14-ed51d01f849d15c2f2eefa03c111f4b689a9cd80655b33a7ccab54e3ed494b41.txt"
+    },
+    {
+      "index": 25,
+      "bytes": 8658,
+      "sha256": "75bddb1842c3defdab3ba08cb44da9f2b2f54952c8eac7edb587f6e0633a8ca7",
+      "blob": "2b75c38d9ecb48c63c34396f8a5062a5d6cac7b4",
+      "paths": [
+        "openbot/runner/tests/isolated-shell.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "2b75c38d9ecb48c63c34396f8a5062a5d6cac7b4-75bddb1842c3defdab3ba08cb44da9f2b2f54952c8eac7edb587f6e0633a8ca7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/2b75c38d9ecb48c63c34396f8a5062a5d6cac7b4-75bddb1842c3defdab3ba08cb44da9f2b2f54952c8eac7edb587f6e0633a8ca7.txt"
+    },
+    {
+      "index": 26,
+      "bytes": 30642,
+      "sha256": "a18c7d32dca58a133162665056a79726ca0a46647ecb94d3389aff3cb1bac22e",
+      "blob": "b19f42f5339d41ae196879f36a12608993c9ac2f",
+      "paths": [
+        "openbot/runner/src/isolated-shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b19f42f5339d41ae196879f36a12608993c9ac2f-a18c7d32dca58a133162665056a79726ca0a46647ecb94d3389aff3cb1bac22e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/b19f42f5339d41ae196879f36a12608993c9ac2f-a18c7d32dca58a133162665056a79726ca0a46647ecb94d3389aff3cb1bac22e.txt"
+    },
+    {
+      "index": 27,
+      "bytes": 26968,
+      "sha256": "b6184402bc5e95e5e2443c7641ee806b3f24c88ef26cf39ad77572c9bcb7d0d0",
+      "blob": "8eb3d2ddbe39fece3d9b39db3e03e4c8af62eed8",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "8eb3d2ddbe39fece3d9b39db3e03e4c8af62eed8-b6184402bc5e95e5e2443c7641ee806b3f24c88ef26cf39ad77572c9bcb7d0d0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/8eb3d2ddbe39fece3d9b39db3e03e4c8af62eed8-b6184402bc5e95e5e2443c7641ee806b3f24c88ef26cf39ad77572c9bcb7d0d0.txt"
+    },
+    {
+      "index": 28,
+      "bytes": 27001,
+      "sha256": "c2b6ef1505144d6f82a8afa8c915978a020e8d640b36b9a5a0ebdccb020e30c0",
+      "blob": "0129ef279af378f5fa3911c35bd7b955cd934f49",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "0129ef279af378f5fa3911c35bd7b955cd934f49-c2b6ef1505144d6f82a8afa8c915978a020e8d640b36b9a5a0ebdccb020e30c0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/0129ef279af378f5fa3911c35bd7b955cd934f49-c2b6ef1505144d6f82a8afa8c915978a020e8d640b36b9a5a0ebdccb020e30c0.txt"
+    },
+    {
+      "index": 29,
+      "bytes": 26988,
+      "sha256": "e696557b183f2a98050dea0807e526b35b28ba032d19fdaac87df9ed8d415094",
+      "blob": "59c3301dc135ec969379d7ff185cb3ab55936398",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "59c3301dc135ec969379d7ff185cb3ab55936398-e696557b183f2a98050dea0807e526b35b28ba032d19fdaac87df9ed8d415094.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/59c3301dc135ec969379d7ff185cb3ab55936398-e696557b183f2a98050dea0807e526b35b28ba032d19fdaac87df9ed8d415094.txt"
+    },
+    {
+      "index": 30,
+      "bytes": 26919,
+      "sha256": "d93c40e63875b3ffdf797672f7ca15cfb85115e4d9d24180840236cdba513576",
+      "blob": "873181c42155d7bc0ed06c3929574ec62fba109d",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "873181c42155d7bc0ed06c3929574ec62fba109d-d93c40e63875b3ffdf797672f7ca15cfb85115e4d9d24180840236cdba513576.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/873181c42155d7bc0ed06c3929574ec62fba109d-d93c40e63875b3ffdf797672f7ca15cfb85115e4d9d24180840236cdba513576.txt"
+    },
+    {
+      "index": 31,
+      "bytes": 18998,
+      "sha256": "126e1bffecabe5f6bf83bf60b71bce6ce68fa8b3dbbf9d51dd8731bfeccd01da",
+      "blob": "82f8e7d38065440ca317b842edce3b26618da1aa",
+      "paths": [
+        "openbot/desktop/src-tauri/src/bin/device-execution-worker.rs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "82f8e7d38065440ca317b842edce3b26618da1aa-126e1bffecabe5f6bf83bf60b71bce6ce68fa8b3dbbf9d51dd8731bfeccd01da.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/82f8e7d38065440ca317b842edce3b26618da1aa-126e1bffecabe5f6bf83bf60b71bce6ce68fa8b3dbbf9d51dd8731bfeccd01da.txt"
+    },
+    {
+      "index": 32,
+      "bytes": 6838,
+      "sha256": "cd9b16ba9a91101b257fe902964bdd86067cb22cba52dbd909ca4a2e74808765",
+      "blob": "84854405d5edbda2056f2299e21c98c09dd2287f",
+      "paths": [
+        "openbot/runner/tests/isolated-shell.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "84854405d5edbda2056f2299e21c98c09dd2287f-cd9b16ba9a91101b257fe902964bdd86067cb22cba52dbd909ca4a2e74808765.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/84854405d5edbda2056f2299e21c98c09dd2287f-cd9b16ba9a91101b257fe902964bdd86067cb22cba52dbd909ca4a2e74808765.txt"
+    },
+    {
+      "index": 33,
+      "bytes": 33685,
+      "sha256": "b75709a47bb52e3659fc92c39159676bf62507d1adf4c47a030936fbfe9fa210",
+      "blob": "e2a33f6f246d4118d6ef20d7f72e5e1aed19cbe3",
+      "paths": [
+        "openbot/runner/src/isolated-shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "e2a33f6f246d4118d6ef20d7f72e5e1aed19cbe3-b75709a47bb52e3659fc92c39159676bf62507d1adf4c47a030936fbfe9fa210.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/e2a33f6f246d4118d6ef20d7f72e5e1aed19cbe3-b75709a47bb52e3659fc92c39159676bf62507d1adf4c47a030936fbfe9fa210.txt"
+    },
+    {
+      "index": 34,
+      "bytes": 27893,
+      "sha256": "f0bfc131aa2aee0a462c6317cbdfc78722d193ed1bb830c333c20d86d29242ff",
+      "blob": "827cef5b94da7fcd432668da02fbe0e3b2e8092e",
+      "paths": [
+        "openbot/runner/src/isolated-shell.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "827cef5b94da7fcd432668da02fbe0e3b2e8092e-f0bfc131aa2aee0a462c6317cbdfc78722d193ed1bb830c333c20d86d29242ff.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/827cef5b94da7fcd432668da02fbe0e3b2e8092e-f0bfc131aa2aee0a462c6317cbdfc78722d193ed1bb830c333c20d86d29242ff.txt"
+    },
+    {
+      "index": 35,
+      "bytes": 16825,
+      "sha256": "f563674f5c01ddc45ef89c9de3cb5b384bece5309d199a5085ba3f64f32a22ef",
+      "blob": "354a4381b6ffd6fc91dbcd2d798ea65ff319b34b",
+      "paths": [
+        ".github/workflows/product49-samejob-acceptance-r3.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "354a4381b6ffd6fc91dbcd2d798ea65ff319b34b-f563674f5c01ddc45ef89c9de3cb5b384bece5309d199a5085ba3f64f32a22ef.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/354a4381b6ffd6fc91dbcd2d798ea65ff319b34b-f563674f5c01ddc45ef89c9de3cb5b384bece5309d199a5085ba3f64f32a22ef.txt"
+    },
+    {
+      "index": 36,
+      "bytes": 216849,
+      "sha256": "b770fee9f282b92c2dac63d5af464f1182b3b8fcc7d952d3876d8b6e7402f42a",
+      "blob": "b13f2677ceaf429a72e2f3efc8098fc40a83a154",
+      "paths": [
+        ".github/workflows/product44-samejob-acceptance-r2.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "b13f2677ceaf429a72e2f3efc8098fc40a83a154-b770fee9f282b92c2dac63d5af464f1182b3b8fcc7d952d3876d8b6e7402f42a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/b13f2677ceaf429a72e2f3efc8098fc40a83a154-b770fee9f282b92c2dac63d5af464f1182b3b8fcc7d952d3876d8b6e7402f42a.txt"
+    },
+    {
+      "index": 37,
+      "bytes": 15926,
+      "sha256": "9256df06db62955debe7fcb59fe352ad05bde90bdd656f42131ca8ab18e8be15",
+      "blob": "86c3d20c051a4e17481171cb1bba7ebc37c628f6",
+      "paths": [
+        ".github/workflows/product44-context-directory-modes.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "86c3d20c051a4e17481171cb1bba7ebc37c628f6-9256df06db62955debe7fcb59fe352ad05bde90bdd656f42131ca8ab18e8be15.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/86c3d20c051a4e17481171cb1bba7ebc37c628f6-9256df06db62955debe7fcb59fe352ad05bde90bdd656f42131ca8ab18e8be15.txt"
+    },
+    {
+      "index": 38,
+      "bytes": 16826,
+      "sha256": "6f7c6146523ff82c49ef391d6bf435e7f6572f3933b7a1f3c034d999ed591850",
+      "blob": "832abe647a1c543dca4a19d1ff99b70afdba7e13",
+      "paths": [
+        ".github/workflows/product44-samejob-acceptance-r2.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "832abe647a1c543dca4a19d1ff99b70afdba7e13-6f7c6146523ff82c49ef391d6bf435e7f6572f3933b7a1f3c034d999ed591850.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/832abe647a1c543dca4a19d1ff99b70afdba7e13-6f7c6146523ff82c49ef391d6bf435e7f6572f3933b7a1f3c034d999ed591850.txt"
+    },
+    {
+      "index": 39,
+      "bytes": 16803,
+      "sha256": "96c0d70edaa3ea873203346613bfe9595f5b10e8af205f06e542005f570fc709",
+      "blob": "18d2c6122d0e5788a95a8fcd4a9f320eca05847c",
+      "paths": [
+        ".github/workflows/product44-samejob-acceptance.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "18d2c6122d0e5788a95a8fcd4a9f320eca05847c-96c0d70edaa3ea873203346613bfe9595f5b10e8af205f06e542005f570fc709.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/18d2c6122d0e5788a95a8fcd4a9f320eca05847c-96c0d70edaa3ea873203346613bfe9595f5b10e8af205f06e542005f570fc709.txt"
+    },
+    {
+      "index": 40,
+      "bytes": 16790,
+      "sha256": "6806a2914503e00c07431bd287a426f990135fc38bd87fdf3ff9f82b7d1552a0",
+      "blob": "88b4eb358989b608c41b7cf372a5f7a1cfd25f66",
+      "paths": [
+        ".github/workflows/product44-samejob-acceptance.yml",
+        ".github/workflows/product-build-startup.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "88b4eb358989b608c41b7cf372a5f7a1cfd25f66-6806a2914503e00c07431bd287a426f990135fc38bd87fdf3ff9f82b7d1552a0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/88b4eb358989b608c41b7cf372a5f7a1cfd25f66-6806a2914503e00c07431bd287a426f990135fc38bd87fdf3ff9f82b7d1552a0.txt"
+    },
+    {
+      "index": 41,
+      "bytes": 28665,
+      "sha256": "8f5a61d025f45bf7e6e40316f0877d4e34ac9c663c5e5930fe48368fac906c66",
+      "blob": "92b14fc8d5202988015e206c1f8c6cf9b579604d",
+      "paths": [
+        ".github/workflows/product44-samejob-acceptance-r2.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "92b14fc8d5202988015e206c1f8c6cf9b579604d-8f5a61d025f45bf7e6e40316f0877d4e34ac9c663c5e5930fe48368fac906c66.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/92b14fc8d5202988015e206c1f8c6cf9b579604d-8f5a61d025f45bf7e6e40316f0877d4e34ac9c663c5e5930fe48368fac906c66.txt"
+    },
+    {
+      "index": 42,
+      "bytes": 16632,
+      "sha256": "51cebc5a2cb4b3f0b218e98289c1649ce96931633b0d3cf06daad09d8d5d2cab",
+      "blob": "6dd69c830ad866d0f1bc272718cacd14a80ad618",
+      "paths": [
+        ".github/workflows/product-build-startup.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "6dd69c830ad866d0f1bc272718cacd14a80ad618-51cebc5a2cb4b3f0b218e98289c1649ce96931633b0d3cf06daad09d8d5d2cab.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/6dd69c830ad866d0f1bc272718cacd14a80ad618-51cebc5a2cb4b3f0b218e98289c1649ce96931633b0d3cf06daad09d8d5d2cab.txt"
+    },
+    {
+      "index": 43,
+      "bytes": 62909,
+      "sha256": "d1e0251e287b53f9817b63c70396f710a8ca2136ee21d1d97acee629dde93632",
+      "blob": "422d85cdcbb785dbdfe000c49083dbf76296247b",
+      "paths": [
+        ".github/workflows/wakerflow-journey-c41-v5.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "422d85cdcbb785dbdfe000c49083dbf76296247b-d1e0251e287b53f9817b63c70396f710a8ca2136ee21d1d97acee629dde93632.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/422d85cdcbb785dbdfe000c49083dbf76296247b-d1e0251e287b53f9817b63c70396f710a8ca2136ee21d1d97acee629dde93632.txt"
+    },
+    {
+      "index": 44,
+      "bytes": 50687,
+      "sha256": "b1e382d4c1bfaa7b3b4ec4f5f949f5889cc00d4a7d84f32ac1fd1ad9832ee175",
+      "blob": "db6197fca84035c9812784873ba4cb0447c6fd5d",
+      "paths": [
+        "openbot/scripts/acceptance/wakerflow-journey.mjs"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "db6197fca84035c9812784873ba4cb0447c6fd5d-b1e382d4c1bfaa7b3b4ec4f5f949f5889cc00d4a7d84f32ac1fd1ad9832ee175.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/db6197fca84035c9812784873ba4cb0447c6fd5d-b1e382d4c1bfaa7b3b4ec4f5f949f5889cc00d4a7d84f32ac1fd1ad9832ee175.txt"
+    },
+    {
+      "index": 45,
+      "bytes": 34512,
+      "sha256": "5850c0dc2a703b492281c99c5604ddf7ba76b8ba62ef1a6dcbf5f1e5b01b6fd0",
+      "blob": "648d0820b926b49efa50dc0a84465a7de76f89a9",
+      "paths": [
+        "openbot/server/src/wakerflows/source-main-resources.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "648d0820b926b49efa50dc0a84465a7de76f89a9-5850c0dc2a703b492281c99c5604ddf7ba76b8ba62ef1a6dcbf5f1e5b01b6fd0.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/648d0820b926b49efa50dc0a84465a7de76f89a9-5850c0dc2a703b492281c99c5604ddf7ba76b8ba62ef1a6dcbf5f1e5b01b6fd0.txt"
+    },
+    {
+      "index": 46,
+      "bytes": 62848,
+      "sha256": "628a46f34b2cb860d464c4522b21c351bcbd5f425a429026437eae2507f743ad",
+      "blob": "e7b2d7b6b1bd50a25ad4942a8c0854cee4057395",
+      "paths": [
+        ".github/workflows/wakerflow-journey-c38-v4.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "e7b2d7b6b1bd50a25ad4942a8c0854cee4057395-628a46f34b2cb860d464c4522b21c351bcbd5f425a429026437eae2507f743ad.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/e7b2d7b6b1bd50a25ad4942a8c0854cee4057395-628a46f34b2cb860d464c4522b21c351bcbd5f425a429026437eae2507f743ad.txt"
+    },
+    {
+      "index": 47,
+      "bytes": 62848,
+      "sha256": "035244241ff1fe00d4b67b70cbd18e350ce7fbc7b16f902fcc001af84d81019d",
+      "blob": "49244e12bc3452d4dde8fad90ab3c90ea0a3e1c1",
+      "paths": [
+        ".github/workflows/wakerflow-journey-c36-v3.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "49244e12bc3452d4dde8fad90ab3c90ea0a3e1c1-035244241ff1fe00d4b67b70cbd18e350ce7fbc7b16f902fcc001af84d81019d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/49244e12bc3452d4dde8fad90ab3c90ea0a3e1c1-035244241ff1fe00d4b67b70cbd18e350ce7fbc7b16f902fcc001af84d81019d.txt"
+    },
+    {
+      "index": 48,
+      "bytes": 62821,
+      "sha256": "1db98f97353b14a981d7e660b286b4bd8029ae71c1b798d75959cc1f58319d1b",
+      "blob": "1e79bc31b6a858d079a407f7fb24c15db2d103f8",
+      "paths": [
+        ".github/workflows/wakerflow-journey-c36.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "1e79bc31b6a858d079a407f7fb24c15db2d103f8-1db98f97353b14a981d7e660b286b4bd8029ae71c1b798d75959cc1f58319d1b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/1e79bc31b6a858d079a407f7fb24c15db2d103f8-1db98f97353b14a981d7e660b286b4bd8029ae71c1b798d75959cc1f58319d1b.txt"
+    },
+    {
+      "index": 49,
+      "bytes": 62785,
+      "sha256": "5de7c6a1497f2f0c7e646053d12c217dea753d804e60af5fde14cfb5e534b8e8",
+      "blob": "f9028670ffae93134122245e3ec2866c8db0f149",
+      "paths": [
+        ".github/workflows/wakerflow-journey-c36.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "f9028670ffae93134122245e3ec2866c8db0f149-5de7c6a1497f2f0c7e646053d12c217dea753d804e60af5fde14cfb5e534b8e8.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/f9028670ffae93134122245e3ec2866c8db0f149-5de7c6a1497f2f0c7e646053d12c217dea753d804e60af5fde14cfb5e534b8e8.txt"
+    },
+    {
+      "index": 50,
+      "bytes": 57574,
+      "sha256": "a750ad3855a0df1e62c05c07048d1abed19e4fa41e5b597936aca0b3e287a24d",
+      "blob": "a09c0fec29780b6dc3e88b5ad4179bbafe2d350e",
+      "paths": [
+        "openbot/server/src/wakerflows/source-bwrap-containment.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "a09c0fec29780b6dc3e88b5ad4179bbafe2d350e-a750ad3855a0df1e62c05c07048d1abed19e4fa41e5b597936aca0b3e287a24d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/a09c0fec29780b6dc3e88b5ad4179bbafe2d350e-a750ad3855a0df1e62c05c07048d1abed19e4fa41e5b597936aca0b3e287a24d.txt"
+    },
+    {
+      "index": 51,
+      "bytes": 57107,
+      "sha256": "cc022cf31802e6d200604835271c1dd637ac3b476a55f520783e25fb17777804",
+      "blob": "3863abee55e4c9baa839e696f938e914d68824c3",
+      "paths": [
+        "openbot/server/src/wakerflows/source-bwrap-containment.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "3863abee55e4c9baa839e696f938e914d68824c3-cc022cf31802e6d200604835271c1dd637ac3b476a55f520783e25fb17777804.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/3863abee55e4c9baa839e696f938e914d68824c3-cc022cf31802e6d200604835271c1dd637ac3b476a55f520783e25fb17777804.txt"
+    },
+    {
+      "index": 52,
+      "bytes": 64656,
+      "sha256": "db1f82f2c4cd78a35c732d08d35584f414043d3bcff50ee83a462d346fee4c1f",
+      "blob": "1874076e46f0233c6fe7ba5ab2ea96ed63c697ad",
+      "paths": [
+        ".github/workflows/native-receipt-7-release.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "1874076e46f0233c6fe7ba5ab2ea96ed63c697ad-db1f82f2c4cd78a35c732d08d35584f414043d3bcff50ee83a462d346fee4c1f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/1874076e46f0233c6fe7ba5ab2ea96ed63c697ad-db1f82f2c4cd78a35c732d08d35584f414043d3bcff50ee83a462d346fee4c1f.txt"
+    },
+    {
+      "index": 53,
+      "bytes": 67271,
+      "sha256": "04488598f0da676f85f636af35d42fad7dfd64508ec994ec42c205b7d0dbae61",
+      "blob": "c3585cf6477119f6ba6e32399253b51491e74201",
+      "paths": [
+        ".github/workflows/project-execution-receipt-17-release.yml",
+        ".github/workflows/project-execution-receipt-17-c31.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "c3585cf6477119f6ba6e32399253b51491e74201-04488598f0da676f85f636af35d42fad7dfd64508ec994ec42c205b7d0dbae61.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/c3585cf6477119f6ba6e32399253b51491e74201-04488598f0da676f85f636af35d42fad7dfd64508ec994ec42c205b7d0dbae61.txt"
+    },
+    {
+      "index": 54,
+      "bytes": 64656,
+      "sha256": "0e8510e09c9af26419a6ec990074b77d6b9febae1fedb29d8a0933e67d07df2a",
+      "blob": "ada18b6860dd8410e72e67ecf856ae0a1174cee5",
+      "paths": [
+        ".github/workflows/native-receipt-7-release.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ada18b6860dd8410e72e67ecf856ae0a1174cee5-0e8510e09c9af26419a6ec990074b77d6b9febae1fedb29d8a0933e67d07df2a.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/ada18b6860dd8410e72e67ecf856ae0a1174cee5-0e8510e09c9af26419a6ec990074b77d6b9febae1fedb29d8a0933e67d07df2a.txt"
+    },
+    {
+      "index": 55,
+      "bytes": 44631,
+      "sha256": "51f4ab585ffcc4e6ee3fbc165594508a98830637174a0c67a97325ea3f15086b",
+      "blob": "2d199b7e223d6dc5325fff2bcd250a9c6cc6ef78",
+      "paths": [
+        ".github/workflows/native-receipt-7-release.yml",
+        ".github/workflows/native-receipt-7-c26.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "2d199b7e223d6dc5325fff2bcd250a9c6cc6ef78-51f4ab585ffcc4e6ee3fbc165594508a98830637174a0c67a97325ea3f15086b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/2d199b7e223d6dc5325fff2bcd250a9c6cc6ef78-51f4ab585ffcc4e6ee3fbc165594508a98830637174a0c67a97325ea3f15086b.txt"
+    },
+    {
+      "index": 56,
+      "bytes": 13864,
+      "sha256": "2ee2310d2fb0374631878a67a2d0795a8ca4ec98a1a30d50e21ca4a28f8dd08f",
+      "blob": "7c626e36e94cd5cb4359f1a2d55e57ef8d38daf3",
+      "paths": [
+        "openbot/server/tests/native-approval-verification.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7c626e36e94cd5cb4359f1a2d55e57ef8d38daf3-2ee2310d2fb0374631878a67a2d0795a8ca4ec98a1a30d50e21ca4a28f8dd08f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/7c626e36e94cd5cb4359f1a2d55e57ef8d38daf3-2ee2310d2fb0374631878a67a2d0795a8ca4ec98a1a30d50e21ca4a28f8dd08f.txt"
+    },
+    {
+      "index": 57,
+      "bytes": 27909,
+      "sha256": "f39ff8b5b1aa7aa75b3e4c80eb9b5ec10d78c913a7b99a3dc780e357407c18f1",
+      "blob": "0e93e42ea27c38cd7e6c1212d699a61bbebbab95",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "0e93e42ea27c38cd7e6c1212d699a61bbebbab95-f39ff8b5b1aa7aa75b3e4c80eb9b5ec10d78c913a7b99a3dc780e357407c18f1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/0e93e42ea27c38cd7e6c1212d699a61bbebbab95-f39ff8b5b1aa7aa75b3e4c80eb9b5ec10d78c913a7b99a3dc780e357407c18f1.txt"
+    },
+    {
+      "index": 58,
+      "bytes": 26751,
+      "sha256": "57331fe3a4525715dd919403db94469b0da9ea44775fcb867b44250e94d772ca",
+      "blob": "26d77ae802a002a1bfb83dd7b8ea43c7efa34360",
+      "paths": [
+        "openbot/server/tests/support/project-execution-native-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "26d77ae802a002a1bfb83dd7b8ea43c7efa34360-57331fe3a4525715dd919403db94469b0da9ea44775fcb867b44250e94d772ca.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/26d77ae802a002a1bfb83dd7b8ea43c7efa34360-57331fe3a4525715dd919403db94469b0da9ea44775fcb867b44250e94d772ca.txt"
+    },
+    {
+      "index": 59,
+      "bytes": 47229,
+      "sha256": "c56f9101ff3d6b204a829d4a3f9c0083b5b8bcacf4036e891976e21eaae852d1",
+      "blob": "7b415b5d6998cbd44e2b6826c857d03557ae3e3c",
+      "paths": [
+        ".github/workflows/project-execution-receipt-17.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "7b415b5d6998cbd44e2b6826c857d03557ae3e3c-c56f9101ff3d6b204a829d4a3f9c0083b5b8bcacf4036e891976e21eaae852d1.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/7b415b5d6998cbd44e2b6826c857d03557ae3e3c-c56f9101ff3d6b204a829d4a3f9c0083b5b8bcacf4036e891976e21eaae852d1.txt"
+    },
+    {
+      "index": 60,
+      "bytes": 44621,
+      "sha256": "f285d9501bccbc84b2b53b974e4b75d5606697a6328e8cb6ee784d0643d922e6",
+      "blob": "8e9566f911038506b205404abaa7156ad80774c4",
+      "paths": [
+        ".github/workflows/native-receipt-7.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "8e9566f911038506b205404abaa7156ad80774c4-f285d9501bccbc84b2b53b974e4b75d5606697a6328e8cb6ee784d0643d922e6.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/8e9566f911038506b205404abaa7156ad80774c4-f285d9501bccbc84b2b53b974e4b75d5606697a6328e8cb6ee784d0643d922e6.txt"
+    },
+    {
+      "index": 61,
+      "bytes": 46797,
+      "sha256": "e3856d69464f8675affb9ccf31a058a9b3d7a3864949fe086556ba6ee3d05ffb",
+      "blob": "67ce6f4b52581df4bcbff1767787366b2199ca8d",
+      "paths": [
+        "openbot/server/src/approvals/service.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "67ce6f4b52581df4bcbff1767787366b2199ca8d-e3856d69464f8675affb9ccf31a058a9b3d7a3864949fe086556ba6ee3d05ffb.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/67ce6f4b52581df4bcbff1767787366b2199ca8d-e3856d69464f8675affb9ccf31a058a9b3d7a3864949fe086556ba6ee3d05ffb.txt"
+    },
+    {
+      "index": 62,
+      "bytes": 112105,
+      "sha256": "d30ad789574b2215c6e9cc6b0c8382c7f98b78fbde4125b63e923c43a00cda79",
+      "blob": "c24184da75c5e7b42d397a01dc1820f5aa70be65",
+      "paths": [
+        "openbot/server/src/devices/native-security.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "c24184da75c5e7b42d397a01dc1820f5aa70be65-d30ad789574b2215c6e9cc6b0c8382c7f98b78fbde4125b63e923c43a00cda79.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/c24184da75c5e7b42d397a01dc1820f5aa70be65-d30ad789574b2215c6e9cc6b0c8382c7f98b78fbde4125b63e923c43a00cda79.txt"
+    },
+    {
+      "index": 63,
+      "bytes": 10529,
+      "sha256": "e3f7b4e6094ffaaf0df1e96c073e9a01f68bea3decbf69f6c614fd0b3a86b38f",
+      "blob": "1753ea4fc4f67eba8dfdc838db3f281ca4e88bad",
+      "paths": [
+        "openbot/server/tests/native-approval-verification.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "1753ea4fc4f67eba8dfdc838db3f281ca4e88bad-e3f7b4e6094ffaaf0df1e96c073e9a01f68bea3decbf69f6c614fd0b3a86b38f.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/1753ea4fc4f67eba8dfdc838db3f281ca4e88bad-e3f7b4e6094ffaaf0df1e96c073e9a01f68bea3decbf69f6c614fd0b3a86b38f.txt"
+    },
+    {
+      "index": 64,
+      "bytes": 41542,
+      "sha256": "4c89f11b084ea7a4d9e0789531877f99f486900ff56a3bf1ceabc35a30ebcd43",
+      "blob": "de629b61c820254df877fb958a8c3d5d81661209",
+      "paths": [
+        ".github/workflows/native-git-v2-19.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "de629b61c820254df877fb958a8c3d5d81661209-4c89f11b084ea7a4d9e0789531877f99f486900ff56a3bf1ceabc35a30ebcd43.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/de629b61c820254df877fb958a8c3d5d81661209-4c89f11b084ea7a4d9e0789531877f99f486900ff56a3bf1ceabc35a30ebcd43.txt"
+    },
+    {
+      "index": 65,
+      "bytes": 17928,
+      "sha256": "8ce96b8a7b72e84adcc02e515e46c4654116c7d4be50c11ca028b39b946ba12e",
+      "blob": "fadffc5ccbbb369cd86e75987867f3189c5dd0a6",
+      "paths": [
+        "openbot/shared/native-git-project.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "fadffc5ccbbb369cd86e75987867f3189c5dd0a6-8ce96b8a7b72e84adcc02e515e46c4654116c7d4be50c11ca028b39b946ba12e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/fadffc5ccbbb369cd86e75987867f3189c5dd0a6-8ce96b8a7b72e84adcc02e515e46c4654116c7d4be50c11ca028b39b946ba12e.txt"
+    },
+    {
+      "index": 66,
+      "bytes": 111374,
+      "sha256": "40e5eb39b049bfb5dede1def50bea45d85c54d37973c0d1dbd982a184add80d6",
+      "blob": "72d03c4e4cdfc9cc6be88fda0f5935a271a5567a",
+      "paths": [
+        "openbot/server/src/devices/native-security.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "72d03c4e4cdfc9cc6be88fda0f5935a271a5567a-40e5eb39b049bfb5dede1def50bea45d85c54d37973c0d1dbd982a184add80d6.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/72d03c4e4cdfc9cc6be88fda0f5935a271a5567a-40e5eb39b049bfb5dede1def50bea45d85c54d37973c0d1dbd982a184add80d6.txt"
+    },
+    {
+      "index": 67,
+      "bytes": 13987,
+      "sha256": "d6616379e2afe3d3c541aa12c73f687cbf1e9a15167850bb785c3e86ea9fccac",
+      "blob": "c358b928e1808f9d9f14b71b3b07cfe7b19018c9",
+      "paths": [
+        "openbot/server/src/computer/runner-transport.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "c358b928e1808f9d9f14b71b3b07cfe7b19018c9-d6616379e2afe3d3c541aa12c73f687cbf1e9a15167850bb785c3e86ea9fccac.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/c358b928e1808f9d9f14b71b3b07cfe7b19018c9-d6616379e2afe3d3c541aa12c73f687cbf1e9a15167850bb785c3e86ea9fccac.txt"
+    },
+    {
+      "index": 68,
+      "bytes": 44904,
+      "sha256": "1e9ffdac49d38fa16dd071a4a260a819334910a385edac99193e920bcfae1bca",
+      "blob": "a7aadc21f513121a258a361344ca0bf97aff28a3",
+      "paths": [
+        "openbot/runner/src/security.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "a7aadc21f513121a258a361344ca0bf97aff28a3-1e9ffdac49d38fa16dd071a4a260a819334910a385edac99193e920bcfae1bca.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/a7aadc21f513121a258a361344ca0bf97aff28a3-1e9ffdac49d38fa16dd071a4a260a819334910a385edac99193e920bcfae1bca.txt"
+    },
+    {
+      "index": 69,
+      "bytes": 50794,
+      "sha256": "6033e0762f28a7075041c5ca8aec5f64be68c4cf210e5323eeeaa081d885dd2e",
+      "blob": "4dd91b9aea50d7d3dbcfacd9aa406b53a7b2017e",
+      "paths": [
+        "openbot/runner/src/projects.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "4dd91b9aea50d7d3dbcfacd9aa406b53a7b2017e-6033e0762f28a7075041c5ca8aec5f64be68c4cf210e5323eeeaa081d885dd2e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/4dd91b9aea50d7d3dbcfacd9aa406b53a7b2017e-6033e0762f28a7075041c5ca8aec5f64be68c4cf210e5323eeeaa081d885dd2e.txt"
+    },
+    {
+      "index": 70,
+      "bytes": 11228,
+      "sha256": "40c95ea81c63097c98ed934b544d60697850bcf82daf7584ecb0a50964ab971e",
+      "blob": "29009d49773f047899f1573402a629635a7ac700",
+      "paths": [
+        "openbot/runner/src/execute.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "29009d49773f047899f1573402a629635a7ac700-40c95ea81c63097c98ed934b544d60697850bcf82daf7584ecb0a50964ab971e.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/29009d49773f047899f1573402a629635a7ac700-40c95ea81c63097c98ed934b544d60697850bcf82daf7584ecb0a50964ab971e.txt"
+    },
+    {
+      "index": 71,
+      "bytes": 68169,
+      "sha256": "c6dd6620e6e1dd82d8223dc812b3ad3c4ea478746cb9b8e33d666cb903f71620",
+      "blob": "babf39f00ab81d9ed8b1e6811c5d792982329f28",
+      "paths": [
+        "openbot/runner/src/index.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "babf39f00ab81d9ed8b1e6811c5d792982329f28-c6dd6620e6e1dd82d8223dc812b3ad3c4ea478746cb9b8e33d666cb903f71620.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/babf39f00ab81d9ed8b1e6811c5d792982329f28-c6dd6620e6e1dd82d8223dc812b3ad3c4ea478746cb9b8e33d666cb903f71620.txt"
+    },
+    {
+      "index": 72,
+      "bytes": 9184,
+      "sha256": "08479e69c6edf638924faa7e4772a901690235f329c2b215635f1eabda5197c7",
+      "blob": "79b350d929eddcfa8c8fef987360b3c88ca746c1",
+      "paths": [
+        "openbot/server/tests/native-git-project.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "79b350d929eddcfa8c8fef987360b3c88ca746c1-08479e69c6edf638924faa7e4772a901690235f329c2b215635f1eabda5197c7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/79b350d929eddcfa8c8fef987360b3c88ca746c1-08479e69c6edf638924faa7e4772a901690235f329c2b215635f1eabda5197c7.txt"
+    },
+    {
+      "index": 73,
+      "bytes": 24016,
+      "sha256": "bb9814f028d5c398cf231254a19a25aaea64aaabe5cd904c44c98428ac1acf7b",
+      "blob": "44d6bb9a1868a7bee5646e2b521d091ce957552c",
+      "paths": [
+        "openbot/runner/tests/native-git-project.test.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "44d6bb9a1868a7bee5646e2b521d091ce957552c-bb9814f028d5c398cf231254a19a25aaea64aaabe5cd904c44c98428ac1acf7b.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/44d6bb9a1868a7bee5646e2b521d091ce957552c-bb9814f028d5c398cf231254a19a25aaea64aaabe5cd904c44c98428ac1acf7b.txt"
+    },
+    {
+      "index": 74,
+      "bytes": 17574,
+      "sha256": "193575eb51dfcb038d57b58461119e7912b239ac755a06760d3f99ecd6b7e93d",
+      "blob": "ad7d67d05a0feb4fcadb0a1d0752eea2d2d9a6f2",
+      "paths": [
+        "openbot/shared/native-git-project.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "ad7d67d05a0feb4fcadb0a1d0752eea2d2d9a6f2-193575eb51dfcb038d57b58461119e7912b239ac755a06760d3f99ecd6b7e93d.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/ad7d67d05a0feb4fcadb0a1d0752eea2d2d9a6f2-193575eb51dfcb038d57b58461119e7912b239ac755a06760d3f99ecd6b7e93d.txt"
+    },
+    {
+      "index": 75,
+      "bytes": 37870,
+      "sha256": "bced414a8d385400cf4cb4dbd88275b00e6e153479d60927baf987d828ffca05",
+      "blob": "4c3b1f261e1a1103c06f09efaf8a6ddb6558ab25",
+      "paths": [
+        ".github/workflows/wakerflow-actions-native-9e50.yml"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "4c3b1f261e1a1103c06f09efaf8a6ddb6558ab25-bced414a8d385400cf4cb4dbd88275b00e6e153479d60927baf987d828ffca05.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/4c3b1f261e1a1103c06f09efaf8a6ddb6558ab25-bced414a8d385400cf4cb4dbd88275b00e6e153479d60927baf987d828ffca05.txt"
+    },
+    {
+      "index": 76,
+      "bytes": 11209,
+      "sha256": "68740e8c74d7d46a77007214390c40b1375b45806841c02a8810050cad7b28d7",
+      "blob": "5c07d8cb38f3c8d54f5f9046bf6a55735ba518c2",
+      "paths": [
+        "openbot/server/tests/support/wf7-action-fixture.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "5c07d8cb38f3c8d54f5f9046bf6a55735ba518c2-68740e8c74d7d46a77007214390c40b1375b45806841c02a8810050cad7b28d7.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/5c07d8cb38f3c8d54f5f9046bf6a55735ba518c2-68740e8c74d7d46a77007214390c40b1375b45806841c02a8810050cad7b28d7.txt"
+    },
+    {
+      "index": 77,
+      "bytes": 17373,
+      "sha256": "f86ed3590678b62ba2d220431c454860c71fd455d701910c658d99b2697a3e79",
+      "blob": "c336ae868712e5226dfc2c7e0d1e1ff2bc3bebb8",
+      "paths": [
+        "openbot/server/tests/support/wf-native-action-channel.ts"
+      ],
+      "checks": {
+        "bytes": true,
+        "sha256": true,
+        "blob": true
+      },
+      "filename": "c336ae868712e5226dfc2c7e0d1e1ff2bc3bebb8-f86ed3590678b62ba2d220431c454860c71fd455d701910c658d99b2697a3e79.txt",
+      "cloud_path": "/workspace/scratch/3d93691fe5e9/recovery-inbox/archive-02-s3-wakerflow-native-e892412de29a/versions/c336ae868712e5226dfc2c7e0d1e1ff2bc3bebb8-f86ed3590678b62ba2d220431c454860c71fd455d701910c658d99b2697a3e79.txt"
+    }
+  ],
+  "transfer_incidents": [
+    {
+      "part": 3,
+      "observed_bytes": 200000,
+      "expected_bytes": 220000,
+      "resolution": "Rewritten from original retained Page return and fully revalidated",
+      "cause": "undetermined",
+      "preserved_invalid_copy": "/workspace/scratch/3d93691fe5e9/recovery-inbox/s3-fragments/part-3.length-mismatch-preserved.b64"
+    }
+  ],
+  "product_source_executed": false,
+  "gitee_uploaded": false
+}
