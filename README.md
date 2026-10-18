@@ -7,6 +7,7 @@
 本仓库于 2026 年 10 月 18 日从历史源码副本恢复到 Gitee。恢复文件的时间主要为 2026 年 10 月 10—11 日，不代表原 GitHub 仓库或云端开发环境的最新版本，也不包含原仓库的完整 Git 历史。
 当前仓库入口：[Gitee 熊宝数字员工](https://gitee.com/xiongpinji/xiongbaowork)。
 恢复范围与验证边界见 [迁移恢复记录](MIGRATION-RECOVERY.md)；部署前需要重新验证。
+旧聊天中找回的修复、验收清单和历史证据见 [资料恢复盘点](THREAD-RECOVERY-REPORT.md)。
 
 源码位于 `openbot/`。本仓库的交付路径是 Docker 镜像；Windows 使用 Docker Desktop 的 Linux 容器。
 开发环境、历史走查记录与交付部署分别见[部署手册](openbot/docs/deployment-qoderwake.md)、

@@ -1,0 +1,83 @@
+--- a/openbot/server/tests/wakerflows.integration.test.ts
++++ b/openbot/server/tests/wakerflows.integration.test.ts
+@@ -864,8 +864,25 @@
+     revision: 1,
+     inputs: { notes: "local fixture" },
+   });
+-  if (!started.runId) throw new Error("No run.");
+-  await f.pipeline.advance({ tenantId: f.tenantId, runId: started.runId });
++  if (!started.runId || !started.taskId) throw new Error("No run or parent.");
++  const outcome = await f.pipeline.advance({
++    tenantId: f.tenantId,
++    runId: started.runId,
++  });
++  expect(outcome.status).toBe("done");
++  expect(outcome.steps).toHaveLength(2);
++  expect(outcome.steps.map((step) => step.id)).toEqual(
++    f.plan.steps.map((step) => step.id),
++  );
++  for (const step of outcome.steps) {
++    expect(step.state).toBe("done");
++    expect(typeof step.taskId).toBe("string");
++    expect(step.taskId).not.toBe("");
++    expect(typeof step.runRef).toBe("string");
++    expect(step.runRef).not.toBe("");
++  }
++  expect(new Set(outcome.steps.map((step) => step.taskId)).size).toBe(2);
++  expect(new Set(outcome.steps.map((step) => step.runRef)).size).toBe(2);
+   const routes = createTaskRoutes(
+     database,
+     async (context, next) => {
+@@ -881,17 +898,47 @@
+   const response = await runAsTenant(f.tenantId, () => routes.request("/"));
+   expect(response.status).toBe(200);
+   const body = (await response.json()) as {
+-    tasks: { source: string; open: unknown }[];
++    tasks: {
++      id: string;
++      tenantId: string;
++      source: string;
++      runRef: string | null;
++      parentTaskId: string | null;
++      executorAgentId: string | null;
++      open: unknown;
++    }[];
+   };
+   expect(
+     body.tasks
+       .filter((task) => task.source === "chat")
+       .map((task) => task.open),
+   ).toEqual([{ kind: "wakerflow", id: f.flow.id }]);
+-  expect(body.tasks.filter((task) => task.source === "group_run")).toHaveLength(
+-    3,
+-  );
+-  for (const task of body.tasks.filter((task) => task.source === "group_run"))
++  const parents = body.tasks.filter((task) => task.source === "group_run");
++  expect(parents).toHaveLength(1);
++  expect(parents[0]).toMatchObject({
++    id: started.taskId,
++    tenantId: f.tenantId,
++    runRef: started.runId,
++    parentTaskId: null,
++  });
++  const children = body.tasks.filter((task) => task.source === "handoff");
++  expect(children).toHaveLength(2);
++  expect(children.map((task) => task.id).sort()).toEqual(
++    outcome.steps.map((step) => step.taskId).sort(),
++  );
++  for (const step of outcome.steps) {
++    const matches = children.filter((task) => task.id === step.taskId);
++    expect(matches).toHaveLength(1);
++    expect(matches[0]).toMatchObject({
++      tenantId: f.tenantId,
++      runRef: step.runRef,
++      parentTaskId: started.taskId,
++      executorAgentId: f.member,
++    });
++  }
++  const runCards = [...parents, ...children];
++  expect(runCards).toHaveLength(3);
++  for (const task of runCards)
+     expect(task.open).toEqual({
+       kind: "wakerflow",
+       id: f.flow.id,

@@ -1,0 +1,16 @@
+[
+  {
+    "path": "openbot/server/src/model-usage/provider-observer.ts",
+    "gitee_snapshot_file_exists": false,
+    "current_blob": null,
+    "required_before_blob": "a3a248882a657fd21f3f6b78637b6cd05961afa2",
+    "can_apply_directly": false
+  },
+  {
+    "path": "openbot/server/tests/wakerflows.integration.test.ts",
+    "gitee_snapshot_file_exists": false,
+    "current_blob": null,
+    "required_before_blob": "6c36b033bc8a731a33e2e54423d280065cd2a818",
+    "can_apply_directly": false
+  }
+]

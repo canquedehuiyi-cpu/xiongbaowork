@@ -1,0 +1,22 @@
+{
+  "source_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+  "source_record": {
+    "line": 133175,
+    "timestamp": "2026-10-18T02:31:18.156Z",
+    "record_type": "custom_tool_call_output"
+  },
+  "historical_only": true,
+  "current_gitee_runtime_verified": false,
+  "recorded_facts": {
+    "run": 39089432666,
+    "artifact": 12121997114,
+    "source": "b374644f38c5338b825d317da5a08bb1b96f8166",
+    "zipBytes": 366372,
+    "zipSHA256": "c08b85d96979f13bb74899efd016be2fe8c6a83b7cdb55ad8e891d347a88da8a",
+    "entries": 623,
+    "rawBytes": 761383,
+    "logBytes": 412809,
+    "logSHA256": "7627bb885325b8768dcfd5840f2ebefb96528558b5b60f39e6da2abcd4dc45db",
+    "footer": "7 tests failed:\n(fail) actual live Root validates cached compressed Map in fresh contained guests without rerunning handler or effects [7023.56ms]\n(fail) actual live Root validates cached Root111 deterministic-entropy Map 20000 in fresh contained guests without rerunning handler or effects [2734.34ms]\n(fail) actual live Root validates cached Root111 compressible Map 35000 in fresh contained guests without rerunning handler or effects [1417.98ms]\n(fail) actual index/application Source child starts only after the original driver COMMIT and projects its receipt once [4702.65ms]\n(fail) actual original employee drift before Source child reservation admits no child SDK and replay admits none [4653.26ms]\n(fail) actual parent runner Stop while child COMMIT is held cannot start or replay the child [4703.96ms]\n(fail) a lost real COMMIT acknowledgement cannot start or replay the Source child [4711.74ms]\n\n 100 pass\n 7 fail\n 717 expect() calls\nRan 107 tests across 4 files. [124.92s]\n"
+  }
+}

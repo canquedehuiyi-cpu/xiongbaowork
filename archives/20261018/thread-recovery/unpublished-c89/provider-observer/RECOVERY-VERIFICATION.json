@@ -1,0 +1,24 @@
+{
+  "source_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+  "source_record_index": 4936,
+  "path": "openbot/server/src/model-usage/provider-observer.ts",
+  "recipe_bytes": 1242,
+  "recipe_sha256": "d42ca64d9e10f40fde71bbec310e88a336cb86b361a0cb63cd51603638e05d23",
+  "recipe_hash_matches_original_record": true,
+  "before": {
+    "path": "openbot/server/src/model-usage/provider-observer.ts",
+    "sha": "a3a248882a657fd21f3f6b78637b6cd05961afa2",
+    "bytes": 14030,
+    "sha256": "503b46972d71d85f88d66d95266d6e6c9c3ff69b00cf540d69a6756c09bddda7"
+  },
+  "after": {
+    "blob": "4278626b31aa70fb7c63a936165c1fb9caf0c372",
+    "bytes": 14220,
+    "sha256": "269e58a708c7e8277daf1e2d6991a05be75aece3f0fe0ea5a69cb0bf54f9f62f"
+  },
+  "literal_count": 2,
+  "full_after_source_recovered": false,
+  "published_to_original_github": false,
+  "runtime_tests": "NOT_RUN",
+  "applied_to_recovered_old_source": false
+}

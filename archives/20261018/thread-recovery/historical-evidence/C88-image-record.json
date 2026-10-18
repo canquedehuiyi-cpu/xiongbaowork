@@ -1,0 +1,74 @@
+{
+  "source_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+  "source_record": {
+    "line": 133110,
+    "timestamp": "2026-10-18T02:28:22.467Z",
+    "record_type": "custom_tool_call_output"
+  },
+  "historical_only": true,
+  "current_gitee_runtime_verified": false,
+  "recorded_facts": {
+    "run": "39089432506",
+    "attempt": 1,
+    "product": "b374644f38c5338b825d317da5a08bb1b96f8166",
+    "tree": "6cf9f2ab4dc70bdc8e848161a4aef000492a458b",
+    "helper": "b374644f38c5338b825d317da5a08bb1b96f8166",
+    "helperTree": "6cf9f2ab4dc70bdc8e848161a4aef000492a458b",
+    "status": "PASSED_HTTP_SCOPE_ONLY",
+    "imageID": "sha256:00a3ae128fda83b5355812995b678e126ea0d38576e6ff540629f86e53065c21",
+    "builds": 1,
+    "buildNativeExit": 0,
+    "commandCount": 441,
+    "commandsContinuousAndAllZero": true,
+    "requests": 89,
+    "requestsExpected": true,
+    "statusCounts": {
+      "200": 42,
+      "401": 19,
+      "404": 28
+    },
+    "assertions": 248,
+    "assertionsAllTrue": true,
+    "writerPredicates": 41,
+    "writerAllTrue": true,
+    "migration": {
+      "actual": 122,
+      "expected": 122,
+      "journalRawSHA256": "a669197774ace841e1c194a9f300b624f834fece12c09c91ddb62d472e2c7703",
+      "ledgerSHA256": "0403da5df6b031b214582cd165fd5a78997743730e27ab6d625ee384769a2603",
+      "sourceSQLSHA256": "1cf1c15d1a92c467e21b60f7623479917e8bcc2fabd36e8f9d6c3ed7fb9c70c0"
+    },
+    "health": {
+      "attempts": 22,
+      "completeBodies": 1,
+      "firstStatus": 200,
+      "lastBodyBytes": 15,
+      "lastError": "NONE",
+      "lastStage": "BODY_COMPLETE",
+      "lastStatus": 200,
+      "responses": 1,
+      "schema": "image-business-health-probe-v1"
+    },
+    "stages": {
+      "build": "PASSED",
+      "fixture": "PASSED",
+      "frozenGET": "PASSED",
+      "health": "PASSED",
+      "instance": "STARTED",
+      "restrictedWriter": "PASSED",
+      "source": "PASSED"
+    },
+    "closure": "CLOSED",
+    "closureFailures": [],
+    "providerHTTP": 0,
+    "retry": 0,
+    "push": 0,
+    "deploy": 0,
+    "fullCI": "NOT_RUN",
+    "nativeOS": "NOT_RUN",
+    "scope77plus7": "NOT_RUN",
+    "contracts76": "NOT_RUN",
+    "smoke144": "NOT_RUN",
+    "overallAcceptance": "NOT_ACCEPTED"
+  }
+}

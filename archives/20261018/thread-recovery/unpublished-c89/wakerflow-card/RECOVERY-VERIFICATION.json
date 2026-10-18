@@ -1,0 +1,28 @@
+{
+  "source_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+  "source_record_indices": [
+    5206,
+    5248,
+    5279,
+    5286
+  ],
+  "path": "openbot/server/tests/wakerflows.integration.test.ts",
+  "before": {
+    "blob": "6c36b033bc8a731a33e2e54423d280065cd2a818",
+    "bytes": 37770,
+    "sha256": "cc6e24cbcb495013914b612b02abc1831e8c56662725a74490e94a5f992fd8e3"
+  },
+  "after": {
+    "blob": "af7e1d61ffd6937ec99e62dbf71763c1c7c1b0eb",
+    "bytes": 39311,
+    "sha256": "91a64b9c5167169a3ef6897f921e9a66e29d1bac4309f5a4648ee2bbf77e8995"
+  },
+  "compressed_transport_sha256": "edd6b26c1a4042d78f6b98dff2cff54c5607385b296bec29e7d5b70ebb8efa42",
+  "json_sha256": "315494db70eb23ae38ff8ec046b41bfc97e433fbd1338160f99e11665950c496",
+  "transport_hashes_verified": true,
+  "whole_file_hashes_verified": true,
+  "literal_forward_reverse_verified": true,
+  "published_to_original_github": false,
+  "runtime_tests": "NOT_RUN",
+  "applied_to_recovered_old_source": false
+}

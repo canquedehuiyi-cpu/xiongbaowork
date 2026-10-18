@@ -1,0 +1,21 @@
+{
+  "source_thread": "01a1250f-65cf-72e2-929c-a95357d2fb09",
+  "session_bytes": 784751287,
+  "first_record": "2026-10-10T09:05:34.637Z",
+  "last_record": "2026-10-18T02:46:08.624Z",
+  "counts": {
+    "session_lines": 133486,
+    "message": 2011,
+    "unique_text_values": 104395,
+    "custom_tool_call": 9663,
+    "custom_tool_call_output": 9765,
+    "reasoning": 19845,
+    "function_call": 3087,
+    "function_call_output": 4300,
+    "compacted": 139,
+    "agent_message": 4046
+  },
+  "hash_matched_full_sources": [],
+  "historical_evidence_objects": 2,
+  "assistant_final_messages": 126
+}
