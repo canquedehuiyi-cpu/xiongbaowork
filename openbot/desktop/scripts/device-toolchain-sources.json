@@ -1,0 +1,279 @@
+{
+  "schema": "device-toolchain-sources-v1",
+  "sourceSHA": "8c04c5ec892c13d8e55cc2e71f8dd52648abe59e",
+  "sourceTree": "bd47b0fa13d7215727462d19d886c385261fd466",
+  "builderBlob": "00a8f2379acb84942178549c6d6139b9489a3417",
+  "cargoLockBlob": "b3313cea2f8cf2f25e9583c07e880546cb3309a9",
+  "cargoLockSHA256": null,
+  "rustCommit": "4a4ef493e3a1488c6e321570238084b38948f6db",
+  "gpgvSHA256": null,
+  "status": "METADATA_ONLY_NOT_APPROVED",
+  "platforms": {
+    "linux-x86_64": {
+      "rustTarget": "x86_64-unknown-linux-gnu",
+      "chromiumTreeSHA256": null,
+      "rustTreeSHA256": null,
+      "vendorTreeSHA256": null,
+      "sources": [
+        {
+          "name": "bun",
+          "version": "1.3.14",
+          "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64-baseline.zip",
+          "archive": "bun-linux-x64-baseline.zip",
+          "archiveBytes": 35595658,
+          "archiveSHA256": "a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7",
+          "kind": "zip",
+          "prefix": "bun-linux-x64-baseline",
+          "binary": "bun",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "node",
+          "version": "22.14.0",
+          "url": "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz",
+          "archive": "node-v22.14.0-linux-x64.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": "69b09dba5c8dcb05c4e4273a4340db1005abeafe3927efda2bc5b249e80437ec",
+          "kind": "tar.xz",
+          "prefix": "node-v22.14.0-linux-x64",
+          "binary": "bin/node",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "chromium",
+          "version": "151.0.7922.34",
+          "url": "https://cdn.playwright.dev/builds/cft/151.0.7922.34/linux64/chrome-linux64.zip",
+          "archive": "chrome-linux64.zip",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "zip",
+          "prefix": "chrome-linux64",
+          "binary": "chrome",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "rustc",
+          "version": "1.94.0",
+          "url": "https://static.rust-lang.org/dist/rustc-1.94.0-x86_64-unknown-linux-gnu.tar.xz",
+          "archive": "rustc-1.94.0-x86_64-unknown-linux-gnu.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "tar.xz",
+          "prefix": "rustc-1.94.0-x86_64-unknown-linux-gnu/rustc",
+          "binary": "bin/rustc",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "cargo",
+          "version": "1.94.0",
+          "url": "https://static.rust-lang.org/dist/cargo-1.94.0-x86_64-unknown-linux-gnu.tar.xz",
+          "archive": "cargo-1.94.0-x86_64-unknown-linux-gnu.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "tar.xz",
+          "prefix": "cargo-1.94.0-x86_64-unknown-linux-gnu/cargo",
+          "binary": "bin/cargo",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "rust-std",
+          "version": "1.94.0",
+          "url": "https://static.rust-lang.org/dist/rust-std-1.94.0-x86_64-unknown-linux-gnu.tar.xz",
+          "archive": "rust-std-1.94.0-x86_64-unknown-linux-gnu.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "tar.xz",
+          "prefix": "rust-std-1.94.0-x86_64-unknown-linux-gnu/rust-std-x86_64-unknown-linux-gnu",
+          "binary": null,
+          "binarySHA256": null,
+          "verification": null
+        }
+      ]
+    },
+    "windows-x86_64": {
+      "rustTarget": "x86_64-pc-windows-msvc",
+      "chromiumTreeSHA256": null,
+      "rustTreeSHA256": null,
+      "vendorTreeSHA256": null,
+      "sources": [
+        {
+          "name": "bun",
+          "version": "1.3.14",
+          "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64-baseline.zip",
+          "archive": "bun-windows-x64-baseline.zip",
+          "archiveBytes": 38023440,
+          "archiveSHA256": "538f9c846355d9e847b2671bc00c47da4229a0befb24df3282b739770f3b475f",
+          "kind": "zip",
+          "prefix": "bun-windows-x64-baseline",
+          "binary": "bun.exe",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "node",
+          "version": "22.14.0",
+          "url": "https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip",
+          "archive": "node-v22.14.0-win-x64.zip",
+          "archiveBytes": null,
+          "archiveSHA256": "55b639295920b219bb2acbcfa00f90393a2789095b7323f79475c9f34795f217",
+          "kind": "zip",
+          "prefix": "node-v22.14.0-win-x64",
+          "binary": "node.exe",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "chromium",
+          "version": "151.0.7922.34",
+          "url": "https://cdn.playwright.dev/builds/cft/151.0.7922.34/win64/chrome-win64.zip",
+          "archive": "chrome-win64.zip",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "zip",
+          "prefix": "chrome-win64",
+          "binary": "chrome.exe",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "rustc",
+          "version": "1.94.0",
+          "url": "https://static.rust-lang.org/dist/rustc-1.94.0-x86_64-pc-windows-msvc.tar.xz",
+          "archive": "rustc-1.94.0-x86_64-pc-windows-msvc.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "tar.xz",
+          "prefix": "rustc-1.94.0-x86_64-pc-windows-msvc/rustc",
+          "binary": "bin/rustc.exe",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "cargo",
+          "version": "1.94.0",
+          "url": "https://static.rust-lang.org/dist/cargo-1.94.0-x86_64-pc-windows-msvc.tar.xz",
+          "archive": "cargo-1.94.0-x86_64-pc-windows-msvc.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "tar.xz",
+          "prefix": "cargo-1.94.0-x86_64-pc-windows-msvc/cargo",
+          "binary": "bin/cargo.exe",
+          "binarySHA256": null,
+          "verification": null
+        },
+        {
+          "name": "rust-std",
+          "version": "1.94.0",
+          "url": "https://static.rust-lang.org/dist/rust-std-1.94.0-x86_64-pc-windows-msvc.tar.xz",
+          "archive": "rust-std-1.94.0-x86_64-pc-windows-msvc.tar.xz",
+          "archiveBytes": null,
+          "archiveSHA256": null,
+          "kind": "tar.xz",
+          "prefix": "rust-std-1.94.0-x86_64-pc-windows-msvc/rust-std-x86_64-pc-windows-msvc",
+          "binary": null,
+          "binarySHA256": null,
+          "verification": null
+        }
+      ]
+    }
+  },
+  "officialEvidence": {
+    "bunRelease": {
+      "id": 320260981,
+      "target": "0d9b296af33f2b851fcbf4df3e9ec89751734ba4",
+      "checksumAsset": 418956640,
+      "checksumSHA256": "0fec8a7c8c72e903dba7ca24b533f9e924da296e65dec32418f68389ccd26165",
+      "signatureAsset": 418956648,
+      "signatureSHA256": "f7dae34eb12b0752232f284a517457d9e7de44db90c8b8cfd6a494fcee410c9e",
+      "signatureMode": null,
+      "signerFingerprint": null
+    },
+    "node": {
+      "sourceCommit": "5d2feb257bcee090e57900eb51720171a6aa92f3",
+      "checksumsURL": "https://nodejs.org/dist/v22.14.0/SHASUMS256.txt",
+      "signatureURL": "https://nodejs.org/dist/v22.14.0/SHASUMS256.txt.sig",
+      "signatureSHA256": null,
+      "signerFingerprint": null,
+      "engineEvidence": {
+        "packagePath": "openbot/package.json",
+        "viteDeclared": "^7.1.7",
+        "viteLocked": "7.3.6",
+        "nodeChosen": "22.14.0",
+        "status": "ENGINES_COMPATIBLE_NOT_BUILT"
+      },
+      "expectedSignerFingerprint": "C0D6248439F1D5604AAFFB4021D900FFDB233756",
+      "signerSourceURL": "https://raw.githubusercontent.com/nodejs/node/5d2feb257bcee090e57900eb51720171a6aa92f3/README.md",
+      "publicKeyURL": "https://raw.githubusercontent.com/nodejs/release-keys/481637f813e912c4aa3622d7964ab426c97b8e8d/keys/C0D6248439F1D5604AAFFB4021D900FFDB233756.asc",
+      "publicKeyBlob": "67211b7b862f2fef24b79be1a88f56d6d7c81333",
+      "publicKeySHA256": "4e615a57f63967ec40481be2fe6d57b39698257f31843ffe79af82d12a1806a2",
+      "signatureVerification": "NOT_RUN"
+    },
+    "rust": {
+      "manifestURL": "https://static.rust-lang.org/dist/channel-rust-1.94.0.toml",
+      "manifestSHA256": null,
+      "signatureURL": "https://static.rust-lang.org/dist/channel-rust-1.94.0.toml.asc",
+      "signatureSHA256": null,
+      "signerFingerprint": null,
+      "componentURLs": "VERSIONED_CANDIDATES_NOT_FETCHED; approved lock must match authenticated manifest exact xz_url"
+    },
+    "chromium": {
+      "playwrightCommit": "26a9e470a7b3c7822084b09fb7f13902c5f37b51",
+      "browserMetadataBlob": "25e42eae2b73a0a4211be65cacf51bb5b173ab8d",
+      "registryBlob": "2b6e0141a7689ffd16c8dd4f7ba530cb3daeaa2a",
+      "revision": "1234",
+      "upstreamSignature": "NOT_PUBLISHED_IN_READ_METADATA",
+      "archiveSHA256": null,
+      "executablePath": "NOT_VERIFIED_FROM_SOURCE; candidate prefix/binary requires real archive inventory and explicit approved lock"
+    }
+  },
+  "githubReleaseAssets": {
+    "repository": "oven-sh/bun",
+    "repositoryID": 357728969,
+    "releaseID": 320260981,
+    "tag": "bun-v1.3.14",
+    "target": "0d9b296af33f2b851fcbf4df3e9ec89751734ba4",
+    "assets": {
+      "bun-linux-x64-baseline.zip": {
+        "id": 418774976,
+        "name": "bun-linux-x64-baseline.zip",
+        "url": "https://api.github.com/repos/oven-sh/bun/releases/assets/418774976",
+        "browser_download_url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64-baseline.zip",
+        "size": 35595658,
+        "digest": "sha256:a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7",
+        "state": "uploaded"
+      },
+      "bun-windows-x64-baseline.zip": {
+        "id": 418774449,
+        "name": "bun-windows-x64-baseline.zip",
+        "url": "https://api.github.com/repos/oven-sh/bun/releases/assets/418774449",
+        "browser_download_url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64-baseline.zip",
+        "size": 38023440,
+        "digest": "sha256:538f9c846355d9e847b2671bc00c47da4229a0befb24df3282b739770f3b475f",
+        "state": "uploaded"
+      },
+      "SHASUMS256.txt": {
+        "id": 418956640,
+        "name": "SHASUMS256.txt",
+        "url": "https://api.github.com/repos/oven-sh/bun/releases/assets/418956640",
+        "browser_download_url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/SHASUMS256.txt",
+        "size": 3431,
+        "digest": "sha256:0fec8a7c8c72e903dba7ca24b533f9e924da296e65dec32418f68389ccd26165",
+        "state": "uploaded"
+      },
+      "SHASUMS256.txt.asc": {
+        "id": 418956648,
+        "name": "SHASUMS256.txt.asc",
+        "url": "https://api.github.com/repos/oven-sh/bun/releases/assets/418956648",
+        "browser_download_url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/SHASUMS256.txt.asc",
+        "size": 3709,
+        "digest": "sha256:f7dae34eb12b0752232f284a517457d9e7de44db90c8b8cfd6a494fcee410c9e",
+        "state": "uploaded"
+      }
+    }
+  }
+}
