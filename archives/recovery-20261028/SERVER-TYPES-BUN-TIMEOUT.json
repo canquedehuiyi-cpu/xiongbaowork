@@ -1,0 +1,42 @@
+{
+  "schema": "xiongbaowork-server-typecheck-stop/1",
+  "head": "b0bc8b51f86bfb5fc83906f2eedd9996eede4f47",
+  "run": 40675320033,
+  "job": 122772122184,
+  "start": {
+    "typescript": "5.9.3",
+    "host_runtime": "Bun1.3.14",
+    "project": "server/tsconfig.json",
+    "declared_includes": [
+      "src",
+      "scripts",
+      "../scripts/composio-smoke.ts"
+    ],
+    "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+    "timeout_seconds": 120
+  },
+  "result": {
+    "exit_code": 124,
+    "project": "server/tsconfig.json",
+    "typescript": "5.9.3",
+    "host_runtime": "Bun1.3.14",
+    "full_ci": "NOT_RUN",
+    "test_sources": "NOT_INCLUDED",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "observed": {
+    "termination": "supervisor120s timeout",
+    "separate_compiler_exit": "NOT_OBTAINED",
+    "diagnostics_before_timeout": 0,
+    "service_seconds": 120.094,
+    "cpu_seconds": 223.916,
+    "memory_peak": "509.2M",
+    "cgroup_limit": 536870912,
+    "swap": 0
+  },
+  "next_method": "same frozen TypeScript5.9.3 on stock cloud Node as normal tsc shebang,300s deadline,Node oldspace384MB supplementary to actual512MiB aggregate cgroup",
+  "source_changes": 0,
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

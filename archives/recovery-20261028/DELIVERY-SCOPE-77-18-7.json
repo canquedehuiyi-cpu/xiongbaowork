@@ -10,55 +10,109 @@
       "id": "A1",
       "requirement": "作为用户，我在侧边栏看到\"工作管理 > 任务看板\"，进入后看到统计条：任务总数 / 进行中 / 需要操作 / 已结束（默认数据周期=一个月，可切 一周/一月/全部）。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A2",
       "requirement": "我可以点统计条任一数字过滤下方任务列表（按下态高亮）。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A3",
       "requirement": "任务列表含列：任务名、执行者（Waker 头像+名，可点进员工详情）、来源（对话触发/自主工作/交接）、状态（进行中/需要操作/已结束-已完成/已结束-失败）、最近更新（相对时间）。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A4",
       "requirement": "我可以用搜索框按任务名过滤，用下拉按 Waker/Group、触发方式、状态、数据周期组合过滤。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A5",
       "requirement": "我可以切换\"列表/泳道\"两个视图；泳道视图按状态分三列（进行中/需要操作/已结束），卡片可拖拽仅进入\"已结束\"（归档语义），其余方向拖拽无效。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A6",
       "requirement": "我点任务行\"查看详情\"，进入该任务关联的执行会话（channel 或 routineRun 详情），看到完整过程。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A7",
       "requirement": "\"需要关注\"区固定在看板上方，含两个 Tab：需要操作(n)/查收结果(n)；空态文案\"暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里\"。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A8",
       "requirement": "当我在\"需要操作\"里批准/拒绝某审批，对应任务状态自动流转（批准→进行中；拒绝→已结束-失败），无需刷新。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "A9",
       "requirement": "当某任务产出附件/文件/组件结果，任务进入\"查收结果\"；我点\"查收\"后任务转\"已结束-已完成\"。",
       "source_reference": "项目规格；原版实测以对应截图/DOM为准",
-      "current_verification": "REQUIRES_NEW_VALIDATION"
+      "current_verification": "REQUIRES_NEW_VALIDATION",
+      "partial_evidence": {
+        "run": 40675320033,
+        "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+        "pass": 58,
+        "fail": 0
+      }
     },
     {
       "id": "B1",
@@ -907,11 +961,30 @@
       "server_types": "original server/tsconfig.json noEmit; original tests excluded",
       "project_and_descendants_limit": 536870912,
       "swap": 0
-    }
+    },
+    "app_task_board": {
+      "status": "PASS_NAMED_7_FILES_HAPPY_DOM_CONTROLLED_FETCH",
+      "head": "b0bc8b51f86bfb5fc83906f2eedd9996eede4f47",
+      "run": 40675320033,
+      "job": 122772122184,
+      "pass": 58,
+      "fail": 0,
+      "expects": 596,
+      "real_browser_device": "NOT_VERIFIED",
+      "full_suite": "NOT_RUN"
+    },
+    "server_typecheck": {
+      "status": "BUN_HOST_120s_TIMEOUT_NO_DIAGNOSTICS",
+      "run": 40675320033,
+      "job": 122772122184,
+      "compiler": "TypeScript5.9.3",
+      "next": "stock Node host,300s,original server config,aggregate512MiB/swap0"
+    },
+    "candidate_entries_are_historical_stage_records": true
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "No pending Source review; next named app fixture tests and original server typecheck, within existing resource gates.",
+  "next_source_package": "No Source changes pending; repeat server compiler with original Node host within same resource boundary after Bun-host timeout.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,

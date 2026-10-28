@@ -47,6 +47,10 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 
 下一步7个任务看板文件使用受控fetch夹具和原app预加载，并单独检查原server TypeScript配置（原配置不包含tests，不修改其include来伪装覆盖）。源码不改，测试120秒/单例5000ms、类型120秒、项目及后代512MiB/swap0，完整依赖安装仍只使用人类具名512MiB例外；Source/下载/其他复制64MiB保持。
 
+七个任务看板文件已实际通过：[40675320033/job122772122184](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40675320033/job/122772122184)，**58 pass / 0 fail / 596 expects**。范围为原app预加载、Happy DOM、真实路由/查询/组件配合受控fetch夹具；不代真实浏览器/设备、后端写入或A故事完整验收。
+
+同作业原server tsconfig由TypeScript5.9.3在Bun承载执行，120秒到时exit124，CPU223.916秒/peak509.2M，未输出编译诊断；不是类型通过，也没有已确认类型错误。下一次仅改用原tsc shebang对应的stock云端Node运行方式，300秒时限，Node oldspace384MiB为额外堆控制，真实project及后代512MiB cgroup门/swap0保持，不用堆限制冒整体门。其他阶段资源门及具名安装例外不变，源码0修改。
+
 ## 持续边界与待验项
 
 - 本轮项目源码、patch、archive、JSON、依赖和项目执行均云端；Windows无项目源码写入/执行，仅保存获准无源码UI PNG。
