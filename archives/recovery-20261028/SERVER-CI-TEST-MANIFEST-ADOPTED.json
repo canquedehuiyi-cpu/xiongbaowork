@@ -1,0 +1,48 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "SERVER-CI-TEST-MANIFEST-20261029",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "base_commit": "8f127f4e5f2ef91185a55cf8303caf60f5d39fb2",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/server-tests.list.txt",
+      "before": {
+        "path": "openbot/scripts/ci/server-tests.list.txt",
+        "bytes": 11292,
+        "sha256": "07e1f32af5eeda9ef66c85f66fce395a131e2f205092953f286ee27e910ebbf9",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/scripts/ci/server-tests.list.txt",
+        "bytes": 13581,
+        "sha256": "4573b1ab43de0a3fa7bb51d96957d91d6c48666b4b0f5deb73b1fc40b6ac4e25",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Only refresh the literal server test manifest to the exact complete sorted current server/tests/**/*.test.ts inventory. Retain all314 prior paths, add50 existing restored test paths, delete0. No Subject test imported by inventory. Original six contiguous shards and stale-manifest fail-closed implementation/tests unchanged. Native PG tests remain PG_PENDING; list inclusion does not authorize import/execution.",
+  "projected_source_files": 2060,
+  "projected_source_bytes": 50032053,
+  "manifest_paths_before": 314,
+  "manifest_paths_after": 364,
+  "additions": 50,
+  "deletions": 0,
+  "strict_ci": "NOT_RUN_BASELINE_UNAVAILABLE_03df9efa",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
+  "review": {
+    "path": "archives/recovery-20261028/SERVER-CI-TEST-MANIFEST-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "path": "archives/recovery-20261028/SERVER-CI-TEST-MANIFEST-CANDIDATE-VALIDATION.json",
+    "run": 40747020490,
+    "job": 123023404323
+  },
+  "source_content_adopted_unchanged": true
+}

@@ -1,3 +1,9 @@
+## root131Shard Source adoption, 2026-10-29
+
+SERVER-CI-TEST-MANIFEST-20261029 adopted unchanged from candidate 72856610a5fae2bd9a62da5d7bc0cb8554481dc4. 1 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40747020490/job 123023404323; see exact validation JSON for pass/fail counts and remaining diagnostics. 2060 files / 50032053 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 ## ROOT131 当前云端验证，2026-10-29
 
 当前正式恢复 Source21：2060文件 / 50029764字节，已独审采用提交 8f127f4e5f2ef91185a55cf8303caf60f5d39fb2。21是源码修复覆盖包数，不等于原18交付包完成。完整77故事/18包/7门仍未交付，要求与原历史全部保留。

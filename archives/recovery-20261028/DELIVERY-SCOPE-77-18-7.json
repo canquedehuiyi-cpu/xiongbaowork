@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "8f127f4e5f2ef91185a55cf8303caf60f5d39fb2",
-  "source_status": "V57_RESTORED_PLUS_21_INDEPENDENTLY_APPROVED_SOURCE_REPAIR_OVERLAYS",
+  "source_snapshot": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
+  "source_status": "V57_RESTORED_PLUS_22_APPROVED_PACKAGES",
   "story_requirements": [
     {
       "id": "A1",
@@ -758,8 +758,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "179c696519f50e2207df1ca20b814d8a621db44c",
-    "head": "0c8f324f6c72953a40ecedabbaee175f05111910",
+    "git_tree": "709e259e49507f05175b2bc45389b4bb937e672a",
+    "head": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -782,7 +782,8 @@
       "RUNNER-PROBE-LIFECYCLE-20261029",
       "RUNNER-PROBE-PENDING-RESULT-20261029",
       "RUNNER-PROBE-FRAME-REF-20261029",
-      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029"
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -790,7 +791,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50029764,
+    "verified_source_bytes": 50032053,
     "verified_source_files": 2060,
     "windows_source_files_written": 0
   },
@@ -4527,11 +4528,145 @@
         40743470005
       ],
       "temporary_diagnostic_adopted": false
+    },
+    "SERVER-CI-TEST-MANIFEST": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40747020490,
+      "job": 123023404323,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "709e259e49507f05175b2bc45389b4bb937e672a",
+        "head": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029",
+          "RUNNER-PROBE-LIFECYCLE-20261029",
+          "RUNNER-PROBE-PENDING-RESULT-20261029",
+          "RUNNER-PROBE-FRAME-REF-20261029",
+          "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+          "SERVER-CI-TEST-MANIFEST-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50032053,
+        "verified_source_files": 2060,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3869,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 1,
+        "completed_files": 1,
+        "results": [
+          {
+            "path": "scripts/ci/test-report.test.mjs",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "tests": {
+        "pass": 8,
+        "fail": 0,
+        "expects": 32
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.7M (swap: 0B)",
+        "Memory peak: 107.9M (swap: 0B)",
+        "Memory peak: 347.6M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 0,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Original8 CI report/shard contract tests only; current complete364-path manifest checked without importing those Subject tests; exact original pinned lint. Not strictCI or nativePG.",
+      "line_inventory": {
+        "before": 314,
+        "current": 364,
+        "added": 50,
+        "deleted": 0
+      },
+      "source_files": 2060,
+      "source_bytes": 50032053
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "SERVER-CI-TEST-MANIFEST candidate72856610 pending independent review/runtime; separately validate exact7 offline runner-policy tests under512MiB. No nativePG import; all77stories/18deliverypackages/7gates retained.",
+  "next_source_package": "Continue remaining original lint blockers in <=8-file independently reviewed packages; original PG and strict-CI gates retained",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -4542,25 +4677,25 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 443409,
-    "sha256": "81c2fc04b9d8ad8a0596974301d449e5370c0487354dba9e535a1c5dc6aab3f5",
+    "bytes": 444062,
+    "sha256": "0def5bab55465e07014081dca06f0a0ae37281035b76d88953f8b93f03de303b",
     "source_files": 2060,
-    "source_bytes": 50029764,
-    "candidate_source_commit": "0c8f324f6c72953a40ecedabbaee175f05111910",
-    "source_validation_run": 40745108351
+    "source_bytes": 50032053,
+    "candidate_source_commit": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
+    "source_validation_run": 40747020490
   },
   "latest_source_validation": {
     "schema": "xiongbaowork-cloud-validation/1",
-    "run": 40745108351,
-    "job": 123016689878,
+    "run": 40747020490,
+    "job": 123023404323,
     "source": {
       "aggregate_memory_limit": 67108864,
       "commercial_acceptance": "NOT_DELIVERED",
       "fd_named_stability_verified": true,
       "file_modes_verified": true,
       "formal_baseline": "V57 with explicit source overlays",
-      "git_tree": "179c696519f50e2207df1ca20b814d8a621db44c",
-      "head": "0c8f324f6c72953a40ecedabbaee175f05111910",
+      "git_tree": "709e259e49507f05175b2bc45389b4bb937e672a",
+      "head": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
       "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
       "overlay_tickets": [
         "AP-INPUT-BUN-20261028",
@@ -4583,7 +4718,8 @@
         "RUNNER-PROBE-LIFECYCLE-20261029",
         "RUNNER-PROBE-PENDING-RESULT-20261029",
         "RUNNER-PROBE-FRAME-REF-20261029",
-        "RUNNER-PROBE-SCROLL-OBSERVATION-20261029"
+        "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+        "SERVER-CI-TEST-MANIFEST-20261029"
       ],
       "postgres17": "PG_PENDING",
       "project_tests": "NOT_RUN",
@@ -4591,7 +4727,7 @@
       "source_mismatches": 0,
       "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
       "swap_limit": 0,
-      "verified_source_bytes": 50029764,
+      "verified_source_bytes": 50032053,
       "verified_source_files": 2060,
       "windows_source_files_written": 0
     },
@@ -4599,7 +4735,7 @@
       "exit_code": 0,
       "frozen_inputs_unchanged": true,
       "lifecycle_scripts": "NOT_RUN",
-      "source_commit": "0c8f324f6c72953a40ecedabbaee175f05111910",
+      "source_commit": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
       "install_memory_limit": 536870912,
       "other_data_copy_limit": 67108864,
       "backend": "copyfile",
@@ -4619,15 +4755,11 @@
     },
     "component": {
       "exit_code": 0,
-      "test_files": 2,
-      "completed_files": 2,
+      "test_files": 1,
+      "completed_files": 1,
       "results": [
         {
-          "path": "server/tests/runner-browser.test.ts",
-          "exit_code": 0
-        },
-        {
-          "path": "server/tests/runner-browser-probe.test.ts",
+          "path": "scripts/ci/test-report.test.mjs",
           "exit_code": 0
         }
       ],
@@ -4641,9 +4773,9 @@
       "commercial_acceptance": "NOT_DELIVERED"
     },
     "tests": {
-      "pass": 60,
+      "pass": 8,
       "fail": 0,
-      "expects": 259
+      "expects": 32
     },
     "lint": {
       "exit_code": 0,
@@ -4668,38 +4800,23 @@
     "automatic_memory_peaks": [
       "Memory peak: 64M (swap: 0B)",
       "Memory peak: 64M (swap: 0B)",
-      "Memory peak: 510.4M (swap: 0B)",
-      "Memory peak: 133.3M (swap: 0B)",
-      "Memory peak: 372.8M (swap: 0B)"
+      "Memory peak: 512.7M (swap: 0B)",
+      "Memory peak: 107.9M (swap: 0B)",
+      "Memory peak: 347.6M (swap: 0B)"
     ],
     "actual_restore512MiB_count": 0,
     "strict_ci": "NOT_RUN",
     "postgres17": "PG_PENDING",
     "commercial_acceptance": "NOT_DELIVERED",
-    "scope": "Existing50 fake browser tests plus10 probe regressions, including bounded observation algorithm; no native wheel claim in this run",
-    "trigger": {
-      "run": 40743470005,
-      "job": 123010929839,
-      "source_commit": "2c6c58fefd18d026fdb8b47b521fb745fbbedb53",
-      "status": "FAILED_OWN_FIXTURE_SCROLL_POSTCONDITION",
-      "exit_code": 1,
-      "checks_passed": 22,
-      "version": "Google Chrome 156.0.8078.47",
-      "peak": "512M",
-      "pass_marker": false,
-      "assertion": "the real page actually moved",
-      "wheel_acknowledged": true,
-      "read_immediately_after_wheel": true,
-      "original_assertion_retained": true,
-      "real_user_device": "NOT_VERIFIED",
-      "pg17": "PG_PENDING",
-      "strict_ci": "NOT_RUN",
-      "commercial_acceptance": "NOT_DELIVERED"
+    "scope": "Original8 CI report/shard contract tests only; current complete364-path manifest checked without importing those Subject tests; exact original pinned lint. Not strictCI or nativePG.",
+    "line_inventory": {
+      "before": 314,
+      "current": 364,
+      "added": 50,
+      "deleted": 0
     },
-    "bounded_reads": 20,
-    "max_requested_interval_ms": 50,
-    "no_single_read_hard_deadline_claim": true,
-    "real_user_device": "NOT_VERIFIED"
+    "source_files": 2060,
+    "source_bytes": 50032053
   },
   "lineage_resource_exception_proposal": {
     "commit": "94d28e02758a9cec1b3aeb95a86aa6e0dcabc489",
