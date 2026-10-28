@@ -1,0 +1,152 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "revision": 2,
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "blocking_findings": [],
+  "before_ref": "1a2345069daf265df2da6c528a635854bf48e844",
+  "after_source_ref": "c3e4c22df8836df5b19168e3cd3a9bed6c4e8d62",
+  "prior_verdict": {
+    "after": "be98f79226d9ec3e226c606fffdb28a2ece3b3c3",
+    "verdict": "FIX_REQUIRED",
+    "history_remains_valid": true
+  },
+  "files": [
+    {
+      "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+      "before": {
+        "bytes": 12034,
+        "sha256": "c3b435ec2ea1784af2408e8ee4fe982e88813b47707ce0aedbc196d57f00b845",
+        "blob": "7e80089b307ca88592196b4b6c8ff4beea2248e9",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 11998,
+        "sha256": "ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da",
+        "blob": "cfd27190f54d100d85a75b321d5dd63b44133644",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+      "before": {
+        "bytes": 12849,
+        "sha256": "fb4a8834b68836f3fc3f846f2737afcfe429f4ecbdb19aa8ff48024b90e39fda",
+        "blob": "b4b5c0b1f8af46d82459a9275f2b608ffdfb56c6",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 12825,
+        "sha256": "910e5c178736d15be6f38cfd1a871f246bfe4073ec9f59d592a60cf681450be9",
+        "blob": "36ffe8885a0ecbf4a3c757035af62929c1f07560",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/resource-project-foundations.ts",
+      "before": {
+        "bytes": 7601,
+        "sha256": "67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732",
+        "blob": "78e77f731b063f33b947a99518a646e1ea795dff",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 7589,
+        "sha256": "42cea04edea132637dd377fcc50d1625bb4d4ff25a416910b247d34bb8dcc3a0",
+        "blob": "f2072820bd8938a4211c939b24dcc4927dffa063",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-knowledge-write-foundations.test.ts",
+      "before": {
+        "bytes": 119984,
+        "sha256": "83304cf4a0b066ad84153fefbe2ebfffd014bbb172f8b734f43b1d83faa05e85",
+        "blob": "08018af2bb9e9cfc8f68a6a60e1ea3c4a414b477",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 130422,
+        "sha256": "27088e601b335f82efb159f938f77add9e3ed249fa420816e95e47560a3ccc1e",
+        "blob": "bb93c5d097648c8547a4bc628f7eedb1da9dcac5",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-resource-project-foundations.test.ts",
+      "before": {
+        "bytes": 111726,
+        "sha256": "018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81",
+        "blob": "9177f863768482023be69c7c70b6577d89b75867",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 115756,
+        "sha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+        "blob": "95c701554810546982e35523f7aa9ec7c237d75c",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "reading_evidence": {
+    "initial_full_before_after_texts": 10,
+    "new_after_tests_fully_read": 2,
+    "three_schemas_reused_after_exact_blob_and_content_match": true,
+    "remaining_test_bytes_restored_to_prior_full_text_after_removing_only_listed_edits": true
+  },
+  "judgments": [
+    "Six schema index calls preserve full column order/ASC/NULLS/partial WHERE/FK/RLS and change ONLY=true to closed-contractfalse through .on defaultbtree.",
+    "Both historicalProtectedSource helpers first seal current whole-file bytes/SHA and UTF8 roundtrip, then apply explicit literal inverses with exact multiplicity, and finally preserve original frozen byte/SHA assertions. Unknown and appended bytes reject; untouched paths retain original guards.",
+    "All original full matrices, SQL grammar and negative cases remain. Resource inverse covers knowledge's three complete index lines; KW covers the three explicit protected files in reverse literal-edit order.",
+    "Root-discovered R1 ExtraConfigColumn.getSQLType self-recursion independently verified in pinned common.ts; R2 removes the call. Actual owner/name maps to one native column whose object equals captured column. Parent/foreignColumn single-column strict identities and full independentFK/RLS matrix remain."
+  ],
+  "primary_sources_read": [
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/indexes.ts",
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/utils.ts",
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/columns/common.ts"
+  ],
+  "independently_read_runtime": {
+    "run": 40663995511,
+    "job": 122733765060,
+    "pass": 58,
+    "fail": 0,
+    "expects": 2371,
+    "actual_pass_lines": 58,
+    "exit_code": 0,
+    "source_files": 2045,
+    "source_bytes": 48459984,
+    "source_mismatches": 0,
+    "fk_case_ms": 0.75,
+    "old_protected_source_guards_ms": [
+      19.11,
+      15.02
+    ],
+    "test_timeout_ms": 5000,
+    "batch_timeout_seconds": 120,
+    "project_memory": 536870912,
+    "data_copy_memory": 67108864,
+    "swap": 0,
+    "bun": "1.3.14+0d9b296af"
+  },
+  "activity": {
+    "github_tools_readonly": true,
+    "tool_memory_only": true,
+    "windows_source_writes": 0,
+    "project_or_subject_execution": 0,
+    "repository_writes": 0,
+    "new_agents": 0
+  },
+  "not_verified": [
+    "Type compilation",
+    "Full preload suite",
+    "Full workspace install",
+    "NativePG17",
+    "Producer wiring",
+    "FullCI",
+    "Commercial acceptance",
+    "ControlJSON/workflow/live head outside frozen Source"
+  ],
+  "root_decision": "ADOPT_EXACT_FIVE_R2_FILES_ONLY",
+  "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED"
+}

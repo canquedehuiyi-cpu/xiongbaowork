@@ -1,4 +1,4 @@
-name: Integrated approved schema definition validation
+name: Integrated approved knowledge resource validation
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: Approved AP schema fix and full source verification
+    name: Approved knowledge resource fixes and full source
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -126,7 +126,7 @@ jobs:
           assert len(shown) == 419227
           assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
           manifest = json.loads(shown)
-          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]}]")
+          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-ADOPTED.json\",\"bytes\":4954,\"sha256\":\"947602e681a0ea87306aec11ef296cc961dd9ed75c323bad843a79de0f32f655\",\"formal_adoption\":true,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]}]")
           records = {f["path"]: f for f in manifest["files"]}
           for specification in overlay_specs:
               overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
@@ -164,7 +164,7 @@ jobs:
           for item in manifest["files"]:
               total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
                                       expected_mode=item["mode"])
-          assert total == 48445588
+          assert total == 48459984
           tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
           assert all(f["path"] in tracked for f in manifest["files"])
           assert not command(["git", "status", "--porcelain"], root)
@@ -408,17 +408,20 @@ jobs:
           revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
           root = base / "xiongbaowork-verified-source" / "repo" / "openbot"
           args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  str(root / "server/tests/recovery-ap2-parent-schema-reconcile.test.ts"),
-                  str(root / "server/tests/recovery-approval-exact-input-objects.test.ts"),
-                  str(root / "server/tests/recovery-approval-direct-execution-domains.test.ts")]
-          result = subprocess.run(args, cwd=harness, env=env, capture_output=True, text=True, timeout=120)
-          print(result.stdout, end="", flush=True)
-          print(result.stderr, end="", flush=True)
-          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
-              "bun_revision": revision, "test_files": 3, "scope": "isolated existing AP2/AP4 schema definition tests; not PostgreSQL validation",
+                  str(root / "server/tests/recovery-knowledge-foundations.test.ts"),
+                  str(root / "server/tests/recovery-knowledge-write-foundations.test.ts"),
+                  str(root / "server/tests/recovery-resource-project-foundations.test.ts")]
+          try:
+              result = subprocess.run(args, cwd=harness, env=env, timeout=120)
+              exit_code = result.returncode
+          except subprocess.TimeoutExpired:
+              exit_code = 124
+              print("COMPONENT_BATCH_TIMEOUT seconds=120; partial output streamed above", flush=True)
+          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": exit_code, "bun_version": version,
+              "bun_revision": revision, "test_files": 3, "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
               "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
               "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
               "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
-          raise SystemExit(result.returncode)
+          raise SystemExit(exit_code)
           
           PY

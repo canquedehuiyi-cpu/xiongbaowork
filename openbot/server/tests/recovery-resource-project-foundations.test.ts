@@ -1201,6 +1201,45 @@ const expectedPriorSnapshots = [
   "recovery/recovery-20261018-v1/meta/0102_snapshot.json",
   "recovery/recovery-20261018-v1/meta/0103_snapshot.json"
 ];
+type ApprovedSourceInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;
+const APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> = {
+  "src/db/schema/knowledge-foundations.ts": {
+    "currentBytes": 11998,
+    "currentSha256": "ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da",
+    "edits": [
+      {
+        "after": "    index(\"knowledge_directories_notebook_idx\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),",
+        "before": "    index(\"knowledge_directories_notebook_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),",
+        "count": 1
+      },
+      {
+        "after": "    index(\"knowledge_sources_notebook_idx\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),",
+        "before": "    index(\"knowledge_sources_notebook_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),",
+        "count": 1
+      },
+      {
+        "after": "    index(\"knowledge_sources_directory_idx\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),",
+        "before": "    index(\"knowledge_sources_directory_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),",
+        "count": 1
+      }
+    ]
+  }
+};
+function historicalProtectedSource(path: string, raw: Buffer): Buffer {
+  const inverse=APPROVED_SOURCE_INVERSES[path];
+  if(!inverse) return raw;
+  assert.equal(raw.length,inverse.currentBytes,"exact approved repaired source size");
+  assert.equal(createHash("sha256").update(raw).digest("hex"),inverse.currentSha256,"unknown source delta rejected");
+  let source=raw.toString("utf8");
+  assert.ok(Buffer.from(source,"utf8").equals(raw));
+  for(const edit of inverse.edits){
+    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);
+    assert.equal(source.split(edit.after).length,edit.count+1,"closed inverse must match exact literal multiplicity");
+    source=source.split(edit.after).join(edit.before);
+  }
+  return Buffer.from(source,"utf8");
+}
+
 const frozenSourceInputs = [
   {
     "path": "src/db/schema/knowledge-foundations.ts",
@@ -1774,7 +1813,7 @@ const actualMetadata = (): Record<string, Table> => Object.fromEntries(
 );
 function replaceOnce(source: string, from: string, to: string): string {
   assert.notEqual(from, to); assert.equal(source.split(from).length, 2, "exactly one literal mutation target");
-  const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;
+  const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;
 }
 function rejectSQLFragment(from: string, to: string): void {
   checkSQL(migration);
@@ -1813,6 +1852,15 @@ function rejectPolicySlot(table: string, name: string, slot: "using" | "withChec
 }
 
 describe("0104 resource/project foundations, complete historical snapshot reconstruction only", () => {
+  test("protected source inverse rejects unknown bytes and appended payloads",()=>{
+    const path="src/db/schema/knowledge-foundations.ts",raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;
+    expect(()=>historicalProtectedSource(path,changed)).toThrow();
+    expect(()=>historicalProtectedSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();
+  });
+  test("literal mutation replacement preserves dollar quote text and permits actual deletion",()=>{
+    expect(replaceOnce("before TARGET after","TARGET","'^[a-f0-9]{63}$'")).toBe("before '^[a-f0-9]{63}$' after");
+    expect(replaceOnce("left DROP right","DROP","")).toBe("left  right");
+  });
   test("two independent complete0121 objects retain exact raw SHA identities", () => {
     expect(capsules).toHaveLength(2);
     for (const capsule of capsules) {
@@ -1840,10 +1888,18 @@ describe("0104 resource/project foundations, complete historical snapshot recons
       [projectContextBindings, projectContextBindings.agentId, agents, agents.id],
       [projectContextBindings, projectContextBindings.projectId, resourceProjects, resourceProjects.id],
     ] as const) {
-      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.includes(column));
+      // Extra-config builders receive ExtraConfigColumns, not the native table field.
+      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.some(from => from.table === model && from.name === column.name));
       expect(matches).toHaveLength(1); const fk = matches[0]; assert.ok(fk); const ref = fk.reference();
-      expect(ref.foreignTable).toBe(parent); expect(ref.foreignColumns).toEqual([parentColumn]);
-      expect(ref.columns).toEqual([column]); expect(fk.onDelete).toBe("cascade"); expect(fk.onUpdate).toBe("no action");
+      expect(ref.foreignTable === parent).toBe(true);expect(ref.foreignColumns).toHaveLength(1);
+      expect(ref.foreignColumns[0] === parentColumn).toBe(true);
+      expect(ref.columns).toHaveLength(1);const from=ref.columns[0];assert.ok(from);
+      expect(from.table === model).toBe(true);expect(from.name).toBe(column.name);
+      // ExtraConfigColumn.getSQLType recurses in pinned Drizzle. Resolve the native column.
+      const native=getTableConfig(model).columns.filter(candidate=>candidate.table===model&&candidate.name===from.name);
+      expect(native).toHaveLength(1);expect(native[0] === column).toBe(true);
+      expect(native[0]?.getSQLType()).toBe(column.getSQLType());
+      expect(fk.onDelete).toBe("cascade");expect(fk.onUpdate).toBe("no action");
       expect(parentColumn.primary).toBe(true); expect(parentColumn.notNull).toBe(true);
       const table = previous.tables[`public.${getTableConfig(parent).name}`];
       if (parent !== resourceProjects) { assert.ok(table); expect(table.columns.id?.primaryKey).toBe(true); }
@@ -1956,7 +2012,7 @@ describe("0104 resource/project foundations, complete historical snapshot recons
       ['p."deleted_at" IS NULL', 'p."deleted_at" IS NOT NULL'],
       ['"scope" = \'public\' OR EXISTS', '"scope" = \'public\' AND EXISTS'],
       ['a."tenant_id" = "resource_projects"."tenant_id"', '(a."tenant_id" = "resource_projects"."tenant_id" OR a."tenant_id" = \'system\')'],
-    ]) { assert.ok(from && to); rejectPolicySlot("resource_projects", name, "withCheck", value => replaceOnce(value, from, to)); }
+    ]) { assert.ok(from);assert.notEqual(from,to); rejectPolicySlot("resource_projects", name, "withCheck", value => replaceOnce(value, from, to)); }
   });
   test("binding INSERT and UPDATE independently preserve device agent system and project scopes", () => {
     for (const name of ["project_binding_owner_insert", "project_binding_owner_update"]) for (const [from, to] of [
@@ -1971,7 +2027,7 @@ describe("0104 resource/project foundations, complete historical snapshot recons
       ['p."device_id" = "project_context_bindings"."device_id"', "true"],
       ['p."scope" = \'public\' OR p."agent_id"', 'p."scope" = \'public\' AND p."agent_id"'],
       ['p."agent_id" = "project_context_bindings"."agent_id"', 'p."agent_id" = \'other-agent\''],
-    ]) { assert.ok(from && to); rejectPolicySlot("project_context_bindings", name, "withCheck", value => replaceOnce(value, from, to)); }
+    ]) { assert.ok(from);assert.notEqual(from,to); rejectPolicySlot("project_context_bindings", name, "withCheck", value => replaceOnce(value, from, to)); }
   });
   test("UPDATE USING and WITH CHECK cannot substitute each other or lose a slot", () => {
     for (const [table, name] of [["resource_projects", "project_owner_update"], ["project_context_bindings", "project_binding_owner_update"]] as const) {
@@ -2029,7 +2085,7 @@ describe("0104 resource/project foundations, complete historical snapshot recons
   });
   test("approved103 source and95182 test and original163 tree are not rewritten", () => {
     for (const input of frozenSourceInputs) {
-      const bytes = readFileSync(join(server, input.path)); expect(bytes.length).toBe(input.bytes);
+      const bytes = historicalProtectedSource(input.path,readFileSync(join(server, input.path))); expect(bytes.length).toBe(input.bytes);
       expect(createHash("sha256").update(bytes).digest("hex")).toBe(input.sha256);
     }
     const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {

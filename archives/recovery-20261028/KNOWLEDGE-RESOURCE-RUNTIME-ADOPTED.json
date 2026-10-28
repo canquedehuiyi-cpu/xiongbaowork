@@ -1,0 +1,130 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+  "status": "SOURCE_INTEGRATION_APPROVED_COMPONENT_SCOPE_ONLY",
+  "formal_adoption": true,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "base_commit": "1a2345069daf265df2da6c528a635854bf48e844",
+  "required_prior_overlays": [
+    "AP-INPUT-BUN-20261028",
+    "AP-SCHEMA-RUNTIME-20261028"
+  ],
+  "scope": "Six btree calls use on() to preserve closed ONLY=false semantics. Literal SQL mutation helpers keep dollar-quote text intact. FK tests bind actual ExtraConfigColumn owner/name/type; deletion mutation remains tested.",
+  "changes": [
+    {
+      "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+      "before": {
+        "bytes": 12034,
+        "sha256": "c3b435ec2ea1784af2408e8ee4fe982e88813b47707ce0aedbc196d57f00b845",
+        "blob": "7e80089b307ca88592196b4b6c8ff4beea2248e9",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 11998,
+        "sha256": "ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da",
+        "blob": "cfd27190f54d100d85a75b321d5dd63b44133644",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+      "before": {
+        "bytes": 12849,
+        "sha256": "fb4a8834b68836f3fc3f846f2737afcfe429f4ecbdb19aa8ff48024b90e39fda",
+        "blob": "b4b5c0b1f8af46d82459a9275f2b608ffdfb56c6",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 12825,
+        "sha256": "910e5c178736d15be6f38cfd1a871f246bfe4073ec9f59d592a60cf681450be9",
+        "blob": "36ffe8885a0ecbf4a3c757035af62929c1f07560",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/resource-project-foundations.ts",
+      "before": {
+        "bytes": 7601,
+        "sha256": "67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732",
+        "blob": "78e77f731b063f33b947a99518a646e1ea795dff",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 7589,
+        "sha256": "42cea04edea132637dd377fcc50d1625bb4d4ff25a416910b247d34bb8dcc3a0",
+        "blob": "f2072820bd8938a4211c939b24dcc4927dffa063",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-knowledge-write-foundations.test.ts",
+      "before": {
+        "bytes": 119984,
+        "sha256": "83304cf4a0b066ad84153fefbe2ebfffd014bbb172f8b734f43b1d83faa05e85",
+        "blob": "08018af2bb9e9cfc8f68a6a60e1ea3c4a414b477",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 130422,
+        "sha256": "27088e601b335f82efb159f938f77add9e3ed249fa420816e95e47560a3ccc1e",
+        "blob": "bb93c5d097648c8547a4bc628f7eedb1da9dcac5",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-resource-project-foundations.test.ts",
+      "before": {
+        "bytes": 111726,
+        "sha256": "018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81",
+        "blob": "9177f863768482023be69c7c70b6577d89b75867",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 115756,
+        "sha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+        "blob": "95c701554810546982e35523f7aa9ec7c237d75c",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "unchanged_artifacts": [
+    "all SQL migration files",
+    "all snapshot files",
+    "journal",
+    "RLS predicates",
+    "FK production declarations"
+  ],
+  "limits": {
+    "timeout_ms": 5000,
+    "project_memory": 536870912,
+    "data_copy_memory": 67108864,
+    "swap": 0
+  },
+  "primary_sources": [
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/indexes.ts",
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/utils.ts"
+  ],
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_revision": 2,
+  "revision_reason": "Keep old source identities through exact current hashes plus closed literal inverse; resolve FK ExtraConfigColumn to canonical native column without calling recursive vendor getSQLType",
+  "vendor_recursion_source": "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/columns/common.ts",
+  "runtime_status": "R2_RUNTIME_PASSED",
+  "candidate_source_commit": "c3e4c22df8836df5b19168e3cd3a9bed6c4e8d62",
+  "adoption_epoch": "ROOT110-KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+  "review": {
+    "path": "archives/recovery-20261028/KNOWLEDGE-RESOURCE-R2-INDEPENDENT-REVIEW.json",
+    "bytes": 5904,
+    "sha256": "009b93b88b80c78f15978cd8114bc6a6d0659c3dbbfe7c5246c24888b88710ea",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY"
+  },
+  "runtime_validation": {
+    "run": 40663995511,
+    "pass": 58,
+    "fail": 0,
+    "expects": 2371
+  },
+  "producer_wiring": "NOT_VERIFIED",
+  "v58": "NOT_ADOPTED"
+}
