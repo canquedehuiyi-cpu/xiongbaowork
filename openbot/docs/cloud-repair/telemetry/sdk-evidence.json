@@ -1,0 +1,56 @@
+{
+  "declarations_and_runtime_files": [
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/exporter-logs-otlp-http@0.221.0@@@1/package.json",
+      "bytes": 3462,
+      "sha256": "b04d04d13b6f1bde3d371ae3d4e09f80315bb31da3b5651f8870dec3c74b3afa"
+    },
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/exporter-logs-otlp-http@0.221.0@@@1/build/src/platform/node/OTLPLogExporter.d.ts",
+      "bytes": 499,
+      "sha256": "08b3836717cd417e00b751fcfbf7b3fee23e6bfdca7c246ca3571c255b97f9a1"
+    },
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/sdk-logs@0.221.0@@@1/build/src/export/LogRecordExporter.d.ts",
+      "bytes": 655,
+      "sha256": "1665a6d0b333b98c82369e4ecc55e7134f56f1b86ec85c7835501ce5164fd5f7"
+    },
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/sdk-logs@0.221.0@@@1/build/src/LoggerProvider.d.ts",
+      "bytes": 1143,
+      "sha256": "7be7b8b7c5ec762a382999eb2997dd458de15f2f0d9cede044ad7a3b66483957"
+    },
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/sdk-logs@0.221.0@@@1/build/src/LoggerProvider.js",
+      "bytes": 3910,
+      "sha256": "57e240a505097158343a95be0d410352e5fc4bc0116c0df2b806c6632ec9a7a1"
+    },
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/sdk-logs@0.221.0@@@1/build/src/export/BatchLogRecordProcessorBase.js",
+      "bytes": 10724,
+      "sha256": "c2d995ab7d962d94c59e341cb4e392e7194bab2629482ed966142fce06b54f9d"
+    },
+    {
+      "path": "/workspace/scratch/3d93691fe5e9/source-reconstruction-20261018/tools/bun-cache/@opentelemetry/sdk-logs@0.221.0@@@1/build/src/types.d.ts",
+      "bytes": 5385,
+      "sha256": "548dbb1627cb1c8e0c8de4f6b3665e5c1fffb47fa05961a753e518db35b3e506"
+    }
+  ],
+  "resolution": {
+    "containing_file": "candidate/openbot/server/node_modules/@opentelemetry/exporter-logs-otlp-http/build/src/platform/node/OTLPLogExporter.d.ts",
+    "typescript": "5.9.3",
+    "mode": "Bundler",
+    "otlp-exporter-base": null,
+    "sdk-logs": "0.221.0"
+  },
+  "missing_direct_packages": [
+    {
+      "name": "@opentelemetry/otlp-exporter-base",
+      "version": "0.221.0"
+    },
+    {
+      "name": "@opentelemetry/otlp-transformer",
+      "version": "0.221.0"
+    }
+  ]
+}
