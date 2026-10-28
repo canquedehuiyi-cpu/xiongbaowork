@@ -1,0 +1,146 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/2",
+  "ticket": "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+  "formal_adoption": true,
+  "status": "SOURCE_SNAPSHOT_RECONSTRUCTION_APPROVED_DEFINITION_SCOPE_ONLY",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "base_commit": "6a2713977bd1e60cfff5405a856b1b3c5dc37bd0",
+  "required_prior_overlays": [
+    "AP-INPUT-BUN-20261028",
+    "AP-SCHEMA-RUNTIME-20261028",
+    "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+    "AUTOMATION-FK-ASSERTION-20261028",
+    "SECURITY-FK-ASSERTION-20261028",
+    "K106-CURRENT-PARENT-RUNTIME-20261028",
+    "PTX-CURRENT-PARENT-RECOVERY-20261028"
+  ],
+  "changes": [
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 11318,
+        "sha256": "e26e1d06bcd76d37baae4997df773de92c1785a2704e950b7d4ca4c8c0210ae4",
+        "blob": "ef29c0fe89be4c423f223e5128d7a53b7acb8b21",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 629001,
+        "sha256": "74f51de19c8e22f82f3497567b5c351864de484b8fc4f9b781b511c2b96ec747",
+        "blob": "d3f5c2b6336cd53867d5b46feaebcc7049176c3c",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+      "before": {
+        "bytes": 16159,
+        "sha256": "0be3bb0f19c52c21fc3ecc689d5eff41ae00a5e028de064cd9ad213d65ac44fb",
+        "blob": "9f5f277d95d265e45c40bd05b61300629f8d519b",
+        "mode": "100644"
+      },
+      "after": {
+        "bytes": 16330,
+        "sha256": "43fe7cd3af489bf7e6347f4a20402a82a7efd9c48a3c8334cbd296d15dbc1f7d",
+        "blob": "ba39023870aac242d749f048e8ed8141cf3a68bd",
+        "mode": "100644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 12135,
+        "sha256": "ce495a487ceb9cdcfef3fcbc8470d9df80123e721784ad91df9e6aac04f37fb1",
+        "blob": "11b84fb058d8bef880d3db508c105c7584285f03",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "before": {
+        "bytes": 1794,
+        "sha256": "f9ddd1c640db86a246e45095788bb3c140ec503a0a35be75a8e64d09c99ea2aa",
+        "blob": "b4d0e1c0d089d03d08f2662e2fc7f232f797c618",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 1848,
+        "sha256": "a3268a149e2a6de7e2a8cc2879b11d34273e78dc5bf4cf496dc1733248fbc66e",
+        "blob": "1a7506958d0cf5cff0a1d087bdf6d2af87df9fbe",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 123346,
+        "sha256": "a0c1b66a51db0ce18e0dfd35567d7339511c6af40533d23f016c0f248f5dbdbe",
+        "blob": "b35bd6bd72852c2ef96eac29136efe9a7016643e",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "lineage": {
+    "idx": 107,
+    "tag": "0107_import_proactive_token_foundations_closed",
+    "when": 1793189723181,
+    "id": "4a391a26-1651-46e0-a0a7-15a64289a6c3",
+    "prevId": "90530f50-0fa9-4dc2-9ced-7d718a08fe76"
+  },
+  "frozen_input_paths": [
+    "archives/recovery-20261028/REMAINING3-SNAPSHOT-INPUT/flow_import_proposals.json",
+    "archives/recovery-20261028/REMAINING3-SNAPSHOT-INPUT/proactive_runs.json",
+    "archives/recovery-20261028/REMAINING3-SNAPSHOT-INPUT/model_token_calls.json"
+  ],
+  "input_provenance": "same-origin independently sealed capsule and derived matrix equal; not two independent original sources",
+  "original_source_bodies": "MISSING; new code explicitly reconstructs full snapshot objects",
+  "historical_whole_raw": "NOT_NEWLY_RETRIEVED",
+  "new_tables": 3,
+  "parent_old_tables": 152,
+  "projected_tables": 155,
+  "projected_original51_name_coverage": 51,
+  "name_count_not_runtime_acceptance": true,
+  "bigint_mode": "number with SQL MAX_SAFE CHECK, no nullable zero fallback; real driver/DTO pending",
+  "projected_source_files": 2054,
+  "projected_source_bytes": 50007029,
+  "limits": {
+    "data": 67108864,
+    "project": 536870912,
+    "swap": 0
+  },
+  "postgres17": "PG_PENDING",
+  "producer_wiring": "NOT_SERVICE_WIRED",
+  "activation": "DISABLED",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "legacy_V58_V59": "NOT_ADOPTED; historical incidents not cleared",
+  "candidate_source_commit": "7b56b2f16f07ee77c8a65f5e5e0617025841739f",
+  "review": {
+    "path": "archives/recovery-20261028/REMAINING3-CURRENT-INDEPENDENT-REVIEW.json",
+    "bytes": 5670,
+    "sha256": "baec6deeaa0a2c5a820226f346d3ce8bf5efd02edb8582d210a9af20def7a23b",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY"
+  },
+  "candidate_runtime": {
+    "run": 40687597154,
+    "job": 122813860960,
+    "pass": 22,
+    "fail": 0,
+    "expects": 994
+  },
+  "adoption_epoch": "ROOT112-REMAINING3-RECONSTRUCTION-20261028"
+}
