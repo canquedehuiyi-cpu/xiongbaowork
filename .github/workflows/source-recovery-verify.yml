@@ -126,7 +126,7 @@ jobs:
           assert len(shown) == 419227
           assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
           manifest = json.loads(shown)
-          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-CANDIDATE.json\",\"bytes\":4103,\"sha256\":\"1235b612d84a01c4ec3f5d77b6e159ec59649eb59d32bc022da92d34c3a123f8\",\"formal_adoption\":false,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]}]")
+          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-CANDIDATE.json\",\"bytes\":4314,\"sha256\":\"b1c3f722568e7caa69919bd69a9108e540fa8837d542a75a4cbd9d43d5769cd0\",\"formal_adoption\":false,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]}]")
           records = {f["path"]: f for f in manifest["files"]}
           for specification in overlay_specs:
               overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
@@ -164,7 +164,7 @@ jobs:
           for item in manifest["files"]:
               total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
                                       expected_mode=item["mode"])
-          assert total == 48445139
+          assert total == 48445588
           tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
           assert all(f["path"] in tracked for f in manifest["files"])
           assert not command(["git", "status", "--porcelain"], root)

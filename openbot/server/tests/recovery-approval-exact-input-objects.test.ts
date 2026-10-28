@@ -471,7 +471,14 @@ function checkSnapshot(value:Snapshot):void {
   // Validation changes only these top-level copies; nested source data is read-only.
   const restored={...value,tables:{...value.tables}};delete restored.tables[captureKey];delete restored.tables[preparedKey];
   restored.tables[ledgerKey]=previous.tables[ledgerKey] as Table;restored.id=previous.id;restored.prevId=previous.prevId;
-  assert.deepEqual(restored,previous,"all other139 structures/top-level values exact, only specified ledger delta");
+  // Compare the complete top level and every table separately. A rejected
+  // mutation then builds a focused table diff instead of a whole-snapshot diff.
+  const {tables:restoredTables,...restoredTop}=restored;
+  const {tables:previousTables,...previousTop}=previous;
+  assert.deepEqual(restoredTop,previousTop,"all top-level metadata exact");
+  assert.deepEqual(Object.keys(restoredTables).sort(),Object.keys(previousTables).sort());
+  for(const key of Object.keys(previousTables))
+    assert.deepEqual(restoredTables[key],previousTables[key],key);
 }
 function checkJournal(value:Journal):void {
   assert.ok(value.entries.length>=103,"known prefix only; suffix has NO execution authority");
@@ -580,7 +587,7 @@ describe("AP4 closed exact-input foundation; definitions are not runtime authori
       const value={immutable:{configRef:{id:"configuration",version:1},toolSetRef:{id:"tools"},transformRef:{id:"transform"}},fullBinding:["private"]};
       // Repository custom jsonb passes the object to Bun SQL, which serializes it once.
       const encoded=table.sourceBinding.mapToDriverValue(value);assert.equal(typeof encoded,"object");assert.equal(encoded,value);assert.deepEqual(encoded,value);assert.deepEqual(table.sourceBinding.mapFromDriverValue(value),value);
-      const query=dialect.sqlToQuery(sql`select ${sql.param(value,table.sourceBinding)}`);assert.equal(query.params.length,1);assert.deepEqual(JSON.parse(query.params[0] as string),value);
+      const query=dialect.sqlToQuery(sql`select ${sql.param(value,table.sourceBinding)}`);assert.equal(query.params.length,1);assert.equal(query.params[0],value);assert.deepEqual(query.params[0],value);
       const buffer=Buffer.from([0,255,1,0]);expect(table.envelopeBytes.mapToDriverValue(buffer)).toBe(buffer);expect(table.envelopeBytes.mapFromDriverValue(buffer)).toBe(buffer);expect(dialect.sqlToQuery(sql`select ${sql.param(buffer,table.envelopeBytes)}`).params[0]).toBe(buffer);
     }
   });

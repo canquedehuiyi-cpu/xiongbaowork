@@ -1,0 +1,27 @@
+{
+  "schema": "xiongbaowork-candidate-failure-history/1",
+  "ticket": "AP-SCHEMA-RUNTIME-20261028",
+  "run_id": 40655849162,
+  "job_id": 122706574245,
+  "commit": "ec5a3508477775ae56f3aa407ba3d7408f9f2469",
+  "pass": 52,
+  "fail": 2,
+  "expect_calls": 1120,
+  "test_files": 3,
+  "failures": [
+    {
+      "name": "custom JSONB query param oracle",
+      "cause": "test still JSON.parse'd an object supplied by repository custom jsonb column"
+    },
+    {
+      "name": "snapshot inverse all139 RLS mutations",
+      "observed_ms": 6222.09,
+      "timeout_ms": 5000,
+      "cause": "large assertion diffs created for each rejected snapshot",
+      "limit_relaxed": false
+    }
+  ],
+  "revision_2_source_change": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+  "not_postgres_validation": true,
+  "windows_source_writes": 0
+}

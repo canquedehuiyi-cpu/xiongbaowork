@@ -62,9 +62,9 @@
         "mode": "0o644"
       },
       "after": {
-        "bytes": 89935,
-        "sha256": "6c000620b2761acace96eb9c2acfa3de357f9bf5e261efc5b938a4696d644684",
-        "blob": "d73eb7a1a490d0af4842c6b8377e73f08cb5531b",
+        "bytes": 90384,
+        "sha256": "e319fe02133461d736bd263cee51af55121c79da0cecb5c5b0f32d2f355d0610",
+        "blob": "f6ddbbc9bfec9dbac28e692677914d326698922b",
         "mode": "0o644"
       }
     },
@@ -103,5 +103,7 @@
   },
   "production_authority": "NOT_WIRED",
   "postgres17": "PG_PENDING",
-  "commercial_acceptance": "NOT_DELIVERED"
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_revision": 2,
+  "revision_reason": "Correct remaining query parameter object oracle and avoid whole-snapshot assertion diff generation on each of 139 negative mutations; original 5s cap unchanged"
 }
