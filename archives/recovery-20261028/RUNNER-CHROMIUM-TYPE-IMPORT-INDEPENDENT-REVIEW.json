@@ -1,0 +1,56 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "835d9dea32078f80cd47b0c911e174c4b154e288",
+  "candidate": "7bc430b62306fc21a1057735b475ed97f8599a27",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/runner/src/browser.ts",
+      "before": {
+        "bytes": 48986,
+        "sha256": "cc939e1981536c9dc01555a38a8ff32a0dd5eda25760c1e41b886cdb23e518d6",
+        "mode": "0o644",
+        "blob": "b43bcec9bd46c444b64d9c189da8b372a4cef1fa"
+      },
+      "after": {
+        "bytes": 48996,
+        "sha256": "eeea500d849f5f4eb4b68f080c119950516ac4ad8006bf896d15fed8acea7637",
+        "mode": "0o644",
+        "blob": "ef647eea0d74fad73e698acb50b1f221fce86091"
+      }
+    }
+  ],
+  "full_read": "Both full Source texts independently UTF8 bytes/SHA256/Git blob matched; only existing import-type line adds chromium (+10B); rest of file exact unchanged",
+  "library_evidence": {
+    "playwright_core": "Pinned1.62.1 official exports/index declarations/ESM entry and needed declaration parts independently read",
+    "chromium": "export const chromium: BrowserType; launchPersistentContext(userDataDir, options?) returns Promise<BrowserContext>; same ESM chromium export",
+    "typescript": "Pinned5.9.3 official importClause.isTypeOnly transform removes entire import; no emitted eager runtime import"
+  },
+  "runtime_unchanged": [
+    "L401 lazy import",
+    "launch options",
+    "sandbox/keychain",
+    "signal handling",
+    "BrowserLauncher seam",
+    "identity/profile selection",
+    "counter persistence",
+    "secret masking",
+    "navigation/stop"
+  ],
+  "independent_before_runtime": {
+    "run": 40717739237,
+    "job": 122919913626,
+    "runner_diagnostic": "L256 TS2304",
+    "worker": "CONTROLLER_HOME_COLLISION_NOT_TYPE_FAILURE",
+    "server_app_pass_and_three_restores": true
+  },
+  "fake_tests_read": "Existing runner-browser tests inject fake launcher/page and use temporary SQLite; no actual Chrome/site/device proof",
+  "candidate_runtime_not_inferred": true,
+  "workflow_adoption_not_in_source_verdict": true,
+  "real_browser": "NOT_PROVED",
+  "pg17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

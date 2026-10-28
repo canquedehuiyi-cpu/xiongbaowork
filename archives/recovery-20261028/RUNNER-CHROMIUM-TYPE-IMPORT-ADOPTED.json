@@ -1,0 +1,74 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_TYPE_ONLY_IMPORT_WITH_RUNNER_COMPILE_AND_FAKE_BROWSER_UNIT_PASS",
+  "base_commit": "835d9dea32078f80cd47b0c911e174c4b154e288",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/runner/src/browser.ts",
+      "before": {
+        "bytes": 48986,
+        "sha256": "cc939e1981536c9dc01555a38a8ff32a0dd5eda25760c1e41b886cdb23e518d6",
+        "mode": "0o644",
+        "blob": "b43bcec9bd46c444b64d9c189da8b372a4cef1fa"
+      },
+      "after": {
+        "bytes": 48996,
+        "sha256": "eeea500d849f5f4eb4b68f080c119950516ac4ad8006bf896d15fed8acea7637",
+        "mode": "0o644",
+        "blob": "ef647eea0d74fad73e698acb50b1f221fce86091"
+      }
+    }
+  ],
+  "scope": "Only add chromium to existing import type from pinned playwright-core so launch options type can refer to it; lazy runtime import and all runtime statements unchanged",
+  "trigger": {
+    "run": 40717739237,
+    "job": 122919913626,
+    "runner_types": {
+      "exit_code": 2,
+      "code": "TS2304",
+      "line": 256
+    },
+    "worker_compile": "NOT_RUN_CONTROLLER_HOME_COLLISION"
+  },
+  "projected_source_files": 2054,
+  "projected_source_bytes": 50009553,
+  "real_browser_device": "NOT_RUN_NOT_PROVED",
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "7bc430b62306fc21a1057735b475ed97f8599a27",
+  "review": {
+    "path": "archives/recovery-20261028/RUNNER-CHROMIUM-TYPE-IMPORT-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "run": 40719764919,
+    "job": 122927137243,
+    "runner_types": {
+      "exit_code": 0,
+      "project_limit": 536870912
+    },
+    "named38": {
+      "pass": 687,
+      "fail": 0,
+      "expects": 10714,
+      "scope": "Retained37 excluding lineage plus50 fake runner-browser cases"
+    },
+    "server_types": 0,
+    "full_app": {
+      "files": 161,
+      "pass": 1207,
+      "fail": 0,
+      "expects": 4163
+    },
+    "app_types": 0,
+    "worker_types": "DEFAULT_V8_HEAP_RESOURCE_STOP_NOT_PASSED",
+    "actual_restore512MiB_count": 3,
+    "strict_ci": "NOT_RUN"
+  },
+  "adoption_epoch": "ROOT117-RUNNER-CHROMIUM-TYPE-IMPORT-20261028"
+}
