@@ -1075,11 +1075,34 @@
       "producer": "NOT_SERVICE_WIRED",
       "pg17": "PG_PENDING"
     },
-    "next_preload38": {
-      "status": "PREPARED_FOR_CURRENT_SOURCE",
-      "test_files": 38,
-      "new_pg15_file_imported": false,
-      "full_ci": "NOT_RUN"
+    "original_preload_subset38": {
+      "head": "56faabeec733e9dd8e62c6fda517d22c69c78f91",
+      "run": 40689788558,
+      "job": 122821353836,
+      "status": "PASS_NAMED_38_FILES_ONLY",
+      "pass": 673,
+      "fail": 0,
+      "expects": 10804,
+      "completed_files": 38,
+      "original_preloads": "UNCHANGED_TWO",
+      "full_dependencies": "FROZEN_INSTALL_PASS_NO_SCRIPTS",
+      "hardlinks": 0,
+      "outside_private_paths": 0,
+      "new_ptx_pg15_file_imported": false,
+      "unhandled_errors": 0,
+      "full_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING"
+    },
+    "typecheck_resource_exception": {
+      "status": "NOT_AUTHORIZED_NOT_RUN",
+      "requested_scope_under_preparation": "original server tsconfig compile only; temporary project-and-descendants2GiB/swap0; other phases unchanged",
+      "actual_blocker": {
+        "run": 40678526201,
+        "job": 122782977940,
+        "kind": "Node default V8 heap SIGABRT; no type diagnostics",
+        "aggregate512MiB": 536870912
+      },
+      "install512MiB_exception": "ALREADY_GRANTED_AND_USED_NOT_BEING_REQUESTED_AGAIN"
     }
   },
   "delivery_status": "NOT_DELIVERED",
@@ -1097,5 +1120,34 @@
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "bytes": 430544,
     "sha256": "8c991de3ff7f91e1d37c0a0b943e631d7825b1a1cd11a862caf25bce9ca41433"
+  },
+  "latest_source_validation": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "3d52577a1f198c0c524c03790cdbdbd5e9b1ce5d",
+    "head": "56faabeec733e9dd8e62c6fda517d22c69c78f91",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+    "swap_limit": 0,
+    "verified_source_bytes": 50007029,
+    "verified_source_files": 2054,
+    "windows_source_files_written": 0
   }
 }
