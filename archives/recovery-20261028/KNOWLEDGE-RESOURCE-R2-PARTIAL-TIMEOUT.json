@@ -1,0 +1,13 @@
+{
+  "run": 40661644468,
+  "job": 122725857063,
+  "head": "b2ced1d46895d17ebb444d19a8b1ee4dea1d8764",
+  "status": "TIMEOUT_120_PARTIAL_OUTPUT_PRESERVED",
+  "last_completed": "resource actual metadata",
+  "known_failure": "knowledge-write old103104 source byte identity protection",
+  "source_changes_after_timeout": 0,
+  "new_diagnostic": "five FK metadata identity booleans only",
+  "diagnostic_timeout_seconds": 15,
+  "project_memory_limit": 536870912,
+  "swap": 0
+}

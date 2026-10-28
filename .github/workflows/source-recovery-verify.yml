@@ -375,7 +375,7 @@ jobs:
               "data_copy_memory_limit": 67108864, "project_parent_memory_limit": 536870912,
               "swap_limit": 0}), flush=True)
           PY
-      - name: Run isolated restored schema tests under project limit
+      - name: Diagnose five actual FK identities under unchanged project cap
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -385,43 +385,27 @@ jobs:
             /usr/bin/python3 -I -B - <<'PY'
           import json, os, subprocess
           from pathlib import Path
-          
-          base = Path.cwd()
-          cg_line = Path("/proc/self/cgroup").read_text().strip()
-          cg = Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "536870912"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert (cg / "memory.oom.group").read_text().strip() == "1"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
-                                                          "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
-          binary = base / "xiongbaowork-bun-1.3.14" / "bun"
-          harness = base / "xiongbaowork-schema-components"
-          home = base / "xiongbaowork-component-home"
-          home.mkdir(mode=0o700)
-          env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
-                 "NODE_ENV": "test", "CI": "true", "NO_COLOR": "1"}
-          version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          assert version == "1.3.14"
-          revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          root = base / "xiongbaowork-verified-source" / "repo" / "openbot"
-          args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  str(root / "server/tests/recovery-knowledge-foundations.test.ts"),
-                  str(root / "server/tests/recovery-knowledge-write-foundations.test.ts"),
-                  str(root / "server/tests/recovery-resource-project-foundations.test.ts")]
+          base=Path.cwd()
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("PROJECT_DIAGNOSTIC_RESOURCE_GATE "+json.dumps({"cgroup":cg_line,"memory_limit":536870912,"swap":0}),flush=True)
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          harness=base/"xiongbaowork-schema-components"
+          script=harness/"fk-metadata-diagnostic.js"
+          with script.open("x") as out:
+              out.write("const root = process.argv[2];\nconst { getTableConfig } = await import(root + \"/node_modules/drizzle-orm/pg-core/index.js\");\nconst { resourceProjects, projectContextBindings } = await import(root + \"/server/src/db/schema/resource-project-foundations.ts\");\nconst { registeredDevices } = await import(root + \"/server/src/db/schema/devices.ts\");\nconst { agents } = await import(root + \"/server/src/db/schema/core.ts\");\nfor (const [label, model, column, parent, parentColumn] of [\n [\"resource.device\", resourceProjects, resourceProjects.deviceId, registeredDevices, registeredDevices.id],\n [\"resource.agent\", resourceProjects, resourceProjects.agentId, agents, agents.id],\n [\"binding.device\", projectContextBindings, projectContextBindings.deviceId, registeredDevices, registeredDevices.id],\n [\"binding.agent\", projectContextBindings, projectContextBindings.agentId, agents, agents.id],\n [\"binding.project\", projectContextBindings, projectContextBindings.projectId, resourceProjects, resourceProjects.id],\n]) {\n const matches=getTableConfig(model).foreignKeys.filter(f=>f.reference().columns.some(c=>c.table===model&&c.name===column.name));\n console.log(\"FK_STEP \" + JSON.stringify({label,stage:\"matches\",count:matches.length}));\n for(const fk of matches){\n  const r=fk.reference();\n  const value={label,fromTableSame:r.columns[0]?.table===model,fromName:r.columns[0]?.name,\n   fromNativeSame:r.columns[0]===column,fromType:r.columns[0]?.getSQLType(),expectedFromType:column.getSQLType(),\n   foreignTableSame:r.foreignTable===parent,foreignColumnSame:r.foreignColumns[0]===parentColumn,\n   foreignColumnTableSame:r.foreignColumns[0]?.table===parent,\n   foreignColumnName:r.foreignColumns[0]?.name,parentName:parentColumn.name,\n   inlinePrimary:parentColumn.primary,parentNotNull:parentColumn.notNull,\n   extraPrimary:getTableConfig(parent).primaryKeys.some(p=>p.columns.some(c=>c.table===parent&&c.name===parentColumn.name)),\n   onDelete:fk.onDelete,onUpdate:fk.onUpdate};\n  console.log(\"FK_METADATA \" + JSON.stringify(value));\n }\n}\n")
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(harness),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
           try:
-              result = subprocess.run(args, cwd=harness, env=env, timeout=120)
-              exit_code = result.returncode
+              result=subprocess.run([str(binary),str(script),str(root)],cwd=harness,env=env,timeout=15)
+              code=result.returncode
           except subprocess.TimeoutExpired:
-              exit_code = 124
-              print("COMPONENT_BATCH_TIMEOUT seconds=120; partial output streamed above", flush=True)
-          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": exit_code, "bun_version": version,
-              "bun_revision": revision, "test_files": 3, "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
-              "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
-              "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
-              "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
-          raise SystemExit(exit_code)
-          
+              code=124
+          print("FK_METADATA_DIAGNOSTIC_RESULT "+json.dumps({"exit_code":code,"scope":"five FK identity flags only","timeout_seconds":15,"postgres17":"PG_PENDING","test_suite":"NOT_RUN"}),flush=True)
+          raise SystemExit(code)
           PY
