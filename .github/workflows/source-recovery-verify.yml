@@ -190,6 +190,11 @@ jobs:
                   assert size <= 35969274
                   digest.update(block)
                   out.write(block)
+                  if size % 262144 < len(block):
+                      out.flush()
+                      os.fsync(out.fileno())
+              out.flush()
+              os.fsync(out.fileno())
           assert size == 35969274 and digest.hexdigest() == "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f"
           binary = tools / "bun"
           binary_hash = hashlib.sha256()
@@ -209,6 +214,11 @@ jobs:
                       assert binary_bytes <= files[0].file_size
                       binary_hash.update(block)
                       out.write(block)
+                      if binary_bytes % 262144 < len(block):
+                          out.flush()
+                          os.fsync(out.fileno())
+                  out.flush()
+                  os.fsync(out.fileno())
               assert binary_bytes == files[0].file_size
           os.chmod(binary, 0o700)
           
