@@ -1,0 +1,115 @@
+{
+  "schema": "xiongbaowork-server-type-contract-candidate-evidence/1",
+  "head": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+  "run": 40701329815,
+  "job": 122861639840,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "992d291faa75947e2c80bcd146d4ee6aff1b0070",
+    "head": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_AND_ONE_CANDIDATE_OVERLAY",
+    "swap_limit": 0,
+    "verified_source_bytes": 50008638,
+    "verified_source_files": 2054,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "compile": {
+    "gate": {
+      "memory_limit": 2147483648,
+      "project_limit": 2147483648,
+      "swap": 0
+    },
+    "start": {
+      "typescript": "5.9.3",
+      "host_runtime": "v24.21.0",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "project": "server/tsconfig.json",
+      "declared_includes": [
+        "src",
+        "scripts",
+        "../scripts/composio-smoke.ts"
+      ],
+      "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+      "timeout_seconds": 300
+    },
+    "result": {
+      "exit_code": 0,
+      "project": "server/tsconfig.json",
+      "typescript": "5.9.3",
+      "host_runtime": "v24.21.0",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "full_ci": "NOT_RUN",
+      "test_sources": "NOT_INCLUDED",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "restore": {
+      "project_memory_max": 536870912,
+      "swap": 0
+    },
+    "peak": "1.9G",
+    "service_runtime": "22.771s",
+    "cpu": "41.526s"
+  },
+  "test": {
+    "status": "RESOURCE_STOP_AT_26TH_FILE_BEFORE_HTTP_REGRESSION",
+    "files_completed": 25,
+    "files_total": 38,
+    "stop_file": "tests/recovery-lineage.test.ts",
+    "result": "oom-kill",
+    "signal": 9,
+    "automatic_child_service_peak": "480.3M",
+    "project_aggregate_limit": 536870912,
+    "swap": 0,
+    "tests_after_stop": "NOT_RUN",
+    "fixture_assertion_failures_seen": 0
+  },
+  "review": "SOURCE_APPROVED_ONLY",
+  "full_ci": "NOT_RUN",
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
