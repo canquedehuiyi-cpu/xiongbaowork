@@ -1,3 +1,21 @@
+## ROOT131 当前云端验证，2026-10-29
+
+当前正式恢复 Source21：2060文件 / 50029764字节，已独审采用提交 8f127f4e5f2ef91185a55cf8303caf60f5d39fb2。21是源码修复覆盖包数，不等于原18交付包完成。完整77故事/18包/7门仍未交付，要求与原历史全部保留。
+
+实际云端Chrome [run40746063116/job123020057194](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40746063116/job/123020057194) exit0且BROWSER_PROBE_PASS：35项检查、26次动作。Chrome156.0.8078.47，预装/usr/bin/google-chrome，Linux/headless，新的私有profile，仅自己127.0.0.1临时fixture；sandboxtrue，项目及全部后代聚合512MiB/swap0，未使用任何2GiB例外。涵盖实际导航、cookie/profile隔离、秘密遮蔽、填写/按键/点击/滚动、PNG/viewport、超长文本、取消结果、实例重开计数与旧句柄拒绝。日志“new runner process”实际为同Bun进程内新executor/browser实例，不能证明OS进程重启。真实用户设备、离线队列持久化/重连、审批闭环及客户部署仍待验。自动Memory peak为64.1M/63.9M/509.9M/512M，完整原值留JSON；不是新采样bench。
+
+旧Chrome四个失败/诊断run40736558021、40739039830、40741256248、40743470005完整保留；每次后续运行都对应已独审的具体Source修复。临时打印句柄诊断未采用，不追认旧失败为成功。Source21候选实际60pass/0fail/259expects，exact原Biome2.5.10 lint exit0/181infos，原wheel仍只发送一次、原scrolled=yes断言不变。
+
+原始lineage已获直接人类授权且实际通过：run40733437062/job122977749310，37pass/0fail/355expects，单项2GiB/swap0/300秒，实际恢复512MiB；自动peak636.6M，DATA64.2M及install512.5M历史原值保留。其163原文件/81迁移与fakePG evidence adapters不是真实PG17，不再把该项称为待授权或当前resource blocked。
+
+历史同Source17组合run40733053569：完整app161文件单进程1207/0/4163/0Unhandled；39个显式组件691/0/10744；原server/app/runner/worker四套tsconfig均exit0；exact原lint0err/0warn/181info。4次实际restore512。后续Source18–21仅probe脚本/测试修复，不能冒这些全量检查跑在最新SHA。
+
+新发现原server测试清单314行但当前已有364文件；候选72856610仅增加已有50测试路径，删0，不改原分片器/测试/PG正文。仅运行原分片/报告验证与lint，独审中。另有7个现有offline runner-policy测试正依原512MiB门验证；直接需要testDatabaseUrl的跨租户/队列测试没有导入或执行。
+
+PG_PENDING、ready=false/ROOT_RELEASE=null/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED、严格CI原03df9efa基线缺失、真实模型/计费/设备/干净客户部署等门保持。免费标准public Actions、privatecache/copyfile/禁生命周期脚本，源码/归档/JSON/依赖/测试仅云端，Windows Source写0。默认分支仍Gitee原基线；旧自动化继续暂停，无PR/生产部署/付费provider调用。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## root130Observe Source adoption, 2026-10-29
 
 RUNNER-PROBE-SCROLL-OBSERVATION-20261029 adopted unchanged from candidate 0c8f324f6c72953a40ecedabbaee175f05111910. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40745108351/job 123016689878; see exact validation JSON for pass/fail counts and remaining diagnostics. 2060 files / 50029764 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.

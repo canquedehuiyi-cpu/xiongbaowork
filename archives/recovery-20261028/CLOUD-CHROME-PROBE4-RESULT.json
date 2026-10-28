@@ -1,0 +1,314 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40746063116,
+  "job": 123020057194,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "ca0b4cbe6f772cfc1cb6a080c324091d858ef318",
+    "head": "723ee1c09ce4663846e0e988748b8e83b01b4117",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50029764,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "723ee1c09ce4663846e0e988748b8e83b01b4117",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "tests": {
+    "pass": 0,
+    "fail": 0,
+    "expects": 0
+  },
+  "lint": null,
+  "lint_counts": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64.1M (swap: 0B)",
+    "Memory peak: 63.9M (swap: 0B)",
+    "Memory peak: 509.9M (swap: 0B)",
+    "Memory peak: 512M (swap: 0B)"
+  ],
+  "actual_restore512MiB_count": 0,
+  "strict_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "source_content_commit": "8f127f4e5f2ef91185a55cf8303caf60f5d39fb2",
+  "workflow_commit": "723ee1c09ce4663846e0e988748b8e83b01b4117",
+  "native": {
+    "status": "PASS_CLOUD_HEADLESS_FIXTURE_ONLY",
+    "exit_code": 0,
+    "pass_marker": true,
+    "browser": "/usr/bin/google-chrome",
+    "version": "Google Chrome 156.0.8078.47",
+    "profile": "NEW_DISPOSABLE_ROOT",
+    "headless": true,
+    "sandbox": "UNCHANGED_TRUE",
+    "project_limit": 536870912,
+    "swap": 0,
+    "real_user_device": "NOT_VERIFIED",
+    "real_provider": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "browser_start": {
+    "source_commit": "FROM_VERIFIED_SOURCE",
+    "browser": "/usr/bin/google-chrome",
+    "version": "Google Chrome 156.0.8078.47",
+    "headless": true,
+    "profile": "NEW_DISPOSABLE_ROOT",
+    "target": "OWN127.0.0.1_EPHEMERAL_FIXTURES_ONLY",
+    "sandbox": "UNCHANGED_TRUE",
+    "timeout_seconds": 170,
+    "external_websites_requested": false
+  },
+  "checks": [
+    {
+      "check": "cloud metadata is refused even with private hosts open",
+      "passed": true,
+      "via": "runner policy, before any request"
+    },
+    {
+      "check": "a file address is refused whatever this probe has opened",
+      "passed": true,
+      "via": "runner policy, before any request"
+    },
+    {
+      "check": "a real navigation lands on the fixture page",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the real page's title comes back",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the real page's text comes back",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the browser kept this coworker's cookie across a navigation",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a second coworker on the same machine gets a separate cookie jar",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a real page's controls are listed",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the list names the page it was taken from",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "an element handle carries this run's token",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the password field's value did not reach the caller",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a hidden value is said to be hidden",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the page's secret is nowhere in the answer",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a real field was filled, and what was typed is not read back",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a second element list is a later number, never the same one",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the real page holds what was put into it",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the real password field refuses automation",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a real key press reached the element the runner named",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a key press with no element goes to the page and is answered",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a real click followed a real link",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the handle from the earlier page is refused, not guessed at",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a real wheel was answered",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the real page actually moved",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the picture is a real PNG",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the picture is the viewport it claims",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the picture says which page it is of",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "an over-long page is cut, and says it was",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a navigation cancelled on the way is a stop, not a mystery",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a cancelled navigation does not pause the device",
+      "passed": true,
+      "via": "runner policy"
+    },
+    {
+      "check": "the browser is usable afterwards",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a cancelled click is an unknown outcome, which is what pauses a device",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the page had not moved: the pause is a conservative answer, not a wrong one",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a new runner process continues the count instead of reusing a number",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "a handle from the dead process is refused as another browser's",
+      "passed": true,
+      "via": "browser"
+    },
+    {
+      "check": "the refused metadata address was never asked of anything",
+      "passed": true,
+      "via": "fixture's own access log"
+    }
+  ],
+  "action_summary": {
+    "checks": 35,
+    "actions": 26,
+    "browser": "/usr/bin/google-chrome",
+    "headless": true
+  },
+  "scope": "35 real headless Chrome own-loopback fixture checks,26 actions; policy and actual browser evidence separated by each check.via",
+  "instance_reopen_caveat": "Probe labels say new runner process, but implementation creates a new executor/browser in same Bun process; only instance reopen/counter persistence is proved, not an OS process restart.",
+  "human_device": "NOT_VERIFIED",
+  "operating_system": "GitHub-hosted Linux cloud",
+  "previous_attempts_retained": [
+    40736558021,
+    40739039830,
+    40741256248,
+    40743470005
+  ],
+  "temporary_diagnostic_adopted": false
+}
