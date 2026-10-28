@@ -1354,7 +1354,7 @@
       "server2GiB_exception_used": false
     },
     "app_resource_exception_proposal": {
-      "status": "PROPOSED_PENDING_DIRECT_HUMAN_AUTHORIZATION_NOT_RUN",
+      "status": "DIRECT_HUMAN_AUTHORIZED_ACTIVATING_TWO_APP_PHASES",
       "proposal_commit": "ea8d06a2065c0207270fbefd7994318e733e6fbe",
       "branch": "codex/app-validation-2gib-proposal-20261028",
       "phases": [
@@ -1366,12 +1366,15 @@
       "timeout_each": 300,
       "restore_after_each": 536870912,
       "active_main_limit": 536870912,
-      "prior_server_only_exception_does_not_cover_app": true
+      "prior_server_only_exception_does_not_cover_app": true,
+      "human_authorization_file": "archives/recovery-20261028/APP-2GiB-HUMAN-AUTHORIZATION.json",
+      "active_app_phase_limit": 2147483648,
+      "other_project_limit": 536870912
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Await direct human answer for app-only2GiB two-phase proposal ea8d06a2065c0207270fbefd7994318e733e6fbe. All currently authorized Source packages adopted and verified; no identical512MiB full-app/lineage retry. PG_PENDING and frozen strictCI/device/provider/deployment gates unchanged.",
+  "next_source_package": "Execute the two directly authorized app2GiB phases, verify actual aggregate gates and per-phase512MiB restores; fix actual diagnostics using the same readonly reviewer and≤8 Source files per package. No other resource expansion.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,

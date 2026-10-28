@@ -1,0 +1,44 @@
+{
+  "schema": "xiongbaowork-human-resource-authorization/1",
+  "status": "AUTHORIZED_NOT_YET_VALIDATED",
+  "human_answer": "允许，仅这两个前端阶段使用 2 GiB（推荐）",
+  "question_item": "call_f8819cf5f1a44a2ab75aaf725b1071d4",
+  "approved_proposal": "ea8d06a2065c0207270fbefd7994318e733e6fbe",
+  "source_commit": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
+  "phases": [
+    {
+      "id": "app_one_process_suite",
+      "command": "bun test --smol --no-install --timeout5000 from openbot/app with original preloads and original qoderwake config",
+      "aggregate_memory_max": 2147483648,
+      "swap": 0,
+      "timeout_seconds": 300,
+      "restore_after_phase": 536870912
+    },
+    {
+      "id": "app_typecheck",
+      "command": "node --max-old-space-size=1792 node_modules/typescript/bin/tsc --noEmit --project app/tsconfig.json",
+      "aggregate_memory_max": 2147483648,
+      "swap": 0,
+      "timeout_seconds": 300,
+      "restore_after_phase": 536870912,
+      "includes": "Original app tsconfig includes src, tests, vite config and shared files unchanged"
+    }
+  ],
+  "unchanged": {
+    "free_standard_public_actions": true,
+    "source_files": 2054,
+    "source_bytes": 50009459,
+    "data_download_copy_limit": 67108864,
+    "install_limit": 536870912,
+    "other_project_phases": 536870912,
+    "lifecycle_scripts": "DISABLED",
+    "private_cache": true,
+    "copyfile": true,
+    "windows_source_writes": 0,
+    "pg17": "PG_PENDING",
+    "paid_provider_calls": 0
+  },
+  "scope": "Only original full app single-process tests and original complete app tsconfig compile; aggregate project-and-all-descendants2GiB per phase, swap0,300seconds each, restore512MiB after each",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "pg17": "PG_PENDING"
+}

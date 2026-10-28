@@ -135,3 +135,6 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 
 
 完整app实际首次运行40705705886/job122877126008已完成启动与原qoderwake配置生成；161个发现文件身份列表一致。单进程--smol在512MiB聚合门触发oom-kill，service38.801秒/CPU47.262秒/peak493.1M；安装自动peak512.3M同样保留，硬门配置仍536870912/swap0。仅观察到73个文件开始、574pass行及3fail行，无最终Bun summary，不当完整计数或通过。3fail均为tasks-attention-region旧夹具缺必需pendingIds；生产页面L833正常传参，未改生产API。新一文件候选f30394a22972f8ebf76d03742a265c245fbc63e4只补两mount的空pendingSet，seed并清理私有roster查询client，四原测试和全部断言保留；独审和161文件逐进程验证进行中。此分进程结果将仅作具名隔离范围，不代单进程套件/严格CI。
+
+
+Root116直接人类新授权：回答“允许，仅这两个前端阶段使用2GiB（推荐）”，明确覆盖原完整app单进程测试与原app/tsconfig.json完整类型检查两步；各项目及全部后代聚合2GiB、swap0、300秒、每步退出恢复512MiB。方案ea8d06a2065c0207270fbefd7994318e733e6fbe已全文回读一致，主恢复分支69297b3fd9cdecb74b37693a95465b41ecbd0c6a未漂移；本次仅启用该两阶段控制流程，无Subject Source修改。DATA64MiB/既有完整依赖安装512MiB/其他项目512MiB、禁全部生命周期脚本、免费云端/私有copyfile/Windows源码0/PG_PENDING均保持。实际运行结果另证，不以授权当通过。
