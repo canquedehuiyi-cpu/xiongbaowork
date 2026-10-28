@@ -9,6 +9,13 @@ import {
 import { asc, eq } from "drizzle-orm";
 import { from, Observable, type Subscription, switchMap, tap } from "rxjs";
 import type { Database } from "../db/client";
+import {
+  takeLocalRunTicket,
+  localDigest,
+  localRunPlan,
+  type LocalReceipt,
+  type LocalRunTicket,
+} from "../approvals/continuation-target-local";
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
@@ -74,7 +81,186 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     super({ onConcurrentRun: "supersede" });
   }
 
+  /** Trusted AP entry only: reserve/start CAS happens before the runtime; a
+   * complete stream is not success until the terminal transaction is acknowledged.
+   * The ordinary SSE path below is intentionally unchanged apart from its reserved ID guard. */
+  async runContinuation(
+    ticket: LocalRunTicket,
+    request: AgentRunnerRunRequest,
+    signal?: AbortSignal,
+  ): Promise<LocalReceipt> {
+    // The AP factory supplies the existing trusted lifecycle guard's signal;
+    // neither a request flag nor an omitted signal authorizes this entry.
+    if (!signal) throw new Error("local_target_guard_signal_required");
+    let cancelled = false;
+    const checkCancellation = () => {
+      if (cancelled || signal.aborted)
+        throw new Error("local_target_cancelled");
+    };
+    checkCancellation();
+    const tenant = currentTenant();
+    const agent = request.agent;
+    const verifyAgentInput = () => {
+      if (
+        request.agent !== agent ||
+        agent.threadId !== request.threadId ||
+        localDigest(agent.messages) !== localDigest(request.input.messages) ||
+        localDigest(agent.state) !== localDigest(request.input.state)
+      )
+        throw new Error("local_target_agent_input_mismatch");
+    };
+    verifyAgentInput();
+    // Capacity may yield; recheck the trusted signal before the admission CAS.
+    if (this.quota) await this.quota.assertCapacity(tenant, "tasksPerMonth");
+    checkCancellation();
+    const admitted = await takeLocalRunTicket(ticket, request, tenant);
+    checkCancellation();
+    verifyAgentInput();
+    if (tenant !== admitted.plan.tenantId)
+      throw new Error("local_target_tenant_mismatch");
+    const events: BaseEvent[] = [];
+    const prior = new Set(request.input.messages.map((message) => message.id));
+    let failed = false;
+    let captureFailed = false;
+    let runtimeEntered = false;
+    let subscription: Subscription | undefined;
+    let rejectStream: ((error: Error) => void) | undefined;
+    let stopPromise: Promise<boolean | undefined> | undefined;
+    const cancel = () => {
+      if (cancelled) return;
+      // Set first: abortRun/stop can synchronously re-enter through the stream.
+      cancelled = true;
+      if (runtimeEntered) {
+        try {
+          agent.abortRun();
+        } catch {
+          /* Still stop this exact run below. */
+        }
+        try {
+          stopPromise = this.stop({
+            threadId: admitted.plan.threadId,
+            runId: admitted.plan.runId,
+          }).catch(() => undefined);
+        } catch {
+          stopPromise = Promise.resolve(undefined);
+        }
+        try {
+          subscription?.unsubscribe();
+        } catch {
+          // Teardown is not authoritative completion. Always settle cancelled
+          // below, without exposing SDK/driver error details.
+        }
+      }
+      rejectStream?.(new Error("local_target_cancelled"));
+    };
+    signal.addEventListener("abort", cancel);
+    try {
+      checkCancellation();
+      // FINAL full input check after the helper's async return. Promise's
+      // executor and continuationStream execute synchronously below: NO await
+      // separates this digest (including tools/context/forwarded/persisted
+      // input messages) from the runtime entry.
+      localRunPlan(admitted.plan, request);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          rejectStream = reject;
+          checkCancellation();
+          runtimeEntered = true;
+          const stream = this.continuationStream(request);
+          if (cancelled || signal.aborted) {
+            cancel();
+            reject(new Error("local_target_cancelled"));
+            return;
+          }
+          subscription = stream.subscribe({
+            next: (event) => {
+              try {
+                events.push(structuredClone(event));
+              } catch {
+                captureFailed = true;
+              }
+            },
+            error: reject,
+            complete: resolve,
+          });
+          // Covers a synchronous abort during subscribe before assignment.
+          if (cancelled) subscription.unsubscribe();
+        });
+      } catch {
+        // A cancelled/partial stream has no authoritative complete journal.
+        // Leave its durable admission unresolved; never save a success receipt.
+        checkCancellation();
+        failed = true;
+        events.push({
+          type: EventType.RUN_ERROR,
+          message: "Local continuation stream failed.",
+          code: "OPENBOT_AP_LOCAL_STREAM_ERROR",
+        });
+      }
+      checkCancellation();
+      if (captureFailed) throw new Error("local_target_event_capture_unknown");
+      const last = events.at(-1);
+      if (
+        !last ||
+        (last.type !== EventType.RUN_FINISHED &&
+          last.type !== EventType.RUN_ERROR)
+      ) {
+        failed = true;
+        events.push({
+          type: EventType.RUN_ERROR,
+          message: "Local continuation has no terminal event.",
+          code: "OPENBOT_AP_LOCAL_TERMINAL_MISSING",
+        });
+      }
+      const messages = structuredClone(agent.messages);
+      const replyText = messages
+        .filter(
+          (message) => !prior.has(message.id) && message.role === "assistant",
+        )
+        .flatMap((message) =>
+          typeof message.content === "string" && message.content
+            ? [message.content]
+            : [],
+        )
+        .join("\n\n");
+      failed ||=
+        carriedFailure(events) ||
+        agent.pendingInterrupts.length > 0 ||
+        !replyText.trim();
+      const receipt = await admitted.persist({
+        events,
+        messages,
+        replyText,
+        failed,
+      });
+      checkCancellation();
+      threadOwners.set(request.threadId, tenant);
+      return receipt;
+    } finally {
+      signal.removeEventListener("abort", cancel);
+      rejectStream = undefined;
+      try {
+        subscription?.unsubscribe();
+      } catch {
+        // Cleanup errors cannot replace the safe cancellation/unknown outcome.
+      } finally {
+        await stopPromise;
+      }
+    }
+  }
+
+  /** Narrow CPU seam; production always invokes the real local SDK here. */
+  protected continuationStream(
+    request: AgentRunnerRunRequest,
+  ): Observable<BaseEvent> {
+    return super.run(request);
+  }
+
   override run(request: AgentRunnerRunRequest): Observable<BaseEvent> {
+    if (request.input.runId.startsWith("ap-local-"))
+      return new Observable((subscriber) =>
+        subscriber.error(new Error("local_target_trusted_entry_required")),
+      );
     const tenant = currentTenant();
     const quota = this.quota;
     /*
