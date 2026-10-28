@@ -1,0 +1,107 @@
+{
+  "schema": "xiongbaowork-source-candidate-overlay/1",
+  "ticket": "AP-SCHEMA-RUNTIME-20261028",
+  "status": "CANDIDATE_PENDING_INDEPENDENT_SOURCE_REVIEW",
+  "formal_adoption": false,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "base_commit": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
+  "required_prior_overlay": "AP-INPUT-BUN-20261028",
+  "scope": "Four default-btree index calls aligned with closed ONLY=false contract; historical AP2/AP4 successor oracles and snapshot validation fixed without relaxing original timeout or RLS mutations",
+  "changes": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "before": {
+        "bytes": 10532,
+        "sha256": "26db3f60910fff8fa968d3b0f55434c4207819e7fefccd6d391571b99b12bd71",
+        "blob": "8b085f21e09bf480a92d20550388340ac40f8e30",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 10520,
+        "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+        "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+      "before": {
+        "bytes": 12930,
+        "sha256": "0e9be153bdb8a0fb6ffd2dd0e6df4551dc9aeed0031eb0c39c7e2aaa0f98e4ab",
+        "blob": "aca215ba45a4df2ae60f7875e8d935723d9e008e",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 12894,
+        "sha256": "8d7489963d0de3f72be40a5a98f97500ecb58e05315bf52fc54b598d03d916fb",
+        "blob": "94d055b9cebe809b1e5e2ba4a2d84238ac0ee878",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "before": {
+        "bytes": 63126,
+        "sha256": "70b7bab9d23287b4acf6ef89edc4ee314e044b83ba13cd71acec6cda5038a053",
+        "blob": "7f87195ec3783504fe9565dba43dcaa1a352c68b",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 69721,
+        "sha256": "e4c5430aee248ffba36ec037470d97a4028d2927ee8939bbb21b4426e3055b14",
+        "blob": "8cdf8b21282c1916c9a9927373e34a1720c3cbd5",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+      "before": {
+        "bytes": 89597,
+        "sha256": "4b5bf1d66b25270dbed7436fc091f4f841bf71a463254b9e718d43cf737ec945",
+        "blob": "457c3c528e124c8ccf4e722fd584938c2d732e74",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 89935,
+        "sha256": "6c000620b2761acace96eb9c2acfa3de357f9bf5e261efc5b938a4696d644684",
+        "blob": "d73eb7a1a490d0af4842c6b8377e73f08cb5531b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts",
+      "before": {
+        "bytes": 35292,
+        "sha256": "dea5acdb33039e8cea0f278ad3f65995887f7f21b270feb0fa26b5d5de9c4362",
+        "blob": "c81db5553879acb10c9c70a9792dfc17c94c08d9",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 35489,
+        "sha256": "d860b71f40a1fc10d74c5184bd9a9b74a516107e901b2fdb77abfe17186b0fc2",
+        "blob": "df5930855be36754e632ce1766052c1dabbd9b8b",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "bounds": {
+    "timeout_ms": 5000,
+    "old_table_rls_mutations": 139,
+    "project_memory": 536870912,
+    "data_copy_memory": 67108864,
+    "swap": 0
+  },
+  "frozen_schema_matrix_sha256": "60f63878d854eb3fddd5f13166c26fd95f105ba83205ad2c34d837822b39d39e",
+  "upstream_index_source": "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/indexes.ts",
+  "author_preparation_history": {
+    "outcome": "JS replacement-string dollar suffix expansion diagnosed; repaired with callback literal replacement",
+    "caughtBy": "subsequent unique-literal guard",
+    "remoteWritesBeforeCorrection": 0,
+    "windowsSourceWrites": 0,
+    "projectExecution": 0,
+    "historyRetained": true
+  },
+  "production_authority": "NOT_WIRED",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

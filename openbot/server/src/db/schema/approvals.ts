@@ -242,7 +242,7 @@ export const approvalContinuations = pgTable(
     check("apx_ledger_ref_pair_ck", sql`("exact_object_id" IS NULL) = ("exact_plaintext_sha256" IS NULL)`),
     check("apx_ledger_ref_sha_ck", sql`"exact_plaintext_sha256" IS NULL OR "exact_plaintext_sha256" ~ '^[a-f0-9]{64}$'`),
     foreignKey({ name: "apx_ledger_prepared_fk", columns: [table.exactObjectId, table.approvalId, table.tenantId, table.ownerId, table.exactPlaintextSha256], foreignColumns: [approvalExactInputObjects.id, approvalExactInputObjects.approvalId, approvalExactInputObjects.tenantId, approvalExactInputObjects.ownerUserId, approvalExactInputObjects.plaintextSha256] }).onDelete("no action").onUpdate("no action"),
-    index("apx_ledger_prepared_idx").using("btree", table.exactObjectId.asc().nullsLast(), table.approvalId.asc().nullsLast(), table.tenantId.asc().nullsLast(), table.ownerId.asc().nullsLast(), table.exactPlaintextSha256.asc().nullsLast()),
+    index("apx_ledger_prepared_idx").on(table.exactObjectId.asc().nullsLast(), table.approvalId.asc().nullsLast(), table.tenantId.asc().nullsLast(), table.ownerId.asc().nullsLast(), table.exactPlaintextSha256.asc().nullsLast()),
   ],
 ).enableRLS();
 
