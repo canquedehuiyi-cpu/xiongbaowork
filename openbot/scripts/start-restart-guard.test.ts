@@ -222,7 +222,7 @@ describe("start.sh runtime health", () => {
       stderr: "",
     });
     expect(result.stdout).toContain(
-      "licence valid · mode test · Bots: analyst",
+      "mode test · licence valid · Bots: analyst",
     );
   });
 });

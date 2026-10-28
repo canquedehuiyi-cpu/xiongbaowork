@@ -1,0 +1,39 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "START-HEALTH-ORDER-ASSERTION-20261029",
+  "formal_adoption": false,
+  "status": "CANDIDATE_PENDING_INDEPENDENT_REVIEW_AND_RUNTIME",
+  "base_commit": "9012793c25b5d9dbdb00ba623462e91245087439",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/start-restart-guard.test.ts",
+      "before": {
+        "path": "openbot/scripts/start-restart-guard.test.ts",
+        "bytes": 16362,
+        "sha256": "d6eb88ce4c163b6b8da3055b9b1bbfc26e46777caf873c736cd9381890a0e2ce",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/scripts/start-restart-guard.test.ts",
+        "bytes": 16362,
+        "sha256": "cf57fb0ac7b43cf9700fc4f7778344e193e17ec0f503794a6f2648fe758436a0",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Only reorder the exact existing synthetic runtime-health expected sentence to match the unchanged startup producer: mode test then licence valid then Bots:analyst. Preserve exact toContain string, no regex/wildcard, all other11 cases and all startup/fixture assertions byte-for-byte. Production scripts/start.sh and fake process/HTTP scaffolding unchanged. This is a stale fixture expectation, not production text rewording.",
+  "trigger": {
+    "run": 40789730098,
+    "job": 123171654707,
+    "test_file": "openbot/scripts/start-restart-guard.test.ts",
+    "pass": 11,
+    "fail": 1
+  },
+  "projected_source_files": 2060,
+  "projected_source_bytes": 50032071,
+  "other_failures_retained": "Original13 approvals, role-writer loader fixture, and3 missing agent-bot declared dependency failures remain separately recorded.",
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
