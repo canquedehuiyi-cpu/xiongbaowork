@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 import { type BrowserLauncher, createRunnerBrowser } from "../../runner/src/browser";
 import { runnerProbeHandleHasToken } from "../../scripts/ci/runner-browser-probe-ref";
 import { stopRunnerProbeServer } from "../../scripts/ci/runner-browser-probe-lifecycle";
+import { settleRunnerProbeAction } from "../../scripts/ci/runner-browser-probe-action";
+import { createRunnerDispatcher } from "../../runner/src/dispatch";
+import { createRunnerExecutor } from "../../runner/src/execute";
+import { createActionJournal } from "../../runner/src/journal";
 
 // Fake-page/CLI-gate tests plus an owned loopback ephemeral HTTP fixture.
 // No installed browser, external site or real user profile is used.
@@ -95,6 +99,40 @@ describe("runner browser probe compatibility", () => {
     } finally {
       await fixture.stop(true);
     }
+  });
+
+  test("awaits the real dispatcher result inside its pending/key wrapper before policy checks", async () => {
+    const root = ownRoot();
+    let launches = 0;
+    const browser = createRunnerBrowser({
+      profileRoot: join(root, "profiles"),
+      launch: async () => { launches++; throw new Error("policy must refuse before browser launch"); },
+    });
+    const journal = createActionJournal(join(root, "actions.sqlite"));
+    const dispatch = createRunnerDispatcher(journal, createRunnerExecutor(join(root, "workspace"), browser));
+    try {
+      let frame: Record<string, unknown> = {};
+      const key = "probe-policy";
+      const pending = dispatch("probe/device", {
+        type: "action", id: key, key, action: "navigate",
+        payload: { tenantId: "probe-tenant", botId: "probe-bot", url: "http://169.254.169.254/latest/meta-data/iam/" },
+      }, (value) => { frame = value; }).then(() => frame);
+      const result = await settleRunnerProbeAction({ pending, key });
+      expect(result.type).toBe("result");
+      expect(result.id).toBe(key);
+      expect(result.ok).toBe(false);
+      expect(String(result.error)).toContain("cloud credentials");
+      expect(launches).toBe(0);
+      expect(await settleRunnerProbeAction(pending)).toEqual(result);
+    } finally {
+      await browser.close();
+      journal.close();
+    }
+  });
+
+  test("unwrapping still rejects anything other than a result frame", async () => {
+    await expect(settleRunnerProbeAction(Promise.resolve({ type: "ack" }))).rejects.toThrow("the runner answered nothing");
+    await expect(settleRunnerProbeAction({ key: "missing", pending: Promise.resolve({}) })).rejects.toThrow("the runner answered nothing");
   });
 
   test("rejects old or malformed token prefixes without changing runner authority", () => {

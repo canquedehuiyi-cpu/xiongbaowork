@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { runnerProbeHandleHasToken } from "./runner-browser-probe-ref";
 import { stopRunnerProbeServer } from "./runner-browser-probe-lifecycle";
+import { type RunnerProbePendingAction, type RunnerProbeResultInput, settleRunnerProbeAction } from "./runner-browser-probe-action";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRunnerBrowser } from "../../runner/src/browser.ts";
@@ -154,7 +155,7 @@ function request(
   action: string,
   payload: Record<string, unknown>,
   identity: typeof FIRST = FIRST,
-): { pending: Promise<Record<string, unknown>>; key: string } {
+): RunnerProbePendingAction {
   issued += 1;
   const key = `probe-${issued}`;
   let frame: Record<string, unknown> = {};
@@ -174,16 +175,14 @@ function request(
   return { pending, key };
 }
 
-async function settle(frame: Promise<Record<string, unknown>>): Promise<
+async function settle(frame: RunnerProbeResultInput): Promise<
   Record<string, unknown>
 > {
-  const result = await frame;
-  if (result.type !== "result") throw new Error("the runner answered nothing");
-  return result;
+  return settleRunnerProbeAction(frame);
 }
 
 async function output(
-  frame: Promise<Record<string, unknown>>,
+  frame: RunnerProbeResultInput,
 ): Promise<Record<string, unknown>> {
   const result = await settle(frame);
   if (result.ok !== true) throw new Error(String(result.error));
@@ -191,7 +190,7 @@ async function output(
 }
 
 async function failure(
-  frame: Promise<Record<string, unknown>>,
+  frame: RunnerProbeResultInput,
 ): Promise<Record<string, unknown>> {
   const result = await settle(frame);
   if (result.ok === true) throw new Error("the action was expected to be refused");
