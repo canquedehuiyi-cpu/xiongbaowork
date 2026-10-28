@@ -309,7 +309,7 @@ describe("idx94 closed domain foundation (no execution authority)", () => {
     ["missing FORCE", (text: string) => text.replace("FORCE ROW LEVEL SECURITY", "ENABLE ROW LEVEL SECURITY")],
     ["extra policy", (text: string) => `${text} CREATE POLICY unsafe ON approval_direct_execution_domains USING (true);`],
     ["extra grant", (text: string) => `${text} GRANT SELECT ON approval_direct_execution_domains TO PUBLIC;`],
-    ["default version", (text: string) => text.replace('"contract_version" text NOT NULL', '\"contract_version\" text NOT NULL DEFAULT \'ap-direct-domain-v2\'')],
+    ["default version", (text: string) => text.replace('"contract_version" text NOT NULL', '"contract_version" text NOT NULL DEFAULT \'ap-direct-domain-v2\'')],
   ] as const) {
     test(`rejects ${name}`, () => expect(() => assertClosedSQL(mutate(sql))).toThrow());
   }
