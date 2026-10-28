@@ -1,0 +1,55 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RUNNER-PROBE-LIFECYCLE-20261029",
+  "formal_adoption": false,
+  "status": "CANDIDATE_PENDING_INDEPENDENT_REVIEW_AND_PINNED_RUNTIME_TEST",
+  "base_commit": "cd03397ec21d93fddb129ce2e9520fbdaa3c4179",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18837,
+        "sha256": "a665fcb8c23082a8af66f665d6b620b7aebafb88b101454b28192b7fb3ed2c52",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 18932,
+        "sha256": "4b16d5a807ff667811e98e148ad7eaeccbe595e95eac14dd2bd205134c84ff6a",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "before": {
+        "bytes": 3826,
+        "sha256": "add363687affff0e68ff057d9fad96828fc291da8195acc105982997b36ef60a",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 4367,
+        "sha256": "4273a9e4a8b5dc680c1913d04c7a8ed4d2862b1d4551a85ee4818467a257fd05",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-lifecycle.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 238,
+        "sha256": "7295ec98c2e920dff611136ed4787d43940dbd53a99c5efd6fed79a2452f979c",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Fix pre-existing Bun.serve cleanup API mismatch; private probe server stopped via pure lifecycle helper calling stop(true), with actual pinned Bun HTTP listener close regression. Run gate, browser launch/sandbox, action assertions, journal and own-root cleanup otherwise unchanged.",
+  "projected_source_files": 2058,
+  "projected_source_bytes": 50024208,
+  "real_browser_probe": "NOT_RUN",
+  "native_pg": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "primary_api_reference": "https://bun.com/docs/runtime/http/server#server-stop"
+}
