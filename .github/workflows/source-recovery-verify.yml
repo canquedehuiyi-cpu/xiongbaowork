@@ -1,4 +1,4 @@
-name: Integrated plugin assembly foundation recovery
+name: Approved preparation transaction SourceOnly recovery
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: K106 approved integration and prior foundations
+    name: Ptx approved SourceOnly recovery - PG17 pending
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -43,7 +43,7 @@ jobs:
           assert (p / "memory.oom.group").read_text().strip() == "1"
           print("PROJECT_PARENT_RESOURCE_GATE " + json.dumps({"aggregate_memory_max": 536870912, "swap_max": 0}))
           PY
-      - name: Verify all 2049 adopted source files under 64 MiB DATA cap
+      - name: Verify all 2050 adopted source files under 64 MiB DATA cap
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
@@ -137,7 +137,7 @@ jobs:
           assert len(shown) == 419227
           assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
           manifest = json.loads(shown)
-          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-ADOPTED.json\",\"bytes\":4954,\"sha256\":\"947602e681a0ea87306aec11ef296cc961dd9ed75c323bad843a79de0f32f655\",\"formal_adoption\":true,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/AUTOMATION-FK-ASSERTION-ADOPTED.json\",\"bytes\":2467,\"sha256\":\"21cfd36110aed505088883686c6b793c31ec6ee08477e6c6c43bc382225125d2\",\"formal_adoption\":true,\"ticket\":\"AUTOMATION-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-automation-run-records.test.ts\"]},{\"path\":\"archives/recovery-20261028/SECURITY-FK-ASSERTION-ADOPTED.json\",\"bytes\":2496,\"sha256\":\"18a702f4acb7ec9c4089872e68d128656609ae77af652766c8ebb7f13e6ee20c\",\"formal_adoption\":true,\"ticket\":\"SECURITY-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-security-policy-fences.test.ts\"]},{\"path\":\"archives/recovery-20261028/K106-CURRENT-ADOPTED.json\",\"bytes\":5481,\"sha256\":\"9c9f46c71a0180d273462919a1d511497d9e8ba3e65b9a9534e61185d559a899\",\"formal_adoption\":true,\"ticket\":\"K106-CURRENT-PARENT-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json\",\"openbot/server/recovery/recovery-20261018-v1/meta/_journal.json\",\"openbot/server/src/db/schema/plugin-assembly-foundations.ts\",\"openbot/server/src/db/schema/index.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\"],\"source_new_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json\",\"openbot/server/src/db/schema/plugin-assembly-foundations.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\"]}]")
+          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-ADOPTED.json\",\"bytes\":4954,\"sha256\":\"947602e681a0ea87306aec11ef296cc961dd9ed75c323bad843a79de0f32f655\",\"formal_adoption\":true,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/AUTOMATION-FK-ASSERTION-ADOPTED.json\",\"bytes\":2467,\"sha256\":\"21cfd36110aed505088883686c6b793c31ec6ee08477e6c6c43bc382225125d2\",\"formal_adoption\":true,\"ticket\":\"AUTOMATION-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-automation-run-records.test.ts\"]},{\"path\":\"archives/recovery-20261028/SECURITY-FK-ASSERTION-ADOPTED.json\",\"bytes\":2496,\"sha256\":\"18a702f4acb7ec9c4089872e68d128656609ae77af652766c8ebb7f13e6ee20c\",\"formal_adoption\":true,\"ticket\":\"SECURITY-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-security-policy-fences.test.ts\"]},{\"path\":\"archives/recovery-20261028/K106-CURRENT-ADOPTED.json\",\"bytes\":5481,\"sha256\":\"9c9f46c71a0180d273462919a1d511497d9e8ba3e65b9a9534e61185d559a899\",\"formal_adoption\":true,\"ticket\":\"K106-CURRENT-PARENT-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json\",\"openbot/server/recovery/recovery-20261018-v1/meta/_journal.json\",\"openbot/server/src/db/schema/plugin-assembly-foundations.ts\",\"openbot/server/src/db/schema/index.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\"],\"source_new_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json\",\"openbot/server/src/db/schema/plugin-assembly-foundations.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/PTX-CURRENT-ADOPTED.json\",\"bytes\":3361,\"sha256\":\"683bfbc145627766dac65fbce19f8fcca1e9e4f3a7f8182e7baa37b168b628f8\",\"ticket\":\"PTX-CURRENT-PARENT-RECOVERY-20261028\",\"formal_adoption\":true,\"source_paths\":[\"openbot/server/src/approvals/continuation-store.ts\",\"openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts\"],\"source_new_paths\":[\"openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts\"]}]")
           records = {f["path"]: f for f in manifest["files"]}
           for specification in overlay_specs:
               overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
@@ -240,275 +240,23 @@ jobs:
           manifest_raw = verified_bytes(root, control_path, 419227,
               "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
           assert manifest_raw == shown
-          assert manifest["file_count"] == len(manifest["files"]) == 2049
-          assert len({f["path"] for f in manifest["files"]}) == 2049
+          assert manifest["file_count"] == len(manifest["files"]) == 2050
+          assert len({f["path"] for f in manifest["files"]}) == 2050
           total = 0
           for item in manifest["files"]:
               total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
                                       expected_mode=item["mode"])
-          assert total == 49207256
+          assert total == 49231004
           tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
           assert all(f["path"] in tracked for f in manifest["files"])
           assert not command(["git", "status", "--porcelain"], root)
-          result = {"status": "SOURCE_BYTES_VERIFIED_WITH_SIX_APPROVED_OVERLAYS", "head": target,
+          result = {"status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING", "head": target,
                     "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
-                    "formal_baseline": "V57 with explicit source overlays", "overlay_tickets": [x["ticket"] for x in overlay_specs], "verified_source_files": 2049, "verified_source_bytes": total,
+                    "formal_baseline": "V57 with explicit source overlays", "overlay_tickets": [x["ticket"] for x in overlay_specs], "verified_source_files": 2050, "verified_source_bytes": total,
                     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
                     "source_mismatches": 0, "file_modes_verified": True, "fd_named_stability_verified": True,
                     "aggregate_memory_limit": 67108864, "project_upper_bound": 536870912, "swap_limit": 0,
                     "project_tests": "NOT_RUN", "postgres17": "PG_PENDING",
                     "commercial_acceptance": "NOT_DELIVERED", "windows_source_files_written": 0}
           print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
-          PY
-      - name: Install pinned official runtime and copy exact input component files
-        run: |
-          set -euo pipefail
-          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
-            --property=Type=exec --property=MemoryMax=64M \
-            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
-            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
-            /usr/bin/python3 -I -B - <<'PY'
-          import hashlib, json, os, stat, sys, urllib.request, zipfile
-          from pathlib import Path
-          
-          base = Path.cwd()
-          cg = Path("/sys/fs/cgroup") / Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "67108864"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          tools = base / "xiongbaowork-bun-1.3.14"
-          tools.mkdir(mode=0o700)
-          archive = tools / "vendor.zip"
-          digest = hashlib.sha256()
-          size = 0
-          with urllib.request.urlopen("https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip", timeout=60) as incoming, archive.open("xb") as out:
-              while True:
-                  block = incoming.read(65536)
-                  if not block:
-                      break
-                  size += len(block)
-                  assert size <= 35969274
-                  digest.update(block)
-                  out.write(block)
-                  if size % 262144 < len(block):
-                      out.flush()
-                      os.fsync(out.fileno())
-              out.flush()
-              os.fsync(out.fileno())
-          assert size == 35969274 and digest.hexdigest() == "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f"
-          binary = tools / "bun"
-          binary_hash = hashlib.sha256()
-          binary_bytes = 0
-          with zipfile.ZipFile(archive) as bundle:
-              files = [i for i in bundle.infolist() if not i.is_dir()]
-              assert len(files) == 1 and files[0].filename == "bun-linux-x64/bun"
-              assert not files[0].flag_bits & 1
-              assert stat.S_ISREG(files[0].external_attr >> 16)
-              assert files[0].file_size <= 256 * 1024 * 1024
-              with bundle.open(files[0]) as incoming, binary.open("xb") as out:
-                  while True:
-                      block = incoming.read(65536)
-                      if not block:
-                          break
-                      binary_bytes += len(block)
-                      assert binary_bytes <= files[0].file_size
-                      binary_hash.update(block)
-                      out.write(block)
-                      if binary_bytes % 262144 < len(block):
-                          out.flush()
-                          os.fsync(out.fileno())
-                  out.flush()
-                  os.fsync(out.fileno())
-              assert binary_bytes == files[0].file_size
-          os.chmod(binary, 0o700)
-          
-          root = base / "xiongbaowork-verified-source" / "repo"
-          harness = base / "xiongbaowork-schema-components"
-          harness.mkdir(mode=0o700)
-          identities = []
-          for item in identities:
-              source = root / item["path"]
-              assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
-              target = harness / item["path"]
-              target.parent.mkdir(parents=True, exist_ok=True)
-              raw_hash = hashlib.sha256()
-              length = 0
-              with source.open("rb") as incoming, target.open("xb") as out:
-                  while True:
-                      block = incoming.read(65536)
-                      if not block:
-                          break
-                      length += len(block)
-                      raw_hash.update(block)
-                      out.write(block)
-              assert length == item["bytes"] and raw_hash.hexdigest() == item["sha256"]
-              assert target.stat().st_nlink == 1 and target.stat().st_ino != source.stat().st_ino
-          assert len(identities) == 0
-          print("RUNTIME_AND_HARNESS " + json.dumps({"bun_version": "1.3.14", "vendor_archive_bytes": size,
-              "vendor_archive_sha256": digest.hexdigest(), "binary_bytes": binary_bytes,
-              "binary_sha256": binary_hash.hexdigest(), "exact_component_files": len(identities),
-              "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
-          
-          PY
-      - name: Prepare one locked schema dependency under 64 MiB DATA cap
-        run: |
-          set -euo pipefail
-          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
-            --property=Type=exec --property=MemoryMax=64M \
-            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
-            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
-            /usr/bin/python3 -I -B - <<'PY'
-          import base64, gzip, hashlib, json, os, stat, tarfile, urllib.request
-          from pathlib import Path
-          
-          base = Path.cwd()
-          line = Path("/proc/self/cgroup").read_text().strip()
-          cg = Path("/sys/fs/cgroup") / line[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "67108864"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          archive = base / "drizzle-orm-0.45.2.tgz"
-          url = "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz"
-          sri = "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q=="
-          digest = hashlib.sha512()
-          size = 0
-          with urllib.request.urlopen(url, timeout=45) as response, archive.open("xb") as out:
-              assert response.status == 200
-              while True:
-                  chunk = response.read(65536)
-                  if not chunk:
-                      break
-                  size += len(chunk)
-                  assert size <= 16777216
-                  digest.update(chunk)
-                  out.write(chunk)
-                  if size % 262144 == 0:
-                      out.flush()
-                      os.fsync(out.fileno())
-              out.flush()
-              os.fsync(out.fileno())
-          assert "sha512-" + base64.b64encode(digest.digest()).decode("ascii") == sri
-          root = base / "xiongbaowork-verified-source" / "repo"
-          modules = root / "openbot" / "node_modules"
-          modules.mkdir(mode=0o700)
-          package = modules / "drizzle-orm"
-          package.mkdir(mode=0o700)
-          seen = set()
-          total = 0
-          count = 0
-          with archive.open("rb") as packed, gzip.GzipFile(fileobj=packed, mode="rb") as uncompressed:
-              with tarfile.open(fileobj=uncompressed, mode="r|") as tar:
-                  for member in tar:
-                      name = member.name
-                      parts = name.split("/")
-                      assert parts[0] == "package" and not name.startswith("/") and "\\" not in name and "\x00" not in name
-                      assert all(p not in (".", "..", ".git") for p in parts)
-                      assert member.isfile() or member.isdir()
-                      assert name not in seen
-                      seen.add(name)
-                      relative = Path(*parts[1:])
-                      target = package / relative
-                      assert target.resolve().is_relative_to(package)
-                      if member.isdir():
-                          target.mkdir(mode=0o700, parents=True, exist_ok=True)
-                          continue
-                      count += 1
-                      total += member.size
-                      assert count <= 6000 and member.size <= 8388608 and total <= 67108864
-                      target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                      written = 0
-                      incoming = tar.extractfile(member)
-                      assert incoming is not None
-                      with incoming, target.open("xb") as out:
-                          while True:
-                              block = incoming.read(65536)
-                              if not block:
-                                  break
-                              written += len(block)
-                              assert written <= member.size
-                              out.write(block)
-                              if written % 262144 == 0:
-                                  out.flush()
-                                  os.fsync(out.fileno())
-                          out.flush()
-                          os.fsync(out.fileno())
-                      assert written == member.size
-                      st = target.stat(follow_symlinks=False)
-                      assert stat.S_ISREG(st.st_mode) and st.st_nlink == 1
-              trailing = 0
-              while True:
-                  block = uncompressed.read(65536)
-                  if not block:
-                      break
-                  trailing += len(block)
-                  assert trailing <= 1048576 and not any(block)
-          info = json.loads((package / "package.json").read_bytes())
-          assert info["name"] == "drizzle-orm" and info["version"] == "0.45.2"
-          assert not info.get("dependencies")
-          assert not any(k in info.get("scripts", {}) for k in ("preinstall", "install", "postinstall"))
-          print("LOCKED_COMPONENT_DEPENDENCY " + json.dumps({"name": info["name"], "version": info["version"],
-              "archive_bytes": size, "integrity": sri, "files": count, "unpacked_bytes": total,
-              "lifecycle_scripts_executed": 0, "hardlinks": 0, "full_workspace_install": "NOT_RUN",
-              "data_copy_memory_limit": 67108864, "project_parent_memory_limit": 536870912,
-              "swap_limit": 0}), flush=True)
-          PY
-      - name: Run isolated restored schema tests under project limit
-        run: |
-          set -euo pipefail
-          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
-            --property=Type=exec --property=MemoryMax=512M \
-            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
-            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
-            /usr/bin/python3 -I -B - <<'PY'
-          import json, os, subprocess
-          from pathlib import Path
-          
-          base = Path.cwd()
-          cg_line = Path("/proc/self/cgroup").read_text().strip()
-          cg = Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "536870912"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert (cg / "memory.oom.group").read_text().strip() == "1"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
-                                                          "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
-          binary = base / "xiongbaowork-bun-1.3.14" / "bun"
-          harness = base / "xiongbaowork-schema-components"
-          home = base / "xiongbaowork-component-home"
-          home.mkdir(mode=0o700)
-          env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
-                 "NODE_ENV": "test", "CI": "true", "NO_COLOR": "1"}
-          version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          assert version == "1.3.14"
-          revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          root = base / "xiongbaowork-verified-source" / "repo" / "openbot"
-          paths = json.loads("[\"server/tests/recovery-knowledge-foundations.test.ts\",\"server/tests/recovery-knowledge-write-foundations.test.ts\",\"server/tests/recovery-resource-project-foundations.test.ts\",\"server/tests/recovery-plugin-assembly-foundations.test.ts\"]")
-          results = []
-          exit_code = 0
-          for path in paths:
-              print("INTEGRATION_FILE_START " + json.dumps({"path":path}), flush=True)
-              try:
-                  result = subprocess.run([str(binary), "test", "--no-install", "--timeout", "5000", str(root / path)], cwd=harness, env=env, timeout=120)
-                  code = result.returncode
-              except subprocess.TimeoutExpired:
-                  code = 124
-                  print("INTEGRATION_FILE_TIMEOUT " + json.dumps({"path":path,"seconds":120}), flush=True)
-              results.append({"path":path,"exit_code":code})
-              print("INTEGRATION_FILE_RESULT " + json.dumps(results[-1]), flush=True)
-              if code != 0:
-                  exit_code = 1
-          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": exit_code, "bun_version": version,
-              "bun_revision": revision, "test_files": len(paths), "file_results":results,
-              "scope": "four approved knowledge/resource/plugin definition suites, separate sequential processes; no PostgreSQL validation",
-              "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
-              "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
-              "producer_wiring": "NOT_VERIFIED", "full_ci":"NOT_RUN", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
-          raise SystemExit(exit_code)
-          
           PY
