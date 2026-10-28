@@ -69,8 +69,19 @@ jobs:
           print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
           
           def command(args, cwd):
-              return subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "core.packedGitLimit=8m", "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]], cwd=cwd, check=True, text=True, capture_output=True,
-                                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout.strip()
+              print("SOURCE_COMMAND_START " + json.dumps({"operation": args[1], "argument_count": len(args)}), flush=True)
+              completed = subprocess.run(["timeout", "--signal=TERM", "--kill-after=2s", "45s",
+                  "git", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+                  "-c", "core.deltaBaseCacheLimit=1m", "-c", "core.packedGitLimit=8m",
+                  "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]],
+                  cwd=cwd, text=True, capture_output=True,
+                  env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+              if completed.returncode:
+                  print("SOURCE_COMMAND_FAILURE " + json.dumps({"operation": args[1], "exit_code": completed.returncode,
+                      "stderr": completed.stderr[-4000:]}), flush=True)
+              completed.check_returncode()
+              print("SOURCE_COMMAND_END " + json.dumps({"operation": args[1]}), flush=True)
+              return completed.stdout.strip()
           
           def metadata(s):
               return (s.st_dev, s.st_ino, s.st_size, s.st_mode, s.st_nlink, s.st_mtime_ns, s.st_ctime_ns)
@@ -129,7 +140,7 @@ jobs:
           overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-CANDIDATE.json\",\"bytes\":4336,\"sha256\":\"57323e24a20701fa70035693274a3b8a28b37239d1a713166dc89c6319283c46\",\"formal_adoption\":false,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]}]")
           records = {f["path"]: f for f in manifest["files"]}
           for specification in overlay_specs:
-              overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+              overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
                                             "show", target + ":" + specification["path"]],
                                            cwd=root, check=True, capture_output=True,
                                            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
@@ -155,6 +166,14 @@ jobs:
           subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
                          cwd=root, check=True, text=True, capture_output=True)
           command(["git", "checkout", "--quiet", "--detach", target], root)
+          tree_records = {}
+          for row in command(["git", "ls-tree", "-r", "-z", target], root).split("\x00"):
+              if not row:
+                  continue
+              metadata_part, path = row.split("\t", 1)
+              mode, kind, oid = metadata_part.split(" ")
+              assert kind == "blob" and len(oid) == 40
+              tree_records[path] = oid
           synced_git_files = set()
           def flush_owned_regular(path):
               if not path.exists():
@@ -182,7 +201,12 @@ jobs:
           batch_bytes = 0
           batch_count = 0
           def materialize_batch(paths):
+              oids = sorted({tree_records[path] for path in paths})
+              command(["git", "fetch", "--quiet", "--no-tags", "--no-write-fetch-head",
+                       "--no-auto-maintenance", "--filter=blob:none", "origin", *oids], root)
+              flush_git_transport()
               command(["git", "checkout", "--quiet", "--ignore-skip-worktree-bits", target, "--", *paths], root)
+              print("SOURCE_BATCH_COMPLETE " + json.dumps({"files": len(paths)}), flush=True)
               for path in paths:
                   flush_owned_regular(root / path)
               flush_git_transport()

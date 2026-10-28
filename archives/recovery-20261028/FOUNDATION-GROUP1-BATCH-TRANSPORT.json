@@ -1,0 +1,26 @@
+{
+  "ticket": "FOUNDATION-GROUP1-BOUNDED-TRANSPORT",
+  "source_changes": 0,
+  "previous_attempt": {
+    "head": "94aae5078ec3cd4bbd8ea467d1501138b99af8ca",
+    "run_id": 40666293935,
+    "job_id": 122741520325,
+    "result": "CANCELLED_AT_TEN_MINUTE_JOB_TIMEOUT_BEFORE_SOURCE_RESULT_OR_TESTS",
+    "exact_phase": "not visible in old logs",
+    "not_test_result": true
+  },
+  "change": {
+    "command_phase_markers": true,
+    "git_command_limit_seconds": 45,
+    "batch_blob_prefetch_from_exact_target_tree": true,
+    "max_files": 32,
+    "max_bytes": 2097152,
+    "fsync_owned_files": true,
+    "memory_limit": 67108864,
+    "project_limit": 536870912,
+    "source_safety_checks_unchanged": true
+  },
+  "postgres17": "PG_PENDING",
+  "delivery": "NOT_DELIVERED",
+  "windows_source_files_written": 0
+}
