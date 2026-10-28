@@ -69,7 +69,7 @@ jobs:
           print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
           
           def command(args, cwd):
-              return subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitLimit=8m", "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]], cwd=cwd, check=True, text=True, capture_output=True,
+              return subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "core.packedGitLimit=8m", "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]], cwd=cwd, check=True, text=True, capture_output=True,
                                     env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout.strip()
           
           def metadata(s):
@@ -120,7 +120,7 @@ jobs:
           command(["git", "config", "remote.origin.partialclonefilter", "blob:none"], root)
           command(["git", "fetch", "--quiet", "--no-tags", "--filter=blob:none", "--depth=1", "origin", target], root)
           control_path = "archives/recovery-20261028/V57-MANIFEST.json"
-          shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+          shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
                                   "show", target + ":" + control_path], cwd=root,
                                  check=True, capture_output=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
           assert len(shown) == 419227
@@ -150,10 +150,59 @@ jobs:
           command(["git", "sparse-checkout", "init", "--no-cone"], root)
           def sparse_literal(path):
               return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
-          patterns = "\n".join(sparse_literal(f["path"]) for f in manifest["files"]) + "\n/" + control_path + "\n"
+          # Materialize only the small control first. Each following source batch is <=2MiB/32files.
+          patterns = "/" + control_path + "\n"
           subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
                          cwd=root, check=True, text=True, capture_output=True)
           command(["git", "checkout", "--quiet", "--detach", target], root)
+          synced_git_files = set()
+          def flush_owned_regular(path):
+              if not path.exists():
+                  return
+              named = os.stat(path, follow_symlinks=False)
+              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+              try:
+                  assert metadata(os.fstat(fd)) == metadata(named)
+                  os.fsync(fd)
+              finally:
+                  os.close(fd)
+          def flush_git_transport():
+              index = root / ".git" / "index"
+              if index.exists():
+                  flush_owned_regular(index)
+              packs = root / ".git" / "objects" / "pack"
+              for item in packs.iterdir():
+                  if item.name.endswith((".pack", ".idx", ".rev")) and str(item) not in synced_git_files:
+                      flush_owned_regular(item)
+                      synced_git_files.add(str(item))
+          flush_owned_regular(root / control_path)
+          flush_git_transport()
+          batch = []
+          batch_bytes = 0
+          batch_count = 0
+          def materialize_batch(paths):
+              command(["git", "checkout", "--quiet", "--ignore-skip-worktree-bits", target, "--", *paths], root)
+              for path in paths:
+                  flush_owned_regular(root / path)
+              flush_git_transport()
+          for item in manifest["files"]:
+              part = Path(item["path"])
+              assert not part.is_absolute() and ".." not in part.parts and part.parts[0] != ".git"
+              assert "\\" not in item["path"] and "\x00" not in item["path"]
+              if batch and (len(batch) == 32 or batch_bytes + item["bytes"] > 2097152):
+                  materialize_batch(batch)
+                  batch_count += 1
+                  batch = []
+                  batch_bytes = 0
+              assert item["bytes"] <= 2097152
+              batch.append(item["path"])
+              batch_bytes += item["bytes"]
+          if batch:
+              materialize_batch(batch)
+              batch_count += 1
+          print("SOURCE_BATCH_MATERIALIZATION " + json.dumps({"batches": batch_count, "max_files": 32,
+              "max_source_bytes": 2097152, "fsync_after_each_batch": True, "memory_limit": 67108864}), flush=True)
           assert command(["git", "rev-parse", "HEAD"], root) == target
           manifest_raw = verified_bytes(root, control_path, 419227,
               "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)

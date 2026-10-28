@@ -1,0 +1,14 @@
+{
+  "schema": "xiongbaowork-resource-stop-history/1",
+  "run": 40664999884,
+  "job": 122737148827,
+  "head": "a9f1e7f47845b2f019f167965be6f8117ea66f08",
+  "stage": "64MiB Source materialization",
+  "outcome": "OOM_KILL",
+  "source_verification_result": "NOT_REACHED",
+  "project_tests": "NOT_STARTED",
+  "memory_limit": 67108864,
+  "swap": 0,
+  "new_strategy": "initial control-only sparse checkout; bounded <=2MiB/32files source batches with fsync and1MiB git delta cache",
+  "limits_raised": false
+}
