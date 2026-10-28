@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { runnerProbeHandleHasToken } from "./runner-browser-probe-ref";
 import { stopRunnerProbeServer } from "./runner-browser-probe-lifecycle";
 import { type RunnerProbePendingAction, type RunnerProbeResultInput, settleRunnerProbeAction } from "./runner-browser-probe-action";
+import { observeRunnerProbeRead } from "./runner-browser-probe-observe";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRunnerBrowser } from "../../runner/src/browser.ts";
@@ -395,7 +396,10 @@ try {
 
   const scrolled = await output(request("scroll", { deltaY: 900 }));
   assert(scrolled.action === "scroll", "a real wheel was answered", "browser");
-  const scrollSeen = await output(request("read", {}));
+  const scrollSeen = await observeRunnerProbeRead(
+    () => output(request("read", {})),
+    (current) => String(current.text).includes("scrolled=yes"),
+  );
   assert(
     String(scrollSeen.text).includes("scrolled=yes"),
     "the real page actually moved",
