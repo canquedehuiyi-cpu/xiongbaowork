@@ -1040,20 +1040,24 @@
       "native_commit_ack_loss": "NOT_VERIFIED",
       "producer_wiring": "NOT_WIRED"
     },
-    "next_original_preload_subset": {
-      "files": 37,
-      "status": "PREPARED_TO_RUN_WITH_FULL_FROZEN_DEPENDENCIES",
-      "includes": [
-        "original35 named files",
-        "K106 plugin definition test",
-        "proactive controlled fixture test"
-      ],
-      "new_pg_integration_test_included": false
+    "original_preload_subset37": {
+      "head": "ef8f38ad08b66442f4a95609d1522c6293a93e6b",
+      "run": 40684891942,
+      "job": 122804593792,
+      "status": "PASS_NAMED_37_FILES_ONLY",
+      "pass": 651,
+      "fail": 0,
+      "expects": 9810,
+      "test_files": 37,
+      "original_preload_scripts": "UNCHANGED_TWO",
+      "new_ptx_pg_file": "NOT_IMPORTED",
+      "postgres17": "PG_PENDING",
+      "full_ci": "NOT_RUN"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Remaining original table definitions flow_import_proposals/proactive_runs/model_token_calls require original independent full oracle bytes before claiming restoration; do not reuse total152 or old V58 to close them.",
+  "next_source_package": "Three full remaining original object capsules are now recovered, hash/blob/codec sealed and match historical derived matrix; prepare explicit current-parent snapshot reconstruction sixfile107 candidate with independent review; old SQL/ORM bodies remain missing.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,

@@ -70,3 +70,7 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 - PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migration NOT_WIRED、ROOT_RELEASE=null、ready=false保留。
 - 旧V58仍未采用，原V57历史46/51余5记录不改；本次另有独立原0121 oracle和当前物理Source证据恢复其中两表定义，其余flow_import_proposals、proactive_runs、model_token_calls仍缺恢复，不能用152总表掩盖。历史审计事件与缺证保留。
 - 专用Codespace最后可见为重连；当前完整物理验证来自Linux Actions，不声称持久Codespace已快进。
+
+37文件子集已在提交ef8f38ad08b66442f4a95609d1522c6293a93e6b实际完成：[40684891942/job122804593792](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40684891942/job/122804593792)，651pass/0fail/9810expects、37/37、exit0；2050/49231004全部字节核验；原两preload未改，完整冻结依赖PASS/hardlink0/外链0/禁全部生命周期脚本。安装peak510.2M、测试peak478.7M保留，PG17新15体未导入。该同一提交具名子集不等完整CI。
+
+最后三个原目标的完整对象已从独立封存7065B capsule三层核合取回，与104854B派生矩阵fullStructure逐字相同，见REMAINING3-SNAPSHOT-INPUT目录。原whole583049/c382dcdb…是历史来源身份，未新取whole；93276原raw缺口和派生分层保持，原ORM/SQLbody仍SOURCE_BODY_MISSING。下一包仅明确按快照重建，不以取到输入等同完成表或运行。
