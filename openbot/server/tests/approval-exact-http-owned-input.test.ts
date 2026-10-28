@@ -294,3 +294,19 @@ test("non Uint8Array stream chunk is a fixed400 not a string coercion", async ()
 	await rejects(post(stream), 400);
 	expect(stream.locked).toBe(false);
 });
+
+test("unsupported native keepalive stays absent and caller shadow getters are never read", async () => {
+	const request = post("null", { keepalive: false });
+	const native = Object.getOwnPropertyDescriptor(Request.prototype, "keepalive");
+	expect(native === undefined || typeof native.get === "function").toBe(true);
+	const nativeValue = native?.get?.call(request);
+	let traps = 0;
+	Object.defineProperty(request, "keepalive", {
+		get() { traps++; throw new Error("SECRET_SENTINEL"); },
+	});
+	const replay = await preserveExactHttpRunInputV1(request);
+	expect(traps).toBe(0);
+	if (native?.get) expect(native.get.call(replay)).toBe(nativeValue);
+	else expect(Object.hasOwn(replay, "keepalive")).toBe(false);
+	expect(getOwnedHttpEntryV1(replay)?.value).toBe(null);
+});

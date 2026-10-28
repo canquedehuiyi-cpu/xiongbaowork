@@ -53,7 +53,11 @@ test("all scalar root kinds have independent literal oracles", () => {
 test("materialization retains complete result-dependent data without projection or stripping", () => {
 	// These are data, not a branded PreparedExecutionInput or trusted authority.
 	const literal = '{"configRefs":{"model":"versioned-ref"},"forwardedProps":{"bearer":"fixture-only","nested":{"encryptedValue":"opaque","metadata":[1,null]}},"messages":[{"content":[{"text":"result text","type":"text"}],"role":"tool"}],"parentRunId":"parent","persistedMessages":[],"resume":true,"result":{"output":{"private":"retained"}},"sourceBinding":{"actualRun":"actual"},"state":{"subagentRunId":"child"},"toolRefs":["tool-v1"],"transformRefs":["transform-v1"]}';
-	expect(materializeExactJsonTextV1(literal).canonicalBytes).toEqual(ascii(literal));
+	// Unsigned UTF8 key ordering places result before resume (l < m).
+	const expected = '{"configRefs":{"model":"versioned-ref"},"forwardedProps":{"bearer":"fixture-only","nested":{"encryptedValue":"opaque","metadata":[1,null]}},"messages":[{"content":[{"text":"result text","type":"text"}],"role":"tool"}],"parentRunId":"parent","persistedMessages":[],"result":{"output":{"private":"retained"}},"resume":true,"sourceBinding":{"actualRun":"actual"},"state":{"subagentRunId":"child"},"toolRefs":["tool-v1"],"transformRefs":["transform-v1"]}';
+	const materialized = materializeExactJsonTextV1(literal);
+	expect(materialized.canonicalBytes).toEqual(ascii(expected));
+	expect(materialized.value).toMatchObject({ resume: true, result: { output: { private: "retained" } } });
 });
 
 test("manual UTF8 and escaped surrogate pair yield identical complete bytes", () => {
@@ -328,7 +332,13 @@ test("failure returns no partial tree bytes or input-bearing diagnostic", () => 
 	if (!(error instanceof Error)) throw new Error("Expected safe error");
 	expect(error.message).toBe("Exact input JSON materialization rejected");
 	expect(error.message.includes(secret)).toBe(false);
-	expect(Reflect.ownKeys(error).sort()).toEqual(["message", "name", "stack"].sort());
+	// Compare with the host native Error shape, independently of this module.
+	// JavaScriptCore includes native source-location keys that V8 omits.
+	const nativeReference = new Error("fixed native reference");
+	nativeReference.name = "ExactInputJsonMaterializerError";
+	expect(Reflect.ownKeys(error).sort()).toEqual(Reflect.ownKeys(nativeReference).sort());
+	expect(error.stack?.includes(secret)).toBe(false);
+	for (const key of ["cause", "value", "canonicalBytes"]) expect(Object.hasOwn(error, key)).toBe(false);
 });
 
 test("separate calls create fresh containers even for equal canonical content", () => {
