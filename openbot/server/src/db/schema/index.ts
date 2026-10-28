@@ -49,3 +49,4 @@ export * from "./knowledge-foundations";
 export * from "./resource-project-foundations";
 export * from "./knowledge-write-foundations";
 export * from "./plugin-assembly-foundations";
+export * from "./import-proactive-token-foundations";
