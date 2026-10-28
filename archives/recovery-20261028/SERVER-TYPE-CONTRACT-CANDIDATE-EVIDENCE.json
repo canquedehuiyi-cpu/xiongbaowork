@@ -1,0 +1,591 @@
+{
+  "schema": "xiongbaowork-server-type-contract-validation/1",
+  "original_seven_diagnostics": {
+    "schema": "xiongbaowork-full-server-typecheck-evidence/1",
+    "status": "CHECK_COMPLETED_SEVEN_TYPE_ERRORS",
+    "head": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+    "run": 40699215575,
+    "job": 122854140237,
+    "source": {
+      "aggregate_memory_limit": 67108864,
+      "commercial_acceptance": "NOT_DELIVERED",
+      "fd_named_stability_verified": true,
+      "file_modes_verified": true,
+      "formal_baseline": "V57 with explicit source overlays",
+      "git_tree": "d65a793c2514b88db3284a7372dc32efc33e63fb",
+      "head": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+      "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+      "overlay_tickets": [
+        "AP-INPUT-BUN-20261028",
+        "AP-SCHEMA-RUNTIME-20261028",
+        "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+        "AUTOMATION-FK-ASSERTION-20261028",
+        "SECURITY-FK-ASSERTION-20261028",
+        "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+      ],
+      "postgres17": "PG_PENDING",
+      "project_tests": "NOT_RUN",
+      "project_upper_bound": 536870912,
+      "source_mismatches": 0,
+      "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+      "swap_limit": 0,
+      "verified_source_bytes": 50007029,
+      "verified_source_files": 2054,
+      "windows_source_files_written": 0
+    },
+    "install": {
+      "exit_code": 0,
+      "frozen_inputs_unchanged": true,
+      "lifecycle_scripts": "NOT_RUN",
+      "source_commit": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+      "install_memory_limit": 536870912,
+      "other_data_copy_limit": 67108864,
+      "backend": "copyfile",
+      "private_cache": true,
+      "dependency_audit": {
+        "status": "PASS",
+        "regular_files": 127738,
+        "symlinks": 3870,
+        "hardlink_files": 0,
+        "outside_private_paths": 0
+      },
+      "full_ci": "NOT_RUN",
+      "original_preload_suite": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "gate": {
+      "memory_limit": 2147483648,
+      "project_limit": 2147483648,
+      "swap": 0
+    },
+    "start": {
+      "typescript": "5.9.3",
+      "host_runtime": "v24.21.0",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "project": "server/tsconfig.json",
+      "declared_includes": [
+        "src",
+        "scripts",
+        "../scripts/composio-smoke.ts"
+      ],
+      "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+      "timeout_seconds": 300
+    },
+    "result": {
+      "exit_code": 2,
+      "project": "server/tsconfig.json",
+      "typescript": "5.9.3",
+      "host_runtime": "v24.21.0",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "full_ci": "NOT_RUN",
+      "test_sources": "NOT_INCLUDED",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "restore": {
+      "project_memory_max": 536870912,
+      "swap": 0
+    },
+    "diagnostics": [
+      "2026-10-28T13:47:32.4059832Z server/src/approvals/exact-http-owned-input.ts(150,10): error TS2322: Type 'ReadableStreamDefaultReadResult<any>' is not assignable to type 'ReadableStreamReadResult<Uint8Array<ArrayBufferLike>>'.",
+      "2026-10-28T13:47:32.4066545Z server/src/approvals/exact-http-owned-input.ts(165,4): error TS2322: Type 'string' is not assignable to type 'RequestCredentials | undefined'.",
+      "2026-10-28T13:47:32.4067533Z server/src/approvals/exact-http-owned-input.ts(165,37): error TS2322: Type 'string' is not assignable to type 'RequestCache | undefined'.",
+      "2026-10-28T13:47:32.4068466Z server/src/approvals/exact-http-owned-input.ts(165,58): error TS2322: Type 'string' is not assignable to type 'RequestRedirect | undefined'.",
+      "2026-10-28T13:47:32.4069374Z server/src/approvals/exact-http-owned-input.ts(166,31): error TS2322: Type 'string' is not assignable to type 'ReferrerPolicy | undefined'.",
+      "2026-10-28T13:47:32.4070272Z server/src/approvals/exact-http-owned-input.ts(167,33): error TS2322: Type 'string' is not assignable to type 'RequestMode | undefined'.",
+      "2026-10-28T13:47:32.4071301Z server/src/approvals/store.ts(170,27): error TS2339: Property 'runId' does not exist on type 'ApprovalRecord'."
+    ],
+    "diagnostic_count": 7,
+    "automatic_peak": "1.8G",
+    "service_runtime": "22.556s",
+    "cpu": "42.934s",
+    "source_changed": false,
+    "tests_not_included_by_original_config": true,
+    "pg17": "PG_PENDING",
+    "full_ci": "NOT_RUN"
+  },
+  "first_candidate": {
+    "schema": "xiongbaowork-server-type-contract-candidate-evidence/1",
+    "head": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+    "run": 40701329815,
+    "job": 122861639840,
+    "source": {
+      "aggregate_memory_limit": 67108864,
+      "commercial_acceptance": "NOT_DELIVERED",
+      "fd_named_stability_verified": true,
+      "file_modes_verified": true,
+      "formal_baseline": "V57 with explicit source overlays",
+      "git_tree": "992d291faa75947e2c80bcd146d4ee6aff1b0070",
+      "head": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+      "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+      "overlay_tickets": [
+        "AP-INPUT-BUN-20261028",
+        "AP-SCHEMA-RUNTIME-20261028",
+        "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+        "AUTOMATION-FK-ASSERTION-20261028",
+        "SECURITY-FK-ASSERTION-20261028",
+        "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+        "SERVER-TYPE-CONTRACT-20261028"
+      ],
+      "postgres17": "PG_PENDING",
+      "project_tests": "NOT_RUN",
+      "project_upper_bound": 536870912,
+      "source_mismatches": 0,
+      "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_AND_ONE_CANDIDATE_OVERLAY",
+      "swap_limit": 0,
+      "verified_source_bytes": 50008638,
+      "verified_source_files": 2054,
+      "windows_source_files_written": 0
+    },
+    "install": {
+      "exit_code": 0,
+      "frozen_inputs_unchanged": true,
+      "lifecycle_scripts": "NOT_RUN",
+      "source_commit": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+      "install_memory_limit": 536870912,
+      "other_data_copy_limit": 67108864,
+      "backend": "copyfile",
+      "private_cache": true,
+      "dependency_audit": {
+        "status": "PASS",
+        "regular_files": 127738,
+        "symlinks": 3870,
+        "hardlink_files": 0,
+        "outside_private_paths": 0
+      },
+      "full_ci": "NOT_RUN",
+      "original_preload_suite": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "compile": {
+      "gate": {
+        "memory_limit": 2147483648,
+        "project_limit": 2147483648,
+        "swap": 0
+      },
+      "start": {
+        "typescript": "5.9.3",
+        "host_runtime": "v24.21.0",
+        "node_path": "/usr/local/bin/node",
+        "node_old_space_mb": 1792,
+        "project": "server/tsconfig.json",
+        "declared_includes": [
+          "src",
+          "scripts",
+          "../scripts/composio-smoke.ts"
+        ],
+        "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+        "timeout_seconds": 300
+      },
+      "result": {
+        "exit_code": 0,
+        "project": "server/tsconfig.json",
+        "typescript": "5.9.3",
+        "host_runtime": "v24.21.0",
+        "node_path": "/usr/local/bin/node",
+        "node_old_space_mb": 1792,
+        "full_ci": "NOT_RUN",
+        "test_sources": "NOT_INCLUDED",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "restore": {
+        "project_memory_max": 536870912,
+        "swap": 0
+      },
+      "peak": "1.9G",
+      "service_runtime": "22.771s",
+      "cpu": "41.526s"
+    },
+    "test": {
+      "status": "RESOURCE_STOP_AT_26TH_FILE_BEFORE_HTTP_REGRESSION",
+      "files_completed": 25,
+      "files_total": 38,
+      "stop_file": "tests/recovery-lineage.test.ts",
+      "result": "oom-kill",
+      "signal": 9,
+      "automatic_child_service_peak": "480.3M",
+      "project_aggregate_limit": 536870912,
+      "swap": 0,
+      "tests_after_stop": "NOT_RUN",
+      "fixture_assertion_failures_seen": 0
+    },
+    "review": "SOURCE_APPROVED_ONLY",
+    "full_ci": "NOT_RUN",
+    "pg17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "smol_candidate": {
+    "schema": "xiongbaowork-server-type-contract-candidate-evidence/1",
+    "source_candidate": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+    "control_commit": "b6d4e6ad75dfba403f29fa8da8df3ceb870bbf3e",
+    "run": 40703574999,
+    "job": 122869579798,
+    "source": {
+      "aggregate_memory_limit": 67108864,
+      "commercial_acceptance": "NOT_DELIVERED",
+      "fd_named_stability_verified": true,
+      "file_modes_verified": true,
+      "formal_baseline": "V57 with explicit source overlays",
+      "git_tree": "d0a9644ed24c7cd490278688039df7829d26fa2d",
+      "head": "b6d4e6ad75dfba403f29fa8da8df3ceb870bbf3e",
+      "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+      "overlay_tickets": [
+        "AP-INPUT-BUN-20261028",
+        "AP-SCHEMA-RUNTIME-20261028",
+        "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+        "AUTOMATION-FK-ASSERTION-20261028",
+        "SECURITY-FK-ASSERTION-20261028",
+        "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+        "SERVER-TYPE-CONTRACT-20261028"
+      ],
+      "postgres17": "PG_PENDING",
+      "project_tests": "NOT_RUN",
+      "project_upper_bound": 536870912,
+      "source_mismatches": 0,
+      "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_AND_ONE_CANDIDATE_OVERLAY",
+      "swap_limit": 0,
+      "verified_source_bytes": 50008638,
+      "verified_source_files": 2054,
+      "windows_source_files_written": 0
+    },
+    "install": {
+      "exit_code": 0,
+      "frozen_inputs_unchanged": true,
+      "lifecycle_scripts": "NOT_RUN",
+      "source_commit": "b6d4e6ad75dfba403f29fa8da8df3ceb870bbf3e",
+      "install_memory_limit": 536870912,
+      "other_data_copy_limit": 67108864,
+      "backend": "copyfile",
+      "private_cache": true,
+      "dependency_audit": {
+        "status": "PASS",
+        "regular_files": 127738,
+        "symlinks": 3870,
+        "hardlink_files": 0,
+        "outside_private_paths": 0
+      },
+      "full_ci": "NOT_RUN",
+      "original_preload_suite": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "targeted": {
+      "pass": 65,
+      "fail": 0,
+      "expects": 920,
+      "files": 2,
+      "completed": [
+        {
+          "path": "server/tests/approval-exact-http-owned-input.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+          "exit_code": 0
+        }
+      ]
+    },
+    "completed_named_files": {
+      "count": 27,
+      "results": [
+        {
+          "path": "server/tests/approval-exact-http-owned-input.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-approval-direct-execution-domains.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-approval-exact-input-objects.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-automation-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-automation-run-records.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-device-binding-leases.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-customization-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-customization-turns.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-official-bindings.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-run-coordination.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-sharing-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-source-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-source-original-records.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-source-run-records.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-flow-source-runtime-records.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-group-pipeline-start-receipts.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-knowledge-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-knowledge-write-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-outbox-knowledge-heads.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-resource-project-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-role-foundations.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-security-policy-fences.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-subject-binding.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-task-flow-audit.test.ts",
+          "exit_code": 0
+        },
+        {
+          "path": "server/tests/recovery-threads-parent-key.test.ts",
+          "exit_code": 0
+        }
+      ],
+      "pass": 413,
+      "fail": 0,
+      "expects": 7311
+    },
+    "full38": {
+      "status": "RESOURCE_STOP_NOT_PASS",
+      "completed_files": 27,
+      "stop_file": "tests/recovery-lineage.test.ts",
+      "runtime_flag": "--smol",
+      "result": "oom-kill",
+      "signal": 9,
+      "automatic_child_service_peak": "478.4M",
+      "project_limit": 536870912,
+      "swap": 0,
+      "remaining_files": "NOT_RUN"
+    },
+    "compiler_source_identical_to_pass": {
+      "run": 40701329815,
+      "job": 122861639840,
+      "exit_code": 0,
+      "project": "original server/tsconfig.json",
+      "source_bytes": 50008638,
+      "test_sources": "NOT_INCLUDED"
+    },
+    "review": {
+      "schema": "xiongbaowork-independent-source-review/1",
+      "reviewer": "/root/review_approval_input_readonly",
+      "base": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+      "candidate": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+      "verdict": "SOURCE_APPROVED_ONLY",
+      "findings": [],
+      "files": [
+        {
+          "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
+          "before": {
+            "bytes": 9733,
+            "sha256": "ca9c1e2826d9fa2753d22138f13314cac79e11c4a5d7ed55d91ce4c973596ff2",
+            "mode": "0o644",
+            "blob": "2c5b99247e2d77179dbffc2e3b78e6a784bca84a"
+          },
+          "after": {
+            "bytes": 9701,
+            "sha256": "faa848e802f9dc7329a935e61cfe55e88275412a18670c01e197396c89d41d2c",
+            "mode": "0o644",
+            "blob": "c5400ffb8f4f76d5c52e2dbece513d92cb811472"
+          }
+        },
+        {
+          "path": "openbot/server/src/approvals/store.ts",
+          "before": {
+            "bytes": 19521,
+            "sha256": "493306d89edf7a26ae12fc42fea17beaccf17fd01f1683f3903b28e675cac225",
+            "mode": "0o644",
+            "blob": "8848fb3737827bf02fadd47414e87979fcce062b"
+          },
+          "after": {
+            "bytes": 19543,
+            "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
+            "mode": "0o644",
+            "blob": "86b8efdd48ec863f6db0e497431d8274ba06e94d"
+          }
+        },
+        {
+          "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
+          "before": {
+            "bytes": 14378,
+            "sha256": "a9640de6b61967d09cd4b9ab1b69649a03762008f6d1925525e2ca192d53c6f3",
+            "mode": "0o644",
+            "blob": "919b9f8d1790798156f1b1e60d3c9431d6fbc618"
+          },
+          "after": {
+            "bytes": 15997,
+            "sha256": "3d9a2c8c74f1259c9088503897367b38d8bb5b8262f3740e0c3cb6db6d21f85c",
+            "mode": "0o644",
+            "blob": "4c1daff30667401d97e6958d7fd8dbfa2c25b15d"
+          }
+        }
+      ],
+      "full_read_and_independent_hash": "All six complete UTF8 bodies independently bytes/SHA256/blob matched by reviewer in tool memory using GitHub connector; no Source written locally; no project execution.",
+      "closed_diff": {
+        "http": "Three type-only edits; runtime statements unchanged; captured intrinsics, slots, cap, abort and cleanup exact",
+        "store": "Only helper return type changed; actual persistent select row including nonnull schema runId remains authoritative; public ApprovalRecord unchanged",
+        "test": "Original313 lines exact prefix of341-line candidate; one new test iterates nine valid native Request option combinations, chunk/empty chunk/EOF, bytes/slots/unlock checks"
+      },
+      "original_errors_read": {
+        "run": 40699215575,
+        "job": 122854140237,
+        "diagnostics": 7
+      },
+      "runtime_not_inferred": true,
+      "tests_not_in_original_server_tsconfig": true,
+      "pg17": "PG_PENDING",
+      "production_wiring": "NOT_SERVICE_WIRED",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "legacy_V58_V59": "NOT_ADOPTED"
+    },
+    "full_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "original38_673pass_evidence": "Historical56faabe commit only; not current full38 pass"
+  },
+  "independent_review": {
+    "schema": "xiongbaowork-independent-source-review/1",
+    "reviewer": "/root/review_approval_input_readonly",
+    "base": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+    "candidate": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": [],
+    "files": [
+      {
+        "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
+        "before": {
+          "bytes": 9733,
+          "sha256": "ca9c1e2826d9fa2753d22138f13314cac79e11c4a5d7ed55d91ce4c973596ff2",
+          "mode": "0o644",
+          "blob": "2c5b99247e2d77179dbffc2e3b78e6a784bca84a"
+        },
+        "after": {
+          "bytes": 9701,
+          "sha256": "faa848e802f9dc7329a935e61cfe55e88275412a18670c01e197396c89d41d2c",
+          "mode": "0o644",
+          "blob": "c5400ffb8f4f76d5c52e2dbece513d92cb811472"
+        }
+      },
+      {
+        "path": "openbot/server/src/approvals/store.ts",
+        "before": {
+          "bytes": 19521,
+          "sha256": "493306d89edf7a26ae12fc42fea17beaccf17fd01f1683f3903b28e675cac225",
+          "mode": "0o644",
+          "blob": "8848fb3737827bf02fadd47414e87979fcce062b"
+        },
+        "after": {
+          "bytes": 19543,
+          "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
+          "mode": "0o644",
+          "blob": "86b8efdd48ec863f6db0e497431d8274ba06e94d"
+        }
+      },
+      {
+        "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
+        "before": {
+          "bytes": 14378,
+          "sha256": "a9640de6b61967d09cd4b9ab1b69649a03762008f6d1925525e2ca192d53c6f3",
+          "mode": "0o644",
+          "blob": "919b9f8d1790798156f1b1e60d3c9431d6fbc618"
+        },
+        "after": {
+          "bytes": 15997,
+          "sha256": "3d9a2c8c74f1259c9088503897367b38d8bb5b8262f3740e0c3cb6db6d21f85c",
+          "mode": "0o644",
+          "blob": "4c1daff30667401d97e6958d7fd8dbfa2c25b15d"
+        }
+      }
+    ],
+    "full_read_and_independent_hash": "All six complete UTF8 bodies independently bytes/SHA256/blob matched by reviewer in tool memory using GitHub connector; no Source written locally; no project execution.",
+    "closed_diff": {
+      "http": "Three type-only edits; runtime statements unchanged; captured intrinsics, slots, cap, abort and cleanup exact",
+      "store": "Only helper return type changed; actual persistent select row including nonnull schema runId remains authoritative; public ApprovalRecord unchanged",
+      "test": "Original313 lines exact prefix of341-line candidate; one new test iterates nine valid native Request option combinations, chunk/empty chunk/EOF, bytes/slots/unlock checks"
+    },
+    "original_errors_read": {
+      "run": 40699215575,
+      "job": 122854140237,
+      "diagnostics": 7
+    },
+    "runtime_not_inferred": true,
+    "tests_not_in_original_server_tsconfig": true,
+    "pg17": "PG_PENDING",
+    "production_wiring": "NOT_SERVICE_WIRED",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "legacy_V58_V59": "NOT_ADOPTED"
+  },
+  "adoption_basis": "Three complete before/after files independently approved; production edits type-only; targeted65/0/920; original server noEmit exit0. Full38 remains resource-stopped, not green.",
+  "pg17": "PG_PENDING",
+  "full_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

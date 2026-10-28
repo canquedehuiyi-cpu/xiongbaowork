@@ -1,0 +1,72 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+  "candidate": "f82b6b4e9c3a32deddd72849a2430ee3a79c1dff",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
+      "before": {
+        "bytes": 9733,
+        "sha256": "ca9c1e2826d9fa2753d22138f13314cac79e11c4a5d7ed55d91ce4c973596ff2",
+        "mode": "0o644",
+        "blob": "2c5b99247e2d77179dbffc2e3b78e6a784bca84a"
+      },
+      "after": {
+        "bytes": 9701,
+        "sha256": "faa848e802f9dc7329a935e61cfe55e88275412a18670c01e197396c89d41d2c",
+        "mode": "0o644",
+        "blob": "c5400ffb8f4f76d5c52e2dbece513d92cb811472"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "before": {
+        "bytes": 19521,
+        "sha256": "493306d89edf7a26ae12fc42fea17beaccf17fd01f1683f3903b28e675cac225",
+        "mode": "0o644",
+        "blob": "8848fb3737827bf02fadd47414e87979fcce062b"
+      },
+      "after": {
+        "bytes": 19543,
+        "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
+        "mode": "0o644",
+        "blob": "86b8efdd48ec863f6db0e497431d8274ba06e94d"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
+      "before": {
+        "bytes": 14378,
+        "sha256": "a9640de6b61967d09cd4b9ab1b69649a03762008f6d1925525e2ca192d53c6f3",
+        "mode": "0o644",
+        "blob": "919b9f8d1790798156f1b1e60d3c9431d6fbc618"
+      },
+      "after": {
+        "bytes": 15997,
+        "sha256": "3d9a2c8c74f1259c9088503897367b38d8bb5b8262f3740e0c3cb6db6d21f85c",
+        "mode": "0o644",
+        "blob": "4c1daff30667401d97e6958d7fd8dbfa2c25b15d"
+      }
+    }
+  ],
+  "full_read_and_independent_hash": "All six complete UTF8 bodies independently bytes/SHA256/blob matched by reviewer in tool memory using GitHub connector; no Source written locally; no project execution.",
+  "closed_diff": {
+    "http": "Three type-only edits; runtime statements unchanged; captured intrinsics, slots, cap, abort and cleanup exact",
+    "store": "Only helper return type changed; actual persistent select row including nonnull schema runId remains authoritative; public ApprovalRecord unchanged",
+    "test": "Original313 lines exact prefix of341-line candidate; one new test iterates nine valid native Request option combinations, chunk/empty chunk/EOF, bytes/slots/unlock checks"
+  },
+  "original_errors_read": {
+    "run": 40699215575,
+    "job": 122854140237,
+    "diagnostics": 7
+  },
+  "runtime_not_inferred": true,
+  "tests_not_in_original_server_tsconfig": true,
+  "pg17": "PG_PENDING",
+  "production_wiring": "NOT_SERVICE_WIRED",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "legacy_V58_V59": "NOT_ADOPTED"
+}
