@@ -1,0 +1,73 @@
+{
+  "schema": "xiongbaowork-explicit-offline-runner-policy-validation/1",
+  "source_content_commit": "8f127f4e5f2ef91185a55cf8303caf60f5d39fb2",
+  "source_files": 2060,
+  "source_bytes": 50029764,
+  "selected_tests": [
+    {
+      "path": "openbot/server/tests/runner-dispatch.test.ts",
+      "bytes": 6637,
+      "sha256": "1b47c215ed148beecdbc39aab70a15acb44c8585ad9513653e712ed23c381e69",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/runner-channel.test.ts",
+      "bytes": 9971,
+      "sha256": "3460e270b0f7257ce00ad09360af617c80149054bfcfac8b4eb026fc03f796ca",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/computer-policy.test.ts",
+      "bytes": 28127,
+      "sha256": "16f60fac67378cb4374c6344b17f74669a6c3bb80a120a50c8eb84fc2081f6b3",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/computer-gateway.test.ts",
+      "bytes": 66586,
+      "sha256": "da0735889d7c5ba72e842600d1f501b4f75fde88e11a86b0d0de5750d7618a71",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/computer-human-input.test.ts",
+      "bytes": 4499,
+      "sha256": "35f624ba2deb2bb0feca772a88cc3d2b21ada816243b5cd2a1c09d094b77a1ca",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/computer-session-guard.test.ts",
+      "bytes": 8225,
+      "sha256": "7ea7e44c4cdf3d3b538b8d63d5f6b9ac5c7419eb20ac6c6240c92872a5a41d3a",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/control-refusal-end-to-end.test.ts",
+      "bytes": 6081,
+      "sha256": "33ac8621cb1289c2cb6198138bea641bc11cdaa39d9392aac8106e08e8d05fee",
+      "mode": "0o644"
+    }
+  ],
+  "scope": "Existing exact7 files: in-memory fake socket/provider/transport tests, pure policy evaluation, in-memory snapshots, route stubs, and own loopback control-refusal listener. Not real user device/offline queue persistence/nativePG/full backend/strictCI.",
+  "excluded_pg_files": [
+    "openbot/server/tests/tenant-cross-tenant-404.test.ts",
+    "openbot/server/tests/tenant-cross-tenant-agents.test.ts",
+    "openbot/server/tests/tenant-cross-tenant-approvals.test.ts",
+    "openbot/server/tests/tenant-cross-tenant-attachments.test.ts",
+    "openbot/server/tests/tenant-cross-tenant-channels.test.ts",
+    "openbot/server/tests/tenant-rls.test.ts",
+    "openbot/server/tests/rls-write-scope.test.ts",
+    "openbot/server/tests/device-queue.test.ts"
+  ],
+  "import_native_pg": false,
+  "credentials": "NONE_IN_TEST_ENVIRONMENT",
+  "provider_calls": "INJECTED_FAKES_OR_OWN_LOOPBACK",
+  "project_and_all_descendants": 536870912,
+  "swap": 0,
+  "data_limit": 67108864,
+  "free_standard_public_actions": true,
+  "paid_provider_calls": 0,
+  "source_changes": 0,
+  "windows_source_writes": 0,
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
