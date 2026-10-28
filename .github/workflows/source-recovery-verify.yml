@@ -1,6 +1,7 @@
-name: Accepted Source checkpoint -manual validation
+name: Remaining test entry inventory -DATA only64MiB
 on:
-  workflow_dispatch:
+  push:
+    branches: ["codex/offline-acceptance-inventory-20261029"]
 permissions:
   contents: read
 concurrency:
@@ -251,228 +252,41 @@ jobs:
           print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
           
           PY
-      - name: Install pinned official runtime and copy exact input component files
+      - name: Inventory remaining tests as DATA only under64MiB
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
             --property=Type=exec --property=MemoryMax=64M \
             --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --property=RuntimeMaxSec=60 \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
             /usr/bin/python3 -I -B - <<'PY'
-          import hashlib, json, os, stat, sys, urllib.request, zipfile
-          from pathlib import Path
-          
-          base = Path.cwd()
-          cg = Path("/sys/fs/cgroup") / Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "67108864"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          tools = base / "xiongbaowork-bun-1.3.14"
-          tools.mkdir(mode=0o700)
-          archive = tools / "vendor.zip"
-          digest = hashlib.sha256()
-          size = 0
-          with urllib.request.urlopen("https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip", timeout=60) as incoming, archive.open("xb") as out:
-              while True:
-                  block = incoming.read(65536)
-                  if not block:
-                      break
-                  size += len(block)
-                  assert size <= 35969274
-                  digest.update(block)
-                  out.write(block)
-                  if size % 262144 < len(block):
-                      out.flush()
-                      os.fsync(out.fileno())
-              out.flush()
-              os.fsync(out.fileno())
-          assert size == 35969274 and digest.hexdigest() == "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f"
-          binary = tools / "bun"
-          binary_hash = hashlib.sha256()
-          binary_bytes = 0
-          with zipfile.ZipFile(archive) as bundle:
-              files = [i for i in bundle.infolist() if not i.is_dir()]
-              assert len(files) == 1 and files[0].filename == "bun-linux-x64/bun"
-              assert not files[0].flag_bits & 1
-              assert stat.S_ISREG(files[0].external_attr >> 16)
-              assert files[0].file_size <= 256 * 1024 * 1024
-              with bundle.open(files[0]) as incoming, binary.open("xb") as out:
-                  while True:
-                      block = incoming.read(65536)
-                      if not block:
-                          break
-                      binary_bytes += len(block)
-                      assert binary_bytes <= files[0].file_size
-                      binary_hash.update(block)
-                      out.write(block)
-                      if binary_bytes % 262144 < len(block):
-                          out.flush()
-                          os.fsync(out.fileno())
-                  out.flush()
-                  os.fsync(out.fileno())
-              assert binary_bytes == files[0].file_size
-          os.chmod(binary, 0o700)
-          
-          root = base / "xiongbaowork-verified-source" / "repo"
-          harness = base / "xiongbaowork-schema-components"
-          harness.mkdir(mode=0o700)
-          identities = []
-          for item in identities:
-              source = root / item["path"]
-              assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
-              target = harness / item["path"]
-              target.parent.mkdir(parents=True, exist_ok=True)
-              raw_hash = hashlib.sha256()
-              length = 0
-              with source.open("rb") as incoming, target.open("xb") as out:
-                  while True:
-                      block = incoming.read(65536)
-                      if not block:
-                          break
-                      length += len(block)
-                      raw_hash.update(block)
-                      out.write(block)
-              assert length == item["bytes"] and raw_hash.hexdigest() == item["sha256"]
-              assert target.stat().st_nlink == 1 and target.stat().st_ino != source.stat().st_ino
-          assert len(identities) == 0
-          print("RUNTIME_AND_HARNESS " + json.dumps({"bun_version": "1.3.14", "vendor_archive_bytes": size,
-              "vendor_archive_sha256": digest.hexdigest(), "binary_bytes": binary_bytes,
-              "binary_sha256": binary_hash.hexdigest(), "exact_component_files": len(identities),
-              "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
-          
-          PY
-      - name: Install frozen workspace dependencies within the human-authorized512MiB install exception
-        id: workspace_install
-        run: |
-          set -euo pipefail
-          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
-            --property=Type=exec --property=MemoryMax=512M \
-            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
-            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
-            /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
-          import collections, hashlib, json, os, selectors, signal, stat, subprocess, sys, time
+          import hashlib, json, re
           from pathlib import Path
           base=Path.cwd()
-          target=sys.argv[1]
-          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
-          cg_line=Path("/proc/self/cgroup").read_text().strip()
-          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
-          assert (cg/"memory.max").read_text().strip()=="536870912"
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864"
           assert (cg/"memory.swap.max").read_text().strip()=="0"
-          assert (cg/"memory.oom.group").read_text().strip()=="1"
-          assert cg.parent.name=="xiongbaowork.slice"
           assert (cg.parent/"memory.max").read_text().strip()=="536870912"
-          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
-          print("WORKSPACE_INSTALL_RESOURCE_GATE "+json.dumps({"memory_limit":536870912,"project_memory_limit":536870912,"swap":0}),flush=True)
           root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
-          assert root.is_dir() and root.resolve().is_relative_to(base)
-          assert not (root/".env").exists() and not (root/".npmrc").exists()
-          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
-          assert binary.is_file()
-          cache=base/"xiongbaowork-workspace-install-cache"
-          home=base/"xiongbaowork-workspace-install-home"
-          cache.mkdir(mode=0o700); home.mkdir(mode=0o700)
-          protected=["bun.lock","package.json","app/package.json","server/package.json","worker/package.json","runner/package.json"]
-          def seal(path):
-              s=path.lstat()
-              assert stat.S_ISREG(s.st_mode) and s.st_nlink==1
-              return {"bytes":s.st_size,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
-          before={p:seal(root/p) for p in protected}
-          assert before["bun.lock"]=={"bytes":453991,"sha256":"c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"}
-          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"CI":"true","NO_COLOR":"1",
-               "NPM_CONFIG_IGNORE_SCRIPTS":"true","GIT_TERMINAL_PROMPT":"0"}
-          assert subprocess.run([str(binary),"--version"],env=env,capture_output=True,text=True,check=True).stdout.strip()=="1.3.14"
-          args=[str(binary),"install","--frozen-lockfile","--ignore-scripts","--backend","copyfile",
-                "--cache-dir",str(cache),"--network-concurrency","4","--no-progress","--verbose"]
-          print("WORKSPACE_INSTALL_START "+json.dumps({"frozen_lockfile":True,"ignore_all_lifecycle_scripts":True,
-                "backend":"copyfile","cache":"private job directory","network_concurrency":4,"timeout_seconds":480,
-                "source_commit":target}),flush=True)
-          proc=subprocess.Popen(args,cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
-          selector=selectors.DefaultSelector()
-          selector.register(proc.stdout,selectors.EVENT_READ)
-          deadline=time.monotonic()+480
-          pending=""
-          tail=collections.deque(maxlen=40)
-          lines=0
-          timed_out=False
-          def installer_line(line):
-              global lines
-              lines+=1
-              line=line[:1600]
-              tail.append(line)
-              if lines<=80 or lines%250==0 or any(marker in line.lower() for marker in ["error:","failed","timed out","timeout","404","403"]):
-                  print("BUN_INSTALL_PROGRESS "+line,flush=True)
-          while selector.get_map():
-              remaining=deadline-time.monotonic()
-              if remaining<=0:
-                  timed_out=True
-                  os.killpg(proc.pid,signal.SIGKILL)
-                  break
-              for key,event in selector.select(min(remaining,1)):
-                  chunk=os.read(key.fd,65536)
-                  if not chunk:
-                      selector.unregister(key.fileobj)
-                      continue
-                  pending+=chunk.decode("utf8",errors="replace")
-                  while "\n" in pending:
-                      line,pending=pending.split("\n",1)
-                      installer_line(line)
-                  if len(pending)>8192:
-                      installer_line(pending[:1600]);pending=""
-              if proc.poll() is not None and not selector.get_map():
-                  break
-          if pending:
-              installer_line(pending)
-          proc.wait()
-          selector.close()
-          code=124 if timed_out else proc.returncode
-          print("BUN_INSTALL_LOG_TAIL "+json.dumps({"lines_seen":lines,"last40":list(tail)}),flush=True)
-          after={p:seal(root/p) for p in protected}
-          assert after==before,"install changed frozen package/lock inputs"
-          audit={"status":"NOT_REACHED","regular_files":0,"symlinks":0,"hardlink_files":0,"outside_private_paths":0}
-          if code==0:
-              audit["status"]="PASS"
-              modules=root/"node_modules"
-              assert modules.is_dir()
-              for current,dirs,files in os.walk(modules,followlinks=False):
-                  for name in dirs+files:
-                      item=Path(current)/name
-                      s=item.lstat()
-                      if stat.S_ISLNK(s.st_mode):
-                          audit["symlinks"]+=1
-                          resolved=item.resolve(strict=True)
-                          assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external dependency link"
-                      elif stat.S_ISREG(s.st_mode):
-                          assert s.st_nlink==1,"hardlinked dependency rejected"
-                          audit["regular_files"]+=1
-              for package in ["app","server","worker","runner"]:
-                  nested=root/package/"node_modules"
-                  if nested.exists():
-                      for current,dirs,files in os.walk(nested,followlinks=False):
-                          for name in dirs+files:
-                              item=Path(current)/name;s=item.lstat()
-                              if stat.S_ISREG(s.st_mode):
-                                  assert s.st_nlink==1,"hardlinked workspace dependency rejected"
-                              elif stat.S_ISLNK(s.st_mode):
-                                  resolved=item.resolve(strict=True)
-                                  assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external workspace dependency link"
-          partial_inventory={}
-          for label,directory in [("private_cache",cache),("root_node_modules",root/"node_modules")]:
-              files=0; total=0
-              if directory.exists():
-                  for current,dirs,names in os.walk(directory,followlinks=False):
-                      for name in names:
-                          s=(Path(current)/name).lstat()
-                          if stat.S_ISREG(s.st_mode):
-                              files+=1;total+=s.st_size
-              partial_inventory[label]={"regular_files":files,"bytes":total}
-          print("WORKSPACE_INSTALL_FILESYSTEM_PROGRESS "+json.dumps(partial_inventory),flush=True)
-          print("WORKSPACE_INSTALL_RESULT "+json.dumps({"exit_code":code,"frozen_inputs_unchanged":True,
-                "lifecycle_scripts":"NOT_RUN","source_commit":target,"install_memory_limit":536870912,"other_data_copy_limit":67108864,"backend":"copyfile","private_cache":True,"dependency_audit":audit,
-                "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
-                "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
-          raise SystemExit(code)
+          groups={}
+          for part in ["server/tests","shared","runner","worker","scripts","tests"]:
+              rows=[]
+              for p in sorted((root/part).rglob("*")):
+                  if not p.is_file() or not (p.name.endswith(".test.ts") or p.name.endswith(".test.mjs")):continue
+                  b=p.read_bytes();s=b.decode("utf8")
+                  flags=[]
+                  for name,pattern in [
+                    ("direct_pg",r'testDatabaseUrl|TEST_DATABASE_URL|createDatabase\s*\(|TEST_POOL|Bun\.SQL|new\s+SQL\s*\('),
+                    ("integration_name",r'\.integration\.test\.'),
+                    ("live_or_smoke",r'OPENBOT_LIVE|OPENBOT_SMOKE|composio-live|tests/smoke'),
+                    ("lineage_scoped2G",r'tests/recovery-lineage\.test\.ts'),
+                    ("fixture_subprocess",r'Bun\.spawn|spawnSync\(|execFile\(|node:child_process'),
+                    ("local_listener",r'Bun\.serve|createServer\(')]:
+                      haystack=str(p.relative_to(root)) if name in ["integration_name","lineage_scoped2G"] else s
+                      if re.search(pattern,haystack):flags.append(name)
+                  rows.append({"path":str(p.relative_to(root)),"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest(),"flags":flags})
+              groups[part]=rows
+          print("OFFLINE_TEST_INVENTORY "+json.dumps({"schema":"xiongbaowork-test-literal-inventory/1","groups":groups,"execution":"NONE_DATA_ONLY_NO_IMPORTS","limits":{"data":67108864,"parent":536870912,"swap":0},"classification":"Literal screening only, not proof of a complete import graph or PG safety; Root must select exact explicit files before execution."},sort_keys=True),flush=True)
           
           PY
