@@ -23,6 +23,8 @@ import { Route as PipelinesRoute } from "@/routes/_authed/_app/pipelines";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
 import { settleReactWork } from "./settle-react-work";
 
+const TASKS_EMPTY = "当前时间范围内还没有任务——和员工说句话，工作就会出现在这里。";
+
 // Exercise the real route queries: a 404/500 is a failed read, and Retry must issue a new read.
 beforeAll(() => GlobalRegistrator.register());
 afterAll(() => GlobalRegistrator.unregister());
@@ -141,12 +143,12 @@ test("task failures do not draw an empty board or zero totals, and retry recover
   expect((await view.findByRole("alert")).textContent).toContain(
     "任务加载失败",
   );
-  expect(view.queryByText(/看板上还没有任务/)).toBeNull();
+  expect(view.queryByText(TASKS_EMPTY)).toBeNull();
   expect(view.queryByText(/四个数按所选周期统计/)).toBeNull();
   const reads = api.reads();
   api.recover();
   await userEvent.click(view.getByRole("button", { name: "重试" }));
-  expect(await view.findByText(/看板上还没有任务/)).toBeTruthy();
+  expect(await view.findByText(TASKS_EMPTY)).toBeTruthy();
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
   expect(api.reads()).toBeGreaterThan(reads);
 });

@@ -1,0 +1,52 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/1",
+  "ticket": "TASKS-READ-LINK-FIXTURES-20261028",
+  "formal_adoption": false,
+  "status": "CANDIDATE_PENDING_REVIEW_AND_RUNTIME",
+  "base_commit": "f7ef2aa6895e24f18ff3d606ce8c00d3e9f6090a",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/app/tests/business-read-errors.test.tsx",
+      "before": {
+        "bytes": 6863,
+        "sha256": "2fa627689e3da99af57dc3bbcc0251540939de331da33782f7c202a574f406f2",
+        "mode": "0o644",
+        "blob": "3a3a5acb2c3c4bb797a7dd1cb303a1081aa451db"
+      },
+      "after": {
+        "bytes": 6951,
+        "sha256": "f97602aaadadf74cc84d014659c1d442800927633e0d0cc7c792a49269647aa3",
+        "mode": "0o644",
+        "blob": "68ed7ea7bf03a4bd6475a48f335cac33196e423a"
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-open-link.test.tsx",
+      "before": {
+        "bytes": 4615,
+        "sha256": "c3e584f7c3e3754a50efe61debc264b5e7828ed04c9f97c9723d7da5a2711d10",
+        "mode": "0o644",
+        "blob": "32bf38d8ae3dd84a2f38c0f822cb945503e55b77"
+      },
+      "after": {
+        "bytes": 5001,
+        "sha256": "2f787e304a6707531be68df51984874869f26ec7db64b821e7e490d45c3edc43",
+        "mode": "0o644",
+        "blob": "8c61ea0e16bbca01c744eb9d14018d14f98729a2"
+      }
+    }
+  ],
+  "scope": "Two test files only: current actual empty-board sentence on both failure-negative and recovery-positive assertions; link fixture supplies required pendingIds and owned preseeded roster client with cleanup. Production unchanged.",
+  "trigger": {
+    "run": 40708081193,
+    "job": 122885528186,
+    "named_files": 161,
+    "pass": 1205,
+    "fail": 2,
+    "unhandled": 0
+  },
+  "full_app_one_process": "RESOURCE_STOP_RETAINED_NOT_PASS",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
