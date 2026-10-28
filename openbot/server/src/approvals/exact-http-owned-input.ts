@@ -63,7 +63,10 @@ function snapshot(request: Request) {
 	const referrer = field(request, "referrer");
 	const referrerPolicy = field(request, "referrerPolicy");
 	const integrity = field(request, "integrity");
-	const keepalive = field(request, "keepalive");
+	// Bun 1.3.14 has no native keepalive property. Preserve only a flag the
+	// trusted native prototype actually exposes; never consult caller shadows.
+	const hasKeepalive = Object.hasOwn(requestGetters, "keepalive");
+	const keepalive = hasKeepalive ? field(request, "keepalive") : undefined;
 	const mode = field(request, "mode");
 	// These are native getter results. Explicit checks narrow actual Fetch types
 // without casting an unknown caller into a Request/Headers/signal/stream.
@@ -72,7 +75,9 @@ function snapshot(request: Request) {
 		|| (credentials !== "omit" && credentials !== "same-origin" && credentials !== "include")
 		|| (cache !== "default" && cache !== "no-store" && cache !== "reload" && cache !== "no-cache" && cache !== "force-cache" && cache !== "only-if-cached")
 		|| (redirect !== "follow" && redirect !== "error" && redirect !== "manual")
-		|| typeof referrer !== "string" || typeof integrity !== "string" || typeof keepalive !== "boolean"
+		|| typeof referrer !== "string" || typeof integrity !== "string"
+		|| (keepalive !== undefined && typeof keepalive !== "boolean")
+		|| (hasKeepalive && keepalive === undefined)
 		|| (referrerPolicy !== "" && referrerPolicy !== "no-referrer" && referrerPolicy !== "no-referrer-when-downgrade" && referrerPolicy !== "origin" && referrerPolicy !== "origin-when-cross-origin" && referrerPolicy !== "same-origin" && referrerPolicy !== "strict-origin" && referrerPolicy !== "strict-origin-when-cross-origin" && referrerPolicy !== "unsafe-url")
 		|| (mode !== "cors" && mode !== "same-origin" && mode !== "no-cors")) throw INVALID;
 	const ownedHeaders = new NativeHeaders();
@@ -159,7 +164,8 @@ export async function preserveExactHttpRunInputV1(request: Request): Promise<Req
 			method: source.method, headers: source.headers, body: raw, signal,
 			credentials: source.credentials, cache: source.cache, redirect: source.redirect,
 			referrer: source.referrer, referrerPolicy: source.referrerPolicy,
-			integrity: source.integrity, keepalive: source.keepalive, mode: source.mode,
+			integrity: source.integrity, mode: source.mode,
+			...(source.keepalive === undefined ? {} : { keepalive: source.keepalive }),
 		});
 		entry = Object.freeze({ value: materialized.value, rawByteLength: used });
 	} catch (error) {

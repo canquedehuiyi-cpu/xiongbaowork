@@ -2,7 +2,7 @@ name: Recovery validation - source and components
 on:
   push:
     branches:
-      - codex/cloud-repairs-recovery-20261028
+      - codex/approval-input-bun-fix-20261028
     paths:
       - '.github/**'
       - '.gitignore'
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: Diagnose native Fetch compatibility - failure retained
+    name: Candidate approval input runtime fix - not adopted
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -126,6 +126,21 @@ jobs:
           assert len(shown) == 419227
           assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
           manifest = json.loads(shown)
+          overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+                                        "show", target + ":archives/recovery-20261028/AP-INPUT-BUN-CANDIDATE.json"],
+                                       cwd=root, check=True, capture_output=True,
+                                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+          assert len(overlay_raw) == 2060 and hashlib.sha256(overlay_raw).hexdigest() == "ff799100294e46b3988a1605e60e1cd31a07b05c64fe0713659455183e910395"
+          overlay = json.loads(overlay_raw)
+          assert overlay["base_manifest_sha256"] == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
+          assert overlay["formal_adoption"] is False and len(overlay["changes"]) == 3
+          assert {c["path"] for c in overlay["changes"]} == set(["openbot/server/src/approvals/exact-http-owned-input.ts","openbot/server/tests/approval-exact-input-json-materializer.test.ts","openbot/server/tests/approval-exact-http-owned-input.test.ts"])
+          records = {f["path"]: f for f in manifest["files"]}
+          for change in overlay["changes"]:
+              original = records[change["path"]]
+              assert original["bytes"] == change["before"]["bytes"] and original["sha256"] == change["before"]["sha256"]
+              original["bytes"] = change["after"]["bytes"]
+              original["sha256"] = change["after"]["sha256"]
           command(["git", "sparse-checkout", "init", "--no-cone"], root)
           def sparse_literal(path):
               return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
@@ -143,13 +158,13 @@ jobs:
           for item in manifest["files"]:
               total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
                                       expected_mode=item["mode"])
-          assert total == 48435806
+          assert total == 48438057
           tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
           assert all(f["path"] in tracked for f in manifest["files"])
           assert not command(["git", "status", "--porcelain"], root)
-          result = {"status": "SOURCE_BYTES_VERIFIED", "head": target,
+          result = {"status": "CANDIDATE_SOURCE_BYTES_VERIFIED_NOT_ADOPTED", "head": target,
                     "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
-                    "formal_baseline": "V57", "verified_source_files": 2045, "verified_source_bytes": total,
+                    "formal_baseline": "V57 + AP-INPUT-BUN-20261028 candidate", "overlay_sha256": "ff799100294e46b3988a1605e60e1cd31a07b05c64fe0713659455183e910395", "verified_source_files": 2045, "verified_source_bytes": total,
                     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
                     "source_mismatches": 0, "file_modes_verified": True, "fd_named_stability_verified": True,
                     "aggregate_memory_limit": 67108864, "project_upper_bound": 536870912, "swap_limit": 0,
@@ -225,7 +240,7 @@ jobs:
           root = base / "xiongbaowork-verified-source" / "repo"
           harness = base / "xiongbaowork-input-provenance-components"
           harness.mkdir(mode=0o700)
-          identities = json.loads("[{\"path\":\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"bytes\":18490,\"sha256\":\"016f08bdd15f27fa97967b3501b81c204030a86c2bdc86244f64886e237edb59\"},{\"path\":\"openbot/server/tests/approval-exact-http-owned-input.test.ts\",\"bytes\":13610,\"sha256\":\"81afc1d207dc5ff25037bbce5b06190338bcfe7b1a87c9e7b721c22f7e60921a\"},{\"path\":\"openbot/server/src/approvals/exact-input-json.ts\",\"bytes\":6534,\"sha256\":\"24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45\"},{\"path\":\"openbot/server/src/approvals/exact-input-json-materializer.ts\",\"bytes\":11512,\"sha256\":\"1f00ea78d598d1736512133066b12072f331f31c1e900aad9c97f1c718398b19\"},{\"path\":\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"bytes\":9361,\"sha256\":\"bba2bd4f4c4109e0b5e2d07066a924f86e5bbd1d887c05e55ec604213dbb49f8\"}]")
+          identities = json.loads("[{\"path\":\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"bytes\":19601,\"sha256\":\"bd49e4b4ed9f4261d7a3c65beb2e023872941a4e32e41435ed38c3238797e830\"},{\"path\":\"openbot/server/tests/approval-exact-http-owned-input.test.ts\",\"bytes\":14378,\"sha256\":\"a9640de6b61967d09cd4b9ab1b69649a03762008f6d1925525e2ca192d53c6f3\"},{\"path\":\"openbot/server/src/approvals/exact-input-json.ts\",\"bytes\":6534,\"sha256\":\"24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45\"},{\"path\":\"openbot/server/src/approvals/exact-input-json-materializer.ts\",\"bytes\":11512,\"sha256\":\"1f00ea78d598d1736512133066b12072f331f31c1e900aad9c97f1c718398b19\"},{\"path\":\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"bytes\":9733,\"sha256\":\"ca9c1e2826d9fa2753d22138f13314cac79e11c4a5d7ed55d91ce4c973596ff2\"}]")
           for item in identities:
               source = root / item["path"]
               assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
@@ -250,7 +265,7 @@ jobs:
               "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           
           PY
-      - name: Diagnose native APIs and reproduce one known failure
+      - name: Run isolated input provenance component tests under project limit
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -260,23 +275,38 @@ jobs:
             /usr/bin/python3 -I -B - <<'PY'
           import json, os, subprocess
           from pathlib import Path
-          base=Path.cwd()
-          cg=Path("/sys/fs/cgroup") / Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
-          assert (cg/"memory.max").read_text().strip()=="536870912"
-          assert (cg/"memory.swap.max").read_text().strip()=="0"
-          assert cg.parent.name=="xiongbaowork.slice"
-          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
-          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
-          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(base/"diagnostic-home"),"NO_COLOR":"1","CI":"true"}
-          (base/"diagnostic-home").mkdir(mode=0o700)
-          probe=subprocess.run([str(binary),"--no-install","-e","const req = new Request(\"https://example.invalid/input\", {method:\"POST\", body:\"null\", headers:{\"content-type\":\"application/json\"}, credentials:\"include\", cache:\"no-store\", redirect:\"manual\", referrer:\"https://example.invalid/\", referrerPolicy:\"same-origin\", integrity:\"sha256-fixture\", keepalive:false, mode:\"cors\"});\nconst names=[\"method\",\"url\",\"headers\",\"signal\",\"body\",\"credentials\",\"cache\",\"redirect\",\"referrer\",\"referrerPolicy\",\"integrity\",\"keepalive\",\"mode\"];\nconst levels=[];let p=Request.prototype;\nfor(let n=0;p!==null&&n<8;n++,p=Object.getPrototypeOf(p)){const d=Object.getOwnPropertyDescriptors(p);levels.push({level:n,fields:Object.fromEntries(names.filter(k=>d[k]).map(k=>[k,{getter:typeof d[k].get,hasValue:Object.hasOwn(d[k],\"value\"),valueType:typeof d[k].value,value:typeof d[k].value===\"string\"||typeof d[k].value===\"boolean\"?d[k].value:undefined}]))});}\nconst fields={};const own=Object.getOwnPropertyDescriptors(Request.prototype);\nfor(const key of names){const d=own[key];try{const value=d?.get?d.get.call(req):d&&Object.hasOwn(d,\"value\")?d.value:undefined;fields[key]={type:typeof value,value:typeof value===\"string\"||typeof value===\"boolean\"?value:undefined,tag:value&&typeof value===\"object\"?Object.prototype.toString.call(value):undefined};}catch(error){fields[key]={error:error?.name};}}\nlet signal=Object.getOwnPropertyDescriptor(Request.prototype,\"signal\")?.get?.call(req);let signalLevels=[];p=AbortSignal.prototype;\nfor(let n=0;p!==null&&n<5;n++,p=Object.getPrototypeOf(p)){const d=Object.getOwnPropertyDescriptors(p);if(d.aborted)signalLevels.push({level:n,getter:typeof d.aborted.get,hasValue:Object.hasOwn(d.aborted,\"value\")});}\nconst fresh=new Error(\"fixed\");fresh.name=\"FixedError\";let thrown;try{throw new Error(\"fixed\");}catch(e){thrown=e;thrown.name=\"FixedError\";}\nlet proxyTraps=0;const proxy=new Proxy(req,{get(){proxyTraps++;throw Error(\"proxy trap\");},getPrototypeOf(){proxyTraps++;throw Error(\"proxy prototype trap\");}});let proxyRefused=false;try{Object.getOwnPropertyDescriptor(Request.prototype,\"method\").get.call(proxy);}catch{proxyRefused=true;}\nconsole.log(\"NATIVE_FETCH_DIAGNOSTIC \"+JSON.stringify({bun:Bun.version,levels,fields,signalLevels,requestOwnKeys:Reflect.ownKeys(req).map(String),freshErrorKeys:Reflect.ownKeys(fresh).map(String),thrownErrorKeys:Reflect.ownKeys(thrown).map(String),proxyRefused,proxyTraps}));\n"],env=env,capture_output=True,text=True,timeout=30,check=True)
-          print(probe.stdout,end="",flush=True)
-          print(probe.stderr,end="",flush=True)
-          harness=base/"xiongbaowork-input-provenance-components"/"openbot"
-          result=subprocess.run([str(binary),"test","--no-install","--timeout","5000","--test-name-pattern","replay preserves original bytes, whitespace and complete unknown fields","server/tests/approval-exact-http-owned-input.test.ts"],cwd=harness,env=env,capture_output=True,text=True,timeout=30)
-          print(result.stdout,end="",flush=True)
-          print(result.stderr,end="",flush=True)
-          print("KNOWN_FAILURE_REPRO "+json.dumps({"exit_code":result.returncode,"previous_baseline_pass":43,"previous_baseline_fail":20,"scope":"one failing HTTP input case only; diagnostic, not acceptance"}),flush=True)
+          
+          base = Path.cwd()
+          cg_line = Path("/proc/self/cgroup").read_text().strip()
+          cg = Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "536870912"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert (cg / "memory.oom.group").read_text().strip() == "1"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
+          print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
+                                                          "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
+          binary = base / "xiongbaowork-bun-1.3.14" / "bun"
+          harness = base / "xiongbaowork-input-provenance-components"
+          home = base / "xiongbaowork-component-home"
+          home.mkdir(mode=0o700)
+          env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
+                 "NODE_ENV": "test", "CI": "true", "NO_COLOR": "1"}
+          version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
+          assert version == "1.3.14"
+          revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
+          args = [str(binary), "test", "--no-install", "--timeout", "5000",
+                  "server/tests/approval-exact-input-json-materializer.test.ts",
+                  "server/tests/approval-exact-http-owned-input.test.ts"]
+          result = subprocess.run(args, cwd=harness / "openbot", env=env, capture_output=True, text=True, timeout=120)
+          print(result.stdout, end="", flush=True)
+          print(result.stderr, end="", flush=True)
+          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
+              "bun_revision": revision, "test_files": 2, "scope": "isolated exact-byte HTTP input and JSON materializer components",
+              "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
+              "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
+              "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
           raise SystemExit(result.returncode)
           
           PY

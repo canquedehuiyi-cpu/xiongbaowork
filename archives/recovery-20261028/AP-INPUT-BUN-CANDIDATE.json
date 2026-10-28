@@ -1,0 +1,56 @@
+{
+  "schema": "xiongbaowork-source-candidate-overlay/1",
+  "ticket": "AP-INPUT-BUN-20261028",
+  "status": "CANDIDATE_PENDING_INDEPENDENT_SOURCE_REVIEW",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "base_commit": "763ac2964a8575cf0c6daaf3ceb1f178f2fb4c14",
+  "formal_adoption": false,
+  "scope": "Optional native keepalive compatibility and independent test oracles; production wiring unchanged",
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
+      "before": {
+        "bytes": 9361,
+        "sha256": "bba2bd4f4c4109e0b5e2d07066a924f86e5bbd1d887c05e55ec604213dbb49f8",
+        "blob": "0edb5f1d70eec6d73a4494bd8021b61440c060fa",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 9733,
+        "sha256": "ca9c1e2826d9fa2753d22138f13314cac79e11c4a5d7ed55d91ce4c973596ff2",
+        "blob": "2c5b99247e2d77179dbffc2e3b78e6a784bca84a",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-input-json-materializer.test.ts",
+      "before": {
+        "bytes": 18490,
+        "sha256": "016f08bdd15f27fa97967b3501b81c204030a86c2bdc86244f64886e237edb59",
+        "blob": "bc606a15fcfe3b5e192c5f2def90cf993e64f695",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 19601,
+        "sha256": "bd49e4b4ed9f4261d7a3c65beb2e023872941a4e32e41435ed38c3238797e830",
+        "blob": "950e790be4e7ff2c81c7371860051affb9ce44da",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
+      "before": {
+        "bytes": 13610,
+        "sha256": "81afc1d207dc5ff25037bbce5b06190338bcfe7b1a87c9e7b721c22f7e60921a",
+        "blob": "5ce1d88db14e0c8cf104840e571a30d4a5aade03",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 14378,
+        "sha256": "a9640de6b61967d09cd4b9ab1b69649a03762008f6d1925525e2ca192d53c6f3",
+        "blob": "919b9f8d1790798156f1b1e60d3c9431d6fbc618",
+        "mode": "0o644"
+      }
+    }
+  ]
+}
