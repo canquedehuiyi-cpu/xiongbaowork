@@ -1,0 +1,184 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "K106-CURRENT-PARENT-RUNTIME-20261028",
+  "revision": 2,
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "formal_parent": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
+  "candidate": "541bd1c7782e7aaca0b9d19fa90bc7f0f4ab7c82",
+  "six_subject_files": [
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql",
+      "bytes": 5270,
+      "sha256": "a5541d86f2d648301bc5c4e7bf5a2e623ccf43e2a1719130d9f95bad41290c72",
+      "blob": "434eb5204024a369249a062e0fdfd93cae99f059",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json",
+      "bytes": 604775,
+      "sha256": "96e8bc9e6a7b89c008649ad0c964f9a6cf5460fad2db9f7c1fb33ebb7c2f3cd6",
+      "blob": "1d28ab313093757f712b067a1c4052f8a0790836",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+      "bytes": 16159,
+      "sha256": "0be3bb0f19c52c21fc3ecc689d5eff41ae00a5e028de064cd9ad213d65ac44fb",
+      "blob": "9f5f277d95d265e45c40bd05b61300629f8d519b",
+      "mode": "100644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+      "bytes": 5290,
+      "sha256": "4b64d2d8cb7ac1f4e361ef3d91de64cda0180d61dce92d74c7e6c5a564d4f588",
+      "blob": "dbce0d05cdeb341ea01465b3dbe325cfbb9edc3d",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "bytes": 1794,
+      "sha256": "f9ddd1c640db86a246e45095788bb3c140ec503a0a35be75a8e64d09c99ea2aa",
+      "blob": "b4d0e1c0d089d03d08f2662e2fc7f232f797c618",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts",
+      "bytes": 128110,
+      "sha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
+      "blob": "0ab9b0090a8823a334c974dd93e295760d8795c6",
+      "mode": "0o644"
+    }
+  ],
+  "review_method": {
+    "sql_orm_barrel_test": "full text including complete128110B test read in chunks",
+    "snapshot_journal": "complete pure DATA JSON and exact text inverse; no Subject parser/helper execution",
+    "windows_disk_writes": 0,
+    "repository_writes": 0,
+    "project_execution": 0,
+    "new_agents": 0
+  },
+  "independent_checks": {
+    "snapshot": {
+      "new_tables": [
+        "public.plugin_assembly_origins",
+        "public.plugin_assembly_publications"
+      ],
+      "oracle": "two complete independent original0121 capsules retained unchanged from historical after34",
+      "old_tables": 150,
+      "old_snapshot_bytes": 594705,
+      "old_snapshot_full_text_equal": true,
+      "unknown_tops_types_order_preserved": true,
+      "id": "90530f50-0fa9-4dc2-9ced-7d718a08fe76",
+      "prevId": "eaa15046-f3b6-4e8b-9509-29279faf2fc7"
+    },
+    "journal": {
+      "inverse_full_text_bytes": 15995,
+      "exact_full_parent_equal": true,
+      "prefix": "0..105 complete typed entries and all tops/order",
+      "event106": {
+        "idx": 106,
+        "version": "7",
+        "when": 1792421265000,
+        "tag": "0106_plugin_assembly_foundations_closed",
+        "breakpoints": true
+      }
+    },
+    "barrel": {
+      "only_one_export_added": true,
+      "inverse_full_text_bytes": 1747
+    },
+    "historical_sql_snapshot_journal_barrel_blobs_equal": true,
+    "orm_delta": "two .using(btree,...) to .on(...) only",
+    "structure": {
+      "columns": 17,
+      "inline_primary_keys": 2,
+      "indexes": 2,
+      "foreign_keys": 1,
+      "checks": 6,
+      "policies": 8,
+      "policy_slots": 10,
+      "rls": 2
+    },
+    "policy_predicates": "public SELECT true, four false slots, admin/tenant/publisher/sourceTenant unchanged",
+    "fk": "exact publication owner/single id/unique native publication.id UUID; exact origin table and origin.id; six true wrong identity/duplicate negatives; no ExtraConfigColumn recursive method",
+    "prior_test_inverses": {
+      "knowledge_write": {
+        "literal_counts": [
+          1,
+          1,
+          1
+        ],
+        "old_bytes": 119984,
+        "old_sha256": "83304cf4a0b066ad84153fefbe2ebfffd014bbb172f8b734f43b1d83faa05e85",
+        "old_full_text_equal": true
+      },
+      "resource": {
+        "literal_counts": [
+          1,
+          1,
+          1,
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        "old_bytes": 111726,
+        "old_sha256": "018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81",
+        "old_full_text_equal": true
+      },
+      "sealed_current_size_sha_before_inverse": true,
+      "strict_utf8_roundtrip": true,
+      "unknown_and_appended_current_bytes_rejected": true,
+      "no_nested_literal_mishit": true
+    },
+    "complete_test_inverse_to_historical": {
+      "bytes": 104477,
+      "sha256": "065569edc900cb77ebd116957541d6c7bc3bc9af35b718243e9cfcd1f4877a15",
+      "full_text_equal": true,
+      "original_definitions": 19,
+      "added_regressions": 3,
+      "protected_artifacts": 214
+    }
+  },
+  "runtime_independently_read": {
+    "baseline": {
+      "run": 40679810321,
+      "job": 122787335008,
+      "pass": 12,
+      "fail": 7,
+      "expects": 518
+    },
+    "revision2": {
+      "run": 40680280457,
+      "job": 122788968758,
+      "pass": 22,
+      "fail": 0,
+      "expects": 625,
+      "exit": 0,
+      "source_files": 2049,
+      "source_bytes": 49207256,
+      "source_mismatches": 0,
+      "test_peak": "215.9M",
+      "data_memory_max": 67108864,
+      "project_memory_max": 536870912,
+      "swap": 0
+    }
+  },
+  "not_verified": [
+    "full preload suite",
+    "full CI",
+    "server types",
+    "native PG17",
+    "real roles/GUC trust",
+    "publisher/registration writer",
+    "producer wiring"
+  ],
+  "legacy_v58": "NOT_ADOPTED; FD/cache/O_EXCL incidents not cleared",
+  "postgres17": "PG_PENDING",
+  "activation": "DISABLED",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
