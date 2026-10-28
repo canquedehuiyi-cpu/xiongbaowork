@@ -1,0 +1,212 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40747270847,
+  "job": 123024996754,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "0dd8ddfdfd546f03dfe03ab10497e2b67aff4d8f",
+    "head": "bfd357ab5ade1bce236b09f3bf2a8208002a5951",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50029764,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "bfd357ab5ade1bce236b09f3bf2a8208002a5951",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 7,
+    "completed_files": 7,
+    "results": [
+      {
+        "path": "server/tests/runner-dispatch.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/runner-channel.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/computer-policy.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/computer-gateway.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/computer-human-input.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/computer-session-guard.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/control-refusal-end-to-end.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 163,
+    "fail": 0,
+    "expects": 437
+  },
+  "lint": null,
+  "lint_counts": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64.2M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 510.1M (swap: 0B)",
+    "Memory peak: 185.9M (swap: 0B)"
+  ],
+  "actual_restore512MiB_count": 0,
+  "strict_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Existing exact7 files: in-memory fake socket/provider/transport tests, pure policy evaluation, in-memory snapshots, route stubs, and own loopback control-refusal listener. Not real user device/offline queue persistence/nativePG/full backend/strictCI.",
+  "plan": {
+    "schema": "xiongbaowork-explicit-offline-runner-policy-validation/1",
+    "source_content_commit": "8f127f4e5f2ef91185a55cf8303caf60f5d39fb2",
+    "source_files": 2060,
+    "source_bytes": 50029764,
+    "selected_tests": [
+      {
+        "path": "openbot/server/tests/runner-dispatch.test.ts",
+        "bytes": 6637,
+        "sha256": "1b47c215ed148beecdbc39aab70a15acb44c8585ad9513653e712ed23c381e69",
+        "mode": "0o644"
+      },
+      {
+        "path": "openbot/server/tests/runner-channel.test.ts",
+        "bytes": 9971,
+        "sha256": "3460e270b0f7257ce00ad09360af617c80149054bfcfac8b4eb026fc03f796ca",
+        "mode": "0o644"
+      },
+      {
+        "path": "openbot/server/tests/computer-policy.test.ts",
+        "bytes": 28127,
+        "sha256": "16f60fac67378cb4374c6344b17f74669a6c3bb80a120a50c8eb84fc2081f6b3",
+        "mode": "0o644"
+      },
+      {
+        "path": "openbot/server/tests/computer-gateway.test.ts",
+        "bytes": 66586,
+        "sha256": "da0735889d7c5ba72e842600d1f501b4f75fde88e11a86b0d0de5750d7618a71",
+        "mode": "0o644"
+      },
+      {
+        "path": "openbot/server/tests/computer-human-input.test.ts",
+        "bytes": 4499,
+        "sha256": "35f624ba2deb2bb0feca772a88cc3d2b21ada816243b5cd2a1c09d094b77a1ca",
+        "mode": "0o644"
+      },
+      {
+        "path": "openbot/server/tests/computer-session-guard.test.ts",
+        "bytes": 8225,
+        "sha256": "7ea7e44c4cdf3d3b538b8d63d5f6b9ac5c7419eb20ac6c6240c92872a5a41d3a",
+        "mode": "0o644"
+      },
+      {
+        "path": "openbot/server/tests/control-refusal-end-to-end.test.ts",
+        "bytes": 6081,
+        "sha256": "33ac8621cb1289c2cb6198138bea641bc11cdaa39d9392aac8106e08e8d05fee",
+        "mode": "0o644"
+      }
+    ],
+    "scope": "Existing exact7 files: in-memory fake socket/provider/transport tests, pure policy evaluation, in-memory snapshots, route stubs, and own loopback control-refusal listener. Not real user device/offline queue persistence/nativePG/full backend/strictCI.",
+    "excluded_pg_files": [
+      "openbot/server/tests/tenant-cross-tenant-404.test.ts",
+      "openbot/server/tests/tenant-cross-tenant-agents.test.ts",
+      "openbot/server/tests/tenant-cross-tenant-approvals.test.ts",
+      "openbot/server/tests/tenant-cross-tenant-attachments.test.ts",
+      "openbot/server/tests/tenant-cross-tenant-channels.test.ts",
+      "openbot/server/tests/tenant-rls.test.ts",
+      "openbot/server/tests/rls-write-scope.test.ts",
+      "openbot/server/tests/device-queue.test.ts"
+    ],
+    "import_native_pg": false,
+    "credentials": "NONE_IN_TEST_ENVIRONMENT",
+    "provider_calls": "INJECTED_FAKES_OR_OWN_LOOPBACK",
+    "project_and_all_descendants": 536870912,
+    "swap": 0,
+    "data_limit": 67108864,
+    "free_standard_public_actions": true,
+    "paid_provider_calls": 0,
+    "source_changes": 0,
+    "windows_source_writes": 0,
+    "pg17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "source_content_commit": "8f127f4e5f2ef91185a55cf8303caf60f5d39fb2",
+  "workflow_commit": "bfd357ab5ade1bce236b09f3bf2a8208002a5951",
+  "native_pg_imported": false,
+  "no_external_real_provider": true,
+  "source_changes": 0,
+  "real_user_device": "NOT_VERIFIED"
+}

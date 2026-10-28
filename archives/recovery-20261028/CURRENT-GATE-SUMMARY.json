@@ -1,0 +1,88 @@
+{
+  "schema": "xiongbaowork-current-delivery-gates/1",
+  "source_content_commit": "3ee17798adf9524391a242d5b5903a2148cfe0ea",
+  "source_files": 2060,
+  "source_bytes": 50032053,
+  "approved_source_repair_overlays": 22,
+  "original_delivery_packages": 18,
+  "original_stories": 77,
+  "original_final_gates": 7,
+  "requirements_and_statuses_retained": true,
+  "current_partial_proofs": {
+    "source22_manifest": {
+      "run": 40747020490,
+      "job": 123023404323,
+      "tests": {
+        "pass": 8,
+        "fail": 0,
+        "expects": 32
+      }
+    },
+    "source21_real_cloud_chrome": {
+      "run": 40746063116,
+      "job": 123020057194,
+      "checks": 35,
+      "actions": 26,
+      "status": "PASS_CLOUD_HEADLESS_FIXTURE_ONLY"
+    },
+    "source21_offline_runner_policy": {
+      "run": 40747270847,
+      "job": 123024996754,
+      "tests": {
+        "pass": 163,
+        "fail": 0,
+        "expects": 437
+      }
+    },
+    "original_lineage": {
+      "run": 40733437062,
+      "job": 122977749310,
+      "tests": {
+        "pass": 37,
+        "fail": 0,
+        "expects": 355
+      },
+      "restored512MiB": true
+    },
+    "historical_combinedSource17": {
+      "run": 40733053569,
+      "job": 122974203077,
+      "app": {
+        "pass": 1207,
+        "fail": 0,
+        "expects": 4163,
+        "files": 161,
+        "unhandled_errors": []
+      },
+      "components": {
+        "pass": 691,
+        "fail": 0,
+        "expects": 10744
+      },
+      "all4_original_tsconfigs": "PASS",
+      "lint": "0 errors /0 warnings /181infos"
+    }
+  },
+  "remaining_gate_evidence": {
+    "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
+    "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
+    "g3": "Source22 complete2060-file/50032053B identity verified; original CI shard/report contracts8/0/32 and exact original pinned lint0err/0warn/181info. Combined Source17 fullapp1207/0/4163, named39component691/0/10744, all4 original tsconfigs passed. Original lineage37/0/355 passed authorized2GiB; Source21 offline runner163/0/437 passed. Whole backend and strictCI remain not passed, nativePG_PENDING and frozen03df9efa baseline unavailable.",
+    "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
+    "g5": "Cloud Linux headless Chrome156.0.8078.47 own-loopback fixture35checks/26actions passed under512MiB/swap0/sandboxtrue, run40746063116; offline7 runner policy files163/0/437 passed separately. Real user device, durable offline reconnect/queue, real human approval closure and clean client deployment remain not verified.",
+    "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
+    "g7": "NO_CLEAN_WINDOWS_LINUX_CLIENT_DEPLOYMENT_EVIDENCE"
+  },
+  "ready": false,
+  "ROOT_RELEASE": null,
+  "AP_DISABLED": true,
+  "NOT_SERVICE_WIRED": true,
+  "migrationNOT_WIRED": true,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN_FROZEN_BASELINE_03df9efa_UNAVAILABLE",
+  "paid_provider_calls": 0,
+  "windows_source_writes": 0,
+  "production_deploys": 0,
+  "default_branch_changed": false,
+  "automations_resumed": false,
+  "commercial_acceptance": "NOT_DELIVERED"
+}

@@ -1,3 +1,17 @@
+## ROOT132 当前交付检查点，2026-10-29
+
+恢复Source22已正式采用于 3ee17798adf9524391a242d5b5903a2148cfe0ea：2060文件/50032053字节，22个独审源码修复覆盖包，与原18交付包严格分开。完整77故事、18交付包、7最终门及其原current_verification/status要求均未改，NOT_DELIVERED。
+
+原server测试清单修复仅一个Source文件，原314路径全留，新增50个已有路径，当前364条/缺0/重0/删0；不改任何测试正文、六分片算法或严格CI基线门。独审SOURCE_APPROVED_ONLY/findings=[]后采用，候选run40747020490/job123023404323核完整Source大小/SHA/typed modes/FD稳定并通过原8个分片与报告case、32expects；exact原Biome2.5.10 lint exit0/0err/0warn/181infos。清单验证未导入364个Subject测试，不能当作全后台通过。自动peaks64M/64M/512.7M/107.9M/347.6M保原值。
+
+新增既有7个offline runner-policy文件验证run40747270847/job123024996754：163pass/0fail/437expects，7/7文件各exit0，原preload、默认512MiB/swap0，自动test peak185.9M；DATA64.2M和install510.1M原值保留。范围为内存fake socket/provider/transport、纯策略、内存snapshot、route stub和自己回环拒绝HTTP服务；不是真实设备重连、真实PG RLS或完整backend。该run冻结Source21，后续Source22仅修清单，所有测试正文和生产路径未变；不冒在新SHA重跑。
+
+Source21实际云端Chrome run40746063116的35check/26action PASS，以及原始lineage37/0/355和Source17组合检查已存独立JSON并保留精确commit/run作用域；不相加成不重复总数，不冒完整77故事已验。旧Chrome失败/临时诊断、旧资源中止与所有历史审计继续保留。
+
+当前没有未审候选或仍运行的本轮cloud验证job。剩余实际门：真实PG17及跨租户/持久化队列仍PG_PENDING；原严格CI03df9efa基线不可用；正式镜像8GET、真实WakerFlow全链、真实用户设备及离线/审批闭环、真实模型/正确计费、Windows/Linux干净客户部署证据均未全验。ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED不变。所有Source/归档/JSON/依赖/测试仅云端，Windows Source写0；免费标准public Actions，privatecache/copyfile/禁生命周期脚本，已获单项2GiB例外不外扩。没有PR、生产部署、付费provider或默认分支变更；旧自动化仍暂停。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## root131Shard Source adoption, 2026-10-29
 
 SERVER-CI-TEST-MANIFEST-20261029 adopted unchanged from candidate 72856610a5fae2bd9a62da5d7bc0cb8554481dc4. 1 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40747020490/job 123023404323; see exact validation JSON for pass/fail counts and remaining diagnostics. 2060 files / 50032053 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
