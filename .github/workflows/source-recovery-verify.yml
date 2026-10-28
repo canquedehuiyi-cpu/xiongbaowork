@@ -18,7 +18,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          sudo systemd-run --quiet --wait --pipe --collect \
+          sudo systemd-run --wait --pipe \
             --property=Type=exec --property=MemoryMax=64M \
             --property=MemorySwapMax=0 --property=OOMPolicy=kill \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
@@ -82,13 +82,28 @@ jobs:
           with tempfile.TemporaryDirectory(prefix="xiongbaowork-source-", dir=Path.cwd()) as work:
               root = Path(work) / "repo"
               command(["git", "init", "--quiet", str(root)], Path(work))
-              command(["git", "fetch", "--quiet", "--no-tags", "--depth=1",
-                       "https://github.com/canquedehuiyi-cpu/xiongbaowork.git", target], root)
+              command(["git", "remote", "add", "origin", "https://github.com/canquedehuiyi-cpu/xiongbaowork.git"], root)
+              command(["git", "config", "remote.origin.promisor", "true"], root)
+              command(["git", "config", "remote.origin.partialclonefilter", "blob:none"], root)
+              command(["git", "fetch", "--quiet", "--no-tags", "--filter=blob:none", "--depth=1", "origin", target], root)
+              control_path = "archives/recovery-20261028/V57-MANIFEST.json"
+              shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+                                      "show", target + ":" + control_path], cwd=root,
+                                     check=True, capture_output=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+              assert len(shown) == 419227
+              assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
+              manifest = json.loads(shown)
+              command(["git", "sparse-checkout", "init", "--no-cone"], root)
+              def sparse_literal(path):
+                  return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
+              patterns = "\n".join(sparse_literal(f["path"]) for f in manifest["files"]) + "\n/" + control_path + "\n"
+              subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
+                             cwd=root, check=True, text=True, capture_output=True)
               command(["git", "checkout", "--quiet", "--detach", target], root)
               assert command(["git", "rev-parse", "HEAD"], root) == target
-              manifest_raw = verified_bytes(root, "archives/recovery-20261028/V57-MANIFEST.json", 419227,
+              manifest_raw = verified_bytes(root, control_path, 419227,
                   "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
-              manifest = json.loads(manifest_raw)
+              assert manifest_raw == shown
               assert manifest["file_count"] == len(manifest["files"]) == 2045
               assert len({f["path"] for f in manifest["files"]}) == 2045
               total = 0
