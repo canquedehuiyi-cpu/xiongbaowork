@@ -1,0 +1,76 @@
+{
+  "schema": "xiongbaowork-candidate-component-validation/1",
+  "ticket": "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+  "status": "R2_RUNTIME_PASSED_INDEPENDENT_REVIEW_PENDING",
+  "formal_adoption": false,
+  "source_commit": "c3e4c22df8836df5b19168e3cd3a9bed6c4e8d62",
+  "run": 40663995511,
+  "job": 122733765060,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "dba1d081325fdb05abfe1bcf2bf18c61fe301b7c",
+    "head": "c3e4c22df8836df5b19168e3cd3a9bed6c4e8d62",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "CANDIDATE_KNOWLEDGE_RESOURCE_SOURCE_BYTES_VERIFIED_NOT_ADOPTED",
+    "swap_limit": 0,
+    "verified_source_bytes": 48459984,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 3,
+    "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 58,
+    "fail": 0,
+    "expects": 2371,
+    "files": 3,
+    "five_fk_ms": 0.75
+  },
+  "historical_failures": [
+    {
+      "run": 40658219110,
+      "pass": 34,
+      "fail": 20,
+      "expects": 1951
+    },
+    {
+      "run": 40660584559,
+      "batch_timeout_seconds": 120
+    },
+    {
+      "run": 40661644468,
+      "batch_timeout_seconds": 120,
+      "partial_output_saved": true
+    },
+    {
+      "run": 40662634458,
+      "diagnostic_timeout_seconds": 15,
+      "issue": "recursive vendor ExtraConfigColumn.getSQLType exposed by candidate test"
+    }
+  ],
+  "limits_unchanged": true,
+  "postgres17": "PG_PENDING"
+}
