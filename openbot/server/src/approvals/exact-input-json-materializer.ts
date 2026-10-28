@@ -146,15 +146,15 @@ class BoundedJsonReader {
 				return chunks.join("");
 			}
 			if (point === 92) {
-				const escape = this.byte();
+				const escapedByte = this.byte();
 				this.at++;
-				if (escape === 34 || escape === 92 || escape === 47) point = escape;
-				else if (escape === 98) point = 8;
-				else if (escape === 102) point = 12;
-				else if (escape === 110) point = 10;
-				else if (escape === 114) point = 13;
-				else if (escape === 116) point = 9;
-				else if (escape === 117) {
+				if (escapedByte === 34 || escapedByte === 92 || escapedByte === 47) point = escapedByte;
+				else if (escapedByte === 98) point = 8;
+				else if (escapedByte === 102) point = 12;
+				else if (escapedByte === 110) point = 10;
+				else if (escapedByte === 114) point = 13;
+				else if (escapedByte === 116) point = 9;
+				else if (escapedByte === 117) {
 					point = this.codeUnit();
 					if (point >= 0xd800 && point <= 0xdbff) {
 						if (this.byte() !== 92) reject(); this.at++;

@@ -28,7 +28,7 @@ import { createRunnerExecutor } from "../../runner/src/execute.ts";
  */
 
 const args = process.argv.slice(2);
-const valueOf = (name: string): string => {
+const readArgValue = (name: string): string => {
   const index = args.indexOf(`--${name}`);
   return index === -1 ? "" : (args[index + 1] ?? "").trim();
 };
@@ -45,8 +45,8 @@ if (!wanted("run")) {
   process.exit(0);
 }
 
-const executablePath = valueOf("executable");
-const channel = valueOf("channel");
+const executablePath = readArgValue("executable");
+const channel = readArgValue("channel");
 if (!executablePath && !channel) {
   throw new Error(
     "Name the browser this probe may start: --executable PATH or --channel NAME. It will not choose one for your machine, and it installs nothing.",
@@ -54,7 +54,7 @@ if (!executablePath && !channel) {
 }
 // Headed is the product's default and the honest way to test it. A CI box with no desktop needs the
 // switch, and saying so here keeps it from silently becoming the tested configuration.
-const headless = valueOf("headless") === "true";
+const headless = readArgValue("headless") === "true";
 
 const FIRST = { tenantId: "probe-tenant", botId: "probe-bot-one" };
 const SECOND = { tenantId: "probe-tenant", botId: "probe-bot-two" };
