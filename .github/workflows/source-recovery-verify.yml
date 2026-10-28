@@ -1,4 +1,4 @@
-name: Integrated approved knowledge resource validation
+name: Recovery automation and Flow foundation validation
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: Approved knowledge resource fixes and full source
+    name: Existing foundation tests - native PG pending
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -69,8 +69,19 @@ jobs:
           print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
           
           def command(args, cwd):
-              return subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitLimit=8m", "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]], cwd=cwd, check=True, text=True, capture_output=True,
-                                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout.strip()
+              print("SOURCE_COMMAND_START " + json.dumps({"operation": args[1], "argument_count": len(args)}), flush=True)
+              completed = subprocess.run(["timeout", "--signal=TERM", "--kill-after=2s", "45s",
+                  "git", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+                  "-c", "core.deltaBaseCacheLimit=1m", "-c", "core.packedGitLimit=8m",
+                  "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]],
+                  cwd=cwd, text=True, capture_output=True,
+                  env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+              if completed.returncode:
+                  print("SOURCE_COMMAND_FAILURE " + json.dumps({"operation": args[1], "exit_code": completed.returncode,
+                      "stderr": completed.stderr[-4000:]}), flush=True)
+              completed.check_returncode()
+              print("SOURCE_COMMAND_END " + json.dumps({"operation": args[1]}), flush=True)
+              return completed.stdout.strip()
           
           def metadata(s):
               return (s.st_dev, s.st_ino, s.st_size, s.st_mode, s.st_nlink, s.st_mtime_ns, s.st_ctime_ns)
@@ -120,16 +131,16 @@ jobs:
           command(["git", "config", "remote.origin.partialclonefilter", "blob:none"], root)
           command(["git", "fetch", "--quiet", "--no-tags", "--filter=blob:none", "--depth=1", "origin", target], root)
           control_path = "archives/recovery-20261028/V57-MANIFEST.json"
-          shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+          shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
                                   "show", target + ":" + control_path], cwd=root,
                                  check=True, capture_output=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
           assert len(shown) == 419227
           assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
           manifest = json.loads(shown)
-          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-ADOPTED.json\",\"bytes\":4954,\"sha256\":\"947602e681a0ea87306aec11ef296cc961dd9ed75c323bad843a79de0f32f655\",\"formal_adoption\":true,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]}]")
+          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-ADOPTED.json\",\"bytes\":4954,\"sha256\":\"947602e681a0ea87306aec11ef296cc961dd9ed75c323bad843a79de0f32f655\",\"formal_adoption\":true,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/AUTOMATION-FK-ASSERTION-ADOPTED.json\",\"bytes\":2467,\"sha256\":\"21cfd36110aed505088883686c6b793c31ec6ee08477e6c6c43bc382225125d2\",\"formal_adoption\":true,\"ticket\":\"AUTOMATION-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-automation-run-records.test.ts\"]}]")
           records = {f["path"]: f for f in manifest["files"]}
           for specification in overlay_specs:
-              overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+              overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
                                             "show", target + ":" + specification["path"]],
                                            cwd=root, check=True, capture_output=True,
                                            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
@@ -150,10 +161,72 @@ jobs:
           command(["git", "sparse-checkout", "init", "--no-cone"], root)
           def sparse_literal(path):
               return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
-          patterns = "\n".join(sparse_literal(f["path"]) for f in manifest["files"]) + "\n/" + control_path + "\n"
+          # Materialize only the small control first. Each following source batch is <=2MiB/32files.
+          patterns = "/" + control_path + "\n"
           subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
                          cwd=root, check=True, text=True, capture_output=True)
           command(["git", "checkout", "--quiet", "--detach", target], root)
+          tree_records = {}
+          for row in command(["git", "ls-tree", "-r", "-z", target], root).split("\x00"):
+              if not row:
+                  continue
+              metadata_part, path = row.split("\t", 1)
+              mode, kind, oid = metadata_part.split(" ")
+              assert kind == "blob" and len(oid) == 40
+              tree_records[path] = oid
+          synced_git_files = set()
+          def flush_owned_regular(path):
+              if not path.exists():
+                  return
+              named = os.stat(path, follow_symlinks=False)
+              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+              try:
+                  assert metadata(os.fstat(fd)) == metadata(named)
+                  os.fsync(fd)
+              finally:
+                  os.close(fd)
+          def flush_git_transport():
+              index = root / ".git" / "index"
+              if index.exists():
+                  flush_owned_regular(index)
+              packs = root / ".git" / "objects" / "pack"
+              for item in packs.iterdir():
+                  if item.name.endswith((".pack", ".idx", ".rev")) and str(item) not in synced_git_files:
+                      flush_owned_regular(item)
+                      synced_git_files.add(str(item))
+          flush_owned_regular(root / control_path)
+          flush_git_transport()
+          batch = []
+          batch_bytes = 0
+          batch_count = 0
+          def materialize_batch(paths):
+              oids = sorted({tree_records[path] for path in paths})
+              command(["git", "fetch", "--quiet", "--no-tags", "--no-write-fetch-head",
+                       "--no-auto-maintenance", "--filter=blob:none", "origin", *oids], root)
+              flush_git_transport()
+              command(["git", "checkout", "--quiet", "--ignore-skip-worktree-bits", target, "--", *paths], root)
+              print("SOURCE_BATCH_COMPLETE " + json.dumps({"files": len(paths)}), flush=True)
+              for path in paths:
+                  flush_owned_regular(root / path)
+              flush_git_transport()
+          for item in manifest["files"]:
+              part = Path(item["path"])
+              assert not part.is_absolute() and ".." not in part.parts and part.parts[0] != ".git"
+              assert "\\" not in item["path"] and "\x00" not in item["path"]
+              if batch and (len(batch) == 32 or batch_bytes + item["bytes"] > 2097152):
+                  materialize_batch(batch)
+                  batch_count += 1
+                  batch = []
+                  batch_bytes = 0
+              assert item["bytes"] <= 2097152
+              batch.append(item["path"])
+              batch_bytes += item["bytes"]
+          if batch:
+              materialize_batch(batch)
+              batch_count += 1
+          print("SOURCE_BATCH_MATERIALIZATION " + json.dumps({"batches": batch_count, "max_files": 32,
+              "max_source_bytes": 2097152, "fsync_after_each_batch": True, "memory_limit": 67108864}), flush=True)
           assert command(["git", "rev-parse", "HEAD"], root) == target
           manifest_raw = verified_bytes(root, control_path, 419227,
               "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
@@ -164,7 +237,7 @@ jobs:
           for item in manifest["files"]:
               total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
                                       expected_mode=item["mode"])
-          assert total == 48459984
+          assert total == 48461807
           tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
           assert all(f["path"] in tracked for f in manifest["files"])
           assert not command(["git", "status", "--porcelain"], root)
@@ -375,7 +448,7 @@ jobs:
               "data_copy_memory_limit": 67108864, "project_parent_memory_limit": 536870912,
               "swap_limit": 0}), flush=True)
           PY
-      - name: Run isolated restored schema tests under project limit
+      - name: Validate eight existing automation and Flow definition test files
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -383,45 +456,50 @@ jobs:
             --property=MemorySwapMax=0 --property=OOMPolicy=kill \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
             /usr/bin/python3 -I -B - <<'PY'
-          import json, os, subprocess
+          import json, os, subprocess, time
           from pathlib import Path
-          
-          base = Path.cwd()
-          cg_line = Path("/proc/self/cgroup").read_text().strip()
-          cg = Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "536870912"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert (cg / "memory.oom.group").read_text().strip() == "1"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
-                                                          "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
-          binary = base / "xiongbaowork-bun-1.3.14" / "bun"
-          harness = base / "xiongbaowork-schema-components"
-          home = base / "xiongbaowork-component-home"
+          base=Path.cwd()
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg/"memory.oom.group").read_text().strip()=="1"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("PROJECT_TEST_RESOURCE_GATE "+json.dumps({"cgroup":cg_line,"memory_limit":536870912,"swap":0}),flush=True)
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          harness=base/"xiongbaowork-schema-components"
+          home=base/"xiongbaowork-foundation-group-home"
           home.mkdir(mode=0o700)
-          env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
-                 "NODE_ENV": "test", "CI": "true", "NO_COLOR": "1"}
-          version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          assert version == "1.3.14"
-          revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          root = base / "xiongbaowork-verified-source" / "repo" / "openbot"
-          args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  str(root / "server/tests/recovery-knowledge-foundations.test.ts"),
-                  str(root / "server/tests/recovery-knowledge-write-foundations.test.ts"),
-                  str(root / "server/tests/recovery-resource-project-foundations.test.ts")]
-          try:
-              result = subprocess.run(args, cwd=harness, env=env, timeout=120)
-              exit_code = result.returncode
-          except subprocess.TimeoutExpired:
-              exit_code = 124
-              print("COMPONENT_BATCH_TIMEOUT seconds=120; partial output streamed above", flush=True)
-          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": exit_code, "bun_version": version,
-              "bun_revision": revision, "test_files": 3, "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
-              "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
-              "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
-              "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
-          raise SystemExit(exit_code)
-          
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
+          version=subprocess.run([str(binary),"--version"],env=env,check=True,capture_output=True,text=True).stdout.strip()
+          assert version=="1.3.14"
+          paths=json.loads("[\"server/tests/recovery-automation-foundations.test.ts\",\"server/tests/recovery-automation-run-records.test.ts\",\"server/tests/recovery-device-binding-leases.test.ts\",\"server/tests/recovery-flow-customization-foundations.test.ts\",\"server/tests/recovery-flow-customization-turns.test.ts\",\"server/tests/recovery-flow-official-bindings.test.ts\",\"server/tests/recovery-flow-run-coordination.test.ts\",\"server/tests/recovery-flow-sharing-foundations.test.ts\"]")
+          deadline=time.monotonic()+120
+          results=[]
+          overall=0
+          for relative in paths:
+              remaining=deadline-time.monotonic()
+              if remaining<=0:
+                  overall=124
+                  break
+              print("COMPONENT_FILE_START "+json.dumps({"path":relative}),flush=True)
+              try:
+                  result=subprocess.run([str(binary),"test","--no-install","--timeout","5000",str(root/relative)],cwd=harness,env=env,timeout=remaining)
+                  code=result.returncode
+              except subprocess.TimeoutExpired:
+                  code=124
+              results.append({"path":relative,"exit_code":code})
+              print("COMPONENT_FILE_RESULT "+json.dumps(results[-1]),flush=True)
+              if code!=0:
+                  overall=124 if code==124 else (overall or 1)
+              if code==124:
+                  break
+          print("COMPONENT_TEST_RESULT "+json.dumps({"exit_code":overall,"test_files":len(paths),"completed_files":len(results),"results":results,
+           "scope":"eight sequential isolated automation and flow foundation definition test files",
+           "batch_timeout_seconds":120,"test_timeout_ms":5000,"original_repo_preload_suite":"NOT_RUN",
+           "postgres17":"PG_PENDING","producer_wiring":"NOT_VERIFIED","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(overall)
           PY

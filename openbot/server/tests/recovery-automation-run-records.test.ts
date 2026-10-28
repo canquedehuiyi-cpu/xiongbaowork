@@ -685,13 +685,47 @@ function checkJournal(j:Journal):void {
 function filesUnder(path:string):string[]{return readdirSync(path,{withFileTypes:true}).flatMap(entry=>{assert.ok(!entry.isSymbolicLink());const full=join(path,entry.name);return entry.isDirectory()?filesUnder(full):[full];});}
 const actualMetadata=()=>Object.fromEntries([automationFirings,automationContinuations].map(model=>{const t=metadata(model);return [`public.${t.name}`,t];}));
 function rejectSQL(before:string,after:string):void {assert.ok(migration.includes(before),'mutation must match original');const changed=migration.replace(before,after);assert.notEqual(changed,migration);expect(()=>checkSQL(changed)).toThrow();}
+type ParentColumnIdentity = { table: PgTable; name: string };
+type ContinuationParentReference = {
+ foreignTable: PgTable; columns: ParentColumnIdentity[]; foreignColumns: ParentColumnIdentity[];
+};
+function checkContinuationParentReference(ref: ContinuationParentReference):void {
+ assert.equal(ref.foreignTable===automationFirings,true,'exact parent table identity');
+ assert.equal(ref.columns.length,1);
+ assert.equal(ref.foreignColumns.length,1);
+ const column=ref.columns[0],foreignColumn=ref.foreignColumns[0];
+ assert.ok(column&&foreignColumn);
+ assert.equal(column.table===automationContinuations,true,'child column owner identity');
+ assert.equal(column.name,'firing_id');
+ const native=getTableConfig(automationContinuations).columns.filter(c=>c.name===column.name);
+ assert.equal(native.length,1,'child name maps to one native column');
+ assert.equal(native[0]===automationContinuations.firingId,true,'exact native child column identity');
+ assert.equal(native[0]?.getSQLType(),'uuid');
+ assert.equal(foreignColumn.table===automationFirings,true,'parent column owner identity');
+ assert.equal(foreignColumn===automationFirings.id,true,'exact native parent column identity');
+}
+
 describe('recovery automation run records independent historical structure',()=>{
  test('complete two oracle raw tables retain fixed identity',()=>{expect(capsules).toHaveLength(2);for(const c of capsules)expect(createHash('sha256').update(c.raw).digest('hex')).toBe(c.sha256);});
  test('all8 SQL statements fully consume and exactly match historical structure',()=>{expect(migration.split('--> statement-breakpoint')).toHaveLength(8);checkSQL(migration);expect(migration.indexOf('CREATE TABLE "public"."automation_firings"')).toBeLessThan(migration.indexOf('CREATE TABLE "public"."automation_continuations"'));});
  test('actual Drizzle22columns2inlinePK3unique3FK1CHECK0policy0RLS deep-equals independent oracles',()=>equalTargets(actualMetadata()));
  test('both existing parents and same-package parent use real UUID inline PKs and full metadata',()=>{
   for(const model of [automations,automationTriggers]){const actual=metadata(model),old=previous.tables[`public.${actual.name}`];assert.ok(old);assert.deepEqual(normalize(actual),normalize(old));expect(model.id.primary).toBe(true);expect(model.id.notNull).toBe(true);expect(model.id.getSQLType()).toBe('uuid');}
-  const firing=getTableConfig(automationFirings),continuation=getTableConfig(automationContinuations);expect(firing.foreignKeys).toHaveLength(2);expect(continuation.foreignKeys).toHaveLength(1);const fk=continuation.foreignKeys[0];assert.ok(fk);const ref=fk.reference();expect(ref.foreignTable).toBe(automationFirings);expect(ref.columns).toEqual([automationContinuations.firingId]);expect(ref.foreignColumns).toEqual([automationFirings.id]);expect(automationFirings.id.primary).toBe(true);expect(fk.onDelete).toBe('no action');expect(fk.onUpdate).toBe('no action');
+  const firing=getTableConfig(automationFirings),continuation=getTableConfig(automationContinuations);expect(firing.foreignKeys).toHaveLength(2);expect(continuation.foreignKeys).toHaveLength(1);const fk=continuation.foreignKeys[0];assert.ok(fk);checkContinuationParentReference(fk.reference());expect(automationFirings.id.primary).toBe(true);expect(fk.onDelete).toBe('no action');expect(fk.onUpdate).toBe('no action');
+ });
+ test('continuation FK identity rejects wrong owner, name, parent table and extra columns',()=>{
+  const fk=getTableConfig(automationContinuations).foreignKeys[0];assert.ok(fk);
+  const ref=fk.reference();checkContinuationParentReference(ref);
+  const child=ref.columns[0],parent=ref.foreignColumns[0];assert.ok(child&&parent);
+  const mutations:ContinuationParentReference[]=[
+   {...ref,foreignTable:automations},
+   {...ref,columns:[{table:automationFirings,name:child.name}]},
+   {...ref,columns:[{table:automationContinuations,name:'run_id'}]},
+   {...ref,columns:[child,child]},
+   {...ref,foreignColumns:[automations.id]},
+   {...ref,foreignColumns:[parent,parent]},
+  ];
+  for(const changed of mutations)expect(()=>checkContinuationParentReference(changed)).toThrow();
  });
  test('custom JSONB mapper and sql.param retain objects without double serialization',()=>{
   const values=[{kind:'fixture',nested:{members:[1,true,null]}},{fixture:true,result:{optional:null}}],columns=[automationFirings.target,automationContinuations.result];

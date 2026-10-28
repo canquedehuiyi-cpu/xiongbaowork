@@ -1,0 +1,91 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "AUTOMATION-FK-ASSERTION-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "blocking_findings": [],
+  "before_ref": "1739664708e108e87024cab1ce0ea419e556e004",
+  "after_source_ref": "a98554a8ee4c5f257d17d96c20abf4e6db0e2b07",
+  "full_before_after_read": true,
+  "files": [
+    {
+      "path": "openbot/server/tests/recovery-automation-run-records.test.ts",
+      "before": {
+        "bytes": 47952,
+        "sha256": "c99e1aecbb10fd9e50c91a72c4382250c439a4b47d2d9f41877cfe8df0414642",
+        "blob": "be33e92e4844e97044f2d7fc869d28176cb0dcad",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 49775,
+        "sha256": "bfe47a7518eae21add3600042613a0e49a1ce82c65cf50c505c9983bbbf17427",
+        "blob": "309245973a27ae95fcbeaac4b9850873f414a378",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "reading_evidence": {
+    "full_two_large_capsule_literals": true,
+    "complete_historical_hash_list_and163_tree_guard": true,
+    "remaining_bytes_exact_before_after_inverse": true,
+    "production_schemas": [
+      "automation-run-records.ts",
+      "automation-foundations.ts"
+    ],
+    "reviewer_recomputed_sha256": false,
+    "parent_recomputed_sha256_and_git_blobs": true
+  },
+  "judgments": [
+    "Pinned Drizzle getTableConfig reads native Columns separately from ExtraConfigColumns used by extra builders; old local FK deep equality compares different object kinds.",
+    "Helper requires exact parent table identity, both sides one column, child owner/name, unique native child identical to firingId with UUID SQLtype, parent owner and exact native id identity.",
+    "No recursive ExtraConfigColumn.getSQLType call. Original complete metadata oracle retains FK names/actions, matrices, historical hash, inverse, journal and security negatives.",
+    "Six negative references start from passing actual reference; each has wrong owner/name/table or duplicate columns. Original failed test retained."
+  ],
+  "primary_sources": [
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/utils.ts"
+  ],
+  "independently_read_runtime_logs": [
+    {
+      "run": 40668205048,
+      "job": 122748023793,
+      "pass": 107,
+      "fail": 1,
+      "expects": 1555
+    },
+    {
+      "run": 40668636413,
+      "job": 122749489960,
+      "head": "a98554a8ee4c5f257d17d96c20abf4e6db0e2b07",
+      "pass": 109,
+      "fail": 0,
+      "expects": 1562,
+      "source_files": 2045,
+      "source_bytes": 48461807,
+      "source_mismatches": 0,
+      "project_memory": 536870912,
+      "data_copy_memory": 67108864,
+      "swap": 0,
+      "test_timeout_ms": 5000,
+      "batch_timeout_seconds": 120
+    }
+  ],
+  "activity": {
+    "github_tools_readonly": true,
+    "tool_memory_only": true,
+    "windows_source_writes": 0,
+    "project_or_subject_execution": 0,
+    "repository_writes": 0,
+    "new_agents": 0
+  },
+  "not_verified": [
+    "Control files/workflow/later test group",
+    "Native PG17",
+    "Full CI",
+    "Full preload suite",
+    "Producer wiring",
+    "Commercial acceptance",
+    "77 stories 18 packages 7 gates complete"
+  ],
+  "root_decision": "ADOPT_EXACT_ONE_REVIEWED_TEST_FILE_ONLY",
+  "v58": "NOT_ADOPTED"
+}
