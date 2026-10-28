@@ -1,0 +1,102 @@
+{
+  "schema": "xiongbaowork-typecheck-resource-evidence/1",
+  "status": "AUXILIARY_V8_HEAP_OOM_NOT_TYPE_DIAGNOSTICS",
+  "head": "33f75f100f13775f125d0e82d7a6b61b51eb5bfb",
+  "run": 40697501862,
+  "job": 122848086646,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "9d3f4e7454f338ca1d75a5a7d8132dd2b7491443",
+    "head": "33f75f100f13775f125d0e82d7a6b61b51eb5bfb",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+    "swap_limit": 0,
+    "verified_source_bytes": 50007029,
+    "verified_source_files": 2054,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "33f75f100f13775f125d0e82d7a6b61b51eb5bfb",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "gate": {
+    "memory_limit": 2147483648,
+    "project_limit": 2147483648,
+    "swap": 0
+  },
+  "start": {
+    "typescript": "5.9.3",
+    "host_runtime": "v24.22.1",
+    "node_path": "/usr/local/bin/node",
+    "node_old_space_mb": 1408,
+    "project": "server/tsconfig.json",
+    "declared_includes": [
+      "src",
+      "scripts",
+      "../scripts/composio-smoke.ts"
+    ],
+    "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+    "timeout_seconds": 300
+  },
+  "result": {
+    "exit_code": -6,
+    "project": "server/tsconfig.json",
+    "typescript": "5.9.3",
+    "host_runtime": "v24.22.1",
+    "node_path": "/usr/local/bin/node",
+    "node_old_space_mb": 1408,
+    "full_ci": "NOT_RUN",
+    "test_sources": "NOT_INCLUDED",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "restore": {
+    "project_memory_max": 536870912,
+    "swap": 0
+  },
+  "automatic_memory_peak": "1.6G",
+  "service_runtime": "31.412s",
+  "cpu_time": "57.263s",
+  "failure": "V8 ineffective mark compacts near1408MiB auxiliary heap limit; SIGABRT6",
+  "kernel_aggregate_oom": false,
+  "compiler_diagnostics": "NONE",
+  "source_changed": false,
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

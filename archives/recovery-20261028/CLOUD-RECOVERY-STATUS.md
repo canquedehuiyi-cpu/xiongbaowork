@@ -84,3 +84,5 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 后续完整server类型检查受原512MiB聚合门/V8 heap OOM阻塞；仅完整依赖安装的512MiB例外已获准，不覆盖放宽编译项目总门。正在准备只对完整server编译步骤临时2GiB/swap0的可审方案，当前未获该例外、未执行或触发；其余阶段仍原资源门。PG_PENDING按人类要求保留，不重复索要PG环境。
 
 2026-10-28 新人类授权：仅完整server类型检查阶段，项目与全部后代聚合上限临时2GiB、swap0、300秒时限，结束恢复512MiB。明确回答“允许，仅完整类型检查阶段使用2GiB”；原安装512MiB例外保留，其余DATA64MiB/其他项目阶段512MiB、免费、私有缓存/copyfile/禁生命周期脚本及源码不落Windows均不变。按已审具体提案6018fc1e95c5c4b56373872b148cea2287ade042启动一次，结果另证；该授权不是类型通过、PG17或完整77/18/7过门。
+
+2GiB获准首次运行40697501862/job122848086646：Source2054/50007029及冻结依赖安装通过；Node24.22.1/TS5.9.3在自设1408MiB V8堆处SIGABRT6，31.412秒/CPU57.263秒/peak1.6G，未触发kernel聚合OOM、无编译诊断。退出trap已实际输出PROJECT_LIMIT_RESTORED=512MiB/swap0。原tsconfig strict=true/skipLibCheck=true/includes未改。下一次仅把辅助heap改1792MiB，实际聚合上限仍为已获准2GiB/swap0/300秒，其他阶段门不改；不以辅助heap冒聚合门，也不继续提高实际资源上限。

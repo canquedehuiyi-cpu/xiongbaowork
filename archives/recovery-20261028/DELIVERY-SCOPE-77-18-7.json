@@ -1094,7 +1094,7 @@
       "postgres17": "PG_PENDING"
     },
     "typecheck_resource_exception": {
-      "status": "HUMAN_AUTHORIZED_READY_TO_RUN",
+      "status": "AUTHORIZED_WITHIN_SAME2GiB_BOUND_NEXT_AUX_HEAP1792",
       "requested_scope_under_preparation": "original server tsconfig compile only; temporary project-and-descendants2GiB/swap0; other phases unchanged",
       "actual_blocker": {
         "run": 40678526201,
@@ -1107,10 +1107,24 @@
       "approved_proposal": "6018fc1e95c5c4b56373872b148cea2287ade042",
       "phase": "full original server/tsconfig.json noEmit only",
       "project_aggregate_during_compile": 2147483648,
-      "node_aux_heap_mib": 1408,
+      "node_aux_heap_mib": 1792,
       "swap": 0,
       "deadline_seconds": 300,
-      "restore512MiB": true
+      "restore512MiB": true,
+      "aggregate_increase_beyond_approved": false,
+      "reason": "first2GiB attempt stopped at own1408MiB V8 auxiliary limit before aggregate cap; one bounded adjustment within approved total"
+    },
+    "server_typecheck_2GiB_1408": {
+      "status": "V8_AUXILIARY_HEAP_OOM_NO_DIAGNOSTICS",
+      "head": "33f75f100f13775f125d0e82d7a6b61b51eb5bfb",
+      "run": 40697501862,
+      "job": 122848086646,
+      "node_aux_heap_mib": 1408,
+      "configured_aggregate": 2147483648,
+      "automatic_peak": "1.6G",
+      "restore512MiB": true,
+      "kernel_aggregate_oom": false,
+      "compiler_diagnostics": "NONE"
     }
   },
   "delivery_status": "NOT_DELIVERED",

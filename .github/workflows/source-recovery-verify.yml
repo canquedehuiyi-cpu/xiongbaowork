@@ -1,4 +1,4 @@
-name: Recovery server typecheck - proposed2GiB compile exception
+name: Recovery server typecheck within approved2GiB
 on:
   push:
     branches:
@@ -524,16 +524,16 @@ jobs:
           node_version=subprocess.run([node,"--version"],capture_output=True,text=True,check=True).stdout.strip()
           home=base/"xiongbaowork-server-types-home";home.mkdir(mode=0o700)
           env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
-          print("SERVER_TYPECHECK_START "+json.dumps({"typescript":metadata["version"],"host_runtime":node_version,"node_path":node,"node_old_space_mb":1408,
+          print("SERVER_TYPECHECK_START "+json.dumps({"typescript":metadata["version"],"host_runtime":node_version,"node_path":node,"node_old_space_mb":1792,
            "project":"server/tsconfig.json","declared_includes":["src","scripts","../scripts/composio-smoke.ts"],
            "test_sources":"NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG","timeout_seconds":300}),flush=True)
           try:
-              result=subprocess.run([node,"--max-old-space-size=1408",str(entry),"--noEmit","--project","server/tsconfig.json"],cwd=root,env=env,timeout=300)
+              result=subprocess.run([node,"--max-old-space-size=1792",str(entry),"--noEmit","--project","server/tsconfig.json"],cwd=root,env=env,timeout=300)
               code=result.returncode
           except subprocess.TimeoutExpired:
               code=124
           print("SERVER_TYPECHECK_RESULT "+json.dumps({"exit_code":code,"project":"server/tsconfig.json",
-           "typescript":metadata["version"],"host_runtime":node_version,"node_path":node,"node_old_space_mb":1408,"full_ci":"NOT_RUN","test_sources":"NOT_INCLUDED",
+           "typescript":metadata["version"],"host_runtime":node_version,"node_path":node,"node_old_space_mb":1792,"full_ci":"NOT_RUN","test_sources":"NOT_INCLUDED",
            "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
           PY
