@@ -138,3 +138,6 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 
 
 Root116直接人类新授权：回答“允许，仅这两个前端阶段使用2GiB（推荐）”，明确覆盖原完整app单进程测试与原app/tsconfig.json完整类型检查两步；各项目及全部后代聚合2GiB、swap0、300秒、每步退出恢复512MiB。方案ea8d06a2065c0207270fbefd7994318e733e6fbe已全文回读一致，主恢复分支69297b3fd9cdecb74b37693a95465b41ecbd0c6a未漂移；本次仅启用该两阶段控制流程，无Subject Source修改。DATA64MiB/既有完整依赖安装512MiB/其他项目512MiB、禁全部生命周期脚本、免费云端/私有copyfile/Windows源码0/PG_PENDING均保持。实际运行结果另证，不以授权当通过。
+
+
+Root116获准2GiB首次运行40714852195/job122909637989：原完整app单Bun进程真实1207pass/0fail，Ran1207tests across161files，exit0，peak1G；原两preload与qoderwake配置不变。完整原app类型检查含tests，正常分析结束，仅tasks-workbench-inflight.test.tsx L478一项TS2769(nullable真实mutation witness)；exit2、peak1.6G，无资源中止。两阶段均实际PROJECT_LIMIT_RESTORED=512MiB/swap0，安装自动peak512.7M原样保留。当前不是全绿或严格CI。新一文件候选98402f9ce24c7b7ab449291d43587ce1eb61749c仅在原actual mutation cache identity断言之前明确要求firstMutation非null；原count/identity/同一outer act观察窗和全部case/expect均保留，无生产Source改动，已复用独审员并跑相同获准两阶段。

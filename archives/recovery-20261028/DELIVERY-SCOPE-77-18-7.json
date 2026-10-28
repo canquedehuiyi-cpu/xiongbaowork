@@ -1370,11 +1370,35 @@
       "human_authorization_file": "archives/recovery-20261028/APP-2GiB-HUMAN-AUTHORIZATION.json",
       "active_app_phase_limit": 2147483648,
       "other_project_limit": 536870912
+    },
+    "authorized_app2GiB_first": {
+      "head": "3421a05cba8d6ba6004b0ba966806b976d616b16",
+      "run": 40714852195,
+      "job": 122909637989,
+      "full_app": {
+        "files": 161,
+        "pass": 1207,
+        "fail": 0,
+        "exit_code": 0,
+        "mode": "ONE_BUN_PROCESS",
+        "automatic_peak": "1G"
+      },
+      "app_types": {
+        "exit_code": 2,
+        "diagnostics": 1,
+        "status": "COMPLETED_WITH_ONE_INFLIGHT_TEST_NULLABLE_WITNESS_TYPE_ERROR",
+        "automatic_peak": "1.6G"
+      },
+      "actual_restore512MiB_count": 2,
+      "swap": 0,
+      "install_automatic_peak": "512.7M",
+      "full_strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Execute the two directly authorized app2GiB phases, verify actual aggregate gates and per-phase512MiB restores; fix actual diagnostics using the same readonly reviewer and≤8 Source files per package. No other resource expansion.",
+  "next_source_package": "TASK-INFLIGHT-TYPE-GUARD candidate98402f9ce24c7b7ab449291d43587ce1eb61749c: one explicit nonnull witness guard in test, no production changes; same authorized full app one-process+types2GiB stages running, readonly Source review in progress.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
