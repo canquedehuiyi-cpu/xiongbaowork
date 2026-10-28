@@ -106,3 +106,6 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 2026-10-28 新人类授权：仅完整server类型检查阶段，项目与全部后代聚合上限临时2GiB、swap0、300秒时限，结束恢复512MiB。明确回答“允许，仅完整类型检查阶段使用2GiB”；原安装512MiB例外保留，其余DATA64MiB/其他项目阶段512MiB、免费、私有缓存/copyfile/禁生命周期脚本及源码不落Windows均不变。按已审具体提案6018fc1e95c5c4b56373872b148cea2287ade042启动一次，结果另证；该授权不是类型通过、PG17或完整77/18/7过门。
 
 2GiB获准首次运行40697501862/job122848086646：Source2054/50007029及冻结依赖安装通过；Node24.22.1/TS5.9.3在自设1408MiB V8堆处SIGABRT6，31.412秒/CPU57.263秒/peak1.6G，未触发kernel聚合OOM、无编译诊断。退出trap已实际输出PROJECT_LIMIT_RESTORED=512MiB/swap0。原tsconfig strict=true/skipLibCheck=true/includes未改。下一次仅把辅助heap改1792MiB，实际聚合上限仍为已获准2GiB/swap0/300秒，其他阶段门不改；不以辅助heap冒聚合门，也不继续提高实际资源上限。
+
+
+完整app实际首次运行40705705886/job122877126008已完成启动与原qoderwake配置生成；161个发现文件身份列表一致。单进程--smol在512MiB聚合门触发oom-kill，service38.801秒/CPU47.262秒/peak493.1M；安装自动peak512.3M同样保留，硬门配置仍536870912/swap0。仅观察到73个文件开始、574pass行及3fail行，无最终Bun summary，不当完整计数或通过。3fail均为tasks-attention-region旧夹具缺必需pendingIds；生产页面L833正常传参，未改生产API。新一文件候选f30394a22972f8ebf76d03742a265c245fbc63e4只补两mount的空pendingSet，seed并清理私有roster查询client，四原测试和全部断言保留；独审和161文件逐进程验证进行中。此分进程结果将仅作具名隔离范围，不代单进程套件/严格CI。

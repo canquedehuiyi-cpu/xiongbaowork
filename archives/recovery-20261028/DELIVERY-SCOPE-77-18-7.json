@@ -1198,18 +1198,29 @@
       "automatic_peak": "319.3M"
     },
     "full_app": {
-      "status": "CONTROLLER_STARTUP_ERROR_NOT_RUN_CORRECTED_EXECUTION_PENDING",
-      "run": 40704605999,
-      "job": 122873210976,
-      "source_files_executed": 0,
-      "root_script_error": "double-backslash continuation",
-      "source_changed": false,
-      "expected_file_count": 161
+      "status": "RESOURCE_STOP_WITH_THREE_OBSERVED_FIXTURE_FAILURES_NO_FINAL_SUMMARY",
+      "head": "a05203530d4a4fb2dd301fa1257db551df0e98e6",
+      "source_commit": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+      "run": 40705705886,
+      "job": 122877126008,
+      "expected_files": 161,
+      "observed_files_started": 73,
+      "observed_pass_lines": 574,
+      "observed_fail_lines": 3,
+      "automatic_peak": "493.1M",
+      "install_automatic_peak": "512.3M",
+      "configured_project_limit": 536870912,
+      "swap": 0,
+      "failure_file": "app/tests/tasks-attention-region.test.tsx",
+      "failure_cause": "old direct-mount fixture missing required pendingIds",
+      "not_final_counts": true,
+      "full_ci": "NOT_RUN",
+      "next_candidate": "f30394a22972f8ebf76d03742a265c245fbc63e4"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Full app one-process tests now scheduled at512MiB on unchanged Source after controller continuation repair. No Source changes before its diagnostics.",
+  "next_source_package": "TASKS-ATTENTION-FIXTURE candidate one test file, full Source independent review and161 named per-file cloud validation in progress. Complete one-process app and lineage resource stops retained; PG_PENDING retained.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
