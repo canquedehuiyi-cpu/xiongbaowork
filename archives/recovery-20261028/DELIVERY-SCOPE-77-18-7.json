@@ -871,18 +871,24 @@
       "expects": 554
     },
     "full_workspace_install": {
-      "status": "BOUNDED_INSTALL_NEXT",
+      "head": "e1c576b179e2ff6564dbd3d007e7079ed95fc72c",
+      "run": 40670946955,
+      "job": 122757246700,
+      "status": "NOT_RUN_RESOURCE_FULL_INSTALL_STOP",
       "memory_limit": 67108864,
       "project_memory_limit": 536870912,
       "swap": 0,
-      "lifecycle_scripts": "NOT_RUN",
-      "frozen_lockfile": true,
-      "backend": "copyfile"
+      "termination": "oom-kill / main SIGKILL9",
+      "service_seconds": 10.333,
+      "frozen_inputs_after": "NOT_REACHED",
+      "lifecycle_scripts": "DISABLED",
+      "dependency_audit": "NOT_REACHED",
+      "next_action": "WAITING_FOR_NAMED_INSTALL_RESOURCE_EXCEPTION"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "None pending independent review; next gate is real frozen workspace install under same DATA resource limit",
+  "next_source_package": "No pending independent Source review. Full workspace install stopped by64MiB limit; direct human policy answer required before repeating.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,

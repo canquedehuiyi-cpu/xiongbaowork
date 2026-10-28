@@ -1,0 +1,73 @@
+{
+  "schema": "xiongbaowork-workspace-install-stop/1",
+  "head": "e1c576b179e2ff6564dbd3d007e7079ed95fc72c",
+  "run_id": 40670946955,
+  "job_id": 122757246700,
+  "result": "NOT_RUN_RESOURCE_FULL_INSTALL_STOP",
+  "source_before_install": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "3f3bb96b6fd7d9e6041c9b6a4f269c6ee83bb1c1",
+    "head": "e1c576b179e2ff6564dbd3d007e7079ed95fc72c",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 48463600,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "install_started": {
+    "frozen_lockfile": true,
+    "ignore_all_lifecycle_scripts": true,
+    "backend": "copyfile",
+    "cache": "private job directory",
+    "network_concurrency": 1,
+    "timeout_seconds": 240,
+    "source_commit": "provided by preceding Source result"
+  },
+  "observed": {
+    "systemd_result": "oom-kill",
+    "main_termination": "code=killed,status=9/KILL",
+    "service_seconds": 10.333,
+    "memory_peak_reported": "64.4M",
+    "configured_cgroup_memory_max": 67108864,
+    "project_parent_memory_max": 536870912,
+    "swap": 0,
+    "actions_step_exit": 1,
+    "installer_child_exit": "NOT_OBTAINED_SEPARATELY"
+  },
+  "post_install_frozen_inputs": "NOT_REACHED",
+  "dependency_audit": "NOT_REACHED",
+  "full_workspace_install": "NOT_COMPLETED",
+  "lifecycle_scripts": "DISABLED_BY_BOTH_FLAG_AND_ENV",
+  "full_preload_suite": "NOT_RUN",
+  "typecheck": "NOT_RUN",
+  "full_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "last_passed_integrated_components": {
+    "source_commit": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
+    "run": 40670272087,
+    "test_files": 33,
+    "pass": 576,
+    "fail": 0,
+    "expects": 8919
+  },
+  "follow_up": "Await direct human authorization for named dependency install resource exception; no rerun or resource increase without answer",
+  "windows_source_writes": 0,
+  "commercial_acceptance": "NOT_DELIVERED",
+  "v58": "NOT_ADOPTED"
+}
