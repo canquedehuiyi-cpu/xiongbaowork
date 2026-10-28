@@ -42,52 +42,55 @@ describe("runner browser probe compatibility", () => {
     expect(readdirSync(cwd)).toEqual([]);
   });
 
-  test("accepts handles issued by the actual runner for two fake-page identities", async () => {
-    let launches = 0;
-    const launch: BrowserLauncher = async () => {
-      launches++;
-      const page = {
-        url: () => "https://probe.invalid/",
-        title: async () => "Probe contract",
-        isClosed: () => false,
-        ariaYaml: async () => '- textbox "Customer" [ref=e1]: sample',
-        readableText: async () => "Probe contract",
-        navigate: async () => {},
-        png: async () => new Uint8Array(),
-        viewportSize: () => ({ width: 1280, height: 800 }),
-        byRef: () => ({
-          count: async () => 1,
-          click: async () => {},
-          fill: async () => {},
-          press: async () => {},
-          holdsSecret: async () => false,
-        }),
-        pressKey: async () => {},
-        insertText: async () => {},
-        wheel: async () => {},
+  for (const rawRef of ["e1", "f1e10"]) {
+    test(`accepts actual runner handles for two identities with raw ref ${rawRef}`, async () => {
+      let launches = 0;
+      const launch: BrowserLauncher = async () => {
+        launches++;
+        const page = {
+          url: () => "https://probe.invalid/",
+          title: async () => "Probe contract",
+          isClosed: () => false,
+          ariaYaml: async () => `- textbox "Customer" [ref=${rawRef}]: sample`,
+          readableText: async () => "Probe contract",
+          navigate: async () => {},
+          png: async () => new Uint8Array(),
+          viewportSize: () => ({ width: 1280, height: 800 }),
+          byRef: () => ({
+            count: async () => 1,
+            click: async () => {},
+            fill: async () => {},
+            press: async () => {},
+            holdsSecret: async () => false,
+          }),
+          pressKey: async () => {},
+          insertText: async () => {},
+          wheel: async () => {},
+        };
+        return { pages: () => [page], close: async () => {}, onClose: () => {} };
       };
-      return { pages: () => [page], close: async () => {}, onClose: () => {} };
-    };
-    const browser = createRunnerBrowser({ profileRoot: join(ownRoot(), "profiles"), launch });
-    const handles: string[] = [];
-    try {
-      for (const botId of ["probe-a", "probe-b"]) {
-        const raw = await browser.act({ action: "snapshot", identity: { tenantId: "probe-tenant", botId }, payload: {} });
-        const snapshot = raw as { snapshotId: number; elements: { ref: string }[] };
-        expect(snapshot.snapshotId).toBeGreaterThan(0);
-        expect(snapshot.elements).toHaveLength(1);
-        const handle = snapshot.elements[0]?.ref ?? "";
-        expect(handle.endsWith(":e1")).toBe(true);
-        expect(/^[0-9a-f]{8}:[ex\d]+$/.test(handle)).toBe(false);
-        expect(runnerProbeHandleHasToken(handle)).toBe(true);
-        handles.push(handle);
+      const browser = createRunnerBrowser({ profileRoot: join(ownRoot(), "profiles"), launch });
+      const handles: string[] = [];
+      try {
+        for (const botId of ["probe-a", "probe-b"]) {
+          const raw = await browser.act({ action: "snapshot", identity: { tenantId: "probe-tenant", botId }, payload: {} });
+          const snapshot = raw as { snapshotId: number; elements: { ref: string }[] };
+          expect(snapshot.snapshotId).toBeGreaterThan(0);
+          expect(snapshot.elements).toHaveLength(1);
+          const handle = snapshot.elements[0]?.ref ?? "";
+          expect(handle.endsWith(`:${rawRef}`)).toBe(true);
+          expect(/^[0-9a-f]{8}:[ex\d]+$/.test(handle)).toBe(false);
+          expect(/^[0-9a-f]{8}-[0-9a-f]{8}:[ex\d]+$/.test(handle)).toBe(rawRef === "e1");
+          expect(runnerProbeHandleHasToken(handle)).toBe(true);
+          handles.push(handle);
+        }
+        expect(launches).toBe(2);
+        expect(handles[0]).not.toBe(handles[1]);
+      } finally {
+        await browser.close();
       }
-      expect(launches).toBe(2);
-      expect(handles[0]).not.toBe(handles[1]);
-    } finally {
-      await browser.close();
-    }
-  });
+    });
+  }
 
   test("fixture cleanup closes the actual pinned Bun listener", async () => {
     const fixture = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("probe fixture") });
@@ -136,7 +139,7 @@ describe("runner browser probe compatibility", () => {
   });
 
   test("rejects old or malformed token prefixes without changing runner authority", () => {
-    for (const value of ["", "01234567:e1", "01234567_89abcdef:e1", "0123456-89abcdef:e1", "01234567-89ABCDEF:e1", "01234567-89abcdef:", "01234567-89abcdef:button"]) {
+    for (const value of ["", "01234567:e1", "01234567_89abcdef:e1", "0123456-89abcdef:e1", "01234567-89ABCDEF:e1", "01234567-89abcdef:", "01234567-89abcdef:button", "01234567-89abcdef:f1", "01234567-89abcdef:f1e", "01234567-89abcdef:f1x10", "01234567-89abcdef:s1e10", "01234567-89abcdef:f1e10more", "01234567-89abcdef:f-1e10"]) {
       expect(runnerProbeHandleHasToken(value)).toBe(false);
     }
   });

@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "fc094fce0914aeb02882b93759778e6ab2fb7981",
-  "basis": "immutable V57 plus 19 independently approved exact overlays; original history and PG_PENDING retained",
+  "source_commit": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+  "basis": "immutable V57 plus 20 independently approved exact overlays; original history and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -381,10 +381,27 @@
       "candidate_source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
       "source_content_adopted_unchanged": true,
       "run": 40738145401
+    },
+    {
+      "ticket": "RUNNER-PROBE-FRAME-REF-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/RUNNER-PROBE-FRAME-REF-ADOPTED.json",
+        "bytes": 3090,
+        "sha256": "7772374d7c918b555aa35687a1a7128a2cb2f9cc4b2e3630fa4f93d7127a2e93",
+        "formal_adoption": true,
+        "ticket": "RUNNER-PROBE-FRAME-REF-20261029",
+        "source_paths": [
+          "openbot/scripts/ci/runner-browser-probe-ref.ts",
+          "openbot/server/tests/runner-browser-probe.test.ts"
+        ]
+      },
+      "candidate_source_commit": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+      "source_content_adopted_unchanged": true,
+      "run": 40742687293
     }
   ],
   "file_count": 2059,
-  "source_bytes": 50026804,
+  "source_bytes": 50027221,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -12778,14 +12795,14 @@
     },
     {
       "path": "openbot/scripts/ci/runner-browser-probe-ref.ts",
-      "bytes": 299,
-      "sha256": "5fb6cc794dd59475953e791fc0435c92d1f1476790f8c120629e71d4855d8faa",
+      "bytes": 313,
+      "sha256": "5a1b157fa106936dd27dbead4b47e31b052cc28f6e6cab7a532b96826cc8eed1",
       "mode": "0o644"
     },
     {
       "path": "openbot/server/tests/runner-browser-probe.test.ts",
-      "bytes": 6405,
-      "sha256": "7d612f203cc5a6b7aff02220a4da89a2714cf7f032e6bb9eb590279ac31448bd",
+      "bytes": 6808,
+      "sha256": "01c20df6486148b64e85d91b88c17ab5b9d8a3e256721069dc3d03a771af2195",
       "mode": "0o644"
     },
     {
@@ -12807,8 +12824,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "98d3806c07f16aba9e4e437aae7361c3d2d0988b",
-    "head": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+    "git_tree": "afd74a90edee642c2417e5654f8740bebb9df8d4",
+    "head": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12829,7 +12846,8 @@
       "TEST-FIXTURE-LINT-20261029",
       "RUNNER-PROBE-COMPATIBILITY-20261029",
       "RUNNER-PROBE-LIFECYCLE-20261029",
-      "RUNNER-PROBE-PENDING-RESULT-20261029"
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12837,7 +12855,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50026804,
+    "verified_source_bytes": 50027221,
     "verified_source_files": 2059,
     "windows_source_files_written": 0
   },
@@ -12850,5 +12868,5 @@
     "not_native_pg_acceptance": true,
     "historical_V57_ledger_not_rewritten": true
   },
-  "source_commit_meaning": "Last Subject Source19 adoption; later evidence-only commits preserve all source bytes"
+  "source_commit_meaning": "Candidate Subject Source adopted without byte changes; promotion commit also changes administrative records and workflow"
 }

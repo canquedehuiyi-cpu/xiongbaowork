@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "fc094fce0914aeb02882b93759778e6ab2fb7981",
-  "source_status": "V57_PLUS_19_APPROVED_SOURCE_REPAIR_OVERLAYS_ORIGINAL18_DELIVERY_PACKAGES_NOT_ACCEPTED",
+  "source_snapshot": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+  "source_status": "V57_RESTORED_PLUS_20_APPROVED_PACKAGES",
   "story_requirements": [
     {
       "id": "A1",
@@ -758,8 +758,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "98d3806c07f16aba9e4e437aae7361c3d2d0988b",
-    "head": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+    "git_tree": "afd74a90edee642c2417e5654f8740bebb9df8d4",
+    "head": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -780,7 +780,8 @@
       "TEST-FIXTURE-LINT-20261029",
       "RUNNER-PROBE-COMPATIBILITY-20261029",
       "RUNNER-PROBE-LIFECYCLE-20261029",
-      "RUNNER-PROBE-PENDING-RESULT-20261029"
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -788,7 +789,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50026804,
+    "verified_source_bytes": 50027221,
     "verified_source_files": 2059,
     "windows_source_files_written": 0
   },
@@ -3912,11 +3913,158 @@
       "status": "RUNNING_AWAIT_REAL_RESULT",
       "commit": "885423b047e0ef6ba769d4966000a677c7a0d0a8",
       "scope": "OWN_CLOUD_HEADLESS_FIXTURE_ONLY_DEFAULT512MiB_NO_USER_DEVICE_ACCEPTANCE"
+    },
+    "RUNNER-PROBE-FRAME-REF": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40742687293,
+      "job": 123008167660,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "afd74a90edee642c2417e5654f8740bebb9df8d4",
+        "head": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029",
+          "RUNNER-PROBE-LIFECYCLE-20261029",
+          "RUNNER-PROBE-PENDING-RESULT-20261029",
+          "RUNNER-PROBE-FRAME-REF-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50027221,
+        "verified_source_files": 2059,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3869,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 2,
+        "completed_files": 2,
+        "results": [
+          {
+            "path": "server/tests/runner-browser.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/runner-browser-probe.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "tests": {
+        "pass": 57,
+        "fail": 0,
+        "expects": 249
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 63.9M (swap: 0B)",
+        "Memory peak: 510.2M (swap: 0B)",
+        "Memory peak: 126.5M (swap: 0B)",
+        "Memory peak: 374.4M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 0,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Existing50 fake browser unit cases plus7 probe regressions covering both legacy and recorded native frame refs; no native Chrome run in this validation",
+      "diagnostic": {
+        "run": 40741256248,
+        "job": 123003132551,
+        "source_commit": "3567d250dd5561445f7c5e5fcb8ae3178bdc4254",
+        "observedRef": "64fa953e-92f84eaa:f1e10",
+        "rawRef": "f1e10",
+        "prefix": "64fa953e-92f84eaa:",
+        "browser": "Google Chrome 156.0.8078.47",
+        "bound512MiB": true,
+        "peak": "512M",
+        "exit_code": 1,
+        "original_assertion_preserved": true,
+        "candidate_adopted": false,
+        "own_fixture_only": true,
+        "navigation_and8otherChecks": 9,
+        "pass_marker": false
+      },
+      "script_diagnostic_not_adopted": true,
+      "real_user_device": "NOT_VERIFIED"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Complete normal cloud own-fixture Chrome verification after reviewed Source19; stop and classify any new actual failure. Original strictCI/nativePG/provider/nativeclient/real-device gates remain open.",
+  "next_source_package": "Continue remaining original lint blockers in <=8-file independently reviewed packages; original PG and strict-CI gates retained",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -3927,25 +4075,25 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 441531,
-    "sha256": "022b68ef5bd68a3583928a3b699a03ca430aae94115ee9a3539790b7dc5a46e1",
+    "bytes": 442284,
+    "sha256": "1180ade863a413e985f1e58f803ce17820f2e0816a0a0b0fd0532e14aecf6743",
     "source_files": 2059,
-    "source_bytes": 50026804,
-    "source_commit": "fc094fce0914aeb02882b93759778e6ab2fb7981",
-    "source_validation_run": 40738145401
+    "source_bytes": 50027221,
+    "candidate_source_commit": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+    "source_validation_run": 40742687293
   },
   "latest_source_validation": {
     "schema": "xiongbaowork-cloud-validation/1",
-    "run": 40738145401,
-    "job": 122992164275,
+    "run": 40742687293,
+    "job": 123008167660,
     "source": {
       "aggregate_memory_limit": 67108864,
       "commercial_acceptance": "NOT_DELIVERED",
       "fd_named_stability_verified": true,
       "file_modes_verified": true,
       "formal_baseline": "V57 with explicit source overlays",
-      "git_tree": "98d3806c07f16aba9e4e437aae7361c3d2d0988b",
-      "head": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+      "git_tree": "afd74a90edee642c2417e5654f8740bebb9df8d4",
+      "head": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
       "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
       "overlay_tickets": [
         "AP-INPUT-BUN-20261028",
@@ -3966,7 +4114,8 @@
         "TEST-FIXTURE-LINT-20261029",
         "RUNNER-PROBE-COMPATIBILITY-20261029",
         "RUNNER-PROBE-LIFECYCLE-20261029",
-        "RUNNER-PROBE-PENDING-RESULT-20261029"
+        "RUNNER-PROBE-PENDING-RESULT-20261029",
+        "RUNNER-PROBE-FRAME-REF-20261029"
       ],
       "postgres17": "PG_PENDING",
       "project_tests": "NOT_RUN",
@@ -3974,7 +4123,7 @@
       "source_mismatches": 0,
       "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
       "swap_limit": 0,
-      "verified_source_bytes": 50026804,
+      "verified_source_bytes": 50027221,
       "verified_source_files": 2059,
       "windows_source_files_written": 0
     },
@@ -3982,7 +4131,7 @@
       "exit_code": 0,
       "frozen_inputs_unchanged": true,
       "lifecycle_scripts": "NOT_RUN",
-      "source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+      "source_commit": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
       "install_memory_limit": 536870912,
       "other_data_copy_limit": 67108864,
       "backend": "copyfile",
@@ -4024,9 +4173,9 @@
       "commercial_acceptance": "NOT_DELIVERED"
     },
     "tests": {
-      "pass": 56,
+      "pass": 57,
       "fail": 0,
-      "expects": 227
+      "expects": 249
     },
     "lint": {
       "exit_code": 0,
@@ -4051,34 +4200,34 @@
     "automatic_memory_peaks": [
       "Memory peak: 64M (swap: 0B)",
       "Memory peak: 63.9M (swap: 0B)",
-      "Memory peak: 512.1M (swap: 0B)",
-      "Memory peak: 125.6M (swap: 0B)",
-      "Memory peak: 373.6M (swap: 0B)"
+      "Memory peak: 510.2M (swap: 0B)",
+      "Memory peak: 126.5M (swap: 0B)",
+      "Memory peak: 374.4M (swap: 0B)"
     ],
     "actual_restore512MiB_count": 0,
     "strict_ci": "NOT_RUN",
     "postgres17": "PG_PENDING",
     "commercial_acceptance": "NOT_DELIVERED",
-    "scope": "Existing50 fake browser unit cases and6 probe compatibility/lifecycle/pending-result regressions; no realChrome",
-    "prior_normal_probe_failure": {
-      "run": 40736558021,
-      "job": 122986564595,
-      "source_commit": "d0f2e9b47dcf569baaac0c403113cd18fcdbaebf",
-      "status": "FAILED_NORMAL_PROBE_NO_FALLBACK",
+    "scope": "Existing50 fake browser unit cases plus7 probe regressions covering both legacy and recorded native frame refs; no native Chrome run in this validation",
+    "diagnostic": {
+      "run": 40741256248,
+      "job": 123003132551,
+      "source_commit": "3567d250dd5561445f7c5e5fcb8ae3178bdc4254",
+      "observedRef": "64fa953e-92f84eaa:f1e10",
+      "rawRef": "f1e10",
+      "prefix": "64fa953e-92f84eaa:",
+      "browser": "Google Chrome 156.0.8078.47",
+      "bound512MiB": true,
+      "peak": "512M",
       "exit_code": 1,
-      "peak": "119.4M",
-      "browser": "/usr/bin/google-chrome",
-      "version": "Google Chrome155.0.8059.39",
-      "stage": "Script settle awaited request wrapper {pending,key} instead of pending result Promise",
-      "unchanged_dispatcher_contract": "type action -> type result; dispatch.ts independently read",
-      "oom": false,
-      "pass_marker": false,
-      "user_device": "NOT_VERIFIED",
-      "new_chrome_navigation": "NOT_REACHED",
-      "pg17": "PG_PENDING"
+      "original_assertion_preserved": true,
+      "candidate_adopted": false,
+      "own_fixture_only": true,
+      "navigation_and8otherChecks": 9,
+      "pass_marker": false
     },
-    "new_waiting_regression": "Real dispatcher/journal/executor metadata refusal before any launch",
-    "real_browser": "NOT_RUN"
+    "script_diagnostic_not_adopted": true,
+    "real_user_device": "NOT_VERIFIED"
   },
   "lineage_resource_exception_proposal": {
     "commit": "94d28e02758a9cec1b3aeb95a86aa6e0dcabc489",

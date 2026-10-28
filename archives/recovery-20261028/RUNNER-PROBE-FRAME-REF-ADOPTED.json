@@ -1,0 +1,75 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RUNNER-PROBE-FRAME-REF-20261029",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "base_commit": "57df6f564b381cbf984341c48db482076201ee92",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-ref.ts",
+      "before": {
+        "bytes": 299,
+        "sha256": "5fb6cc794dd59475953e791fc0435c92d1f1476790f8c120629e71d4855d8faa",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 313,
+        "sha256": "5a1b157fa106936dd27dbead4b47e31b052cc28f6e6cab7a532b96826cc8eed1",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "before": {
+        "bytes": 6405,
+        "sha256": "7d612f203cc5a6b7aff02220a4da89a2714cf7f032e6bb9eb590279ac31448bd",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 6808,
+        "sha256": "01c20df6486148b64e85d91b88c17ab5b9d8a3e256721069dc3d03a771af2195",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Probe-only token-format compatibility: retain exact old legacy suffix class and add only numeric f<frame>e<element> form observed from pinned native Playwright. Preserve run/profile prefix, all existing negative cases, all production authority. Existing actual-producer test parameterized for legacye1 and observedf1e10; add former-predicate counterexample and six malformed frame negatives. Transient script diagnostic is not adopted; script unchanged from current main.",
+  "projected_source_files": 2059,
+  "projected_source_bytes": 50027221,
+  "observed_native_evidence": {
+    "run": 40741256248,
+    "job": 123003132551,
+    "source_commit": "3567d250dd5561445f7c5e5fcb8ae3178bdc4254",
+    "observedRef": "64fa953e-92f84eaa:f1e10",
+    "rawRef": "f1e10",
+    "prefix": "64fa953e-92f84eaa:",
+    "browser": "Google Chrome 156.0.8078.47",
+    "bound512MiB": true,
+    "peak": "512M",
+    "exit_code": 1,
+    "original_assertion_preserved": true,
+    "candidate_adopted": false,
+    "own_fixture_only": true,
+    "navigation_and8otherChecks": 9,
+    "pass_marker": false
+  },
+  "pinned_emitter_reference": "https://github.com/microsoft/playwright/blob/v1.62.1/packages/injected/src/ariaSnapshot.ts#L204",
+  "diagnostic_candidate_not_adopted": "3567d250dd5561445f7c5e5fcb8ae3178bdc4254",
+  "real_user_device": "NOT_VERIFIED",
+  "pg17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "bff32e41012b38dc45057f83a8a8eb1f1015a8b5",
+  "review": {
+    "path": "archives/recovery-20261028/RUNNER-PROBE-FRAME-REF-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "path": "archives/recovery-20261028/RUNNER-PROBE-FRAME-REF-CANDIDATE-VALIDATION.json",
+    "run": 40742687293,
+    "job": 123008167660
+  },
+  "source_content_adopted_unchanged": true
+}
