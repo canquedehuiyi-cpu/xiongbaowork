@@ -294,6 +294,9 @@ try {
   const customer = refNamed(elements, "Customer");
   const secret = refNamed(elements, "Secret");
   const link = refNamed(elements, "Proceed to the second page");
+  if (!runnerProbeHandleHasToken(secret)) {
+    console.log(JSON.stringify({ diagnostic: "own-fixture handle format", observedRef: secret.slice(0, 160) }));
+  }
   assert(
     runnerProbeHandleHasToken(secret),
     "an element handle carries this run's token",

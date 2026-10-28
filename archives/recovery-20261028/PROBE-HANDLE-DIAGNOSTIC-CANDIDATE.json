@@ -1,0 +1,47 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "PROBE-HANDLE-DIAGNOSTIC-20261029",
+  "formal_adoption": false,
+  "status": "DIAGNOSTIC_CANDIDATE_NOT_ADOPTED_ASSERTION_RETAINED",
+  "base_commit": "57df6f564b381cbf984341c48db482076201ee92",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18915,
+        "sha256": "8a6c1b7eb67eade9208abfd339e2ba7a62450cd5e87c116c72953be692303a20",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 19076,
+        "sha256": "e5cdd27b7e11eda92c2a31d0b27c97ab106396f912294679bc1995a544f14b5e",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Only emit bounded160-character actual handle from own generated fixture on failed existing format predicate; no cookie/secret field value, no assertion relaxation, no production runner change.",
+  "projected_source_files": 2059,
+  "projected_source_bytes": 50026965,
+  "trigger": {
+    "run": 40739039830,
+    "job": 122995307364,
+    "status": "FAILED_NORMAL_PROBE_HANDLE_FORMAT_ASSERTION",
+    "exit_code": 1,
+    "source_commit": "885423b047e0ef6ba769d4966000a677c7a0d0a8",
+    "browser": "/usr/bin/google-chrome",
+    "version": "Google Chrome156.0.8078.47",
+    "peak": "509.7M",
+    "checks_passed": 9,
+    "real_navigation_title_text_cookie_and_profile_isolation": true,
+    "assertion": "an element handle carries this run's token",
+    "pass_marker": false,
+    "no_oom_marker": true,
+    "real_user_device": "NOT_VERIFIED",
+    "pg17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "pg17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
