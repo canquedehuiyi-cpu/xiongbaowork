@@ -1,0 +1,84 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RUNNER-PROBE-PENDING-RESULT-20261029",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "base_commit": "f0eecf8077f60f7bc774829d04c042930fa7a7de",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18932,
+        "sha256": "4b16d5a807ff667811e98e148ad7eaeccbe595e95eac14dd2bd205134c84ff6a",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 18915,
+        "sha256": "8a6c1b7eb67eade9208abfd339e2ba7a62450cd5e87c116c72953be692303a20",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "before": {
+        "bytes": 4416,
+        "sha256": "fb4d434e9f8ed549a8ded333f5843c8c366f70c35e976d0810b4e28441432f4b",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 6405,
+        "sha256": "7d612f203cc5a6b7aff02220a4da89a2714cf7f032e6bb9eb590279ac31448bd",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-action.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 575,
+        "sha256": "3ac3163408dcff64a70c2e92560c88067d2ccddc76f23061fe59f38ba144dfeb",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Await request.pending when given the local pending/key wrapper, preserving direct Promise support used by cancellation cases and existing type=result validation. No dispatcher, journal, executor, browser, policy, identity, payload or action assertions changed. Actual dispatcher/journal/executor refusal-before-launch regression and invalid-frame tests added.",
+  "projected_source_files": 2059,
+  "projected_source_bytes": 50026804,
+  "trigger": {
+    "run": 40736558021,
+    "job": 122986564595,
+    "source_commit": "d0f2e9b47dcf569baaac0c403113cd18fcdbaebf",
+    "status": "FAILED_NORMAL_PROBE_NO_FALLBACK",
+    "exit_code": 1,
+    "peak": "119.4M",
+    "browser": "/usr/bin/google-chrome",
+    "version": "Google Chrome155.0.8059.39",
+    "stage": "Script settle awaited request wrapper {pending,key} instead of pending result Promise",
+    "unchanged_dispatcher_contract": "type action -> type result; dispatch.ts independently read",
+    "oom": false,
+    "pass_marker": false,
+    "user_device": "NOT_VERIFIED",
+    "new_chrome_navigation": "NOT_REACHED",
+    "pg17": "PG_PENDING"
+  },
+  "real_chrome_navigation": "NOT_YET_PROVED",
+  "native_pg": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+  "review": {
+    "path": "archives/recovery-20261028/RUNNER-PROBE-PENDING-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "path": "archives/recovery-20261028/RUNNER-PROBE-PENDING-CANDIDATE-VALIDATION.json",
+    "run": 40738145401,
+    "job": 122992164275
+  },
+  "source_content_adopted_unchanged": true
+}

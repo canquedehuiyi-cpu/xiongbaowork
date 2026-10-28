@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "a74183b107b73b31725b2b2de7e48c6ee0d1c392",
-  "basis": "immutable V57 plus 18 independently approved exact overlays; original history and PG_PENDING retained",
+  "source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+  "basis": "immutable V57 plus 19 independently approved exact overlays; original history and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -360,10 +360,31 @@
       "candidate_source_commit": "a74183b107b73b31725b2b2de7e48c6ee0d1c392",
       "source_content_adopted_unchanged": true,
       "run": 40735529839
+    },
+    {
+      "ticket": "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/RUNNER-PROBE-PENDING-ADOPTED.json",
+        "bytes": 3195,
+        "sha256": "0b15bcb554fabc9c82318fa347015228e97b9bbfaa6e404a40d3237d8177c93c",
+        "formal_adoption": true,
+        "ticket": "RUNNER-PROBE-PENDING-RESULT-20261029",
+        "source_paths": [
+          "openbot/scripts/ci/runner-browser-probe.ts",
+          "openbot/server/tests/runner-browser-probe.test.ts",
+          "openbot/scripts/ci/runner-browser-probe-action.ts"
+        ],
+        "source_new_paths": [
+          "openbot/scripts/ci/runner-browser-probe-action.ts"
+        ]
+      },
+      "candidate_source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+      "source_content_adopted_unchanged": true,
+      "run": 40738145401
     }
   ],
-  "file_count": 2058,
-  "source_bytes": 50024257,
+  "file_count": 2059,
+  "source_bytes": 50026804,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -6579,8 +6600,8 @@
     },
     {
       "path": "openbot/scripts/ci/runner-browser-probe.ts",
-      "bytes": 18932,
-      "sha256": "4b16d5a807ff667811e98e148ad7eaeccbe595e95eac14dd2bd205134c84ff6a",
+      "bytes": 18915,
+      "sha256": "8a6c1b7eb67eade9208abfd339e2ba7a62450cd5e87c116c72953be692303a20",
       "mode": "0o644"
     },
     {
@@ -12763,14 +12784,20 @@
     },
     {
       "path": "openbot/server/tests/runner-browser-probe.test.ts",
-      "bytes": 4416,
-      "sha256": "fb4d434e9f8ed549a8ded333f5843c8c366f70c35e976d0810b4e28441432f4b",
+      "bytes": 6405,
+      "sha256": "7d612f203cc5a6b7aff02220a4da89a2714cf7f032e6bb9eb590279ac31448bd",
       "mode": "0o644"
     },
     {
       "path": "openbot/scripts/ci/runner-browser-probe-lifecycle.ts",
       "bytes": 238,
       "sha256": "7295ec98c2e920dff611136ed4787d43940dbd53a99c5efd6fed79a2452f979c",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-action.ts",
+      "bytes": 575,
+      "sha256": "3ac3163408dcff64a70c2e92560c88067d2ccddc76f23061fe59f38ba144dfeb",
       "mode": "0o644"
     }
   ],
@@ -12780,8 +12807,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "61afdf485677bf7b27f6b728d7a3b56778377638",
-    "head": "a74183b107b73b31725b2b2de7e48c6ee0d1c392",
+    "git_tree": "98d3806c07f16aba9e4e437aae7361c3d2d0988b",
+    "head": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12801,7 +12828,8 @@
       "APPROVAL-GUARD-LINT-20261029",
       "TEST-FIXTURE-LINT-20261029",
       "RUNNER-PROBE-COMPATIBILITY-20261029",
-      "RUNNER-PROBE-LIFECYCLE-20261029"
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12809,8 +12837,8 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50024257,
-    "verified_source_files": 2058,
+    "verified_source_bytes": 50026804,
+    "verified_source_files": 2059,
     "windows_source_files_written": 0
   },
   "commercial_acceptance": "NOT_DELIVERED",

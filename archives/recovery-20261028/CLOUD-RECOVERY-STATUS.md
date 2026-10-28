@@ -1,3 +1,9 @@
+## root126ProbePending Source adoption, 2026-10-29
+
+RUNNER-PROBE-PENDING-RESULT-20261029 adopted unchanged from candidate e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40738145401/job 122992164275; see exact validation JSON for pass/fail counts and remaining diagnostics. 2059 files / 50026804 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 ## root124LifecycleR2 Source adoption, 2026-10-29
 
 RUNNER-PROBE-LIFECYCLE-20261029 adopted unchanged from candidate a74183b107b73b31725b2b2de7e48c6ee0d1c392. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40735529839/job 122982901554; see exact validation JSON for pass/fail counts and remaining diagnostics. 2058 files / 50024257 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.

@@ -1,0 +1,146 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40738145401,
+  "job": 122992164275,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "98d3806c07f16aba9e4e437aae7361c3d2d0988b",
+    "head": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50026804,
+    "verified_source_files": 2059,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 2,
+    "completed_files": 2,
+    "results": [
+      {
+        "path": "server/tests/runner-browser.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/runner-browser-probe.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 56,
+    "fail": 0,
+    "expects": 227
+  },
+  "lint": {
+    "exit_code": 0,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "lint_counts": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 63.9M (swap: 0B)",
+    "Memory peak: 512.1M (swap: 0B)",
+    "Memory peak: 125.6M (swap: 0B)",
+    "Memory peak: 373.6M (swap: 0B)"
+  ],
+  "actual_restore512MiB_count": 0,
+  "strict_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Existing50 fake browser unit cases and6 probe compatibility/lifecycle/pending-result regressions; no realChrome",
+  "prior_normal_probe_failure": {
+    "run": 40736558021,
+    "job": 122986564595,
+    "source_commit": "d0f2e9b47dcf569baaac0c403113cd18fcdbaebf",
+    "status": "FAILED_NORMAL_PROBE_NO_FALLBACK",
+    "exit_code": 1,
+    "peak": "119.4M",
+    "browser": "/usr/bin/google-chrome",
+    "version": "Google Chrome155.0.8059.39",
+    "stage": "Script settle awaited request wrapper {pending,key} instead of pending result Promise",
+    "unchanged_dispatcher_contract": "type action -> type result; dispatch.ts independently read",
+    "oom": false,
+    "pass_marker": false,
+    "user_device": "NOT_VERIFIED",
+    "new_chrome_navigation": "NOT_REACHED",
+    "pg17": "PG_PENDING"
+  },
+  "new_waiting_regression": "Real dispatcher/journal/executor metadata refusal before any launch",
+  "real_browser": "NOT_RUN"
+}
