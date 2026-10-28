@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
-  "source_status": "V57_RESTORED_PLUS_SIX_INDEPENDENTLY_APPROVED_PACKAGES",
+  "source_snapshot": "85074c589b9d18a129a746386217db69aa73f077",
+  "source_status": "V57_RESTORED_PLUS_SEVEN_INDEPENDENTLY_APPROVED_PACKAGES_PTX_SOURCE_ONLY",
   "story_requirements": [
     {
       "id": "A1",
@@ -758,8 +758,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "963c1b238570df93c11f639efcafd0f082450855",
-    "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+    "git_tree": "349533f4c058e9b937cf7e4e4534032f902f924b",
+    "head": "85074c589b9d18a129a746386217db69aa73f077",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -767,23 +767,24 @@
       "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
       "AUTOMATION-FK-ASSERTION-20261028",
       "SECURITY-FK-ASSERTION-20261028",
-      "K106-CURRENT-PARENT-RUNTIME-20261028"
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_SIX_APPROVED_OVERLAYS",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING",
     "swap_limit": 0,
-    "verified_source_bytes": 49207256,
-    "verified_source_files": 2049,
+    "verified_source_bytes": 49231004,
+    "verified_source_files": 2050,
     "windows_source_files_written": 0
   },
   "paid_provider_requests": 0,
   "postgres17": "PG_PENDING",
   "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED",
   "windows_source_writes": 0,
-  "source_verified_run": 40681795546,
+  "source_verified_run": 40684567801,
   "root_readme_restore": {
     "commit": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
     "archivePath": "archives/recovery-20261028/GITEE-ROOT-README-0089682.md",
@@ -1022,11 +1023,37 @@
       "legacy_v58": "NOT_ADOPTED",
       "postgres17": "PG_PENDING",
       "full_ci": "NOT_RUN"
+    },
+    "ptx_source_integrated": {
+      "head": "85074c589b9d18a129a746386217db69aa73f077",
+      "run": 40684567801,
+      "job": 122803503606,
+      "source_files": 2050,
+      "source_bytes": 49231004,
+      "source_mismatches": 0,
+      "independent_review": "SOURCE_APPROVED_ONLY",
+      "project_tests": "NOT_RUN",
+      "pg_definitions": 15,
+      "pg_test_executions": 0,
+      "postgres17": "PG_PENDING",
+      "global_prepare_once": "NOT_GUARANTEED",
+      "native_commit_ack_loss": "NOT_VERIFIED",
+      "producer_wiring": "NOT_WIRED"
+    },
+    "next_original_preload_subset": {
+      "files": 37,
+      "status": "PREPARED_TO_RUN_WITH_FULL_FROZEN_DEPENDENCIES",
+      "includes": [
+        "original35 named files",
+        "K106 plugin definition test",
+        "proactive controlled fixture test"
+      ],
+      "new_pg_integration_test_included": false
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Recover two Ptx leaves from exact historical author packet; create new current-parent candidate and current independent review; old projected V59/Source-only receipts do not authorize adoption by themselves.",
+  "next_source_package": "Remaining original table definitions flow_import_proposals/proactive_runs/model_token_calls require original independent full oracle bytes before claiming restoration; do not reuse total152 or old V58 to close them.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -1037,7 +1064,7 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 426551,
-    "sha256": "06da64a390c7a352ef61e0c7c271996eef48ca85af5bb565fd09808b613fc300"
+    "bytes": 427723,
+    "sha256": "21d6368ccd163bbeee1ee8cd043ccd73b8d769ee897744c1733dd656dad31c77"
   }
 }

@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
-  "basis": "immutable V57 manifest plus six independently approved exact overlays; four explicit new records",
+  "source_commit": "85074c589b9d18a129a746386217db69aa73f077",
+  "basis": "immutable V57 manifest plus seven independently approved exact overlays; Ptx SourceOnly PG_PENDING",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -119,10 +119,30 @@
       },
       "source_commit": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
       "run": 40681795546
+    },
+    {
+      "ticket": "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/PTX-CURRENT-ADOPTED.json",
+        "bytes": 3361,
+        "sha256": "683bfbc145627766dac65fbce19f8fcca1e9e4f3a7f8182e7baa37b168b628f8",
+        "ticket": "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "formal_adoption": true,
+        "source_paths": [
+          "openbot/server/src/approvals/continuation-store.ts",
+          "openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts"
+        ],
+        "source_new_paths": [
+          "openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts"
+        ]
+      },
+      "source_commit": "85074c589b9d18a129a746386217db69aa73f077",
+      "runtime": "PG_PENDING_ZERO_EXECUTIONS",
+      "source_verification_run": 40684567801
     }
   ],
-  "file_count": 2049,
-  "source_bytes": 49207256,
+  "file_count": 2050,
+  "source_bytes": 49231004,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -8170,8 +8190,8 @@
     },
     {
       "path": "openbot/server/src/approvals/continuation-store.ts",
-      "bytes": 13036,
-      "sha256": "aa2d5a5c1d89329c50dd89091155d45b69255bc92e96b79fa4d6fd6a7215fc2c",
+      "bytes": 15478,
+      "sha256": "03d4193517cf84ea21f1ff38209eefd9e6dfa38d52a191dc87c828aaa0c4bb21",
       "mode": "100644"
     },
     {
@@ -12477,6 +12497,12 @@
       "bytes": 128110,
       "sha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
       "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts",
+      "bytes": 21306,
+      "sha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
+      "mode": "0o644"
     }
   ],
   "physical_verification": {
@@ -12485,8 +12511,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "963c1b238570df93c11f639efcafd0f082450855",
-    "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+    "git_tree": "349533f4c058e9b937cf7e4e4534032f902f924b",
+    "head": "85074c589b9d18a129a746386217db69aa73f077",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12494,16 +12520,17 @@
       "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
       "AUTOMATION-FK-ASSERTION-20261028",
       "SECURITY-FK-ASSERTION-20261028",
-      "K106-CURRENT-PARENT-RUNTIME-20261028"
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_SIX_APPROVED_OVERLAYS",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING",
     "swap_limit": 0,
-    "verified_source_bytes": 49207256,
-    "verified_source_files": 2049,
+    "verified_source_bytes": 49231004,
+    "verified_source_files": 2050,
     "windows_source_files_written": 0
   },
   "commercial_acceptance": "NOT_DELIVERED",

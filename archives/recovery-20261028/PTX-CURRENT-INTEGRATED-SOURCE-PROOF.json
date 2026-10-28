@@ -1,0 +1,39 @@
+{
+  "head": "85074c589b9d18a129a746386217db69aa73f077",
+  "run": 40684567801,
+  "job": 122803503606,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "349533f4c058e9b937cf7e4e4534032f902f924b",
+    "head": "85074c589b9d18a129a746386217db69aa73f077",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING",
+    "swap_limit": 0,
+    "verified_source_bytes": 49231004,
+    "verified_source_files": 2050,
+    "windows_source_files_written": 0
+  },
+  "scope": "adopted Ptx SourceOnly recovery; no runtime or PG17 claims",
+  "pg_definitions": 15,
+  "pg_test_executions": 0,
+  "postgres17": "PG_PENDING",
+  "project_tests": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

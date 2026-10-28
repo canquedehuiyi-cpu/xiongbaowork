@@ -7,10 +7,10 @@
 
 - V57全部195项修复（25修改/170新增/0删除，原载荷15,019,196字节）已恢复，原清单419227字节/SHA256 `81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920` 保持不变。
 - 原V57的2045清单文件、48,435,806字节已完整物理核验。
-- 其后6个包均经同一名非作者独审、Root精确采用及采用提交上的重新验证：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件、AUTOMATION-FK单测试文件、SECURITY-FK单测试文件与K106当前父六文件包，共21个不同主体文件的修复/新增。
-- 当前受清单覆盖的 **2049文件、49,207,256字节**，已按原V57清单加6个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
-- 最新完成该核验的主体提交：[325d99abb42beb8de8dd8952f239efd71d8de2e2](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/325d99abb42beb8de8dd8952f239efd71d8de2e2)。
-- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，426551字节/SHA256 `06da64a390c7a352ef61e0c7c271996eef48ca85af5bb565fd09808b613fc300`。这是基于原清单及6个批准overlay的派生清单，原V57身份不被改写。
+- 其后7个恢复/兼容修复包均经同一名非作者独审及Root精确采用，共23个不同主体文件：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件、AUTOMATION-FK单测试、SECURITY-FK单测试、K106六文件及Ptx两文件。前6包有明确组件测试证据；Ptx仅SourceOnly采用及整树字节核验，15项PG17定义未运行。这7个修复包不等于18个交付包已完成。
+- 当前受清单覆盖的 **2050文件、49,231,004字节**，已按原V57清单加7个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
+- 最新完成该核验的主体提交：[85074c589b9d18a129a746386217db69aa73f077](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/85074c589b9d18a129a746386217db69aa73f077)。
+- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，427723字节/SHA256 `21d6368ccd163bbeee1ee8cd043ccd73b8d769ee897744c1733dd656dad31c77`。这是基于原清单及7个批准overlay的派生清单，原V57身份不被改写。
 - 恢复分支：[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)。默认分支仍保留原Gitee导入基线；旧Gitee README单独保留。
 
 ## 运行与审查证据
@@ -57,7 +57,9 @@ Node 默认堆检查已实际停止：[40678526201/job122782977940](https://gith
 
 K106当前父候选已完成：原历史六leaf基线fbf07b62…在全2049文件字节核验后真实12pass/7fail/518expects；R2候选541bd1c7…为22pass/0fail/625expects，全2049文件/49,207,256字节SHA/权限/FD稳定通过。R2保留原19定义与214 artifact保护，索引两个using→on，真实FK精确owner/name→唯一native id/uuid与六身份负例，literal callback保护SQL dollar文本；对两项已批准知识/资源测试仅允许固定当前SHA并精确literal inverse还原旧整件SHA，未知字节及追加均拒绝。候选原文及两次运行在仓库归档；同一名非作者独审SOURCE_APPROVED_ONLY/findings=[]后，Root在新父上精确采用六Subject+overlay+workflow共8文件。采用提交325d99abb42beb8de8dd8952f239efd71d8de2e2的[运行40681795546/job122794075624](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40681795546/job/122794075624)完整核2049/49207256；四个知识/资源/plugin定义测试独立进程顺序完成，80pass/0fail/2996expects、exit0，测试peak223.2M。仅定义/组件范围，不是native PG17、完整CI或商业过门。
 
-下一包为Ptx两个历史leaf：continuation-store与准备事务集成测试。先按精确原ref/完整三层身份取回，再新建当前父候选和独审，不把旧预计V59或15defs0run回执直接采用。
+Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store15478B/03d4193517cf84ea21f1ff38209eefd9e6dfa38d52a191dc87c828aaa0c4bb21与PG集成测试21306B/61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0原字节核合；store四hunks正反offset0/fuzz0逐字等两端，新446行creation完整等测试，read(binding)至EOF完全不变。非作者完整读两Source及原DB/tenant/ABI，SOURCE_APPROVED_ONLY/findings=[]。采用提交85074c589b9d18a129a746386217db69aa73f077的[40684567801/job122803503606](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40684567801/job/122803503606)按七overlay全核2050/49231004，无项目执行。新15项测试只定义、PG_PENDING；不导入为CPU测试。prepare仅每invocation至多一次，非跨并发全局一次；callback仅受信任同tx数据库写可回滚，外部副作用不保护；after_ack定义模拟成功后包装层抛错，不冒真实网络COMMIT ACK丢失。producer/native/RLS/类型/fullCI未验，旧V58/V59不追认。
+
+下一步用完整锁文件依赖、原两preload顺序运行37个明确文件：原35加K106及proactive受控模型/工具夹具。该具名子集不包含Ptx PG集成测试；继续保持安装512MiB具名例外、DATA64MiB、项目聚合512MiB/swap0、禁全部生命周期脚本及免费云端。
 
 ## 持续边界与待验项
 
