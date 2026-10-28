@@ -1,0 +1,39 @@
+{
+  "head": "d23a906dc66fd56ff4c13cc26f0fc68292dec7e6",
+  "run": 40682617913,
+  "job": 122796874109,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "ea8047407f36b455ead712ceb50a303e3517b9a9",
+    "head": "d23a906dc66fd56ff4c13cc26f0fc68292dec7e6",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_ONLY_PTX_CANDIDATE_VERIFIED_PG_PENDING",
+    "swap_limit": 0,
+    "verified_source_bytes": 49231004,
+    "verified_source_files": 2050,
+    "windows_source_files_written": 0
+  },
+  "project_tests": "NOT_RUN",
+  "pg_definitions": 15,
+  "postgres17": "PG_PENDING",
+  "typecheck": "NOT_COMPLETED",
+  "formal_adoption": false,
+  "commercial_acceptance": "NOT_DELIVERED"
+}

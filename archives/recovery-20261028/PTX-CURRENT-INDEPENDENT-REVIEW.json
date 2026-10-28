@@ -1,0 +1,99 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "PTX-CURRENT-PARENT-RECOVERY-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "formal_parent": "f43c9817b1098725240e3f9c212b9a34cc152f18",
+  "candidate": "d23a906dc66fd56ff4c13cc26f0fc68292dec7e6",
+  "scope": [
+    {
+      "path": "openbot/server/src/approvals/continuation-store.ts",
+      "before": {
+        "bytes": 13036,
+        "sha256": "aa2d5a5c1d89329c50dd89091155d45b69255bc92e96b79fa4d6fd6a7215fc2c",
+        "blob": "4248f406a1eb8f13e0dc2f563aafe614599adb2a",
+        "mode": "100644"
+      },
+      "after": {
+        "bytes": 15478,
+        "sha256": "03d4193517cf84ea21f1ff38209eefd9e6dfa38d52a191dc87c828aaa0c4bb21",
+        "blob": "9ebde5c64298b9f400beb0794a58d8b8487cb632",
+        "mode": "100644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 21306,
+        "sha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
+        "blob": "02309df774e8a2714915331bd030ae06c1cbb8e4",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "excluded": "workflow/control records not part of Source verdict",
+  "full_reads": {
+    "store_before": 13036,
+    "store_after": 15478,
+    "new_pg_test": 21306,
+    "pg_definitions": 15,
+    "related_interfaces": [
+      "db/client.ts",
+      "tenant/context.ts",
+      "continuation-protocol.ts",
+      "approval schema",
+      "approval action interface"
+    ]
+  },
+  "pure_data_independent_checks": {
+    "archive_after_full_text_equal": true,
+    "all_other_store_methods_read_to_eof_equal": true,
+    "before_after_blobs": [
+      "4248f406a1eb8f13e0dc2f563aafe614599adb2a",
+      "9ebde5c64298b9f400beb0794a58d8b8487cb632",
+      "02309df774e8a2714915331bd030ae06c1cbb8e4"
+    ]
+  },
+  "source_checks": [
+    "store creates one same connection transaction; parent read, existing identity, qualification, prepare, insert and full immutable reread inside it",
+    "existing digest conflict detected before prepare; matching existing/initial conflict/gates skip prepare",
+    "eight fields frozen before authorization await; legacy/callback/field/authorization fail closed",
+    "old ensure input object and original preflight/origin/authorization order retained",
+    "tenant captured on transaction entry and set locally within same transaction connection",
+    "Drizzle0.45.2 delegates callback to Bun SQL begin; no new automatic retry/replay",
+    "test guard URL/disposable name/explicit marker before createDatabase; PG17/schema/privileged fixture before writes; no automatic DDL/grants/migrations/production fallback"
+  ],
+  "independent_runtime_log_read": {
+    "run": 40682617913,
+    "job": 122796874109,
+    "head": "d23a906dc66fd56ff4c13cc26f0fc68292dec7e6",
+    "source_files": 2050,
+    "source_bytes": 49231004,
+    "source_mismatches": 0,
+    "mode_fd_stability": true,
+    "data_memory_max": 67108864,
+    "project_memory_max": 536870912,
+    "swap": 0,
+    "project_tests": "NOT_RUN"
+  },
+  "boundaries": {
+    "prepare_once": "per invocation at most once, not global across concurrent callers; missing row SELECT FOR UPDATE not a gap lock",
+    "callback": "trusted internal rollback-capable writes through supplied tx only; other connections/external effects not protected",
+    "ack_test": "after_ack definition simulates transaction success then wrapper throws; not real network COMMIT ACK loss",
+    "native_commit_race_and_rls": "NOT_VERIFIED",
+    "pg17": "PG_PENDING_15_DEFINITIONS_ZERO_EXECUTIONS",
+    "producer_issuer_pwrite": "NOT_WIRED_NOT_VERIFIED",
+    "types": "NOT_COMPLETED",
+    "full_ci": "NOT_RUN",
+    "activation": "DISABLED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "legacy_V58_V59": "NOT_ADOPTED; old incidents not cleared",
+  "windows_source_writes": 0,
+  "reviewer_project_execution": 0,
+  "reviewer_repository_writes": 0
+}
