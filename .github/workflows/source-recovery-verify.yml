@@ -23,7 +23,7 @@ jobs:
             --property=MemorySwapMax=0 --property=OOMPolicy=kill \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
             /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
-          import hashlib, json, os, stat, subprocess, sys, tempfile
+          import base64, gzip, hashlib, io, json, os, stat, subprocess, sys, tarfile, tempfile, zipfile
           from pathlib import Path
           
           target = sys.argv[1]
@@ -104,6 +104,48 @@ jobs:
               manifest_raw = verified_bytes(root, control_path, 419227,
                   "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
               assert manifest_raw == shown
+              readme_expected = next(f for f in manifest["files"] if f["path"] == "README.md")
+              if (root / "README.md").stat().st_size != readme_expected["bytes"]:
+                  archive = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+                                            "show", target + ":archives/20261018/development-base-20261018.zip"],
+                                           cwd=root, check=True, capture_output=True,
+                                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+                  assert len(archive) == 8777985
+                  assert hashlib.sha256(archive).hexdigest() == "d35fb1b9534b3008731687ef5177388351b6e7ec317e202e72b8ca47d1842e49"
+                  with zipfile.ZipFile(io.BytesIO(archive)) as outer:
+                      packed = outer.read("development-base/development-source.tar.gz")
+                  assert len(packed) == 8390351 and packed[:3] == b"\\x1f\\x8b\\x08"
+                  assert hashlib.sha256(packed).hexdigest() == "75b2aa411dc58e7bfc84afaac78853e38eac481b04d208f95c8bfe32bb68ab4f"
+                  del archive
+                  seen = set()
+                  members = source_bytes = 0
+                  original_readme = None
+                  with gzip.GzipFile(fileobj=io.BytesIO(packed)) as stream:
+                      with tarfile.open(fileobj=stream, mode="r|") as source_tar:
+                          for member in source_tar:
+                              rel = Path(member.name)
+                              assert not rel.is_absolute() and ".." not in rel.parts
+                              assert "\\\\" not in member.name and member.name not in seen
+                              assert member.isfile() and not member.issym() and not member.islnk()
+                              seen.add(member.name)
+                              members += 1
+                              source_bytes += member.size
+                              assert members <= 1875 and source_bytes <= 34529259
+                              if member.name == "README.md":
+                                  original_readme = source_tar.extractfile(member).read(7803)
+                      while True:
+                          padding = stream.read(65536)
+                          if not padding:
+                              break
+                          assert not padding.strip(b"\\x00")
+                          assert stream.tell() <= 64 * 1024 * 1024
+                  assert members == 1875 and source_bytes == 34529259
+                  assert original_readme is not None and len(original_readme) == 7802
+                  assert hashlib.sha256(original_readme).hexdigest() == readme_expected["sha256"]
+                  print("ARCHIVE_README_IDENTITY " + json.dumps({"bytes": 7802, "sha256": readme_expected["sha256"],
+                                                               "tar_members": members, "tar_source_bytes": source_bytes}), flush=True)
+                  print("ARCHIVE_README_DATA " + base64.b64encode(original_readme).decode("ascii"), flush=True)
+                  raise RuntimeError("Exact archived README recovered; remote README still requires Root restore")
               assert manifest["file_count"] == len(manifest["files"]) == 2045
               assert len({f["path"] for f in manifest["files"]}) == 2045
               total = 0
