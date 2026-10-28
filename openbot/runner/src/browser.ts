@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
-import type { BrowserContext, Page } from "playwright-core";
+import type { BrowserContext, Page, chromium } from "playwright-core";
 import {
   cutAtCodeUnits,
   parseAriaSnapshot,
