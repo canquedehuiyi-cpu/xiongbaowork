@@ -7,10 +7,10 @@
 
 - V57全部195项修复（25修改/170新增/0删除，原载荷15,019,196字节）已恢复，原清单419227字节/SHA256 `81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920` 保持不变。
 - 原V57的2045清单文件、48,435,806字节已完整物理核验。
-- 其后5个包均经同一名非作者独审、Root精确采用及采用提交上的重新验证：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件、AUTOMATION-FK单测试文件、SECURITY-FK单测试文件，共15项主体文件修复。
-- 当前受清单覆盖的 **2045文件、48,463,600字节**，已按原V57清单加5个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
-- 最新完成该核验的主体提交：[e7bc10395277baf9133690e6d3d852c3cfcac25b](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/e7bc10395277baf9133690e6d3d852c3cfcac25b)。
-- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，424212字节/SHA256 `79edba3a1a8c1ad7421ce8fc5eb42ab2c048ac967c5ca71bc9102f8e5902ae61`。这是基于原清单及5个批准overlay的派生清单，原V57身份不被改写。
+- 其后6个包均经同一名非作者独审、Root精确采用及采用提交上的重新验证：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件、AUTOMATION-FK单测试文件、SECURITY-FK单测试文件与K106当前父六文件包，共21个不同主体文件的修复/新增。
+- 当前受清单覆盖的 **2049文件、49,207,256字节**，已按原V57清单加6个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
+- 最新完成该核验的主体提交：[325d99abb42beb8de8dd8952f239efd71d8de2e2](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/325d99abb42beb8de8dd8952f239efd71d8de2e2)。
+- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，426551字节/SHA256 `06da64a390c7a352ef61e0c7c271996eef48ca85af5bb565fd09808b613fc300`。这是基于原清单及6个批准overlay的派生清单，原V57身份不被改写。
 - 恢复分支：[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)。默认分支仍保留原Gitee导入基线；旧Gitee README单独保留。
 
 ## 运行与审查证据
@@ -41,11 +41,7 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 
 完整依赖安装随后成功：[40672999809/job122764245052](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40672999809/job/122764245052)。原锁文件和6个包文件前后哈希相同；普通文件127738、符号链接3870，hardlink0、私有路径之外链接0；copyfile/私有缓存/全部生命周期脚本未运行。安装阶段按人类具名例外512MiB（实际peak511.8M）、其他DATA仍64MiB，项目总512MiB/swap0。原64MiB OOM与首次512MiB240秒timeout保留；进度日志/并发4/480秒时限后的实际耗时160.775秒。缓存及依赖位于该临时Linux作业，不冒持久Codespace已有该环境。
 
-下一步保留原bunfig中的server/app两预加载脚本，用完整依赖跑35个明确命名文件（已有33组件加2个启动/受限写入生命周期CPU注入用例）。这不是全套preload、类型、完整CI或PG17验收；均另证。
-
 原始预加载子集实际通过：[40674048676/job122767800762](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40674048676/job/122767800762)，35文件全部完成，**621 pass / 0 fail / 9151 expects**，没有Unhandled error。原bunfig及server/app两个预加载脚本保持，完整冻结依赖安装PASS。原自动日志安装peak512.5M、测试peak466.6M逐字保留；验证的是实际配置的512MiB聚合门/swap0，不冒历史从未出现瞬时超门。全套preload及完整CI仍NOT_RUN。
-
-下一步7个任务看板文件使用受控fetch夹具和原app预加载，并单独检查原server TypeScript配置（原配置不包含tests，不修改其include来伪装覆盖）。源码不改，测试120秒/单例5000ms、类型120秒、项目及后代512MiB/swap0，完整依赖安装仍只使用人类具名512MiB例外；Source/下载/其他复制64MiB保持。
 
 七个任务看板文件已实际通过：[40675320033/job122772122184](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40675320033/job/122772122184)，**58 pass / 0 fail / 596 expects**。范围为原app预加载、Happy DOM、真实路由/查询/组件配合受控fetch夹具；不代真实浏览器/设备、后端写入或A故事完整验收。
 
@@ -55,7 +51,13 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 
 同一独审员已完整审冻结b0bc8b51…的578行36722B控制器，CONTROL_REVIEW_OK，Source五overlay/实际cgroup/具名安装例外/禁脚本/私有链接审计/步骤顺序/环境白名单无阻断；不计新主体包采用，也不覆盖后续Node差异。
 
-K106六历史after已通过Pages正常连接器按原ref取回、严格base64/gzip/CRC/ISIZE/raw SHA/Git blob/LFCR核验，原样归档在[历史未采用目录](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028/archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED)，归档提交6970f22792c221bbdc825bfca95586aa477cfa89。4NEW在当前manifest/Git树ABSENT，2MOD完整before SHA/blob吻合，snapshot去新增2表和idprev后逐字还原旧150表及未知tops，journal0..105与全部tops、barrel唯一新增行inverse全核。仅恢复历史字节，不改正式2045源码/150表，不当V58采用或清旧FD/cache/机制红；下一包须在当前父上形成新候选、运行与复审。
+K106六历史after已通过Pages正常连接器按原ref取回、严格base64/gzip/CRC/ISIZE/raw SHA/Git blob/LFCR核验，原样归档在[历史未采用目录](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028/archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED)，归档提交6970f22792c221bbdc825bfca95586aa477cfa89。4NEW在当前manifest/Git树ABSENT，2MOD完整before SHA/blob吻合，snapshot去新增2表和idprev后逐字还原旧150表及未知tops，journal0..105与全部tops、barrel唯一新增行inverse全核。上述是历史归档阶段；原六leaf历史字节保持归档，当前父修订候选及独审采用另列，不追认旧V58，不清旧FD/cache/机制红。
+
+Node 默认堆检查已实际停止：[40678526201/job122782977940](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40678526201/job/122782977940)。实际 host Node v24.21.0、TypeScript5.9.3，未设置NODE_OPTIONS或额外oldspace限制；仍在512MiB project及后代cgroup/swap0内发生V8 heap limit/SIGABRT6，Python child return-6、Actions步骤250，测试阶段peak356.5M。不是类型通过或类型诊断；同一作业的冻结依赖安装PASS，自动peak513.5M原样保留。更早一次384MiB检查host v24.22.1与其错误RESULT标签、Bun timeout全部保留。保持资源门，不重复相同编译尝试。
+
+K106当前父候选已完成：原历史六leaf基线fbf07b62…在全2049文件字节核验后真实12pass/7fail/518expects；R2候选541bd1c7…为22pass/0fail/625expects，全2049文件/49,207,256字节SHA/权限/FD稳定通过。R2保留原19定义与214 artifact保护，索引两个using→on，真实FK精确owner/name→唯一native id/uuid与六身份负例，literal callback保护SQL dollar文本；对两项已批准知识/资源测试仅允许固定当前SHA并精确literal inverse还原旧整件SHA，未知字节及追加均拒绝。候选原文及两次运行在仓库归档；同一名非作者独审SOURCE_APPROVED_ONLY/findings=[]后，Root在新父上精确采用六Subject+overlay+workflow共8文件。采用提交325d99abb42beb8de8dd8952f239efd71d8de2e2的[运行40681795546/job122794075624](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40681795546/job/122794075624)完整核2049/49207256；四个知识/资源/plugin定义测试独立进程顺序完成，80pass/0fail/2996expects、exit0，测试peak223.2M。仅定义/组件范围，不是native PG17、完整CI或商业过门。
+
+下一包为Ptx两个历史leaf：continuation-store与准备事务集成测试。先按精确原ref/完整三层身份取回，再新建当前父候选和独审，不把旧预计V59或15defs0run回执直接采用。
 
 ## 持续边界与待验项
 
@@ -64,5 +66,5 @@ K106六历史after已通过Pages正常连接器按原ref取回、严格base64/gz
 - Bun1.3.14+0d9b296af；schema测试仅用原lockfile固定Drizzle0.45.2并验证SRI，不冒完整workspace安装。
 - 原preload全套、类型编译、完整CI、原生PG17、生产接线、镜像、真实UI、真实计费和客户交付分别待真实验证。
 - PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migration NOT_WIRED、ROOT_RELEASE=null、ready=false保留。
-- V58仍未采用，原51表恢复46/51的余5不能由新增协议表替代；历史审计事件与缺证保留。
+- 旧V58仍未采用，原V57历史46/51余5记录不改；本次另有独立原0121 oracle和当前物理Source证据恢复其中两表定义，其余flow_import_proposals、proactive_runs、model_token_calls仍缺恢复，不能用152总表掩盖。历史审计事件与缺证保留。
 - 专用Codespace最后可见为重连；当前完整物理验证来自Linux Actions，不声称持久Codespace已快进。

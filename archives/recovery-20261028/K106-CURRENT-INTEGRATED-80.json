@@ -1,0 +1,118 @@
+{
+  "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+  "run": 40681795546,
+  "job": 122794075624,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "963c1b238570df93c11f639efcafd0f082450855",
+    "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SIX_APPROVED_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 49207256,
+    "verified_source_files": 2049,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 4,
+    "file_results": [
+      {
+        "path": "server/tests/recovery-knowledge-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-knowledge-write-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-resource-project-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-plugin-assembly-foundations.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "four approved knowledge/resource/plugin definition suites, separate sequential processes; no PostgreSQL validation",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "full_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "counts": [
+    {
+      "kind": "pass",
+      "n": 14
+    },
+    {
+      "kind": "fail",
+      "n": 0
+    },
+    {
+      "kind": "expect() calls",
+      "n": 687
+    },
+    {
+      "kind": "pass",
+      "n": 23
+    },
+    {
+      "kind": "fail",
+      "n": 0
+    },
+    {
+      "kind": "expect() calls",
+      "n": 878
+    },
+    {
+      "kind": "pass",
+      "n": 21
+    },
+    {
+      "kind": "fail",
+      "n": 0
+    },
+    {
+      "kind": "expect() calls",
+      "n": 806
+    },
+    {
+      "kind": "pass",
+      "n": 22
+    },
+    {
+      "kind": "fail",
+      "n": 0
+    },
+    {
+      "kind": "expect() calls",
+      "n": 625
+    }
+  ],
+  "total": {
+    "pass": 80,
+    "fail": 0,
+    "expects": 2996
+  }
+}

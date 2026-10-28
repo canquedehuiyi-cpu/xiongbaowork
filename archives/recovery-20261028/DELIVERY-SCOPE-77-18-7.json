@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "ebd96e157ff4b4ef33065653db43080a18afab17",
-  "source_status": "V57_RESTORED_PLUS_FIVE_INDEPENDENTLY_APPROVED_PACKAGES",
+  "source_snapshot": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+  "source_status": "V57_RESTORED_PLUS_SIX_INDEPENDENTLY_APPROVED_PACKAGES",
   "story_requirements": [
     {
       "id": "A1",
@@ -758,31 +758,32 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "fb05c78567426959360dacc3fbaf05057168a66a",
-    "head": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
+    "git_tree": "963c1b238570df93c11f639efcafd0f082450855",
+    "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
       "AP-SCHEMA-RUNTIME-20261028",
       "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
       "AUTOMATION-FK-ASSERTION-20261028",
-      "SECURITY-FK-ASSERTION-20261028"
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SIX_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 48463600,
-    "verified_source_files": 2045,
+    "verified_source_bytes": 49207256,
+    "verified_source_files": 2049,
     "windows_source_files_written": 0
   },
   "paid_provider_requests": 0,
   "postgres17": "PG_PENDING",
   "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED",
   "windows_source_writes": 0,
-  "source_verified_run": 40670272087,
+  "source_verified_run": 40681795546,
   "root_readme_restore": {
     "commit": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
     "archivePath": "archives/recovery-20261028/GITEE-ROOT-README-0089682.md",
@@ -954,14 +955,6 @@
       "full_suite": "NOT_RUN",
       "full_ci": "NOT_RUN"
     },
-    "next_app7_and_server_types": {
-      "status": "NEXT",
-      "app_test_files": 7,
-      "app_controlled_fetch": true,
-      "server_types": "original server/tsconfig.json noEmit; original tests excluded",
-      "project_and_descendants_limit": 536870912,
-      "swap": 0
-    },
     "app_task_board": {
       "status": "PASS_NAMED_7_FILES_HAPPY_DOM_CONTROLLED_FETCH",
       "head": "b0bc8b51f86bfb5fc83906f2eedd9996eede4f47",
@@ -974,15 +967,21 @@
       "full_suite": "NOT_RUN"
     },
     "server_typecheck": {
-      "status": "NODE_384MiB_HEAP_SIGABRT_NOT_COMPLETE",
-      "run": 40676314709,
-      "job": 122775533054,
+      "status": "NODE_DEFAULT_V8_HEAP_RESOURCE_STOP_NOT_COMPLETE",
+      "head": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
+      "run": 40678526201,
+      "job": 122782977940,
       "typescript": "5.9.3",
-      "runtime": "Node24.22.1",
-      "own_heap_limit": 384,
-      "configured_project_limit": 536870912,
+      "runtime": "Node v24.21.0",
+      "node_options": "UNSET",
+      "auxiliary_old_space_limit": "NONE",
+      "project_limit": 536870912,
+      "swap": 0,
+      "python_child_exit": -6,
+      "actions_step_exit": 250,
       "kernel_oom": false,
-      "next": "Node default heap, no NODE_OPTIONS, same aggregate512MiB/swap0"
+      "diagnostics": "NONE",
+      "prior_attempts_preserved": true
     },
     "candidate_entries_are_historical_stage_records": true,
     "controller_independent_review": {
@@ -992,18 +991,42 @@
       "subject_package": false
     },
     "k106_candidate_recovery": {
-      "status": "HISTORICAL_BYTES_RECOVERED_NOT_APPLIED",
-      "archive_commit": "6970f22792c221bbdc825bfca95586aa477cfa89",
+      "status": "INDEPENDENT_SOURCE_REVIEW_APPROVED_AND_ADOPTED",
+      "head": "541bd1c7782e7aaca0b9d19fa90bc7f0f4ab7c82",
+      "run": 40680280457,
+      "job": 122788968758,
       "files": 6,
-      "new_paths_current_absent": 4,
-      "mod_before_current_match": 2,
-      "version_adoption": "NOT_V58",
-      "table_count_current_formal": 150
+      "projected_total_files": 2049,
+      "projected_total_bytes": 49207256,
+      "pass": 22,
+      "fail": 0,
+      "expects": 625,
+      "baseline_run": 40679810321,
+      "baseline_pass": 12,
+      "baseline_fail": 7,
+      "formal_adoption": true,
+      "v58": "NOT_ADOPTED"
+    },
+    "k106_integrated": {
+      "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+      "run": 40681795546,
+      "job": 122794075624,
+      "pass": 80,
+      "fail": 0,
+      "expects": 2996,
+      "test_files": 4,
+      "source_files": 2049,
+      "source_bytes": 49207256,
+      "table_definitions": 152,
+      "original_missing_two_restored_as_definitions_only": true,
+      "legacy_v58": "NOT_ADOPTED",
+      "postgres17": "PG_PENDING",
+      "full_ci": "NOT_RUN"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "K106 six historical leaves now byte-recovered and current-before applicable; prepare isolated candidate against five approved overlays, then current independent review and integration proof.",
+  "next_source_package": "Recover two Ptx leaves from exact historical author packet; create new current-parent candidate and current independent review; old projected V59/Source-only receipts do not authorize adoption by themselves.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -1014,9 +1037,7 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "sha256": "79edba3a1a8c1ad7421ce8fc5eb42ab2c048ac967c5ca71bc9102f8e5902ae61",
-    "bytes": 424212,
-    "files": 2045,
-    "source_bytes": 48463600
+    "bytes": 426551,
+    "sha256": "06da64a390c7a352ef61e0c7c271996eef48ca85af5bb565fd09808b613fc300"
   }
 }

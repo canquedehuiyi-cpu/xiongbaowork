@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
-  "basis": "immutable V57 manifest plus three independently approved exact overlays",
+  "source_commit": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+  "basis": "immutable V57 manifest plus six independently approved exact overlays; four explicit new records",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -93,10 +93,36 @@
       },
       "source_commit": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
       "run": 40670272087
+    },
+    {
+      "ticket": "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/K106-CURRENT-ADOPTED.json",
+        "bytes": 5481,
+        "sha256": "9c9f46c71a0180d273462919a1d511497d9e8ba3e65b9a9534e61185d559a899",
+        "formal_adoption": true,
+        "ticket": "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "source_paths": [
+          "openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql",
+          "openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json",
+          "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+          "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+          "openbot/server/src/db/schema/index.ts",
+          "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts"
+        ],
+        "source_new_paths": [
+          "openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql",
+          "openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json",
+          "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+          "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts"
+        ]
+      },
+      "source_commit": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
+      "run": 40681795546
     }
   ],
-  "file_count": 2045,
-  "source_bytes": 48463600,
+  "file_count": 2049,
+  "source_bytes": 49207256,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -7747,8 +7773,8 @@
     },
     {
       "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
-      "bytes": 15995,
-      "sha256": "c9eb36952c8af649fb8813def53240a1b8bc5e4a33a8a025ef3a394ee80f6951",
+      "bytes": 16159,
+      "sha256": "0be3bb0f19c52c21fc3ecc689d5eff41ae00a5e028de064cd9ad213d65ac44fb",
       "mode": "100644"
     },
     {
@@ -8804,8 +8830,8 @@
     },
     {
       "path": "openbot/server/src/db/schema/index.ts",
-      "bytes": 1747,
-      "sha256": "f2c7d495bfc245e148dc976669ed1da7b530ad71b99a5c22845cb14f1f4951ed",
+      "bytes": 1794,
+      "sha256": "f9ddd1c640db86a246e45095788bb3c140ec503a0a35be75a8e64d09c99ea2aa",
       "mode": "0o644"
     },
     {
@@ -12427,6 +12453,30 @@
       "bytes": 63,
       "sha256": "0baa7dd48e8a2672ee9f96c7f611889bf0aa2f53dfe71a1f35020dd6ee786336",
       "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql",
+      "bytes": 5270,
+      "sha256": "a5541d86f2d648301bc5c4e7bf5a2e623ccf43e2a1719130d9f95bad41290c72",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json",
+      "bytes": 604775,
+      "sha256": "96e8bc9e6a7b89c008649ad0c964f9a6cf5460fad2db9f7c1fb33ebb7c2f3cd6",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+      "bytes": 5290,
+      "sha256": "4b64d2d8cb7ac1f4e361ef3d91de64cda0180d61dce92d74c7e6c5a564d4f588",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts",
+      "bytes": 128110,
+      "sha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
+      "mode": "0o644"
     }
   ],
   "physical_verification": {
@@ -12435,24 +12485,25 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "fb05c78567426959360dacc3fbaf05057168a66a",
-    "head": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
+    "git_tree": "963c1b238570df93c11f639efcafd0f082450855",
+    "head": "325d99abb42beb8de8dd8952f239efd71d8de2e2",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
       "AP-SCHEMA-RUNTIME-20261028",
       "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
       "AUTOMATION-FK-ASSERTION-20261028",
-      "SECURITY-FK-ASSERTION-20261028"
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SIX_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 48463600,
-    "verified_source_files": 2045,
+    "verified_source_bytes": 49207256,
+    "verified_source_files": 2049,
     "windows_source_files_written": 0
   },
   "commercial_acceptance": "NOT_DELIVERED",
