@@ -475,6 +475,7 @@ test("one card entered twice inside a single outer act leaves one mutation objec
   const expectSameSingle = () => {
     const live = addedOf();
     expect(live.length).toBe(1);
+    if (firstMutation === null) throw new Error("first mutation was not captured");
     expect(live[0]).toBe(firstMutation);
   };
   await act(async () => {

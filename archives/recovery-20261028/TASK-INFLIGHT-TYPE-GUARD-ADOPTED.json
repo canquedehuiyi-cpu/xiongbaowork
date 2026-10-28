@@ -1,0 +1,76 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "TASK-INFLIGHT-TYPE-GUARD-20261028",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_FULL_APP_SINGLE_PROCESS_AND_ORIGINAL_APP_TYPES_PASS",
+  "base_commit": "b47d0f69567139cdb28b8e94dbe2b060794be79f",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/app/tests/tasks-workbench-inflight.test.tsx",
+      "before": {
+        "bytes": 21400,
+        "sha256": "cd299f0251e9707117c0222f092de7fcd0b77177393be8f5d6e5f158085ff6bd",
+        "mode": "0o644",
+        "blob": "b635510915f30f0880fe923b023b09b512b34786"
+      },
+      "after": {
+        "bytes": 21484,
+        "sha256": "517dad76581fb1e539ce63bf75d013060b314d9ee806903754774ccdfb8d8194",
+        "mode": "0o644",
+        "blob": "73a9038e26ad12d85eda9cac019d1d677a93c4b6"
+      }
+    }
+  ],
+  "scope": "One test helper guard explicitly requires captured nonnull first mutation before unchanged real-cache object identity assertion; no production Source or test cases/assertion removal",
+  "trigger": {
+    "run": 40714852195,
+    "job": 122909637989,
+    "full_app_single_process": {
+      "files": 161,
+      "pass": 1207,
+      "fail": 0
+    },
+    "app_typecheck": {
+      "exit_code": 2,
+      "diagnostics": 1,
+      "path": "openbot/app/tests/tasks-workbench-inflight.test.tsx",
+      "line": 478,
+      "code": "TS2769",
+      "reason": "captured firstMutation is nullable at generic expect.toBe boundary"
+    }
+  },
+  "resource_authorization": "APP-2GiB-HUMAN-AUTHORIZATION.json applies only original app one-process suite and original full app tsconfig; all original gates retained",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "98402f9ce24c7b7ab449291d43587ce1eb61749c",
+  "review": {
+    "path": "archives/recovery-20261028/TASK-INFLIGHT-TYPE-GUARD-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "run": 40716110884,
+    "job": 122914126876,
+    "full_app_single_process": {
+      "files": 161,
+      "pass": 1207,
+      "fail": 0,
+      "expects": 4163,
+      "unhandled": 0,
+      "peak": "1G"
+    },
+    "original_app_types": {
+      "exit_code": 0,
+      "diagnostics": 0,
+      "tests_included": true,
+      "peak": "1.5G"
+    },
+    "project_aggregate_each": 2147483648,
+    "swap": 0,
+    "restore512MiB_after_each": true,
+    "strict_ci": "NOT_RUN"
+  },
+  "adoption_epoch": "ROOT116-TASK-INFLIGHT-TYPE-GUARD-20261028"
+}

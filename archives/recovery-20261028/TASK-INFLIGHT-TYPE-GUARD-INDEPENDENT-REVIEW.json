@@ -1,0 +1,47 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "3421a05cba8d6ba6004b0ba966806b976d616b16",
+  "candidate": "98402f9ce24c7b7ab449291d43587ce1eb61749c",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/app/tests/tasks-workbench-inflight.test.tsx",
+      "before": {
+        "bytes": 21400,
+        "sha256": "cd299f0251e9707117c0222f092de7fcd0b77177393be8f5d6e5f158085ff6bd",
+        "mode": "0o644",
+        "blob": "b635510915f30f0880fe923b023b09b512b34786"
+      },
+      "after": {
+        "bytes": 21484,
+        "sha256": "517dad76581fb1e539ce63bf75d013060b314d9ee806903754774ccdfb8d8194",
+        "mode": "0o644",
+        "blob": "73a9038e26ad12d85eda9cac019d1d677a93c4b6"
+      }
+    }
+  ],
+  "full_read": "Both complete texts independently UTF8 bytes/SHA256 and Git blob matched through GitHub connector and tool memory; no local Source writes/project execution",
+  "closed_diff": "Remove unique84B guard and entire after equals before;8cases and all66expect source lines unchanged",
+  "semantics": {
+    "precondition": "Guard after live.length==1 and before original object identity toBe; explicitly rejects uncaptured null witness without fabricating object",
+    "observation": "Actual provider QueryClient mutation cache; first mutation captured after firstclick from added[0]; click/capture/drop/first identity stay one outer act, no new await/subscription/reset/clear/unmount",
+    "later_checks": "Same actual object verified after drop, transport write and settlement; all same-card/cross-action dedupe/different-card/out-of-order/refusal/refetch bounds retained"
+  },
+  "independent_before_runtime": {
+    "run": 40714852195,
+    "job": 122909637989,
+    "files": 161,
+    "pass": 1207,
+    "fail": 0,
+    "expects": 4163,
+    "type_diagnostics": 1,
+    "type_exit": 2,
+    "two_resource_restores_confirmed": true
+  },
+  "candidate_runtime_not_inferred": true,
+  "full_ci": "NOT_RUN",
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
