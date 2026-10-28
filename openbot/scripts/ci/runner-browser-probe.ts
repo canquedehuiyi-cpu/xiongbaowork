@@ -1,5 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { runnerProbeHandleHasToken } from "./runner-browser-probe-ref";
+import { stopRunnerProbeServer } from "./runner-browser-probe-lifecycle";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRunnerBrowser } from "../../runner/src/browser.ts";
@@ -505,7 +506,7 @@ try {
   );
 } finally {
   await browser.close().catch(() => undefined);
-  server.close();
+  await stopRunnerProbeServer(server);
   journal.close();
   rmSync(probeRoot, { recursive: true, force: true });
 }

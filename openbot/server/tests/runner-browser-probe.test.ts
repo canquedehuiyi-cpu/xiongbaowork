@@ -6,8 +6,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type BrowserLauncher, createRunnerBrowser } from "../../runner/src/browser";
 import { runnerProbeHandleHasToken } from "../../scripts/ci/runner-browser-probe-ref";
+import { stopRunnerProbeServer } from "../../scripts/ci/runner-browser-probe-lifecycle";
 
-// Pure fake-page/CLI-gate tests. No installed browser, port, website or real profile is used.
+// Fake-page/CLI-gate tests plus an owned loopback ephemeral HTTP fixture.
+// No installed browser, external site or real user profile is used.
 const roots: string[] = [];
 function ownRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "openbot-probe-contract-"));
@@ -80,6 +82,18 @@ describe("runner browser probe compatibility", () => {
       expect(handles[0]).not.toBe(handles[1]);
     } finally {
       await browser.close();
+    }
+  });
+
+  test("fixture cleanup closes the actual pinned Bun listener", async () => {
+    const fixture = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("probe fixture") });
+    const url = fixture.url;
+    try {
+      expect(await (await fetch(url)).text()).toBe("probe fixture");
+      await stopRunnerProbeServer(fixture);
+      await expect(fetch(url)).rejects.toThrow();
+    } finally {
+      await fixture.stop(true);
     }
   });
 
