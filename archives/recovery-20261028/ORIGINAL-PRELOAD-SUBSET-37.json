@@ -1,0 +1,227 @@
+{
+  "head": "ef8f38ad08b66442f4a95609d1522c6293a93e6b",
+  "run": 40684891942,
+  "job": 122804593792,
+  "total": {
+    "pass": 651,
+    "fail": 0,
+    "expects": 9810
+  },
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "7226082b5449cb486534d3189ff2f27043910654",
+    "head": "ef8f38ad08b66442f4a95609d1522c6293a93e6b",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING",
+    "swap_limit": 0,
+    "verified_source_bytes": 49231004,
+    "verified_source_files": 2050,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "test_files": 37,
+    "completed_files": 37,
+    "results": [
+      {
+        "path": "server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-approval-direct-execution-domains.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-approval-exact-input-objects.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-automation-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-automation-run-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-device-binding-leases.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-customization-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-customization-turns.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-official-bindings.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-run-coordination.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-sharing-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-original-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-run-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-runtime-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-group-pipeline-start-receipts.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-knowledge-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-knowledge-write-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-outbox-knowledge-heads.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-resource-project-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-role-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-security-policy-fences.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-subject-binding.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-task-flow-audit.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-threads-parent-key.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "tests/recovery-lineage.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-input-json.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-object-header.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-object-wire.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-object-crypto.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-http-owned-input.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approvals-continuation-protocol.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/server-readiness-gates.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/role-writer-lifecycle.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-plugin-assembly-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/proactive.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "37 sequential named files with unchanged repository original preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "NAMED_37_FILE_SUBSET_ONLY_FULL_SUITE_NOT_RUN",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "ef8f38ad08b66442f4a95609d1522c6293a93e6b",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "original_preload_scripts": "UNCHANGED_TWO",
+  "full_ci": "NOT_RUN",
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

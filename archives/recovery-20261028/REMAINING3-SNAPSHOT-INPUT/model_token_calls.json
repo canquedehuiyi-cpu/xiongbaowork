@@ -1,0 +1,306 @@
+{
+  "name": "model_token_calls",
+  "schema": "",
+  "columns": {
+    "tenant_id": {
+      "name": "tenant_id",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "call_id": {
+      "name": "call_id",
+      "type": "uuid",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "run_id": {
+      "name": "run_id",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "thread_id": {
+      "name": "thread_id",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "agent_id": {
+      "name": "agent_id",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "execution_epoch": {
+      "name": "execution_epoch",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "model_ref": {
+      "name": "model_ref",
+      "type": "uuid",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "provider": {
+      "name": "provider",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "model_name": {
+      "name": "model_name",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "credential_id": {
+      "name": "credential_id",
+      "type": "uuid",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "credential_digest": {
+      "name": "credential_digest",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "original_model_fingerprint": {
+      "name": "original_model_fingerprint",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "sdk_provider": {
+      "name": "sdk_provider",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "sdk_model_id": {
+      "name": "sdk_model_id",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "original_text": {
+      "name": "original_text",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "original_digest": {
+      "name": "original_digest",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "outcome": {
+      "name": "outcome",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true,
+      "default": "'pending'"
+    },
+    "usage_status": {
+      "name": "usage_status",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true,
+      "default": "'unknown'"
+    },
+    "input_tokens": {
+      "name": "input_tokens",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "output_tokens": {
+      "name": "output_tokens",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "total_tokens": {
+      "name": "total_tokens",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "reasoning_tokens": {
+      "name": "reasoning_tokens",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "cached_input_tokens": {
+      "name": "cached_input_tokens",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "cache_write_tokens": {
+      "name": "cache_write_tokens",
+      "type": "bigint",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "receipt_text": {
+      "name": "receipt_text",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "receipt_digest": {
+      "name": "receipt_digest",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "started_at": {
+      "name": "started_at",
+      "type": "timestamp with time zone",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "observed_at": {
+      "name": "observed_at",
+      "type": "timestamp with time zone",
+      "primaryKey": false,
+      "notNull": false
+    }
+  },
+  "indexes": {
+    "model_token_calls_time_idx": {
+      "name": "model_token_calls_time_idx",
+      "columns": [
+        {
+          "expression": "tenant_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        },
+        {
+          "expression": "started_at",
+          "isExpression": false,
+          "asc": false,
+          "nulls": "last"
+        },
+        {
+          "expression": "call_id",
+          "isExpression": false,
+          "asc": false,
+          "nulls": "last"
+        }
+      ],
+      "isUnique": false,
+      "concurrently": false,
+      "method": "btree",
+      "with": {}
+    }
+  },
+  "foreignKeys": {},
+  "compositePrimaryKeys": {
+    "model_token_calls_tenant_id_call_id_pk": {
+      "name": "model_token_calls_tenant_id_call_id_pk",
+      "columns": [
+        "tenant_id",
+        "call_id"
+      ]
+    }
+  },
+  "uniqueConstraints": {},
+  "policies": {
+    "model_token_calls_owner_select": {
+      "name": "model_token_calls_owner_select",
+      "as": "PERMISSIVE",
+      "for": "SELECT",
+      "to": [
+        "public"
+      ],
+      "using": "tenant_id = current_setting('app.tenant_id', true)"
+    },
+    "model_token_calls_owner_insert": {
+      "name": "model_token_calls_owner_insert",
+      "as": "PERMISSIVE",
+      "for": "INSERT",
+      "to": [
+        "public"
+      ],
+      "withCheck": "tenant_id = current_setting('app.tenant_id', true)"
+    },
+    "model_token_calls_owner_update": {
+      "name": "model_token_calls_owner_update",
+      "as": "PERMISSIVE",
+      "for": "UPDATE",
+      "to": [
+        "public"
+      ],
+      "using": "tenant_id = current_setting('app.tenant_id', true)",
+      "withCheck": "tenant_id = current_setting('app.tenant_id', true)"
+    },
+    "model_token_calls_owner_delete": {
+      "name": "model_token_calls_owner_delete",
+      "as": "PERMISSIVE",
+      "for": "DELETE",
+      "to": [
+        "public"
+      ],
+      "using": "tenant_id = current_setting('app.tenant_id', true)"
+    }
+  },
+  "checkConstraints": {
+    "model_token_calls_owner": {
+      "name": "model_token_calls_owner",
+      "value": "\"model_token_calls\".\"tenant_id\" NOT IN ('system', 'platform')"
+    },
+    "model_token_calls_epoch": {
+      "name": "model_token_calls_epoch",
+      "value": "\"model_token_calls\".\"execution_epoch\" BETWEEN 1 AND 9007199254740991"
+    },
+    "model_token_calls_outcome": {
+      "name": "model_token_calls_outcome",
+      "value": "\"model_token_calls\".\"outcome\" IN ('pending', 'completed', 'stopped', 'unknown')"
+    },
+    "model_token_calls_usage": {
+      "name": "model_token_calls_usage",
+      "value": "\"model_token_calls\".\"usage_status\" IN ('unknown', 'partial', 'reported') AND ((\"model_token_calls\".\"usage_status\" = 'reported' AND \"model_token_calls\".\"input_tokens\" IS NOT NULL AND \"model_token_calls\".\"output_tokens\" IS NOT NULL) OR (\"model_token_calls\".\"usage_status\" = 'partial' AND ((\"model_token_calls\".\"input_tokens\" IS NULL) <> (\"model_token_calls\".\"output_tokens\" IS NULL))) OR (\"model_token_calls\".\"usage_status\" = 'unknown' AND \"model_token_calls\".\"input_tokens\" IS NULL AND \"model_token_calls\".\"output_tokens\" IS NULL))"
+    },
+    "model_token_calls_count_0": {
+      "name": "model_token_calls_count_0",
+      "value": "\"model_token_calls\".\"input_tokens\" BETWEEN 0 AND 9007199254740991"
+    },
+    "model_token_calls_count_1": {
+      "name": "model_token_calls_count_1",
+      "value": "\"model_token_calls\".\"output_tokens\" BETWEEN 0 AND 9007199254740991"
+    },
+    "model_token_calls_count_2": {
+      "name": "model_token_calls_count_2",
+      "value": "\"model_token_calls\".\"total_tokens\" BETWEEN 0 AND 9007199254740991"
+    },
+    "model_token_calls_count_3": {
+      "name": "model_token_calls_count_3",
+      "value": "\"model_token_calls\".\"reasoning_tokens\" BETWEEN 0 AND 9007199254740991"
+    },
+    "model_token_calls_count_4": {
+      "name": "model_token_calls_count_4",
+      "value": "\"model_token_calls\".\"cached_input_tokens\" BETWEEN 0 AND 9007199254740991"
+    },
+    "model_token_calls_count_5": {
+      "name": "model_token_calls_count_5",
+      "value": "\"model_token_calls\".\"cache_write_tokens\" BETWEEN 0 AND 9007199254740991"
+    },
+    "model_token_calls_digests": {
+      "name": "model_token_calls_digests",
+      "value": "\"model_token_calls\".\"credential_digest\" ~ '^[a-f0-9]{64}$' AND \"model_token_calls\".\"original_model_fingerprint\" ~ '^[a-f0-9]{64}$' AND \"model_token_calls\".\"original_digest\" ~ '^[a-f0-9]{64}$' AND \"model_token_calls\".\"original_digest\" = encode(sha256(convert_to(\"model_token_calls\".\"original_text\",'UTF8')),'hex')"
+    },
+    "model_token_calls_receipt": {
+      "name": "model_token_calls_receipt",
+      "value": "(\"model_token_calls\".\"receipt_text\" IS NULL AND \"model_token_calls\".\"receipt_digest\" IS NULL AND \"model_token_calls\".\"outcome\" <> 'completed') OR (\"model_token_calls\".\"receipt_text\" IS NOT NULL AND \"model_token_calls\".\"receipt_digest\" IS NOT NULL AND \"model_token_calls\".\"receipt_digest\" ~ '^[a-f0-9]{64}$' AND \"model_token_calls\".\"receipt_digest\" = encode(sha256(convert_to(\"model_token_calls\".\"receipt_text\",'UTF8')),'hex') AND \"model_token_calls\".\"outcome\" = 'completed' AND \"model_token_calls\".\"observed_at\" IS NOT NULL)"
+    }
+  },
+  "isRLSEnabled": true
+}

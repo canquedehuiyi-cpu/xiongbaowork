@@ -1,0 +1,170 @@
+{
+  "name": "flow_import_proposals",
+  "schema": "",
+  "columns": {
+    "tenant_id": {
+      "name": "tenant_id",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true,
+      "default": "current_setting('app.tenant_id', true)"
+    },
+    "id": {
+      "name": "id",
+      "type": "uuid",
+      "primaryKey": true,
+      "notNull": true
+    },
+    "request_id": {
+      "name": "request_id",
+      "type": "uuid",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "revision": {
+      "name": "revision",
+      "type": "integer",
+      "primaryKey": false,
+      "notNull": true,
+      "default": 0
+    },
+    "fingerprint": {
+      "name": "fingerprint",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "token": {
+      "name": "token",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "digest": {
+      "name": "digest",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "owner_revision": {
+      "name": "owner_revision",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "choices": {
+      "name": "choices",
+      "type": "jsonb",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "preview": {
+      "name": "preview",
+      "type": "jsonb",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "status": {
+      "name": "status",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": true,
+      "default": "'prepared'"
+    },
+    "import_request_id": {
+      "name": "import_request_id",
+      "type": "uuid",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "expires_at": {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "primaryKey": false,
+      "notNull": true
+    },
+    "created_at": {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "primaryKey": false,
+      "notNull": true,
+      "default": "now()"
+    }
+  },
+  "indexes": {
+    "flow_import_proposals_request_idx": {
+      "name": "flow_import_proposals_request_idx",
+      "columns": [
+        {
+          "expression": "tenant_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        },
+        {
+          "expression": "request_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        }
+      ],
+      "isUnique": true,
+      "concurrently": false,
+      "method": "btree",
+      "with": {}
+    }
+  },
+  "foreignKeys": {},
+  "compositePrimaryKeys": {},
+  "uniqueConstraints": {},
+  "policies": {
+    "tenant_scope_select": {
+      "name": "tenant_scope_select",
+      "as": "PERMISSIVE",
+      "for": "SELECT",
+      "to": [
+        "public"
+      ],
+      "using": "\"flow_import_proposals\".\"tenant_id\" = current_setting('app.tenant_id', true)"
+    },
+    "tenant_scope_insert": {
+      "name": "tenant_scope_insert",
+      "as": "PERMISSIVE",
+      "for": "INSERT",
+      "to": [
+        "public"
+      ],
+      "withCheck": "\"flow_import_proposals\".\"tenant_id\" = current_setting('app.tenant_id', true)"
+    },
+    "tenant_scope_update": {
+      "name": "tenant_scope_update",
+      "as": "PERMISSIVE",
+      "for": "UPDATE",
+      "to": [
+        "public"
+      ],
+      "using": "\"flow_import_proposals\".\"tenant_id\" = current_setting('app.tenant_id', true)",
+      "withCheck": "\"flow_import_proposals\".\"tenant_id\" = current_setting('app.tenant_id', true)"
+    },
+    "tenant_scope_delete": {
+      "name": "tenant_scope_delete",
+      "as": "PERMISSIVE",
+      "for": "DELETE",
+      "to": [
+        "public"
+      ],
+      "using": "\"flow_import_proposals\".\"tenant_id\" = current_setting('app.tenant_id', true)"
+    }
+  },
+  "checkConstraints": {
+    "flow_import_proposals_status_check": {
+      "name": "flow_import_proposals_status_check",
+      "value": "\"flow_import_proposals\".\"status\" IN ('prepared','imported')"
+    },
+    "flow_import_proposals_revision_check": {
+      "name": "flow_import_proposals_revision_check",
+      "value": "\"flow_import_proposals\".\"revision\" >= 0"
+    }
+  },
+  "isRLSEnabled": true
+}

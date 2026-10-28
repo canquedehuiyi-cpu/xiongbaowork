@@ -1,0 +1,81 @@
+{
+  "schema": "xiongbaowork-snapshot-reconstruction-input/1",
+  "status": "INPUTS_ONLY_NOT_SOURCE_IMPLEMENTATION_NOT_ADOPTED",
+  "source_parent": "ef8f38ad08b66442f4a95609d1522c6293a93e6b",
+  "current_manifest": {
+    "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+    "bytes": 427723,
+    "sha256": "21d6368ccd163bbeee1ee8cd043ccd73b8d769ee897744c1733dd656dad31c77"
+  },
+  "current_snapshot106": {
+    "bytes": 604775,
+    "sha256": "96e8bc9e6a7b89c008649ad0c964f9a6cf5460fad2db9f7c1fb33ebb7c2f3cd6",
+    "tables": 152
+  },
+  "original_whole_historical_identity": {
+    "bytes": 583049,
+    "sha256": "c382dcdb7b39a9bc7fe47394478a51dd3d25df8dcd803c6e172b9c17f27cb48f",
+    "blob": "bc185c8b7d533421aa1ee9b8b261cb9cd2e8d29a"
+  },
+  "whole_current_bytes": "NOT_NEWLY_RETRIEVED",
+  "capsule": {
+    "reference": "library-file:fde1_bGliZmlsZV84R2ZPRVdGcDNaYU9JbVVWeW4zLUR3_FileDrive_ecfdc2761b3481918cafe0a7f422e7bf",
+    "bytes": 7065,
+    "sha256": "8e61ff99c0feafe6502e35544220b5b4f9f8e7784dbb95d7063f19e8a67d657b"
+  },
+  "derived_matrix": {
+    "bytes": 104854,
+    "sha256": "3726ad9a88fd4e193720a45856a843e77edbb7cd0231dbc6da98891ff3637e52",
+    "original93276_raw": "MISSING_NOT_RECONSTRUCTED_OR_CLEARED"
+  },
+  "object_capsule_equals_matrix_full_structures": true,
+  "targets": [
+    {
+      "name": "flow_import_proposals",
+      "bytes": 4155,
+      "sha256": "737b0c1d304777b472d835f606364c005e00f9765470fa77659887a78a795546",
+      "blob": "c4597bd9675fadf9c215137bfe9457e31110cf1e"
+    },
+    {
+      "name": "proactive_runs",
+      "bytes": 7851,
+      "sha256": "d3711f2d7d533f84555ee739ca2f456dd169a350b77001ef6dbceb43b2e0f226",
+      "blob": "afe147fb22b53315e03d4e581cd60610c99fdb19"
+    },
+    {
+      "name": "model_token_calls",
+      "bytes": 9256,
+      "sha256": "dbefab6c72124576aa7ff0a911fb4bddbe34c46ed8e4bee91550b16ae1c4f7cf",
+      "blob": "bf2f99f295afcc4433e7cef675e6604ab9a492fc"
+    }
+  ],
+  "historical_orm_sql_body": "SOURCE_BODY_MISSING; future SQL/ORM are explicit snapshot reconstruction, not recovered original source",
+  "root_next_decisions": {
+    "lineage_idx": 107,
+    "tag": "0107_import_proactive_token_foundations_closed",
+    "schema_module": "import-proactive-token-foundations.ts",
+    "test": "recovery-import-proactive-token-foundations.test.ts",
+    "bigint_js_mode": "number; all seven bigint values SQL CHECK constrained to MAX_SAFE; real driver precision not verified; DTO must preserve null without zero default",
+    "activation": "DEFINITIONS_ONLY_NO_WRITER_OR_MODEL_CALLS"
+  },
+  "scope_totals": {
+    "columns": 58,
+    "inlinePK": 2,
+    "compositePK": 1,
+    "indexes": 4,
+    "uniqueIndexes": 2,
+    "foreignKeys": 0,
+    "checks": 22,
+    "policies": 12,
+    "policySlots": 15,
+    "rls": 3
+  },
+  "limits": {
+    "source_files_per_package": 6,
+    "data": 67108864,
+    "project": 536870912,
+    "swap": 0,
+    "postgres17": "PG_PENDING"
+  },
+  "commercial_acceptance": "NOT_DELIVERED"
+}
