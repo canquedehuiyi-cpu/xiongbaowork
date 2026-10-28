@@ -1,6 +1,7 @@
-name: Accepted Source checkpoint -manual validation
+name: Existing local HTTP and subprocess fixtures -512MiB
 on:
-  workflow_dispatch:
+  push:
+    branches: ["codex/local-fixture-acceptance-20261029"]
 permissions:
   contents: read
 concurrency:
@@ -474,5 +475,77 @@ jobs:
                 "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
                 "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
+          
+          PY
+      - name: Validate explicit local HTTP and owned subprocess fixtures under512MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --property=RuntimeMaxSec=660 \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib, json, os, re, subprocess, time
+          from pathlib import Path
+          base=Path.cwd()
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg/"memory.oom.group").read_text().strip()=="1"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("PROJECT_TEST_RESOURCE_GATE "+json.dumps({"project_and_descendants":536870912,"swap":0,"uses_2GiB_exception":False}),flush=True)
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          home=base/"local-fixture-subprocess-test-home";home.mkdir(mode=0o700)
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
+          assert not any(k in env for k in ["DATABASE_URL","TEST_DATABASE_URL","COMPOSIO_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","OPENBOT_LIVE_COMPOSIO","OPENBOT_LIVE_SCREEN"])
+          assert not (root/".env").exists()
+          items=json.loads("[{\"bytes\":12328,\"flags\":[\"local_listener\"],\"path\":\"server/tests/agent-connection-live.test.ts\",\"sha256\":\"49fc825edebc269a1eae0a4c3587b9db86d8c12feb11e49094010c96ee4a5c87\"},{\"bytes\":7417,\"flags\":[\"local_listener\"],\"path\":\"server/tests/agent-test-connection-headers.test.ts\",\"sha256\":\"a58b739d2646e36be551a9d1669cdcff14936a917978ab6c6e931c294dbcc0d4\"},{\"bytes\":10525,\"flags\":[\"fixture_subprocess\",\"local_listener\"],\"path\":\"server/tests/approvals-continuation-recovery.test.ts\",\"sha256\":\"39994f065b691ce36dfcf072fa0a545f70e850275f51b4f52f3a119651f7d166\"},{\"bytes\":15081,\"flags\":[\"local_listener\"],\"path\":\"server/tests/computer-provider.test.ts\",\"sha256\":\"1c90a86f840fbc001736e72b96b9d0f593bcbd7d872e7e788fca021c49037200\"},{\"bytes\":45528,\"flags\":[\"local_listener\"],\"path\":\"server/tests/config.test.ts\",\"sha256\":\"96b2dd3ea790f5966b4667085bf33288295c1c88ab62b6d067ce1b4f79103bf7\"},{\"bytes\":98908,\"flags\":[\"local_listener\"],\"path\":\"server/tests/copilot.test.ts\",\"sha256\":\"7c08c508c8fc20eada2ed920b9f66289f9b5da5ed748845b201dfbc09c1b8538\"},{\"bytes\":4982,\"flags\":[\"local_listener\"],\"path\":\"server/tests/deployment-route-bot-end-to-end.test.ts\",\"sha256\":\"3ad7a3a42e8b491eb3bd6e241e2c665a75df46dc9a503ddaf9a3e89afee2d294\"},{\"bytes\":5551,\"flags\":[\"local_listener\"],\"path\":\"server/tests/human-input-end-to-end.test.ts\",\"sha256\":\"24d74211bc69d8a468b0d22209dbb1fbba81e3d28ba89440843feecf3db35e20\"},{\"bytes\":17036,\"flags\":[\"local_listener\"],\"path\":\"server/tests/model-providers.test.ts\",\"sha256\":\"65a6676475d37011ee39c4e46350bfbdea23c9d99e39ef0f5e873ad8f6dc82fe\"},{\"bytes\":9559,\"flags\":[\"local_listener\"],\"path\":\"server/tests/organization-auth.test.ts\",\"sha256\":\"edb3d030e0c498c125ff0285de00c0355246203a9bec7e5e1745c63d5f853d28\"},{\"bytes\":1571,\"flags\":[\"local_listener\"],\"path\":\"server/tests/otel-export-scrubbing.test.ts\",\"sha256\":\"d4d53eb4a33be56407b25e4d3aa9b762dfc8d897f370032b965034c12c9b7f1b\"},{\"bytes\":6080,\"flags\":[\"fixture_subprocess\",\"local_listener\"],\"path\":\"server/tests/otel-exporter-compat.test.ts\",\"sha256\":\"835f6b26f1019fa10f539ac45aa28892116f285b032eb35bbf12239c97711b31\"},{\"bytes\":4949,\"flags\":[\"fixture_subprocess\",\"local_listener\"],\"path\":\"server/tests/otel-sdk-lifecycle.test.ts\",\"sha256\":\"43fede37a795c8153b46815771d4ac8320b88cf98ad7fd0d1f5db80a6238c8c8\"},{\"bytes\":13105,\"flags\":[\"local_listener\"],\"path\":\"server/tests/plan-model.test.ts\",\"sha256\":\"3374b4515b0229d80cb513172b43893782ca58f7eb4edf011ec6087d9f2f1d16\"},{\"bytes\":3762,\"flags\":[\"fixture_subprocess\"],\"path\":\"server/tests/production-loader-boundary.test.ts\",\"sha256\":\"63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3\"},{\"bytes\":21169,\"flags\":[\"fixture_subprocess\",\"local_listener\"],\"path\":\"server/tests/provider-oauth.test.ts\",\"sha256\":\"2adf35455efb1ba0ab68ff71eed6b5eaab3fdf2a0d6ebdbbe96a857544436d0c\"},{\"bytes\":29682,\"flags\":[\"fixture_subprocess\"],\"path\":\"server/tests/responsibility-triggers.test.ts\",\"sha256\":\"ace55e80a91a538df780cf1ae5d9c74610af6bfd9e11a0518355b304380939a4\"},{\"bytes\":16179,\"flags\":[\"local_listener\"],\"path\":\"server/tests/run-built-agent-cancellation.test.ts\",\"sha256\":\"7a9a8a706dfaada3b41a3f805a51ac4b45c3feb0875bea69231cef51390311f9\"},{\"bytes\":7875,\"flags\":[\"local_listener\"],\"path\":\"server/tests/tool-selection-environment-restoration-driver.test.ts\",\"sha256\":\"0105137e6af30c81ced6954a992f5ea62c28491f8ff7281f99df47d6fe86c695\"},{\"bytes\":8345,\"flags\":[\"fixture_subprocess\"],\"path\":\"server/tests/tool-selection-environment-restoration.test.ts\",\"sha256\":\"8e52f19189c7bd9c1d7db8c927b7ff11a8bc8a64046683eb5d15333b68f423ec\"},{\"bytes\":12546,\"flags\":[\"local_listener\"],\"path\":\"server/tests/voice-summary-model.test.ts\",\"sha256\":\"d347733e70f4f3faecbd88dbb3aac4642ce77b042169dc0d8ba9b5388cb0493c\"},{\"bytes\":4808,\"flags\":[\"fixture_subprocess\"],\"path\":\"scripts/processes.test.ts\",\"sha256\":\"b7f10845f09c010be01072a94e7f336d13cc8320a90bf78c65b72f98134bd0e3\"},{\"bytes\":16362,\"flags\":[\"fixture_subprocess\"],\"path\":\"scripts/start-restart-guard.test.ts\",\"sha256\":\"d6eb88ce4c163b6b8da3055b9b1bbfc26e46777caf873c736cd9381890a0e2ce\"},{\"bytes\":2789,\"flags\":[\"fixture_subprocess\"],\"path\":\"scripts/test-ci.test.ts\",\"sha256\":\"b30fc5f19d173e1179b3572d2830d9f19661c791277471331f89ca4589f41361\"},{\"bytes\":2519,\"flags\":[\"fixture_subprocess\"],\"path\":\"tests/agent-bot.test.ts\",\"sha256\":\"dd4ddce04a1266f1db112a8e60083cfa777ee63a08cfa77ec641162916834e61\"},{\"bytes\":19056,\"flags\":[\"fixture_subprocess\"],\"path\":\"tests/compose.test.ts\",\"sha256\":\"ca5d6959a05108e24dc93950ac1ba31a2db6d8e1be3186da10cb7b9684c1b80a\"},{\"path\":\"server/tests/tool-selection.integration.test.ts\",\"bytes\":36271,\"sha256\":\"dcf5b271f15a1a61587c52fc6055b132c27600c70eb5f7ea49041ea7a335a93a\",\"flags\":[\"AUDITED_LOCAL_AGUI_AND_LLMOCK_ONLY_NOT_NATIVE_PG\"]}]")
+          for x in items:
+              p=root/x["path"];b=p.read_bytes()
+              assert p.is_file() and not p.is_symlink() and p.stat().st_nlink==1
+              assert len(b)==x["bytes"] and hashlib.sha256(b).hexdigest()==x["sha256"]
+              s=b.decode("utf8")
+              assert not re.search(r'testDatabaseUrl|TEST_DATABASE_URL|createDatabase\s*\(|TEST_POOL|Bun\.SQL|new\s+SQL\s*\(',s)
+              assert not re.search(r'OPENBOT_LIVE|OPENBOT_SMOKE|composio-live|tests/smoke',s)
+              assert (".integration.test." not in x["path"] or x["path"]=="server/tests/tool-selection.integration.test.ts") and x["path"]!="tests/recovery-lineage.test.ts"
+          print("EXPLICIT_OFFLINE_SELECTION "+json.dumps({"files":len(items),"identity_verified":True,"source_changes":0,"original_preloads":"UNCHANGED","realPG":"PG_PENDING","scope":"Explicit additional files, not whole server suite/strictCI."}),flush=True)
+          # The original pretest producer runs explicitly, with no dotenv/credential file and no install hook.
+          gen=subprocess.run([str(binary),"--no-install","scripts/generate-app-config.ts"],cwd=root,env=env,capture_output=True,text=True,timeout=30)
+          print("ORIGINAL_APP_CONFIG_GENERATOR "+json.dumps({"exit_code":gen.returncode,"stdout":gen.stdout[-1600:],"stderr":gen.stderr[-1600:]}),flush=True)
+          if gen.returncode:raise SystemExit(gen.returncode)
+          deadline=time.monotonic()+600
+          results=[];overall=0; totals={"pass":0,"fail":0,"skip":0,"expects":0}
+          for x in items:
+              remaining=deadline-time.monotonic()
+              if remaining<=0:overall=124;break
+              relative=x["path"]
+              print("OFFLINE_FILE_START "+json.dumps({"path":relative}),flush=True)
+              try:
+                  r=subprocess.run([str(binary),"test","--no-install","--timeout","5000",str(root/relative)],cwd=root,env=env,capture_output=True,text=True,timeout=min(remaining,60))
+                  code=r.returncode;out=r.stdout+"\n"+r.stderr
+              except subprocess.TimeoutExpired as e:
+                  code=124;out=str(e.stdout or "")+"\n"+str(e.stderr or "")
+              counts={k:sum(int(v) for v in re.findall(r"(?m)^\s*(\d+) "+(r"expect\(\) calls" if k=="expects" else k)+r"\s*$",out)) for k in totals}
+              summary=re.search(r"Ran (\d+) tests? across",out)
+              errors=re.findall(r"(?m)^\s*(\d+) errors?\s*$",out)
+              valid=bool(summary and int(summary.group(1))>0 and counts["pass"]>0 and counts["fail"]==0 and not any(int(v)>0 for v in errors))
+              row={"path":relative,"exit_code":code,"counts":counts,"summary_present":bool(summary),"valid_pass":code==0 and valid,"error_summary":errors}
+              results.append(row)
+              for k,v in counts.items():totals[k]+=v
+              print("OFFLINE_FILE_RESULT "+json.dumps(row),flush=True)
+              lines=out.splitlines()
+              if not row["valid_pass"]:
+                  overall=overall or (124 if code==124 else 1)
+                  print("OFFLINE_FAILURE_LOG "+json.dumps({"path":relative,"lines":len(lines),"tail100":lines[-100:],"failure_headers":[l for l in lines if "(fail)" in l]}),flush=True)
+              else:
+                  print("OFFLINE_PASS_LOG "+json.dumps({"path":relative,"lines":len(lines),"tail8":lines[-8:]}),flush=True)
+              if code==124:break
+          print("LOCAL_FIXTURE_TEST_RESULT "+json.dumps({"exit_code":overall,"expected_files":len(items),"completed_files":len(results),"files":results,"totals":totals,"batch_timeout":600,"per_file_timeout":60,"per_test_timeout_ms":5000,"runtime":"Bun1.3.14","original_preloads":"UNCHANGED_TWO","original_strict_ci":"NOT_RUN","original400_floor":"UNCHANGED_NOT_USED_AS_A_SUBSTITUTE","postgres17":"PG_PENDING","real_provider":"NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(overall)
           
           PY
