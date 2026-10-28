@@ -1,0 +1,16 @@
+{
+  "schema": "xiongbaowork-controller-error/1",
+  "head": "f30394a22972f8ebf76d03742a265c245fbc63e4",
+  "run": 40707525052,
+  "job": 122883541988,
+  "kind": "ROOT_WORKFLOW_REGION_SELECTION_ERROR",
+  "cause": "Unscoped search for import collections selected installer heredoc; sequential app runner inserted into installation stage before any dependency install",
+  "frozen_source_verified": true,
+  "dependency_install_executed": false,
+  "app_config_generation_executed": true,
+  "test_attempts": 161,
+  "test_result_interpretation": "DEPENDENCY_PRELOAD_IMPORT_FAILURES_NOT_SUBJECT_ASSERTION_FAILURES",
+  "subject_assertions_reached": false,
+  "source_candidate_bytes_unchanged": true,
+  "corrective_action": "Rebuild from known-good full-app workflow; exact full installer block identity and stage order guarded before write"
+}
