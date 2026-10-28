@@ -411,14 +411,17 @@ jobs:
                   str(root / "server/tests/recovery-knowledge-foundations.test.ts"),
                   str(root / "server/tests/recovery-knowledge-write-foundations.test.ts"),
                   str(root / "server/tests/recovery-resource-project-foundations.test.ts")]
-          result = subprocess.run(args, cwd=harness, env=env, capture_output=True, text=True, timeout=120)
-          print(result.stdout, end="", flush=True)
-          print(result.stderr, end="", flush=True)
-          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
+          try:
+              result = subprocess.run(args, cwd=harness, env=env, timeout=120)
+              exit_code = result.returncode
+          except subprocess.TimeoutExpired:
+              exit_code = 124
+              print("COMPONENT_BATCH_TIMEOUT seconds=120; partial output streamed above", flush=True)
+          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": exit_code, "bun_version": version,
               "bun_revision": revision, "test_files": 3, "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
               "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
               "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
               "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
-          raise SystemExit(result.returncode)
+          raise SystemExit(exit_code)
           
           PY

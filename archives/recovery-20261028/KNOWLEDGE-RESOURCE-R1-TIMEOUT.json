@@ -1,0 +1,13 @@
+{
+  "run": 40660584559,
+  "job": 122722325776,
+  "source_commit": "be98f79226d9ec3e226c606fffdb28a2ece3b3c3",
+  "test_summary_available": false,
+  "raw_logs_preserved": true,
+  "outcome": "BATCH_TIMEOUT_120_SECONDS",
+  "project_memory_limit": 536870912,
+  "data_copy_limit": 67108864,
+  "swap": 0,
+  "source_file_changes": 0,
+  "runner_revision": "stream stdout/stderr directly; retain same120s batch and5000ms test limits"
+}
