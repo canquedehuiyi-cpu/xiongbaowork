@@ -1,3 +1,9 @@
+## root124LifecycleR2 Source adoption, 2026-10-29
+
+RUNNER-PROBE-LIFECYCLE-20261029 adopted unchanged from candidate a74183b107b73b31725b2b2de7e48c6ee0d1c392. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40735529839/job 122982901554; see exact validation JSON for pass/fail counts and remaining diagnostics. 2058 files / 50024257 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 ## ROOT123 current authorized verification, 2026-10-29
 
 17 source repair packages adopted with independent review; Source2057/50023334B. Exact original Biome lint passed with0errors/0warnings/181infos; full original app single process1207/0/4163 and originalapp tsc passed; named39 components691/0/10744 passed. Worker original tsc now passed at authorized2GiB in run40731418887/job122969353990; automaticpeak747.9M, actualrestore512MiB. Prior512MiB V8 OOM events retained. All four workspace original tsconfigs passed at separate evidenced stages; a combined current17 commit validation is now being activated. Resource exceptions remain individually scoped; all unexcepted project phases512MiB, data/copy64MiB, swap0. Lifecycle scripts disabled/private copyfile cache/free standard public Actions/Windows Source writes0.
