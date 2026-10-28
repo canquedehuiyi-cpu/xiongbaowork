@@ -88,6 +88,14 @@ export type EnterpriseDeps = {
   };
   initialAdminEmails?: readonly string[];
   env?: Record<string, string | undefined>;
+  /** Optional typed clock seam; production keeps the native interval implementation. */
+  clock?: {
+    scheduleInterval: (
+      callback: () => void,
+      milliseconds: number,
+    ) => ReturnType<typeof setInterval>;
+    cancelInterval: (timer: ReturnType<typeof setInterval>) => void;
+  };
 };
 
 export type EnterpriseControls = {
@@ -113,6 +121,7 @@ export type EnterpriseControls = {
 };
 
 let installed: EnterpriseControls | undefined;
+let initializing: Promise<EnterpriseControls> | undefined;
 
 /** The running controls, or undefined in a test or a script that never installed them. */
 export function enterpriseControls(): EnterpriseControls | undefined {
@@ -253,383 +262,486 @@ function commandOf(payload: Record<string, unknown>): string | undefined {
   return typeof command === "string" && command.trim() ? command : undefined;
 }
 
-export async function installEnterpriseControls(
+export function installEnterpriseControls(
   deps: EnterpriseDeps,
 ): Promise<EnterpriseControls> {
-  if (installed) return installed;
+  if (installed) return Promise.resolve(installed);
+  if (initializing) return initializing;
+  const pending = initializeEnterpriseControls(deps).finally(() => {
+    initializing = undefined;
+  });
+  initializing = pending;
+  return pending;
+}
+
+async function initializeEnterpriseControls(
+  deps: EnterpriseDeps,
+): Promise<EnterpriseControls> {
   const store = createEnterpriseStore(deps.database);
   const env = deps.env ?? process.env;
+  const clock = deps.clock ?? {
+    scheduleInterval: (callback: () => void, milliseconds: number) =>
+      setInterval(callback, milliseconds),
+    cancelInterval: (timer: ReturnType<typeof setInterval>) =>
+      clearInterval(timer),
+  };
   let snapshot: Snapshot | undefined;
-
-  const refresh = async () => {
-    try {
-      snapshot = await loadSnapshot(store);
-    } catch (error) {
-      console.error(
-        JSON.stringify({
-          type: "enterprise-controls-refresh-failed",
-          note: snapshot
-            ? "Still enforcing the last settings this server read."
-            : "No settings have been read, so every capability-gated action is refused.",
-          error: String(error),
-          cause:
-            error instanceof Error && error.cause
-              ? String(error.cause)
-              : undefined,
-        }),
-      );
-    }
-  };
-  await refresh();
-  setPolicyOverlay((context) => decideFromSnapshot(snapshot, context));
-
-  const exporter = createOtelEventExporter(env);
+  let exporter: EventExporter | undefined;
+  let connection: ReturnType<typeof postgres> | undefined;
   const removeTaps: (() => void)[] = [];
-  if (exporter) removeTaps.push(addAuditTap((event) => exporter.emit(event)));
-
-  /*
-   * Action Recording: every shell command a Bot ran (or was refused), scrubbed, into its own table.
-   * Read from the audit rows the computer gateway and the host broker already write, so the recorded
-   * outcome is the one the trail holds.
-   */
-  removeTaps.push(
-    addAuditTap((event) => {
-      if (!snapshot?.settings.actionRecording) return;
-      if (!event.eventType.startsWith("computer.action_")) return;
-      const command = commandOf(event.payload);
-      if (!command) return;
-      const scrubbed = scrubCommand(command);
-      const botId =
-        typeof event.payload.bot === "string" ? event.payload.bot : null;
-      // The gateway names the tool `action`; `tool` is accepted for any other writer.
-      const named = event.payload.action ?? event.payload.tool;
-      const toolName =
-        typeof named === "string" ? named : "computer_run_command";
-      const actor =
-        event.actorUserId ??
-        (typeof event.payload.actor === "string" ? event.payload.actor : null);
-      const outcome = event.eventType.replace("computer.action_", "");
-      void store
-        .recordAction({
-          surface: toolName.startsWith("host/") ? "local" : "cloud",
-          botId,
-          actorUserId: actor,
-          toolName,
-          command: scrubbed,
-          outcome,
-        })
-        .catch((error) =>
-          console.error(
-            JSON.stringify({
-              type: "action-record-failed",
-              error: String(error),
-            }),
-          ),
+  const timers: ReturnType<typeof setInterval>[] = [];
+  let closing = false;
+  let finishing: Promise<void> | undefined;
+  let controls: EnterpriseControls | undefined;
+  let ownsOverlay = false;
+  const stop = (): Promise<void> => {
+    if (finishing) return finishing;
+    const completion = Promise.withResolvers<void>();
+    finishing = completion.promise;
+    closing = true;
+    if (installed === controls) installed = undefined;
+    const failures: Error[] = [];
+    const attempt = (stage: string, close: () => void) => {
+      try {
+        close();
+      } catch {
+        failures.push(
+          new Error(`Enterprise controls ${stage} failed or is unconfirmed.`),
         );
-      exporter?.emit({
-        eventType: "action.recorded",
-        targetType: "computer",
-        targetId: botId,
-        actorUserId: event.actorUserId ?? null,
-        initiatorKind: event.initiatorKind,
-        initiatorId: event.initiatorId,
-        payload: { bot: botId, tool: toolName, command: scrubbed, outcome },
-        surface: "bot",
-      });
-    }),
-  );
-
-  const audit = (input: Parameters<typeof recordAuditEvent>[1]) =>
-    recordAuditEvent(deps.auditStore, input).catch((error) =>
-      console.error(
-        JSON.stringify({
-          type: "enterprise-audit-failed",
-          eventType: input.eventType,
-          error: String(error),
-        }),
-      ),
-    );
-
-  const policyForBot = async (botId: string): Promise<EgressPolicy> => {
-    const current = snapshot;
-    if (!current) return { mode: "deny_all", rules: [] };
-    const [profile] = await deps.database
-      .select({ owner: agentProfiles.ownerUserId })
-      .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, botId))
-      .limit(1);
-    const member: Member = profile?.owner
-      ? await store.member(profile.owner)
-      : { role: "user", groups: [] };
-    const cloudNetwork = resolveCapability(
-      current.rows,
-      member,
-      "cloudNetwork",
-    ).allowed;
-    const { from: _from, ...policy } = effectiveNetworkPolicy(
-      current.network,
-      member,
-      cloudNetwork,
-    );
-    return policy;
+      }
+    };
+    for (const timer of timers)
+      attempt("timer stop", () => clock.cancelInterval(timer));
+    for (const remove of removeTaps) attempt("tap removal", remove);
+    if (ownsOverlay) attempt("policy seal", () => setPolicyOverlay(null));
+    void (async () => {
+      const closes: { stage: string; close: () => Promise<void> }[] = [];
+      const listener = connection;
+      const telemetry = exporter;
+      if (listener)
+        closes.push({ stage: "listener close", close: () => listener.end() });
+      if (telemetry)
+        closes.push({
+          stage: "exporter shutdown",
+          close: () => telemetry.shutdown(),
+        });
+      const results = await Promise.allSettled(
+        closes.map(({ close }) => Promise.resolve().then(close)),
+      );
+      for (const [index, result] of results.entries()) {
+        if (result.status === "rejected")
+          failures.push(
+            new Error(
+              `Enterprise controls ${closes[index]?.stage ?? "resource close"} failed or is unconfirmed.`,
+            ),
+          );
+      }
+      if (failures.length)
+        throw new AggregateError(
+          failures,
+          `Enterprise controls shutdown is unconfirmed (${failures.length} failed stages).`,
+        );
+    })().then(completion.resolve, completion.reject);
+    return finishing;
   };
 
-  let pushing: Promise<void> | undefined;
-  const pushNetworkPolicies = async () => {
-    if (!deps.provider) return;
-    if (pushing) return pushing;
-    pushing = (async () => {
+  try {
+    const refresh = async () => {
+      if (closing) return;
       try {
-        const report = await pushEgressPolicies({
-          provider: deps.provider as ComputerProvider,
-          token: deps.computerToken,
-          policyForBot,
-        });
-        if (report.failed.length > 0) {
-          console.warn(
-            JSON.stringify({
-              type: "egress-policy-push-incomplete",
-              ...report,
-            }),
-          );
-        }
+        snapshot = await loadSnapshot(store);
       } catch (error) {
         console.error(
           JSON.stringify({
-            type: "egress-policy-push-failed",
+            type: "enterprise-controls-refresh-failed",
+            note: snapshot
+              ? "Still enforcing the last settings this server read."
+              : "No settings have been read, so every capability-gated action is refused.",
             error: String(error),
+            cause:
+              error instanceof Error && error.cause
+                ? String(error.cause)
+                : undefined,
           }),
         );
-      } finally {
-        pushing = undefined;
       }
-    })();
-    return pushing;
-  };
-
-  const ownedBots = async (userId: string) =>
-    (
-      await deps.database
-        .select({ agentId: agentProfiles.agentId })
-        .from(agentProfiles)
-        .where(eq(agentProfiles.ownerUserId, userId))
-    ).map((row) => row.agentId);
-
-  const terminateMemberComputers: EnterpriseControls["terminateMemberComputers"] =
-    async (userId, by) => {
-      const result = {
-        stopped: [] as string[],
-        failed: [] as { botId: string; reason: string }[],
-      };
-      if (!deps.provider) return result;
-      for (const botId of await ownedBots(userId)) {
-        try {
-          const { wasRunning } = await deps.provider.stop(botId);
-          if (wasRunning) result.stopped.push(botId);
-        } catch (error) {
-          result.failed.push({
-            botId,
-            reason: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-      await audit({
-        eventType: "computer.terminated",
-        targetType: "person",
-        targetId: userId,
-        ...(by.id ? { actorUserId: by.id } : {}),
-        payload: {
-          by: by.email,
-          stopped: result.stopped,
-          failed: result.failed,
-          note: "Running Bots stopped; durable disks kept; each Bot gets a fresh computer next session.",
-        },
-      });
-      return result;
     };
+    await refresh();
+    setPolicyOverlay((context) =>
+      closing ? null : decideFromSnapshot(snapshot, context),
+    );
+    ownsOverlay = true;
 
-  /**
-   * Stop every running computer nobody has used for `inactiveComputerDays`.
-   *
-   * One replica at a time, under a transaction-scoped advisory lock, so two servers do not both
-   * write the audit row. Idleness is read from the audit trail, as the idle culler reads it, so
-   * nothing here dials a computer to ask.
-   */
-  const terminateInactiveComputers = async () => {
-    const days = snapshot?.settings.inactiveComputerDays ?? 30;
-    if (!deps.provider || days <= 0) return null;
+    exporter = createOtelEventExporter(env);
+    const eventExporter = exporter;
+    if (eventExporter)
+      removeTaps.push(
+        addAuditTap((event) => {
+          if (!closing) eventExporter.emit(event);
+        }),
+      );
+
     /*
-     * The lock is held on a connection of its own, so the work below (reads, stops, audit rows) uses
-     * the pool normally. Holding it inside a pool transaction while writing through the pool is how
-     * a small pool deadlocks.
+     * Action Recording: every shell command a Bot ran (or was refused), scrubbed, into its own table.
+     * Read from the audit rows the computer gateway and the host broker already write, so the recorded
+     * outcome is the one the trail holds.
      */
-    const lockConnection = postgres(deps.databaseUrl, { max: 1 });
-    try {
-      const [lock] = await lockConnection<
-        { held: boolean }[]
-      >`select pg_try_advisory_lock(4192011) as held`;
-      if (!lock?.held) return null;
-      const tx = deps.database;
-      const running = (await (deps.provider as ComputerProvider).list()).filter(
-        (computer) => computer.status === "running",
-      );
-      if (running.length === 0) return { stopped: [] };
-      const bot = sql<string>`${auditEvents.payload}->>'bot'`;
-      const used = new Map(
-        (
-          await tx
-            .select({ bot, last: sql<string>`max(${auditEvents.createdAt})` })
-            .from(auditEvents)
-            .where(
-              and(
-                like(auditEvents.eventType, "computer.%"),
-                inArray(
-                  bot,
-                  running.map((computer) => computer.botId),
-                ),
-              ),
-            )
-            .groupBy(bot)
-        ).map((row) => [row.bot, new Date(row.last)] as const),
-      );
-      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-      const stopped: string[] = [];
-      for (const computer of running) {
-        const since =
-          used.get(computer.botId) ??
-          (computer.startedAt ? new Date(computer.startedAt) : undefined);
-        if (!since || since.getTime() > cutoff) continue;
-        try {
-          await (deps.provider as ComputerProvider).stop(computer.botId);
-          stopped.push(computer.botId);
-          await audit({
-            eventType: "computer.terminated_inactive",
-            targetType: "computer",
-            targetId: computer.botId,
-            initiator: DEPLOYMENT_INITIATOR,
-            payload: {
-              bot: computer.botId,
-              idleSince: since.toISOString(),
-              inactiveDays: days,
-            },
-          });
-        } catch (error) {
-          console.warn(
-            JSON.stringify({
-              type: "inactive-computer-stop-failed",
-              botId: computer.botId,
-              error: String(error),
-            }),
+    removeTaps.push(
+      addAuditTap((event) => {
+        if (closing) return;
+        if (!snapshot?.settings.actionRecording) return;
+        if (!event.eventType.startsWith("computer.action_")) return;
+        const command = commandOf(event.payload);
+        if (!command) return;
+        const scrubbed = scrubCommand(command);
+        const botId =
+          typeof event.payload.bot === "string" ? event.payload.bot : null;
+        // The gateway names the tool `action`; `tool` is accepted for any other writer.
+        const named = event.payload.action ?? event.payload.tool;
+        const toolName =
+          typeof named === "string" ? named : "computer_run_command";
+        const actor =
+          event.actorUserId ??
+          (typeof event.payload.actor === "string"
+            ? event.payload.actor
+            : null);
+        const outcome = event.eventType.replace("computer.action_", "");
+        void store
+          .recordAction({
+            surface: toolName.startsWith("host/") ? "local" : "cloud",
+            botId,
+            actorUserId: actor,
+            toolName,
+            command: scrubbed,
+            outcome,
+          })
+          .catch((error) =>
+            console.error(
+              JSON.stringify({
+                type: "action-record-failed",
+                error: String(error),
+              }),
+            ),
           );
-        }
-      }
-      await lockConnection`select pg_advisory_unlock(4192011)`;
-      return { stopped };
-    } finally {
-      await lockConnection.end({ timeout: 5 });
-    }
-  };
-
-  const offboard = async (userId: string, by: string) => {
-    await deps.people?.retireOwned(userId, by).catch((error) =>
-      console.error(
-        JSON.stringify({
-          type: "offboard-retire-failed",
-          userId,
-          error: String(error),
-        }),
-      ),
+        exporter?.emit({
+          eventType: "action.recorded",
+          targetType: "computer",
+          targetId: botId,
+          actorUserId: event.actorUserId ?? null,
+          initiatorKind: event.initiatorKind,
+          initiatorId: event.initiatorId,
+          payload: { bot: botId, tool: toolName, command: scrubbed, outcome },
+          surface: "bot",
+        });
+      }),
     );
-    await terminateMemberComputers(userId, { email: by }).catch((error) =>
-      console.error(
-        JSON.stringify({
-          type: "offboard-computers-failed",
-          userId,
-          error: String(error),
-        }),
-      ),
-    );
-  };
 
-  // Every server hears a change, including the one that made it.
-  const connection = postgres(deps.databaseUrl, { max: 1 });
-  const onChange = () => {
-    void refresh().then(() => pushNetworkPolicies());
-  };
-  await connection
-    .listen(ENTERPRISE_TOPIC, onChange, onChange)
-    .catch((error) => {
-      console.error(
-        JSON.stringify({
-          type: "enterprise-listen-failed",
-          note: "Changes made on another server reach this one within a minute instead of at once.",
-          error: String(error),
-        }),
-      );
-    });
-
-  const timers = [
-    setInterval(() => void refresh(), 60_000),
-    setInterval(() => void pushNetworkPolicies(), 30_000),
-    setInterval(() => {
-      void terminateInactiveComputers().catch((error) =>
+    const audit = (input: Parameters<typeof recordAuditEvent>[1]) =>
+      recordAuditEvent(deps.auditStore, input).catch((error) =>
         console.error(
           JSON.stringify({
-            type: "inactive-computer-sweep-failed",
+            type: "enterprise-audit-failed",
+            eventType: input.eventType,
             error: String(error),
           }),
         ),
       );
-      void store
-        .purgeActions(
-          new Date(
-            Date.now() - ACTION_RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000,
-          ),
-        )
-        .catch((error) =>
+
+    const policyForBot = async (botId: string): Promise<EgressPolicy> => {
+      const current = snapshot;
+      if (!current) return { mode: "deny_all", rules: [] };
+      const [profile] = await deps.database
+        .select({ owner: agentProfiles.ownerUserId })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, botId))
+        .limit(1);
+      const member: Member = profile?.owner
+        ? await store.member(profile.owner)
+        : { role: "user", groups: [] };
+      const cloudNetwork = resolveCapability(
+        current.rows,
+        member,
+        "cloudNetwork",
+      ).allowed;
+      const { from: _from, ...policy } = effectiveNetworkPolicy(
+        current.network,
+        member,
+        cloudNetwork,
+      );
+      return policy;
+    };
+
+    let pushing: Promise<void> | undefined;
+    const pushNetworkPolicies = async () => {
+      if (closing || !deps.provider) return;
+      if (pushing) return pushing;
+      pushing = (async () => {
+        try {
+          const report = await pushEgressPolicies({
+            provider: deps.provider as ComputerProvider,
+            token: deps.computerToken,
+            policyForBot,
+          });
+          if (report.failed.length > 0) {
+            console.warn(
+              JSON.stringify({
+                type: "egress-policy-push-incomplete",
+                ...report,
+              }),
+            );
+          }
+        } catch (error) {
           console.error(
             JSON.stringify({
-              type: "action-record-purge-failed",
+              type: "egress-policy-push-failed",
+              error: String(error),
+            }),
+          );
+        } finally {
+          pushing = undefined;
+        }
+      })();
+      return pushing;
+    };
+
+    const ownedBots = async (userId: string) =>
+      (
+        await deps.database
+          .select({ agentId: agentProfiles.agentId })
+          .from(agentProfiles)
+          .where(eq(agentProfiles.ownerUserId, userId))
+      ).map((row) => row.agentId);
+
+    const terminateMemberComputers: EnterpriseControls["terminateMemberComputers"] =
+      async (userId, by) => {
+        const result = {
+          stopped: [] as string[],
+          failed: [] as { botId: string; reason: string }[],
+        };
+        if (!deps.provider) return result;
+        for (const botId of await ownedBots(userId)) {
+          try {
+            const { wasRunning } = await deps.provider.stop(botId);
+            if (wasRunning) result.stopped.push(botId);
+          } catch (error) {
+            result.failed.push({
+              botId,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        await audit({
+          eventType: "computer.terminated",
+          targetType: "person",
+          targetId: userId,
+          ...(by.id ? { actorUserId: by.id } : {}),
+          payload: {
+            by: by.email,
+            stopped: result.stopped,
+            failed: result.failed,
+            note: "Running Bots stopped; durable disks kept; each Bot gets a fresh computer next session.",
+          },
+        });
+        return result;
+      };
+
+    /**
+     * Stop every running computer nobody has used for `inactiveComputerDays`.
+     *
+     * One replica at a time, under a transaction-scoped advisory lock, so two servers do not both
+     * write the audit row. Idleness is read from the audit trail, as the idle culler reads it, so
+     * nothing here dials a computer to ask.
+     */
+    const terminateInactiveComputers = async () => {
+      const days = snapshot?.settings.inactiveComputerDays ?? 30;
+      if (!deps.provider || days <= 0) return null;
+      /*
+       * The lock is held on a connection of its own, so the work below (reads, stops, audit rows) uses
+       * the pool normally. Holding it inside a pool transaction while writing through the pool is how
+       * a small pool deadlocks.
+       */
+      const lockConnection = postgres(deps.databaseUrl, { max: 1 });
+      try {
+        const [lock] = await lockConnection<
+          { held: boolean }[]
+        >`select pg_try_advisory_lock(4192011) as held`;
+        if (!lock?.held) return null;
+        const tx = deps.database;
+        const running = (
+          await (deps.provider as ComputerProvider).list()
+        ).filter((computer) => computer.status === "running");
+        if (running.length === 0) return { stopped: [] };
+        const bot = sql<string>`${auditEvents.payload}->>'bot'`;
+        const used = new Map(
+          (
+            await tx
+              .select({ bot, last: sql<string>`max(${auditEvents.createdAt})` })
+              .from(auditEvents)
+              .where(
+                and(
+                  like(auditEvents.eventType, "computer.%"),
+                  inArray(
+                    bot,
+                    running.map((computer) => computer.botId),
+                  ),
+                ),
+              )
+              .groupBy(bot)
+          ).map((row) => [row.bot, new Date(row.last)] as const),
+        );
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        const stopped: string[] = [];
+        for (const computer of running) {
+          const since =
+            used.get(computer.botId) ??
+            (computer.startedAt ? new Date(computer.startedAt) : undefined);
+          if (!since || since.getTime() > cutoff) continue;
+          try {
+            await (deps.provider as ComputerProvider).stop(computer.botId);
+            stopped.push(computer.botId);
+            await audit({
+              eventType: "computer.terminated_inactive",
+              targetType: "computer",
+              targetId: computer.botId,
+              initiator: DEPLOYMENT_INITIATOR,
+              payload: {
+                bot: computer.botId,
+                idleSince: since.toISOString(),
+                inactiveDays: days,
+              },
+            });
+          } catch (error) {
+            console.warn(
+              JSON.stringify({
+                type: "inactive-computer-stop-failed",
+                botId: computer.botId,
+                error: String(error),
+              }),
+            );
+          }
+        }
+        await lockConnection`select pg_advisory_unlock(4192011)`;
+        return { stopped };
+      } finally {
+        await lockConnection.end({ timeout: 5 });
+      }
+    };
+
+    const offboard = async (userId: string, by: string) => {
+      await deps.people?.retireOwned(userId, by).catch((error) =>
+        console.error(
+          JSON.stringify({
+            type: "offboard-retire-failed",
+            userId,
+            error: String(error),
+          }),
+        ),
+      );
+      await terminateMemberComputers(userId, { email: by }).catch((error) =>
+        console.error(
+          JSON.stringify({
+            type: "offboard-computers-failed",
+            userId,
+            error: String(error),
+          }),
+        ),
+      );
+    };
+
+    // Every server hears a change, including the one that made it.
+    connection = postgres(deps.databaseUrl, { max: 1 });
+    const onChange = () => {
+      if (!closing) void refresh().then(() => pushNetworkPolicies());
+    };
+    await connection
+      .listen(ENTERPRISE_TOPIC, onChange, onChange)
+      .catch((error) => {
+        console.error(
+          JSON.stringify({
+            type: "enterprise-listen-failed",
+            note: "Changes made on another server reach this one within a minute instead of at once.",
+            error: String(error),
+          }),
+        );
+      });
+
+    timers.push(
+      clock.scheduleInterval(() => {
+        if (!closing) void refresh();
+      }, 60_000),
+    );
+    timers.push(
+      clock.scheduleInterval(() => {
+        if (!closing) void pushNetworkPolicies();
+      }, 30_000),
+    );
+    timers.push(
+      clock.scheduleInterval(() => {
+        if (closing) return;
+        void terminateInactiveComputers().catch((error) =>
+          console.error(
+            JSON.stringify({
+              type: "inactive-computer-sweep-failed",
               error: String(error),
             }),
           ),
         );
-    }, 60 * 60_000),
-  ];
-  for (const timer of timers) timer.unref?.();
-  void pushNetworkPolicies();
+        void store
+          .purgeActions(
+            new Date(
+              Date.now() - ACTION_RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+            ),
+          )
+          .catch((error) =>
+            console.error(
+              JSON.stringify({
+                type: "action-record-purge-failed",
+                error: String(error),
+              }),
+            ),
+          );
+      }, 60 * 60_000),
+    );
+    for (const timer of timers) timer.unref?.();
+    void pushNetworkPolicies();
 
-  installed = {
-    store,
-    deps,
-    exporter,
-    snapshot: () => snapshot,
-    refresh,
-    capabilityFor: async (userId, capability) =>
-      resolveCapability(
-        await store.capabilityRows(),
-        await store.member(userId),
-        capability,
-      ).allowed,
-    capabilitiesFor: async (userId) =>
-      resolveAllCapabilities(
-        await store.capabilityRows(),
-        await store.member(userId),
-      ),
-    terminateMemberComputers,
-    terminateInactiveComputers,
-    pushNetworkPolicies,
-    policyForBot,
-    offboard,
-    stop: async () => {
-      for (const timer of timers) clearInterval(timer);
-      for (const remove of removeTaps) remove();
-      setPolicyOverlay(null);
-      installed = undefined;
-      await Promise.allSettled([connection.end(), exporter?.shutdown()]);
-    },
-  };
-  return installed;
+    controls = {
+      store,
+      deps,
+      exporter,
+      snapshot: () => snapshot,
+      refresh,
+      capabilityFor: async (userId, capability) =>
+        resolveCapability(
+          await store.capabilityRows(),
+          await store.member(userId),
+          capability,
+        ).allowed,
+      capabilitiesFor: async (userId) =>
+        resolveAllCapabilities(
+          await store.capabilityRows(),
+          await store.member(userId),
+        ),
+      terminateMemberComputers,
+      terminateInactiveComputers,
+      pushNetworkPolicies,
+      policyForBot,
+      offboard,
+      stop,
+    };
+    installed = controls;
+    return controls;
+  } catch {
+    try {
+      await stop();
+    } catch (cleanup: unknown) {
+      throw new AggregateError(
+        [new Error("Enterprise controls initialization failed."), cleanup],
+        "Enterprise controls initialization failed and cleanup is unconfirmed.",
+      );
+    }
+    throw new Error("Enterprise controls initialization failed.");
+  }
 }
 
 /** For the break-glass rule, which is decided before the controls may be installed. */

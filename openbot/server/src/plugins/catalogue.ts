@@ -108,6 +108,8 @@ export type CatalogueEntry = {
    * call runs in this process against this deployment's own tables as the person whose turn it is.
    */
   auth: CatalogueAuth;
+  /** Reviewed owner assembly opt-in; credential and provenance gates still apply. */
+  ownerAssembly?: boolean;
   /**
    * The tools this vendor's server exposes that change something.
    *
@@ -162,6 +164,7 @@ export type CatalogueEntry = {
 export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
   {
     key: "parallel",
+    ownerAssembly: true,
     title: "Parallel Search",
     vendor: "Parallel",
     summary:
@@ -396,6 +399,11 @@ export function resolveServerUrl(
   // slash, which some servers treat as a different route.
   const path = entry.path === "/" ? "" : entry.path;
   return { url: `${host}${path}`, entry };
+}
+
+/** A source opt-in never authorizes use of a deployment credential. */
+export function ownerAssemblySource(entry: CatalogueEntry | null): boolean {
+  return entry?.ownerAssembly === true && entry.auth.kind === "none";
 }
 
 /**

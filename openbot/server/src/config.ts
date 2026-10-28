@@ -168,6 +168,8 @@ export type DeploymentConfig = {
   /** The port the API listens on. Named `PORT` or `SERVER_PORT`; see `serverPort`. */
   port: number;
   databaseUrl: string;
+  /** Dedicated restricted identity writer; bootstrap refuses an absent URL. */
+  roleWriterDatabaseUrl?: string;
   keyEncryptionKey: string;
   /**
    * Authentication for the bundled Bot and/or the installed picked harness.
@@ -1302,6 +1304,7 @@ export function loadConfig(
     transcription: transcriptionConfig(environment),
     voice: voiceConfig(environment),
     databaseUrl: required(environment, "DATABASE_URL"),
+    roleWriterDatabaseUrl: optional(environment, "ROLE_WRITER_DATABASE_URL"),
     keyEncryptionKey: keyEncryptionKey(environment),
     ...(managedAgent ? { managedAgent } : {}),
     agentEndpointAllowedHosts: agentEndpointAllowedHosts(environment),

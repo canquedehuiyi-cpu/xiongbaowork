@@ -6,6 +6,7 @@ import {
   classifyTool,
   customUrlRefusal,
   hostAdmissible,
+  ownerAssemblySource,
   resolveServerUrl,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
@@ -599,4 +600,32 @@ test("a recorded read cannot take an action off a curated entry's write list", (
   // And the empty string is a recorded value rather than a silence, so it does not fall through to
   // the write list and read as a read for an action the list omits.
   expect(classifyTool(notion, "notion-fetch", true, "")).toBe("write");
+});
+
+describe("owner assembly source eligibility", () => {
+  test("only the explicitly reviewed anonymous source opts in", () => {
+    expect(CATALOGUE.filter(ownerAssemblySource).map((entry) => entry.key)).toEqual(["parallel"]);
+    expect(ownerAssemblySource(null)).toBe(false);
+  });
+
+  test("an opt-in cannot authorize shared, personal or builtin credential paths", () => {
+    const source = catalogueEntry("parallel");
+    expect(source).not.toBeNull();
+    if (!source) throw new Error("Missing reviewed test source.");
+    expect(ownerAssemblySource({ ...source, ownerAssembly: false })).toBe(false);
+    expect(ownerAssemblySource({ ...source, auth: { kind: "deployment-bearer" } })).toBe(false);
+    expect(ownerAssemblySource({ ...source, auth: { kind: "builtin" } })).toBe(false);
+    const personal = catalogueEntry("google-drive");
+    expect(personal).not.toBeNull();
+    if (!personal) throw new Error("Missing personal credential source.");
+    expect(ownerAssemblySource({ ...personal, ownerAssembly: true })).toBe(false);
+  });
+});
+
+test("anonymous authentication alone does not opt a source into owner assembly", () => {
+  const source = catalogueEntry("parallel");
+  if (!source) throw new Error("Missing reviewed test source.");
+  const { ownerAssembly: _optIn, ...withoutOptIn } = source;
+  expect(ownerAssemblySource(withoutOptIn)).toBe(false);
+  expect(ownerAssemblySource(catalogueEntry("unknown-owner-source"))).toBe(false);
 });

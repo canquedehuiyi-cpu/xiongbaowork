@@ -1,17 +1,24 @@
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
 import {
   BROWSER_ACTIONS,
   BrowserFailure,
+  type BrowserLaunchOptions,
   browserIdentityOf,
   createRunnerBrowser,
   DEFAULT_BROWSER_CHANNEL,
   MAX_SNAPSHOT_GENERATION,
   ownedContextOf,
-  type BrowserLaunchOptions,
+  playwrightLaunchOptions,
   type RunnerBrowser,
 } from "../../runner/src/browser";
 
@@ -70,7 +77,7 @@ function refOf(elements: { ref: string }[], index: number): string {
 }
 
 function handleSuffix(ref: string, raw: string): boolean {
-  return /^[0-9a-f]{8}:/.test(ref) && ref.endsWith(`:${raw}`);
+  return /^[0-9a-f]{8}-[0-9a-f]{8}:/.test(ref) && ref.slice(18) === raw;
 }
 
 async function refusal(work: Promise<unknown>): Promise<BrowserFailure> {
@@ -102,8 +109,11 @@ type Shape = {
   goneRefs?: string[];
   /** A call that waits here until the test lets it go. */
   hold?: Promise<void>;
+  /** Signals actual adapter dispatch, before waiting for the test to release it. */
+  actionEntered?: () => void;
   /** A browser that is slow to come up, which is the normal case on a laptop, not the exception. */
   launchHold?: Promise<void>;
+  launchEntered?: () => void;
   /** Where a click takes the page, so a page change can retire the list it came from. */
   clickGoesTo?: string;
   /** Every pending call fails the way Playwright's does once its signal has been aborted. */
@@ -164,6 +174,7 @@ function fakePageOf(state: PageState): FakePage {
     name: string,
     options: { signal?: AbortSignal },
   ): Promise<void> => {
+    shape.actionEntered?.();
     if (shape.hold) await shape.hold;
     if (shape.aborted && !shape.blindToStop && options.signal?.aborted) {
       throw new Error(`The action was aborted: ${name}`);
@@ -183,14 +194,17 @@ function fakePageOf(state: PageState): FakePage {
     navigate: async (target, options) => {
       if (shape.hold) await shape.hold;
       if (shape.aborted && options.signal?.aborted) {
-        throw new Error("Navigation interrupted because the signal was aborted");
+        throw new Error(
+          "Navigation interrupted because the signal was aborted",
+        );
       }
       if (shape.failPage) throw new Error("net::ERR_NAME_NOT_RESOLVED");
       state.calls.push(`navigate ${target}`);
       state.url = target;
     },
     png: async (maskSelector) => {
-      if (shape.failPage) throw new Error("Cannot take a screenshot of nothing");
+      if (shape.failPage)
+        throw new Error("Cannot take a screenshot of nothing");
       state.maskSelector = maskSelector;
       state.calls.push("png");
       return new Uint8Array([80, 78, 71]);
@@ -241,7 +255,10 @@ type Fake = {
   contexts: FakeContext[];
   /** The site opened another window: the newest one is the page being driven from here on. */
   opening(url: string): void;
-  launch(profileDir: string, options: BrowserLaunchOptions): Promise<FakeContext>;
+  launch(
+    profileDir: string,
+    options: BrowserLaunchOptions,
+  ): Promise<FakeContext>;
 };
 
 /** The launcher seam: records where a browser would have started, and hands back a fake one. */
@@ -266,6 +283,7 @@ function fakeBrowser(shape: Shape = {}): Fake {
       live.push({ ...state, url });
     },
     async launch(profileDir, options) {
+      shape.launchEntered?.();
       if (shape.launchHold) await shape.launchHold;
       launches.push({ profileDir, options });
       // Its own listener list and its own count, so closing one browser says nothing about another.
@@ -296,7 +314,8 @@ function fakeBrowser(shape: Shape = {}): Fake {
         close: async () => {
           context.closes += 1;
           state.calls.push("close");
-          if (shape.failPage) throw new Error("That browser would not shut down");
+          if (shape.failPage)
+            throw new Error("That browser would not shut down");
         },
         onClose: (listener) => {
           listeners.push(listener);
@@ -436,9 +455,9 @@ describe("what one browser action is answered with", () => {
     expect(back.deltaY).toBe(-400);
     expect(fake.calls).toContain("wheel 600");
     expect(fake.calls).toContain("wheel -400");
-    expect((await refusal(drive(browser, "scroll", { deltaY: "far" }))).message).toContain(
-      "finite",
-    );
+    expect(
+      (await refusal(drive(browser, "scroll", { deltaY: "far" }))).message,
+    ).toContain("finite");
     await browser.close();
   });
 });
@@ -519,9 +538,11 @@ describe("element lists and the handles they give out", () => {
     ]);
     // An opaque handle: this run's token, then the name Playwright gave the element.
     expect(handleSuffix(refOf(elements, 3), "e4")).toBe(true);
-    expect(elements.every((element) => /^[0-9a-f]{8}:e\d+$/.test(element.ref))).toBe(
-      true,
-    );
+    expect(
+      elements.every((element) =>
+        /^[0-9a-f]{8}-[0-9a-f]{8}:e\d+$/.test(element.ref),
+      ),
+    ).toBe(true);
     await browser.close();
   });
 
@@ -621,7 +642,9 @@ describe("element lists and the handles they give out", () => {
     const error = await refusal(
       drive(browser, "click", { ref: button, snapshotId: 1 }),
     );
-    expect(error.message).toContain("Nothing on this page is that element any more");
+    expect(error.message).toContain(
+      "Nothing on this page is that element any more",
+    );
     await browser.close();
   });
 
@@ -640,7 +663,19 @@ describe("element lists and the handles they give out", () => {
     const again = asRecord(await drive(browser, "snapshot"));
     expect(fake.launches).toHaveLength(2);
     expect(again.snapshotId).toBe(2);
-    expect(refOf(elementsOf(again), 3)).not.toBe(button);
+    // Handles are a (snapshotId, ref) pair. A new snapshot can reuse the same raw element,
+    // but neither an omitted generation nor the old generation may authorize that handle.
+    expect(refOf(elementsOf(again), 3)).toBe(button);
+    const oldPair = await refusal(
+      drive(browser, "click", { ref: button, snapshotId: 1 }),
+    );
+    expect(oldPair.message).toContain("out of date");
+    const missingGeneration = await refusal(
+      drive(browser, "click", { ref: button }),
+    );
+    expect(missingGeneration.message).toContain("not the list of elements");
+    expect(fake.calls.some((call) => call.startsWith("click"))).toBe(false);
+    expect(fake.launches).toHaveLength(2);
     await browser.close();
   });
 });
@@ -658,9 +693,10 @@ describe("whose browser this is", () => {
         "has to name the coworker it belongs to",
       );
     }
-    expect(browserIdentityOf({ tenantId: " t-1 ", botId: " bot-a " })).toEqual(
-      { tenantId: "t-1", botId: "bot-a" },
-    );
+    expect(browserIdentityOf({ tenantId: " t-1 ", botId: " bot-a " })).toEqual({
+      tenantId: "t-1",
+      botId: "bot-a",
+    });
   });
 
   test("constructing the browser creates nothing on disk", () => {
@@ -693,7 +729,9 @@ describe("whose browser this is", () => {
         COLLEAGUE,
       ),
     );
-    expect(error.message).toContain("out of date");
+    expect(error.message).toContain("another coworker's page");
+    expect(fake.calls.some((call) => call.startsWith("click"))).toBe(false);
+    expect(fake.launches).toHaveLength(2);
     expect(theirs.snapshotId).toBe(1);
     await browser.close();
   });
@@ -868,7 +906,12 @@ describe("stopping", () => {
 
   test("a click cancelled on the way to the page is an unknown outcome", async () => {
     const held = gate();
-    const fake = fakeBrowser({ hold: held.wait, aborted: true });
+    const entered = gate();
+    const fake = fakeBrowser({
+      hold: held.wait,
+      actionEntered: entered.release,
+      aborted: true,
+    });
     const browser = browserOf(profileRoot(), fake);
     const elements = elementsOf(await drive(browser, "snapshot"));
     const controller = new AbortController();
@@ -879,6 +922,7 @@ describe("stopping", () => {
       OWNER,
       controller.signal,
     );
+    await entered.wait;
     controller.abort();
     held.release();
     const error = await refusal(pending);
@@ -1115,28 +1159,25 @@ describe("the machine it runs on", () => {
 });
 
 describe("the page underneath the wrapper", () => {
-  test(
-    "the real adapter gives the same view of the same window, and a new view of a new one",
-    () => {
-      // Three calls are a context's whole life, so nothing browser-shaped has to exist for this.
-      const first = { which: "one" };
-      const second = { which: "two" };
-      const windows: unknown[] = [first, second];
-      const context = {
-        pages: () => windows,
-        close: async () => undefined,
-        on: () => undefined,
-      };
-      const owned = ownedContextOf(context as never);
-      const asked = owned.pages();
-      // Asking twice is not a page change: this is the comparison that retires a generation.
-      expect(owned.pages()[0]).toBe(asked[0]);
-      expect(owned.pages()[1]).toBe(asked[1]);
-      expect(owned.pages()[0]).not.toBe(asked[1]);
-      windows.push({ which: "three" });
-      expect(owned.pages()[2]).not.toBe(asked[0]);
-    },
-  );
+  test("the real adapter gives the same view of the same window, and a new view of a new one", () => {
+    // Three calls are a context's whole life, so nothing browser-shaped has to exist for this.
+    const first = { which: "one" };
+    const second = { which: "two" };
+    const windows: unknown[] = [first, second];
+    const context = {
+      pages: () => windows,
+      close: async () => undefined,
+      on: () => undefined,
+    };
+    const owned = ownedContextOf(context as never);
+    const asked = owned.pages();
+    // Asking twice is not a page change: this is the comparison that retires a generation.
+    expect(owned.pages()[0]).toBe(asked[0]);
+    expect(owned.pages()[1]).toBe(asked[1]);
+    expect(owned.pages()[0]).not.toBe(asked[1]);
+    windows.push({ which: "three" });
+    expect(owned.pages()[2]).not.toBe(asked[0]);
+  });
 
   test("a window the site opened becomes the one driven, and the old list is spent", async () => {
     const fake = fakeBrowser();
@@ -1145,7 +1186,10 @@ describe("the page underneath the wrapper", () => {
     // The page opened its own window between two actions, which is the normal case, not the odd one.
     fake.opening("https://example.test/popup");
     const error = await refusal(
-      drive(browser, "click", { ref: refOf(elementsOf(first), 3), snapshotId: 1 }),
+      drive(browser, "click", {
+        ref: refOf(elementsOf(first), 3),
+        snapshotId: 1,
+      }),
     );
     expect(error.message).toContain("out of date");
     const moved = asRecord(await drive(browser, "read"));
@@ -1183,16 +1227,21 @@ describe("the page underneath the wrapper", () => {
 describe("a stop that arrives at an awkward moment", () => {
   test("a stop during the browser's start costs no action at all", async () => {
     const held = gate();
-    const fake = fakeBrowser({ launchHold: held.wait });
+    const entered = gate();
+    const fake = fakeBrowser({
+      launchHold: held.wait,
+      launchEntered: entered.release,
+    });
     const browser = browserOf(profileRoot(), fake);
     const controller = new AbortController();
     const pending = drive(
       browser,
-      "click",
-      { ref: "12345678:e4", snapshotId: 1 },
+      "key",
+      { key: "Enter" },
       OWNER,
       controller.signal,
     );
+    await entered.wait;
     controller.abort();
     held.release();
     const error = await refusal(pending);
@@ -1206,8 +1255,13 @@ describe("a stop that arrives at an awkward moment", () => {
 
   test("a click that reaches the page after the stop is an unknown outcome", async () => {
     const held = gate();
+    const entered = gate();
     // A locator that answers regardless: what the runner must assume, because it cannot know.
-    const fake = fakeBrowser({ hold: held.wait, blindToStop: true });
+    const fake = fakeBrowser({
+      hold: held.wait,
+      actionEntered: entered.release,
+      blindToStop: true,
+    });
     const browser = browserOf(profileRoot(), fake);
     const elements = elementsOf(await drive(browser, "snapshot"));
     const controller = new AbortController();
@@ -1218,6 +1272,7 @@ describe("a stop that arrives at an awkward moment", () => {
       OWNER,
       controller.signal,
     );
+    await entered.wait;
     controller.abort();
     held.release();
     const error = await refusal(pending);
@@ -1229,7 +1284,12 @@ describe("a stop that arrives at an awkward moment", () => {
 
   test("a stop during a fill is unknown, and the submit it meant to send is not sent", async () => {
     const held = gate();
-    const fake = fakeBrowser({ hold: held.wait, blindToStop: true });
+    const entered = gate();
+    const fake = fakeBrowser({
+      hold: held.wait,
+      actionEntered: entered.release,
+      blindToStop: true,
+    });
     const browser = browserOf(profileRoot(), fake);
     const email = refOf(elementsOf(await drive(browser, "snapshot")), 0);
     const controller = new AbortController();
@@ -1240,6 +1300,7 @@ describe("a stop that arrives at an awkward moment", () => {
       OWNER,
       controller.signal,
     );
+    await entered.wait;
     controller.abort();
     held.release();
     const error = await refusal(pending);

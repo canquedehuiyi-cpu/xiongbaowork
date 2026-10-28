@@ -688,6 +688,53 @@ export function addAuditTap(tap: AuditTap): () => void {
   return () => auditTaps.delete(tap);
 }
 
+/**
+ * Owner assembly only: the grant and sanitized trail commit together.
+ * A COMMIT with an unknown outcome is never announced as a committed tap.
+ */
+export async function commitOwnerAssembly<T>(
+  database: Database,
+  event: AuditEventInput,
+  work: (
+    transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
+  ) => Promise<{ value: T; changed: boolean }>,
+): Promise<T> {
+  const { initiator, ...input } = event;
+  const payload = redactAuditPayload(input.payload);
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  if (!isRecord(payload)) {
+    throw new TypeError(
+      "An audit payload must remain a record after redaction.",
+    );
+  }
+  const row = {
+    ...input,
+    ...initiatorColumns(initiator),
+    payload,
+  };
+  const result = await database.transaction(async (transaction) => {
+    const outcome = await work(transaction);
+    if (outcome.changed) await transaction.insert(auditEvents).values(row);
+    return outcome;
+  });
+  if (result.changed) {
+    for (const tap of auditTaps) {
+      try {
+        tap(row);
+      } catch {
+        console.error(
+          JSON.stringify({
+            type: "audit-tap-failed",
+            eventType: row.eventType,
+          }),
+        );
+      }
+    }
+  }
+  return result.value;
+}
+
 export function createAuditStore(database: Database): AuditStore {
   return {
     insert: async ({ initiator, ...event }) => {
