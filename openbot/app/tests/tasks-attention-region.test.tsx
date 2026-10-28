@@ -30,7 +30,20 @@ beforeAll(() => {
     registeredHere = true;
   }
 });
-afterEach(cleanup);
+const clients = new Set<QueryClient>();
+function testClient() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(agentKeys.list(false), []);
+  clients.add(client);
+  return client;
+}
+afterEach(() => {
+  cleanup();
+  for (const client of clients) client.clear();
+  clients.clear();
+});
 afterAll(() => {
   if (registeredHere) GlobalRegistrator.unregister();
 });
@@ -51,15 +64,16 @@ const card = (over: { status: string; title?: string }): CardTask =>
  * A QueryClientProvider, because a card resolves its coworker's name from the roster now and that
  * read is a query. Without a client the render throws before any assertion runs -- which is the right
  * outcome for the test to discover, but not one it should be made to discover twice. The roster
- * request itself goes nowhere in here, and the card falls back to the id it was given.
+ * query is seeded with an empty, non-stale roster, and the card falls back to its given id.
  */
 const draw = (tasks: CardTask[]) =>
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={testClient()}>
       <AttentionRegion
         machineLabel={() => null}
         onArchive={() => {}}
         onReview={() => {}}
+        pendingIds={new Set<string>()}
         tasks={tasks}
       />
     </QueryClientProvider>,
@@ -113,9 +127,7 @@ test("the empty results tab says what belongs there", async () => {
  * the roster cannot answer: an employee who is gone, where printing the id is the honest thing.
  */
 test("a card names its coworker, the whole crew, or the id it was given", async () => {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
-  });
+  const queryClient = testClient();
   queryClient.setQueryData(agentKeys.list(false), [
     { id: "agent-known", name: "阿审" } as never,
   ]);
@@ -125,6 +137,7 @@ test("a card names its coworker, the whole crew, or the id it was given", async 
         machineLabel={() => null}
         onArchive={() => {}}
         onReview={() => {}}
+        pendingIds={new Set<string>()}
         tasks={[
           {
             ...card({ status: "failed", title: "整组的活" }),

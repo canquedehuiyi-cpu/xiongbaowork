@@ -1,0 +1,35 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/1",
+  "ticket": "TASKS-ATTENTION-FIXTURE-20261028",
+  "formal_adoption": false,
+  "status": "CANDIDATE_REQUIRES_REVIEW_AND_TARGETED_RUNTIME",
+  "base_commit": "a05203530d4a4fb2dd301fa1257db551df0e98e6",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/app/tests/tasks-attention-region.test.tsx",
+      "before": {
+        "bytes": 6124,
+        "sha256": "e735dea27d4beb5ea1f4a539f08c565cfde117d8ba36c4ca9061e6619b409308",
+        "mode": "0o644",
+        "blob": "177b737ef74d3d00f42485735d17b35f16f2f40f"
+      },
+      "after": {
+        "bytes": 6471,
+        "sha256": "40144c4c938ccf301120cab812abb469340c02d6caa9ed63c76f15f03bb027db",
+        "mode": "0o644",
+        "blob": "e319c87eacfa90b282ae06c5d947e0a6da73ef0b"
+      }
+    }
+  ],
+  "scope": "Test fixture only: provide required pendingIds and seed/dispose private roster query clients; all original four assertions and production route unchanged",
+  "trigger": {
+    "run": 40705705886,
+    "job": 122877126008,
+    "observed_failures": 3,
+    "cause": "test direct mounts omitted required pendingIds prop; real TasksScreen supplies it at line833"
+  },
+  "full_app_one_process": "RESOURCE_STOP_RETAINED_NO_FULL_PASS",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
