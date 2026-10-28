@@ -1,0 +1,43 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "WORKSPACE-RUNNER-ASSERTION-20261029",
+  "formal_adoption": false,
+  "status": "CANDIDATE_PENDING_INDEPENDENT_REVIEW_AND_RUNTIME",
+  "base_commit": "1d3c906db077fefd08e25dce9aa3b20bc2870452",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/tests/workspace.test.ts",
+      "before": {
+        "path": "openbot/tests/workspace.test.ts",
+        "bytes": 2084,
+        "sha256": "bc783ee67e831015d840ade5375022f27f29da48a4a83e4005cb8fe84db30745",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/tests/workspace.test.ts",
+        "bytes": 2102,
+        "sha256": "19ab8b22506d527885f6e682a7fc4afc929d6395d960c3b03691683d7b2a7847",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Only update the original strict workspace expectation and test title to include the already-present runner fourth workspace. Retain exact ordered equality, per-workspace directory/package-name assertions, dev app/server-only assertion, wildcard build coverage and worker startup assertions. No production/package/lock/script/approval/PG behavior changed.",
+  "projected_source_files": 2060,
+  "projected_source_bytes": 50032071,
+  "trigger": {
+    "run": 40788312542,
+    "job": 123166945250,
+    "path": "openbot/tests/workspace.test.ts",
+    "pass": 3,
+    "fail": 1
+  },
+  "known_other_failures_retained": {
+    "approval_files": 2,
+    "tests": 13,
+    "reason": "Existing intentional approval_recovery_blocked/NOT_SERVICE_WIRED guard; not relaxed by this package."
+  },
+  "strict_ci": "NOT_RUN_BASELINE_UNAVAILABLE_03df9efa",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
