@@ -743,6 +743,13 @@
       "when": 1792409657000,
       "tag": "0105_knowledge_write_foundations_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1792421265000,
+      "tag": "0106_plugin_assembly_foundations_closed",
+      "breakpoints": true
     }
   ]
 }

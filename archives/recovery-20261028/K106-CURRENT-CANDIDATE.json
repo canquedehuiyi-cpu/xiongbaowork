@@ -1,0 +1,115 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/2",
+  "ticket": "ROOT111-K106-CURRENT-PARENT-BASELINE",
+  "formal_adoption": false,
+  "status": "HISTORICAL_SOURCE_BYTES_RESTORED_TO_ISOLATED_CANDIDATE_NOT_ADOPTED",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "current_parent": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
+  "required_prior_overlays": [
+    "AP-INPUT-BUN-20261028",
+    "AP-SCHEMA-RUNTIME-20261028",
+    "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+    "AUTOMATION-FK-ASSERTION-20261028",
+    "SECURITY-FK-ASSERTION-20261028"
+  ],
+  "changes": [
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 5270,
+        "sha256": "a5541d86f2d648301bc5c4e7bf5a2e623ccf43e2a1719130d9f95bad41290c72",
+        "blob": "434eb5204024a369249a062e0fdfd93cae99f059",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 604775,
+        "sha256": "96e8bc9e6a7b89c008649ad0c964f9a6cf5460fad2db9f7c1fb33ebb7c2f3cd6",
+        "blob": "1d28ab313093757f712b067a1c4052f8a0790836",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+      "before": {
+        "bytes": 15995,
+        "sha256": "c9eb36952c8af649fb8813def53240a1b8bc5e4a33a8a025ef3a394ee80f6951",
+        "blob": "738e4ecf8036435ebc487e6fbe4c3153a6adfd37",
+        "mode": "100644"
+      },
+      "after": {
+        "bytes": 16159,
+        "sha256": "0be3bb0f19c52c21fc3ecc689d5eff41ae00a5e028de064cd9ad213d65ac44fb",
+        "blob": "9f5f277d95d265e45c40bd05b61300629f8d519b",
+        "mode": "100644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 5314,
+        "sha256": "320f9f7742730e9b34a8ca6647ace9ad642541943ddb7da3af4a7b4e82c59d9f",
+        "blob": "c4a489c28255ecd5978d16c0a16ab80c30080654",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "before": {
+        "bytes": 1747,
+        "sha256": "f2c7d495bfc245e148dc976669ed1da7b530ad71b99a5c22845cb14f1f4951ed",
+        "blob": "26afec75aeaf3183292e188f3239dfdcd0fe4780",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 1794,
+        "sha256": "f9ddd1c640db86a246e45095788bb3c140ec503a0a35be75a8e64d09c99ea2aa",
+        "blob": "b4d0e1c0d089d03d08f2662e2fc7f232f797c618",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 104477,
+        "sha256": "065569edc900cb77ebd116957541d6c7bc3bc9af35b718243e9cfcd1f4877a15",
+        "blob": "33761f01441c333954baf3319ec568cdb1cc3a14",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "historical_origin": {
+    "index_bytes": 15655,
+    "index_sha256": "ba222a22905cccd25b1fbfb5d0db5472465e02ea2430d4bd4025403ac613bc70",
+    "historical_author_base": "V56",
+    "historical_c3_source_review": "SOURCE_ONLY19_DEFINITIONS_ZERO_RUNS",
+    "archive_commit": "6970f22792c221bbdc825bfca95586aa477cfa89",
+    "legacy_v58": "NOT_ADOPTED; no old FD/cache/authoring incident cleared"
+  },
+  "snapshot_lineage": {
+    "idx": 106,
+    "when": 1792421265000,
+    "id": "90530f50-0fa9-4dc2-9ced-7d718a08fe76",
+    "prevId": "eaa15046-f3b6-4e8b-9509-29279faf2fc7",
+    "tables": 152
+  },
+  "current_source_files_projected": 2049,
+  "current_source_bytes_projected": 49183647,
+  "activation": "DISABLED; schemas and test definitions only, no publisher/role/native registration writer",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
