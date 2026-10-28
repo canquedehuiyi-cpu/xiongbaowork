@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.1",
+  "plan_name": "tool-self-check",
+  "plan_version": "1",
+  "max_timeout_s": 600,
+  "steps": [
+    {
+      "id": "cloud-dev-unittest",
+      "argv": ["python3", "-B", "-m", "unittest", "discover", "-s", "openbot/scripts/cloud-dev/tests", "-p", "test_*.py"],
+      "cwd": ".",
+      "timeout_s": 180,
+      "required": true,
+      "capture": true,
+      "depends_on": [],
+      "prereq_paths": []
+    }
+  ]
+}
