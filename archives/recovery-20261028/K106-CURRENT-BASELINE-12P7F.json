@@ -1,0 +1,48 @@
+{
+  "schema": "xiongbaowork-candidate-baseline-runtime/1",
+  "head": "fbf07b62ca112bb4ef036cbe49336dd80604fc1e",
+  "run": 40679810321,
+  "job": 122787335008,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "4ef98c04a3cad0d96d4b2d0a25dbca09283dbbde",
+    "head": "fbf07b62ca112bb4ef036cbe49336dd80604fc1e",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "ROOT111-K106-CURRENT-PARENT-BASELINE"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "CANDIDATE_K106_CURRENT_PARENT_BYTES_VERIFIED_NOT_ADOPTED",
+    "swap_limit": 0,
+    "verified_source_bytes": 49183647,
+    "verified_source_files": 2049,
+    "windows_source_files_written": 0
+  },
+  "pass": 12,
+  "fail": 7,
+  "expects": 518,
+  "original_test_definitions": 19,
+  "failures": [
+    "Drizzle .using sets index ONLY true",
+    "ExtraConfigColumn is not native PgUUID child instance",
+    "String.replace replacement expands dollar suffix SQL",
+    "prior approved knowledge/resource repair hashes differ from frozen historical sources"
+  ],
+  "formal_adoption": false,
+  "postgres17": "PG_PENDING",
+  "full_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "legacy_v58": "NOT_ADOPTED; prior incidents not cleared"
+}

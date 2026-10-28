@@ -1,0 +1,28 @@
+{
+  "schema": "xiongbaowork-runtime-resource-evidence/1",
+  "source_commit": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
+  "run_id": 40678526201,
+  "job_id": 122782977940,
+  "source_files": 2045,
+  "source_bytes": 48463600,
+  "workspace_install": "PASS",
+  "scripts": "NOT_RUN",
+  "install_reported_memory_peak": "513.5M",
+  "configured_project_memory_max": 536870912,
+  "configured_install_memory_max": 536870912,
+  "swap": 0,
+  "typecheck": {
+    "status": "RESOURCE_STOP_NO_COMPILER_DIAGNOSTICS",
+    "host_runtime": "v24.21.0",
+    "typescript": "5.9.3",
+    "node_old_space": "NODE_DEFAULT",
+    "process_signal": "SIGABRT6",
+    "python_child_returncode": -6,
+    "workflow_exit": 250,
+    "reason": "V8 heap limit",
+    "reported_memory_peak": "356.5M",
+    "postgres17": "PG_PENDING"
+  },
+  "full_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
