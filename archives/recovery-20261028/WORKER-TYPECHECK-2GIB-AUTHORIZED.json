@@ -1,0 +1,53 @@
+{
+  "schema": "xiongbaowork-proposed-worker-resource-exception/1",
+  "status": "DIRECT_HUMAN_AUTHORIZED_ACTIVATION_PENDING_RUNTIME_RESULT",
+  "source_commit": "73cc3efd3603ba4899b901c4e43df08c65871f14",
+  "reason": "Original worker tsconfig at512MiB aggregate stopped at default V8 heap and at384MiB auxiliary heap; no type diagnostics. Same Source server/app/runner original types and full app tests passed.",
+  "evidence": [
+    {
+      "run": 40719764919,
+      "job": 122927137243,
+      "auxiliary_heap": "default",
+      "automatic_peak": "314.3M",
+      "return": -6
+    },
+    {
+      "run": 40721528612,
+      "job": 122933438438,
+      "auxiliary_heap_mib": 384,
+      "automatic_peak": "474.9M",
+      "return": -6
+    }
+  ],
+  "phase": "original worker/tsconfig.json --noEmit only; original include src unchanged",
+  "command": "node --max-old-space-size=1792 node_modules/typescript/bin/tsc --noEmit --project worker/tsconfig.json",
+  "project_and_all_descendants_memory_max": 2147483648,
+  "swap": 0,
+  "timeout_seconds": 300,
+  "restore_after_phase": 536870912,
+  "activation": "One normal on-push cloud workflow restricted to this compile phase; original Source unchanged",
+  "prior_exceptions_do_not_cover_worker": true,
+  "unchanged": {
+    "free_standard_public_actions": true,
+    "source_files": 2055,
+    "source_bytes": 50019140,
+    "data_copy_memory": 67108864,
+    "full_dependency_install_memory": 536870912,
+    "other_unexcepted_project_phases": 536870912,
+    "lifecycle_scripts": "DISABLED",
+    "private_cache": true,
+    "copyfile": true,
+    "windows_source_writes": 0,
+    "pg17": "PG_PENDING",
+    "paid_provider_calls": 0
+  },
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "authorization": {
+    "reply": "允许，仅 worker 完整类型检查使用 2 GiB（推荐）",
+    "date": "2026-10-29",
+    "original_reviewable_proposal": "7a8b96ec2ea40ff454bc8095e542a123da5c030b"
+  },
+  "source_files": 2055,
+  "source_bytes": 50019140
+}
