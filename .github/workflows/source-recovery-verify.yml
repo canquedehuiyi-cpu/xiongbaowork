@@ -20,7 +20,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
           sudo systemd-run --quiet --wait --pipe --collect \
             --property=Type=exec --property=MemoryMax=64M \
-            --property=MemorySwapMax=0 --property=MemoryOOMGroup=yes \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
             /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
           import hashlib, json, os, stat, subprocess, sys, tempfile
@@ -33,6 +33,7 @@ jobs:
           cg = Path("/sys/fs/cgroup") / cg_lines[0][3:].lstrip("/")
           assert (cg / "memory.max").read_text().strip() == "67108864"
           assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert (cg / "memory.oom.group").read_text().strip() == "1"
           print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
           
           def command(args, cwd):
