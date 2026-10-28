@@ -1,0 +1,67 @@
+{
+  "schema": "xiongbaowork-historical-byte-recovery/1",
+  "status": "RECOVERED_NOT_ADOPTED_SOURCE_ONLY_PG_PENDING",
+  "parent": "a96bbcbe9602841bfe26bc9e966ba43a2d9b2cd0",
+  "author_index": {
+    "reference": "library-file:fde1_bGliZmlsZV9vQUhsb09nelNWWmtHenVCNDRuc2hR_FileDrive_ecfdc2761b3481918cafe0a7f422e7bf",
+    "bytes": 14861,
+    "sha256": "ee6e639aa5b118f942a9f58db0366e66f98559767f6515f88153742f4f222cae"
+  },
+  "cap": {
+    "name": "ev-0111.json",
+    "bytes": 174216,
+    "sha256": "91879ff54711bcc198f507dd971b4864d319241ca8ad5318961126b7e2446810",
+    "blob": "4f5ff16cf4e62675d8644f18d37026e01f15f3b3",
+    "reference": "library-file:fde1_bGliZmlsZV9ZZlY3bnRHZEM2R0dWTWZrSExBc09n_FileDrive_ecfdc2761b3481918cafe0a7f422e7bf"
+  },
+  "decoded": [
+    {
+      "ordinal": 16,
+      "bytes": 28006,
+      "sha256": "ff827b278ff0a37c48cd8058e0fdf3c51e0315e34b2ad25916520846b9b916e5",
+      "blob": "21d9a853c8416a37fbe9b40c85edcb1e54c79801"
+    },
+    {
+      "ordinal": 17,
+      "bytes": 28006,
+      "sha256": "139fce0879525f5cc9ae65d6849e7af26bd174e44e94ed91be847b5868716af3",
+      "blob": "47e410d1d27514c6d9d3932e49681ad1b1d2cd83"
+    },
+    {
+      "ordinal": 18,
+      "bytes": 15478,
+      "sha256": "03d4193517cf84ea21f1ff38209eefd9e6dfa38d52a191dc87c828aaa0c4bb21",
+      "blob": "9ebde5c64298b9f400beb0794a58d8b8487cb632"
+    },
+    {
+      "ordinal": 19,
+      "bytes": 21306,
+      "sha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
+      "blob": "02309df774e8a2714915331bd030ae06c1cbb8e4"
+    }
+  ],
+  "strict_patch": {
+    "forwardHunks": 4,
+    "reverseHunks": 4,
+    "offset": 0,
+    "fuzz": 0,
+    "forwardFullEqual": true,
+    "reverseFullEqual": true,
+    "original_patch_format": "unified diff without Git index header; exact original context/body checked by own DATA codec after adding sealed known blob header in RAM only",
+    "beforeSha256": "aa2d5a5c1d89329c50dd89091155d45b69255bc92e96b79fa4d6fd6a7215fc2c",
+    "afterSha256": "03d4193517cf84ea21f1ff38209eefd9e6dfa38d52a191dc87c828aaa0c4bb21"
+  },
+  "mod_before_current_exact": true,
+  "new_path_current_absent": true,
+  "source_paths": [
+    "openbot/server/src/approvals/continuation-store.ts",
+    "openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts"
+  ],
+  "new_pg_test_definitions": 15,
+  "native_pg17": "NOT_RUN",
+  "pg_pending": true,
+  "windows_source_writes": 0,
+  "conditional_old_v59": "NOT_ADOPTED",
+  "old_v58": "NOT_ADOPTED",
+  "historical_incidents": "NOT_CLEARED"
+}
