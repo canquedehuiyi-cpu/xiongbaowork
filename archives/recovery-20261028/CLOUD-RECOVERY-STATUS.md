@@ -43,6 +43,10 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 
 下一步保留原bunfig中的server/app两预加载脚本，用完整依赖跑35个明确命名文件（已有33组件加2个启动/受限写入生命周期CPU注入用例）。这不是全套preload、类型、完整CI或PG17验收；均另证。
 
+原始预加载子集实际通过：[40674048676/job122767800762](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40674048676/job/122767800762)，35文件全部完成，**621 pass / 0 fail / 9151 expects**，没有Unhandled error。原bunfig及server/app两个预加载脚本保持，完整冻结依赖安装PASS。原自动日志安装peak512.5M、测试peak466.6M逐字保留；验证的是实际配置的512MiB聚合门/swap0，不冒历史从未出现瞬时超门。全套preload及完整CI仍NOT_RUN。
+
+下一步7个任务看板文件使用受控fetch夹具和原app预加载，并单独检查原server TypeScript配置（原配置不包含tests，不修改其include来伪装覆盖）。源码不改，测试120秒/单例5000ms、类型120秒、项目及后代512MiB/swap0，完整依赖安装仍只使用人类具名512MiB例外；Source/下载/其他复制64MiB保持。
+
 ## 持续边界与待验项
 
 - 本轮项目源码、patch、archive、JSON、依赖和项目执行均云端；Windows无项目源码写入/执行，仅保存获准无源码UI PNG。

@@ -888,17 +888,30 @@
       "full_ci": "NOT_RUN"
     },
     "original_preload_subset": {
-      "status": "NEXT_BOUND_35_NAMED_FILES",
-      "source_changes": 0,
+      "head": "a38a20a89675a4644fe4e3e23c4a45f3746b354a",
+      "run": 40674048676,
+      "job": 122767800762,
+      "status": "PASS_NAMED_35_FILES_ONLY",
       "test_files": 35,
-      "test_timeout_ms": 5000,
-      "total_timeout_seconds": 120,
-      "full_suite": "NOT_RUN"
+      "pass": 621,
+      "fail": 0,
+      "expects": 9151,
+      "original_two_preloads": true,
+      "full_suite": "NOT_RUN",
+      "full_ci": "NOT_RUN"
+    },
+    "next_app7_and_server_types": {
+      "status": "NEXT",
+      "app_test_files": 7,
+      "app_controlled_fetch": true,
+      "server_types": "original server/tsconfig.json noEmit; original tests excluded",
+      "project_and_descendants_limit": 536870912,
+      "swap": 0
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "No pending independent Source review. Validate original preload named subset with full frozen dependencies; no PG17 or paid provider calls.",
+  "next_source_package": "No pending Source review; next named app fixture tests and original server typecheck, within existing resource gates.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
