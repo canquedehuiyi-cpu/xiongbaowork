@@ -1,0 +1,49 @@
+{
+  "schema": "xiongbaowork-integrated-component-validation/1",
+  "ticket": "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+  "commit": "13e38d05cd0138949df5d92f23412ae600a7c083",
+  "run": 40665619882,
+  "job": 122739218637,
+  "tests": {
+    "pass": 58,
+    "fail": 0,
+    "expects": 2371,
+    "files": 3
+  },
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "239bec9a0a48d276503880b2bd1dd53bb8a837f7",
+    "head": "13e38d05cd0138949df5d92f23412ae600a7c083",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 48459984,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 3,
+    "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}

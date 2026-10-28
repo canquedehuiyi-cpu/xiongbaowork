@@ -1,0 +1,48 @@
+{
+  "schema": "xiongbaowork-integrated-component-validation/1",
+  "ticket": "AP-SCHEMA-RUNTIME-20261028",
+  "commit": "1a2345069daf265df2da6c528a635854bf48e844",
+  "run": 40659665549,
+  "job": 122719226952,
+  "tests": {
+    "pass": 54,
+    "fail": 0,
+    "expects": 1126,
+    "files": 3
+  },
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "faad26f422e8f4cc1518c2c1587d56705355c092",
+    "head": "1a2345069daf265df2da6c528a635854bf48e844",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 48445588,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 3,
+    "scope": "isolated existing AP2/AP4 schema definition tests; not PostgreSQL validation",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}

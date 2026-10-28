@@ -4,7 +4,7 @@
   "packages": 18,
   "gates": 7,
   "source_snapshot": "ebd96e157ff4b4ef33065653db43080a18afab17",
-  "source_status": "V57_RESTORED_PLUS_INDEPENDENTLY_APPROVED_AP_INPUT_FIX",
+  "source_status": "V57_RESTORED_PLUS_THREE_INDEPENDENTLY_APPROVED_PACKAGES",
   "story_requirements": [
     {
       "id": "A1",
@@ -704,19 +704,21 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "340a91ce7d7a30aa12c673792e0acf8057f64ce0",
-    "head": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
+    "git_tree": "239bec9a0a48d276503880b2bd1dd53bb8a837f7",
+    "head": "13e38d05cd0138949df5d92f23412ae600a7c083",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
-      "AP-INPUT-BUN-20261028"
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAY",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 48438057,
+    "verified_source_bytes": 48459984,
     "verified_source_files": 2045,
     "windows_source_files_written": 0
   },
@@ -805,6 +807,34 @@
       "timeout_ms": 5000,
       "formal_adoption": false,
       "independent_source_review": "IN_PROGRESS"
+    },
+    "schema_integrated": {
+      "head": "1a2345069daf265df2da6c528a635854bf48e844",
+      "run": 40659665549,
+      "job": 122719226952,
+      "pass": 54,
+      "fail": 0,
+      "expects": 1126,
+      "formal_adoption": true,
+      "independent_source_review": "SOURCE_APPROVED_ONLY"
+    },
+    "knowledge_resource_integrated": {
+      "head": "13e38d05cd0138949df5d92f23412ae600a7c083",
+      "run": 40665619882,
+      "job": 122739218637,
+      "pass": 58,
+      "fail": 0,
+      "expects": 2371,
+      "formal_adoption": true,
+      "independent_source_review": "R2_SOURCE_APPROVED_ONLY",
+      "prior_fix_required_and_timeouts_preserved": true
+    },
+    "foundation_group1": {
+      "tests": 8,
+      "run_with_source_resource_stop": 40664999884,
+      "project_tests_at_that_run": "NOT_STARTED",
+      "batched_source_run_head": "94aae5078ec3cd4bbd8ea467d1501138b99af8ca",
+      "status": "BOUNDED_SOURCE_TRANSPORT_REVISED_UNDER_SAME64MiB_LIMIT"
     }
   },
   "delivery_status": "NOT_DELIVERED",
@@ -813,7 +843,7 @@
     "packages": 18,
     "gates": 7
   },
-  "next_source_package": "AP-SCHEMA-RUNTIME-20261028_PENDING_CURRENT_FIVE_FILE_REVIEW",
+  "next_source_package": "AWAIT_EXISTING_FOUNDATION_GROUP1_ACTUAL_RESULTS",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -821,5 +851,12 @@
     "windows_source_writes": 0,
     "project_execution_by_reviewer": false,
     "repository_writes_by_reviewer": false
+  },
+  "current_expected_manifest": {
+    "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+    "sha256": "9b5040641711ca7b9d98158d0e1f2194cfd154aa73716c1fe574525bf21f7db1",
+    "bytes": 422990,
+    "files": 2045,
+    "source_bytes": 48459984
   }
 }
