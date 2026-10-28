@@ -1,0 +1,63 @@
+{
+  "schema": "xiongbaowork-restored-schema-runtime-validation/1",
+  "status": "FAILED_NOT_ADOPTED_AS_ACCEPTANCE",
+  "commit": "c1a8d006107fdf2cee0f7c1948bbd4cf17cc5ef5",
+  "run_url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40651549206",
+  "run_id": 40651549206,
+  "job_id": 122692551518,
+  "test_summary": {
+    "pass": 43,
+    "fail": 9,
+    "expect_calls": 1101,
+    "test_files": 3,
+    "timeout_cases": 1,
+    "timeout_ms": 5000
+  },
+  "source_2045_bytes_verification": "PASSED",
+  "dependency": {
+    "name": "drizzle-orm",
+    "version": "0.45.2",
+    "archive_bytes": 1223890,
+    "files": 2666,
+    "unpacked_bytes": 10420427,
+    "integrity": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+    "full_workspace_install": "NOT_RUN",
+    "lifecycle_scripts_executed": 0,
+    "hardlinks": 0
+  },
+  "postgres17": "PG_PENDING",
+  "windows_source_files_written": 0,
+  "changes_after_failure": 0,
+  "original_timeout_preserved": true,
+  "diagnosis": {
+    "index_metadata": {
+      "failure_cases": 4,
+      "observation": "Drizzle 0.45.2 .using(\"btree\", ...) sets config.only=true; frozen closed schema requires false",
+      "upstream_source": "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/indexes.ts",
+      "product_fix": "NOT_AUTHORED_OR_ADOPTED"
+    },
+    "ap2_parent_inverse": {
+      "failure_cases": 1,
+      "observation": "AP2 test does not invert later accepted AP4 additions before checking original 9255-byte parent"
+    },
+    "json_parameter_oracle": {
+      "failure_cases": 1,
+      "observation": "Repository custom jsonb intentionally passes objects through to Bun SQL; test expects string",
+      "source_path": "openbot/server/src/db/schema/json.ts"
+    },
+    "snapshot_timeout": {
+      "failure_cases": 1,
+      "observed_ms": 7252.01,
+      "limit_ms": 5000,
+      "limit_relaxed": false
+    },
+    "domain_sql_layout": {
+      "failure_cases": 1,
+      "observation": "Exact expected rendering omits spaces inside CREATE TABLE boundary parentheses"
+    },
+    "domain_journal_prefix": {
+      "failure_cases": 1,
+      "observation": "Old idx94 test pops current final journal entry instead of checking frozen prefix index94"
+    }
+  }
+}

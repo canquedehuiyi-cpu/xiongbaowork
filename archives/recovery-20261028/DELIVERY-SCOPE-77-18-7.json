@@ -4,7 +4,7 @@
   "packages": 18,
   "gates": 7,
   "source_snapshot": "ebd96e157ff4b4ef33065653db43080a18afab17",
-  "source_status": "V57_195_TARGETS_RESTORED_REMOTE_TREE_VERIFIED",
+  "source_status": "V57_ALL_195_REPAIRS_SYNCED_AND_2045_SOURCE_FILES_PHYSICALLY_VERIFIED",
   "story_requirements": [
     {
       "id": "A1",
@@ -704,8 +704,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57",
-    "git_tree": "b6765c4d6a1d143cb7e41c091d04e165d3a5c2c4",
-    "head": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
+    "git_tree": "8018e1b74df2878b838f87ea22fb9b4b86644375",
+    "head": "c1a8d006107fdf2cee0f7c1948bbd4cf17cc5ef5",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -738,5 +738,52 @@
       "blob": "45989b5d36d121c56148ed7f39166481c91e1b6f",
       "identityLine": "2026-10-28T06:48:00.1104019Z ARCHIVE_README_IDENTITY {\"bytes\": 7802, \"sha256\": \"1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7\", \"tar_members\": 1875, \"tar_source_bytes\": 34529259}"
     }
-  }
+  },
+  "current_validation": {
+    "byte_components": {
+      "run": 40647799132,
+      "head": "ec7d4ada5d2c81cb1357391ce565ae471249d43d",
+      "pass": 105,
+      "fail": 0,
+      "expect_calls": 1224,
+      "test_files": 4
+    },
+    "input_candidate": {
+      "branch": "codex/approval-input-bun-fix-20261028",
+      "head": "4626ad65f409e24b92f6a84629d1504638178e1d",
+      "run": 40650647131,
+      "pass": 64,
+      "fail": 0,
+      "expect_calls": 848,
+      "test_files": 2,
+      "formal_adoption": false,
+      "independent_source_review": "PENDING"
+    },
+    "continuation_protocol": {
+      "head": "bb06961fac6f9eb26b26cb817a2acaf9d98b383f",
+      "run": 40651075475,
+      "pass": 22,
+      "fail": 0,
+      "expect_calls": 101,
+      "test_files": 1,
+      "network_attempts": 0,
+      "persistent_ports": "SIMULATED"
+    },
+    "restored_schema": {
+      "head": "c1a8d006107fdf2cee0f7c1948bbd4cf17cc5ef5",
+      "run": 40651549206,
+      "pass": 43,
+      "fail": 9,
+      "expect_calls": 1101,
+      "test_files": 3,
+      "postgres17": "PG_PENDING"
+    }
+  },
+  "delivery_status": "NOT_DELIVERED",
+  "original_full_scope_retained": {
+    "stories": 77,
+    "packages": 18,
+    "gates": 7
+  },
+  "next_source_package": "HELD_UNTIL_CURRENT_CANDIDATE_NON_AUTHOR_REVIEW"
 }
