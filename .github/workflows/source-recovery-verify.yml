@@ -1,4 +1,4 @@
-name: Recovery validation - continuation protocol
+name: Recovery validation - restored schema definitions
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: V57 source and HTTP input components
+    name: V57 source and AP2 AP4 schema definitions
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -223,9 +223,9 @@ jobs:
           os.chmod(binary, 0o700)
           
           root = base / "xiongbaowork-verified-source" / "repo"
-          harness = base / "xiongbaowork-continuation-protocol-component"
+          harness = base / "xiongbaowork-schema-components"
           harness.mkdir(mode=0o700)
-          identities = json.loads("[{\"path\":\"openbot/server/tests/approvals-continuation-protocol.test.ts\",\"bytes\":17879,\"sha256\":\"284e1b225d9e89716f3951e96cc545c5158f74895a306d90fcd74e8d56e28d5a\"},{\"path\":\"openbot/server/src/approvals/continuation-protocol.ts\",\"bytes\":11057,\"sha256\":\"2129614c5dbd7111e6e1708598c27c065c08f52a97d19fb542eb4a7a4611c972\"}]")
+          identities = []
           for item in identities:
               source = root / item["path"]
               assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
@@ -243,14 +243,118 @@ jobs:
                       out.write(block)
               assert length == item["bytes"] and raw_hash.hexdigest() == item["sha256"]
               assert target.stat().st_nlink == 1 and target.stat().st_ino != source.stat().st_ino
-          assert len(identities) == 2
+          assert len(identities) == 0
           print("RUNTIME_AND_HARNESS " + json.dumps({"bun_version": "1.3.14", "vendor_archive_bytes": size,
               "vendor_archive_sha256": digest.hexdigest(), "binary_bytes": binary_bytes,
               "binary_sha256": binary_hash.hexdigest(), "exact_component_files": len(identities),
               "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           
           PY
-      - name: Run isolated continuation protocol tests under project limit
+      - name: Prepare one locked schema dependency under 64 MiB DATA cap
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import base64, gzip, hashlib, json, os, stat, tarfile, urllib.request
+          from pathlib import Path
+          
+          base = Path.cwd()
+          line = Path("/proc/self/cgroup").read_text().strip()
+          cg = Path("/sys/fs/cgroup") / line[3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "67108864"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
+          archive = base / "drizzle-orm-0.45.2.tgz"
+          url = "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz"
+          sri = "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q=="
+          digest = hashlib.sha512()
+          size = 0
+          with urllib.request.urlopen(url, timeout=45) as response, archive.open("xb") as out:
+              assert response.status == 200
+              while True:
+                  chunk = response.read(65536)
+                  if not chunk:
+                      break
+                  size += len(chunk)
+                  assert size <= 16777216
+                  digest.update(chunk)
+                  out.write(chunk)
+                  if size % 262144 == 0:
+                      out.flush()
+                      os.fsync(out.fileno())
+              out.flush()
+              os.fsync(out.fileno())
+          assert "sha512-" + base64.b64encode(digest.digest()).decode("ascii") == sri
+          root = base / "xiongbaowork-verified-source" / "repo"
+          modules = root / "openbot" / "node_modules"
+          modules.mkdir(mode=0o700)
+          package = modules / "drizzle-orm"
+          package.mkdir(mode=0o700)
+          seen = set()
+          total = 0
+          count = 0
+          with archive.open("rb") as packed, gzip.GzipFile(fileobj=packed, mode="rb") as uncompressed:
+              with tarfile.open(fileobj=uncompressed, mode="r|") as tar:
+                  for member in tar:
+                      name = member.name
+                      parts = name.split("/")
+                      assert parts[0] == "package" and not name.startswith("/") and "\\" not in name and "\x00" not in name
+                      assert all(p not in (".", "..", ".git") for p in parts)
+                      assert member.isfile() or member.isdir()
+                      assert name not in seen
+                      seen.add(name)
+                      relative = Path(*parts[1:])
+                      target = package / relative
+                      assert target.resolve().is_relative_to(package)
+                      if member.isdir():
+                          target.mkdir(mode=0o700, parents=True, exist_ok=True)
+                          continue
+                      count += 1
+                      total += member.size
+                      assert count <= 6000 and member.size <= 8388608 and total <= 67108864
+                      target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                      written = 0
+                      incoming = tar.extractfile(member)
+                      assert incoming is not None
+                      with incoming, target.open("xb") as out:
+                          while True:
+                              block = incoming.read(65536)
+                              if not block:
+                                  break
+                              written += len(block)
+                              assert written <= member.size
+                              out.write(block)
+                              if written % 262144 == 0:
+                                  out.flush()
+                                  os.fsync(out.fileno())
+                          out.flush()
+                          os.fsync(out.fileno())
+                      assert written == member.size
+                      st = target.stat(follow_symlinks=False)
+                      assert stat.S_ISREG(st.st_mode) and st.st_nlink == 1
+              trailing = 0
+              while True:
+                  block = uncompressed.read(65536)
+                  if not block:
+                      break
+                  trailing += len(block)
+                  assert trailing <= 1048576 and not any(block)
+          info = json.loads((package / "package.json").read_bytes())
+          assert info["name"] == "drizzle-orm" and info["version"] == "0.45.2"
+          assert not info.get("dependencies")
+          assert not any(k in info.get("scripts", {}) for k in ("preinstall", "install", "postinstall"))
+          print("LOCKED_COMPONENT_DEPENDENCY " + json.dumps({"name": info["name"], "version": info["version"],
+              "archive_bytes": size, "integrity": sri, "files": count, "unpacked_bytes": total,
+              "lifecycle_scripts_executed": 0, "hardlinks": 0, "full_workspace_install": "NOT_RUN",
+              "data_copy_memory_limit": 67108864, "project_parent_memory_limit": 536870912,
+              "swap_limit": 0}), flush=True)
+          PY
+      - name: Run isolated restored schema tests under project limit
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -273,7 +377,7 @@ jobs:
           print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
                                                           "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           binary = base / "xiongbaowork-bun-1.3.14" / "bun"
-          harness = base / "xiongbaowork-continuation-protocol-component"
+          harness = base / "xiongbaowork-schema-components"
           home = base / "xiongbaowork-component-home"
           home.mkdir(mode=0o700)
           env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
@@ -281,13 +385,16 @@ jobs:
           version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
           assert version == "1.3.14"
           revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
+          root = base / "xiongbaowork-verified-source" / "repo" / "openbot"
           args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  "server/tests/approvals-continuation-protocol.test.ts"]
-          result = subprocess.run(args, cwd=harness / "openbot", env=env, capture_output=True, text=True, timeout=120)
+                  str(root / "server/tests/recovery-ap2-parent-schema-reconcile.test.ts"),
+                  str(root / "server/tests/recovery-approval-exact-input-objects.test.ts"),
+                  str(root / "server/tests/recovery-approval-direct-execution-domains.test.ts")]
+          result = subprocess.run(args, cwd=harness, env=env, capture_output=True, text=True, timeout=120)
           print(result.stdout, end="", flush=True)
           print(result.stderr, end="", flush=True)
           print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
-              "bun_revision": revision, "test_files": 1, "scope": "isolated exact-byte continuation coordinator with simulated ports; not database atomicity",
+              "bun_revision": revision, "test_files": 3, "scope": "isolated existing AP2/AP4 schema definition tests; not PostgreSQL validation",
               "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
               "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
               "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
