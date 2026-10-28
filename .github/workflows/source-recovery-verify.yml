@@ -54,9 +54,9 @@ jobs:
                   assert not parent.is_symlink()
               assert path.resolve(strict=True).is_relative_to(root)
               named = os.stat(path, follow_symlinks=False)
-              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1 and named.st_size == expected_size
+              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1 and named.st_size == expected_size, json.dumps({"path": rel, "expected_bytes": expected_size, "actual_bytes": named.st_size, "nlink": named.st_nlink, "mode": named.st_mode})
               if expected_mode is not None:
-                  assert stat.S_IMODE(named.st_mode) == (int(expected_mode.removeprefix("0o"), 8) & 0o7777)
+                  assert stat.S_IMODE(named.st_mode) == (int(expected_mode.removeprefix("0o"), 8) & 0o7777), json.dumps({"path": rel, "expected_mode": expected_mode, "actual_mode": oct(stat.S_IMODE(named.st_mode))})
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
               try:
                   before = os.fstat(fd)
@@ -73,7 +73,7 @@ jobs:
                       digest.update(chunk)
                       if retain:
                           data.extend(chunk)
-                  assert count == expected_size and digest.hexdigest() == expected_sha
+                  assert count == expected_size and digest.hexdigest() == expected_sha, json.dumps({"path": rel, "expected_sha256": expected_sha, "actual_sha256": digest.hexdigest(), "expected_bytes": expected_size, "actual_bytes": count})
                   assert metadata(os.fstat(fd)) == metadata(before) == metadata(os.stat(path, follow_symlinks=False))
                   return bytes(data) if retain else count
               finally:

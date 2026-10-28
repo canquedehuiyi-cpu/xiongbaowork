@@ -4,10 +4,9 @@
 这是基于 CopilotKit OpenBot 开发的私有化版本：账号、对话、任务与审计数据存入自己的 PostgreSQL，
 模型由部署方或用户接入。当前目标是 v0.1；浏览器执行、真实模型成功路径及完整发布验收以验收记录为准。
 
-本仓库于 2026 年 10 月 18 日从历史源码副本恢复到 Gitee。恢复文件的时间主要为 2026 年 10 月 10—11 日，不代表原 GitHub 仓库或云端开发环境的最新版本，也不包含原仓库的完整 Git 历史。
-当前仓库入口：[Gitee 熊宝数字员工](https://gitee.com/xiongpinji/xiongbaowork)。
-恢复范围与验证边界见 [迁移恢复记录](MIGRATION-RECOVERY.md)；部署前需要重新验证。
-旧聊天中找回的修复、验收清单和历史证据见 [资料恢复盘点](THREAD-RECOVERY-REPORT.md)。
+当前交付候选见 [PR #1](https://github.com/xiongpinji/xiongbao-Wake-/pull/1)。
+验收未合并候选时，克隆后先执行 `git -C xiongbao-Wake- switch feat/b-delivery-form`，再进入 `openbot/`。
+正式部署使用已合入交付改动的 main 或发布标签。
 
 源码位于 `openbot/`。本仓库的交付路径是 Docker 镜像；Windows 使用 Docker Desktop 的 Linux 容器。
 开发环境、历史走查记录与交付部署分别见[部署手册](openbot/docs/deployment-qoderwake.md)、
@@ -21,13 +20,14 @@
 ## Linux 快速上手
 
 需要 Bash、Git、Docker Engine（含 Buildx）、curl 和 OpenSSL。
-当前仓库位于 Gitee，需要有仓库读取权限，并提前完成 Gitee 的 HTTPS 或 SSH Git 认证。
+当前仓库为私有仓库，需要有读取权限的 GitHub 账号，并提前完成 Git 认证；
+已安装 GitHub CLI 时可执行 `gh auth login` 和 `gh auth setup-git`。
 WSL 使用 Docker Desktop 时先启用该发行版的 WSL Integration，并确认 `docker version` 同时显示 Client / Server。
 下面只在本机开放 `127.0.0.1:3772`，不配置模型密钥。
 
 ```bash
-git clone https://gitee.com/xiongpinji/xiongbaowork.git
-cd xiongbaowork/openbot
+git clone https://github.com/xiongpinji/xiongbao-Wake-.git
+cd xiongbao-Wake-/openbot
 cp docker/delivery.env.example .env.delivery
 printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
 docker build -f Dockerfile -t xiongbao-digital-employee:local .
@@ -56,7 +56,7 @@ done
 `gh auth login`、`gh auth setup-git`。确认 `docker version` 同时显示 Client / Server。
 
 ```powershell
-git clone https://gitee.com/xiongpinji/xiongbaowork.git
+git clone https://github.com/xiongpinji/xiongbao-Wake-.git
 Set-Location xiongbao-Wake-/openbot
 Copy-Item docker/delivery.env.example .env.delivery
 $keyBytes = New-Object byte[] 32
@@ -131,5 +131,3 @@ Windows 宿主不能直接 `bun` 起 server，交付路径是**镜像或 Linux/W
 
 代码沿用 [MIT 许可](openbot/LICENSE)，保留 `Copyright (c) 2026 CopilotKit` 与许可文本。
 第三方依赖、品牌素材和模型服务的许可或服务条款各自适用。
-
-按用户确认的两个目标会话补充同步的修改配方与云端修复索引见 [两会话同步报告](TWO-TARGET-SYNC-REPORT.md)。
