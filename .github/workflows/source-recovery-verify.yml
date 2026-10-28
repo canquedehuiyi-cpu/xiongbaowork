@@ -1,4 +1,4 @@
-name: Recovery automation and Flow foundation validation
+name: Recovery Flow source and security foundation validation
 on:
   push:
     branches:
@@ -448,7 +448,7 @@ jobs:
               "data_copy_memory_limit": 67108864, "project_parent_memory_limit": 536870912,
               "swap_limit": 0}), flush=True)
           PY
-      - name: Validate eight existing automation and Flow definition test files
+      - name: Validate eight existing Flow source and security definition test files
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -471,12 +471,12 @@ jobs:
           binary=base/"xiongbaowork-bun-1.3.14"/"bun"
           root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
           harness=base/"xiongbaowork-schema-components"
-          home=base/"xiongbaowork-foundation-group-home"
+          home=base/"xiongbaowork-foundation-group2-home"
           home.mkdir(mode=0o700)
           env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
           version=subprocess.run([str(binary),"--version"],env=env,check=True,capture_output=True,text=True).stdout.strip()
           assert version=="1.3.14"
-          paths=json.loads("[\"server/tests/recovery-automation-foundations.test.ts\",\"server/tests/recovery-automation-run-records.test.ts\",\"server/tests/recovery-device-binding-leases.test.ts\",\"server/tests/recovery-flow-customization-foundations.test.ts\",\"server/tests/recovery-flow-customization-turns.test.ts\",\"server/tests/recovery-flow-official-bindings.test.ts\",\"server/tests/recovery-flow-run-coordination.test.ts\",\"server/tests/recovery-flow-sharing-foundations.test.ts\"]")
+          paths=json.loads("[\"server/tests/recovery-flow-source-foundations.test.ts\",\"server/tests/recovery-flow-source-original-records.test.ts\",\"server/tests/recovery-flow-source-run-records.test.ts\",\"server/tests/recovery-flow-source-runtime-records.test.ts\",\"server/tests/recovery-group-pipeline-start-receipts.test.ts\",\"server/tests/recovery-outbox-knowledge-heads.test.ts\",\"server/tests/recovery-role-foundations.test.ts\",\"server/tests/recovery-security-policy-fences.test.ts\"]")
           deadline=time.monotonic()+120
           results=[]
           overall=0
@@ -498,8 +498,9 @@ jobs:
               if code==124:
                   break
           print("COMPONENT_TEST_RESULT "+json.dumps({"exit_code":overall,"test_files":len(paths),"completed_files":len(results),"results":results,
-           "scope":"eight sequential isolated automation and flow foundation definition test files",
+           "scope":"eight sequential isolated flow source, outbox, role and security foundation definition test files",
            "batch_timeout_seconds":120,"test_timeout_ms":5000,"original_repo_preload_suite":"NOT_RUN",
            "postgres17":"PG_PENDING","producer_wiring":"NOT_VERIFIED","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(overall)
+          
           PY
