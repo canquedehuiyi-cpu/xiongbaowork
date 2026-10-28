@@ -117,45 +117,31 @@ export function createContinuationStore(
     b: ContinuationBinding,
     fn: (tx: Transaction) => Promise<T>,
   ) => runAsTenant(b.tenantId, () => database.transaction(fn));
-  const locked = async (tx: Transaction, b: ContinuationBinding) => {
+  const locked = async (
+    tx: Transaction,
+    b: ContinuationBinding,
+    provisioning = false,
+  ) => {
     const [row] = await tx
       .select({
         ...getTableColumns(ledger),
         leaseLive: sql<boolean>`coalesce(${ledger.leaseUntil} > clock_timestamp(), false)`,
       })
       .from(ledger)
-      .where(scope(b))
+      .where(provisioning ? and(
+        eq(ledger.approvalId, b.approvalId),
+        eq(ledger.ownerId, b.ownerId),
+        eq(ledger.tenantId, b.tenantId),
+      ) : scope(b))
       .for("update")
       .limit(1);
     return row;
   };
-  const port: ContinuationStorePort & {
-    ensure(input: ContinuationProvision): Promise<ContinuationRecord>;
-  } = {
-    capabilities: {
-      fencedCas: true,
-      durableDispatchIntent: true,
-      atomicReceiptAndApprovalFinish: true,
-    },
-    async ensure(input) {
-      nonempty([
-        input.approvalId,
-        input.ownerId,
-        input.tenantId,
-        input.inputDigest,
-        input.admissionId,
-        input.branchKind,
-        input.branchTargetId,
-      ]);
-      if (input.origin !== "current" && input.origin !== "legacy_unknown")
-        throw new ContinuationStoreConflict("invalid_origin");
-      // Pure attestation only; it must not execute/dispatch a target operation.
-      if (
-        input.origin === "current" &&
-        !(await options.authorizeCurrentProvisioning?.(input))
-      )
-        throw new ContinuationStoreConflict("current_provenance_unverified");
-      return transaction(input, async (tx) => {
+  const ensureInTransaction = (
+    input: ContinuationProvision,
+    prepare?: (tx: Transaction) => Promise<void>,
+  ): Promise<ContinuationRecord> => {
+    return transaction(input, async (tx) => {
         const [approval] = await tx
           .select({
             status: approvalRequests.status,
@@ -167,7 +153,10 @@ export function createContinuationStore(
         if (!approval)
           throw new ContinuationStoreConflict("approval_not_in_scope");
         // Existing continuation completion may already have finished approval.
-        const existing = await locked(tx, input);
+        // Preparation must see an in-scope row even if its digest differs,
+        // so an immutable conflict cannot first execute the DB callback.
+        // Old ensure and every other method retain their original filter.
+        const existing = await locked(tx, input, prepare !== undefined);
         if (existing) {
           if (
             !sameIdentity(existing, input) ||
@@ -184,6 +173,8 @@ export function createContinuationStore(
           !approval.result
         )
           throw new ContinuationStoreConflict("action_result_not_ready");
+        // Only controlled DB writes: external effects cannot be rolled back.
+        if (prepare) await prepare(tx);
         await tx
           .insert(ledger)
           .values({
@@ -209,6 +200,67 @@ export function createContinuationStore(
           throw new ContinuationStoreConflict("immutable_provision_conflict");
         return record(row);
       });
+  };
+  const port: ContinuationStorePort & {
+    ensure(input: ContinuationProvision): Promise<ContinuationRecord>;
+    /** Internal server DB composition only; not a public protocol/authority. */
+    ensureWithPreparation(
+      input: ContinuationProvision,
+      prepare: (tx: Transaction) => Promise<void>,
+    ): Promise<ContinuationRecord>;
+  } = {
+    capabilities: {
+      fencedCas: true,
+      durableDispatchIntent: true,
+      atomicReceiptAndApprovalFinish: true,
+    },
+    async ensure(input) {
+      nonempty([
+        input.approvalId,
+        input.ownerId,
+        input.tenantId,
+        input.inputDigest,
+        input.admissionId,
+        input.branchKind,
+        input.branchTargetId,
+      ]);
+      if (input.origin !== "current" && input.origin !== "legacy_unknown")
+        throw new ContinuationStoreConflict("invalid_origin");
+      // Pure attestation only; it must not execute/dispatch a target operation.
+      if (
+        input.origin === "current" &&
+        !(await options.authorizeCurrentProvisioning?.(input))
+      )
+        throw new ContinuationStoreConflict("current_provenance_unverified");
+      return ensureInTransaction(input);
+    },
+    async ensureWithPreparation(input, prepare) {
+      if (input.origin === "legacy_unknown")
+        throw new ContinuationStoreConflict("legacy_preparation_forbidden");
+      if (typeof prepare !== "function")
+        throw new ContinuationStoreConflict("invalid_preparation_callback");
+      // Capture only this typed ABI before awaiting authorization. This freezes
+      // parameter consistency, not provenance or arbitrary callback side effects.
+      const snapshot = Object.freeze({
+        approvalId: input.approvalId,
+        ownerId: input.ownerId,
+        tenantId: input.tenantId,
+        inputDigest: input.inputDigest,
+        admissionId: input.admissionId,
+        branchKind: input.branchKind,
+        branchTargetId: input.branchTargetId,
+        origin: input.origin,
+      });
+      nonempty([snapshot.approvalId, snapshot.ownerId, snapshot.tenantId,
+        snapshot.inputDigest, snapshot.admissionId, snapshot.branchKind,
+        snapshot.branchTargetId]);
+      if (snapshot.origin !== "current")
+        throw new ContinuationStoreConflict("invalid_origin");
+      if (!(await options.authorizeCurrentProvisioning?.(snapshot)))
+        throw new ContinuationStoreConflict("current_provenance_unverified");
+      // Resolve only after the store-owned transaction observes COMMIT ACK.
+      // An unknown commit outcome propagates; never retry prepare automatically.
+      return ensureInTransaction(snapshot, prepare);
     },
     async read(binding) {
       return transaction(binding, async (tx) => {

@@ -1,0 +1,58 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/2",
+  "ticket": "PTX-CURRENT-PARENT-RECOVERY-20261028",
+  "formal_adoption": false,
+  "status": "SOURCE_ONLY_CANDIDATE_PG_PENDING",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "current_parent": "f43c9817b1098725240e3f9c212b9a34cc152f18",
+  "required_prior_overlays": [
+    "AP-INPUT-BUN-20261028",
+    "AP-SCHEMA-RUNTIME-20261028",
+    "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+    "AUTOMATION-FK-ASSERTION-20261028",
+    "SECURITY-FK-ASSERTION-20261028",
+    "K106-CURRENT-PARENT-RUNTIME-20261028"
+  ],
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/continuation-store.ts",
+      "before": {
+        "bytes": 13036,
+        "sha256": "aa2d5a5c1d89329c50dd89091155d45b69255bc92e96b79fa4d6fd6a7215fc2c",
+        "blob": "4248f406a1eb8f13e0dc2f563aafe614599adb2a",
+        "mode": "100644"
+      },
+      "after": {
+        "bytes": 15478,
+        "sha256": "03d4193517cf84ea21f1ff38209eefd9e6dfa38d52a191dc87c828aaa0c4bb21",
+        "blob": "9ebde5c64298b9f400beb0794a58d8b8487cb632",
+        "mode": "100644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 21306,
+        "sha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
+        "blob": "02309df774e8a2714915331bd030ae06c1cbb8e4",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "historical_origin": {
+    "author_base": "V56",
+    "index_bytes": 14861,
+    "index_sha256": "ee6e639aa5b118f942a9f58db0366e66f98559767f6515f88153742f4f222cae",
+    "conditional_V59": "HISTORICAL_DATA_ONLY_NOT_ADOPTED"
+  },
+  "projected_source_files": 2050,
+  "projected_source_bytes": 49231004,
+  "preparation_transaction_tests": "PG_PENDING; never import as CPU-only test",
+  "native_PG17": "NOT_RUN",
+  "producer_wiring": "NOT_VERIFIED",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "legacy_V58": "NOT_ADOPTED"
+}
