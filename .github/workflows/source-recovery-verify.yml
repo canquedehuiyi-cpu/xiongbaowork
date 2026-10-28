@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: V57 source and isolated approval components
+    name: V57 source and HTTP input components
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -158,7 +158,7 @@ jobs:
           print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
           
           PY
-      - name: Install pinned official runtime and copy eight exact component files
+      - name: Install pinned official runtime and copy exact input component files
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -223,9 +223,9 @@ jobs:
           os.chmod(binary, 0o700)
           
           root = base / "xiongbaowork-verified-source" / "repo"
-          harness = base / "xiongbaowork-approval-components"
+          harness = base / "xiongbaowork-input-provenance-components"
           harness.mkdir(mode=0o700)
-          identities = json.loads("[{\"path\":\"openbot/server/tests/approval-exact-input-json.test.ts\",\"bytes\":8030,\"sha256\":\"a67781293ab350b0476aebfdbba74bd87f0618fe5f99ffaf3776c0f256f30392\"},{\"path\":\"openbot/server/tests/approval-exact-object-header.test.ts\",\"bytes\":13299,\"sha256\":\"233025a2aa0ca6ae2b78689df48588ea291c559e8bd11ba7a66b8d444f2c007a\"},{\"path\":\"openbot/server/tests/approval-exact-object-wire.test.ts\",\"bytes\":11179,\"sha256\":\"c0068686f81a6a8cbf10a7321294337a4997eeeba5cfdadefca48fe7775b3629\"},{\"path\":\"openbot/server/tests/approval-exact-object-crypto.test.ts\",\"bytes\":13447,\"sha256\":\"0f0bfba9bf7907db97d43fbbda66ee2d36b26356454687294ad2be4a00042c4e\"},{\"path\":\"openbot/server/src/approvals/exact-input-json.ts\",\"bytes\":6534,\"sha256\":\"24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45\"},{\"path\":\"openbot/server/src/approvals/exact-object-header.ts\",\"bytes\":7168,\"sha256\":\"e40e6dc5829c99af2ec204e91b5e25f71bd1fdca25f39987552973ebd68e5445\"},{\"path\":\"openbot/server/src/approvals/exact-object-wire.ts\",\"bytes\":5644,\"sha256\":\"7848e9b23a2dd2648b3f682e7be434885bbaddfd0052dbd8d9d0095874cdf2e8\"},{\"path\":\"openbot/server/src/approvals/exact-object-crypto.ts\",\"bytes\":7143,\"sha256\":\"52aecfa4c153d164fd8e5cc6e61ff7eb2e98613191393e5c2344a4cc3a428341\"}]")
+          identities = json.loads("[{\"path\":\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"bytes\":18490,\"sha256\":\"016f08bdd15f27fa97967b3501b81c204030a86c2bdc86244f64886e237edb59\"},{\"path\":\"openbot/server/tests/approval-exact-http-owned-input.test.ts\",\"bytes\":13610,\"sha256\":\"81afc1d207dc5ff25037bbce5b06190338bcfe7b1a87c9e7b721c22f7e60921a\"},{\"path\":\"openbot/server/src/approvals/exact-input-json.ts\",\"bytes\":6534,\"sha256\":\"24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45\"},{\"path\":\"openbot/server/src/approvals/exact-input-json-materializer.ts\",\"bytes\":11512,\"sha256\":\"1f00ea78d598d1736512133066b12072f331f31c1e900aad9c97f1c718398b19\"},{\"path\":\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"bytes\":9361,\"sha256\":\"bba2bd4f4c4109e0b5e2d07066a924f86e5bbd1d887c05e55ec604213dbb49f8\"}]")
           for item in identities:
               source = root / item["path"]
               assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
@@ -243,14 +243,14 @@ jobs:
                       out.write(block)
               assert length == item["bytes"] and raw_hash.hexdigest() == item["sha256"]
               assert target.stat().st_nlink == 1 and target.stat().st_ino != source.stat().st_ino
-          assert len(identities) == 8
+          assert len(identities) == 5
           print("RUNTIME_AND_HARNESS " + json.dumps({"bun_version": "1.3.14", "vendor_archive_bytes": size,
               "vendor_archive_sha256": digest.hexdigest(), "binary_bytes": binary_bytes,
               "binary_sha256": binary_hash.hexdigest(), "exact_component_files": len(identities),
               "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           
           PY
-      - name: Run isolated approval component tests under project limit
+      - name: Run isolated input provenance component tests under project limit
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -273,7 +273,7 @@ jobs:
           print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
                                                           "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           binary = base / "xiongbaowork-bun-1.3.14" / "bun"
-          harness = base / "xiongbaowork-approval-components"
+          harness = base / "xiongbaowork-input-provenance-components"
           home = base / "xiongbaowork-component-home"
           home.mkdir(mode=0o700)
           env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
@@ -282,15 +282,14 @@ jobs:
           assert version == "1.3.14"
           revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
           args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  "server/tests/approval-exact-input-json.test.ts",
-                  "server/tests/approval-exact-object-header.test.ts",
-                  "server/tests/approval-exact-object-wire.test.ts",
-                  "server/tests/approval-exact-object-crypto.test.ts"]
+                  "server/tests/approval-exact-input-json-materializer.test.ts",
+                  "server/tests/approval-exact-http-owned-input.test.ts"]
           result = subprocess.run(args, cwd=harness / "openbot", env=env, capture_output=True, text=True, timeout=120)
           print(result.stdout, end="", flush=True)
           print(result.stderr, end="", flush=True)
           print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
-              "bun_revision": revision, "test_files": 4, "scope": "isolated exact-byte approval components",
+              "bun_revision": revision, "test_files": 2, "scope": "isolated exact-byte HTTP input and JSON materializer components",
+              "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
               "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
               "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
           raise SystemExit(result.returncode)

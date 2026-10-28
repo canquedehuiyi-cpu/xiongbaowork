@@ -1,0 +1,80 @@
+{
+  "schema": "xiongbaowork-component-test-proof/1",
+  "run": 40647799132,
+  "job": 122680581443,
+  "head": "ec7d4ada5d2c81cb1357391ce565ae471249d43d",
+  "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40647799132",
+  "pass": 105,
+  "fail": 0,
+  "expect": 1224,
+  "files": 4,
+  "result": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 4,
+    "scope": "isolated exact-byte approval components",
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "runtime": {
+    "bun_version": "1.3.14",
+    "vendor_archive_bytes": 35969274,
+    "vendor_archive_sha256": "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f",
+    "binary_bytes": 92752752,
+    "binary_sha256": "9fd36f87e4b90b07632b987a2e4ec81ca15a62c81bf983190cea6d715be2ad74",
+    "exact_component_files": 8,
+    "data_job_memory_max": 67108864,
+    "project_parent_memory_max": 536870912,
+    "swap_max": 0
+  },
+  "exact_files": [
+    {
+      "path": "openbot/server/tests/approval-exact-input-json.test.ts",
+      "bytes": 8030,
+      "sha256": "a67781293ab350b0476aebfdbba74bd87f0618fe5f99ffaf3776c0f256f30392"
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-object-header.test.ts",
+      "bytes": 13299,
+      "sha256": "233025a2aa0ca6ae2b78689df48588ea291c559e8bd11ba7a66b8d444f2c007a"
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-object-wire.test.ts",
+      "bytes": 11179,
+      "sha256": "c0068686f81a6a8cbf10a7321294337a4997eeeba5cfdadefca48fe7775b3629"
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-object-crypto.test.ts",
+      "bytes": 13447,
+      "sha256": "0f0bfba9bf7907db97d43fbbda66ee2d36b26356454687294ad2be4a00042c4e"
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-input-json.ts",
+      "bytes": 6534,
+      "sha256": "24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45"
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-header.ts",
+      "bytes": 7168,
+      "sha256": "e40e6dc5829c99af2ec204e91b5e25f71bd1fdca25f39987552973ebd68e5445"
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-wire.ts",
+      "bytes": 5644,
+      "sha256": "7848e9b23a2dd2648b3f682e7be434885bbaddfd0052dbd8d9d0095874cdf2e8"
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-crypto.ts",
+      "bytes": 7143,
+      "sha256": "52aecfa4c153d164fd8e5cc6e61ff7eb2e98613191393e5c2344a4cc3a428341"
+    }
+  ],
+  "notes": [
+    "Isolated component fixtures only; the original repository preload suite was not run.",
+    "No producer/DB authority or business admission is certified by this test set.",
+    "The original V57 source files and test assertions were not edited."
+  ]
+}
