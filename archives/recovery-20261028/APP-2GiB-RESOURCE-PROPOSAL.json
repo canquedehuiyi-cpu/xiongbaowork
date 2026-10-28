@@ -1,0 +1,47 @@
+{
+  "schema": "xiongbaowork-proposed-app-resource-exception/1",
+  "status": "PROPOSED_NOT_AUTHORIZED_NOT_RUN",
+  "source_commit": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
+  "reason": "At unchanged512MiB, original full app one-process suite kernel OOM-killed and original app tsconfig Node default V8 heap OOM. All161 isolated files1207/0/0Unhandled; server original tsc already passes in previously authorized server-only2GiB phase.",
+  "current_evidence": {
+    "run": 40711491813,
+    "job": 122897680323
+  },
+  "new_scope": [
+    {
+      "id": "app_one_process_suite",
+      "command": "bun test --smol --no-install --timeout5000 from openbot/app with original preloads and original qoderwake config",
+      "aggregate_memory_max": 2147483648,
+      "swap": 0,
+      "timeout_seconds": 300,
+      "restore_after_phase": 536870912
+    },
+    {
+      "id": "app_typecheck",
+      "command": "node --max-old-space-size=1792 node_modules/typescript/bin/tsc --noEmit --project app/tsconfig.json",
+      "aggregate_memory_max": 2147483648,
+      "swap": 0,
+      "timeout_seconds": 300,
+      "restore_after_phase": 536870912,
+      "includes": "Original app tsconfig includes src, tests, vite config and shared files unchanged"
+    }
+  ],
+  "activation": "Manual workflow only; no dispatch or active main workflow change before direct human authorization",
+  "unchanged": {
+    "free_standard_public_actions": true,
+    "source_files": 2054,
+    "source_bytes": 50009459,
+    "data_download_copy_limit": 67108864,
+    "install_limit": 536870912,
+    "other_project_phases": 536870912,
+    "lifecycle_scripts": "DISABLED",
+    "private_cache": true,
+    "copyfile": true,
+    "windows_source_writes": 0,
+    "pg17": "PG_PENDING",
+    "paid_provider_calls": 0
+  },
+  "not_authorized_by_prior_server_exception": true,
+  "commercial_acceptance": "NOT_DELIVERED",
+  "proposal_commit": "ea8d06a2065c0207270fbefd7994318e733e6fbe"
+}

@@ -1,3 +1,29 @@
+# 当前云端恢复与验证状态（2026-10-28，Root115）
+
+完整目标仍为77故事、18包、7门，尚未完成商业验收。恢复分支为[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)，默认分支仍保留原Gitee导入基线。
+
+## 当前已确认
+
+- 最新Subject采用提交[ab106bc05673128b2a5e8f5cd7e8295168f4913f](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/ab106bc05673128b2a5e8f5cd7e8295168f4913f)；11个已独审恢复/修复包，31个不同Subject路径，不等18个交付包完成。后3包分别修复两个生产文件的类型表达和三个旧前端测试夹具，生产执行语句未因此改变。三轮独审均SOURCE_APPROVED_ONLY/findings=[]；当前正文/完整身份/采用卡保在仓库。
+- 该采用提交的[40711491813/job122897680323](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40711491813/job/122897680323)实际全核2054文件/50009459字节，所有大小/SHA/权限/FD稳定/no symlink/nlink1通过；源DATA门64MiB，冻结完整依赖安装512MiB成功、6原package/lock输入不变、禁全部生命周期脚本、private cache/copyfile/hardlink0/外链0。当前完整派生manifest 432991B/SHA256 f7cfff83983d8e3a123b4190e5dbfb08de94bed02b6120095d2e899ca3839434，原V57清单身份不改。
+- 原server/tsconfig.json在[92ddb512](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/92ddb512249939c34e71ec56eb1341cda95efa2b)的[40704605999/job122873210976](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40704605999/job/122873210976)实际exit0，TS5.9.3/Node24.21.0、peak1.9G；只用人类已授权的server编译2GiB/swap0/300秒例外，实际恢复512MiB。原strict/skipLibCheck/include不改，原server配置不含tests。此后仅三个app测试夹具变化，server生产Source字节未变。
+- 同一92ddb提交的37具名server/结构子集637pass/0fail/10521expects、37/37、Unhandled0、exit0，原两preload不改。明确排除512MiB资源中止的lineage，不冒原38文件或全CI；旧56faabe的673pass只是历史提交证据。
+- [17f05d45](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/17f05d45a11e3ab383a1e0c90b63f998dd3570fa)的[40710103537/job122892742860](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40710103537/job/122892742860)完整161具名前端文件逐进程验证：1207pass/0fail/0skip/0todo/0Unhandled、161/161，peak508.4M；原两preload和qoderwake配置生成不改。两个候选测试已逐字独审后采用到ab106，所有Subject字节与该候选相同。该隔离结果不代单进程套件或真实浏览器。
+
+## 当前资源停止与具体提案
+
+在ab106实际尝试原单进程app套件：512MiB/swap0、--smol，最终kernel oom-kill，peak507.5M，观察380条pass/0条fail、48个文件heading，但无最终summary，不能当完整计数/通过。完整原app/tsconfig.json含src/tests/vite/shared，在同一512MiB门下Node24.22.1默认V8堆OOM，child-6/step250、peak446.5M、无TS诊断；并未挪用server的2GiB许可。
+
+仅针对原单进程app套件和完整原app类型检查的[2GiB可审提案ea8d06a2065c0207270fbefd7994318e733e6fbe](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/ea8d06a2065c0207270fbefd7994318e733e6fbe)已保存为独立分支，workflow_dispatch only，未触发/未获授权。每阶段项目及全部后代聚合2GiB、swap0、300秒、每步退出恢复512MiB；类型步骤辅助old-space1792MiB不替代聚合门。其余DATA64MiB/依赖安装512MiB/其他项目512MiB及免费云端均保留。当前主恢复workflow资源仍512MiB，没有Source变化或付费provider调用。
+
+## 保留边界和历史
+
+PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、ROOT_RELEASE=null/ready=false、原严格CI冻结03df9efa缺失、真实设备/计费/客户部署证据等门不降。不创建PR触发未受限原CI，不改默认分支或擅自标complete；旧V58/V59不追认，旧Source/O_EXCL/cache/driver/原raw缺口等审计不清除。Windows源码/JSON/patch/依赖/项目执行0，本轮项目均云端。原自动化仍暂停。
+
+Root控制错误也保留：双反斜杠导致app启动前失败；后一次误选installer heredoc导致依赖未装的161次preload导入失败，非Subject断言结果。已从工作模板恢复并对8167B完整installer逐字核合，后续161实际1205/2及1207/0结果分列。原单进程heading初用tests/src过滤计73，独核74（漏app根vite-listen-port.test.ts），已更正；heading不代表完成数。
+
+以下为原时点历史记录，当前状态以上述Root115为准，原文继续保留：
+
 # 当前云端恢复与验证状态（2026-10-28）
 
 完整目标仍为77故事、18包、7门，商业交付尚未完成。当前恢复分支为[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)。默认分支仍保留Gitee原导入基线。

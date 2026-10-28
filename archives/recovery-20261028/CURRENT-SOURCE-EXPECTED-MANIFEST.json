@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+  "source_commit": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
   "basis": "immutable V57 plus eight independently approved exact overlays; explicit new0107 snapshot reconstruction and Ptx SourceOnly boundaries",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
@@ -185,10 +185,43 @@
       "candidate_full_server_typecheck_run": 40701329815,
       "targeted_input_run": 40703574999,
       "scope": "Production type-only edits with added native Fetch regression; full38 lineage resource stop retained"
+    },
+    {
+      "ticket": "TASKS-ATTENTION-FIXTURE-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/TASKS-ATTENTION-FIXTURE-ADOPTED.json",
+        "bytes": 2503,
+        "sha256": "504ea6fef90250cd97024aaf9ed0dcec1634555fb709723fdd9dd0f5bbbda9fb",
+        "formal_adoption": true,
+        "ticket": "TASKS-ATTENTION-FIXTURE-20261028",
+        "source_paths": [
+          "openbot/app/tests/tasks-attention-region.test.tsx"
+        ]
+      },
+      "source_commit": "f7ef2aa6895e24f18ff3d606ce8c00d3e9f6090a",
+      "candidate_validation_run": 40708081193,
+      "scope": "One test fixture only; targeted4/0; all161 separate processes1205/2; full app one-process stop retained"
+    },
+    {
+      "ticket": "TASKS-READ-LINK-FIXTURES-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/TASKS-READ-LINK-FIXTURES-ADOPTED.json",
+        "bytes": 2613,
+        "sha256": "8124290da2f6ca89cedb4cbc99324f458533a3779d0111145925a0a17b7a26fa",
+        "formal_adoption": true,
+        "ticket": "TASKS-READ-LINK-FIXTURES-20261028",
+        "source_paths": [
+          "openbot/app/tests/business-read-errors.test.tsx",
+          "openbot/app/tests/tasks-open-link.test.tsx"
+        ]
+      },
+      "source_commit": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
+      "candidate_validation_run": 40710103537,
+      "scope": "Two test fixtures; all161 separate processes1207/0/0Unhandled; not whole-app one-process equivalence"
     }
   ],
   "file_count": 2054,
-  "source_bytes": 50008638,
+  "source_bytes": 50009459,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -3774,8 +3807,8 @@
     },
     {
       "path": "openbot/app/tests/business-read-errors.test.tsx",
-      "bytes": 6863,
-      "sha256": "2fa627689e3da99af57dc3bbcc0251540939de331da33782f7c202a574f406f2",
+      "bytes": 6951,
+      "sha256": "f97602aaadadf74cc84d014659c1d442800927633e0d0cc7c792a49269647aa3",
       "mode": "0o644"
     },
     {
@@ -4422,14 +4455,14 @@
     },
     {
       "path": "openbot/app/tests/tasks-attention-region.test.tsx",
-      "bytes": 6124,
-      "sha256": "e735dea27d4beb5ea1f4a539f08c565cfde117d8ba36c4ca9061e6619b409308",
+      "bytes": 6471,
+      "sha256": "40144c4c938ccf301120cab812abb469340c02d6caa9ed63c76f15f03bb027db",
       "mode": "0o644"
     },
     {
       "path": "openbot/app/tests/tasks-open-link.test.tsx",
-      "bytes": 4615,
-      "sha256": "c3e584f7c3e3754a50efe61debc264b5e7828ed04c9f97c9723d7da5a2711d10",
+      "bytes": 5001,
+      "sha256": "2f787e304a6707531be68df51984874869f26ec7db64b821e7e490d45c3edc43",
       "mode": "0o644"
     },
     {
@@ -12581,8 +12614,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "01ef9bf4e29381d30a73e1c230ed8471eebfb3a7",
-    "head": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+    "git_tree": "01febb681f2b22c27a7b4c36c98bf1bc40b3d99c",
+    "head": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12593,15 +12626,17 @@
       "K106-CURRENT-PARENT-RUNTIME-20261028",
       "PTX-CURRENT-PARENT-RECOVERY-20261028",
       "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
-      "SERVER-TYPE-CONTRACT-20261028"
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_NINE_APPROVED_OVERLAYS",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_ELEVEN_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50008638,
+    "verified_source_bytes": 50009459,
     "verified_source_files": 2054,
     "windows_source_files_written": 0
   },

@@ -254,7 +254,7 @@
   "swap": 0,
   "observed_pass_lines": 574,
   "observed_fail_lines": 3,
-  "files_started_observed": 73,
+  "files_started_observed": 74,
   "failures": [
     "(fail) the counts ride the tabs, and 需要操作 includes what broke [7.79ms]",
     "(fail) the empty results tab says what belongs there [3.22ms]",
@@ -265,5 +265,13 @@
   "no_full_suite_pass": true,
   "full_ci": "NOT_RUN",
   "pg17": "PG_PENDING",
-  "commercial_acceptance": "NOT_DELIVERED"
+  "commercial_acceptance": "NOT_DELIVERED",
+  "initial_filtered_headers_count": 73,
+  "file_heading_count_correction": {
+    "initial_filtered_count": 73,
+    "correct_total_heading_lines": 74,
+    "correct_distinct_headers": 74,
+    "reason": "Initial filter counted tests/ and src/ paths only; omitted app root vite-listen-port.test.ts heading",
+    "headers_do_not_prove_file_completion": true
+  }
 }
