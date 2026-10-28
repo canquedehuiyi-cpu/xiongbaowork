@@ -1,0 +1,57 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/1",
+  "ticket": "AUTOMATION-FK-ASSERTION-20261028",
+  "status": "CANDIDATE_NOT_ADOPTED",
+  "formal_adoption": false,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "base_commit": "1739664708e108e87024cab1ce0ea419e556e004",
+  "required_prior_overlays": [
+    "AP-INPUT-BUN-20261028",
+    "AP-SCHEMA-RUNTIME-20261028",
+    "KNOWLEDGE-RESOURCE-RUNTIME-20261028"
+  ],
+  "scope": "One test file: bind ExtraConfigColumn FK local identity by exact table/name and map to unique native PgUUID; preserve strict native parent identity and complete old schema/oracle guards. Add six rejected identity mutations.",
+  "changes": [
+    {
+      "path": "openbot/server/tests/recovery-automation-run-records.test.ts",
+      "before": {
+        "bytes": 47952,
+        "sha256": "c99e1aecbb10fd9e50c91a72c4382250c439a4b47d2d9f41877cfe8df0414642",
+        "blob": "be33e92e4844e97044f2d7fc869d28176cb0dcad",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 49775,
+        "sha256": "bfe47a7518eae21add3600042613a0e49a1ce82c65cf50c505c9983bbbf17427",
+        "blob": "309245973a27ae95fcbeaac4b9850873f414a378",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "unchanged_artifacts": [
+    "production schemas",
+    "all SQL",
+    "all snapshot files",
+    "journal",
+    "other seven test files"
+  ],
+  "baseline": {
+    "run_id": 40668205048,
+    "job_id": 122748023793,
+    "head": "b0b04b58946b0e25ebde99f8f3f8558a4c327da9",
+    "pass": 107,
+    "fail": 1,
+    "expects": 1555
+  },
+  "limits": {
+    "project_memory": 536870912,
+    "data_copy_memory": 67108864,
+    "swap": 0,
+    "test_timeout_ms": 5000,
+    "batch_timeout_seconds": 120
+  },
+  "postgres17": "PG_PENDING",
+  "producer_wiring": "NOT_VERIFIED",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "v58": "NOT_ADOPTED"
+}
