@@ -1,19 +1,30 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
+  foreignKey,
   index,
   pgTable,
+  primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
+  uuid,
+  type PgTableExtraConfigValue,
 } from "drizzle-orm/pg-core";
+import type {
+  ContinuationReceipt,
+  ContinuationRecord,
+} from "../../approvals/continuation-protocol";
 import type {
   ApprovalAction,
   ApprovalDecision,
   HostCommandPolicy,
   RuleBehaviour,
 } from "../../approvals/types";
+import { approvalExactInputObjects } from "./approval-exact-input-objects";
 import { users } from "./core";
 import { jsonb } from "./json";
 import { tenantId } from "./tenant";
@@ -99,6 +110,7 @@ export const approvalRequests = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
+    unique("approval_requests_id_tenant_owner_unique").on(table.id, table.tenantId, table.ownerUserId),
     uniqueIndex("approval_requests_action_idx").on(
       table.ownerUserId,
       table.runId,
@@ -176,3 +188,91 @@ export const approvalTeamRules = pgTable(
     ),
   ],
 );
+
+/** Recovery ledger, independent of the original action result and decision. */
+export const approvalContinuations = pgTable(
+  "approval_continuations",
+  {
+    approvalId: text("approval_id")
+      .primaryKey()
+      .references(() => approvalRequests.id, { onDelete: "cascade" }),
+    tenantId: tenantId(),
+    ownerId: text("owner_user_id").notNull(),
+    inputDigest: text("input_digest").notNull(),
+    admissionId: text("admission_id").notNull().unique(),
+    branchKind: text("branch_kind").notNull(),
+    branchTargetId: text("branch_target_id").notNull(),
+    origin: text("origin").$type<ContinuationRecord["origin"]>().notNull(),
+    state: text("state").$type<ContinuationRecord["state"]>().notNull(),
+    fence: bigint("fence", { mode: "bigint" }).notNull().default(0n),
+    claimOwner: text("claim_owner"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    intentId: text("intent_id"),
+    intentFence: bigint("intent_fence", { mode: "bigint" }),
+    proofId: text("proof_id"),
+    receipt: jsonb("receipt").$type<ContinuationReceipt>(),
+    lastReason: text("last_reason"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    exactObjectId: uuid("exact_object_id"),
+    exactPlaintextSha256: text("exact_plaintext_sha256"),
+  },
+  (table): PgTableExtraConfigValue[] => [
+    index("approval_continuations_owner_idx").on(
+      table.tenantId,
+      table.ownerId,
+      table.state,
+    ),
+    check(
+      "approval_continuations_state_check",
+      sql`${table.state} in ('ready','claimed','dispatched','unknown','completed')`,
+    ),
+    check(
+      "approval_continuations_origin_check",
+      sql`${table.origin} in ('current','legacy_unknown')`,
+    ),
+    check(
+      "approval_continuations_legacy_check",
+      sql`${table.origin} <> 'legacy_unknown' or ${table.state} not in ('ready','claimed','dispatched')`,
+    ),
+    check(
+      "approval_continuations_receipt_check",
+      sql`(${table.state} = 'completed') = (${table.receipt} is not null and ${table.completedAt} is not null)`,
+    ),
+    check("approval_continuations_fence_check", sql`${table.fence} >= 0`),
+    check("apx_ledger_ref_pair_ck", sql`("exact_object_id" IS NULL) = ("exact_plaintext_sha256" IS NULL)`),
+    check("apx_ledger_ref_sha_ck", sql`"exact_plaintext_sha256" IS NULL OR "exact_plaintext_sha256" ~ '^[a-f0-9]{64}$'`),
+    foreignKey({ name: "apx_ledger_prepared_fk", columns: [table.exactObjectId, table.approvalId, table.tenantId, table.ownerId, table.exactPlaintextSha256], foreignColumns: [approvalExactInputObjects.id, approvalExactInputObjects.approvalId, approvalExactInputObjects.tenantId, approvalExactInputObjects.ownerUserId, approvalExactInputObjects.plaintextSha256] }).onDelete("no action").onUpdate("no action"),
+    index("apx_ledger_prepared_idx").using("btree", table.exactObjectId.asc().nullsLast(), table.approvalId.asc().nullsLast(), table.tenantId.asc().nullsLast(), table.ownerId.asc().nullsLast(), table.exactPlaintextSha256.asc().nullsLast()),
+  ],
+).enableRLS();
+
+/** Future target/substep ledger. No runtime writer is wired by this package. */
+export const approvalContinuationSteps = pgTable(
+  "approval_continuation_steps",
+  {
+    approvalId: text("approval_id")
+      .notNull()
+      .references(() => approvalContinuations.approvalId, {
+        onDelete: "cascade",
+      }),
+    stepKey: text("step_key").notNull(),
+    tenantId: tenantId(),
+    ownerId: text("owner_user_id").notNull(),
+    inputDigest: text("input_digest").notNull(),
+    admissionId: text("admission_id").unique(),
+    state: text("state")
+      .$type<"reserved" | "running" | "unknown" | "completed">()
+      .notNull(),
+    fence: bigint("fence", { mode: "bigint" }).notNull().default(0n),
+    receipt: jsonb("receipt").$type<ContinuationReceipt>(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.approvalId, table.stepKey] }),
+    check(
+      "approval_continuation_steps_state_check",
+      sql`${table.state} in ('reserved','running','unknown','completed')`,
+    ),
+    check("approval_continuation_steps_fence_check", sql`${table.fence} >= 0`),
+  ],
+).enableRLS();

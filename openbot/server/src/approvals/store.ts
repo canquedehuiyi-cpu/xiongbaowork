@@ -1,3 +1,4 @@
+import { currentTenant } from "../tenant/context";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
@@ -11,6 +12,7 @@ import {
 import { workItems } from "../db/schema/work";
 import type { TaskProjector } from "../tasks/projector";
 import {
+  validateApprovalRecoveryContext,
   type ApprovalAction,
   ApprovalNotFoundError,
   type ApprovalPolicyStore,
@@ -33,22 +35,77 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   hostCommandsCap: "allow",
 };
 
+/** The real transaction callback type supplied by the tenant-bound DB client. */
+type StoredApprovalTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
+
+const ruleScope = (action: ApprovalAction) =>
+  and(
+    eq(approvalRules.ownerUserId, action.actorId),
+    eq(approvalRules.botId, action.botId),
+    eq(approvalRules.toolRef, action.toolRef),
+    eq(approvalRules.effect, action.effect),
+    eq(approvalRules.scope, action.scope),
+    eq(approvalRules.behaviour, "allow"),
+    isNull(approvalRules.revokedAt),
+  );
+
+/**
+ * Insert/read one stored approval on the caller's already tenant-bound physical
+ * transaction. No pool/session/role/permission ownership or admission is supplied
+ * here. The caller owns commit/rollback and must not pass an unscoped transaction.
+ */
+export async function openStoredApprovalInTransaction(
+  tx: StoredApprovalTransaction,
+  action: ApprovalAction,
+): Promise<ApprovalRecord> {
+  // A request the policy gate opened was opened because something asked for the person; a
+  // saved "always" rule was already weighed there and must not approve it behind that.
+  const [rule] = action.policy
+    ? []
+    : await tx
+        .select()
+        .from(approvalRules)
+        .where(ruleScope(action))
+        .limit(1);
+  await tx
+    .insert(approvalRequests)
+    .values({
+      id: crypto.randomUUID(),
+      ownerUserId: action.actorId,
+      runId: action.runId,
+      toolCallId: action.toolCallId,
+      actionDigest: action.actionDigest,
+      action,
+      status: rule ? "approved" : "pending",
+      decision: rule ? "allow_always" : null,
+      decidedAt: rule ? sql`now()` : null,
+    })
+    .onConflictDoNothing();
+  const [row] = await tx
+    .select()
+    .from(approvalRequests)
+    .where(
+      and(
+        eq(approvalRequests.ownerUserId, action.actorId),
+        eq(approvalRequests.runId, action.runId),
+        eq(approvalRequests.toolCallId, action.toolCallId),
+      ),
+    )
+    .limit(1);
+  if (!row) throw new ApprovalNotFoundError();
+  if (row.actionDigest !== action.actionDigest)
+    throw new ApprovalRefusedError("The approved action has changed.");
+  return row;
+}
+
 export function createApprovalStore(
   database: Database,
   board?: TaskProjector,
 ): ApprovalStore {
   const owned = (owner: string, id: string) =>
     and(eq(approvalRequests.ownerUserId, owner), eq(approvalRequests.id, id));
-  const ruleScope = (action: ApprovalAction) =>
-    and(
-      eq(approvalRules.ownerUserId, action.actorId),
-      eq(approvalRules.botId, action.botId),
-      eq(approvalRules.toolRef, action.toolRef),
-      eq(approvalRules.effect, action.effect),
-      eq(approvalRules.scope, action.scope),
-      eq(approvalRules.behaviour, "allow"),
-      isNull(approvalRules.revokedAt),
-    );
   async function get(owner: string, id: string): Promise<ApprovalRecord> {
     const [row] = await database
       .select()
@@ -59,6 +116,23 @@ export function createApprovalStore(
     return row;
   }
   return {
+    async getRecoveryContext(owner, id) {
+      const [row] = await database
+        .select()
+        .from(approvalRequests)
+        .where(owned(owner, id))
+        .limit(1);
+      if (!row) throw new ApprovalNotFoundError();
+      const context = {
+        request: row,
+        tenantId: row.tenantId,
+        parentActionDigest: row.actionDigest,
+        parentRunId: row.runId,
+        parentToolCallId: row.toolCallId,
+      };
+      validateApprovalRecoveryContext(context, owner, id, currentTenant());
+      return context;
+    },
     async enabled(owner) {
       const [row] = await database
         .select()
@@ -87,43 +161,7 @@ export function createApprovalStore(
     },
     async open(action) {
       return database.transaction(async (tx) => {
-        // A request the policy gate opened was opened because something asked for the person; a
-        // saved "always" rule was already weighed there and must not approve it behind that.
-        const [rule] = action.policy
-          ? []
-          : await tx
-              .select()
-              .from(approvalRules)
-              .where(ruleScope(action))
-              .limit(1);
-        await tx
-          .insert(approvalRequests)
-          .values({
-            id: crypto.randomUUID(),
-            ownerUserId: action.actorId,
-            runId: action.runId,
-            toolCallId: action.toolCallId,
-            actionDigest: action.actionDigest,
-            action,
-            status: rule ? "approved" : "pending",
-            decision: rule ? "allow_always" : null,
-            decidedAt: rule ? sql`now()` : null,
-          })
-          .onConflictDoNothing();
-        const [row] = await tx
-          .select()
-          .from(approvalRequests)
-          .where(
-            and(
-              eq(approvalRequests.ownerUserId, action.actorId),
-              eq(approvalRequests.runId, action.runId),
-              eq(approvalRequests.toolCallId, action.toolCallId),
-            ),
-          )
-          .limit(1);
-        if (!row) throw new ApprovalNotFoundError();
-        if (row.actionDigest !== action.actionDigest)
-          throw new ApprovalRefusedError("The approved action has changed.");
+        const row = await openStoredApprovalInTransaction(tx, action);
         // The board parks the mirroring task while a person's turn is pending.
         if (board && row.status === "pending") {
           void board

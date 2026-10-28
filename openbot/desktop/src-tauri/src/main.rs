@@ -463,7 +463,7 @@ async fn prepare_installation(
         }
         let address = tauri::async_runtime::block_on(engine_ready(&app))?.pin()?;
         attempt.require_current()?;
-        tauri::async_runtime::block_on(deployment_ready(&app, &root))?;
+        tauri::async_runtime::block_on(deployment_ready_for_generation(&app, &root, attempt.generation))?;
         let picked = harness::picked(harness.as_ref(), &root).map_err(Problem::from)?;
         let handle = app.clone();
         let _startup = attempt.lock_current()?;
@@ -499,7 +499,7 @@ async fn prepare_installation(
                 "Preparing the local runtime.",
                 None,
             );
-            let bun = install::ensure_bun(&root, which_bun())?;
+            let bun = installation_bun(&root)?;
             report_running(
                 &handle,
                 "dependencies",
@@ -754,9 +754,14 @@ fn ensure_linux_podman_api(shell: &Shell, address: &engine::Address) -> Result<(
 ///
 /// Local preparation fetches the manifest needed by both launch and plan sign-in images.
 /// An installed deployment keeps its exact tag without consulting GitHub again.
-async fn deployment_ready<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    root: &Path,
+#[cfg(test)]
+async fn deployment_ready<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &Path) -> Result<(), Problem> {
+    let generation = app.state::<Shell>().start_generation.load(std::sync::atomic::Ordering::SeqCst);
+    deployment_ready_for_generation(app, root, generation).await
+}
+
+async fn deployment_ready_for_generation<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>, root: &Path, generation: u64,
 ) -> Result<(), Problem> {
     report_running(app, "deployment", "Checking the OpenBot release.", None);
     // Both release discovery and downloading use blocking HTTP. Keeping them in a blocking task
@@ -764,15 +769,42 @@ async fn deployment_ready<R: tauri::Runtime>(
     let target = root.to_path_buf();
     let handle = app.clone();
     let version = tauri::async_runtime::spawn_blocking(move || {
-        let version = deployment_release::resolve_version(&target)?;
+        let mut current = || -> Result<(), String> {
+            if handle.state::<Shell>().start_generation.load(std::sync::atomic::Ordering::SeqCst) != generation {
+                return Err("STAGE_CANCELLED".into());
+            }
+            Ok(())
+        };
+        let context = || -> Result<deployment::StageContext, String> {
+            if handle.state::<Shell>().start_generation.load(std::sync::atomic::Ordering::SeqCst) != generation {
+                return Err("STAGE_CANCELLED".into());
+            }
+            let app_config = handle.path().app_config_dir().map_err(|_| "STAGE_CONFIG_UNAVAILABLE")?;
+            let parent = app_config.join("release-staging-v1");
+            deployment::prepare_stage_context(&target, &app_config, &parent)
+        };
+        current()?;
+        let mut prepared_context = None;
+        let version = match deployment::installed(&target) {
+            Some(pinned) => pinned.version,
+            None => {
+                // Unsupported native context fails before even latest-release HTTP.
+                prepared_context = Some(context()?);
+                deployment_release::resolve_version(&target)?
+            },
+        };
+        current()?;
         if deployment::needs_fetch(&target, &version) {
+            if prepared_context.is_none() { prepared_context = Some(context()?); }
             report_running(
                 &handle,
                 "deployment",
                 format!("Downloading OpenBot {version}."),
                 None,
             );
-            deployment::fetch(&target, &version)?;
+            let stage_context = prepared_context.as_ref().ok_or("UNVERIFIED_PUBLICATION_CONTEXT")?;
+            deployment::fetch_staged(stage_context, &version, &mut current)?;
+            return Err("PUBLICATION_UNAVAILABLE".into());
         }
         Ok::<_, String>(version)
     })
@@ -3335,29 +3367,18 @@ fn cancel_model_oauth(attempt_id: String) {
 }
 
 /// `bun` from PATH, or the places an installer puts it when PATH has not been reloaded.
-fn which_bun() -> Option<PathBuf> {
-    if quiet::command("bun")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        if let Some(path) = std::env::var_os("PATH").and_then(|path| {
-            std::env::split_paths(&path)
-                .map(|directory| directory.join(if cfg!(windows) { "bun.exe" } else { "bun" }))
-                .find(|path| path.is_file())
-        }) {
-            return Some(path);
-        }
-    }
+// Explicit Install only. Discovery reads candidate locators, never executes a
+// bare command. The library classifies the exact locator before its first probe.
+fn installation_bun(root: &Path) -> Result<PathBuf, Problem> {
+    let path = std::env::var_os("PATH");
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()?;
-    let candidates = [
-        PathBuf::from(&home).join(".bun/bin/bun"),
-        PathBuf::from(&home).join(".bun/bin/bun.exe"),
-    ];
-    candidates.into_iter().find(|path| path.exists())
+        .ok()
+        .map(PathBuf::from);
+    let cwd = std::env::current_dir().map_err(|error| {
+        Problem::with("OpenBot could not locate its app runtime safely.", error.to_string())
+    })?;
+    install::ensure_bun_from_search(root, path.as_deref(), home.as_deref(), &cwd)
 }
 
 /// Watch the three host processes and start one again when it dies.
@@ -10424,5 +10445,18 @@ fn main() {
                 format!("http://127.0.0.1:{}/", f.ports.app)
             );
         }
+    }
+
+    #[test]
+    fn stale_install_generation_cannot_enter_context_or_fetch_even_with_a_cached_pin() {
+        let root = temp_root("f4b-stale-generation"); write_installed_deployment(&root);
+        deployment::record(&root, "v0.0.7").unwrap();
+        let app = tauri::test::mock_builder().manage(Shell::default())
+            .build(tauri::test::mock_context(tauri::test::noop_assets())).unwrap();
+        app.state::<Shell>().start_generation.store(9, std::sync::atomic::Ordering::SeqCst);
+        assert!(tauri::async_runtime::block_on(deployment_ready_for_generation(app.handle(), &root, 8)).is_err());
+        assert_eq!(deployment::installed(&root).unwrap().version, "v0.0.7");
+        assert_eq!(std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(), "services: {}\n");
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

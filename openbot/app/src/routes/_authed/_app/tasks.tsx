@@ -1,30 +1,64 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import { client } from "@/lib/client";
+import { client, RequestError } from "@/lib/client";
+import { taskAction } from "@/lib/tasks/actions";
+
+/**
+ * The board address, in full: which machine, which crew, which status, which words, how far back,
+ * and which shape. All six belong in the URL, because a filter that resets on reload cannot be
+ * shared, bookmarked or opened from a chat message.
+ *
+ * An unrecognised value is a stale link rather than a broken page, so it falls back to the board
+ * default instead of to an error. The four text fields accept strings only: a number or an object
+ * arriving here came from a hand-edited address, and the honest reading of that is no filter.
+ * An empty value means the whole axis: no machine selected is the same answer as no
+ * parameter at all. `status` is deliberately not validated against an enum here, because the
+ * server owns that vocabulary and this screen will always lag it by one release.
+ */
+type View = "list" | "lanes";
+
+type BoardSearch = {
+  machineId: string;
+  crew: string;
+  status: string;
+  q: string;
+  period: Period;
+  view: View;
+};
+
+export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
+  const text = (key: string): string => {
+    const value = search[key];
+    return typeof value === "string" ? value : "";
+  };
+  const period = text("period");
+  const view = text("view");
+  return {
+    machineId: text("machineId"),
+    crew: text("crew"),
+    status: text("status"),
+    q: text("q"),
+    period: period === "week" || period === "all" ? period : "month",
+    view: view === "lanes" ? view : "list",
+  };
+};
 
 export const Route = createFileRoute("/_authed/_app/tasks")({
   component: TasksPage,
   /**
-   * `?machineId=` is the address a person shares or bookmarks to say "this machine's work", so the
-   * filter lives in the URL rather than in a control that resets on reload. An empty string means
-   * every machine, which is the same answer as no parameter at all.
+   * boardSearch always answers all six fields, but any one of them may be absent from an incoming
+   * link: the sidebar pointing at /tasks and a wakers page pointing at one crew are both already
+   * complete questions. Declaring the schema required here would make unrelated links carry six keys
+   * nobody chose, so the route accepts a partial address and boardSearch fills in the rest.
    */
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): { machineId?: string; crew?: string } => ({
-    machineId: typeof search.machineId === "string" ? search.machineId : "",
-    /*
-     * A crew, carried as the roster it names rather than as a group id: the board's filter is over
-     * coworkers, and a person arriving from /wakers should see the same cards whether the group was
-     * renamed since. Empty means every coworker.
-     */
-    crew: typeof search.crew === "string" ? search.crew : "",
-  }),
+  validateSearch: (search: Record<string, unknown>): Partial<BoardSearch> =>
+    boardSearch(search),
 });
 
 /**
@@ -191,6 +225,47 @@ export function shownForStatus<T extends { status: string }>(
 }
 
 /**
+ * The board's nothing-here sentence, scoped to what the person actually asked for: the window may be
+ * empty because the workspace is empty in this range, because a filter narrowed everything away, or
+ * because the machine you picked is idle. Saying which is the difference between a dead end and a
+ * next step, and none of these sentences may claim the whole database is empty -- this read is a
+ * capped window (see boardStats, which reports 200+ rather than a total).
+ */
+export const boardEmptySentence = (filters: {
+  machineId: string;
+  crew: string;
+  status: string;
+  q: string;
+}): string => {
+  const narrowed = Boolean(filters.status || filters.q || filters.crew);
+  /*
+   * Which scopes are in play decides which sentence is true. A device and a filter together are not
+   * the same question as either one alone: idle in this window is a different claim from hidden by
+   * this filter, and saying the first while the second is what emptied the list would be a sentence
+   * the screen cannot support.
+   */
+  if (filters.machineId && narrowed) {
+    return "这台设备在当前时间范围内没有符合筛选条件的任务——换一个条件，或到 /tasks 看全部设备。";
+  }
+  if (filters.machineId) {
+    return `这台机器在当前时间范围内没有待办——其他机器在 /tasks 有各自的看板。`;
+  }
+  if (narrowed) {
+    return "没有符合当前筛选条件的任务。";
+  }
+  return "当前时间范围内还没有任务——和员工说句话，工作就会出现在这里。";
+};
+
+/**
+ * Lanes can also be holding work that no column will take: `laneOf` answers with nothing for a
+ * status this release does not know. Such tasks are real, so the screen points at the list instead
+ * of saying there is nothing here and instead of filing them under 已结束.
+ */
+export const lanesUnmappable = (tasks: { status: string }[]): boolean =>
+  tasks.length > 0 && tasks.every((task) => laneOf(task.status).length === 0);
+
+
+/**
  * Spec A1/A2: the window's totals, each one a filter. Pressing a number shows those tasks; pressing
  * the pressed one again shows everything. It shares its state with the pills below, so the two can
  * never claim different filters at once.
@@ -330,13 +405,16 @@ function TaskCard({
   machine,
   onReview,
   onArchive,
+  pendingIds,
 }: {
   task: Task;
   /** Which of the tenant's machines did it, already named — or its id if the machine is gone. */
   machine: string | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
+  pendingIds: ReadonlySet<string>;
 }) {
+  const busy = pendingIds.has(task.id);
   /*
    * A3 asks the board to show which coworker did the work — its name and avatar, the same identity
    * every other screen uses. What was printed here was the first eight characters of its primary
@@ -375,6 +453,7 @@ function TaskCard({
                   ? "opacity-50"
                   : "bg-sky-500/15 text-sky-400"
           }`}
+          data-status={task.status}
         >
           {STATUS_LABEL[task.status] ?? task.status}
         </span>
@@ -431,17 +510,21 @@ function TaskCard({
           <button
             className="bg-foreground text-background rounded px-2 py-0.5"
             type="button"
+            aria-busy={busy}
+            disabled={busy}
             onClick={() => onReview(task.id)}
           >
-            查收
+            {busy ? "查收中…" : "查收"}
           </button>
         ) : task.status === "failed" ? (
           <button
             className="rounded bg-foreground/10 px-2 py-0.5"
             type="button"
+            aria-busy={busy}
+            disabled={busy}
             onClick={() => onArchive(task.id)}
           >
-            归档
+            {busy ? "归档中…" : "归档"}
           </button>
         ) : null}
       </div>
@@ -474,11 +557,13 @@ export function AttentionRegion({
   machineLabel,
   onReview,
   onArchive,
+  pendingIds,
 }: {
   tasks: Task[];
   machineLabel: (deviceId: string | null) => string | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
+  pendingIds: ReadonlySet<string>;
 }) {
   const [tab, setTab] = useState<"needsYou" | "review">("needsYou");
   const groups = attentionGroups(tasks);
@@ -497,6 +582,7 @@ export function AttentionRegion({
           ] as const
         ).map(([key, label]) => (
           <button
+            aria-pressed={tab === key}
             className={`rounded-full px-3 py-1 text-sm ${
               tab === key
                 ? "bg-foreground text-background"
@@ -525,6 +611,7 @@ export function AttentionRegion({
               machine={machineLabel(task.device)}
               onArchive={onArchive}
               onReview={onReview}
+              pendingIds={pendingIds}
               task={task}
             />
           ))}
@@ -544,18 +631,31 @@ const PERIODS: { label: string; value: Period }[] = [
 
 function TasksPage() {
   const queryClient = useQueryClient();
-  const { machineId, crew } = Route.useSearch();
+  const {
+    machineId,
+    crew,
+    status,
+    q: search,
+    period,
+    view,
+  } = boardSearch(Route.useSearch());
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
-  const [view, setView] = useState<"list" | "lanes">("list");
-  const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
   /*
-   * How far back this list reaches, on the same read the filters already use. Defaulted to a month
-   * because that is the horizon a person checks a coworker's work over; a week is "did it run
-   * today", and everything is the audit question rather than the working one.
+   * How far back this list reaches, now carried in the address: a month is the horizon a person
+   * checks a coworker over, a week is did it run today, everything is the audit question.
    */
-  const [period, setPeriod] = useState<Period>("month");
+  const patch = (over: Partial<BoardSearch>) =>
+    navigate({
+      replace: true,
+      search: { machineId, crew, status, q: search, period, view, ...over },
+      to: "/tasks",
+    });
+  /* Each control writes one axis of the address; the other axes ride along unchanged. */
+  const setView = (next: View) => patch({ view: next });
+  const setStatus = (next: string) => patch({ status: next });
+  const setSearch = (next: string) => patch({ q: next });
+  const setPeriod = (next: Period) => patch({ period: next });
   const query = [`period=${period}`];
   // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
   if (status && status !== "ended") query.push(`status=${status}`);
@@ -571,7 +671,7 @@ function TasksPage() {
     refetchInterval: 5000,
     /*
      * A new filter is a new query key, and until it answers the list would be empty -- which renders
-     * the board's "看板上还没有任务" sentence for a moment every time a number or pill is pressed.
+     * the board's nothing-here sentence for a moment every time a number or pill is pressed.
      * Keeping the previous list on screen until the new one arrives says nothing false meanwhile.
      */
     placeholderData: (previous) => previous,
@@ -593,18 +693,53 @@ function TasksPage() {
     },
     refetchInterval: 30000,
   });
+  /*
+   * A6's gate is a ref, not the mutation state. `act.isPending` belongs to the one hook all seven entry
+   * points share, so gating on it would grey out every card while a single archive runs; `act.variables`
+   * names only the most recent call, so one card's response would release another card's gate. Checking
+   * and writing the same Set inside one synchronous handler is what makes a second click on a submitting
+   * card do nothing at all. The state copy exists only so the screen can name the busy card; pending
+   * means "this write has not settled" -- not "the refetch after it has finished".
+   */
+  const inflight = useRef(new Set<string>());
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const act = useMutation({
-    mutationFn: async (input: { id: string; verb: "review" | "archive" }) => {
-      await fetch(`/api/tasks/${input.id}/${input.verb}`, {
-        method: "POST",
-        credentials: "include",
-      });
-    },
+    mutationFn: (input: { id: string; verb: "review" | "archive" }) =>
+      taskAction({ id: input.id, verb: input.verb }),
+    /*
+     * A POST whose response never arrived may still have landed on the server, so nothing here may
+     * replay it: archiving the same task twice is a wrong board, not a harmless second try. Failure
+     * goes to the screen instead, and the only affordance offered there is a read.
+     */
+    retry: false,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
+    /*
+     * Hook-level onSettled receives (data, error, variables) -- variables is the THIRD parameter. Each
+     * settlement unlocks the card its OWN call locked, so two cards finishing out of order cannot release
+     * each other early. Per-call callbacks are not used here: they fire only for the latest call.
+     */
+    onSettled: (_data, _error, variables) => {
+      inflight.current.delete(variables.id);
+      setPendingIds(new Set(inflight.current));
+    },
   });
+  const runAction = (id: string, verb: "review" | "archive") => {
+    if (inflight.current.has(id)) return;
+    inflight.current.add(id);
+    setPendingIds(new Set(inflight.current));
+    act.mutate({ id, verb });
+  };
   const list = shownForStatus(tasks.data ?? [], status);
+  /*
+   * 51665048 froze three states that may not overlap: a read that failed says 失败, a first read
+   * says 加载中, and only a read that answered with something gets to say the nothing-here
+   * sentence. Cached data rides through a refetch on purpose, so what has to be asked here is the
+   * query state, not whether the array happens to be empty right now -- an empty cache plus a 500
+   * is a failure, not an empty workspace. Non-empty cached cards keep showing exactly as before.
+   */
+  const readFailed = tasks.isError || summary.isError;
   /*
    * Named from the machines this person owns, and the id when the machine is not among them: work
    * that happened on a laptop which has since been unpaired still happened there, and a card that
@@ -620,8 +755,32 @@ function TasksPage() {
   const dropLane = (laneKey: string, taskId: string) => {
     const task = list.find((entry) => entry.id === taskId);
     if (task && archivesOnDrop(laneKey, task.status)) {
-      act.mutate({ id: taskId, verb: "archive" });
+      runAction(taskId, "archive");
     }
+  };
+  /*
+   * 404 and 409 are the server refusing this action on purpose, and its own sentence already rides in
+   * `RequestError.message`. Anything else -- a 5xx, or a request that never got an answer -- is not a
+   * denial we are allowed to assert: the write may have landed. So the screen says 未确认 and offers
+   * a read, never a second write.
+   */
+  const actionFailure = (): { label: string; note: string; detail: string | null } => {
+    const status = act.error instanceof RequestError ? act.error.status : 0;
+    const message = act.error instanceof Error ? act.error.message : "请稍后再试。";
+    if (status === 404) return { label: "这个任务已经不在那里了", note: "服务端拒绝（404）", detail: message };
+    if (status === 409) return { label: "这个任务当前状态不接受这个操作", note: "服务端拒绝（409）", detail: message };
+    return {
+      label: "结果未确认，请刷新任务后核对",
+      note: status ? `服务端返回 ${status}` : "请求没有收到回应",
+      // 51666174: an unknown write must not borrow the retry-flavoured fallback.
+      detail: null,
+    };
+  };
+  const failure = act.isError ? actionFailure() : null;
+  const refreshReadsOnly = () => {
+    void tasks.refetch();
+    void summary.refetch();
+    act.reset();
   };
   return (
     <PageShell
@@ -647,6 +806,18 @@ function TasksPage() {
           onRetry={() => void machines.refetch()}
         />
       ) : null}
+      {failure ? (
+        <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
+          <p className="text-destructive">
+            {failure.label}
+            {failure.detail ? `：${failure.detail}` : ""}
+            （{failure.note}）
+          </p>
+          <Button onClick={refreshReadsOnly} size="sm" variant="outline">
+            刷新任务
+          </Button>
+        </div>
+      ) : null}
       {/*
        * A7's region, fixed above the board. It reads the same list the board renders, on purpose: a
        * second fetch would put two answers to "what needs me" on one screen, and they would disagree
@@ -657,8 +828,9 @@ function TasksPage() {
       {tasks.data !== undefined ? (
         <AttentionRegion
           machineLabel={machineLabel}
-          onArchive={(id) => act.mutate({ id, verb: "archive" })}
-          onReview={(id) => act.mutate({ id, verb: "review" })}
+          onArchive={(id) => runAction(id, "archive")}
+          onReview={(id) => runAction(id, "review")}
+          pendingIds={pendingIds}
           tasks={list}
         />
       ) : null}
@@ -676,6 +848,7 @@ function TasksPage() {
       <div className="flex flex-wrap items-center gap-2 pb-4">
         {FILTERS.map((entry) => (
           <button
+            aria-pressed={status === entry.key}
             key={entry.key}
             type="button"
             onClick={() => setStatus(entry.key)}
@@ -691,6 +864,7 @@ function TasksPage() {
         <span className="flex items-center gap-1">
           {PERIODS.map((entry) => (
             <button
+              aria-pressed={period === entry.value}
               className={`rounded-full px-3 py-1 text-sm ${
                 period === entry.value
                   ? "bg-foreground text-background"
@@ -705,10 +879,11 @@ function TasksPage() {
           ))}
         </span>
         <input
+          aria-label="搜索任务"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="搜索任务"
-          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none"
+          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         {/*
          * A crew arrived at from /wakers, shown as the thing it was filtered by and dismissible
@@ -717,9 +892,7 @@ function TasksPage() {
         {crew ? (
           <button
             type="button"
-            onClick={() =>
-              navigate({ to: "/tasks", search: { machineId, crew: "" } })
-            }
+            onClick={() => patch({ crew: "" })}
             className="bg-foreground/5 hover:bg-foreground/10 rounded-full px-3 py-1 text-sm"
           >
             只看该小组 · 清除
@@ -733,13 +906,9 @@ function TasksPage() {
         {(machines.data?.length ?? 0) > 0 ? (
           <span className="flex flex-wrap items-center gap-1">
             <button
+              aria-pressed={!machineId}
               type="button"
-              onClick={() =>
-                navigate({
-                  to: "/tasks",
-                  search: { machineId: "", crew },
-                })
-              }
+              onClick={() => patch({ machineId: "" })}
               className={`rounded-full px-3 py-1 text-sm ${
                 !machineId
                   ? "bg-foreground text-background"
@@ -750,14 +919,10 @@ function TasksPage() {
             </button>
             {(machines.data ?? []).map((machine) => (
               <button
+                aria-pressed={machineId === machine.deviceId}
                 key={machine.deviceId}
                 type="button"
-                onClick={() =>
-                  navigate({
-                    to: "/tasks",
-                    search: { machineId: machine.deviceId, crew },
-                  })
-                }
+                onClick={() => patch({ machineId: machine.deviceId })}
                 className={`rounded-full px-3 py-1 text-sm ${
                   machineId === machine.deviceId
                     ? "bg-foreground text-background"
@@ -778,6 +943,7 @@ function TasksPage() {
         <div className="ml-auto flex rounded-lg bg-foreground/5 p-0.5 text-sm">
           {(["list", "lanes"] as const).map((mode) => (
             <button
+              aria-pressed={view === mode}
               key={mode}
               type="button"
               onClick={() => setView(mode)}
@@ -801,23 +967,23 @@ function TasksPage() {
               key={task.id}
               task={task}
               machine={machineLabel(task.device)}
-              onReview={(id) => act.mutate({ id, verb: "review" })}
-              onArchive={(id) => act.mutate({ id, verb: "archive" })}
+              onReview={(id) => runAction(id, "review")}
+              onArchive={(id) => runAction(id, "archive")}
+              pendingIds={pendingIds}
             />
           ))}
           {/*
            * The board's nothing-here sentence, said per machine: "no tasks" and "this machine is idle"
            * are different facts, and the second one is the reason the filter exists.
            */}
-          {list.length === 0 ? (
+          {list.length === 0 && !readFailed ? (
             <li className="py-10 text-center text-sm opacity-50">
-              {machineId
-                ? `这台机器上没有待办——员工们都在休息。其他机器在 /tasks 有各自的看板。`
-                : "看板上还没有任务——和员工说句话，工作就会出现在这里。"}
+              {boardEmptySentence({ machineId, crew, status, q: search })}
             </li>
           ) : null}
         </ul>
       ) : (
+        <>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {LANES.map((lane) => (
             // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
@@ -845,14 +1011,23 @@ function TasksPage() {
                       key={task.id}
                       task={task}
                       machine={machineLabel(task.device)}
-                      onReview={(id) => act.mutate({ id, verb: "review" })}
-                      onArchive={(id) => act.mutate({ id, verb: "archive" })}
+                      onReview={(id) => runAction(id, "review")}
+                      onArchive={(id) => runAction(id, "archive")}
+                      pendingIds={pendingIds}
                     />
                   ))}
               </ul>
             </div>
           ))}
         </div>
+          {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
+            <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
+              {lanesUnmappable(list)
+                ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
+                : boardEmptySentence({ machineId, crew, status, q: search })}
+            </p>
+          ) : null}
+        </>
       )}
     </PageShell>
   );

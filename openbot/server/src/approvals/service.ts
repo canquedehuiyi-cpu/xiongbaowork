@@ -1,3 +1,4 @@
+import { currentTenant } from "../tenant/context";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -11,6 +12,10 @@ import {
 } from "./policy";
 import type { ApprovalQuestions } from "./questions";
 import {
+  type ApprovalRecoveryContext,
+  type ApprovalRecoveryPort,
+  type ApprovalRecoveryOutcome,
+  validateApprovalRecoveryContext,
   type ApprovalAction,
   type ApprovalCandidate,
   type ApprovalContinuation,
@@ -20,6 +25,7 @@ import {
   type ApprovalPreferences,
   type ApprovalRecord,
   ApprovalRefusedError,
+  ApprovalNotFoundError,
   type ApprovalRule,
   type ApprovalRuleInput,
   type ApprovalStore,
@@ -120,6 +126,24 @@ export type ApprovalResumeDependencies = {
     result: { content: string; error?: string };
   }): Promise<void>;
 };
+export class ApprovalRecoveryBlockedError extends Error {
+  constructor() {
+    super("approval_recovery_blocked");
+    this.name = "ApprovalRecoveryBlockedError";
+  }
+}
+export class ApprovalRecoveryUnknownError extends Error {
+  constructor() {
+    super("approval_recovery_unknown");
+    this.name = "ApprovalRecoveryUnknownError";
+  }
+}
+export class ApprovalRecoveryBusyError extends Error {
+  constructor() {
+    super("approval_recovery_busy");
+    this.name = "ApprovalRecoveryBusyError";
+  }
+}
 export type ApprovalService = ReturnType<typeof createApprovalService>;
 
 export function createApprovalService(
@@ -133,8 +157,54 @@ export function createApprovalService(
   options: {
     /** The deployment's configured model, for auto-review and pre-approval checks. */
     review?: ReviewModel;
+    continuationRecovery?: ApprovalRecoveryPort;
   } = {},
 ) {
+  async function recoverSaved(
+    request: ApprovalRecord,
+    owner: string,
+    mode: "resume" | "abandon",
+  ): Promise<void> {
+    if (
+      !options.continuationRecovery ||
+      !store.getRecoveryContext ||
+      !request.result
+    )
+      throw new ApprovalRecoveryBlockedError();
+    let context: ApprovalRecoveryContext;
+    try {
+      context = await store.getRecoveryContext(owner, request.id);
+      validateApprovalRecoveryContext(
+        context,
+        owner,
+        request.id,
+        currentTenant(),
+      );
+      if (
+        !context.request.result ||
+        !isDeepStrictEqual(context.request.result, request.result)
+      )
+        throw new ApprovalRecoveryBlockedError();
+    } catch (error) {
+      if (error instanceof ApprovalNotFoundError) throw error;
+      throw new ApprovalRecoveryBlockedError();
+    }
+    let outcome: ApprovalRecoveryOutcome;
+    try {
+      outcome = await options.continuationRecovery.recover({
+        context,
+        mode,
+        result: context.request.result,
+      });
+    } catch {
+      throw new ApprovalRecoveryUnknownError();
+    }
+    if (outcome.kind === "busy") throw new ApprovalRecoveryBusyError();
+    if (outcome.kind === "blocked") throw new ApprovalRecoveryBlockedError();
+    if (outcome.kind !== "completed") throw new ApprovalRecoveryUnknownError();
+    // The trusted protocol port committed receipt + approval.finish atomically.
+    // Never call ordinary store.finish a second time here.
+  }
   /**
    * A personal "allow" rule closes the requests it now covers that were only waiting on the person's
    * default or their own rules. Safety hand-offs, team rules and auto-review stops are left alone.
@@ -510,6 +580,12 @@ export function createApprovalService(
         throw new ApprovalRefusedError(
           "This action is still waiting for your decision.",
         );
+      // Fresh producer/exact-input provisioning is not implemented in this
+      // package. Gate BEFORE validation, execution, refusal result writes or
+      // the retained fresh-policy branches below. Never fabricate readiness.
+      if (!request.result) throw new ApprovalRecoveryBlockedError();
+      if (!options.continuationRecovery || !store.getRecoveryContext)
+        throw new ApprovalRecoveryBlockedError();
       const continuation = request.action.continuation;
       if (!continuation)
         throw new ApprovalRefusedError(
@@ -620,49 +696,18 @@ export function createApprovalService(
         // Saved by one process only: whichever saves the answer is the one that continues.
         if (!(await store.saveResult(ownerUserId, id, result))) return;
       }
-      await dependencies.continue({
-        approvalId: id,
-        messageId: `approval:${id}`,
-        continuation,
-        result,
-      });
-      await store.finish(ownerUserId, id);
+      await recoverSaved(request, ownerUserId, "resume");
     },
-    /**
-     * The work item carrying this resume ran out of tries. Left alone, the request stayed approved
-     * and the conversation waited forever, so the Bot is told the action could not be carried out
-     * and the conversation continues. Only the process that saves that answer continues it.
-     */
     async abandon(
       ownerUserId: string,
       id: string,
-      reason: string,
-      dependencies: Pick<ApprovalResumeDependencies, "continue">,
+      _reason: string,
+      _dependencies: Pick<ApprovalResumeDependencies, "continue">,
     ): Promise<void> {
       const request = await store.get(ownerUserId, id);
       if (request.status === "completed" || request.status === "pending")
         return;
-      const continuation = request.action.continuation;
-      let result = request.result;
-      if (!result) {
-        const text = `Not done: this action could not be carried out (${reason.slice(0, 300)}). Check whether it happened before asking the person again.`;
-        if (
-          !(await store.saveResult(ownerUserId, id, {
-            content: text,
-            error: text,
-          }))
-        )
-          return;
-        result = { content: text, error: text };
-      }
-      if (continuation)
-        await dependencies.continue({
-          approvalId: id,
-          messageId: `approval:${id}`,
-          continuation,
-          result,
-        });
-      await store.finish(ownerUserId, id);
+      await recoverSaved(request, ownerUserId, "abandon");
     },
   };
 }

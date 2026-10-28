@@ -1,3 +1,4 @@
+import type { ContinuationReceipt } from "./continuation-protocol";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import {
@@ -209,6 +210,10 @@ export type ApprovalGate = (
   candidate: ApprovalCandidate,
 ) => Promise<ApprovalPermit | undefined>;
 export type ApprovalStore = {
+  getRecoveryContext?(
+    ownerUserId: string,
+    id: string,
+  ): Promise<ApprovalRecoveryContext>;
   enabled(ownerUserId: string): Promise<boolean>;
   setEnabled(ownerUserId: string, enabled: boolean): Promise<void>;
   open(action: ApprovalAction): Promise<ApprovalRecord>;
@@ -379,4 +384,55 @@ export function approvalPreview(args: unknown, depth = 0): unknown {
       )
       .replace(/Bearer\s+\S+/gi, "Bearer [private value]");
   return args;
+}
+
+/** Database parent columns, not HTTP claims or an owner-derived tenant. */
+export type ApprovalRecoveryContext = {
+  request: ApprovalRecord;
+  tenantId: string;
+  parentActionDigest: string;
+  parentRunId: string;
+  parentToolCallId: string;
+};
+export type ApprovalRecoveryOutcome =
+  | { kind: "completed"; receipt: ContinuationReceipt }
+  | { kind: "busy" }
+  | { kind: "unknown"; reason: string; admissionId?: string }
+  | { kind: "blocked"; reason: string };
+export interface ApprovalRecoveryPort {
+  recover(input: {
+    context: ApprovalRecoveryContext;
+    mode: "resume" | "abandon";
+    result: NonNullable<ApprovalRecord["result"]>;
+  }): Promise<ApprovalRecoveryOutcome>;
+}
+/** Both real store and service defend the parent/JSON/live-scope binding. */
+export function validateApprovalRecoveryContext(
+  context: ApprovalRecoveryContext,
+  owner: string,
+  id: string,
+  tenant: string,
+): void {
+  const { request: row } = context;
+  if (
+    ![
+      owner,
+      id,
+      tenant,
+      context.tenantId,
+      context.parentActionDigest,
+      context.parentRunId,
+      context.parentToolCallId,
+    ].every((x) => typeof x === "string" && x.trim()) ||
+    row.id !== id ||
+    row.ownerUserId !== owner ||
+    row.action.actorId !== owner ||
+    context.tenantId !== tenant ||
+    row.action.actionDigest !== context.parentActionDigest ||
+    row.action.runId !== context.parentRunId ||
+    row.action.toolCallId !== context.parentToolCallId ||
+    row.action.continuation?.runId !== context.parentRunId ||
+    row.action.continuation?.toolCallId !== context.parentToolCallId
+  )
+    throw new ApprovalRefusedError("approval_recovery_binding_invalid");
 }
