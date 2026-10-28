@@ -1,3 +1,23 @@
+# 当前云端恢复与验证状态（2026-10-28）
+
+完整目标仍为77故事、18包、7门，商业交付尚未完成。当前恢复分支为[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)。默认分支仍保留Gitee原导入基线。
+
+第9个三文件包SERVER-TYPE-CONTRACT已在独审SOURCE_APPROVED_ONLY/findings=[]后采用为[92ddb512249939c34e71ec56eb1341cda95efa2b](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/92ddb512249939c34e71ec56eb1341cda95efa2b)。生产文件只有类型表达修改，原captured native getter/stream、cap、abort、持久化row.runId投影语句均未改；新增一项测试迭代9组真实Fetch选项。现共9包、28个不同Subject路径，不等18交付包完成。
+
+该采用提交的[40704605999/job122873210976](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40704605999/job/122873210976)实际核2054文件/50008638字节，全大小/SHA/权限/FD稳定/无symlink/nlink1通过；冻结依赖安装成功、6原输入不变、禁全部生命周期脚本、copyfile/私有缓存/hardlink0/外链0。37具名文件（明确排除资源中止的lineage）637pass/0fail/10521expects、37/37、Unhandled0、exit0、peak319.3M。原两preload保留，不包含Ptx15项PG定义。
+
+完整原server/tsconfig.json检查已在同一采用提交实际exit0，TS5.9.3/Node24.21.0，21.730秒/CPU39.880秒/peak1.9G。仅此编译阶段采用人类获准2GiB聚合门/swap0/300秒，随后实际PROJECT_LIMIT_RESTORED=512MiB/swap0。原strict/skipLibCheck/include未改；该原配置不含tests，不冒测试源码全量类型通过。
+
+此前两次38文件尝试分别在默认模式与lineage --smol下触发512MiB聚合oom-kill，首25文件及后27文件分别完成；不能当38通过。第二次中HTTP+materializer两目标65pass/0fail/920expects，完整编译成功见首候选40701329815。lineage资源停止保留，不改断言或扩大测试上限。旧56faabe的673pass仅该历史提交证据。
+
+完整app161文件首次控制步骤因Root双反斜杠续行写错，在systemd-run启动项目之前失败，app代码尚未执行；该控制错误保留，不归因产品Source。已修正为已验证单反斜杠前缀，下一次仅执行完整app目录单Bun进程、原两preload、原qoderwake配置生成及--smol，所有项目阶段仍512MiB/swap0，不重复已通过37子集和server编译。
+
+当前派生清单431440B/SHA256 b596fe9f8807b77ce73939bac4628078442e988d436ebffc8740844d8bc5aaf3，V57原manifest419227/SHA81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920保持。源码/JSON/patch/依赖/执行均云端，Windows源码写入0。PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、ROOT_RELEASE=null/ready=false、严格CI原冻结03df9efa缺失、真实设备/计费/客户验收等门保留；不标complete。
+
+## 保留的历史记录
+
+以下原文只证明其所列时点与提交，当前结果以上述新记录为准；旧错误、缺证与审计事件不清除。
+
 # 云端恢复与验证状态（2026-10-28）
 
 目标仓库：[canquedehuiyi-cpu/xiongbaowork](https://github.com/canquedehuiyi-cpu/xiongbaowork)。

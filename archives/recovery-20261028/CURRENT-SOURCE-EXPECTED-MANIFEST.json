@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+  "source_commit": "92ddb512249939c34e71ec56eb1341cda95efa2b",
   "basis": "immutable V57 plus eight independently approved exact overlays; explicit new0107 snapshot reconstruction and Ptx SourceOnly boundaries",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
@@ -166,10 +166,29 @@
       "source_commit": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
       "run": 40689165318,
       "scope": "new snapshot reconstruction definitions, not original ORM/SQL body recovery"
+    },
+    {
+      "ticket": "SERVER-TYPE-CONTRACT-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/SERVER-TYPE-CONTRACT-ADOPTED.json",
+        "bytes": 3346,
+        "sha256": "5ab9f718b0068335f58f4f058fb3cec92c1971ec8943199c82ca3a9ea89620b2",
+        "formal_adoption": true,
+        "ticket": "SERVER-TYPE-CONTRACT-20261028",
+        "source_paths": [
+          "openbot/server/src/approvals/exact-http-owned-input.ts",
+          "openbot/server/src/approvals/store.ts",
+          "openbot/server/tests/approval-exact-http-owned-input.test.ts"
+        ]
+      },
+      "source_commit": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+      "candidate_full_server_typecheck_run": 40701329815,
+      "targeted_input_run": 40703574999,
+      "scope": "Production type-only edits with added native Fetch regression; full38 lineage resource stop retained"
     }
   ],
   "file_count": 2054,
-  "source_bytes": 50007029,
+  "source_bytes": 50008638,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -8237,8 +8256,8 @@
     },
     {
       "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
-      "bytes": 9733,
-      "sha256": "ca9c1e2826d9fa2753d22138f13314cac79e11c4a5d7ed55d91ce4c973596ff2",
+      "bytes": 9701,
+      "sha256": "faa848e802f9dc7329a935e61cfe55e88275412a18670c01e197396c89d41d2c",
       "mode": "0o644"
     },
     {
@@ -8315,8 +8334,8 @@
     },
     {
       "path": "openbot/server/src/approvals/store.ts",
-      "bytes": 19521,
-      "sha256": "493306d89edf7a26ae12fc42fea17beaccf17fd01f1683f3903b28e675cac225",
+      "bytes": 19543,
+      "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
       "mode": "0o644"
     },
     {
@@ -9989,8 +10008,8 @@
     },
     {
       "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
-      "bytes": 14378,
-      "sha256": "a9640de6b61967d09cd4b9ab1b69649a03762008f6d1925525e2ca192d53c6f3",
+      "bytes": 15997,
+      "sha256": "3d9a2c8c74f1259c9088503897367b38d8bb5b8262f3740e0c3cb6db6d21f85c",
       "mode": "0o644"
     },
     {
@@ -12562,8 +12581,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "87c2bd32d7e6fdf330927ffc0d0129d6fdcdfff5",
-    "head": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+    "git_tree": "01ef9bf4e29381d30a73e1c230ed8471eebfb3a7",
+    "head": "92ddb512249939c34e71ec56eb1341cda95efa2b",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12573,15 +12592,16 @@
       "SECURITY-FK-ASSERTION-20261028",
       "K106-CURRENT-PARENT-RUNTIME-20261028",
       "PTX-CURRENT-PARENT-RECOVERY-20261028",
-      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_NINE_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50007029,
+    "verified_source_bytes": 50008638,
     "verified_source_files": 2054,
     "windows_source_files_written": 0
   },

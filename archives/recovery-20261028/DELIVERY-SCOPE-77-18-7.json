@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
-  "source_status": "V57_RESTORED_PLUS_EIGHT_APPROVED_PACKAGES_INCLUDING_EXPLICIT_SNAPSHOT_RECONSTRUCTION",
+  "source_snapshot": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+  "source_status": "V57_RESTORED_PLUS_NINE_APPROVED_PACKAGES_INCLUDING_EXPLICIT_SNAPSHOT_RECONSTRUCTION",
   "story_requirements": [
     {
       "id": "A1",
@@ -969,21 +969,20 @@
       "full_suite": "NOT_RUN"
     },
     "server_typecheck": {
-      "status": "NODE_DEFAULT_V8_HEAP_RESOURCE_STOP_NOT_COMPLETE",
-      "head": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
-      "run": 40678526201,
-      "job": 122782977940,
+      "status": "PASS_ORIGINAL_SERVER_TSCONFIG_TESTS_NOT_INCLUDED",
+      "head": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+      "run": 40704605999,
+      "job": 122873210976,
       "typescript": "5.9.3",
       "runtime": "Node v24.21.0",
-      "node_options": "UNSET",
-      "auxiliary_old_space_limit": "NONE",
-      "project_limit": 536870912,
+      "exit_code": 0,
+      "configured_aggregate_memory": 2147483648,
+      "node_old_space_mib": 1792,
       "swap": 0,
-      "python_child_exit": -6,
-      "actions_step_exit": 250,
-      "kernel_oom": false,
-      "diagnostics": "NONE",
-      "prior_attempts_preserved": true
+      "automatic_peak": "1.9G",
+      "restored_512MiB": true,
+      "full_ci": "NOT_RUN",
+      "tests_in_original_config": false
     },
     "candidate_entries_are_historical_stage_records": true,
     "controller_independent_review": {
@@ -1094,8 +1093,8 @@
       "postgres17": "PG_PENDING"
     },
     "typecheck_resource_exception": {
-      "status": "AUTHORIZED_WITHIN_SAME2GiB_BOUND_NEXT_AUX_HEAP1792",
-      "requested_scope_under_preparation": "original server tsconfig compile only; temporary project-and-descendants2GiB/swap0; other phases unchanged",
+      "status": "AUTHORIZED_COMPILE_ONLY_2GiB_SUCCESS_AND_512MiB_RESTORE_OBSERVED",
+      "requested_scope_under_preparation": "Original server/tsconfig.json compile only; approved and used; all other limits retained",
       "actual_blocker": {
         "run": 40678526201,
         "job": 122782977940,
@@ -1125,11 +1124,92 @@
       "restore512MiB": true,
       "kernel_aggregate_oom": false,
       "compiler_diagnostics": "NONE"
+    },
+    "server_typecheck_prior512": {
+      "status": "NODE_DEFAULT_V8_HEAP_RESOURCE_STOP_NOT_COMPLETE",
+      "head": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
+      "run": 40678526201,
+      "job": 122782977940,
+      "typescript": "5.9.3",
+      "runtime": "Node v24.21.0",
+      "node_options": "UNSET",
+      "auxiliary_old_space_limit": "NONE",
+      "project_limit": 536870912,
+      "swap": 0,
+      "python_child_exit": -6,
+      "actions_step_exit": 250,
+      "kernel_oom": false,
+      "diagnostics": "NONE",
+      "prior_attempts_preserved": true
+    },
+    "server_typecheck_2GiB_seven_errors": {
+      "head": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+      "run": 40699215575,
+      "job": 122854140237,
+      "exit_code": 2,
+      "diagnostics": 7,
+      "resource_stop": false,
+      "restore512MiB": true
+    },
+    "server_type_contract_adopted": {
+      "head": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+      "source_files": 3,
+      "independent_review": "SOURCE_APPROVED_ONLY",
+      "distinct_cumulative_subject_paths": 28,
+      "targeted": {
+        "run": 40703574999,
+        "pass": 65,
+        "fail": 0,
+        "expects": 920,
+        "files": 2
+      },
+      "full38": "RESOURCE_STOP_NOT_PASS",
+      "lineage_attempts": [
+        {
+          "run": 40701329815,
+          "job": 122861639840,
+          "completed_files": 25,
+          "runtime_flag": "DEFAULT",
+          "resource_status": "oom-kill"
+        },
+        {
+          "run": 40703574999,
+          "job": 122869579798,
+          "completed_files": 27,
+          "runtime_flag": "--smol for lineage only",
+          "resource_status": "oom-kill"
+        }
+      ],
+      "remaining37_and_full_app": "37_PASS_637_0_FULL_APP_CONTROLLER_STARTUP_ERROR_NOT_RUN_REPAIR_PREPARED",
+      "full_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING"
+    },
+    "current37": {
+      "head": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+      "run": 40704605999,
+      "job": 122873210976,
+      "pass": 637,
+      "fail": 0,
+      "expects": 10521,
+      "completed_files": 37,
+      "unhandled_errors": 0,
+      "lineage": "RESOURCE_STOP_RETAINED_NOT_RUN",
+      "original_preloads": "UNCHANGED_TWO",
+      "automatic_peak": "319.3M"
+    },
+    "full_app": {
+      "status": "CONTROLLER_STARTUP_ERROR_NOT_RUN_CORRECTED_EXECUTION_PENDING",
+      "run": 40704605999,
+      "job": 122873210976,
+      "source_files_executed": 0,
+      "root_script_error": "double-backslash continuation",
+      "source_changed": false,
+      "expected_file_count": 161
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "No speculative reconstruction from counts. The remaining original three table structures are now explicitly rebuilt and Source-approved; next execution evidence must respect PG_PENDING, compiler resource stop, native roles/driver, production and real-device gates.",
+  "next_source_package": "Full app one-process tests now scheduled at512MiB on unchanged Source after controller continuation repair. No Source changes before its diagnostics.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -1140,8 +1220,12 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 430544,
-    "sha256": "8c991de3ff7f91e1d37c0a0b943e631d7825b1a1cd11a862caf25bce9ca41433"
+    "bytes": 431440,
+    "sha256": "b596fe9f8807b77ce73939bac4628078442e988d436ebffc8740844d8bc5aaf3",
+    "source_files": 2054,
+    "source_bytes": 50008638,
+    "physical_source_commit": "92ddb512249939c34e71ec56eb1341cda95efa2b",
+    "physical_source_run": 40704605999
   },
   "latest_source_validation": {
     "aggregate_memory_limit": 67108864,
@@ -1149,8 +1233,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "3d52577a1f198c0c524c03790cdbdbd5e9b1ce5d",
-    "head": "56faabeec733e9dd8e62c6fda517d22c69c78f91",
+    "git_tree": "01ef9bf4e29381d30a73e1c230ed8471eebfb3a7",
+    "head": "92ddb512249939c34e71ec56eb1341cda95efa2b",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -1160,15 +1244,16 @@
       "SECURITY-FK-ASSERTION-20261028",
       "K106-CURRENT-PARENT-RUNTIME-20261028",
       "PTX-CURRENT-PARENT-RECOVERY-20261028",
-      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_NINE_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50007029,
+    "verified_source_bytes": 50008638,
     "verified_source_files": 2054,
     "windows_source_files_written": 0
   }
