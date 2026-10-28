@@ -4,7 +4,7 @@
   "packages": 18,
   "gates": 7,
   "source_snapshot": "ebd96e157ff4b4ef33065653db43080a18afab17",
-  "source_status": "V57_ALL_195_REPAIRS_SYNCED_AND_2045_SOURCE_FILES_PHYSICALLY_VERIFIED",
+  "source_status": "V57_RESTORED_PLUS_INDEPENDENTLY_APPROVED_AP_INPUT_FIX",
   "story_requirements": [
     {
       "id": "A1",
@@ -703,17 +703,20 @@
     "commercial_acceptance": "NOT_DELIVERED",
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
-    "formal_baseline": "V57",
-    "git_tree": "8018e1b74df2878b838f87ea22fb9b4b86644375",
-    "head": "c1a8d006107fdf2cee0f7c1948bbd4cf17cc5ef5",
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "340a91ce7d7a30aa12c673792e0acf8057f64ce0",
+    "head": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028"
+    ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAY",
     "swap_limit": 0,
-    "verified_source_bytes": 48435806,
+    "verified_source_bytes": 48438057,
     "verified_source_files": 2045,
     "windows_source_files_written": 0
   },
@@ -777,6 +780,31 @@
       "expect_calls": 1101,
       "test_files": 3,
       "postgres17": "PG_PENDING"
+    },
+    "input_integrated": {
+      "head": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
+      "run": 40654934850,
+      "job": 122703562585,
+      "pass": 64,
+      "fail": 0,
+      "expect_calls": 848,
+      "test_files": 2,
+      "formal_adoption": true,
+      "independent_source_review": "SOURCE_APPROVED_ONLY",
+      "review_file": "AP-INPUT-BUN-INDEPENDENT-REVIEW.json"
+    },
+    "schema_candidate": {
+      "head": "2d4f23c074d3b367ff51b61fed58645a5458c2db",
+      "branch": "codex/ap-schema-runtime-fix-20261028",
+      "run": 40656168267,
+      "job": 122707604334,
+      "pass": 54,
+      "fail": 0,
+      "expects": 1126,
+      "snapshot_all139_ms": 253.14,
+      "timeout_ms": 5000,
+      "formal_adoption": false,
+      "independent_source_review": "IN_PROGRESS"
     }
   },
   "delivery_status": "NOT_DELIVERED",
@@ -785,5 +813,13 @@
     "packages": 18,
     "gates": 7
   },
-  "next_source_package": "HELD_UNTIL_CURRENT_CANDIDATE_NON_AUTHOR_REVIEW"
+  "next_source_package": "AP-SCHEMA-RUNTIME-20261028_PENDING_CURRENT_FIVE_FILE_REVIEW",
+  "readonly_independent_review_authorization": {
+    "same_agent_only": true,
+    "subsequent_source_packages_max_files": 8,
+    "scope": "this repository GitHub and tool memory read-only",
+    "windows_source_writes": 0,
+    "project_execution_by_reviewer": false,
+    "repository_writes_by_reviewer": false
+  }
 }

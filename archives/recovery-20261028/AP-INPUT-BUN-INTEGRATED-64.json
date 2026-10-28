@@ -1,0 +1,52 @@
+{
+  "schema": "xiongbaowork-integrated-component-validation/1",
+  "ticket": "AP-INPUT-BUN-20261028",
+  "source_status": "ADOPTED_EXACT_THREE_REVIEWED_FILES",
+  "commit": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
+  "run_id": 40654934850,
+  "job_id": 122703562585,
+  "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40654934850",
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "340a91ce7d7a30aa12c673792e0acf8057f64ce0",
+    "head": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAY",
+    "swap_limit": 0,
+    "verified_source_bytes": 48438057,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 2,
+    "scope": "isolated exact-byte HTTP input and JSON materializer components",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "test_summary": {
+    "pass": 64,
+    "fail": 0,
+    "expects": 848,
+    "files": 2
+  },
+  "independent_source_review": "AP-INPUT-BUN-INDEPENDENT-REVIEW.json",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
