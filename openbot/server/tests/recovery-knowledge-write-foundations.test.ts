@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { preLintRecoverySource } from "./helpers/recovery-lint-source";
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { is, sql, SQL } from "drizzle-orm";
+import { is, SQL } from "drizzle-orm";
 import { getTableConfig, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 import { users, agents } from "../src/db/schema/core";
 import { knowledgeNotebooks } from "../src/db/schema/knowledge-foundations";
@@ -1265,14 +1266,26 @@ function parseSQL(source: string): {
         const columnsTo = c.ids();
         c.take("ON");
         c.take("DELETE");
-        const onDelete = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onDelete: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onDelete = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onDelete = "no action";
+        }
         c.take("ON");
         c.take("UPDATE");
-        const onUpdate = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onUpdate: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onUpdate = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onUpdate = "no action";
+        }
         c.finish();
         if (tableTo === name) {
           assert.ok(
@@ -1846,6 +1859,7 @@ const APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> =
   }
 };
 function historicalProtectedSource(path: string, raw: Buffer): Buffer {
+  raw = preLintRecoverySource(path, raw);
   const inverse=APPROVED_SOURCE_INVERSES[path];
   if(!inverse) return raw;
   assert.equal(raw.length,inverse.currentBytes,"exact approved repaired source size");
@@ -1936,7 +1950,7 @@ describe("0105 historical knowledge write foundations, SOURCE only not authority
       const p=parents.find(p=>p.name===fk.tableTo);assert.ok(p);
       const keys=[...Object.values(p.compositePrimaryKeys).map(p=>p.columns),...Object.values(p.columns).filter(c=>c.primaryKey).map(c=>[c.name])];
       assert.ok(keys.some(key=>JSON.stringify(key)===JSON.stringify(fk.columnsTo)));
-      fk.columnsFrom.forEach((c,i)=>assert.equal(t.columns[c]?.type,p.columns[fk.columnsTo[i] ?? ""]?.type));
+      fk.columnsFrom.forEach((c,i)=>{assert.equal(t.columns[c]?.type,p.columns[fk.columnsTo[i] ?? ""]?.type);});
     }
     const execution=requireTable(expected,"knowledge_write_executions");assert.deepEqual(execution.uniqueConstraints,{});
     const fk=requireTable(expected,"knowledge_write_claims").foreignKeys.knowledge_claim_execution_fk;assert.ok(fk);
