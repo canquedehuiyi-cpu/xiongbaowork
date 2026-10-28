@@ -1,0 +1,45 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "FIX_REQUIRED",
+  "scope_after": "be98f79226d9ec3e226c606fffdb28a2ece3b3c3",
+  "scope_before": "1a2345069daf265df2da6c528a635854bf48e844",
+  "full_texts_read": 10,
+  "findings": [
+    {
+      "severity": "P2",
+      "family": "historical source identity guards conflict with repairs",
+      "locations": [
+        "recovery-knowledge-write-foundations.test.ts:1959",
+        "recovery-resource-project-foundations.test.ts:2037"
+      ],
+      "minimum_fix": "Closed uniquely-matched source inverse preserving original size/SHA; reject unknown changes"
+    }
+  ],
+  "accepted_source_observations": [
+    "Six schema changes are exactly using(btree) to on, columns/order/where/RLS/FK unchanged",
+    "Literal replacement callback and deletion negative correction are sound",
+    "FK owner/name direction matches real ExtraConfigColumns behavior"
+  ],
+  "runtime": {
+    "baseline_run": 40658219110,
+    "baseline_pass": 34,
+    "baseline_fail": 20,
+    "candidate_runs": [
+      40660584559,
+      40661644468
+    ],
+    "candidate_outcome": "120-second timeout; no complete counts"
+  },
+  "root_additional_confirmed_defect": {
+    "location": "resource FK test's newly added from.getSQLType call",
+    "cause": "pinned ExtraConfigColumn.getSQLType directly self-recurses",
+    "primary_source": "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/columns/common.ts",
+    "diagnostic_run": 40662634458,
+    "diagnostic_job": 122729174671,
+    "timeout_seconds": 15
+  },
+  "history_preserved": true,
+  "not_adopted": true
+}

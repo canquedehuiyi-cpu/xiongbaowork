@@ -65,9 +65,9 @@
         "mode": "0o644"
       },
       "after": {
-        "bytes": 120192,
-        "sha256": "e7de283a5d17f490bf001c4876dde66b45e0a22f439a6c44a1bf3f29d2441eb7",
-        "blob": "85345d9eb98a1d743c0a2b41fa15cc6905f88d2f",
+        "bytes": 130422,
+        "sha256": "27088e601b335f82efb159f938f77add9e3ed249fa420816e95e47560a3ccc1e",
+        "blob": "bb93c5d097648c8547a4bc628f7eedb1da9dcac5",
         "mode": "0o644"
       }
     },
@@ -80,9 +80,9 @@
         "mode": "0o644"
       },
       "after": {
-        "bytes": 112378,
-        "sha256": "dbead38fe076b11354792af86f1a6fbee3188aeb5cd28beb9451a579980ec655",
-        "blob": "15e1218d6c80aab5fef3bef13fe075707b0f1195",
+        "bytes": 115756,
+        "sha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+        "blob": "95c701554810546982e35523f7aa9ec7c237d75c",
         "mode": "0o644"
       }
     }
@@ -105,5 +105,9 @@
     "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/utils.ts"
   ],
   "postgres17": "PG_PENDING",
-  "commercial_acceptance": "NOT_DELIVERED"
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_revision": 2,
+  "revision_reason": "Keep old source identities through exact current hashes plus closed literal inverse; resolve FK ExtraConfigColumn to canonical native column without calling recursive vendor getSQLType",
+  "vendor_recursion_source": "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/columns/common.ts",
+  "runtime_status": "R2_NOT_RUN"
 }

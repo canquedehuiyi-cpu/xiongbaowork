@@ -1759,7 +1759,115 @@ function rejectPolicySlot(table: string, name: string, slot: "using" | "withChec
   expect(() => checkSQL(changedSQL)).toThrow();
 }
 
+type ApprovedSourceInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;
+const APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> = {
+  "src/db/schema/knowledge-foundations.ts": {
+    "currentBytes": 11998,
+    "currentSha256": "ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da",
+    "edits": [
+      {
+        "after": "    index(\"knowledge_directories_notebook_idx\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),",
+        "before": "    index(\"knowledge_directories_notebook_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),",
+        "count": 1
+      },
+      {
+        "after": "    index(\"knowledge_sources_notebook_idx\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),",
+        "before": "    index(\"knowledge_sources_notebook_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),",
+        "count": 1
+      },
+      {
+        "after": "    index(\"knowledge_sources_directory_idx\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),",
+        "before": "    index(\"knowledge_sources_directory_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),",
+        "count": 1
+      }
+    ]
+  },
+  "src/db/schema/resource-project-foundations.ts": {
+    "currentBytes": 7589,
+    "currentSha256": "42cea04edea132637dd377fcc50d1625bb4d4ff25a416910b247d34bb8dcc3a0",
+    "edits": [
+      {
+        "after": "    index(\"resource_projects_device_scope_idx\").on(table.tenantId.asc().nullsLast(), table.deviceId.asc().nullsLast(), table.agentId.asc().nullsLast()),",
+        "before": "    index(\"resource_projects_device_scope_idx\").using(\"btree\", table.tenantId.asc().nullsLast(), table.deviceId.asc().nullsLast(), table.agentId.asc().nullsLast()),",
+        "count": 1
+      }
+    ]
+  },
+  "tests/recovery-resource-project-foundations.test.ts": {
+    "currentBytes": 115756,
+    "currentSha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+    "edits": [
+      {
+        "after": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {\n  test(\"protected source inverse rejects unknown bytes and appended payloads\",()=>{\n    const path=\"src/db/schema/knowledge-foundations.ts\",raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;\n    expect(()=>historicalProtectedSource(path,changed)).toThrow();\n    expect(()=>historicalProtectedSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();\n  });",
+        "before": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {",
+        "count": 1
+      },
+      {
+        "after": "const bytes = historicalProtectedSource(input.path,readFileSync(join(server, input.path))); expect(bytes.length).toBe(input.bytes);",
+        "before": "const bytes = readFileSync(join(server, input.path)); expect(bytes.length).toBe(input.bytes);",
+        "count": 1
+      },
+      {
+        "after": "type ApprovedSourceInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;\nconst APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> = {\n  \"src/db/schema/knowledge-foundations.ts\": {\n    \"currentBytes\": 11998,\n    \"currentSha256\": \"ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da\",\n    \"edits\": [\n      {\n        \"after\": \"    index(\\\"knowledge_directories_notebook_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_directories_notebook_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"    index(\\\"knowledge_sources_notebook_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_sources_notebook_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"    index(\\\"knowledge_sources_directory_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_sources_directory_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\",\n        \"count\": 1\n      }\n    ]\n  }\n};\nfunction historicalProtectedSource(path: string, raw: Buffer): Buffer {\n  const inverse=APPROVED_SOURCE_INVERSES[path];\n  if(!inverse) return raw;\n  assert.equal(raw.length,inverse.currentBytes,\"exact approved repaired source size\");\n  assert.equal(createHash(\"sha256\").update(raw).digest(\"hex\"),inverse.currentSha256,\"unknown source delta rejected\");\n  let source=raw.toString(\"utf8\");\n  assert.ok(Buffer.from(source,\"utf8\").equals(raw));\n  for(const edit of inverse.edits){\n    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);\n    assert.equal(source.split(edit.after).length,edit.count+1,\"closed inverse must match exact literal multiplicity\");\n    source=source.split(edit.after).join(edit.before);\n  }\n  return Buffer.from(source,\"utf8\");\n}\n\nconst frozenSourceInputs = [",
+        "before": "const frozenSourceInputs = [",
+        "count": 1
+      },
+      {
+        "after": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {\n  test(\"literal mutation replacement preserves dollar quote text and permits actual deletion\",()=>{\n    expect(replaceOnce(\"before TARGET after\",\"TARGET\",\"'^[a-f0-9]{63}$'\")).toBe(\"before '^[a-f0-9]{63}$' after\");\n    expect(replaceOnce(\"left DROP right\",\"DROP\",\"\")).toBe(\"left  right\");\n  });",
+        "before": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {",
+        "count": 1
+      },
+      {
+        "after": "assert.ok(from);assert.notEqual(from,to);",
+        "before": "assert.ok(from && to);",
+        "count": 2
+      },
+      {
+        "after": "expect(ref.columns).toHaveLength(1);const from=ref.columns[0];assert.ok(from);\n      expect(from.table === model).toBe(true);expect(from.name).toBe(column.name);\n      // ExtraConfigColumn.getSQLType recurses in pinned Drizzle. Resolve the native column.\n      const native=getTableConfig(model).columns.filter(candidate=>candidate.table===model&&candidate.name===from.name);\n      expect(native).toHaveLength(1);expect(native[0] === column).toBe(true);\n      expect(native[0]?.getSQLType()).toBe(column.getSQLType());\n      expect(fk.onDelete).toBe(\"cascade\");expect(fk.onUpdate).toBe(\"no action\");",
+        "before": "expect(ref.columns).toEqual([column]); expect(fk.onDelete).toBe(\"cascade\"); expect(fk.onUpdate).toBe(\"no action\");",
+        "count": 1
+      },
+      {
+        "after": "expect(ref.foreignTable === parent).toBe(true);expect(ref.foreignColumns).toHaveLength(1);\n      expect(ref.foreignColumns[0] === parentColumn).toBe(true);",
+        "before": "expect(ref.foreignTable).toBe(parent); expect(ref.foreignColumns).toEqual([parentColumn]);",
+        "count": 1
+      },
+      {
+        "after": "// Extra-config builders receive ExtraConfigColumns, not the native table field.\n      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.some(from => from.table === model && from.name === column.name));",
+        "before": "const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.includes(column));",
+        "count": 1
+      },
+      {
+        "after": "const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;",
+        "before": "const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;",
+        "count": 1
+      }
+    ]
+  }
+};
+function historicalProtectedSource(path: string, raw: Buffer): Buffer {
+  const inverse=APPROVED_SOURCE_INVERSES[path];
+  if(!inverse) return raw;
+  assert.equal(raw.length,inverse.currentBytes,"exact approved repaired source size");
+  assert.equal(createHash("sha256").update(raw).digest("hex"),inverse.currentSha256,"unknown source delta rejected");
+  let source=raw.toString("utf8");
+  assert.ok(Buffer.from(source,"utf8").equals(raw));
+  for(const edit of inverse.edits){
+    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);
+    assert.equal(source.split(edit.after).length,edit.count+1,"closed inverse must match exact literal multiplicity");
+    source=source.split(edit.after).join(edit.before);
+  }
+  return Buffer.from(source,"utf8");
+}
+
 describe("0105 historical knowledge write foundations, SOURCE only not authority", () => {
+  test("protected source inverse rejects changed or extended approved files",()=>{
+    for(const path of Object.keys(APPROVED_SOURCE_INVERSES)){
+      const raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;
+      expect(()=>historicalProtectedSource(path,changed)).toThrow();
+      expect(()=>historicalProtectedSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();
+    }
+  });
   test("literal mutation replacement preserves SQL regex dollar quote text",()=>{
     expect(replaceOnce("before TARGET after","TARGET","'^[a-f0-9]{63}$'")).toBe("before '^[a-f0-9]{63}$' after");
   });
@@ -1959,7 +2067,7 @@ describe("0105 historical knowledge write foundations, SOURCE only not authority
       {path:"tests/recovery-resource-project-foundations.test.ts",bytes:111726,sha256:"018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81"},
       {path:"src/db/schema/knowledge-foundations.ts",bytes:12034,sha256:"c3b435ec2ea1784af2408e8ee4fe982e88813b47707ce0aedbc196d57f00b845"},
       {path:"src/db/schema/resource-project-foundations.ts",bytes:7601,sha256:"67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732"},
-    ]) {const b=readFileSync(join(server,f.path));expect(b.length).toBe(f.bytes);expect(createHash("sha256").update(b).digest("hex")).toBe(f.sha256);}
+    ]) {const b=historicalProtectedSource(f.path,readFileSync(join(server,f.path)));expect(b.length).toBe(f.bytes);expect(createHash("sha256").update(b).digest("hex")).toBe(f.sha256);}
     const walk=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(entry=>{assert.ok(!entry.isSymbolicLink());const p=join(dir,entry.name);return entry.isDirectory()?walk(p):[p];});
     const dir=join(server,"drizzle"),files=walk(dir).sort();expect(files).toHaveLength(163);
     const lines=files.map(p=>{const b=readFileSync(p);return `${relative(dir,p)}\0${b.length}\0${createHash("sha256").update(b).digest("hex")}\n`;});
