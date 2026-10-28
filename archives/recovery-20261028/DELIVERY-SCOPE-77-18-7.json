@@ -871,23 +871,34 @@
       "expects": 554
     },
     "full_workspace_install": {
-      "status": "HUMAN_AUTHORIZED_512MiB_INSTALL_RETRY_ONCE",
-      "prior_64MiB_stop": {
-        "run": 40670946955,
-        "job": 122757246700
-      },
+      "status": "PASS_FROZEN_INSTALL_WITHOUT_LIFECYCLE_SCRIPTS",
+      "head": "d657c72b43526ac0730e2df37cff3aa78a5557f6",
+      "run": 40672999809,
+      "job": 122764245052,
       "memory_limit": 536870912,
-      "other_data_memory_limit": 67108864,
       "project_memory_limit": 536870912,
+      "other_data_copy_limit": 67108864,
       "swap": 0,
-      "lifecycle_scripts": "DISABLED",
-      "private_cache": true,
-      "backend": "copyfile"
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0,
+      "protected_six_package_lock_inputs": "UNCHANGED",
+      "lifecycle_scripts": "NOT_RUN",
+      "full_ci": "NOT_RUN"
+    },
+    "original_preload_subset": {
+      "status": "NEXT_BOUND_35_NAMED_FILES",
+      "source_changes": 0,
+      "test_files": 35,
+      "test_timeout_ms": 5000,
+      "total_timeout_seconds": 120,
+      "full_suite": "NOT_RUN"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "No pending Source review. Continue actual install within named human resource exception, preserving other limits.",
+  "next_source_package": "No pending independent Source review. Validate original preload named subset with full frozen dependencies; no PG17 or paid provider calls.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,

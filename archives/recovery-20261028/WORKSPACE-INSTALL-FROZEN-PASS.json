@@ -1,0 +1,89 @@
+{
+  "schema": "xiongbaowork-frozen-workspace-install-validation/1",
+  "source_commit": "d657c72b43526ac0730e2df37cff3aa78a5557f6",
+  "run": 40672999809,
+  "job": 122764245052,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "1a3ccd0f9b4d6aad53b8e5c73637bb19968afdc4",
+    "head": "d657c72b43526ac0730e2df37cff3aa78a5557f6",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 48463600,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "d657c72b43526ac0730e2df37cff3aa78a5557f6",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "filesystem": {
+    "private_cache": {
+      "regular_files": 120073,
+      "bytes": 1103368127
+    },
+    "root_node_modules": {
+      "regular_files": 127738,
+      "bytes": 1221605702
+    }
+  },
+  "observed": {
+    "service_seconds": 160.775,
+    "memory_peak": "511.8M",
+    "exit_code": 0,
+    "network_concurrency": 4
+  },
+  "conditions": {
+    "only_human_named_install_exception_512MiB": true,
+    "project_and_descendants_512MiB": true,
+    "other_data_copy_64MiB": true,
+    "free_cloud_only": true,
+    "private_cache": true,
+    "copyfile": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "frozen_six_inputs_unchanged": true
+  },
+  "history": {
+    "prior64MiB_oom": 40670946955,
+    "prior512MiB_240s_timeout": 40671814715
+  },
+  "full_ci": "NOT_RUN",
+  "original_preload_suite": "NOT_RUN",
+  "typecheck": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

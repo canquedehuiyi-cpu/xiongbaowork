@@ -39,6 +39,10 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 - 完整原锁文件workspace安装已实际尝试一次：[40670946955/job122757246700](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40670946955/job/122757246700)。私有缓存/copyfile/网络并发1/忽略全部生命周期脚本；64MiB安装门下10.333秒后systemd `oom-kill`、main SIGKILL9，Actions步骤exit1。自动日志peak64.4M保留，不冒始终低于门；项目512MiB/swap0未放宽。安装后包/锁完整性与依赖审计未到达，原preload、类型、完整CI均NOT_RUN。此前576/0同提交组件结果独立保留。该64MiB失败历史完整保留。人类随后明确批准仅完整依赖安装阶段512MiB；本次按该具名例外继续，其他DATA仍64MiB，项目及后代512MiB/swap0、免费、私有缓存/copyfile/禁全部生命周期脚本不变。
 - 原严格CI冻结基线03df9efa29cc51b64bd4a7b695dcb977ac0869f6在已导入历史中未取得；不会用当前分支或0089682冒替。原CI工作流还含不受原项目总门约束的并行/容器任务，未直接触发。
 
+完整依赖安装随后成功：[40672999809/job122764245052](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40672999809/job/122764245052)。原锁文件和6个包文件前后哈希相同；普通文件127738、符号链接3870，hardlink0、私有路径之外链接0；copyfile/私有缓存/全部生命周期脚本未运行。安装阶段按人类具名例外512MiB（实际peak511.8M）、其他DATA仍64MiB，项目总512MiB/swap0。原64MiB OOM与首次512MiB240秒timeout保留；进度日志/并发4/480秒时限后的实际耗时160.775秒。缓存及依赖位于该临时Linux作业，不冒持久Codespace已有该环境。
+
+下一步保留原bunfig中的server/app两预加载脚本，用完整依赖跑35个明确命名文件（已有33组件加2个启动/受限写入生命周期CPU注入用例）。这不是全套preload、类型、完整CI或PG17验收；均另证。
+
 ## 持续边界与待验项
 
 - 本轮项目源码、patch、archive、JSON、依赖和项目执行均云端；Windows无项目源码写入/执行，仅保存获准无源码UI PNG。
