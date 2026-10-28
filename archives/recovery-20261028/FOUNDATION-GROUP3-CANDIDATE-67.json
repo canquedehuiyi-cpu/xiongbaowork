@@ -1,0 +1,88 @@
+{
+  "run": 40669911352,
+  "job": 122753767211,
+  "head": "75bcf80cf146da6c8b1612e441ede7fb26eb4e5f",
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "e151ef54bccac6aac62427a825754c827fb82fbb",
+    "head": "75bcf80cf146da6c8b1612e441ede7fb26eb4e5f",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "CANDIDATE_SECURITY_FK_SOURCE_BYTES_VERIFIED_NOT_ADOPTED",
+    "swap_limit": 0,
+    "verified_source_bytes": 48463600,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "test_files": 4,
+    "completed_files": 4,
+    "results": [
+      {
+        "path": "server/tests/recovery-subject-binding.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-task-flow-audit.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-threads-parent-key.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "tests/recovery-lineage.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "four sequential isolated identity metadata and recovery lineage tests",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "counts": [
+    {
+      "pass": 9,
+      "fail": 0,
+      "expects": 37
+    },
+    {
+      "pass": 9,
+      "fail": 0,
+      "expects": 46
+    },
+    {
+      "pass": 12,
+      "fail": 0,
+      "expects": 116
+    },
+    {
+      "pass": 37,
+      "fail": 0,
+      "expects": 355
+    }
+  ],
+  "pass": 67,
+  "fail": 0,
+  "expects": 554,
+  "formal_adoption": false,
+  "scope": "unchanged three identity metadata files and lineage file; candidate Source equalcd0b14e9"
+}

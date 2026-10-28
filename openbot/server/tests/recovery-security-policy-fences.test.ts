@@ -669,12 +669,46 @@ function rejectPolicy(table:string,name:string,field:'using'|'withCheck',change:
  const changed=changePolicy(table,name,change),before=parseSQL(migration).tables,after=parseSQL(changed).tables,key=`public.${table}`,oldTable=before[key],newTable=after[key];assert.ok(oldTable&&newTable);const old=oldTable.policies[name],value=newTable.policies[name];assert.ok(old&&value);assert.notEqual(value[field],old[field]);const restored=structuredClone(after),rt=restored[key];assert.ok(rt);rt.policies[name]=structuredClone(old);assert.deepEqual(restored,before,'all other tables/policies unchanged');for(const f of ['name','as','for','to','using','withCheck'] as const)if(f!==field)assert.deepEqual(value[f],old[f]);expect(()=>checkSQL(changed)).toThrow();
 }
 function policyExpression(table:string,name:string,field:'using'|'withCheck'):string {const t=expected[`public.${table}`];assert.ok(t);const p=t.policies[name];assert.ok(p);const value=p[field];assert.ok(value!==undefined);return value;}
+type PolicyAgentColumnIdentity = { table: PgTable; name: string };
+type PolicyAgentReference = {
+ foreignTable: PgTable; columns: PolicyAgentColumnIdentity[]; foreignColumns: PolicyAgentColumnIdentity[];
+};
+function checkPolicyAgentReference(ref: PolicyAgentReference):void {
+ assert.equal(ref.foreignTable===agents,true,'exact parent table identity');
+ assert.equal(ref.columns.length,1);
+ assert.equal(ref.foreignColumns.length,1);
+ const column=ref.columns[0],foreignColumn=ref.foreignColumns[0];
+ assert.ok(column&&foreignColumn);
+ assert.equal(column.table===agentSecurityPolicies,true,'child column owner identity');
+ assert.equal(column.name,'agent_id');
+ const native=getTableConfig(agentSecurityPolicies).columns.filter(c=>c.name===column.name);
+ assert.equal(native.length,1,'child name maps to one native column');
+ assert.equal(native[0]===agentSecurityPolicies.agentId,true,'exact native child column identity');
+ assert.equal(native[0]?.getSQLType(),'text');
+ assert.equal(foreignColumn.table===agents,true,'parent column owner identity');
+ assert.equal(foreignColumn===agents.id,true,'exact native parent column identity');
+}
+
 describe('recovery security policy fences exact historical structures',()=>{
  test('two full independent oracle raws retain fixed identities',()=>{expect(capsules).toHaveLength(2);for(const c of capsules)expect(createHash('sha256').update(c.raw).digest('hex')).toBe(c.sha256);});
  test('all13 SQL statements fully consume including ?& ARRAY and every complete config CHECK',()=>{expect(migration.split('--> statement-breakpoint')).toHaveLength(13);checkSQL(migration);});
  test('real Drizzle13columns2PK1FK5CHECK8policy2RLS equal independent metadata',()=>equalTargets(actualMetadata()));
  test('existing agents text PK and policy agent_profiles columns match approved parent fragments',()=>{
-  const parent=previous.tables['public.agents'],profile=previous.tables['public.agent_profiles'];assert.ok(parent&&profile);assert.deepEqual(parent.columns.id,expectedAgentId);for(const [k,v] of Object.entries(expectedProfileColumns))assert.deepEqual(profile.columns[k],v);expect(agents.id.primary).toBe(true);expect(agents.id.notNull).toBe(true);expect(agents.id.getSQLType()).toBe('text');const cfg=getTableConfig(agentSecurityPolicies);expect(cfg.foreignKeys).toHaveLength(1);const fk=cfg.foreignKeys[0];assert.ok(fk);const ref=fk.reference();expect(ref.foreignTable).toBe(agents);expect(ref.foreignColumns).toEqual([agents.id]);expect(ref.columns).toEqual([agentSecurityPolicies.agentId]);expect(fk.onDelete).toBe('cascade');expect(fk.onUpdate).toBe('no action');
+  const parent=previous.tables['public.agents'],profile=previous.tables['public.agent_profiles'];assert.ok(parent&&profile);assert.deepEqual(parent.columns.id,expectedAgentId);for(const [k,v] of Object.entries(expectedProfileColumns))assert.deepEqual(profile.columns[k],v);expect(agents.id.primary).toBe(true);expect(agents.id.notNull).toBe(true);expect(agents.id.getSQLType()).toBe('text');const cfg=getTableConfig(agentSecurityPolicies);expect(cfg.foreignKeys).toHaveLength(1);const fk=cfg.foreignKeys[0];assert.ok(fk);checkPolicyAgentReference(fk.reference());expect(fk.onDelete).toBe('cascade');expect(fk.onUpdate).toBe('no action');
+ });
+ test('policy FK identity rejects wrong owner, name, parent table and extra columns',()=>{
+  const fk=getTableConfig(agentSecurityPolicies).foreignKeys[0];assert.ok(fk);
+  const ref=fk.reference();checkPolicyAgentReference(ref);
+  const child=ref.columns[0],parent=ref.foreignColumns[0];assert.ok(child&&parent);
+  const mutations:PolicyAgentReference[]=[
+   {...ref,foreignTable:agentSecurityPolicies},
+   {...ref,columns:[{table:securityEgressFences,name:child.name}]},
+   {...ref,columns:[{table:agentSecurityPolicies,name:'revision'}]},
+   {...ref,columns:[child,child]},
+   {...ref,foreignColumns:[agentSecurityPolicies.agentId]},
+   {...ref,foreignColumns:[parent,parent]},
+  ];
+  for(const changed of mutations)expect(()=>checkPolicyAgentReference(changed)).toThrow();
  });
  test('both custom JSONB mapper and sql.param preserve object identity without double encoding',()=>{
   const values=[{enterpriseMode:false,dangerousCommandsEnabled:false,sensitivePathsEnabled:true,sensitivePaths:[],toolModes:{}},{fixture:{optional:null},items:[1,true]}],columns=[agentSecurityPolicies.config,securityEgressFences.target];for(let i=0;i<columns.length;i++){const column=columns[i],value=values[i];assert.ok(column&&value);expect(column.mapToDriverValue(value)).toBe(value);expect(column.mapFromDriverValue(value)).toBe(value);const query=dialect.sqlToQuery(sql`select ${sql.param(value,column)}::jsonb`);expect(query.params).toHaveLength(1);expect(query.params[0]).toBe(value);expect(typeof query.params[0]).toBe('object');expect(column.hasDefault).toBe(false);expect(column.notNull).toBe(true);}

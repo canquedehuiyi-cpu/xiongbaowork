@@ -1,0 +1,89 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "SECURITY-FK-ASSERTION-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "blocking_findings": [],
+  "before_ref": "58294bc57b6068a73a7b275d0e8eb80a291b3956",
+  "after_source_ref": "cd0b14e948be8d8fc5d837486cd80c8f5b2aefcd",
+  "full_before_after_read": true,
+  "files": [
+    {
+      "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
+      "before": {
+        "bytes": 51536,
+        "sha256": "f05977fbdc4c547dc76f4f16e478df8478818f9eb742cd76dd76ddc1dc202cde",
+        "blob": "066d76f3933cc067bb318943cb260e1702ef872c",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 53329,
+        "sha256": "9bc8e5240cb3f3b70846f8760a2d1794faf3cbf90184c42c00fe76ef2f9f73a8",
+        "blob": "b24985f8eaf109c67fbccd20d79ed9fd161aac8c",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "reading_evidence": {
+    "both_large_oracle_literals": true,
+    "all_historical_hashes_snapshot_inverse_journal_security_negatives": true,
+    "remaining_bytes_exact_before_after_inverse": true,
+    "production_schema_read": "security-policy-fences.ts",
+    "parent_read": "core.ts actual agents.id text primary key",
+    "reviewer_recomputed_sha256": false,
+    "parent_recomputed_sha256_and_git_blobs": true
+  },
+  "judgments": [
+    "ExtraConfigColumn child FK is not native PgText; owner/name uniquely maps to native agentSecurityPolicies.agentId and native text SQLtype.",
+    "Helper requires exact agents parent table, one column per side, actual child owner/name, unique native child identity, parent owner and agents.id strict identity; no ExtraConfigColumn recursive getSQLType call.",
+    "Six true negative references start with passing actual reference, then alter wrong parent table, child owner/name, duplicate child, wrong parent column, duplicate parent.",
+    "Remaining bytes equal before. Complete13columns2PK1FK5CHECK8policy2RLS oracle, cascade/noaction, enterpriseMode=false, owner EXISTS, old hashes, journal and original failed test preserved."
+  ],
+  "primary_sources": [
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/utils.ts"
+  ],
+  "independently_read_runtime_logs": [
+    {
+      "run": 40669016122,
+      "job": 122750752991,
+      "pass": 95,
+      "fail": 1,
+      "expects": 1128
+    },
+    {
+      "run": 40669613882,
+      "job": 122752762517,
+      "head": "cd0b14e948be8d8fc5d837486cd80c8f5b2aefcd",
+      "pass": 97,
+      "fail": 0,
+      "expects": 1133,
+      "source_files": 2045,
+      "source_bytes": 48463600,
+      "source_mismatches": 0,
+      "project_memory": 536870912,
+      "data_copy_memory": 67108864,
+      "swap": 0,
+      "test_timeout_ms": 5000,
+      "batch_timeout_seconds": 120
+    }
+  ],
+  "activity": {
+    "github_tools_readonly": true,
+    "tool_memory_only": true,
+    "windows_source_writes": 0,
+    "project_or_subject_execution": 0,
+    "repository_writes": 0,
+    "new_agents": 0
+  },
+  "not_verified": [
+    "Control files/workflow/live head",
+    "Native PG17",
+    "Full CI",
+    "Full preload suite",
+    "Producer wiring",
+    "Production safety mode activation",
+    "77 stories 18 packages 7 gates delivery"
+  ],
+  "root_decision": "ADOPT_EXACT_ONE_REVIEWED_TEST_FILE_ONLY",
+  "v58": "NOT_ADOPTED"
+}

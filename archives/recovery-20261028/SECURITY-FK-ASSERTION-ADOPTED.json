@@ -1,0 +1,74 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "SECURITY-FK-ASSERTION-20261028",
+  "status": "SOURCE_INTEGRATION_APPROVED_COMPONENT_SCOPE_ONLY",
+  "formal_adoption": true,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "base_commit": "58294bc57b6068a73a7b275d0e8eb80a291b3956",
+  "required_prior_overlays": [
+    "AP-INPUT-BUN-20261028",
+    "AP-SCHEMA-RUNTIME-20261028",
+    "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+    "AUTOMATION-FK-ASSERTION-20261028"
+  ],
+  "scope": "One security definition test file: bind ExtraConfigColumn child owner/name to unique native agentId/text and retain exact native agents.id parent identity; six true wrong identity/duplicate negatives. Production schema/RLS/FK actions unchanged.",
+  "changes": [
+    {
+      "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
+      "before": {
+        "bytes": 51536,
+        "sha256": "f05977fbdc4c547dc76f4f16e478df8478818f9eb742cd76dd76ddc1dc202cde",
+        "blob": "066d76f3933cc067bb318943cb260e1702ef872c",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 53329,
+        "sha256": "9bc8e5240cb3f3b70846f8760a2d1794faf3cbf90184c42c00fe76ef2f9f73a8",
+        "blob": "b24985f8eaf109c67fbccd20d79ed9fd161aac8c",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "unchanged_artifacts": [
+    "production schemas",
+    "SQL",
+    "snapshots",
+    "journal",
+    "other seven tests"
+  ],
+  "baseline": {
+    "run": 40669016122,
+    "job": 122750752991,
+    "head": "e7069ad2835dd4c960b678a41a5a307a51fac894",
+    "pass": 95,
+    "fail": 1,
+    "expects": 1128
+  },
+  "limits": {
+    "project_memory": 536870912,
+    "data_copy_memory": 67108864,
+    "swap": 0,
+    "test_timeout_ms": 5000,
+    "batch_timeout_seconds": 120
+  },
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "producer_wiring": "NOT_VERIFIED",
+  "v58": "NOT_ADOPTED",
+  "adoption_epoch": "ROOT110-SECURITY-FK-ASSERTION-20261028",
+  "candidate_source_commit": "cd0b14e948be8d8fc5d837486cd80c8f5b2aefcd",
+  "review": {
+    "path": "archives/recovery-20261028/SECURITY-FK-INDEPENDENT-REVIEW.json",
+    "bytes": 3350,
+    "sha256": "9f80b74fd2ba87319ac7fcc493b0aad980f588ac197aa64a4f49014d2bf8397e",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY"
+  },
+  "runtime_validation": {
+    "run": 40669613882,
+    "job": 122752762517,
+    "pass": 97,
+    "fail": 0,
+    "expects": 1133
+  }
+}
