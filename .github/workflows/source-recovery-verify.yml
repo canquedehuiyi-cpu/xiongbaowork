@@ -1,4 +1,4 @@
-name: Candidate restored schema definition repairs
+name: Knowledge and resource foundation validation
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: AP schema candidate - independent review pending
+    name: Knowledge resource definitions - PG pending
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -408,14 +408,14 @@ jobs:
           revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
           root = base / "xiongbaowork-verified-source" / "repo" / "openbot"
           args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  str(root / "server/tests/recovery-ap2-parent-schema-reconcile.test.ts"),
-                  str(root / "server/tests/recovery-approval-exact-input-objects.test.ts"),
-                  str(root / "server/tests/recovery-approval-direct-execution-domains.test.ts")]
+                  str(root / "server/tests/recovery-knowledge-foundations.test.ts"),
+                  str(root / "server/tests/recovery-knowledge-write-foundations.test.ts"),
+                  str(root / "server/tests/recovery-resource-project-foundations.test.ts")]
           result = subprocess.run(args, cwd=harness, env=env, capture_output=True, text=True, timeout=120)
           print(result.stdout, end="", flush=True)
           print(result.stderr, end="", flush=True)
           print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
-              "bun_revision": revision, "test_files": 3, "scope": "isolated existing AP2/AP4 schema definition tests; not PostgreSQL validation",
+              "bun_revision": revision, "test_files": 3, "scope": "isolated existing knowledge and resource schema definition tests; not PostgreSQL validation",
               "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
               "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
               "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)

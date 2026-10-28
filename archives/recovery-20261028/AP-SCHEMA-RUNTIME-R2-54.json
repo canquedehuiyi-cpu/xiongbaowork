@@ -1,0 +1,74 @@
+{
+  "schema": "xiongbaowork-candidate-component-validation/1",
+  "ticket": "AP-SCHEMA-RUNTIME-20261028",
+  "status": "RUNTIME_PASSED_INDEPENDENT_SOURCE_REVIEW_PENDING",
+  "formal_adoption": false,
+  "commit": "2d4f23c074d3b367ff51b61fed58645a5458c2db",
+  "run": 40656168267,
+  "job": 122707604334,
+  "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40656168267",
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "2e23cb989c80ed65c1303f7d49b19db83b3d56a4",
+    "head": "2d4f23c074d3b367ff51b61fed58645a5458c2db",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "CANDIDATE_SCHEMA_SOURCE_BYTES_VERIFIED_NOT_ADOPTED",
+    "swap_limit": 0,
+    "verified_source_bytes": 48445588,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 3,
+    "scope": "isolated existing AP2/AP4 schema definition tests; not PostgreSQL validation",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 54,
+    "fail": 0,
+    "expects": 1126,
+    "files": 3,
+    "snapshot_all139_ms": 253.14,
+    "unchanged_timeout_ms": 5000
+  },
+  "history": [
+    {
+      "run": 40651549206,
+      "pass": 43,
+      "fail": 9,
+      "expects": 1101
+    },
+    {
+      "run": 40655849162,
+      "pass": 52,
+      "fail": 2,
+      "expects": 1120,
+      "snapshot_ms": 6222.09
+    }
+  ],
+  "frozen_sql_and_snapshot_bytes_unchanged": true,
+  "project_memory": 536870912,
+  "data_copy_memory": 67108864,
+  "swap": 0,
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
