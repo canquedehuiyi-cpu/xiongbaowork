@@ -1,0 +1,4199 @@
+{
+  "schema": "xiongbaowork-cloud-source-recovery/1",
+  "date": "2026-10-28",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "branch": "codex/cloud-repairs-recovery-20261028",
+  "source_commit": "ebd96e157ff4b4ef33065653db43080a18afab17",
+  "source_git_tree": "7e0e2649c8476531f378ef1743ca765627a36c77",
+  "source_file_count": 2045,
+  "repository_file_count": 2268,
+  "formal_baseline": "V57",
+  "manifest": {
+    "bytes": 419227,
+    "sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "blob": "5f9b0661d281300579897e86aec90b5e0aa23343",
+    "source_tree_sha256": "27ac0063c8d19f3e32ff2866e8d7e17d226d7bea00df962c5acac5e85102022e"
+  },
+  "independent_initial_manifest_diff": {
+    "initial_files": 1875,
+    "modified": 25,
+    "new": 170,
+    "deleted": 0
+  },
+  "restored_targets": [
+    {
+      "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+      "classification": "M",
+      "bytes": 41233,
+      "sha256": "da756f889563a854e54d057c934a7efb953b11a4ead1e7f229c26beaff77b9ac",
+      "git_blob": "2ca328ffbb2bee00afaa5e4ddf141406e3e22ea9",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3029305971,
+        "isize": 41233,
+        "trailing": 0,
+        "compressedBytes": 13412
+      }
+    },
+    {
+      "path": "openbot/desktop/src-tauri/src/deployment.rs",
+      "classification": "M",
+      "bytes": 130628,
+      "sha256": "9c2bac5a68cde0cc40622c57782b1fbf89a3c3cac2f7058ef1c72b3ba6b4a3f7",
+      "git_blob": "7268364bd896cf7b9101a6c54b3386dac546846f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 405427429,
+        "isize": 130628,
+        "trailing": 0,
+        "compressedBytes": 30229
+      }
+    },
+    {
+      "path": "openbot/desktop/src-tauri/src/install.rs",
+      "classification": "M",
+      "bytes": 137454,
+      "sha256": "5eec2525410740a94656d6597ce93870da97b424775a22164de7bc6f69243005",
+      "git_blob": "13124e17f94b0795239936d20d1c96f7394ea77d",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1332386190,
+        "isize": 137454,
+        "trailing": 0,
+        "compressedBytes": 28508
+      }
+    },
+    {
+      "path": "openbot/desktop/src-tauri/src/main.rs",
+      "classification": "M",
+      "bytes": 418910,
+      "sha256": "9fbf0c0ae1762b20fa09895ed747d7527f79d3e417d05c1943407e8ed4ad6521",
+      "git_blob": "c193abe872bf3cc6ac40d15c33e01bbb3ad0c657",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2284651804,
+        "isize": 418910,
+        "trailing": 0,
+        "compressedBytes": 83388
+      }
+    },
+    {
+      "path": "openbot/server/src/admin/controls.ts",
+      "classification": "M",
+      "bytes": 35155,
+      "sha256": "aa1ca74a493050ffd11b58b0ffb94de18d81f1401fcc66028faaa96a731524bd",
+      "git_blob": "3a689d0230b85299224e19c5afc6acc097571610",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 3,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/service.ts",
+      "classification": "M",
+      "bytes": 29420,
+      "sha256": "c04faac55fa7b47ea7e933e8a3500fa0442121a6a70ad35a2046c124004af0a1",
+      "git_blob": "5fa5ec21e327515cd37a395deeea54ec55c60eb6",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1864851922,
+        "isize": 29420,
+        "trailing": 0,
+        "compressedBytes": 7632
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "classification": "M",
+      "bytes": 19521,
+      "sha256": "493306d89edf7a26ae12fc42fea17beaccf17fd01f1683f3903b28e675cac225",
+      "git_blob": "8848fb3737827bf02fadd47414e87979fcce062b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2669380494,
+        "isize": 19521,
+        "trailing": 0,
+        "compressedBytes": 3949
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "classification": "M",
+      "bytes": 14252,
+      "sha256": "1974d5dedb34f00c94d979b30c18e0962e648e14d28b8ff618d1fe5fb857d37c",
+      "git_blob": "98a634dfb2db0ded05008497ebaad9216561230a",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3365440224,
+        "isize": 14252,
+        "trailing": 0,
+        "compressedBytes": 4384
+      }
+    },
+    {
+      "path": "openbot/server/src/audit.ts",
+      "classification": "M",
+      "bytes": 43787,
+      "sha256": "ec1d947cd05e8d25ac210777e47b69d604473c62472b31991509b24dc2aee124",
+      "git_blob": "9f006725bcb44d75a8b98e5290632bdbf11ff4bc",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 1,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/auth/roles.ts",
+      "classification": "M",
+      "bytes": 16001,
+      "sha256": "f06599a0ee7d4df79e1c5239408b26f030803b923784d08532723111a0549e88",
+      "git_blob": "0b32ef1c5be01cdb563e171560ac2707be07576b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 2,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/config.ts",
+      "classification": "M",
+      "bytes": 59001,
+      "sha256": "f922dee5e1764ce83837e039f43787409731f6fa9ccf7c29cf6e2c453059f030",
+      "git_blob": "0a1021a38d4eaa04d7a97ef4802d684fcf880d8f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 2,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "classification": "M",
+      "bytes": 10532,
+      "sha256": "26db3f60910fff8fa968d3b0f55434c4207819e7fefccd6d391571b99b12bd71",
+      "git_blob": "8b085f21e09bf480a92d20550388340ac40f8e30",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 922776768,
+        "isize": 10532,
+        "trailing": 0,
+        "compressedBytes": 2660
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/core.ts",
+      "classification": "M",
+      "bytes": 26447,
+      "sha256": "0091d749d70791e10c462bfc67534089bc5e88a1c93bd38dd8bb467c1d15f64a",
+      "git_blob": "38b94cc1b66876764af887a7c268c30d500f4c26",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3783742436,
+        "isize": 26447,
+        "trailing": 0,
+        "compressedBytes": 8466
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "classification": "M",
+      "bytes": 1747,
+      "sha256": "f2c7d495bfc245e148dc976669ed1da7b530ad71b99a5c22845cb14f1f4951ed",
+      "git_blob": "26afec75aeaf3183292e188f3239dfdcd0fe4780",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3378177241,
+        "isize": 1747,
+        "trailing": 0,
+        "compressedBytes": 469
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/plugins.ts",
+      "classification": "M",
+      "bytes": 39993,
+      "sha256": "802dae12d1c5c40a52ef9208b2fef3e8851248f58cd34fce5d5e13ca38a1554d",
+      "git_blob": "5e27d88839b386af9e3ca871c9ecc23bfa6fe912",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/tasks.ts",
+      "classification": "M",
+      "bytes": 3589,
+      "sha256": "0586f6b196ca10a6dacb300e0961b43e65305c1ff4be17b12006a0aae8e7b755",
+      "git_blob": "d54c14ff4630ad93c9714dbcef8d19beaefdd323",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/threads.ts",
+      "classification": "M",
+      "bytes": 2571,
+      "sha256": "5f7946caab15a29f62e4fa17ff8f373b2725453ccbcff8aff9e1eb8b03a8916a",
+      "git_blob": "4c613d8a5bc400cbde5d8789c1848d727b07c408",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 115385460,
+        "isize": 2571,
+        "trailing": 0,
+        "compressedBytes": 988
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/wakerflows.ts",
+      "classification": "M",
+      "bytes": 2706,
+      "sha256": "40e74432740329cb378928912a9ec7d35b8bf4ce1208df631269915bd921f52d",
+      "git_blob": "2b2d4efd53f6979cc17916d9eb0c0650df4f828c",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/index.ts",
+      "classification": "M",
+      "bytes": 156700,
+      "sha256": "bc7187983edcba3100caf0c42ce9b4d8361dd35f237287b7074ace93bfa5b125",
+      "git_blob": "f53d3f69258a11336f1c8a42eceb7b425b6d3027",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_DECLARED_GZIP_RAW_HASH_AND_CRC_VERIFIED_BASE64_IDENTITY_OBSERVED_RAM_ONLY",
+        "crc32": 2928012675,
+        "isize": 156700,
+        "trailing": 0,
+        "compressedBytes": 42387
+      }
+    },
+    {
+      "path": "openbot/server/src/plugins/catalogue.ts",
+      "classification": "M",
+      "bytes": 30987,
+      "sha256": "b42535f21c80e79b6b5b317d01a40b80a09c9281617a1bd24e2d495472d618cf",
+      "git_blob": "de748bd0d19883f8c37369478c1c0ca8b30baf9e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 3,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/routines/run-turn.ts",
+      "classification": "M",
+      "bytes": 39851,
+      "sha256": "ceec5de87acdb1fa9e06f73cabb3a3701adeb8729fb62125196c3209aa4b83b9",
+      "git_blob": "ff5f7932153f0efbab7b9c8c0bac72d79f179488",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3522494817,
+        "isize": 39851,
+        "trailing": 0,
+        "compressedBytes": 13356
+      }
+    },
+    {
+      "path": "openbot/server/src/threads/postgres-runner.ts",
+      "classification": "M",
+      "bytes": 21952,
+      "sha256": "4415639a5109b2539bd3f20f650f6e04c4a8bbcabb0b55a4aacdb9fdfed54d9d",
+      "git_blob": "60542a7f2cf33eae26eb311466bfde5b96525642",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3351200463,
+        "isize": 21952,
+        "trailing": 0,
+        "compressedBytes": 7141
+      }
+    },
+    {
+      "path": "openbot/server/tests/plugin-catalogue.test.ts",
+      "classification": "M",
+      "bytes": 28223,
+      "sha256": "e9e15d0f11be382a7ff4869acb67f177a01e86fe9df32ba71b9790618b221eb3",
+      "git_blob": "7f453e55e2ebbcbc6bfcf849a0514bafced093ba",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 2,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/roles.test.ts",
+      "classification": "M",
+      "bytes": 24905,
+      "sha256": "0edf8da700d6a733805b8c37844f861849a7cb4c96a5f5e79cdee3b009542a73",
+      "git_blob": "dbb203be2e935701e4de521855f61db09de67138",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 19,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser.test.ts",
+      "classification": "M",
+      "bytes": 48278,
+      "sha256": "54e7b0696f89dd0e4cc710724231675ec4f0244f2b02639d9035d6baf192e2a4",
+      "git_blob": "b4602b3ecf478e04d5adea503cb0c43f82abab80",
+      "mode": "100644",
+      "verification": {
+        "transport": "ORIGINAL_BASELINE_STRICT_V9",
+        "hunks": 23,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/app/src/lib/tasks/actions.ts",
+      "classification": "N",
+      "bytes": 478,
+      "sha256": "81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63",
+      "git_blob": "44abbaf7c8beede4d3a066fbc6305daf539f43e4",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 12,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-actions.test.ts",
+      "classification": "N",
+      "bytes": 4353,
+      "sha256": "cc5f6a6f7504398aa3b4b40c5991b7e727ba581e8b223731d87fdc763b79cfc3",
+      "git_blob": "d26e18cc72dfd17d40352240cce867268e356c34",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 126,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-workbench-a7-contracts.test.tsx",
+      "classification": "N",
+      "bytes": 19580,
+      "sha256": "62be007bb4101470abb06c1fd8098dad8dbbbcc1c3ace52b7be8dbe09558f229",
+      "git_blob": "801bbd55aef24b5e5af4594b4cd52727bf6fa5e7",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_UTF8_SOURCE_TEXT_IN_JSON_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+      "classification": "N",
+      "bytes": 15105,
+      "sha256": "3cae74a38a8096d6460e3740bedabba6bf2070d17f3fc9e63152cf0adaa64cd7",
+      "git_blob": "95fbf74e4dd0050cf9e541e4de43f5add5260a02",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2121431537,
+        "isize": 15105,
+        "trailing": 0,
+        "compressedBytes": 4892
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+      "classification": "N",
+      "bytes": 2927,
+      "sha256": "b2ebfbabb224d9bc78f7b9cc6bb31107899fd75520c05b0eeeeb3c0abdc8c87a",
+      "git_blob": "3b0256d3dc57d17da2494c2a70f4c36325361720",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_AND_STRICT_DELTA_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "baseHunks": 1,
+        "deltaHunks": 1,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-workbench-inflight.test.tsx",
+      "classification": "N",
+      "bytes": 21400,
+      "sha256": "cd299f0251e9707117c0222f092de7fcd0b77177393be8f5d6e5f158085ff6bd",
+      "git_blob": "b635510915f30f0880fe923b023b09b512b34786",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3008266912,
+        "isize": 21400,
+        "trailing": 0,
+        "compressedBytes": 6171
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-workbench-mutations.test.tsx",
+      "classification": "N",
+      "bytes": 17215,
+      "sha256": "652b542f95cf0e516a57189e91c0d1cb447c8a8ef2ad2145860c73b058d9bac4",
+      "git_blob": "760efcd4ff3282e327be01564390b55626f77274",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1327976197,
+        "isize": 17215,
+        "trailing": 0,
+        "compressedBytes": 5362
+      }
+    },
+    {
+      "path": "openbot/app/tests/tasks-workbench-navigation.test.tsx",
+      "classification": "N",
+      "bytes": 16146,
+      "sha256": "fcb141ba9c7b9a528bae611bd34ea2b6c88b96e77b45cf4b0a840ea2859ad5b5",
+      "git_blob": "a87f9915e21d2624918aa9cb7cc55041a44afc5c",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_AND_STRICT_DELTA_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "baseHunks": 1,
+        "deltaHunks": 10,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/desktop/src-tauri/src/release_transaction.rs",
+      "classification": "N",
+      "bytes": 22263,
+      "sha256": "eb8078731e153584ddbcc054032542d4ac66079a2bb6bb32aefc056a863a1841",
+      "git_blob": "b51b68a732b9783b16fd249d82d1e7bca1582c3c",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1748511821,
+        "isize": 22263,
+        "trailing": 0,
+        "compressedBytes": 6304
+      }
+    },
+    {
+      "path": "openbot/desktop/src-tauri/src/release_transaction_tests.rs",
+      "classification": "N",
+      "bytes": 27489,
+      "sha256": "fbb87c3c2a0946622b9472ef01e183f8512d2e1e3a94d4f9c822a2e5d3025d43",
+      "git_blob": "45f32503c413d0fdc1e5c9c098b7c5ba275149e0",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1092550871,
+        "isize": 27489,
+        "trailing": 0,
+        "compressedBytes": 6986
+      }
+    },
+    {
+      "path": "openbot/docs/cloud-dev/b1-doctor.md",
+      "classification": "N",
+      "bytes": 6919,
+      "sha256": "f5b1a25ad817536bcccb78351b272bfd839e8c62657b45f9873c9b87f9d136b1",
+      "git_blob": "e84ad6675bdd829f22106a66536f96328920bcd8",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_UTF8_SOURCE_TEXT_IN_JSON_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/docs/cloud-dev/b2-verify.md",
+      "classification": "N",
+      "bytes": 10750,
+      "sha256": "1146de756af5de63b60915f721332ad7db310e662355ba11d80eeaa27e54ab7f",
+      "git_blob": "623eee81643b674a30fd3c3ff4cabb2192f70454",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1593379521,
+        "isize": 10750,
+        "trailing": 0,
+        "compressedBytes": 4819
+      }
+    },
+    {
+      "path": "openbot/docs/cloud-dev/b3-baseline.md",
+      "classification": "N",
+      "bytes": 3223,
+      "sha256": "00ea9d3b3446fe7a24fc931375fe19ccfc457915ea12aabbc64bb7ee27fd592c",
+      "git_blob": "6f0a41a815535aeeafa86fd29bfe8e0bcc3974af",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2843589764,
+        "isize": 3223,
+        "trailing": 0,
+        "compressedBytes": 1938
+      }
+    },
+    {
+      "path": "openbot/docs/cloud-dev/b4-handoff.md",
+      "classification": "N",
+      "bytes": 10895,
+      "sha256": "c65977d37517e270d29ed5b020ca667b352f2838d050aa4e9b53e51341bbe874",
+      "git_blob": "a6f90f382d4081485ac2e29d2ddd09a0383cae68",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 209846192,
+        "isize": 10895,
+        "trailing": 0,
+        "compressedBytes": 4870
+      }
+    },
+    {
+      "path": "openbot/docs/cloud-repair/telemetry/C2-plan-and-results.md",
+      "classification": "N",
+      "bytes": 6014,
+      "sha256": "57f05aeb11109885124d30f5922b44f037a1170db0f22bbfb6524e51c7a310d3",
+      "git_blob": "6e9bffa683926adacb5c9e905dce52e9cf9c9f8b",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 36,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/docs/cloud-repair/telemetry/sdk-evidence.json",
+      "classification": "N",
+      "bytes": 2536,
+      "sha256": "96cc26617070ed3050548e46cc138728597097986308a2294edf5da9e981e7ab",
+      "git_blob": "d205fa8d10b744dbf99c8208f4f4f29427de2642",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 56,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/docs/recovery-lineage/README.md",
+      "classification": "N",
+      "bytes": 5798,
+      "sha256": "2cb180b9f46a70504258ada8ee0e239d0d1070b3e133cec5ca38138b9951f303",
+      "git_blob": "b33b5d86ccb7b282f2ca0e7aa1a4bee5f77b0c30",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 52,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/docs/task-workbench/A2.md",
+      "classification": "N",
+      "bytes": 4587,
+      "sha256": "6c8b13fe9f98bee6604d4adc079832039023e08e3ec77ddbced12f978163a17d",
+      "git_blob": "1462e74bb60b168ef0b7a6e9e7f4098e15525459",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1014463013,
+        "isize": 4587,
+        "trailing": 0,
+        "compressedBytes": 2835
+      }
+    },
+    {
+      "path": "openbot/docs/task-workbench/A5.md",
+      "classification": "N",
+      "bytes": 7814,
+      "sha256": "f47481d74e34ebf2a95899c1a3c7a91bfe074b5538d33bddfdca1dfff67aaa7a",
+      "git_blob": "c1639038101a5c19f30e041a13d2b56f1ec41bdf",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 466188728,
+        "isize": 7814,
+        "trailing": 0,
+        "compressedBytes": 4484
+      }
+    },
+    {
+      "path": "openbot/docs/task-workbench/A6.md",
+      "classification": "N",
+      "bytes": 8588,
+      "sha256": "106b11321ed81b6f95e0682eb849d9d73bef5a91915ef52bfaf1def972330a0c",
+      "git_blob": "a938bf64ffce5d7008df628a9c3dfc54268add66",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 268935678,
+        "isize": 8588,
+        "trailing": 0,
+        "compressedBytes": 5104
+      }
+    },
+    {
+      "path": "openbot/docs/task-workbench/A7-contracts.md",
+      "classification": "N",
+      "bytes": 6058,
+      "sha256": "7d5f48cf1810a8572a0695143afa265441899e6aa1ba3de0b65356a5d2313e3e",
+      "git_blob": "6baac14aea64f64b672af8b0fc79e6015ba88ef3",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_UTF8_SOURCE_TEXT_IN_JSON_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/baseline.py",
+      "classification": "N",
+      "bytes": 18966,
+      "sha256": "fc3627b6df5378534db7af7562fad29060dc5be5252255069cf79cdb72ca2448",
+      "git_blob": "fadd510f967939db3f017a131b6d29f17971401b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 656731064,
+        "isize": 18966,
+        "trailing": 0,
+        "compressedBytes": 6039
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/doctor.py",
+      "classification": "N",
+      "bytes": 28978,
+      "sha256": "5c7daf00d54f2c4778392b46a5e4c0c3715e741f744ecd8c12c9db76fa0893e6",
+      "git_blob": "1803acd8b13c0c6966e5b2023f084216dfddc321",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 40143783,
+        "isize": 28978,
+        "trailing": 0,
+        "compressedBytes": 7723
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/handoff.py",
+      "classification": "N",
+      "bytes": 13782,
+      "sha256": "55199302f1f9f66791720e4dc21c29203d53ffe3d46178e24b02463d03b3b6a4",
+      "git_blob": "de9a07f08d8a7188d072a281c359a6b749982b9b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3311938032,
+        "isize": 13782,
+        "trailing": 0,
+        "compressedBytes": 4192
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/receipt.py",
+      "classification": "N",
+      "bytes": 31169,
+      "sha256": "158e195a3cc36fe078ea80d2debef80bb524fafbe318cdf34fee40a7d6dccca9",
+      "git_blob": "4f62a7c5e4eff2a7a1cfd62b01faf331c5209ee4",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1163845708,
+        "isize": 31169,
+        "trailing": 0,
+        "compressedBytes": 6372
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/reporting.py",
+      "classification": "N",
+      "bytes": 5793,
+      "sha256": "0ecbb710cad3e31782327200269a96d293aaf86e4afb9b46a34d319029da8b21",
+      "git_blob": "20ae86f689f0834b2d162f20681e9a8837022d7a",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 226947055,
+        "isize": 5793,
+        "trailing": 0,
+        "compressedBytes": 1928
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/__init__.py",
+      "classification": "N",
+      "bytes": 77,
+      "sha256": "b6853ec7718ca01b110d3b323490330e911296bd35c5a5d411176b74b6396932",
+      "git_blob": "c7c0d41d20cd58c007d9507503d1d9a1962d9ca8",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2419386229,
+        "isize": 77,
+        "trailing": 0,
+        "compressedBytes": 91
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/test_baseline.py",
+      "classification": "N",
+      "bytes": 18216,
+      "sha256": "84d7e56835ab6c97c2bd75c19c24ab84206d44c45e749cff248faf5610b61cd7",
+      "git_blob": "e4c288c755da1158167b43cd83eb6c329449d450",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 4219386605,
+        "isize": 18216,
+        "trailing": 0,
+        "compressedBytes": 4482
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/test_doctor.py",
+      "classification": "N",
+      "bytes": 27595,
+      "sha256": "746f0e376a7723debf25790d0f15111939ede2c67a081d2e4a2958a63f366e81",
+      "git_blob": "a7dfcd06c2b615502ac60631d6fe0c726fa68aa7",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 590,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/test_handoff.py",
+      "classification": "N",
+      "bytes": 21034,
+      "sha256": "ecb3fe711c33344e4f0aa6fb572ec05969e6d45caf14482f4dcac13d76fc38f4",
+      "git_blob": "b41bdf614560d6aeabcea6905745babbfa786544",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 304515129,
+        "isize": 21034,
+        "trailing": 0,
+        "compressedBytes": 5074
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/test_receipt.py",
+      "classification": "N",
+      "bytes": 42961,
+      "sha256": "9a9deae1c5b7d4c4bc6165c441bc4bd5c879906bddad9aff83b4572c21c4310f",
+      "git_blob": "1673a5a12e03516f473709a19dc1ad808e8855dd",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2919186789,
+        "isize": 42961,
+        "trailing": 0,
+        "compressedBytes": 6727
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/test_reporting.py",
+      "classification": "N",
+      "bytes": 7884,
+      "sha256": "8b2f2ae3b73bdde598782becd43aa750c2026fa2e00b950d4220e0d6d694e60e",
+      "git_blob": "3bd956b0c57294c4ba99102c122372a5dfb2beb8",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 172,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/tests/test_verify.py",
+      "classification": "N",
+      "bytes": 67612,
+      "sha256": "c49075bbfabdc7af3302240cb522727a9883e7d480037c0d5da802974de82e0a",
+      "git_blob": "4a90934931fe7019d9d10a1b0b94394a40f71573",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1805654550,
+        "isize": 67612,
+        "trailing": 0,
+        "compressedBytes": 12458
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/verify-plan-smoke.json",
+      "classification": "N",
+      "bytes": 452,
+      "sha256": "7b60878e4146032a5ec722e18fc1b35c0ad73b63812962b015999e52eb865e7f",
+      "git_blob": "48b870a1cb14bde997ba76eef5c3302279a45179",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3527759519,
+        "isize": 452,
+        "trailing": 0,
+        "compressedBytes": 256
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/verify-plan-tool-self-check.json",
+      "classification": "N",
+      "bytes": 436,
+      "sha256": "3cbb16d3ae7263ecb50877bd861b8f642e20a4f0d4fff2286af27654dc37c224",
+      "git_blob": "4eb7bb609f9d8ba344a56786caae005c4536524b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 4265384916,
+        "isize": 436,
+        "trailing": 0,
+        "compressedBytes": 255
+      }
+    },
+    {
+      "path": "openbot/scripts/cloud-dev/verify.py",
+      "classification": "N",
+      "bytes": 48513,
+      "sha256": "8b2edcee06c9df41d83a2bc8a3dae3a5023e30010de071407376408445563443",
+      "git_blob": "1a426e18b4caf4a4bac29bca76d8128fe2295493",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 295338942,
+        "isize": 48513,
+        "trailing": 0,
+        "compressedBytes": 13602
+      }
+    },
+    {
+      "path": "openbot/scripts/recovery-lineage/CATALOG-PROTOCOL.md",
+      "classification": "N",
+      "bytes": 3519,
+      "sha256": "85bc9735c5ab69c5188dbfce1818b57045a02747a82a4155f3526183b65e9f3f",
+      "git_blob": "cc7eabe95d9454a007aa3ce1509551195660a7e0",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_UTF8_SOURCE_TEXT_IN_JSON_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/scripts/recovery-lineage/bundle.ts",
+      "classification": "N",
+      "bytes": 6687,
+      "sha256": "0a82af25a3901adf17aa0cdb8a2f756e815d5f0a38b034060e3e09643bd66a24",
+      "git_blob": "0f68fe4ad1eef86c5618c2bcc5f67151961f7ae6",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 210,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/scripts/recovery-lineage/manifest.ts",
+      "classification": "N",
+      "bytes": 2801,
+      "sha256": "3d8f4a4bb356155217886535584b297e32ff87e2941ac85cba070bca73fc7d5d",
+      "git_blob": "8669a00f3f9d795ddd58c22880f44920e93c0cfe",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 87,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/scripts/recovery-lineage/preflight.ts",
+      "classification": "N",
+      "bytes": 18473,
+      "sha256": "314dba041fce3f8c17b55fcbecce54e3be7c4de2bf4e8b5e0d0e61bb1d707fec",
+      "git_blob": "204aea21502283b1e0b5df6947931e8f9af0f854",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_UTF8_SOURCE_TEXT_IN_JSON_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/FLOW-ACTIVATION-CONTRACT.md",
+      "classification": "N",
+      "bytes": 8178,
+      "sha256": "7f53152fdd46e68c66f0ac92338156b11be785bd29e7847452e2a211658907c9",
+      "git_blob": "f56060d1c7462f916e3fda3c403aae85102357a3",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0081_snapshot.json",
+      "classification": "N",
+      "bytes": 292641,
+      "sha256": "ef4b170efbc98717bce811b27d3f5d35c274146f5faec50bc787028acbfaa24c",
+      "git_blob": "c4dff6b062facad39719d6156bba822aa5175925",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0082_snapshot.json",
+      "classification": "N",
+      "bytes": 310313,
+      "sha256": "2cc73e7181b11baa27dcad48ab412cf5d89c13d19d0f06a4640e6cdaa7a883e8",
+      "git_blob": "ecb079ccb95e33bf5b902d26f0e94b8fc704e5a9",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0083_snapshot.json",
+      "classification": "N",
+      "bytes": 312091,
+      "sha256": "159c6313247a705e2dd71efe46c90cc734ee9a8a0be3b66f4c114ef343335d61",
+      "git_blob": "c86494580a16cec3efaa67d3b883c93304210363",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0084_recovery_flow_source_foundations_snapshot.json",
+      "classification": "N",
+      "bytes": 329146,
+      "sha256": "12a3221d57c57de1f3639d126ea90e0724e84e64fd2965e4fb62d197fced2a07",
+      "git_blob": "417069a4057b0697c24c13d6388cb6df2c3b3614",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0085_snapshot.json",
+      "classification": "N",
+      "bytes": 352947,
+      "sha256": "b02d8b70f513bcc764a2be96a4d88184d73392b14eb754a8067b9cd123a00eab",
+      "git_blob": "4158e89b9e0278263a382bca5ac05904c473cf39",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0086_snapshot.json",
+      "classification": "N",
+      "bytes": 369468,
+      "sha256": "6beec7f83f05e43d212c44f990ba625c4714acb45fdac6b4082df3085e89541a",
+      "git_blob": "a101176140b3a848a16d445ede52966cf0ff0736",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0087_snapshot.json",
+      "classification": "N",
+      "bytes": 389321,
+      "sha256": "86cd06c067f98c93911bc639cb3df766c54cb4d7478f95c414bf29b34fafb3ef",
+      "git_blob": "65b321784e13d5558d107ce0f2ce915bd06441f3",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_PARTS_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0088_snapshot.json",
+      "classification": "N",
+      "bytes": 406139,
+      "sha256": "eb784f5a88fea45abc65672bf804d7a3ad20642fd81578ccecd236be77e92360",
+      "git_blob": "6ba59e508d2fe3ce12f362d1e70d3a01147e9d88",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 4282784498,
+        "isize": 406139,
+        "trailing": 0,
+        "compressedBytes": 21635
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0089_snapshot.json",
+      "classification": "N",
+      "bytes": 423098,
+      "sha256": "6e16372f22dba1583e1898f3c10e21a1ce7c76f6ddc16595f86a49806a0769cf",
+      "git_blob": "f7518b23c69e9d0d907ce0c433db2a677f05643d",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2233153300,
+        "isize": 423098,
+        "trailing": 0,
+        "compressedBytes": 22177
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0090_snapshot.json",
+      "classification": "N",
+      "bytes": 427649,
+      "sha256": "f49a5fdbd213a1273b898a925e486499a6b1357243bb74f0a4108bdcb5f6d44e",
+      "git_blob": "1cf0f3e1099dce797e07996a4f4719abc0510f9d",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3725033315,
+        "isize": 427649,
+        "trailing": 0,
+        "compressedBytes": 22468
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0091_snapshot.json",
+      "classification": "N",
+      "bytes": 436634,
+      "sha256": "9d26860fe19084a4de2635a4e28865ff38258e4781eeb8cd1bf45fe1c872e0ef",
+      "git_blob": "eed687d8a59c51b0be955bcab8302dfdcb222159",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1702455900,
+        "isize": 436634,
+        "trailing": 0,
+        "compressedBytes": 22767
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0092_snapshot.json",
+      "classification": "N",
+      "bytes": 436885,
+      "sha256": "b0bc37ce370b357d08a9f513dfad13d186c91c161c8b0abadf045b9912a22893",
+      "git_blob": "f3b2762cc269fd152b2315c2698a32abe7c24214",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 474684565,
+        "isize": 436885,
+        "trailing": 0,
+        "compressedBytes": 22811
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0093_snapshot.json",
+      "classification": "N",
+      "bytes": 442363,
+      "sha256": "acaa87bf970da9ffd06198e59a365d10d2d9d3f03f56dbc07cfe393d76abc7eb",
+      "git_blob": "d1b32398a7f3ce5d4fcc8b9a868dc49d7feef3aa",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1452873955,
+        "isize": 442363,
+        "trailing": 0,
+        "compressedBytes": 22984
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0094_snapshot.json",
+      "classification": "N",
+      "bytes": 449141,
+      "sha256": "27e268245fa3f0ed13f13035c751ac27c006d274191c670f92183521863cdfd2",
+      "git_blob": "0e3f5dd3647e5f814d8a162e4e8798c8b93238bc",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2053606875,
+        "isize": 449141,
+        "trailing": 0,
+        "compressedBytes": 23611
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0095_snapshot.json",
+      "classification": "N",
+      "bytes": 454058,
+      "sha256": "77ed1fad2c312ed16635d95a6fb40fe4e230b96f53c007c7b71a881dcd57cc4b",
+      "git_blob": "8008339698ac0e53a959217d5b8f63cc78c86e4f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3480808746,
+        "isize": 454058,
+        "trailing": 0,
+        "compressedBytes": 23884
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0096_snapshot.json",
+      "classification": "N",
+      "bytes": 463387,
+      "sha256": "e28a48738b23d9f2ff41d1e0b515e189ecb5bd44db2befb652af1bdcb126963b",
+      "git_blob": "55e053e11deeaaa199c767790a58b594bce7b2c2",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 773966835,
+        "isize": 463387,
+        "trailing": 0,
+        "compressedBytes": 24303
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0097_snapshot.json",
+      "classification": "N",
+      "bytes": 471291,
+      "sha256": "0bc645a65fc289437489a3e000596616f3694bc6325a4be7a10f59597e941a37",
+      "git_blob": "9e356435738d67c2bafb98846c0b1ebf283b078d",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2398629326,
+        "isize": 471291,
+        "trailing": 0,
+        "compressedBytes": 24658
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0098_snapshot.json",
+      "classification": "N",
+      "bytes": 479137,
+      "sha256": "58b5758a353915408091102051bdfed77b5bc168e4cd91ec0169bcaa7ba5eb26",
+      "git_blob": "2ca93242ebc347e8fcbaa61abc1262abafd9ef19",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 507725359,
+        "isize": 479137,
+        "trailing": 0,
+        "compressedBytes": 25205
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0099_snapshot.json",
+      "classification": "N",
+      "bytes": 488317,
+      "sha256": "e08e4184dbf674fa4c88d6e55f270f2e371b1541a046ab8da29068084fd9ca0c",
+      "git_blob": "6650781952e23fe1c0b51513eae6772095b681e2",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1414812220,
+        "isize": 488317,
+        "trailing": 0,
+        "compressedBytes": 25827
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0100_snapshot.json",
+      "classification": "N",
+      "bytes": 498108,
+      "sha256": "fd218591c0165512dbaf63a36fed8ddd775cc577d090083510329c6d6779fc93",
+      "git_blob": "af2d6cff3841cb876cedce1c68a8eb46bf4ec3a4",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1120874765,
+        "isize": 498108,
+        "trailing": 0,
+        "compressedBytes": 26437
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0101_snapshot.json",
+      "classification": "N",
+      "bytes": 507555,
+      "sha256": "1631a6306279b57d76ef47a95f6ca6f063d7ef62d333e06f7b979c22b4ee6cd2",
+      "git_blob": "f64279da6be25bdee2eef81cf3f2a58701f0a189",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2695149807,
+        "isize": 507555,
+        "trailing": 0,
+        "compressedBytes": 27097
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0102_snapshot.json",
+      "classification": "N",
+      "bytes": 537031,
+      "sha256": "443ee53d6f553e665e9c1b72f540c277ad4dfb025bd052f5a3e95985e3096ba9",
+      "git_blob": "1cd2fb143ae54ddff461ca423ac158e2808a2273",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1530812176,
+        "isize": 537031,
+        "trailing": 0,
+        "compressedBytes": 28728
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0103_snapshot.json",
+      "classification": "N",
+      "bytes": 558672,
+      "sha256": "235b48c0acfc9bf76871bcf4e2b0d636d357bdbfb6c4e796caa4a1e9092f91df",
+      "git_blob": "36c8e5459a71546d75b6552d575193f5344f6e7a",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3713497481,
+        "isize": 558672,
+        "trailing": 0,
+        "compressedBytes": 30208
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0104_snapshot.json",
+      "classification": "N",
+      "bytes": 570806,
+      "sha256": "1430962f8cf028bf688f92747cbc46599f38068b46868f98dbcd3fa3db81f3ee",
+      "git_blob": "eeacdc0e02eb48d6b77956c12a1abcb12c512dd4",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 294556013,
+        "isize": 570806,
+        "trailing": 0,
+        "compressedBytes": 30910
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0105_snapshot.json",
+      "classification": "N",
+      "bytes": 594705,
+      "sha256": "c0477f74367fc3c80aec5a1596bee1ea1a7a3aa6247a0847f8c55a05cfab30a6",
+      "git_blob": "56f7994a32bc07818604a9f3de0f1c5f9dd0bc23",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 217490523,
+        "isize": 594705,
+        "trailing": 0,
+        "compressedBytes": 32248
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+      "classification": "N",
+      "bytes": 15995,
+      "sha256": "c9eb36952c8af649fb8813def53240a1b8bc5e4a33a8a025ef3a394ee80f6951",
+      "git_blob": "738e4ecf8036435ebc487e6fbe4c3153a6adfd37",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3172674502,
+        "isize": 15995,
+        "trailing": 0,
+        "compressedBytes": 2592
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0081_recovery_subject_and_binding.sql",
+      "classification": "N",
+      "bytes": 172,
+      "sha256": "0769123048b40af0f80aa8a3c843f67ab19fac5c44ccb9243bbc6819d689bb40",
+      "git_blob": "ff70c6ea1cce1eb7baee9821a4ec974d7be363ff",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0082_recovery_role_foundations.sql",
+      "classification": "N",
+      "bytes": 9833,
+      "sha256": "683834fae02b1e3cf3be6ca85340098c2a1bd0cea6de65c7e14b80e3be7a93dc",
+      "git_blob": "c007cf2207b0de0eeda2e8dbe8f5094247848119",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0083_recovery_task_flow_audit_contract.sql",
+      "classification": "N",
+      "bytes": 938,
+      "sha256": "ee97d7862077239462aec225a1b71bf2b87d06a9d858b48dcaa7746a2b0856ea",
+      "git_blob": "a822dededf8c4c0c8ae4981ef495af58db3c72b9",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0084_recovery_flow_source_foundations.sql",
+      "classification": "N",
+      "bytes": 8236,
+      "sha256": "96cb4c921ca065856d4f3d641440907528d9ddf78e483ff09ff100aa2835e541",
+      "git_blob": "fc43dfb6588a502ba02e0ec7635df4075b2cb6ae",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0085_recovery_flow_source_run_records.sql",
+      "classification": "N",
+      "bytes": 12015,
+      "sha256": "a94c4a80167f67e79fee01f71483b7964985da4957a0221280f79cebe279e4c2",
+      "git_blob": "6c64733236897a36f5ee4189f90c52fe564936cc",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0086_recovery_flow_source_runtime_records.sql",
+      "classification": "N",
+      "bytes": 8857,
+      "sha256": "21d90fc2a2505943db1e1687109820527660b8ec7b87d2e8a6b303107fa723bd",
+      "git_blob": "5f1cf1ff0896669451ad879caf17733ee631f30e",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0087_recovery_flow_source_original_records.sql",
+      "classification": "N",
+      "bytes": 11428,
+      "sha256": "e5e5fb88be31f330280ea3e045d29da6d3315e0df2f82d854df16d399a8fd7f9",
+      "git_blob": "956c52ef4c4992a37e4e0c744dda4b7f2909085b",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0088_recovery_flow_run_coordination.sql",
+      "classification": "N",
+      "bytes": 7714,
+      "sha256": "a7623f0e399a806cbc195dd18f4e4ff2f64aa674a8fae25c4152c71e823c3786",
+      "git_blob": "c27b99b3d0d898062fd06d65726a53b8f66aac18",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3175576934,
+        "isize": 7714,
+        "trailing": 0,
+        "compressedBytes": 1045
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0089_recovery_flow_official_bindings.sql",
+      "classification": "N",
+      "bytes": 3140,
+      "sha256": "a1ffdceb492b8f3ba00b7fc78f994d608c016a7f171a3ba913a408c800112219",
+      "git_blob": "aad5c75764086f21596d83dc9de12a682fdd61cc",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2833081752,
+        "isize": 3140,
+        "trailing": 0,
+        "compressedBytes": 701
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0090_recovery_group_pipeline_start_receipts.sql",
+      "classification": "N",
+      "bytes": 2093,
+      "sha256": "8c9ae16ca677f0969d8035247443b8428afd02c4b936c96efd7b6d2e81fb0671",
+      "git_blob": "6d8549729b806a60a2ef6b6c151698243a0a3ed7",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2696948925,
+        "isize": 2093,
+        "trailing": 0,
+        "compressedBytes": 577
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0091_recovery_flow_customization_foundations.sql",
+      "classification": "N",
+      "bytes": 4376,
+      "sha256": "ecaf856fcc358e5e522a22b6e3f86e4aeb5aac64e1ddd48f273e65fdb3ef9a60",
+      "git_blob": "5a9678bffe437b2e292bac50fbabdcdfebc0ae7c",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2394752155,
+        "isize": 4376,
+        "trailing": 0,
+        "compressedBytes": 689
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0092_threads_domain_parent_key.sql",
+      "classification": "N",
+      "bytes": 119,
+      "sha256": "5dd8207d87d6f63823de57e60c639a5683341f8891dffa5398e72c6b221ed9dd",
+      "git_blob": "19ec85aab78aa40cb1b0242b9ff6924f72413b48",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3347921402,
+        "isize": 119,
+        "trailing": 0,
+        "compressedBytes": 117
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0093_recovery_flow_customization_turns.sql",
+      "classification": "N",
+      "bytes": 2476,
+      "sha256": "ca2502c0d5975497998fbd90c2532da4c47dde49142bd63da13ff00314daf061",
+      "git_blob": "3e53d4a4bf9a07e3fb8284ac0d5fa09ff4166578",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1048360703,
+        "isize": 2476,
+        "trailing": 0,
+        "compressedBytes": 594
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0094_approval_direct_execution_domains.sql",
+      "classification": "N",
+      "bytes": 2891,
+      "sha256": "c0e601568100b1c92bb25f24524a48150629e750f135cfb28e41d5c391e37c82",
+      "git_blob": "e8c85a847841f9f29dc9ad5368ba3ac0cbf0501b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 325079390,
+        "isize": 2891,
+        "trailing": 0,
+        "compressedBytes": 743
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0095_recovery_automation_foundations.sql",
+      "classification": "N",
+      "bytes": 1401,
+      "sha256": "1414446cb8749a6a097f843bf9d2cc2e42da63ff0e2c96b613bd78de8db85b3e",
+      "git_blob": "aaf886dca2da708fe95db3c42fb7f86071b5bbe8",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 4233514279,
+        "isize": 1401,
+        "trailing": 0,
+        "compressedBytes": 481
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0096_recovery_flow_sharing_foundations.sql",
+      "classification": "N",
+      "bytes": 4389,
+      "sha256": "d8f0f5dd67ce26328745b6b6d94b6e958d3906c7cd8a308d4ecfbc168e067190",
+      "git_blob": "5faa42fd18d89c79c911864a1730974639fcf898",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1049348111,
+        "isize": 4389,
+        "trailing": 0,
+        "compressedBytes": 805
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0097_recovery_automation_run_records.sql",
+      "classification": "N",
+      "bytes": 2530,
+      "sha256": "cb2b14e26104fa172d06bac1561e12a78220458d51a038e67630fece6f9f3211",
+      "git_blob": "06a5136e71dfdae2d6c60574807f0a054e9be683",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 204875116,
+        "isize": 2530,
+        "trailing": 0,
+        "compressedBytes": 623
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0098_recovery_device_binding_leases.sql",
+      "classification": "N",
+      "bytes": 4010,
+      "sha256": "ce329e24edef4d46e3355b301b6c004ce0e24cccb68b1216fa0b0e4efff32fc7",
+      "git_blob": "48c1fba83881d40f1359135c03efc2cdcbdf2662",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3909212398,
+        "isize": 4010,
+        "trailing": 0,
+        "compressedBytes": 758
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0099_recovery_security_policy_fences.sql",
+      "classification": "N",
+      "bytes": 5540,
+      "sha256": "30f22f1ee9cf0bf2104d6ef5803a51de993ade44c034bc25cd9f72dc046015a2",
+      "git_blob": "17c1edd22d20646dcb5673e23d6b5c8cf733e811",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 505521966,
+        "isize": 5540,
+        "trailing": 0,
+        "compressedBytes": 990
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0100_recovery_outbox_knowledge_heads.sql",
+      "classification": "N",
+      "bytes": 5279,
+      "sha256": "2780c167f92272e521b0e1cb39d904f61a9f83b643da5c857760f5aa1c532c62",
+      "git_blob": "e0fe3f11a27d01e25491f6d077ddba74e0ba9ceb",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 996684570,
+        "isize": 5279,
+        "trailing": 0,
+        "compressedBytes": 1016
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0101_ap2_parent_schema_reconcile_closed.sql",
+      "classification": "N",
+      "bytes": 3715,
+      "sha256": "c3c3c4c601261fd774cc729e1e117019385b6855bbd9d0d697174709db626da0",
+      "git_blob": "7fc3a74fb4dd42e81b12b45a54e78ea7e1465e46",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 600881198,
+        "isize": 3715,
+        "trailing": 0,
+        "compressedBytes": 826
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0102_approval_exact_input_objects_closed.sql",
+      "classification": "N",
+      "bytes": 12931,
+      "sha256": "6394f3f2f598888826339bd4037f2c8c82fd69768008368892599c913b08c64d",
+      "git_blob": "12af1a759c012a1cfbf352f9f98a063c8bc00b7b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2991979519,
+        "isize": 12931,
+        "trailing": 0,
+        "compressedBytes": 1510
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0103_knowledge_foundations_closed.sql",
+      "classification": "N",
+      "bytes": 11367,
+      "sha256": "d8c2845d3cd0a89e517b68200e78b143e569e840b67e9e4a3467bdc83fe697ed",
+      "git_blob": "cbef0fcc528502da6dd27eec5fe7bb718fb0c9e8",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 44294166,
+        "isize": 11367,
+        "trailing": 0,
+        "compressedBytes": 1538
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0104_resource_project_foundations_closed.sql",
+      "classification": "N",
+      "bytes": 7125,
+      "sha256": "1b03ea36d08be34439aa25d9d89f9a3fb3a2a9d6f1cf29ab3d9aac1cfda06951",
+      "git_blob": "619d581bfe62c103d72c367202b55297af7d515e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 4043158156,
+        "isize": 7125,
+        "trailing": 0,
+        "compressedBytes": 1043
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0105_knowledge_write_foundations_closed.sql",
+      "classification": "N",
+      "bytes": 12373,
+      "sha256": "37dd08048fe85c2ad2e2de8a0dbe48b78a19c3fe7fc56b6040ce24d6a337e5a0",
+      "git_blob": "7ddf3f97777624e3136406a7f780c1e569b22600",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1441207043,
+        "isize": 12373,
+        "trailing": 0,
+        "compressedBytes": 1604
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-protocol.ts",
+      "classification": "N",
+      "bytes": 11057,
+      "sha256": "2129614c5dbd7111e6e1708598c27c065c08f52a97d19fb542eb4a7a4611c972",
+      "git_blob": "5ea8bca2a773b213d861b0529744cd19eb56125e",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 281,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-store.ts",
+      "classification": "N",
+      "bytes": 13036,
+      "sha256": "aa2d5a5c1d89329c50dd89091155d45b69255bc92e96b79fa4d6fd6a7215fc2c",
+      "git_blob": "4248f406a1eb8f13e0dc2f563aafe614599adb2a",
+      "mode": "100644",
+      "verification": {
+        "transport": "NATIVE_SOURCE_AND_INDEPENDENT_ASCII_SHA256"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-target-local.ts",
+      "classification": "N",
+      "bytes": 8943,
+      "sha256": "6fd4a925453a24444fbfda3610b31ab6eb12910deecadf0f3a4c2fd8b5ce8182",
+      "git_blob": "7a7aa79782a05f70f50bac86452b3d76fd4d1350",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2950226106,
+        "isize": 8943,
+        "trailing": 0,
+        "compressedBytes": 2743
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-target-store.ts",
+      "classification": "N",
+      "bytes": 22423,
+      "sha256": "c2a82247205dfa4bd8d63bde997994ab36bcc184f4ce38737ec0c0d6097a0b97",
+      "git_blob": "46a2ee890b920d51e558bcf0d7984bc36770e34b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1194623890,
+        "isize": 22423,
+        "trailing": 0,
+        "compressedBytes": 5816
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
+      "classification": "N",
+      "bytes": 9361,
+      "sha256": "bba2bd4f4c4109e0b5e2d07066a924f86e5bbd1d887c05e55ec604213dbb49f8",
+      "git_blob": "0edb5f1d70eec6d73a4494bd8021b61440c060fa",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3572032020,
+        "isize": 9361,
+        "trailing": 0,
+        "compressedBytes": 3225
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-input-json-materializer.ts",
+      "classification": "N",
+      "bytes": 11512,
+      "sha256": "1f00ea78d598d1736512133066b12072f331f31c1e900aad9c97f1c718398b19",
+      "git_blob": "dd3605d02807a58a1fa1302e5ae336b5a2bcf44c",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2466908853,
+        "isize": 11512,
+        "trailing": 0,
+        "compressedBytes": 3438
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-input-json.ts",
+      "classification": "N",
+      "bytes": 6534,
+      "sha256": "24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45",
+      "git_blob": "ff562c1702dfa26d258ce773fc67a32bbb680d2a",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 809323405,
+        "isize": 6534,
+        "trailing": 0,
+        "compressedBytes": 2406
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-crypto.ts",
+      "classification": "N",
+      "bytes": 7143,
+      "sha256": "52aecfa4c153d164fd8e5cc6e61ff7eb2e98613191393e5c2344a4cc3a428341",
+      "git_blob": "8a6f18af3a76b9ad446a5cee264f3b1da32efb3b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1429896865,
+        "isize": 7143,
+        "trailing": 0,
+        "compressedBytes": 2569
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-header.ts",
+      "classification": "N",
+      "bytes": 7168,
+      "sha256": "e40e6dc5829c99af2ec204e91b5e25f71bd1fdca25f39987552973ebd68e5445",
+      "git_blob": "475b430210dea68a9e16982cde03e0eff73aaa59",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 379033433,
+        "isize": 7168,
+        "trailing": 0,
+        "compressedBytes": 2510
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-wire.ts",
+      "classification": "N",
+      "bytes": 5644,
+      "sha256": "7848e9b23a2dd2648b3f682e7be434885bbaddfd0052dbd8d9d0095874cdf2e8",
+      "git_blob": "5642ca1b1a72e2ae149bcf55e36b772442f961f9",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1366595880,
+        "isize": 5644,
+        "trailing": 0,
+        "compressedBytes": 1961
+      }
+    },
+    {
+      "path": "openbot/server/src/auth/role-writer-lifecycle.ts",
+      "classification": "N",
+      "bytes": 9068,
+      "sha256": "bc81ce7784bea2c5e4d9d65de3a812a497d2d226b8209de858dd9ed737a47563",
+      "git_blob": "3904651344e4a8308b536ba941a425dae7fd4824",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 292,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+      "classification": "N",
+      "bytes": 3336,
+      "sha256": "e23afbf4a11cbbb965a09a992ce1ac22578b08a40ec28c9a483a4049c72ddf7c",
+      "git_blob": "f4b7167267c32030a4043e0d8fe6815656983f3b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3642165691,
+        "isize": 3336,
+        "trailing": 0,
+        "compressedBytes": 993
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+      "classification": "N",
+      "bytes": 12930,
+      "sha256": "0e9be153bdb8a0fb6ffd2dd0e6df4551dc9aeed0031eb0c39c7e2aaa0f98e4ab",
+      "git_blob": "aca215ba45a4df2ae60f7875e8d935723d9e008e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1188456057,
+        "isize": 12930,
+        "trailing": 0,
+        "compressedBytes": 2047
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/automation-foundations.ts",
+      "classification": "N",
+      "bytes": 1735,
+      "sha256": "ee7a5da74f2f49f69c2bc1425aca40519a116e597aa09cafd81b29997f3a58a5",
+      "git_blob": "30aaa057c907399272562ecc5d2a24db2b0074bf",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2689692258,
+        "isize": 1735,
+        "trailing": 0,
+        "compressedBytes": 653
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/automation-run-records.ts",
+      "classification": "N",
+      "bytes": 3043,
+      "sha256": "01b7f6cf19f7b22d80004a018ab59f3d2a9b31dbe77b6fdbbe94d168ed2f6140",
+      "git_blob": "befc051b34c25e703f63e15b109d6fce2995a295",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1597072976,
+        "isize": 3043,
+        "trailing": 0,
+        "compressedBytes": 831
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/device-binding-leases.ts",
+      "classification": "N",
+      "bytes": 4516,
+      "sha256": "643892e2d789a9eb229b6995db97e67e935136599514a28f9eab0b92776dbfdb",
+      "git_blob": "b5ed0f66f5bd95f8a3969c895da7847248190380",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 565879964,
+        "isize": 4516,
+        "trailing": 0,
+        "compressedBytes": 982
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-customization-foundations.ts",
+      "classification": "N",
+      "bytes": 4446,
+      "sha256": "59ee2058bb3394e0dd093ed6d36458d8d9f9dc2433c4be6c078455e2728ea3b8",
+      "git_blob": "400dc055c5513d59cebc0e7df2391ebb990eb06e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3655444927,
+        "isize": 4446,
+        "trailing": 0,
+        "compressedBytes": 847
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-customization-turns.ts",
+      "classification": "N",
+      "bytes": 2785,
+      "sha256": "0e0f587aa2c42cdabc58350d0b5fc7eb581921e38dc451083d67d580d6b86d9a",
+      "git_blob": "2cb8ce28c0f69fbb3d6462b698761d6d10659c16",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 922719853,
+        "isize": 2785,
+        "trailing": 0,
+        "compressedBytes": 798
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-official-bindings.ts",
+      "classification": "N",
+      "bytes": 3548,
+      "sha256": "799d21ea79b4c1d37e8c8e7b5656e82a777b96e961351586ad05b97ee4635742",
+      "git_blob": "d43cb340cf59275ef0d7654d0ff6f161a7d102c3",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2433022258,
+        "isize": 3548,
+        "trailing": 0,
+        "compressedBytes": 929
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-run-coordination.ts",
+      "classification": "N",
+      "bytes": 8003,
+      "sha256": "1cb536ddf37bb64c07e237069bd213366dd546a1aad9c604cd01d1e93921c9bd",
+      "git_blob": "20eb3ade1788bdee9aab7f0086604846094a8d1f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1719312527,
+        "isize": 8003,
+        "trailing": 0,
+        "compressedBytes": 1272
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-sharing-foundations.ts",
+      "classification": "N",
+      "bytes": 4682,
+      "sha256": "3095e430d7ee4d74edaed222799dd428f0663919a355d4e182dfbc2ad4b56217",
+      "git_blob": "eaa4a802dab9495cde061f69268e83a485962a85",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1419581736,
+        "isize": 4682,
+        "trailing": 0,
+        "compressedBytes": 999
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-source-foundations.ts",
+      "classification": "N",
+      "bytes": 8436,
+      "sha256": "f35d08ff55f59d53ae1b762c9d02df19a3284bdb075be400fb000f731b34e94a",
+      "git_blob": "6a1f57e5ab7ef5098394ef901bbb43f7ac70fa85",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-source-original-records.ts",
+      "classification": "N",
+      "bytes": 12222,
+      "sha256": "3c0bb97213b18b7f0e47e72a0357de378bdd8a65c30c76a6ce4a94e1cf779a19",
+      "git_blob": "f5bb0137285216ef8b75a2b78ce4e196f8cdeb65",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-source-run-records.ts",
+      "classification": "N",
+      "bytes": 13400,
+      "sha256": "c303f37f86b54bcc1b91b273767341c09151029894848e0b408f5ba233e46443",
+      "git_blob": "2ded0ffb62d4282fed03518a5ebc046044e8bb1d",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/flow-source-runtime-records.ts",
+      "classification": "N",
+      "bytes": 8919,
+      "sha256": "f9bb388f21c24359ce0cd3934d48d4d0bebfce112ab69e9d8919d5a1167cd6c3",
+      "git_blob": "d3a8ebc4b807ec54d4210177d649cecc009d025b",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/group-pipeline-start-receipts.ts",
+      "classification": "N",
+      "bytes": 2392,
+      "sha256": "baa9a5307346baee97d0b5a3713d7e132aa0f8ea23f6a6e51c561bdf1589f545",
+      "git_blob": "34983f1233a976e012361d4b7a39b13b92d83a19",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3575125015,
+        "isize": 2392,
+        "trailing": 0,
+        "compressedBytes": 747
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+      "classification": "N",
+      "bytes": 12034,
+      "sha256": "c3b435ec2ea1784af2408e8ee4fe982e88813b47707ce0aedbc196d57f00b845",
+      "git_blob": "7e80089b307ca88592196b4b6c8ff4beea2248e9",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1895998196,
+        "isize": 12034,
+        "trailing": 0,
+        "compressedBytes": 1943
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+      "classification": "N",
+      "bytes": 12849,
+      "sha256": "fb4a8834b68836f3fc3f846f2737afcfe429f4ecbdb19aa8ff48024b90e39fda",
+      "git_blob": "b4b5c0b1f8af46d82459a9275f2b608ffdfb56c6",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3620113207,
+        "isize": 12849,
+        "trailing": 0,
+        "compressedBytes": 1980
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/outbox-knowledge-heads.ts",
+      "classification": "N",
+      "bytes": 5866,
+      "sha256": "b17dad4058bf5bfd080ebbd5632522579ab3d8b5e6fba56401e993d7654a5bd6",
+      "git_blob": "7ba19932c19644f36a81bf68f3c335cc232ac166",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3861018574,
+        "isize": 5866,
+        "trailing": 0,
+        "compressedBytes": 1270
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/resource-project-foundations.ts",
+      "classification": "N",
+      "bytes": 7601,
+      "sha256": "67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732",
+      "git_blob": "78e77f731b063f33b947a99518a646e1ea795dff",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2619277842,
+        "isize": 7601,
+        "trailing": 0,
+        "compressedBytes": 1341
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/roles.ts",
+      "classification": "N",
+      "bytes": 5115,
+      "sha256": "6e6f37d94a160e1a40efe3756b544f930fefd0d46f6268f440ac1734e3700753",
+      "git_blob": "e3db171720a01d26941c25a690e011b141681aee",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/security-policy-fences.ts",
+      "classification": "N",
+      "bytes": 6038,
+      "sha256": "e4ae1d234ef6c28bc892c2d3311b8aad72b5d63320d93424dba51706658226d1",
+      "git_blob": "22a1a3f0acc07c5b947866e0fb38cd6add23cacd",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1246962166,
+        "isize": 6038,
+        "trailing": 0,
+        "compressedBytes": 1220
+      }
+    },
+    {
+      "path": "openbot/server/tests/admin-controls-shutdown.test.ts",
+      "classification": "N",
+      "bytes": 12914,
+      "sha256": "b75a5b76fd63056289e5b1badbad064fdfc261d1767950c1a765e188b99454b6",
+      "git_blob": "6bf7b3457d29df9d8cbaaf851ed2ce65ba99658f",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 392,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-continuation-store.integration.test.ts",
+      "classification": "N",
+      "bytes": 19014,
+      "sha256": "c975a5f38b250c182a0734ae8a20dfbda441c6b42b59cb25a6d2172eee5d469c",
+      "git_blob": "e096fd2e6356a79c8f0a057771bdc47fbd95dd77",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 421415765,
+        "isize": 19014,
+        "trailing": 0,
+        "compressedBytes": 5202
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
+      "classification": "N",
+      "bytes": 13610,
+      "sha256": "81afc1d207dc5ff25037bbce5b06190338bcfe7b1a87c9e7b721c22f7e60921a",
+      "git_blob": "5ce1d88db14e0c8cf104840e571a30d4a5aade03",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2292257414,
+        "isize": 13610,
+        "trailing": 0,
+        "compressedBytes": 3889
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-input-json-materializer.test.ts",
+      "classification": "N",
+      "bytes": 18490,
+      "sha256": "016f08bdd15f27fa97967b3501b81c204030a86c2bdc86244f64886e237edb59",
+      "git_blob": "bc606a15fcfe3b5e192c5f2def90cf993e64f695",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1091603847,
+        "isize": 18490,
+        "trailing": 0,
+        "compressedBytes": 5355
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-input-json.test.ts",
+      "classification": "N",
+      "bytes": 8030,
+      "sha256": "a67781293ab350b0476aebfdbba74bd87f0618fe5f99ffaf3776c0f256f30392",
+      "git_blob": "0c105633452cb14d93663254cfb4c3ba2c0670bd",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3907957174,
+        "isize": 8030,
+        "trailing": 0,
+        "compressedBytes": 2865
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-object-crypto.test.ts",
+      "classification": "N",
+      "bytes": 13447,
+      "sha256": "0f0bfba9bf7907db97d43fbbda66ee2d36b26356454687294ad2be4a00042c4e",
+      "git_blob": "94ea63363c44870e390230e8c90e62f77ac2f1e5",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2340491365,
+        "isize": 13447,
+        "trailing": 0,
+        "compressedBytes": 3208
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-object-header.test.ts",
+      "classification": "N",
+      "bytes": 13299,
+      "sha256": "233025a2aa0ca6ae2b78689df48588ea291c559e8bd11ba7a66b8d444f2c007a",
+      "git_blob": "6acb347a2c9fdd5e6f174cd6572b91ed25c7784e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3372401362,
+        "isize": 13299,
+        "trailing": 0,
+        "compressedBytes": 3691
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-exact-object-wire.test.ts",
+      "classification": "N",
+      "bytes": 11179,
+      "sha256": "c0068686f81a6a8cbf10a7321294337a4997eeeba5cfdadefca48fe7775b3629",
+      "git_blob": "24a7f4ced39383d66606cced1eb341bf97a9bd29",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2434640825,
+        "isize": 11179,
+        "trailing": 0,
+        "compressedBytes": 3240
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-open-transaction.integration.test.ts",
+      "classification": "N",
+      "bytes": 10173,
+      "sha256": "8d5d0b4b5be0746f114db4ec259a378a26ff03af1d9e0ff6639cd46751ed11c3",
+      "git_blob": "dfbb5d10e5aae9611dfc6eaf7c8bcf20d41857f6",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1069379746,
+        "isize": 10173,
+        "trailing": 0,
+        "compressedBytes": 3125
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-recovery-port.integration.test.ts",
+      "classification": "N",
+      "bytes": 3673,
+      "sha256": "d69b410bc0d6894ccd0725aa8802c70f4df537f206afbea2a0178013f1d8b8fd",
+      "git_blob": "3e78a9b2ad2b6ebc963b69e10351b58b08c94eee",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2726928074,
+        "isize": 3673,
+        "trailing": 0,
+        "compressedBytes": 1382
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-recovery-port.test.ts",
+      "classification": "N",
+      "bytes": 13015,
+      "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
+      "git_blob": "59a2ac92fdc9ec9875c123e463df30c1d6b9348e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2565703658,
+        "isize": 13015,
+        "trailing": 0,
+        "compressedBytes": 3513
+      }
+    },
+    {
+      "path": "openbot/server/tests/approvals-continuation-protocol.test.ts",
+      "classification": "N",
+      "bytes": 17879,
+      "sha256": "284e1b225d9e89716f3951e96cc545c5158f74895a306d90fcd74e8d56e28d5a",
+      "git_blob": "10cb4651a6f05668213f8fda097caed207a64c10",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 567,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/approvals-continuation-recovery.test.ts",
+      "classification": "N",
+      "bytes": 10525,
+      "sha256": "39994f065b691ce36dfcf072fa0a545f70e850275f51b4f52f3a119651f7d166",
+      "git_blob": "05f15301f674572dc732df0bb53818d1eb8219d1",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3208413162,
+        "isize": 10525,
+        "trailing": 0,
+        "compressedBytes": 2989
+      }
+    },
+    {
+      "path": "openbot/server/tests/continuation-target-local.test.ts",
+      "classification": "N",
+      "bytes": 28577,
+      "sha256": "2a330c46097076ae763fe13a4364fe39a57f48bce2315f21e0c8c9a1590cae70",
+      "git_blob": "d02800e7a254d9d41f7b4e5807147b42541e888f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3319380133,
+        "isize": 28577,
+        "trailing": 0,
+        "compressedBytes": 6357
+      }
+    },
+    {
+      "path": "openbot/server/tests/continuation-target-store.integration.test.ts",
+      "classification": "N",
+      "bytes": 16737,
+      "sha256": "1019b575df4b7509f0faf43ffa911b23b88118a09d1036059f5c95afc69f464a",
+      "git_blob": "d8b34310ba205015c3694b9448e895b2991cf8ee",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 213672827,
+        "isize": 16737,
+        "trailing": 0,
+        "compressedBytes": 4844
+      }
+    },
+    {
+      "path": "openbot/server/tests/otel-exporter-compat.test.ts",
+      "classification": "N",
+      "bytes": 6080,
+      "sha256": "835f6b26f1019fa10f539ac45aa28892116f285b032eb35bbf12239c97711b31",
+      "git_blob": "973303f03358518574c518aa5bbfc6f3c74822af",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 117,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/otel-sdk-lifecycle.test.ts",
+      "classification": "N",
+      "bytes": 4949,
+      "sha256": "43fede37a795c8153b46815771d4ac8320b88cf98ad7fd0d1f5db80a6238c8c8",
+      "git_blob": "cb894c0b7b6d985e784d8612dd87f57cdb2e1b76",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 110,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/owner-assembly-audit.test.ts",
+      "classification": "N",
+      "bytes": 8487,
+      "sha256": "13420b22eaf7834076204e6003af00bbd85ffcd8bcf10069f57eafd7ab438ff6",
+      "git_blob": "6dc4a8f347edc7fbc38dd244d085f84fa0824ad1",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 282,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "classification": "N",
+      "bytes": 63126,
+      "sha256": "70b7bab9d23287b4acf6ef89edc4ee314e044b83ba13cd71acec6cda5038a053",
+      "git_blob": "7f87195ec3783504fe9565dba43dcaa1a352c68b",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3877129998,
+        "isize": 63126,
+        "trailing": 0,
+        "compressedBytes": 14294
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts",
+      "classification": "N",
+      "bytes": 35292,
+      "sha256": "dea5acdb33039e8cea0f278ad3f65995887f7f21b270feb0fa26b5d5de9c4362",
+      "git_blob": "c81db5553879acb10c9c70a9792dfc17c94c08d9",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2252126136,
+        "isize": 35292,
+        "trailing": 0,
+        "compressedBytes": 6864
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+      "classification": "N",
+      "bytes": 89597,
+      "sha256": "4b5bf1d66b25270dbed7436fc091f4f841bf71a463254b9e718d43cf737ec945",
+      "git_blob": "457c3c528e124c8ccf4e722fd584938c2d732e74",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1703814765,
+        "isize": 89597,
+        "trailing": 0,
+        "compressedBytes": 18016
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-automation-foundations.test.ts",
+      "classification": "N",
+      "bytes": 40079,
+      "sha256": "c2f14856bae4539e485b9fbbb35a3bf3fb76d144a4c5af14248db0b66cfb4a41",
+      "git_blob": "063b69f54d03bd4d177833e62c5bf9f36d22391f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 2075300238,
+        "isize": 40079,
+        "trailing": 0,
+        "compressedBytes": 11032
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-automation-run-records.test.ts",
+      "classification": "N",
+      "bytes": 47952,
+      "sha256": "c99e1aecbb10fd9e50c91a72c4382250c439a4b47d2d9f41877cfe8df0414642",
+      "git_blob": "be33e92e4844e97044f2d7fc869d28176cb0dcad",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 460752943,
+        "isize": 47952,
+        "trailing": 0,
+        "compressedBytes": 12378
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-device-binding-leases.test.ts",
+      "classification": "N",
+      "bytes": 46916,
+      "sha256": "22b592e85970f65eb2b3c4df57baac71758e57ffc4bdfbab296280360abac23c",
+      "git_blob": "4f6b9a8683d4a399b9620a82c61ad06fb0360db2",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 875786753,
+        "isize": 46916,
+        "trailing": 0,
+        "compressedBytes": 12440
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-customization-foundations.test.ts",
+      "classification": "N",
+      "bytes": 42869,
+      "sha256": "07daf20f6316ff821305570d1af0a5ec1162f8b59d5139db1092df809f9ac44b",
+      "git_blob": "f0c10a74c6467a16289e576e74d305821c8ac3a7",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 183945704,
+        "isize": 42869,
+        "trailing": 0,
+        "compressedBytes": 10767
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-customization-turns.test.ts",
+      "classification": "N",
+      "bytes": 40595,
+      "sha256": "f5b393c892ea8b7d816b92e9fbabcd1f94351cd8a8312e95910d965395655a6d",
+      "git_blob": "c642f99246ccabdd41612ec4ca971923e521b6de",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 86921613,
+        "isize": 40595,
+        "trailing": 0,
+        "compressedBytes": 11086
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-official-bindings.test.ts",
+      "classification": "N",
+      "bytes": 38478,
+      "sha256": "ab96a7035cd3b29b4390f9c2c61c4d5069c5c06a9a2061694cce71a3688d0932",
+      "git_blob": "f4d7f32e1a2987558f626a6223e05d8f1ba461a4",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 264565174,
+        "isize": 38478,
+        "trailing": 0,
+        "compressedBytes": 10282
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-run-coordination.test.ts",
+      "classification": "N",
+      "bytes": 50218,
+      "sha256": "5d7fe43786ef00deb38533897ee3f90cc42e949dfdfe111ed9bfcf6da5bffc53",
+      "git_blob": "31f2812f98de801e0c910014b0e47ba36406ca36",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 654090174,
+        "isize": 50218,
+        "trailing": 0,
+        "compressedBytes": 10956
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-sharing-foundations.test.ts",
+      "classification": "N",
+      "bytes": 47891,
+      "sha256": "5e2018bcdababaacc121981b3a7157cab4fa9bf9ba1611223059e9ebe58633c9",
+      "git_blob": "0163e17d30852cbc8a774bde7026af35e915bd3e",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 163600504,
+        "isize": 47891,
+        "trailing": 0,
+        "compressedBytes": 12336
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-source-foundations.test.ts",
+      "classification": "N",
+      "bytes": 44771,
+      "sha256": "77c5ce15fb3674e9127b013834eb84a244506e6bfb53c6462f2f92d6f64e0fe0",
+      "git_blob": "bec36e7868544a55631bac10b1a5faa9fa1ce1be",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-source-original-records.test.ts",
+      "classification": "N",
+      "bytes": 54463,
+      "sha256": "62ac1fea54a1b3664a16112fc46ec171f785b4ea285b5457203d75e93b400fc0",
+      "git_blob": "e33d6969026f361a8a3201c02a87293b93ff5115",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-source-run-records.test.ts",
+      "classification": "N",
+      "bytes": 53367,
+      "sha256": "7d78535e85af2582ca64dd1d1db1bc61d008337ba14d0f7820874dc00757ce3f",
+      "git_blob": "ae29661c844064a996013b802c0f4b69249466c4",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-flow-source-runtime-records.test.ts",
+      "classification": "N",
+      "bytes": 48487,
+      "sha256": "5bf3b9d98f589b362e817d6bbfbcfe2cc0940db3093087fd00740d87de61c8c0",
+      "git_blob": "233caa4d998109a10fc1543fa34c617a14bfd63c",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-group-pipeline-start-receipts.test.ts",
+      "classification": "N",
+      "bytes": 36231,
+      "sha256": "a0c33ad193da807c34e33a5131912beb59f7e205e2d66b534f880f2f6b81a934",
+      "git_blob": "615baa761b5aae0167728f2ed5d9185831edb71f",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 658213579,
+        "isize": 36231,
+        "trailing": 0,
+        "compressedBytes": 10066
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-knowledge-foundations.test.ts",
+      "classification": "N",
+      "bytes": 95182,
+      "sha256": "8246be120f1ca64ec954512887140da90b785eb777082aaabbd10348ed7282cb",
+      "git_blob": "ac5acd3b3761b3fcfa5737cf1dab252fcb42ade7",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1563897044,
+        "isize": 95182,
+        "trailing": 0,
+        "compressedBytes": 24793
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-knowledge-write-foundations.test.ts",
+      "classification": "N",
+      "bytes": 119984,
+      "sha256": "83304cf4a0b066ad84153fefbe2ebfffd014bbb172f8b734f43b1d83faa05e85",
+      "git_blob": "08018af2bb9e9cfc8f68a6a60e1ea3c4a414b477",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 3503774052,
+        "isize": 119984,
+        "trailing": 0,
+        "compressedBytes": 28368
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-outbox-knowledge-heads.test.ts",
+      "classification": "N",
+      "bytes": 56386,
+      "sha256": "b4d0f3c3cf27f14fc8834b3a7ad728467d4c9306749e16388aeb9d2c5c3c286e",
+      "git_blob": "7a9f2acf8dddd562fb881ee7af36d1ea6bfa2bb5",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1157163277,
+        "isize": 56386,
+        "trailing": 0,
+        "compressedBytes": 13155
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-resource-project-foundations.test.ts",
+      "classification": "N",
+      "bytes": 111726,
+      "sha256": "018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81",
+      "git_blob": "9177f863768482023be69c7c70b6577d89b75867",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 4186951029,
+        "isize": 111726,
+        "trailing": 0,
+        "compressedBytes": 27332
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-role-foundations.test.ts",
+      "classification": "N",
+      "bytes": 44119,
+      "sha256": "58b3d1ef25d98917c08b96ecafa93430848e04deebce5d8d140dfd4f34ee8a78",
+      "git_blob": "2337fde659460cb381c3abd119b81b0606379647",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
+      "classification": "N",
+      "bytes": 51536,
+      "sha256": "f05977fbdc4c547dc76f4f16e478df8478818f9eb742cd76dd76ddc1dc202cde",
+      "git_blob": "066d76f3933cc067bb318943cb260e1702ef872c",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 949371426,
+        "isize": 51536,
+        "trailing": 0,
+        "compressedBytes": 13397
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-subject-binding.test.ts",
+      "classification": "N",
+      "bytes": 10810,
+      "sha256": "aec7705207de643076c0c5af24be62bd3f338dabee1bd5b202a0366f98b9faa5",
+      "git_blob": "8a9830cc977948bc8be8ba77410f6643c38f8751",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-task-flow-audit.test.ts",
+      "classification": "N",
+      "bytes": 38415,
+      "sha256": "93c08bfa1de9e49d88ef3a833a5cc713967d7d8ca4a12b9f20bc76498bc9eb82",
+      "git_blob": "faf03843d6d78a08dd75dfa7663cd7a405291ac4",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_NATIVE_UTF8_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-threads-parent-key.test.ts",
+      "classification": "N",
+      "bytes": 32319,
+      "sha256": "d07c0ad9ceadc3549bc081e5f80215d6414aa2df12dd01fce1a4f50522bc55b3",
+      "git_blob": "b9a404df836b1ad8096dedb00c7bec5f9a0b8479",
+      "mode": "100644",
+      "verification": {
+        "transport": "ENCODED_SOURCE_TRANSPORT_FULLY_HASH_AND_CRC_VERIFIED_RAM_ONLY",
+        "crc32": 1669661910,
+        "isize": 32319,
+        "trailing": 0,
+        "compressedBytes": 9086
+      }
+    },
+    {
+      "path": "openbot/server/tests/role-writer-lifecycle.test.ts",
+      "classification": "N",
+      "bytes": 16256,
+      "sha256": "3e8dc3767e9a806c1df44183916580eed644832afab4ae64dd22e688055b3a5c",
+      "git_blob": "912e445e2d6c8d0d6faffa8a9500e46ca241a5ce",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 509,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/server/tests/server-readiness-gates.test.ts",
+      "classification": "N",
+      "bytes": 9990,
+      "sha256": "2fa4734f01a96cb5bdfba424614819aebeccba0771929d290fef27656feb5e1e",
+      "git_blob": "7f93bc194074a264750be5a5de8b47c1ad2adec2",
+      "mode": "100644",
+      "verification": {
+        "transport": "PATCH_NEW_FILE_SOURCE_FULLY_HASH_VERIFIED_RAM_ONLY",
+        "hunks": 1,
+        "lines": 319,
+        "offset": 0,
+        "fuzz": 0
+      }
+    },
+    {
+      "path": "openbot/tests/recovery-lineage.test.ts",
+      "classification": "N",
+      "bytes": 27325,
+      "sha256": "2d7d2a39a9f56f2b6e04829d10d5269da1261796ca8fa14729f7aa59b2f9ae5f",
+      "git_blob": "693cb7018a615091340b644156c0e4cb63e31be1",
+      "mode": "100644",
+      "verification": {
+        "transport": "DIRECT_UTF8_SOURCE_TEXT_IN_JSON_FULLY_HASH_VERIFIED_RAM_ONLY"
+      }
+    }
+  ],
+  "packages": [
+    {
+      "package": 1,
+      "parent": "0089682e785d03fa67e8463bf862d2b94447392c",
+      "commit": "13032787d6692d5354303ef2f462c49a0a207dd6",
+      "files": [
+        {
+          "path": "openbot/server/src/admin/controls.ts",
+          "sha": "3a689d0230b85299224e19c5afc6acc097571610",
+          "bytes": 35155,
+          "sha256": "aa1ca74a493050ffd11b58b0ffb94de18d81f1401fcc66028faaa96a731524bd"
+        },
+        {
+          "path": "openbot/server/src/audit.ts",
+          "sha": "9f006725bcb44d75a8b98e5290632bdbf11ff4bc",
+          "bytes": 43787,
+          "sha256": "ec1d947cd05e8d25ac210777e47b69d604473c62472b31991509b24dc2aee124"
+        },
+        {
+          "path": "openbot/server/src/auth/roles.ts",
+          "sha": "0b32ef1c5be01cdb563e171560ac2707be07576b",
+          "bytes": 16001,
+          "sha256": "f06599a0ee7d4df79e1c5239408b26f030803b923784d08532723111a0549e88"
+        },
+        {
+          "path": "openbot/server/src/config.ts",
+          "sha": "0a1021a38d4eaa04d7a97ef4802d684fcf880d8f",
+          "bytes": 59001,
+          "sha256": "f922dee5e1764ce83837e039f43787409731f6fa9ccf7c29cf6e2c453059f030"
+        },
+        {
+          "path": "openbot/server/src/plugins/catalogue.ts",
+          "sha": "de748bd0d19883f8c37369478c1c0ca8b30baf9e",
+          "bytes": 30987,
+          "sha256": "b42535f21c80e79b6b5b317d01a40b80a09c9281617a1bd24e2d495472d618cf"
+        },
+        {
+          "path": "openbot/server/tests/plugin-catalogue.test.ts",
+          "sha": "7f453e55e2ebbcbc6bfcf849a0514bafced093ba",
+          "bytes": 28223,
+          "sha256": "e9e15d0f11be382a7ff4869acb67f177a01e86fe9df32ba71b9790618b221eb3"
+        },
+        {
+          "path": "openbot/server/tests/roles.test.ts",
+          "sha": "dbb203be2e935701e4de521855f61db09de67138",
+          "bytes": 24905,
+          "sha256": "0edf8da700d6a733805b8c37844f861849a7cb4c96a5f5e79cdee3b009542a73"
+        },
+        {
+          "path": "openbot/server/tests/runner-browser.test.ts",
+          "sha": "b4602b3ecf478e04d5adea503cb0c43f82abab80",
+          "bytes": 48278,
+          "sha256": "54e7b0696f89dd0e4cc710724231675ec4f0244f2b02639d9035d6baf192e2a4"
+        }
+      ]
+    },
+    {
+      "package": 2,
+      "parent": "13032787d6692d5354303ef2f462c49a0a207dd6",
+      "commit": "ef25e6605b75364f8fb606ec03ef65f7000b235d",
+      "tree": "f6dc0e33a3aa4ba556945bd138cd4be179bc4527",
+      "files": [
+        {
+          "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+          "bytes": 41233,
+          "sha256": "da756f889563a854e54d057c934a7efb953b11a4ead1e7f229c26beaff77b9ac",
+          "blob": "2ca328ffbb2bee00afaa5e4ddf141406e3e22ea9"
+        },
+        {
+          "path": "openbot/desktop/src-tauri/src/deployment.rs",
+          "bytes": 130628,
+          "sha256": "9c2bac5a68cde0cc40622c57782b1fbf89a3c3cac2f7058ef1c72b3ba6b4a3f7",
+          "blob": "7268364bd896cf7b9101a6c54b3386dac546846f"
+        },
+        {
+          "path": "openbot/desktop/src-tauri/src/install.rs",
+          "bytes": 137454,
+          "sha256": "5eec2525410740a94656d6597ce93870da97b424775a22164de7bc6f69243005",
+          "blob": "13124e17f94b0795239936d20d1c96f7394ea77d"
+        },
+        {
+          "path": "openbot/desktop/src-tauri/src/main.rs",
+          "bytes": 418910,
+          "sha256": "9fbf0c0ae1762b20fa09895ed747d7527f79d3e417d05c1943407e8ed4ad6521",
+          "blob": "c193abe872bf3cc6ac40d15c33e01bbb3ad0c657"
+        },
+        {
+          "path": "openbot/server/src/approvals/service.ts",
+          "bytes": 29420,
+          "sha256": "c04faac55fa7b47ea7e933e8a3500fa0442121a6a70ad35a2046c124004af0a1",
+          "blob": "5fa5ec21e327515cd37a395deeea54ec55c60eb6"
+        },
+        {
+          "path": "openbot/server/src/approvals/store.ts",
+          "bytes": 19521,
+          "sha256": "493306d89edf7a26ae12fc42fea17beaccf17fd01f1683f3903b28e675cac225",
+          "blob": "8848fb3737827bf02fadd47414e87979fcce062b"
+        },
+        {
+          "path": "openbot/server/src/approvals/types.ts",
+          "bytes": 14252,
+          "sha256": "1974d5dedb34f00c94d979b30c18e0962e648e14d28b8ff618d1fe5fb857d37c",
+          "blob": "98a634dfb2db0ded05008497ebaad9216561230a"
+        },
+        {
+          "path": "openbot/server/src/db/schema/approvals.ts",
+          "bytes": 10532,
+          "sha256": "26db3f60910fff8fa968d3b0f55434c4207819e7fefccd6d391571b99b12bd71",
+          "blob": "8b085f21e09bf480a92d20550388340ac40f8e30"
+        }
+      ]
+    },
+    {
+      "package": 3,
+      "parent": "ef25e6605b75364f8fb606ec03ef65f7000b235d",
+      "commit": "fb11fb99a6a9d3464b9e203b16cef3abf6055f69",
+      "tree": "0ed20b209c899c2166fcb48797afde7074245e03",
+      "files": [
+        {
+          "path": "openbot/server/src/db/schema/core.ts",
+          "bytes": 26447,
+          "sha256": "0091d749d70791e10c462bfc67534089bc5e88a1c93bd38dd8bb467c1d15f64a",
+          "blob": "38b94cc1b66876764af887a7c268c30d500f4c26"
+        },
+        {
+          "path": "openbot/server/src/db/schema/index.ts",
+          "bytes": 1747,
+          "sha256": "f2c7d495bfc245e148dc976669ed1da7b530ad71b99a5c22845cb14f1f4951ed",
+          "blob": "26afec75aeaf3183292e188f3239dfdcd0fe4780"
+        },
+        {
+          "path": "openbot/server/src/db/schema/plugins.ts",
+          "bytes": 39993,
+          "sha256": "802dae12d1c5c40a52ef9208b2fef3e8851248f58cd34fce5d5e13ca38a1554d",
+          "blob": "5e27d88839b386af9e3ca871c9ecc23bfa6fe912"
+        },
+        {
+          "path": "openbot/server/src/db/schema/tasks.ts",
+          "bytes": 3589,
+          "sha256": "0586f6b196ca10a6dacb300e0961b43e65305c1ff4be17b12006a0aae8e7b755",
+          "blob": "d54c14ff4630ad93c9714dbcef8d19beaefdd323"
+        },
+        {
+          "path": "openbot/server/src/db/schema/threads.ts",
+          "bytes": 2571,
+          "sha256": "5f7946caab15a29f62e4fa17ff8f373b2725453ccbcff8aff9e1eb8b03a8916a",
+          "blob": "4c613d8a5bc400cbde5d8789c1848d727b07c408"
+        },
+        {
+          "path": "openbot/server/src/db/schema/wakerflows.ts",
+          "bytes": 2706,
+          "sha256": "40e74432740329cb378928912a9ec7d35b8bf4ce1208df631269915bd921f52d",
+          "blob": "2b2d4efd53f6979cc17916d9eb0c0650df4f828c"
+        },
+        {
+          "path": "openbot/server/src/index.ts",
+          "bytes": 156700,
+          "sha256": "bc7187983edcba3100caf0c42ce9b4d8361dd35f237287b7074ace93bfa5b125",
+          "blob": "f53d3f69258a11336f1c8a42eceb7b425b6d3027"
+        },
+        {
+          "path": "openbot/server/src/routines/run-turn.ts",
+          "bytes": 39851,
+          "sha256": "ceec5de87acdb1fa9e06f73cabb3a3701adeb8729fb62125196c3209aa4b83b9",
+          "blob": "ff5f7932153f0efbab7b9c8c0bac72d79f179488"
+        }
+      ]
+    },
+    {
+      "package": 4,
+      "parent": "fb11fb99a6a9d3464b9e203b16cef3abf6055f69",
+      "commit": "05f088f3c42297b87e9de8cd01b0c67833919133",
+      "tree": "55ca0b636d33f0572044ac097531cb3b39e9428b",
+      "files": [
+        {
+          "path": "openbot/server/src/threads/postgres-runner.ts",
+          "bytes": 21952,
+          "sha256": "4415639a5109b2539bd3f20f650f6e04c4a8bbcabb0b55a4aacdb9fdfed54d9d",
+          "blob": "60542a7f2cf33eae26eb311466bfde5b96525642"
+        },
+        {
+          "path": "openbot/app/src/lib/tasks/actions.ts",
+          "bytes": 478,
+          "sha256": "81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63",
+          "blob": "44abbaf7c8beede4d3a066fbc6305daf539f43e4"
+        },
+        {
+          "path": "openbot/app/tests/tasks-actions.test.ts",
+          "bytes": 4353,
+          "sha256": "cc5f6a6f7504398aa3b4b40c5991b7e727ba581e8b223731d87fdc763b79cfc3",
+          "blob": "d26e18cc72dfd17d40352240cce867268e356c34"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-a7-contracts.test.tsx",
+          "bytes": 19580,
+          "sha256": "62be007bb4101470abb06c1fd8098dad8dbbbcc1c3ace52b7be8dbe09558f229",
+          "blob": "801bbd55aef24b5e5af4594b4cd52727bf6fa5e7"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+          "bytes": 15105,
+          "sha256": "3cae74a38a8096d6460e3740bedabba6bf2070d17f3fc9e63152cf0adaa64cd7",
+          "blob": "95fbf74e4dd0050cf9e541e4de43f5add5260a02"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+          "bytes": 2927,
+          "sha256": "b2ebfbabb224d9bc78f7b9cc6bb31107899fd75520c05b0eeeeb3c0abdc8c87a",
+          "blob": "3b0256d3dc57d17da2494c2a70f4c36325361720"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-inflight.test.tsx",
+          "bytes": 21400,
+          "sha256": "cd299f0251e9707117c0222f092de7fcd0b77177393be8f5d6e5f158085ff6bd",
+          "blob": "b635510915f30f0880fe923b023b09b512b34786"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-mutations.test.tsx",
+          "bytes": 17215,
+          "sha256": "652b542f95cf0e516a57189e91c0d1cb447c8a8ef2ad2145860c73b058d9bac4",
+          "blob": "760efcd4ff3282e327be01564390b55626f77274"
+        }
+      ]
+    },
+    {
+      "package": 5,
+      "parent": "05f088f3c42297b87e9de8cd01b0c67833919133",
+      "commit": "b952ea9d112daf3878be3e87ace18790b9879aca",
+      "tree": "d90babe8536c7a4db8b49d1c5a153a0f1eeee164",
+      "files": [
+        {
+          "path": "openbot/app/tests/tasks-workbench-navigation.test.tsx",
+          "bytes": 16146,
+          "sha256": "fcb141ba9c7b9a528bae611bd34ea2b6c88b96e77b45cf4b0a840ea2859ad5b5",
+          "blob": "a87f9915e21d2624918aa9cb7cc55041a44afc5c"
+        },
+        {
+          "path": "openbot/desktop/src-tauri/src/release_transaction.rs",
+          "bytes": 22263,
+          "sha256": "eb8078731e153584ddbcc054032542d4ac66079a2bb6bb32aefc056a863a1841",
+          "blob": "b51b68a732b9783b16fd249d82d1e7bca1582c3c"
+        },
+        {
+          "path": "openbot/desktop/src-tauri/src/release_transaction_tests.rs",
+          "bytes": 27489,
+          "sha256": "fbb87c3c2a0946622b9472ef01e183f8512d2e1e3a94d4f9c822a2e5d3025d43",
+          "blob": "45f32503c413d0fdc1e5c9c098b7c5ba275149e0"
+        },
+        {
+          "path": "openbot/docs/cloud-dev/b1-doctor.md",
+          "bytes": 6919,
+          "sha256": "f5b1a25ad817536bcccb78351b272bfd839e8c62657b45f9873c9b87f9d136b1",
+          "blob": "e84ad6675bdd829f22106a66536f96328920bcd8"
+        },
+        {
+          "path": "openbot/docs/cloud-dev/b2-verify.md",
+          "bytes": 10750,
+          "sha256": "1146de756af5de63b60915f721332ad7db310e662355ba11d80eeaa27e54ab7f",
+          "blob": "623eee81643b674a30fd3c3ff4cabb2192f70454"
+        },
+        {
+          "path": "openbot/docs/cloud-dev/b3-baseline.md",
+          "bytes": 3223,
+          "sha256": "00ea9d3b3446fe7a24fc931375fe19ccfc457915ea12aabbc64bb7ee27fd592c",
+          "blob": "6f0a41a815535aeeafa86fd29bfe8e0bcc3974af"
+        },
+        {
+          "path": "openbot/docs/cloud-dev/b4-handoff.md",
+          "bytes": 10895,
+          "sha256": "c65977d37517e270d29ed5b020ca667b352f2838d050aa4e9b53e51341bbe874",
+          "blob": "a6f90f382d4081485ac2e29d2ddd09a0383cae68"
+        },
+        {
+          "path": "openbot/docs/cloud-repair/telemetry/C2-plan-and-results.md",
+          "bytes": 6014,
+          "sha256": "57f05aeb11109885124d30f5922b44f037a1170db0f22bbfb6524e51c7a310d3",
+          "blob": "6e9bffa683926adacb5c9e905dce52e9cf9c9f8b"
+        }
+      ]
+    },
+    {
+      "package": 6,
+      "parent": "b952ea9d112daf3878be3e87ace18790b9879aca",
+      "commit": "d3f6cb6f24f252e1b4d23c932cf23aa5ffa24e03",
+      "tree": "e31bec45c0e80de4184d9a2ecdaa21ae1817f3e0",
+      "files": [
+        {
+          "path": "openbot/docs/cloud-repair/telemetry/sdk-evidence.json",
+          "bytes": 2536,
+          "sha256": "96cc26617070ed3050548e46cc138728597097986308a2294edf5da9e981e7ab",
+          "blob": "d205fa8d10b744dbf99c8208f4f4f29427de2642"
+        },
+        {
+          "path": "openbot/docs/recovery-lineage/README.md",
+          "bytes": 5798,
+          "sha256": "2cb180b9f46a70504258ada8ee0e239d0d1070b3e133cec5ca38138b9951f303",
+          "blob": "b33b5d86ccb7b282f2ca0e7aa1a4bee5f77b0c30"
+        },
+        {
+          "path": "openbot/docs/task-workbench/A2.md",
+          "bytes": 4587,
+          "sha256": "6c8b13fe9f98bee6604d4adc079832039023e08e3ec77ddbced12f978163a17d",
+          "blob": "1462e74bb60b168ef0b7a6e9e7f4098e15525459"
+        },
+        {
+          "path": "openbot/docs/task-workbench/A5.md",
+          "bytes": 7814,
+          "sha256": "f47481d74e34ebf2a95899c1a3c7a91bfe074b5538d33bddfdca1dfff67aaa7a",
+          "blob": "c1639038101a5c19f30e041a13d2b56f1ec41bdf"
+        },
+        {
+          "path": "openbot/docs/task-workbench/A6.md",
+          "bytes": 8588,
+          "sha256": "106b11321ed81b6f95e0682eb849d9d73bef5a91915ef52bfaf1def972330a0c",
+          "blob": "a938bf64ffce5d7008df628a9c3dfc54268add66"
+        },
+        {
+          "path": "openbot/docs/task-workbench/A7-contracts.md",
+          "bytes": 6058,
+          "sha256": "7d5f48cf1810a8572a0695143afa265441899e6aa1ba3de0b65356a5d2313e3e",
+          "blob": "6baac14aea64f64b672af8b0fc79e6015ba88ef3"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/baseline.py",
+          "bytes": 18966,
+          "sha256": "fc3627b6df5378534db7af7562fad29060dc5be5252255069cf79cdb72ca2448",
+          "blob": "fadd510f967939db3f017a131b6d29f17971401b"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/doctor.py",
+          "bytes": 28978,
+          "sha256": "5c7daf00d54f2c4778392b46a5e4c0c3715e741f744ecd8c12c9db76fa0893e6",
+          "blob": "1803acd8b13c0c6966e5b2023f084216dfddc321"
+        }
+      ]
+    },
+    {
+      "package": 7,
+      "parent": "d3f6cb6f24f252e1b4d23c932cf23aa5ffa24e03",
+      "commit": "3840761fde4f37671910a93c6476950837b0cf47",
+      "tree": "74700879f40c993b0da64f08c7a3d9bfa0f64769",
+      "files": [
+        {
+          "path": "openbot/scripts/cloud-dev/handoff.py",
+          "bytes": 13782,
+          "sha256": "55199302f1f9f66791720e4dc21c29203d53ffe3d46178e24b02463d03b3b6a4",
+          "blob": "de9a07f08d8a7188d072a281c359a6b749982b9b"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/receipt.py",
+          "bytes": 31169,
+          "sha256": "158e195a3cc36fe078ea80d2debef80bb524fafbe318cdf34fee40a7d6dccca9",
+          "blob": "4f62a7c5e4eff2a7a1cfd62b01faf331c5209ee4"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/reporting.py",
+          "bytes": 5793,
+          "sha256": "0ecbb710cad3e31782327200269a96d293aaf86e4afb9b46a34d319029da8b21",
+          "blob": "20ae86f689f0834b2d162f20681e9a8837022d7a"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/tests/__init__.py",
+          "bytes": 77,
+          "sha256": "b6853ec7718ca01b110d3b323490330e911296bd35c5a5d411176b74b6396932",
+          "blob": "c7c0d41d20cd58c007d9507503d1d9a1962d9ca8"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/tests/test_baseline.py",
+          "bytes": 18216,
+          "sha256": "84d7e56835ab6c97c2bd75c19c24ab84206d44c45e749cff248faf5610b61cd7",
+          "blob": "e4c288c755da1158167b43cd83eb6c329449d450"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/tests/test_doctor.py",
+          "bytes": 27595,
+          "sha256": "746f0e376a7723debf25790d0f15111939ede2c67a081d2e4a2958a63f366e81",
+          "blob": "a7dfcd06c2b615502ac60631d6fe0c726fa68aa7"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/tests/test_handoff.py",
+          "bytes": 21034,
+          "sha256": "ecb3fe711c33344e4f0aa6fb572ec05969e6d45caf14482f4dcac13d76fc38f4",
+          "blob": "b41bdf614560d6aeabcea6905745babbfa786544"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/tests/test_receipt.py",
+          "bytes": 42961,
+          "sha256": "9a9deae1c5b7d4c4bc6165c441bc4bd5c879906bddad9aff83b4572c21c4310f",
+          "blob": "1673a5a12e03516f473709a19dc1ad808e8855dd"
+        }
+      ]
+    },
+    {
+      "package": 8,
+      "parent": "3840761fde4f37671910a93c6476950837b0cf47",
+      "commit": "dddc96774ea9590ba1275a694045c84637ccd0fe",
+      "tree": "2ac157532ea8666e27d6505d213102f7f873d0f5",
+      "files": [
+        {
+          "path": "openbot/scripts/cloud-dev/tests/test_reporting.py",
+          "bytes": 7884,
+          "sha256": "8b2f2ae3b73bdde598782becd43aa750c2026fa2e00b950d4220e0d6d694e60e",
+          "blob": "3bd956b0c57294c4ba99102c122372a5dfb2beb8"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/tests/test_verify.py",
+          "bytes": 67612,
+          "sha256": "c49075bbfabdc7af3302240cb522727a9883e7d480037c0d5da802974de82e0a",
+          "blob": "4a90934931fe7019d9d10a1b0b94394a40f71573"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/verify-plan-smoke.json",
+          "bytes": 452,
+          "sha256": "7b60878e4146032a5ec722e18fc1b35c0ad73b63812962b015999e52eb865e7f",
+          "blob": "48b870a1cb14bde997ba76eef5c3302279a45179"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/verify-plan-tool-self-check.json",
+          "bytes": 436,
+          "sha256": "3cbb16d3ae7263ecb50877bd861b8f642e20a4f0d4fff2286af27654dc37c224",
+          "blob": "4eb7bb609f9d8ba344a56786caae005c4536524b"
+        },
+        {
+          "path": "openbot/scripts/cloud-dev/verify.py",
+          "bytes": 48513,
+          "sha256": "8b2edcee06c9df41d83a2bc8a3dae3a5023e30010de071407376408445563443",
+          "blob": "1a426e18b4caf4a4bac29bca76d8128fe2295493"
+        },
+        {
+          "path": "openbot/scripts/recovery-lineage/CATALOG-PROTOCOL.md",
+          "bytes": 3519,
+          "sha256": "85bc9735c5ab69c5188dbfce1818b57045a02747a82a4155f3526183b65e9f3f",
+          "blob": "cc7eabe95d9454a007aa3ce1509551195660a7e0"
+        },
+        {
+          "path": "openbot/scripts/recovery-lineage/bundle.ts",
+          "bytes": 6687,
+          "sha256": "0a82af25a3901adf17aa0cdb8a2f756e815d5f0a38b034060e3e09643bd66a24",
+          "blob": "0f68fe4ad1eef86c5618c2bcc5f67151961f7ae6"
+        },
+        {
+          "path": "openbot/scripts/recovery-lineage/manifest.ts",
+          "bytes": 2801,
+          "sha256": "3d8f4a4bb356155217886535584b297e32ff87e2941ac85cba070bca73fc7d5d",
+          "blob": "8669a00f3f9d795ddd58c22880f44920e93c0cfe"
+        }
+      ]
+    },
+    {
+      "package": 9,
+      "parent": "dddc96774ea9590ba1275a694045c84637ccd0fe",
+      "commit": "cb6a04fda446261d8ab82069caa2002088836290",
+      "tree": "aa4a23d847f68e0305e5a3b6a948f0f5c0f3bd58",
+      "files": [
+        {
+          "path": "openbot/scripts/recovery-lineage/preflight.ts",
+          "bytes": 18473,
+          "sha256": "314dba041fce3f8c17b55fcbecce54e3be7c4de2bf4e8b5e0d0e61bb1d707fec",
+          "blob": "204aea21502283b1e0b5df6947931e8f9af0f854"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/FLOW-ACTIVATION-CONTRACT.md",
+          "bytes": 8178,
+          "sha256": "7f53152fdd46e68c66f0ac92338156b11be785bd29e7847452e2a211658907c9",
+          "blob": "f56060d1c7462f916e3fda3c403aae85102357a3"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0081_snapshot.json",
+          "bytes": 292641,
+          "sha256": "ef4b170efbc98717bce811b27d3f5d35c274146f5faec50bc787028acbfaa24c",
+          "blob": "c4dff6b062facad39719d6156bba822aa5175925"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0082_snapshot.json",
+          "bytes": 310313,
+          "sha256": "2cc73e7181b11baa27dcad48ab412cf5d89c13d19d0f06a4640e6cdaa7a883e8",
+          "blob": "ecb079ccb95e33bf5b902d26f0e94b8fc704e5a9"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0083_snapshot.json",
+          "bytes": 312091,
+          "sha256": "159c6313247a705e2dd71efe46c90cc734ee9a8a0be3b66f4c114ef343335d61",
+          "blob": "c86494580a16cec3efaa67d3b883c93304210363"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0084_recovery_flow_source_foundations_snapshot.json",
+          "bytes": 329146,
+          "sha256": "12a3221d57c57de1f3639d126ea90e0724e84e64fd2965e4fb62d197fced2a07",
+          "blob": "417069a4057b0697c24c13d6388cb6df2c3b3614"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0085_snapshot.json",
+          "bytes": 352947,
+          "sha256": "b02d8b70f513bcc764a2be96a4d88184d73392b14eb754a8067b9cd123a00eab",
+          "blob": "4158e89b9e0278263a382bca5ac05904c473cf39"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0086_snapshot.json",
+          "bytes": 369468,
+          "sha256": "6beec7f83f05e43d212c44f990ba625c4714acb45fdac6b4082df3085e89541a",
+          "blob": "a101176140b3a848a16d445ede52966cf0ff0736"
+        }
+      ]
+    },
+    {
+      "package": 10,
+      "parent": "cb6a04fda446261d8ab82069caa2002088836290",
+      "commit": "6db3bc9cb45041722b21c47b4d07d99eb6bc6b14",
+      "tree": "65e5004e5150d038f9c86bc64751e87080750250",
+      "files": [
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0087_snapshot.json",
+          "bytes": 389321,
+          "sha256": "86cd06c067f98c93911bc639cb3df766c54cb4d7478f95c414bf29b34fafb3ef",
+          "blob": "65b321784e13d5558d107ce0f2ce915bd06441f3"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0088_snapshot.json",
+          "bytes": 406139,
+          "sha256": "eb784f5a88fea45abc65672bf804d7a3ad20642fd81578ccecd236be77e92360",
+          "blob": "6ba59e508d2fe3ce12f362d1e70d3a01147e9d88"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0089_snapshot.json",
+          "bytes": 423098,
+          "sha256": "6e16372f22dba1583e1898f3c10e21a1ce7c76f6ddc16595f86a49806a0769cf",
+          "blob": "f7518b23c69e9d0d907ce0c433db2a677f05643d"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0090_snapshot.json",
+          "bytes": 427649,
+          "sha256": "f49a5fdbd213a1273b898a925e486499a6b1357243bb74f0a4108bdcb5f6d44e",
+          "blob": "1cf0f3e1099dce797e07996a4f4719abc0510f9d"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0091_snapshot.json",
+          "bytes": 436634,
+          "sha256": "9d26860fe19084a4de2635a4e28865ff38258e4781eeb8cd1bf45fe1c872e0ef",
+          "blob": "eed687d8a59c51b0be955bcab8302dfdcb222159"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0092_snapshot.json",
+          "bytes": 436885,
+          "sha256": "b0bc37ce370b357d08a9f513dfad13d186c91c161c8b0abadf045b9912a22893",
+          "blob": "f3b2762cc269fd152b2315c2698a32abe7c24214"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0093_snapshot.json",
+          "bytes": 442363,
+          "sha256": "acaa87bf970da9ffd06198e59a365d10d2d9d3f03f56dbc07cfe393d76abc7eb",
+          "blob": "d1b32398a7f3ce5d4fcc8b9a868dc49d7feef3aa"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0094_snapshot.json",
+          "bytes": 449141,
+          "sha256": "27e268245fa3f0ed13f13035c751ac27c006d274191c670f92183521863cdfd2",
+          "blob": "0e3f5dd3647e5f814d8a162e4e8798c8b93238bc"
+        }
+      ]
+    },
+    {
+      "package": 11,
+      "parent": "6db3bc9cb45041722b21c47b4d07d99eb6bc6b14",
+      "commit": "e54732e04365bfc0d8b142f547a0e69fe5c52453",
+      "tree": "70528e5227a026c293f30ac112ef39029440d9e6",
+      "files": [
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0095_snapshot.json",
+          "bytes": 454058,
+          "sha256": "77ed1fad2c312ed16635d95a6fb40fe4e230b96f53c007c7b71a881dcd57cc4b",
+          "blob": "8008339698ac0e53a959217d5b8f63cc78c86e4f"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0096_snapshot.json",
+          "bytes": 463387,
+          "sha256": "e28a48738b23d9f2ff41d1e0b515e189ecb5bd44db2befb652af1bdcb126963b",
+          "blob": "55e053e11deeaaa199c767790a58b594bce7b2c2"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0097_snapshot.json",
+          "bytes": 471291,
+          "sha256": "0bc645a65fc289437489a3e000596616f3694bc6325a4be7a10f59597e941a37",
+          "blob": "9e356435738d67c2bafb98846c0b1ebf283b078d"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0098_snapshot.json",
+          "bytes": 479137,
+          "sha256": "58b5758a353915408091102051bdfed77b5bc168e4cd91ec0169bcaa7ba5eb26",
+          "blob": "2ca93242ebc347e8fcbaa61abc1262abafd9ef19"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0099_snapshot.json",
+          "bytes": 488317,
+          "sha256": "e08e4184dbf674fa4c88d6e55f270f2e371b1541a046ab8da29068084fd9ca0c",
+          "blob": "6650781952e23fe1c0b51513eae6772095b681e2"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0100_snapshot.json",
+          "bytes": 498108,
+          "sha256": "fd218591c0165512dbaf63a36fed8ddd775cc577d090083510329c6d6779fc93",
+          "blob": "af2d6cff3841cb876cedce1c68a8eb46bf4ec3a4"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0101_snapshot.json",
+          "bytes": 507555,
+          "sha256": "1631a6306279b57d76ef47a95f6ca6f063d7ef62d333e06f7b979c22b4ee6cd2",
+          "blob": "f64279da6be25bdee2eef81cf3f2a58701f0a189"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0102_snapshot.json",
+          "bytes": 537031,
+          "sha256": "443ee53d6f553e665e9c1b72f540c277ad4dfb025bd052f5a3e95985e3096ba9",
+          "blob": "1cd2fb143ae54ddff461ca423ac158e2808a2273"
+        }
+      ]
+    },
+    {
+      "package": 12,
+      "parent": "e54732e04365bfc0d8b142f547a0e69fe5c52453",
+      "commit": "873a333fe0414d35297abe1bc5a8a5b9de295247",
+      "tree": "9801eae894c91900c54e61929d5609a86e0284f7",
+      "files": [
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0103_snapshot.json",
+          "bytes": 558672,
+          "sha256": "235b48c0acfc9bf76871bcf4e2b0d636d357bdbfb6c4e796caa4a1e9092f91df",
+          "blob": "36c8e5459a71546d75b6552d575193f5344f6e7a"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0104_snapshot.json",
+          "bytes": 570806,
+          "sha256": "1430962f8cf028bf688f92747cbc46599f38068b46868f98dbcd3fa3db81f3ee",
+          "blob": "eeacdc0e02eb48d6b77956c12a1abcb12c512dd4"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/0105_snapshot.json",
+          "bytes": 594705,
+          "sha256": "c0477f74367fc3c80aec5a1596bee1ea1a7a3aa6247a0847f8c55a05cfab30a6",
+          "blob": "56f7994a32bc07818604a9f3de0f1c5f9dd0bc23"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+          "bytes": 15995,
+          "sha256": "c9eb36952c8af649fb8813def53240a1b8bc5e4a33a8a025ef3a394ee80f6951",
+          "blob": "738e4ecf8036435ebc487e6fbe4c3153a6adfd37"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0081_recovery_subject_and_binding.sql",
+          "bytes": 172,
+          "sha256": "0769123048b40af0f80aa8a3c843f67ab19fac5c44ccb9243bbc6819d689bb40",
+          "blob": "ff70c6ea1cce1eb7baee9821a4ec974d7be363ff"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0082_recovery_role_foundations.sql",
+          "bytes": 9833,
+          "sha256": "683834fae02b1e3cf3be6ca85340098c2a1bd0cea6de65c7e14b80e3be7a93dc",
+          "blob": "c007cf2207b0de0eeda2e8dbe8f5094247848119"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0083_recovery_task_flow_audit_contract.sql",
+          "bytes": 938,
+          "sha256": "ee97d7862077239462aec225a1b71bf2b87d06a9d858b48dcaa7746a2b0856ea",
+          "blob": "a822dededf8c4c0c8ae4981ef495af58db3c72b9"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0084_recovery_flow_source_foundations.sql",
+          "bytes": 8236,
+          "sha256": "96cb4c921ca065856d4f3d641440907528d9ddf78e483ff09ff100aa2835e541",
+          "blob": "fc43dfb6588a502ba02e0ec7635df4075b2cb6ae"
+        }
+      ]
+    },
+    {
+      "package": 13,
+      "parent": "873a333fe0414d35297abe1bc5a8a5b9de295247",
+      "commit": "06453d79f610783d5eaee97ce88a65c8dc77ca11",
+      "tree": "2311a3f0812d47921bfecd9bc5c9d6364f1fe2fa",
+      "files": [
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0085_recovery_flow_source_run_records.sql",
+          "bytes": 12015,
+          "sha256": "a94c4a80167f67e79fee01f71483b7964985da4957a0221280f79cebe279e4c2",
+          "blob": "6c64733236897a36f5ee4189f90c52fe564936cc"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0086_recovery_flow_source_runtime_records.sql",
+          "bytes": 8857,
+          "sha256": "21d90fc2a2505943db1e1687109820527660b8ec7b87d2e8a6b303107fa723bd",
+          "blob": "5f1cf1ff0896669451ad879caf17733ee631f30e"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0087_recovery_flow_source_original_records.sql",
+          "bytes": 11428,
+          "sha256": "e5e5fb88be31f330280ea3e045d29da6d3315e0df2f82d854df16d399a8fd7f9",
+          "blob": "956c52ef4c4992a37e4e0c744dda4b7f2909085b"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0088_recovery_flow_run_coordination.sql",
+          "bytes": 7714,
+          "sha256": "a7623f0e399a806cbc195dd18f4e4ff2f64aa674a8fae25c4152c71e823c3786",
+          "blob": "c27b99b3d0d898062fd06d65726a53b8f66aac18"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0089_recovery_flow_official_bindings.sql",
+          "bytes": 3140,
+          "sha256": "a1ffdceb492b8f3ba00b7fc78f994d608c016a7f171a3ba913a408c800112219",
+          "blob": "aad5c75764086f21596d83dc9de12a682fdd61cc"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0090_recovery_group_pipeline_start_receipts.sql",
+          "bytes": 2093,
+          "sha256": "8c9ae16ca677f0969d8035247443b8428afd02c4b936c96efd7b6d2e81fb0671",
+          "blob": "6d8549729b806a60a2ef6b6c151698243a0a3ed7"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0091_recovery_flow_customization_foundations.sql",
+          "bytes": 4376,
+          "sha256": "ecaf856fcc358e5e522a22b6e3f86e4aeb5aac64e1ddd48f273e65fdb3ef9a60",
+          "blob": "5a9678bffe437b2e292bac50fbabdcdfebc0ae7c"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0092_threads_domain_parent_key.sql",
+          "bytes": 119,
+          "sha256": "5dd8207d87d6f63823de57e60c639a5683341f8891dffa5398e72c6b221ed9dd",
+          "blob": "19ec85aab78aa40cb1b0242b9ff6924f72413b48"
+        }
+      ]
+    },
+    {
+      "package": 14,
+      "parent": "06453d79f610783d5eaee97ce88a65c8dc77ca11",
+      "commit": "7c1d44ca3a62b66002dc7ba9471175ce49cfae4a",
+      "tree": "d7bf421bf5f46e4a03cc8d997862933e227ce64a",
+      "files": [
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0093_recovery_flow_customization_turns.sql",
+          "bytes": 2476,
+          "sha256": "ca2502c0d5975497998fbd90c2532da4c47dde49142bd63da13ff00314daf061",
+          "blob": "3e53d4a4bf9a07e3fb8284ac0d5fa09ff4166578"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0094_approval_direct_execution_domains.sql",
+          "bytes": 2891,
+          "sha256": "c0e601568100b1c92bb25f24524a48150629e750f135cfb28e41d5c391e37c82",
+          "blob": "e8c85a847841f9f29dc9ad5368ba3ac0cbf0501b"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0095_recovery_automation_foundations.sql",
+          "bytes": 1401,
+          "sha256": "1414446cb8749a6a097f843bf9d2cc2e42da63ff0e2c96b613bd78de8db85b3e",
+          "blob": "aaf886dca2da708fe95db3c42fb7f86071b5bbe8"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0096_recovery_flow_sharing_foundations.sql",
+          "bytes": 4389,
+          "sha256": "d8f0f5dd67ce26328745b6b6d94b6e958d3906c7cd8a308d4ecfbc168e067190",
+          "blob": "5faa42fd18d89c79c911864a1730974639fcf898"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0097_recovery_automation_run_records.sql",
+          "bytes": 2530,
+          "sha256": "cb2b14e26104fa172d06bac1561e12a78220458d51a038e67630fece6f9f3211",
+          "blob": "06a5136e71dfdae2d6c60574807f0a054e9be683"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0098_recovery_device_binding_leases.sql",
+          "bytes": 4010,
+          "sha256": "ce329e24edef4d46e3355b301b6c004ce0e24cccb68b1216fa0b0e4efff32fc7",
+          "blob": "48c1fba83881d40f1359135c03efc2cdcbdf2662"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0099_recovery_security_policy_fences.sql",
+          "bytes": 5540,
+          "sha256": "30f22f1ee9cf0bf2104d6ef5803a51de993ade44c034bc25cd9f72dc046015a2",
+          "blob": "17c1edd22d20646dcb5673e23d6b5c8cf733e811"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0100_recovery_outbox_knowledge_heads.sql",
+          "bytes": 5279,
+          "sha256": "2780c167f92272e521b0e1cb39d904f61a9f83b643da5c857760f5aa1c532c62",
+          "blob": "e0fe3f11a27d01e25491f6d077ddba74e0ba9ceb"
+        }
+      ]
+    },
+    {
+      "package": 15,
+      "parent": "7c1d44ca3a62b66002dc7ba9471175ce49cfae4a",
+      "commit": "c5fc005aeec30b95e4ccf55d75288875f9b7be62",
+      "tree": "28ea95ac8828b2b479a8eac67179239a3a8bb62f",
+      "files": [
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0101_ap2_parent_schema_reconcile_closed.sql",
+          "bytes": 3715,
+          "sha256": "c3c3c4c601261fd774cc729e1e117019385b6855bbd9d0d697174709db626da0",
+          "blob": "7fc3a74fb4dd42e81b12b45a54e78ea7e1465e46"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0102_approval_exact_input_objects_closed.sql",
+          "bytes": 12931,
+          "sha256": "6394f3f2f598888826339bd4037f2c8c82fd69768008368892599c913b08c64d",
+          "blob": "12af1a759c012a1cfbf352f9f98a063c8bc00b7b"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0103_knowledge_foundations_closed.sql",
+          "bytes": 11367,
+          "sha256": "d8c2845d3cd0a89e517b68200e78b143e569e840b67e9e4a3467bdc83fe697ed",
+          "blob": "cbef0fcc528502da6dd27eec5fe7bb718fb0c9e8"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0104_resource_project_foundations_closed.sql",
+          "bytes": 7125,
+          "sha256": "1b03ea36d08be34439aa25d9d89f9a3fb3a2a9d6f1cf29ab3d9aac1cfda06951",
+          "blob": "619d581bfe62c103d72c367202b55297af7d515e"
+        },
+        {
+          "path": "openbot/server/recovery/recovery-20261018-v1/sql/0105_knowledge_write_foundations_closed.sql",
+          "bytes": 12373,
+          "sha256": "37dd08048fe85c2ad2e2de8a0dbe48b78a19c3fe7fc56b6040ce24d6a337e5a0",
+          "blob": "7ddf3f97777624e3136406a7f780c1e569b22600"
+        },
+        {
+          "path": "openbot/server/src/approvals/continuation-protocol.ts",
+          "bytes": 11057,
+          "sha256": "2129614c5dbd7111e6e1708598c27c065c08f52a97d19fb542eb4a7a4611c972",
+          "blob": "5ea8bca2a773b213d861b0529744cd19eb56125e"
+        },
+        {
+          "path": "openbot/server/src/approvals/continuation-store.ts",
+          "bytes": 13036,
+          "sha256": "aa2d5a5c1d89329c50dd89091155d45b69255bc92e96b79fa4d6fd6a7215fc2c",
+          "blob": "4248f406a1eb8f13e0dc2f563aafe614599adb2a"
+        },
+        {
+          "path": "openbot/server/src/approvals/continuation-target-local.ts",
+          "bytes": 8943,
+          "sha256": "6fd4a925453a24444fbfda3610b31ab6eb12910deecadf0f3a4c2fd8b5ce8182",
+          "blob": "7a7aa79782a05f70f50bac86452b3d76fd4d1350"
+        }
+      ]
+    },
+    {
+      "package": 16,
+      "parent": "c5fc005aeec30b95e4ccf55d75288875f9b7be62",
+      "commit": "709230fe723cf5e489bf52fc905db8dbcf3f49b2",
+      "tree": "3253490c5622a5fd178c5674895c755571cbf506",
+      "files": [
+        {
+          "path": "openbot/server/src/approvals/continuation-target-store.ts",
+          "bytes": 22423,
+          "sha256": "c2a82247205dfa4bd8d63bde997994ab36bcc184f4ce38737ec0c0d6097a0b97",
+          "blob": "46a2ee890b920d51e558bcf0d7984bc36770e34b"
+        },
+        {
+          "path": "openbot/server/src/approvals/exact-http-owned-input.ts",
+          "bytes": 9361,
+          "sha256": "bba2bd4f4c4109e0b5e2d07066a924f86e5bbd1d887c05e55ec604213dbb49f8",
+          "blob": "0edb5f1d70eec6d73a4494bd8021b61440c060fa"
+        },
+        {
+          "path": "openbot/server/src/approvals/exact-input-json-materializer.ts",
+          "bytes": 11512,
+          "sha256": "1f00ea78d598d1736512133066b12072f331f31c1e900aad9c97f1c718398b19",
+          "blob": "dd3605d02807a58a1fa1302e5ae336b5a2bcf44c"
+        },
+        {
+          "path": "openbot/server/src/approvals/exact-input-json.ts",
+          "bytes": 6534,
+          "sha256": "24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45",
+          "blob": "ff562c1702dfa26d258ce773fc67a32bbb680d2a"
+        },
+        {
+          "path": "openbot/server/src/approvals/exact-object-crypto.ts",
+          "bytes": 7143,
+          "sha256": "52aecfa4c153d164fd8e5cc6e61ff7eb2e98613191393e5c2344a4cc3a428341",
+          "blob": "8a6f18af3a76b9ad446a5cee264f3b1da32efb3b"
+        },
+        {
+          "path": "openbot/server/src/approvals/exact-object-header.ts",
+          "bytes": 7168,
+          "sha256": "e40e6dc5829c99af2ec204e91b5e25f71bd1fdca25f39987552973ebd68e5445",
+          "blob": "475b430210dea68a9e16982cde03e0eff73aaa59"
+        },
+        {
+          "path": "openbot/server/src/approvals/exact-object-wire.ts",
+          "bytes": 5644,
+          "sha256": "7848e9b23a2dd2648b3f682e7be434885bbaddfd0052dbd8d9d0095874cdf2e8",
+          "blob": "5642ca1b1a72e2ae149bcf55e36b772442f961f9"
+        },
+        {
+          "path": "openbot/server/src/auth/role-writer-lifecycle.ts",
+          "bytes": 9068,
+          "sha256": "bc81ce7784bea2c5e4d9d65de3a812a497d2d226b8209de858dd9ed737a47563",
+          "blob": "3904651344e4a8308b536ba941a425dae7fd4824"
+        }
+      ]
+    },
+    {
+      "package": 17,
+      "parent": "709230fe723cf5e489bf52fc905db8dbcf3f49b2",
+      "commit": "ce23144721ade6f01e8b5227945cfceafc2a8be2",
+      "tree": "6406b537898f7b18a2525f7225744a9b62701661",
+      "files": [
+        {
+          "path": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+          "bytes": 3336,
+          "sha256": "e23afbf4a11cbbb965a09a992ce1ac22578b08a40ec28c9a483a4049c72ddf7c",
+          "blob": "f4b7167267c32030a4043e0d8fe6815656983f3b"
+        },
+        {
+          "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+          "bytes": 12930,
+          "sha256": "0e9be153bdb8a0fb6ffd2dd0e6df4551dc9aeed0031eb0c39c7e2aaa0f98e4ab",
+          "blob": "aca215ba45a4df2ae60f7875e8d935723d9e008e"
+        },
+        {
+          "path": "openbot/server/src/db/schema/automation-foundations.ts",
+          "bytes": 1735,
+          "sha256": "ee7a5da74f2f49f69c2bc1425aca40519a116e597aa09cafd81b29997f3a58a5",
+          "blob": "30aaa057c907399272562ecc5d2a24db2b0074bf"
+        },
+        {
+          "path": "openbot/server/src/db/schema/automation-run-records.ts",
+          "bytes": 3043,
+          "sha256": "01b7f6cf19f7b22d80004a018ab59f3d2a9b31dbe77b6fdbbe94d168ed2f6140",
+          "blob": "befc051b34c25e703f63e15b109d6fce2995a295"
+        },
+        {
+          "path": "openbot/server/src/db/schema/device-binding-leases.ts",
+          "bytes": 4516,
+          "sha256": "643892e2d789a9eb229b6995db97e67e935136599514a28f9eab0b92776dbfdb",
+          "blob": "b5ed0f66f5bd95f8a3969c895da7847248190380"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-customization-foundations.ts",
+          "bytes": 4446,
+          "sha256": "59ee2058bb3394e0dd093ed6d36458d8d9f9dc2433c4be6c078455e2728ea3b8",
+          "blob": "400dc055c5513d59cebc0e7df2391ebb990eb06e"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-customization-turns.ts",
+          "bytes": 2785,
+          "sha256": "0e0f587aa2c42cdabc58350d0b5fc7eb581921e38dc451083d67d580d6b86d9a",
+          "blob": "2cb8ce28c0f69fbb3d6462b698761d6d10659c16"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-official-bindings.ts",
+          "bytes": 3548,
+          "sha256": "799d21ea79b4c1d37e8c8e7b5656e82a777b96e961351586ad05b97ee4635742",
+          "blob": "d43cb340cf59275ef0d7654d0ff6f161a7d102c3"
+        }
+      ]
+    },
+    {
+      "package": 18,
+      "parent": "ce23144721ade6f01e8b5227945cfceafc2a8be2",
+      "commit": "8d4a47bbd2267f943293898475faae08bcf2d7d7",
+      "tree": "191422b4534957d0d93466dc43866e00e9554f30",
+      "files": [
+        {
+          "path": "openbot/server/src/db/schema/flow-run-coordination.ts",
+          "bytes": 8003,
+          "sha256": "1cb536ddf37bb64c07e237069bd213366dd546a1aad9c604cd01d1e93921c9bd",
+          "blob": "20eb3ade1788bdee9aab7f0086604846094a8d1f"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-sharing-foundations.ts",
+          "bytes": 4682,
+          "sha256": "3095e430d7ee4d74edaed222799dd428f0663919a355d4e182dfbc2ad4b56217",
+          "blob": "eaa4a802dab9495cde061f69268e83a485962a85"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-source-foundations.ts",
+          "bytes": 8436,
+          "sha256": "f35d08ff55f59d53ae1b762c9d02df19a3284bdb075be400fb000f731b34e94a",
+          "blob": "6a1f57e5ab7ef5098394ef901bbb43f7ac70fa85"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-source-original-records.ts",
+          "bytes": 12222,
+          "sha256": "3c0bb97213b18b7f0e47e72a0357de378bdd8a65c30c76a6ce4a94e1cf779a19",
+          "blob": "f5bb0137285216ef8b75a2b78ce4e196f8cdeb65"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-source-run-records.ts",
+          "bytes": 13400,
+          "sha256": "c303f37f86b54bcc1b91b273767341c09151029894848e0b408f5ba233e46443",
+          "blob": "2ded0ffb62d4282fed03518a5ebc046044e8bb1d"
+        },
+        {
+          "path": "openbot/server/src/db/schema/flow-source-runtime-records.ts",
+          "bytes": 8919,
+          "sha256": "f9bb388f21c24359ce0cd3934d48d4d0bebfce112ab69e9d8919d5a1167cd6c3",
+          "blob": "d3a8ebc4b807ec54d4210177d649cecc009d025b"
+        },
+        {
+          "path": "openbot/server/src/db/schema/group-pipeline-start-receipts.ts",
+          "bytes": 2392,
+          "sha256": "baa9a5307346baee97d0b5a3713d7e132aa0f8ea23f6a6e51c561bdf1589f545",
+          "blob": "34983f1233a976e012361d4b7a39b13b92d83a19"
+        },
+        {
+          "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+          "bytes": 12034,
+          "sha256": "c3b435ec2ea1784af2408e8ee4fe982e88813b47707ce0aedbc196d57f00b845",
+          "blob": "7e80089b307ca88592196b4b6c8ff4beea2248e9"
+        }
+      ]
+    },
+    {
+      "package": 19,
+      "parent": "8d4a47bbd2267f943293898475faae08bcf2d7d7",
+      "commit": "118d1bf8a48c9e43ef984eda3b55113b444350cd",
+      "tree": "73efebee6763b4b5db71612bbc49005fab41aefc",
+      "files": [
+        {
+          "path": "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+          "bytes": 12849,
+          "sha256": "fb4a8834b68836f3fc3f846f2737afcfe429f4ecbdb19aa8ff48024b90e39fda",
+          "blob": "b4b5c0b1f8af46d82459a9275f2b608ffdfb56c6"
+        },
+        {
+          "path": "openbot/server/src/db/schema/outbox-knowledge-heads.ts",
+          "bytes": 5866,
+          "sha256": "b17dad4058bf5bfd080ebbd5632522579ab3d8b5e6fba56401e993d7654a5bd6",
+          "blob": "7ba19932c19644f36a81bf68f3c335cc232ac166"
+        },
+        {
+          "path": "openbot/server/src/db/schema/resource-project-foundations.ts",
+          "bytes": 7601,
+          "sha256": "67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732",
+          "blob": "78e77f731b063f33b947a99518a646e1ea795dff"
+        },
+        {
+          "path": "openbot/server/src/db/schema/roles.ts",
+          "bytes": 5115,
+          "sha256": "6e6f37d94a160e1a40efe3756b544f930fefd0d46f6268f440ac1734e3700753",
+          "blob": "e3db171720a01d26941c25a690e011b141681aee"
+        },
+        {
+          "path": "openbot/server/src/db/schema/security-policy-fences.ts",
+          "bytes": 6038,
+          "sha256": "e4ae1d234ef6c28bc892c2d3311b8aad72b5d63320d93424dba51706658226d1",
+          "blob": "22a1a3f0acc07c5b947866e0fb38cd6add23cacd"
+        },
+        {
+          "path": "openbot/server/tests/admin-controls-shutdown.test.ts",
+          "bytes": 12914,
+          "sha256": "b75a5b76fd63056289e5b1badbad064fdfc261d1767950c1a765e188b99454b6",
+          "blob": "6bf7b3457d29df9d8cbaaf851ed2ce65ba99658f"
+        },
+        {
+          "path": "openbot/server/tests/approval-continuation-store.integration.test.ts",
+          "bytes": 19014,
+          "sha256": "c975a5f38b250c182a0734ae8a20dfbda441c6b42b59cb25a6d2172eee5d469c",
+          "blob": "e096fd2e6356a79c8f0a057771bdc47fbd95dd77"
+        },
+        {
+          "path": "openbot/server/tests/approval-exact-http-owned-input.test.ts",
+          "bytes": 13610,
+          "sha256": "81afc1d207dc5ff25037bbce5b06190338bcfe7b1a87c9e7b721c22f7e60921a",
+          "blob": "5ce1d88db14e0c8cf104840e571a30d4a5aade03"
+        }
+      ]
+    },
+    {
+      "package": 20,
+      "parent": "118d1bf8a48c9e43ef984eda3b55113b444350cd",
+      "commit": "7cbc8778ae9ac1f3efd897ddf03bf48e9d5a0a28",
+      "tree": "7d3617aa8227741c110ad14288a7bd9fde8eb8ce",
+      "files": [
+        {
+          "path": "openbot/server/tests/approval-exact-input-json-materializer.test.ts",
+          "bytes": 18490,
+          "sha256": "016f08bdd15f27fa97967b3501b81c204030a86c2bdc86244f64886e237edb59",
+          "blob": "bc606a15fcfe3b5e192c5f2def90cf993e64f695"
+        },
+        {
+          "path": "openbot/server/tests/approval-exact-input-json.test.ts",
+          "bytes": 8030,
+          "sha256": "a67781293ab350b0476aebfdbba74bd87f0618fe5f99ffaf3776c0f256f30392",
+          "blob": "0c105633452cb14d93663254cfb4c3ba2c0670bd"
+        },
+        {
+          "path": "openbot/server/tests/approval-exact-object-crypto.test.ts",
+          "bytes": 13447,
+          "sha256": "0f0bfba9bf7907db97d43fbbda66ee2d36b26356454687294ad2be4a00042c4e",
+          "blob": "94ea63363c44870e390230e8c90e62f77ac2f1e5"
+        },
+        {
+          "path": "openbot/server/tests/approval-exact-object-header.test.ts",
+          "bytes": 13299,
+          "sha256": "233025a2aa0ca6ae2b78689df48588ea291c559e8bd11ba7a66b8d444f2c007a",
+          "blob": "6acb347a2c9fdd5e6f174cd6572b91ed25c7784e"
+        },
+        {
+          "path": "openbot/server/tests/approval-exact-object-wire.test.ts",
+          "bytes": 11179,
+          "sha256": "c0068686f81a6a8cbf10a7321294337a4997eeeba5cfdadefca48fe7775b3629",
+          "blob": "24a7f4ced39383d66606cced1eb341bf97a9bd29"
+        },
+        {
+          "path": "openbot/server/tests/approval-open-transaction.integration.test.ts",
+          "bytes": 10173,
+          "sha256": "8d5d0b4b5be0746f114db4ec259a378a26ff03af1d9e0ff6639cd46751ed11c3",
+          "blob": "dfbb5d10e5aae9611dfc6eaf7c8bcf20d41857f6"
+        },
+        {
+          "path": "openbot/server/tests/approval-recovery-port.integration.test.ts",
+          "bytes": 3673,
+          "sha256": "d69b410bc0d6894ccd0725aa8802c70f4df537f206afbea2a0178013f1d8b8fd",
+          "blob": "3e78a9b2ad2b6ebc963b69e10351b58b08c94eee"
+        },
+        {
+          "path": "openbot/server/tests/approval-recovery-port.test.ts",
+          "bytes": 13015,
+          "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
+          "blob": "59a2ac92fdc9ec9875c123e463df30c1d6b9348e"
+        }
+      ]
+    },
+    {
+      "package": 21,
+      "parent": "7cbc8778ae9ac1f3efd897ddf03bf48e9d5a0a28",
+      "commit": "10590c38b565509ef105e2475445b092e8f15628",
+      "tree": "a948d752f6670540741d87ce1f874d7a02a3877c",
+      "files": [
+        {
+          "path": "openbot/server/tests/approvals-continuation-protocol.test.ts",
+          "bytes": 17879,
+          "sha256": "284e1b225d9e89716f3951e96cc545c5158f74895a306d90fcd74e8d56e28d5a",
+          "blob": "10cb4651a6f05668213f8fda097caed207a64c10"
+        },
+        {
+          "path": "openbot/server/tests/approvals-continuation-recovery.test.ts",
+          "bytes": 10525,
+          "sha256": "39994f065b691ce36dfcf072fa0a545f70e850275f51b4f52f3a119651f7d166",
+          "blob": "05f15301f674572dc732df0bb53818d1eb8219d1"
+        },
+        {
+          "path": "openbot/server/tests/continuation-target-local.test.ts",
+          "bytes": 28577,
+          "sha256": "2a330c46097076ae763fe13a4364fe39a57f48bce2315f21e0c8c9a1590cae70",
+          "blob": "d02800e7a254d9d41f7b4e5807147b42541e888f"
+        },
+        {
+          "path": "openbot/server/tests/continuation-target-store.integration.test.ts",
+          "bytes": 16737,
+          "sha256": "1019b575df4b7509f0faf43ffa911b23b88118a09d1036059f5c95afc69f464a",
+          "blob": "d8b34310ba205015c3694b9448e895b2991cf8ee"
+        },
+        {
+          "path": "openbot/server/tests/otel-exporter-compat.test.ts",
+          "bytes": 6080,
+          "sha256": "835f6b26f1019fa10f539ac45aa28892116f285b032eb35bbf12239c97711b31",
+          "blob": "973303f03358518574c518aa5bbfc6f3c74822af"
+        },
+        {
+          "path": "openbot/server/tests/otel-sdk-lifecycle.test.ts",
+          "bytes": 4949,
+          "sha256": "43fede37a795c8153b46815771d4ac8320b88cf98ad7fd0d1f5db80a6238c8c8",
+          "blob": "cb894c0b7b6d985e784d8612dd87f57cdb2e1b76"
+        },
+        {
+          "path": "openbot/server/tests/owner-assembly-audit.test.ts",
+          "bytes": 8487,
+          "sha256": "13420b22eaf7834076204e6003af00bbd85ffcd8bcf10069f57eafd7ab438ff6",
+          "blob": "6dc4a8f347edc7fbc38dd244d085f84fa0824ad1"
+        },
+        {
+          "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+          "bytes": 63126,
+          "sha256": "70b7bab9d23287b4acf6ef89edc4ee314e044b83ba13cd71acec6cda5038a053",
+          "blob": "7f87195ec3783504fe9565dba43dcaa1a352c68b"
+        }
+      ]
+    },
+    {
+      "package": 22,
+      "parent": "10590c38b565509ef105e2475445b092e8f15628",
+      "commit": "ca7ff00c378e47be178d5d7fbb75ac5ba4a841ff",
+      "tree": "ce0a01d707b7427a6f15e2940051d837ed496b4b",
+      "files": [
+        {
+          "path": "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts",
+          "bytes": 35292,
+          "sha256": "dea5acdb33039e8cea0f278ad3f65995887f7f21b270feb0fa26b5d5de9c4362",
+          "blob": "c81db5553879acb10c9c70a9792dfc17c94c08d9"
+        },
+        {
+          "path": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+          "bytes": 89597,
+          "sha256": "4b5bf1d66b25270dbed7436fc091f4f841bf71a463254b9e718d43cf737ec945",
+          "blob": "457c3c528e124c8ccf4e722fd584938c2d732e74"
+        },
+        {
+          "path": "openbot/server/tests/recovery-automation-foundations.test.ts",
+          "bytes": 40079,
+          "sha256": "c2f14856bae4539e485b9fbbb35a3bf3fb76d144a4c5af14248db0b66cfb4a41",
+          "blob": "063b69f54d03bd4d177833e62c5bf9f36d22391f"
+        },
+        {
+          "path": "openbot/server/tests/recovery-automation-run-records.test.ts",
+          "bytes": 47952,
+          "sha256": "c99e1aecbb10fd9e50c91a72c4382250c439a4b47d2d9f41877cfe8df0414642",
+          "blob": "be33e92e4844e97044f2d7fc869d28176cb0dcad"
+        },
+        {
+          "path": "openbot/server/tests/recovery-device-binding-leases.test.ts",
+          "bytes": 46916,
+          "sha256": "22b592e85970f65eb2b3c4df57baac71758e57ffc4bdfbab296280360abac23c",
+          "blob": "4f6b9a8683d4a399b9620a82c61ad06fb0360db2"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-customization-foundations.test.ts",
+          "bytes": 42869,
+          "sha256": "07daf20f6316ff821305570d1af0a5ec1162f8b59d5139db1092df809f9ac44b",
+          "blob": "f0c10a74c6467a16289e576e74d305821c8ac3a7"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-customization-turns.test.ts",
+          "bytes": 40595,
+          "sha256": "f5b393c892ea8b7d816b92e9fbabcd1f94351cd8a8312e95910d965395655a6d",
+          "blob": "c642f99246ccabdd41612ec4ca971923e521b6de"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-official-bindings.test.ts",
+          "bytes": 38478,
+          "sha256": "ab96a7035cd3b29b4390f9c2c61c4d5069c5c06a9a2061694cce71a3688d0932",
+          "blob": "f4d7f32e1a2987558f626a6223e05d8f1ba461a4"
+        }
+      ]
+    },
+    {
+      "package": 23,
+      "parent": "ca7ff00c378e47be178d5d7fbb75ac5ba4a841ff",
+      "commit": "b145ecc839925c91fc4a765c0cb9163d461380e0",
+      "tree": "13ae04caab7855dc28ff9cf41b1bda27a47fc93c",
+      "files": [
+        {
+          "path": "openbot/server/tests/recovery-flow-run-coordination.test.ts",
+          "bytes": 50218,
+          "sha256": "5d7fe43786ef00deb38533897ee3f90cc42e949dfdfe111ed9bfcf6da5bffc53",
+          "blob": "31f2812f98de801e0c910014b0e47ba36406ca36"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-sharing-foundations.test.ts",
+          "bytes": 47891,
+          "sha256": "5e2018bcdababaacc121981b3a7157cab4fa9bf9ba1611223059e9ebe58633c9",
+          "blob": "0163e17d30852cbc8a774bde7026af35e915bd3e"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-source-foundations.test.ts",
+          "bytes": 44771,
+          "sha256": "77c5ce15fb3674e9127b013834eb84a244506e6bfb53c6462f2f92d6f64e0fe0",
+          "blob": "bec36e7868544a55631bac10b1a5faa9fa1ce1be"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-source-original-records.test.ts",
+          "bytes": 54463,
+          "sha256": "62ac1fea54a1b3664a16112fc46ec171f785b4ea285b5457203d75e93b400fc0",
+          "blob": "e33d6969026f361a8a3201c02a87293b93ff5115"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-source-run-records.test.ts",
+          "bytes": 53367,
+          "sha256": "7d78535e85af2582ca64dd1d1db1bc61d008337ba14d0f7820874dc00757ce3f",
+          "blob": "ae29661c844064a996013b802c0f4b69249466c4"
+        },
+        {
+          "path": "openbot/server/tests/recovery-flow-source-runtime-records.test.ts",
+          "bytes": 48487,
+          "sha256": "5bf3b9d98f589b362e817d6bbfbcfe2cc0940db3093087fd00740d87de61c8c0",
+          "blob": "233caa4d998109a10fc1543fa34c617a14bfd63c"
+        },
+        {
+          "path": "openbot/server/tests/recovery-group-pipeline-start-receipts.test.ts",
+          "bytes": 36231,
+          "sha256": "a0c33ad193da807c34e33a5131912beb59f7e205e2d66b534f880f2f6b81a934",
+          "blob": "615baa761b5aae0167728f2ed5d9185831edb71f"
+        },
+        {
+          "path": "openbot/server/tests/recovery-knowledge-foundations.test.ts",
+          "bytes": 95182,
+          "sha256": "8246be120f1ca64ec954512887140da90b785eb777082aaabbd10348ed7282cb",
+          "blob": "ac5acd3b3761b3fcfa5737cf1dab252fcb42ade7"
+        }
+      ]
+    },
+    {
+      "package": 24,
+      "parent": "b145ecc839925c91fc4a765c0cb9163d461380e0",
+      "commit": "79b6155bb96aae75d9ca3fc2ff84c16f4781552c",
+      "tree": "5809a28b61436a99ea228ddd94ab991bc81320f7",
+      "files": [
+        {
+          "path": "openbot/server/tests/recovery-knowledge-write-foundations.test.ts",
+          "bytes": 119984,
+          "sha256": "83304cf4a0b066ad84153fefbe2ebfffd014bbb172f8b734f43b1d83faa05e85",
+          "blob": "08018af2bb9e9cfc8f68a6a60e1ea3c4a414b477"
+        },
+        {
+          "path": "openbot/server/tests/recovery-outbox-knowledge-heads.test.ts",
+          "bytes": 56386,
+          "sha256": "b4d0f3c3cf27f14fc8834b3a7ad728467d4c9306749e16388aeb9d2c5c3c286e",
+          "blob": "7a9f2acf8dddd562fb881ee7af36d1ea6bfa2bb5"
+        },
+        {
+          "path": "openbot/server/tests/recovery-resource-project-foundations.test.ts",
+          "bytes": 111726,
+          "sha256": "018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81",
+          "blob": "9177f863768482023be69c7c70b6577d89b75867"
+        },
+        {
+          "path": "openbot/server/tests/recovery-role-foundations.test.ts",
+          "bytes": 44119,
+          "sha256": "58b3d1ef25d98917c08b96ecafa93430848e04deebce5d8d140dfd4f34ee8a78",
+          "blob": "2337fde659460cb381c3abd119b81b0606379647"
+        },
+        {
+          "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
+          "bytes": 51536,
+          "sha256": "f05977fbdc4c547dc76f4f16e478df8478818f9eb742cd76dd76ddc1dc202cde",
+          "blob": "066d76f3933cc067bb318943cb260e1702ef872c"
+        },
+        {
+          "path": "openbot/server/tests/recovery-subject-binding.test.ts",
+          "bytes": 10810,
+          "sha256": "aec7705207de643076c0c5af24be62bd3f338dabee1bd5b202a0366f98b9faa5",
+          "blob": "8a9830cc977948bc8be8ba77410f6643c38f8751"
+        },
+        {
+          "path": "openbot/server/tests/recovery-task-flow-audit.test.ts",
+          "bytes": 38415,
+          "sha256": "93c08bfa1de9e49d88ef3a833a5cc713967d7d8ca4a12b9f20bc76498bc9eb82",
+          "blob": "faf03843d6d78a08dd75dfa7663cd7a405291ac4"
+        },
+        {
+          "path": "openbot/server/tests/recovery-threads-parent-key.test.ts",
+          "bytes": 32319,
+          "sha256": "d07c0ad9ceadc3549bc081e5f80215d6414aa2df12dd01fce1a4f50522bc55b3",
+          "blob": "b9a404df836b1ad8096dedb00c7bec5f9a0b8479"
+        }
+      ]
+    },
+    {
+      "package": 25,
+      "parent": "79b6155bb96aae75d9ca3fc2ff84c16f4781552c",
+      "commit": "ebd96e157ff4b4ef33065653db43080a18afab17",
+      "tree": "7e0e2649c8476531f378ef1743ca765627a36c77",
+      "files": [
+        {
+          "path": "openbot/server/tests/role-writer-lifecycle.test.ts",
+          "bytes": 16256,
+          "sha256": "3e8dc3767e9a806c1df44183916580eed644832afab4ae64dd22e688055b3a5c",
+          "blob": "912e445e2d6c8d0d6faffa8a9500e46ca241a5ce"
+        },
+        {
+          "path": "openbot/server/tests/server-readiness-gates.test.ts",
+          "bytes": 9990,
+          "sha256": "2fa4734f01a96cb5bdfba424614819aebeccba0771929d290fef27656feb5e1e",
+          "blob": "7f93bc194074a264750be5a5de8b47c1ad2adec2"
+        },
+        {
+          "path": "openbot/tests/recovery-lineage.test.ts",
+          "bytes": 27325,
+          "sha256": "2d7d2a39a9f56f2b6e04829d10d5269da1261796ca8fa14729f7aa59b2f9ae5f",
+          "blob": "693cb7018a615091340b644156c0e4cb63e31be1"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "all195_bytes_and_sha256": true,
+    "git_remote_tree_readback": true,
+    "other_repository_files_preserved": true,
+    "credential_pattern_findings": 0,
+    "physical_full_source_verification": "PENDING",
+    "project_tests": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED"
+  },
+  "bounds": {
+    "windows_source_files_written": 0,
+    "cloud_only": true,
+    "max_source_files_per_package": 8,
+    "project_aggregate_memory_bytes": 536870912,
+    "project_swap_bytes": 0,
+    "paid_usage_budget_usd": 0,
+    "stories": 77,
+    "packages": 18,
+    "final_gates": 7
+  },
+  "history": {
+    "strict_v9_missing8": {
+      "files": 8,
+      "bytes": 286337,
+      "hunks": 55,
+      "offset": 0,
+      "fuzz": 0
+    },
+    "previous_source_only_reviews_retained": true,
+    "previous_rejected_candidates_and_boundary_events_retained": true,
+    "transport_failure": "One create_blob request failed in transport; expected blob was read as 404, then creation resumed. No ref was advanced for the failed package."
+  }
+}
