@@ -1,0 +1,58 @@
+{
+  "head": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+  "run": 40689165318,
+  "job": 122819239449,
+  "total": {
+    "pass": 22,
+    "fail": 0,
+    "expects": 994
+  },
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "87c2bd32d7e6fdf330927ffc0d0129d6fdcdfff5",
+    "head": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+    "swap_limit": 0,
+    "verified_source_bytes": 50007029,
+    "verified_source_files": 2054,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 1,
+    "scope": "integrated independently approved three table definition reconstruction; not PostgreSQL or production validation",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "original51_name_coverage": 51,
+  "definition_tables": 155,
+  "current_name_coverage_is_not_pg_acceptance": true,
+  "original_raw_whole": "NOT_NEWLY_RETRIEVED",
+  "old_orm_sql_bodies": "MISSING_NEW_RECONSTRUCTION",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

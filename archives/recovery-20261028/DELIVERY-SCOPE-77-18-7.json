@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "85074c589b9d18a129a746386217db69aa73f077",
-  "source_status": "V57_RESTORED_PLUS_SEVEN_INDEPENDENTLY_APPROVED_PACKAGES_PTX_SOURCE_ONLY",
+  "source_snapshot": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+  "source_status": "V57_RESTORED_PLUS_EIGHT_APPROVED_PACKAGES_INCLUDING_EXPLICIT_SNAPSHOT_RECONSTRUCTION",
   "story_requirements": [
     {
       "id": "A1",
@@ -758,8 +758,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "349533f4c058e9b937cf7e4e4534032f902f924b",
-    "head": "85074c589b9d18a129a746386217db69aa73f077",
+    "git_tree": "87c2bd32d7e6fdf330927ffc0d0129d6fdcdfff5",
+    "head": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -768,23 +768,24 @@
       "AUTOMATION-FK-ASSERTION-20261028",
       "SECURITY-FK-ASSERTION-20261028",
       "K106-CURRENT-PARENT-RUNTIME-20261028",
-      "PTX-CURRENT-PARENT-RECOVERY-20261028"
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
     "swap_limit": 0,
-    "verified_source_bytes": 49231004,
-    "verified_source_files": 2050,
+    "verified_source_bytes": 50007029,
+    "verified_source_files": 2054,
     "windows_source_files_written": 0
   },
   "paid_provider_requests": 0,
   "postgres17": "PG_PENDING",
   "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED",
   "windows_source_writes": 0,
-  "source_verified_run": 40684567801,
+  "source_verified_run": 40689165318,
   "root_readme_restore": {
     "commit": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
     "archivePath": "archives/recovery-20261028/GITEE-ROOT-README-0089682.md",
@@ -1053,11 +1054,37 @@
       "new_ptx_pg_file": "NOT_IMPORTED",
       "postgres17": "PG_PENDING",
       "full_ci": "NOT_RUN"
+    },
+    "remaining3_reconstruction": {
+      "head": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+      "run": 40689165318,
+      "job": 122819239449,
+      "pass": 22,
+      "fail": 0,
+      "expects": 994,
+      "test_files": 1,
+      "source_files": 2054,
+      "source_bytes": 50007029,
+      "current_snapshot_tables": 155,
+      "current_original51_name_coverage": 51,
+      "original_whole_not_newly_retrieved": true,
+      "original_orm_sql_bodies_missing": true,
+      "source_scope": "explicit new snapshot reconstruction",
+      "independent_review": "SOURCE_APPROVED_ONLY",
+      "migration": "NOT_RUN",
+      "producer": "NOT_SERVICE_WIRED",
+      "pg17": "PG_PENDING"
+    },
+    "next_preload38": {
+      "status": "PREPARED_FOR_CURRENT_SOURCE",
+      "test_files": 38,
+      "new_pg15_file_imported": false,
+      "full_ci": "NOT_RUN"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Three full remaining original object capsules are now recovered, hash/blob/codec sealed and match historical derived matrix; prepare explicit current-parent snapshot reconstruction sixfile107 candidate with independent review; old SQL/ORM bodies remain missing.",
+  "next_source_package": "No speculative reconstruction from counts. The remaining original three table structures are now explicitly rebuilt and Source-approved; next execution evidence must respect PG_PENDING, compiler resource stop, native roles/driver, production and real-device gates.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -1068,7 +1095,7 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 427723,
-    "sha256": "21d6368ccd163bbeee1ee8cd043ccd73b8d769ee897744c1733dd656dad31c77"
+    "bytes": 430544,
+    "sha256": "8c991de3ff7f91e1d37c0a0b943e631d7825b1a1cd11a862caf25bce9ca41433"
   }
 }

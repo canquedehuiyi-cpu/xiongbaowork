@@ -7,10 +7,10 @@
 
 - V57全部195项修复（25修改/170新增/0删除，原载荷15,019,196字节）已恢复，原清单419227字节/SHA256 `81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920` 保持不变。
 - 原V57的2045清单文件、48,435,806字节已完整物理核验。
-- 其后7个恢复/兼容修复包均经同一名非作者独审及Root精确采用，共23个不同主体文件：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件、AUTOMATION-FK单测试、SECURITY-FK单测试、K106六文件及Ptx两文件。前6包有明确组件测试证据；Ptx仅SourceOnly采用及整树字节核验，15项PG17定义未运行。这7个修复包不等于18个交付包已完成。
-- 当前受清单覆盖的 **2050文件、49,231,004字节**，已按原V57清单加7个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
-- 最新完成该核验的主体提交：[85074c589b9d18a129a746386217db69aa73f077](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/85074c589b9d18a129a746386217db69aa73f077)。
-- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，427723字节/SHA256 `21d6368ccd163bbeee1ee8cd043ccd73b8d769ee897744c1733dd656dad31c77`。这是基于原清单及7个批准overlay的派生清单，原V57身份不被改写。
+- 其后8个恢复/兼容修复包均经同一名非作者独审及Root精确采用，共27个不同主体文件：前五个兼容包、K106六文件、Ptx两文件，以及0107剩余三表六文件显式快照重建包。前6包及第8包有组件/结构测试；Ptx仅SourceOnly采用，15项PG17定义未运行。0107是按冻结完整对象新重建，不冒原ORM/SQL找回；8个修复包不等于18个交付包完成。
+- 当前受清单覆盖的 **2054文件、50,007,029字节**，已按原V57清单加8个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
+- 最新完成该核验的主体提交：[78c2b4328481a7234bb36f7a7f178f0efa07b71d](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/78c2b4328481a7234bb36f7a7f178f0efa07b71d)。
+- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，430544字节/SHA256 `8c991de3ff7f91e1d37c0a0b943e631d7825b1a1cd11a862caf25bce9ca41433`。这是基于原清单及8个批准overlay的派生清单，原V57身份不被改写。
 - 恢复分支：[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)。默认分支仍保留原Gitee导入基线；旧Gitee README单独保留。
 
 ## 运行与审查证据
@@ -68,9 +68,13 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 - Bun1.3.14+0d9b296af；schema测试仅用原lockfile固定Drizzle0.45.2并验证SRI，不冒完整workspace安装。
 - 原preload全套、类型编译、完整CI、原生PG17、生产接线、镜像、真实UI、真实计费和客户交付分别待真实验证。
 - PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migration NOT_WIRED、ROOT_RELEASE=null、ready=false保留。
-- 旧V58仍未采用，原V57历史46/51余5记录不改；本次另有独立原0121 oracle和当前物理Source证据恢复其中两表定义，其余flow_import_proposals、proactive_runs、model_token_calls仍缺恢复，不能用152总表掩盖。历史审计事件与缺证保留。
+- 旧V58仍未采用，原V57历史46/51余5记录不改；本次另有独立原0121 oracle和当前物理Source证据恢复其中两表定义，三表原ORM/SQL仍缺失；0107另行明确重建三表完整结构，并保全152父表，不能将155总表当原whole或nativePG验收。历史审计事件与缺证保留。
 - 专用Codespace最后可见为重连；当前完整物理验证来自Linux Actions，不声称持久Codespace已快进。
 
 37文件子集已在提交ef8f38ad08b66442f4a95609d1522c6293a93e6b实际完成：[40684891942/job122804593792](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40684891942/job/122804593792)，651pass/0fail/9810expects、37/37、exit0；2050/49231004全部字节核验；原两preload未改，完整冻结依赖PASS/hardlink0/外链0/禁全部生命周期脚本。安装peak510.2M、测试peak478.7M保留，PG17新15体未导入。该同一提交具名子集不等完整CI。
 
 最后三个原目标的完整对象已从独立封存7065B capsule三层核合取回，与104854B派生矩阵fullStructure逐字相同，见REMAINING3-SNAPSHOT-INPUT目录。原whole583049/c382dcdb…是历史来源身份，未新取whole；93276原raw缺口和派生分层保持，原ORM/SQLbody仍SOURCE_BODY_MISSING。下一包仅明确按快照重建，不以取到输入等同完成表或运行。
+
+0107显式重建已采用：[78c2b4328481a7234bb36f7a7f178f0efa07b71d](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/78c2b4328481a7234bb36f7a7f178f0efa07b71d)，[40689165318/job122819239449](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40689165318/job/122819239449)在实际采用提交上全核2054/50007029，22pass/0fail/994expects、exit0、测试peak196.9M。六Source经全文独审SOURCE_APPROVED_ONLY/findings=[]，三完整对象逐字等冻结oracle，152旧表和全部tops/order逆向精确回604775父；journal107完整逆回16159，barrel一export。216历史+7 Source全部223身份保持。当前51/51仅名称及分层结构恢复证据，旧V57历史46/51不倒改，原whole未新取/93276raw缺口/原ORM_SQL_BODY_MISSING保持；PG谓词、真实driver/DTO/NULL、producer和商业门未验。
+
+下一步同一新Source提交保留原两preload和冻结依赖，明确38文件（原37加0107定义测试），不包含Ptx的15项PG集成测试。项目总512MiB/swap0、DATA64MiB和仅完整依赖安装512MiB具名例外不变。

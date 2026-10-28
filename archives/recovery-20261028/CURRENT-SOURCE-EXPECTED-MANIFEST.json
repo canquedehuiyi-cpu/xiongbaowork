@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "85074c589b9d18a129a746386217db69aa73f077",
-  "basis": "immutable V57 manifest plus seven independently approved exact overlays; Ptx SourceOnly PG_PENDING",
+  "source_commit": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+  "basis": "immutable V57 plus eight independently approved exact overlays; explicit new0107 snapshot reconstruction and Ptx SourceOnly boundaries",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -139,10 +139,37 @@
       "source_commit": "85074c589b9d18a129a746386217db69aa73f077",
       "runtime": "PG_PENDING_ZERO_EXECUTIONS",
       "source_verification_run": 40684567801
+    },
+    {
+      "ticket": "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/REMAINING3-CURRENT-ADOPTED.json",
+        "bytes": 5228,
+        "sha256": "319648196acda53d60ac61c69bf87a670f61ae4ad6211ccce7fd10bd84f6a59d",
+        "formal_adoption": true,
+        "ticket": "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+        "source_paths": [
+          "openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql",
+          "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+          "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+          "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+          "openbot/server/src/db/schema/index.ts",
+          "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts"
+        ],
+        "source_new_paths": [
+          "openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql",
+          "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+          "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+          "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts"
+        ]
+      },
+      "source_commit": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
+      "run": 40689165318,
+      "scope": "new snapshot reconstruction definitions, not original ORM/SQL body recovery"
     }
   ],
-  "file_count": 2050,
-  "source_bytes": 49231004,
+  "file_count": 2054,
+  "source_bytes": 50007029,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -7793,8 +7820,8 @@
     },
     {
       "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
-      "bytes": 16159,
-      "sha256": "0be3bb0f19c52c21fc3ecc689d5eff41ae00a5e028de064cd9ad213d65ac44fb",
+      "bytes": 16330,
+      "sha256": "43fe7cd3af489bf7e6347f4a20402a82a7efd9c48a3c8334cbd296d15dbc1f7d",
       "mode": "100644"
     },
     {
@@ -8850,8 +8877,8 @@
     },
     {
       "path": "openbot/server/src/db/schema/index.ts",
-      "bytes": 1794,
-      "sha256": "f9ddd1c640db86a246e45095788bb3c140ec503a0a35be75a8e64d09c99ea2aa",
+      "bytes": 1848,
+      "sha256": "a3268a149e2a6de7e2a8cc2879b11d34273e78dc5bf4cf496dc1733248fbc66e",
       "mode": "0o644"
     },
     {
@@ -12503,6 +12530,30 @@
       "bytes": 21306,
       "sha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
       "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql",
+      "bytes": 11318,
+      "sha256": "e26e1d06bcd76d37baae4997df773de92c1785a2704e950b7d4ca4c8c0210ae4",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+      "bytes": 629001,
+      "sha256": "74f51de19c8e22f82f3497567b5c351864de484b8fc4f9b781b511c2b96ec747",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+      "bytes": 12135,
+      "sha256": "ce495a487ceb9cdcfef3fcbc8470d9df80123e721784ad91df9e6aac04f37fb1",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts",
+      "bytes": 123346,
+      "sha256": "a0c1b66a51db0ce18e0dfd35567d7339511c6af40533d23f016c0f248f5dbdbe",
+      "mode": "0o644"
     }
   ],
   "physical_verification": {
@@ -12511,8 +12562,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "349533f4c058e9b937cf7e4e4534032f902f924b",
-    "head": "85074c589b9d18a129a746386217db69aa73f077",
+    "git_tree": "87c2bd32d7e6fdf330927ffc0d0129d6fdcdfff5",
+    "head": "78c2b4328481a7234bb36f7a7f178f0efa07b71d",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12521,18 +12572,26 @@
       "AUTOMATION-FK-ASSERTION-20261028",
       "SECURITY-FK-ASSERTION-20261028",
       "K106-CURRENT-PARENT-RUNTIME-20261028",
-      "PTX-CURRENT-PARENT-RECOVERY-20261028"
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_SEVEN_APPROVED_OVERLAYS_PG_PENDING",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
     "swap_limit": 0,
-    "verified_source_bytes": 49231004,
-    "verified_source_files": 2050,
+    "verified_source_bytes": 50007029,
+    "verified_source_files": 2054,
     "windows_source_files_written": 0
   },
   "commercial_acceptance": "NOT_DELIVERED",
-  "postgres17": "PG_PENDING"
+  "postgres17": "PG_PENDING",
+  "original51_name_coverage": {
+    "current": 51,
+    "previous": 48,
+    "method": "three full new oracle objects and byte-exact inverse of152 old tables; name presence separately checked",
+    "not_native_pg_acceptance": true,
+    "historical_V57_ledger_not_rewritten": true
+  }
 }
