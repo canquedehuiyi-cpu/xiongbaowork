@@ -211,9 +211,15 @@ function parseSQL(source: string): {
         const columnsTo = c.ids();
         c.take("ON");
         c.take("DELETE");
-        const onDelete = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onDelete: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onDelete = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onDelete = "no action";
+        }
         c.take("ON");
         c.take("UPDATE");
         c.take("NO");
@@ -1258,7 +1264,7 @@ describe('AP2 current ORM reconcile CLOSED new design, no runtime authorization'
   }
 ]){const b=readFileSync(join(server,input.path));expect(b.length).toBe(input.bytes);expect(createHash('sha256').update(b).digest('hex')).toBe(input.sha256);}});
  test('real inline admission unique descriptors merge with extra-config ordinary uniques without uniqueIndex mixing',()=>{
-  for(const model of models){const inputs=uniqueInputs(model),column=inputs.columns.find(c=>c.name==='admission_id');assert.ok(column&&column.uniqueName);expect(column.isUnique).toBe(true);expect(column.uniqueName).toBe(`${getTableConfig(model).name}_admission_id_unique`);const uniques=ordinaryUniqueMetadata(inputs.columns,inputs.extras);expect(uniques[column.uniqueName]).toEqual({name:column.uniqueName,columns:['admission_id'],nullsNotDistinct:false});}
+  for(const model of models){const inputs=uniqueInputs(model),column=inputs.columns.find(c=>c.name==='admission_id');assert.ok(column?.uniqueName);expect(column.isUnique).toBe(true);expect(column.uniqueName).toBe(`${getTableConfig(model).name}_admission_id_unique`);const uniques=ordinaryUniqueMetadata(inputs.columns,inputs.extras);expect(uniques[column.uniqueName]).toEqual({name:column.uniqueName,columns:['admission_id'],nullsNotDistinct:false});}
   const parent=uniqueInputs(approvalRequests),uniques=ordinaryUniqueMetadata(parent.columns,parent.extras);expect(uniques).toEqual({[parentUnique.name]:parentUnique});expect(Object.hasOwn(uniques,'approval_requests_action_idx')).toBe(false);expect(getTableConfig(approvalRequests).indexes.some(i=>i.config.name==='approval_requests_action_idx'&&i.config.unique)).toBe(true);
  });
  test('missing inline unique flag or wrong actual name rejects the unchanged independent oracle',()=>{
@@ -1271,7 +1277,7 @@ describe('AP2 current ORM reconcile CLOSED new design, no runtime authorization'
   for(const model of models){const inputs=uniqueInputs(model);for(const change of [(c:InlineUniqueColumn)=>({...c,uniqueName:undefined}),(c:InlineUniqueColumn)=>({...c,uniqueName:''}),(c:InlineUniqueColumn)=>({...c,uniqueType:'unknown-null-mode'})]){const columns=inputs.columns.map(c=>c.name==='admission_id'?change(c):c);expect(()=>ordinaryUniqueMetadata(columns,inputs.extras)).toThrow();}}
  });
  test('duplicate inline and extra-config names reject, while incorrect extra NULL semantics also rejects parent expectation',()=>{
-  for(const model of models){const inputs=uniqueInputs(model),column=inputs.columns.find(c=>c.name==='admission_id');assert.ok(column&&column.uniqueName);expect(()=>ordinaryUniqueMetadata([...inputs.columns,column],inputs.extras)).toThrow();expect(()=>ordinaryUniqueMetadata(inputs.columns,[...inputs.extras,{name:column.uniqueName,columns:[column.name],nullsNotDistinct:false}])).toThrow();}
+  for(const model of models){const inputs=uniqueInputs(model),column=inputs.columns.find(c=>c.name==='admission_id');assert.ok(column?.uniqueName);expect(()=>ordinaryUniqueMetadata([...inputs.columns,column],inputs.extras)).toThrow();expect(()=>ordinaryUniqueMetadata(inputs.columns,[...inputs.extras,{name:column.uniqueName,columns:[column.name],nullsNotDistinct:false}])).toThrow();}
   const parent=uniqueInputs(approvalRequests);expect(parent.extras).toHaveLength(1);expect(()=>ordinaryUniqueMetadata(parent.columns,[...parent.extras,...parent.extras])).toThrow();const actual=metadata(approvalRequests);actual.uniqueConstraints=ordinaryUniqueMetadata(parent.columns,parent.extras.map(c=>({...c,nullsNotDistinct:true})));expect(()=>assert.deepEqual(normalize(actual),normalize(parentExpected()))).toThrow();
  });
 });

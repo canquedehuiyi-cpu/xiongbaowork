@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { preLintRecoverySource } from "./helpers/recovery-lint-source";
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
@@ -1279,14 +1280,26 @@ function parseSQL(source: string): {
         const columnsTo = c.ids();
         c.take("ON");
         c.take("DELETE");
-        const onDelete = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onDelete: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onDelete = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onDelete = "no action";
+        }
         c.take("ON");
         c.take("UPDATE");
-        const onUpdate = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onUpdate: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onUpdate = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onUpdate = "no action";
+        }
         c.finish();
         if (tableTo === name) {
           assert.ok(
@@ -1882,6 +1895,7 @@ const APPROVED_K106_PRIOR_TEST_INVERSES: Readonly<Record<string,ApprovedK106Prio
   }
 };
 function historicalK106PriorTestSource(path:string,raw:Buffer):Buffer {
+  raw = preLintRecoverySource(path, raw);
   const inverse=APPROVED_K106_PRIOR_TEST_INVERSES[path];
   if(!inverse) return raw;
   assert.equal(raw.length,inverse.currentBytes,"exact approved prior repair size");

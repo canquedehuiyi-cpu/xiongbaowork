@@ -1,0 +1,159 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "aeede7b26552cc17a623af90a57509573b11aa9c",
+  "candidate": "56eadd51224f0331c928b47a41a2275a810eabe4",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "before": {
+        "bytes": 69721,
+        "sha256": "e4c5430aee248ffba36ec037470d97a4028d2927ee8939bbb21b4426e3055b14",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 69816,
+        "sha256": "00916632b07c54585015a45b7f209b8234e1a321742ec945e61edf512b0f8d47",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-outbox-knowledge-heads.test.ts",
+      "before": {
+        "bytes": 56386,
+        "sha256": "b4d0f3c3cf27f14fc8834b3a7ad728467d4c9306749e16388aeb9d2c5c3c286e",
+        "blob": "7a9f2acf8dddd562fb881ee7af36d1ea6bfa2bb5",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 56495,
+        "sha256": "8dee735d62b20b0e2db3bb4ca2bf38402733f342f79ad46e752ab917148550e9",
+        "blob": "3f7542a5847e5f8069a0ba5f25b6260c9529e959",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-resource-project-foundations.test.ts",
+      "before": {
+        "bytes": 115756,
+        "sha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 115974,
+        "sha256": "d8701c36d66fd26527d24bf3c8e1bfad358b082f5074a8e7f6a31bf746293099",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
+      "before": {
+        "bytes": 53329,
+        "sha256": "9bc8e5240cb3f3b70846f8760a2d1794faf3cbf90184c42c00fe76ef2f9f73a8",
+        "blob": "b24985f8eaf109c67fbccd20d79ed9fd161aac8c",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 53438,
+        "sha256": "796725b473e465e553971b33da1f5aa83e42f5db7094400fd867a08b56987ac4",
+        "blob": "407d88296b1833699f6ed8ee7a38a1c00bb98fa2",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts",
+      "before": {
+        "bytes": 128110,
+        "sha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 128442,
+        "sha256": "795e8365ad2ac62d78f6de4973b382dd95625f3698ab62a840b3ce41ecaabfa3",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-knowledge-write-foundations.test.ts",
+      "before": {
+        "bytes": 130422,
+        "sha256": "27088e601b335f82efb159f938f77add9e3ed249fa420816e95e47560a3ccc1e",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 130752,
+        "sha256": "33bd5d214ab3020edc86654e71e08db75ffa38a7d9bb1c9fa0e1b6960fa43f64",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts",
+      "before": {
+        "bytes": 123346,
+        "sha256": "a0c1b66a51db0ce18e0dfd35567d7339511c6af40533d23f016c0f248f5dbdbe",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 124238,
+        "sha256": "e456a2f60fd74bea4f732c5f2e0db1e4ad7e7abcc5a5eabadfe2f17c0dd0749f",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/helpers/recovery-lint-source.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 7362,
+        "sha256": "2314cd991b89f6eca42a6df376c5ee977a897cb9f6b6fcbb4fd8286a69d485f3",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "full_read_and_closed_diff": true,
+  "regular_blob_mode": "100644",
+  "typed_optional_blob_presence_preserved": true,
+  "old_oracles_inverse_tables_and_expected_bytes": "VERBATIM_UNCHANGED",
+  "outer_inverse_data_checks": [
+    {
+      "path": "Resource",
+      "after_bytes": 115974,
+      "before_bytes": 115756
+    },
+    {
+      "path": "K106",
+      "after_bytes": 128442,
+      "before_bytes": 128110
+    },
+    {
+      "path": "KnowledgeWrite",
+      "after_bytes": 130752,
+      "before_bytes": 130422
+    }
+  ],
+  "deep_historical_inverse": "Independent pure DATA literal checks reached original111726/018f89eb Resource and119984/83304cf4 KW whole identities through both existing inverse layers",
+  "helper": {
+    "bytes": 7362,
+    "fixed_paths": 3,
+    "own_full_identity": "Included as NEW in Source overlay and verification",
+    "imports": [
+      "node:assert",
+      "node:buffer",
+      "node:crypto"
+    ],
+    "new_sha_then_exact_literal_then_old_sha": true,
+    "project_imports": false,
+    "filesystem_writes": false,
+    "module_cycle": false,
+    "hash_self_reference": false
+  },
+  "tamper_rejection_assertions": 6,
+  "r1_verdict_retained": "REVISIONS_REQUIRED_NOT_ADOPTED",
+  "project_execution": false,
+  "windows_source_writes": 0,
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

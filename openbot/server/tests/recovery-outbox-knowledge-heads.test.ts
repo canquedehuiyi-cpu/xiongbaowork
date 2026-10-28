@@ -209,9 +209,15 @@ function parseSQL(source: string): {
         const columnsTo = c.ids();
         c.take("ON");
         c.take("DELETE");
-        const onDelete = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onDelete: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onDelete = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onDelete = "no action";
+        }
         c.take("ON");
         c.take("UPDATE");
         c.take("NO");

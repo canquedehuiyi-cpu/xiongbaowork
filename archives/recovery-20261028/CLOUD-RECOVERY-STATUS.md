@@ -1,3 +1,9 @@
+## root119ParserR2 Source adoption, 2026-10-29
+
+RECOVERY-PARSER-LINT-20261029 adopted unchanged from candidate 56eadd51224f0331c928b47a41a2275a810eabe4. 8 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40726107602/job 122949694053; see exact validation JSON for pass/fail counts and remaining diagnostics. 2055 files / 50019000 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB proposal remains unexecuted pending direct human reply. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 # 当前云端恢复与验证状态（Root118，2026-10-29）
 
 原目标77故事/18包/7门完整保留，商业验收尚未完成。恢复分支codex/cloud-repairs-recovery-20261028；默认分支仍为原Gitee导入基线。

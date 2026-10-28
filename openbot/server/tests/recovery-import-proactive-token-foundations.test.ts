@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { preLintRecoverySource } from "./helpers/recovery-lint-source";
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
@@ -1339,14 +1340,26 @@ function parseSQL(source: string): {
         const columnsTo = c.ids();
         c.take("ON");
         c.take("DELETE");
-        const onDelete = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onDelete: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onDelete = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onDelete = "no action";
+        }
         c.take("ON");
         c.take("UPDATE");
-        const onUpdate = c.peek() === "CASCADE"
-          ? (c.take("CASCADE"), "cascade")
-          : (c.take("NO"), c.take("ACTION"), "no action");
+        let onUpdate: "cascade" | "no action";
+        if (c.peek() === "CASCADE") {
+          c.take("CASCADE");
+          onUpdate = "cascade";
+        } else {
+          c.take("NO");
+          c.take("ACTION");
+          onUpdate = "no action";
+        }
         c.finish();
         if (tableTo === name) {
           assert.ok(
@@ -2071,10 +2084,19 @@ describe("0107 import proactive and token full snapshot reconstruction; no produ
   const old=structuredClone(journal),first=old.entries[0];assert.ok(first);first.when++;expect(()=>checkJournal(old)).toThrow();
   const future=structuredClone(journal);future.entries.push({idx:108,version:"7",when:1793189723182,tag:"untrusted-future-metadata",breakpoints:true});checkJournal(future);
  });
+ test("lint source inverse rejects changed and extended current test bytes", () => {
+  for (const path of ["tests/recovery-resource-project-foundations.test.ts", "tests/recovery-knowledge-write-foundations.test.ts", "tests/recovery-plugin-assembly-foundations.test.ts"]) {
+   const raw = readFileSync(join(server, path));
+   const changed = Buffer.from(raw);
+   changed[0] = (changed[0] ?? 0) ^ 1;
+   expect(() => preLintRecoverySource(path, changed)).toThrow();
+   expect(() => preLintRecoverySource(path, Buffer.concat([raw, Buffer.from([0])]))).toThrow();
+  }
+ });
  test("all216 previous full artifacts and seven approved source files retain whole fixed byte identities",()=>{
   expect(protected214).toHaveLength(214);expect(protected216).toHaveLength(216);
   const keys=protected216.map(x=>x.path);expect(new Set(keys).size).toBe(216);expect(filesUnder(join(server,"drizzle"))).toHaveLength(163);
-  for(const input of [...protected216,...protectedCurrentSource]){const raw=readFileSync(join(server,input.path));expect(raw.length).toBe(input.bytes);expect(createHash("sha256").update(raw).digest("hex")).toBe(input.sha256);}
+  for(const input of [...protected216,...protectedCurrentSource]){const raw=preLintRecoverySource(input.path,readFileSync(join(server,input.path)));expect(raw.length).toBe(input.bytes);expect(createHash("sha256").update(raw).digest("hex")).toBe(input.sha256);}
  });
  test("literal negative replacement preserves SQL dollar suffix and permits real deletion",()=>{
   expect(replaceOnce("left TARGET right","TARGET","'^[a-f0-9]{63}$'")).toBe("left '^[a-f0-9]{63}$' right");
