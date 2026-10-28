@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "13e38d05cd0138949df5d92f23412ae600a7c083",
+  "source_commit": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
   "basis": "immutable V57 manifest plus three independently approved exact overlays",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
@@ -63,10 +63,40 @@
       },
       "source_commit": "13e38d05cd0138949df5d92f23412ae600a7c083",
       "run": 40665619882
+    },
+    {
+      "ticket": "AUTOMATION-FK-ASSERTION-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/AUTOMATION-FK-ASSERTION-ADOPTED.json",
+        "bytes": 2467,
+        "sha256": "21cfd36110aed505088883686c6b793c31ec6ee08477e6c6c43bc382225125d2",
+        "formal_adoption": true,
+        "ticket": "AUTOMATION-FK-ASSERTION-20261028",
+        "source_paths": [
+          "openbot/server/tests/recovery-automation-run-records.test.ts"
+        ]
+      },
+      "source_commit": "58294bc57b6068a73a7b275d0e8eb80a291b3956",
+      "run": 40669329715
+    },
+    {
+      "ticket": "SECURITY-FK-ASSERTION-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/SECURITY-FK-ASSERTION-ADOPTED.json",
+        "bytes": 2496,
+        "sha256": "18a702f4acb7ec9c4089872e68d128656609ae77af652766c8ebb7f13e6ee20c",
+        "formal_adoption": true,
+        "ticket": "SECURITY-FK-ASSERTION-20261028",
+        "source_paths": [
+          "openbot/server/tests/recovery-security-policy-fences.test.ts"
+        ]
+      },
+      "source_commit": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
+      "run": 40670272087
     }
   ],
   "file_count": 2045,
-  "source_bytes": 48459984,
+  "source_bytes": 48463600,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -11237,9 +11267,9 @@
     },
     {
       "path": "openbot/server/tests/recovery-automation-run-records.test.ts",
-      "bytes": 47952,
-      "sha256": "c99e1aecbb10fd9e50c91a72c4382250c439a4b47d2d9f41877cfe8df0414642",
-      "blob": "be33e92e4844e97044f2d7fc869d28176cb0dcad",
+      "bytes": 49775,
+      "sha256": "bfe47a7518eae21add3600042613a0e49a1ce82c65cf50c505c9983bbbf17427",
+      "blob": "309245973a27ae95fcbeaac4b9850873f414a378",
       "mode": "0o644"
     },
     {
@@ -11348,9 +11378,9 @@
     },
     {
       "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
-      "bytes": 51536,
-      "sha256": "f05977fbdc4c547dc76f4f16e478df8478818f9eb742cd76dd76ddc1dc202cde",
-      "blob": "066d76f3933cc067bb318943cb260e1702ef872c",
+      "bytes": 53329,
+      "sha256": "9bc8e5240cb3f3b70846f8760a2d1794faf3cbf90184c42c00fe76ef2f9f73a8",
+      "blob": "b24985f8eaf109c67fbccd20d79ed9fd161aac8c",
       "mode": "0o644"
     },
     {
@@ -12405,13 +12435,15 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "239bec9a0a48d276503880b2bd1dd53bb8a837f7",
-    "head": "13e38d05cd0138949df5d92f23412ae600a7c083",
+    "git_tree": "fb05c78567426959360dacc3fbaf05057168a66a",
+    "head": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
       "AP-SCHEMA-RUNTIME-20261028",
-      "KNOWLEDGE-RESOURCE-RUNTIME-20261028"
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12419,7 +12451,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 48459984,
+    "verified_source_bytes": 48463600,
     "verified_source_files": 2045,
     "windows_source_files_written": 0
   },

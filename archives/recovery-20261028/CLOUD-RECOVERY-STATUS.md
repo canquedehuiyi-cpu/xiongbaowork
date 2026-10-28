@@ -7,10 +7,10 @@
 
 - V57全部195项修复（25修改/170新增/0删除，原载荷15,019,196字节）已恢复，原清单419227字节/SHA256 `81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920` 保持不变。
 - 原V57的2045清单文件、48,435,806字节已完整物理核验。
-- 其后3个包均经同一名非作者独审、Root精确采用及采用提交上的重新验证：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件，共13项主体文件修复。
-- 当前受清单覆盖的 **2045文件、48,459,984字节**，已按原V57清单加3个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
-- 最新完成该核验的主体提交：[13e38d05cd0138949df5d92f23412ae600a7c083](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/13e38d05cd0138949df5d92f23412ae600a7c083)。
-- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，422990字节/SHA256 `9b5040641711ca7b9d98158d0e1f2194cfd154aa73716c1fe574525bf21f7db1`。这是基于原清单及批准overlay的派生清单，原V57身份不被改写。
+- 其后5个包均经同一名非作者独审、Root精确采用及采用提交上的重新验证：AP-INPUT-BUN三文件、AP-SCHEMA-RUNTIME五文件、KNOWLEDGE-RESOURCE-RUNTIME五文件、AUTOMATION-FK单测试文件、SECURITY-FK单测试文件，共15项主体文件修复。
+- 当前受清单覆盖的 **2045文件、48,463,600字节**，已按原V57清单加5个明确批准overlay在Linux云端核验：完整大小/SHA256、文件权限、无符号链接、单链接、FD与路径稳定性均通过。
+- 最新完成该核验的主体提交：[e7bc10395277baf9133690e6d3d852c3cfcac25b](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/e7bc10395277baf9133690e6d3d852c3cfcac25b)。
+- `CURRENT-SOURCE-EXPECTED-MANIFEST.json` 给出当前完整预期记录，424212字节/SHA256 `79edba3a1a8c1ad7421ce8fc5eb42ab2c048ac967c5ca71bc9102f8e5902ae61`。这是基于原清单及5个批准overlay的派生清单，原V57身份不被改写。
 - 恢复分支：[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)。默认分支仍保留原Gitee导入基线；旧Gitee README单独保留。
 
 ## 运行与审查证据
@@ -28,11 +28,16 @@
 每包的独审、批准overlay、候选与集成运行回执分别保存。AP-SCHEMA原9fail及r1的2fail保留；知识/资源原20fail、R1 FIX_REQUIRED、两次120秒停止及15秒FK诊断停止均保留。
 Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLType，R2已改为唯一原生列身份映射并通过复审；该历史不清除。
 
-## 当前继续工作
+## 同一提交组件重验与当前继续工作
 
-已转入8个已有自动化/Flow基础定义用例的验证。第一次在Source取回阶段触及64MiB硬门并OOM，测试尚未启动；未当作测试失败或成功。
-现改为每批不超过32文件/2MiB，分批取回并fsync各自文件，Git delta cache收窄到1MiB。64MiB上限、项目512MiB、swap0不提高；后续实际结果另证。
-同一名只读独审员已获人类持续授权，可审后续每个≤8文件包；继续遵守“上包审后下一包”，不重复索取该项授权。
+五包批准后，在主体提交 `e7bc10395277baf9133690e6d3d852c3cfcac25b` 上统一重跑33个明确测试文件（独立Bun进程、无原repo preload），实际 **576 pass / 0 fail / 8919 expects**，33文件全部完成、exit0：[运行40670272087](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40670272087)。
+此为同一提交组件范围通过，不等于完整CI、原preload、PG17、生产接线或77/18/7交付。
+
+- 自动化/Flow8文件：109/0；原107/1保留。安全/Flow源8文件：97/0；原95/1保留。身份/谱系4文件：67/0。上述分组均包含于同一33文件集成运行。
+- 本地FK ExtraConfigColumn与原生列比较问题分别在两个单测试包修复，完整生产schema、SQL、RLS、旧oracle/hash、snapshot/journal与安全负例保持；同一独审员分别完整全文读审通过。
+- 最初Source64MiB OOM运行40664999884、分批无阶段输出十分钟停止40666293935均保留。显式从目标Git树取对象ID，按32文件/2MiB预取并fsync后，74批完成且同一64MiB硬门通过。
+- 下一步仅实际尝试原锁文件完整workspace安装；使用私有缓存、copyfile后端、网络并发1、忽略全部生命周期脚本、240秒硬时限，仍为DATA64MiB/项目512MiB/swap0。未启动原preload、类型或完整CI。
+- 原严格CI冻结基线03df9efa29cc51b64bd4a7b695dcb977ac0869f6在已导入历史中未取得；不会用当前分支或0089682冒替。原CI工作流还含不受原项目总门约束的并行/容器任务，未直接触发。
 
 ## 持续边界与待验项
 

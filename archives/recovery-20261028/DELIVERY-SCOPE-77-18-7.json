@@ -4,7 +4,7 @@
   "packages": 18,
   "gates": 7,
   "source_snapshot": "ebd96e157ff4b4ef33065653db43080a18afab17",
-  "source_status": "V57_RESTORED_PLUS_THREE_INDEPENDENTLY_APPROVED_PACKAGES",
+  "source_status": "V57_RESTORED_PLUS_FIVE_INDEPENDENTLY_APPROVED_PACKAGES",
   "story_requirements": [
     {
       "id": "A1",
@@ -704,13 +704,15 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "239bec9a0a48d276503880b2bd1dd53bb8a837f7",
-    "head": "13e38d05cd0138949df5d92f23412ae600a7c083",
+    "git_tree": "fb05c78567426959360dacc3fbaf05057168a66a",
+    "head": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
       "AP-SCHEMA-RUNTIME-20261028",
-      "KNOWLEDGE-RESOURCE-RUNTIME-20261028"
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -718,7 +720,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 48459984,
+    "verified_source_bytes": 48463600,
     "verified_source_files": 2045,
     "windows_source_files_written": 0
   },
@@ -726,7 +728,7 @@
   "postgres17": "PG_PENDING",
   "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED",
   "windows_source_writes": 0,
-  "source_verified_run": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40646288694",
+  "source_verified_run": 40670272087,
   "root_readme_restore": {
     "commit": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
     "archivePath": "archives/recovery-20261028/GITEE-ROOT-README-0089682.md",
@@ -830,20 +832,57 @@
       "prior_fix_required_and_timeouts_preserved": true
     },
     "foundation_group1": {
-      "tests": 8,
-      "run_with_source_resource_stop": 40664999884,
-      "project_tests_at_that_run": "NOT_STARTED",
-      "batched_source_run_head": "94aae5078ec3cd4bbd8ea467d1501138b99af8ca",
-      "status": "BOUNDED_SOURCE_TRANSPORT_REVISED_UNDER_SAME64MiB_LIMIT"
+      "adopted_source": "58294bc57b6068a73a7b275d0e8eb80a291b3956",
+      "run": 40669329715,
+      "pass": 109,
+      "fail": 0,
+      "expects": 1562,
+      "history": {
+        "source_oom": 40664999884,
+        "source_timeout": 40666293935,
+        "baseline107pass1fail": 40668205048
+      }
+    },
+    "integrated33": {
+      "source_commit": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
+      "run": 40670272087,
+      "job": 122754963946,
+      "pass": 576,
+      "fail": 0,
+      "expects": 8919,
+      "test_files": 33,
+      "original_preload_suite": "NOT_RUN",
+      "full_ci": "NOT_RUN"
+    },
+    "foundation_group2": {
+      "adopted_source": "e7bc10395277baf9133690e6d3d852c3cfcac25b",
+      "integrated_in_run": 40670272087,
+      "pass": 97,
+      "fail": 0,
+      "expects": 1133,
+      "candidate_run": 40669613882,
+      "baseline95pass1fail": 40669016122
+    },
+    "foundation_group3": {
+      "integrated_in_run": 40670272087,
+      "candidate_run": 40669911352,
+      "pass": 67,
+      "fail": 0,
+      "expects": 554
+    },
+    "full_workspace_install": {
+      "status": "BOUNDED_INSTALL_NEXT",
+      "memory_limit": 67108864,
+      "project_memory_limit": 536870912,
+      "swap": 0,
+      "lifecycle_scripts": "NOT_RUN",
+      "frozen_lockfile": true,
+      "backend": "copyfile"
     }
   },
   "delivery_status": "NOT_DELIVERED",
-  "original_full_scope_retained": {
-    "stories": 77,
-    "packages": 18,
-    "gates": 7
-  },
-  "next_source_package": "AWAIT_EXISTING_FOUNDATION_GROUP1_ACTUAL_RESULTS",
+  "original_full_scope_retained": true,
+  "next_source_package": "None pending independent review; next gate is real frozen workspace install under same DATA resource limit",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -854,9 +893,9 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "sha256": "9b5040641711ca7b9d98158d0e1f2194cfd154aa73716c1fe574525bf21f7db1",
-    "bytes": 422990,
+    "sha256": "79edba3a1a8c1ad7421ce8fc5eb42ab2c048ac967c5ca71bc9102f8e5902ae61",
+    "bytes": 424212,
     "files": 2045,
-    "source_bytes": 48459984
+    "source_bytes": 48463600
   }
 }
