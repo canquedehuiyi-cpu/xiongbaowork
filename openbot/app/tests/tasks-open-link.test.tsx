@@ -9,6 +9,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
+import { agentKeys } from "@/lib/agents/queries";
 import { AttentionRegion, cardLinkOf } from "@/routes/_authed/_app/tasks";
 import { settleReactWork } from "./settle-react-work";
 
@@ -30,7 +31,12 @@ beforeAll(() => {
     registeredHere = true;
   }
 });
-afterEach(cleanup);
+const clients = new Set<QueryClient>();
+afterEach(() => {
+  cleanup();
+  for (const client of clients) client.clear();
+  clients.clear();
+});
 afterAll(async () => {
   if (!registeredHere) return;
   await settleReactWork();
@@ -84,12 +90,18 @@ const card = (id: string, open: CardTask["open"]): CardTask =>
   }) as unknown as CardTask;
 
 function draw(tasks: CardTask[]) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(agentKeys.list(false), []);
+  clients.add(client);
   const root = createRootRoute({
     component: () => (
       <AttentionRegion
         machineLabel={() => null}
         onArchive={() => {}}
         onReview={() => {}}
+        pendingIds={new Set<string>()}
         tasks={tasks}
       />
     ),
@@ -110,7 +122,7 @@ function draw(tasks: CardTask[]) {
     ]),
   });
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
