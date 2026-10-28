@@ -193,7 +193,7 @@ const ATTENTION_SELECTOR = 'section[aria-label="需要关注"]';
 const resultRows = (view: ReturnType<typeof render>) => {
   const aside = view.container.querySelector(ATTENTION_SELECTOR);
   return [...view.container.querySelectorAll("li")].filter(
-    (li) => !aside || !aside.contains(li),
+    (li) => !aside?.contains(li),
   );
 };
 

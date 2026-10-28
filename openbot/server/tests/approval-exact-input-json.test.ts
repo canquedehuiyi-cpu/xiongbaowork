@@ -48,7 +48,7 @@ describe("OPENBOT_EXACT_INPUT_JSON_V1 component (not AP4 admission)", () => {
 		exact(["😀", "é", "e\u0301"], '["😀","é","e\u0301"]');
 	});
 	test("JSON quote and control escaping", () => {
-		exact('"\\\b\t\n\f\r\u0000\u001f/', '"\\\"\\\\\\b\\t\\n\\f\\r\\u0000\\u001f/"');
+		exact('"\\\b\t\n\f\r\u0000\u001f/', '"\\"\\\\\\b\\t\\n\\f\\r\\u0000\\u001f/"');
 	});
 	test("explicit absent and null presence are distinct literal bytes", () => {
 		exact({ state: { presence: "ABSENT" } }, '{"state":{"presence":"ABSENT"}}');

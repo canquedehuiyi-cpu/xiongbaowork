@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
@@ -333,7 +333,7 @@ test("settling that held write with a non-JSON 500 puts one unconfirmed region o
   const stub = installStub();
   const { view } = draw("/tasks?period=all&q=card&view=list");
   const base = await readyBoard(stub, view);
-  const rows = cardButtons(view, "failed card").length;
+  const _rows = cardButtons(view, "failed card").length;
   await userEvent.click(buttonsNamed(view, "归档")[0] as HTMLElement);
   await waitFor(() => {
     expect(stub.held.length).toBe(1);

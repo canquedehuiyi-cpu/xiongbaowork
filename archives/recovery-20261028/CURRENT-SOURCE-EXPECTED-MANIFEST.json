@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "eafa66655fc1af63b604448e28180aefe7bbfa00",
-  "basis": "immutable V57 plus 15 independently approved exact overlays; original history and PG_PENDING retained",
+  "source_commit": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
+  "basis": "immutable V57 plus 16 independently approved exact overlays; original history and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -297,10 +297,30 @@
       "candidate_source_commit": "eafa66655fc1af63b604448e28180aefe7bbfa00",
       "source_content_adopted_unchanged": true,
       "run": 40727650134
+    },
+    {
+      "ticket": "TEST-FIXTURE-LINT-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/TEST-FIXTURE-LINT-ADOPTED.json",
+        "bytes": 3785,
+        "sha256": "c773b58e309f22b39478e566604e6e1902d1685f89139332bb226e14e0bf8080",
+        "formal_adoption": true,
+        "ticket": "TEST-FIXTURE-LINT-20261029",
+        "source_paths": [
+          "openbot/app/tests/tasks-workbench-a7-contracts.test.tsx",
+          "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+          "openbot/app/tests/tasks-workbench-mutations.test.tsx",
+          "openbot/server/tests/approval-exact-input-json.test.ts",
+          "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts"
+        ]
+      },
+      "candidate_source_commit": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
+      "source_content_adopted_unchanged": true,
+      "run": 40729144151
     }
   ],
   "file_count": 2055,
-  "source_bytes": 50019171,
+  "source_bytes": 50019140,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -4552,15 +4572,15 @@
     },
     {
       "path": "openbot/app/tests/tasks-workbench-a7-contracts.test.tsx",
-      "bytes": 19580,
-      "sha256": "62be007bb4101470abb06c1fd8098dad8dbbbcc1c3ace52b7be8dbe09558f229",
+      "bytes": 19570,
+      "sha256": "f7481d538c916590b0e2f9e00ad4aaa3ce26e524572d8ffd3568beb64bc4a98e",
       "mode": "0o644"
     },
     {
       "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
-      "bytes": 15105,
-      "sha256": "3cae74a38a8096d6460e3740bedabba6bf2070d17f3fc9e63152cf0adaa64cd7",
-      "blob": "95fbf74e4dd0050cf9e541e4de43f5add5260a02",
+      "bytes": 15096,
+      "sha256": "962630d6d80eba7a26c1c155e9e13bcdcaaec5a7e6fa1be820b086c61cc9980a",
+      "blob": "5fd9ee516ab8c69d1f2e8a8e2a7046859e79dc1b",
       "mode": "100644"
     },
     {
@@ -4577,8 +4597,8 @@
     },
     {
       "path": "openbot/app/tests/tasks-workbench-mutations.test.tsx",
-      "bytes": 17215,
-      "sha256": "652b542f95cf0e516a57189e91c0d1cb447c8a8ef2ad2145860c73b058d9bac4",
+      "bytes": 17206,
+      "sha256": "3bbd5d47c4b67d2751e5d959c26a7e1eb786ce6a673f8ccd85153504cea87886",
       "mode": "0o644"
     },
     {
@@ -10132,8 +10152,8 @@
     },
     {
       "path": "openbot/server/tests/approval-exact-input-json.test.ts",
-      "bytes": 8030,
-      "sha256": "a67781293ab350b0476aebfdbba74bd87f0618fe5f99ffaf3776c0f256f30392",
+      "bytes": 8029,
+      "sha256": "e9221222ad33bce24dfc01055ff97ddb245cde7c8f5c10aa0c6642a0a37e8931",
       "mode": "0o644"
     },
     {
@@ -11451,9 +11471,9 @@
     },
     {
       "path": "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts",
-      "bytes": 35489,
-      "sha256": "d860b71f40a1fc10d74c5184bd9a9b74a516107e901b2fdb77abfe17186b0fc2",
-      "blob": "df5930855be36754e632ce1766052c1dabbd9b8b",
+      "bytes": 35487,
+      "sha256": "bc14b34f5022e2260fab01fd4480d2b0056b4c7cf920620c74ab1aedc11a847b",
+      "blob": "e5b5fc1a93f3053ab96fe5f64087e408f8b6a710",
       "mode": "0o644"
     },
     {
@@ -12699,8 +12719,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "203477647d652e87cd80a8721a0f06b78bb60b7a",
-    "head": "eafa66655fc1af63b604448e28180aefe7bbfa00",
+    "git_tree": "03aee8ce447a7dcce1219c02425330970dcdf1c5",
+    "head": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12717,7 +12737,8 @@
       "TASK-INFLIGHT-TYPE-GUARD-20261028",
       "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
       "RECOVERY-PARSER-LINT-20261029",
-      "APPROVAL-GUARD-LINT-20261029"
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12725,7 +12746,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50019171,
+    "verified_source_bytes": 50019140,
     "verified_source_files": 2055,
     "windows_source_files_written": 0
   },

@@ -1,3 +1,9 @@
+## root121Test Source adoption, 2026-10-29
+
+TEST-FIXTURE-LINT-20261029 adopted unchanged from candidate 729b50753123fe4cdf68358d6ad8a64fcafa159a. 5 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40729144151/job 122960387839; see exact validation JSON for pass/fail counts and remaining diagnostics. 2055 files / 50019140 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB proposal remains unexecuted pending direct human reply. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 ## root120Approval Source adoption, 2026-10-29
 
 APPROVAL-GUARD-LINT-20261029 adopted unchanged from candidate eafa66655fc1af63b604448e28180aefe7bbfa00. 6 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40727650134/job 122955130307; see exact validation JSON for pass/fail counts and remaining diagnostics. 2055 files / 50019171 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB proposal remains unexecuted pending direct human reply. Windows Source writes 0.

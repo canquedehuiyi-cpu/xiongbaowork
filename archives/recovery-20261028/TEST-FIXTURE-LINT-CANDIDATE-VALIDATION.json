@@ -1,0 +1,161 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40729144151,
+  "job": 122960387839,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "03aee8ce447a7dcce1219c02425330970dcdf1c5",
+    "head": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50019140,
+    "verified_source_files": 2055,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 2,
+    "completed_files": 2,
+    "results": [
+      {
+        "path": "server/tests/approval-exact-input-json.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-approval-direct-execution-domains.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 43,
+    "fail": 0,
+    "expects": 288
+  },
+  "lint": {
+    "exit_code": 0,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "lint_counts": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 510M (swap: 0B)",
+    "Memory peak: 154.8M (swap: 0B)",
+    "Memory peak: 1G (swap: 0B)",
+    "Memory peak: 1.5G (swap: 0B)",
+    "Memory peak: 345M (swap: 0B)"
+  ],
+  "actual_restore512MiB_count": 2,
+  "strict_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Five test-only changes; two original server component files and all161 app tests in one Bun process with original preloads",
+  "app": {
+    "exit_code": 0,
+    "expected_test_files": 161,
+    "log_lines": 1684,
+    "source_commit": "FROM_VERIFIED_SOURCE",
+    "runtime_mode": "--smol",
+    "original_preloads": "UNCHANGED_TWO",
+    "full_strict_ci": "NOT_RUN",
+    "original_baseline": "UNAVAILABLE_03df9efa",
+    "postgres17": "PG_PENDING",
+    "real_browser_device": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "app_types": {
+    "exit_code": 0,
+    "project": "app/tsconfig.json",
+    "typescript": "5.9.3",
+    "host_runtime": "v24.22.1",
+    "aggregate_limit": 2147483648,
+    "swap": 0,
+    "node_options": "UNSET",
+    "test_sources": "INCLUDED",
+    "server2GiB_exception_used": false,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "app_tests": {
+    "pass": 1207,
+    "fail": 0,
+    "expects": 4163,
+    "files": 161,
+    "unhandled_errors": []
+  },
+  "lint_infos": 181
+}
