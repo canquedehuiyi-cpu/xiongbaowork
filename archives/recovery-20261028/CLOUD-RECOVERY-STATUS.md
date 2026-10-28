@@ -1,3 +1,19 @@
+# 当前云端恢复与验证状态（Root118，2026-10-29）
+
+原目标77故事/18包/7门完整保留，商业验收尚未完成。恢复分支codex/cloud-repairs-recovery-20261028；默认分支仍为原Gitee导入基线。
+
+当前Subject采用提交[97fd6bda6fb8792cec6d10abdbde6041e9a34d68](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/97fd6bda6fb8792cec6d10abdbde6041e9a34d68)，13个已独审恢复/修复包、33个不同Subject路径，不等18交付包完成。当前2054文件/50009553字节，实际[40721528612/job122933438438](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40721528612/job/122933438438)全部大小/SHA/权限/FD稳定/no symlink/nlink1核验通过；派生清单434479B/SHAdef9c749f1dfb383e234ac9f34dbf953ec0bfed686880ea7cdf7fe48db13739c，原V57清单419227/SHA81de4470…不改。
+
+同一提交实际结果：保留37（明确排除资源中止lineage）+原runner-browser fake seam50case的新38文件集合687pass/0fail/10714expects；原完整app单Bun进程161文件1207pass/0fail/4163expects；server/app/runner各原tsconfig均exit0。app配置原含tests、server/runner原include不改；原两preload及qoderwake配置生成保留。原server编译与新获准app两阶段聚合2GiB/swap0/300秒均实际退出恢复512MiB，共3次。真实浏览器/用户设备未运行，不以fake seam/组件测试当验收。
+
+worker原tsconfig在512MiB下默认V8堆OOM，aux384MiB同门重试仍V8堆OOM：child-6、自动peak474.9M、无TS诊断、非kernel聚合OOM；未挪用server/app2GiB授权，停止相同重试。runner原唯一TS2304已由+10B import type绑定修复，lazy runtime import及所有执行语句不变，独审SOURCE_APPROVED_ONLY/findings=[]。worker临时home重名启动前错误已按独立private home修正，历史不清除。
+
+原固定Biome2.5.10只读lint已检查1485文件，3errors/36warnings/181infos，exit1，规则配置未改、无--write/Source自动修复，peak398M。默认输出仅20项、200项未展示，当前仅用display-only diagnostic-level=warn/max-diagnostics=1000取齐阻断诊断，保留原error-on-warnings与全配置。不能将显示过滤当规则关闭/过门，也不为非阻断info制造Source改动。
+
+DATA64MiB/依赖安装512MiB（原6package/lock输入不变、copyfile/privatecache、禁全部生命周期脚本、hardlink0/外链0）/其他项目512MiB、仅获准阶段2GiB、swap0、免费云端与Windows源码0保持。该运行安装自动peak512.7M按原日志保留，不声称所有历史峰值低于配置。PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、ROOT_RELEASE=null/ready=false、原严格CI冻结03df9efa缺失、真实计费/设备/客户部署等门均保留，未标complete。原自动化仍暂停。
+
+以下原文为历史时点记录，当前以本Root118为准，旧错误、原raw缺口、V58/V59未采用及边界事件不清除：
+
 # 当前云端恢复与验证状态（2026-10-28，Root115）
 
 完整目标仍为77故事、18包、7门，尚未完成商业验收。恢复分支为[`codex/cloud-repairs-recovery-20261028`](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028)，默认分支仍保留原Gitee导入基线。

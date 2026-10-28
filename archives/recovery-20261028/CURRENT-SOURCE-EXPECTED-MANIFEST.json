@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
+  "source_commit": "97fd6bda6fb8792cec6d10abdbde6041e9a34d68",
   "basis": "immutable V57 plus eight independently approved exact overlays; explicit new0107 snapshot reconstruction and Ptx SourceOnly boundaries",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
@@ -218,10 +218,42 @@
       "source_commit": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
       "candidate_validation_run": 40710103537,
       "scope": "Two test fixtures; all161 separate processes1207/0/0Unhandled; not whole-app one-process equivalence"
+    },
+    {
+      "ticket": "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/TASK-INFLIGHT-TYPE-GUARD-ADOPTED.json",
+        "bytes": 2638,
+        "sha256": "f3777b77bd0a7ee4415afbeaf40f8e8388d2422de4d2898c95dd34a6be3bc1c3",
+        "formal_adoption": true,
+        "ticket": "TASK-INFLIGHT-TYPE-GUARD-20261028",
+        "source_paths": [
+          "openbot/app/tests/tasks-workbench-inflight.test.tsx"
+        ]
+      },
+      "source_commit": "835d9dea32078f80cd47b0c911e174c4b154e288",
+      "candidate_run": 40716110884,
+      "scope": "One test guard; original full app single process1207/0/4163 and complete app tsconfig exit0"
+    },
+    {
+      "ticket": "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "overlay": {
+        "path": "archives/recovery-20261028/RUNNER-CHROMIUM-TYPE-IMPORT-ADOPTED.json",
+        "bytes": 2451,
+        "sha256": "78ea2cd96a3b649bf3a220e7e20361b8a8929e0a492ef216c700efc7ba58d0f0",
+        "formal_adoption": true,
+        "ticket": "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+        "source_paths": [
+          "openbot/runner/src/browser.ts"
+        ]
+      },
+      "source_commit": "97fd6bda6fb8792cec6d10abdbde6041e9a34d68",
+      "candidate_run": 40719764919,
+      "scope": "Type-only binding; runner original tsc exit0 under512MiB, existing50 fake browser unit cases pass; real user browser not proved"
     }
   ],
   "file_count": 2054,
-  "source_bytes": 50009459,
+  "source_bytes": 50009553,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -4492,8 +4524,8 @@
     },
     {
       "path": "openbot/app/tests/tasks-workbench-inflight.test.tsx",
-      "bytes": 21400,
-      "sha256": "cd299f0251e9707117c0222f092de7fcd0b77177393be8f5d6e5f158085ff6bd",
+      "bytes": 21484,
+      "sha256": "517dad76581fb1e539ce63bf75d013060b314d9ee806903754774ccdfb8d8194",
       "mode": "0o644"
     },
     {
@@ -6335,8 +6367,8 @@
     },
     {
       "path": "openbot/runner/src/browser.ts",
-      "bytes": 48986,
-      "sha256": "cc939e1981536c9dc01555a38a8ff32a0dd5eda25760c1e41b886cdb23e518d6",
+      "bytes": 48996,
+      "sha256": "eeea500d849f5f4eb4b68f080c119950516ac4ad8006bf896d15fed8acea7637",
       "mode": "0o644"
     },
     {
@@ -12614,8 +12646,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "01febb681f2b22c27a7b4c36c98bf1bc40b3d99c",
-    "head": "ab106bc05673128b2a5e8f5cd7e8295168f4913f",
+    "git_tree": "2d9d741736c21c1e9b48bf25b593da5eb47fe733",
+    "head": "97fd6bda6fb8792cec6d10abdbde6041e9a34d68",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12628,15 +12660,17 @@
       "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
       "SERVER-TYPE-CONTRACT-20261028",
       "TASKS-ATTENTION-FIXTURE-20261028",
-      "TASKS-READ-LINK-FIXTURES-20261028"
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
     "project_upper_bound": 536870912,
     "source_mismatches": 0,
-    "status": "SOURCE_BYTES_VERIFIED_WITH_ELEVEN_APPROVED_OVERLAYS",
+    "status": "SOURCE_BYTES_VERIFIED_WITH_THIRTEEN_APPROVED_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50009459,
+    "verified_source_bytes": 50009553,
     "verified_source_files": 2054,
     "windows_source_files_written": 0
   },
