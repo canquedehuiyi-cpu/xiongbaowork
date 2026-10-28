@@ -1,0 +1,110 @@
+{
+  "schema": "xiongbaowork-full-server-typecheck-evidence/1",
+  "status": "CHECK_COMPLETED_SEVEN_TYPE_ERRORS",
+  "head": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+  "run": 40699215575,
+  "job": 122854140237,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "d65a793c2514b88db3284a7372dc32efc33e63fb",
+    "head": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_EIGHT_APPROVED_OVERLAYS_DEFINITIONS_ONLY",
+    "swap_limit": 0,
+    "verified_source_bytes": 50007029,
+    "verified_source_files": 2054,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "a54f3586f0e9eb27412d0afbd86cf482d45f0c7b",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "gate": {
+    "memory_limit": 2147483648,
+    "project_limit": 2147483648,
+    "swap": 0
+  },
+  "start": {
+    "typescript": "5.9.3",
+    "host_runtime": "v24.21.0",
+    "node_path": "/usr/local/bin/node",
+    "node_old_space_mb": 1792,
+    "project": "server/tsconfig.json",
+    "declared_includes": [
+      "src",
+      "scripts",
+      "../scripts/composio-smoke.ts"
+    ],
+    "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+    "timeout_seconds": 300
+  },
+  "result": {
+    "exit_code": 2,
+    "project": "server/tsconfig.json",
+    "typescript": "5.9.3",
+    "host_runtime": "v24.21.0",
+    "node_path": "/usr/local/bin/node",
+    "node_old_space_mb": 1792,
+    "full_ci": "NOT_RUN",
+    "test_sources": "NOT_INCLUDED",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "restore": {
+    "project_memory_max": 536870912,
+    "swap": 0
+  },
+  "diagnostics": [
+    "2026-10-28T13:47:32.4059832Z server/src/approvals/exact-http-owned-input.ts(150,10): error TS2322: Type 'ReadableStreamDefaultReadResult<any>' is not assignable to type 'ReadableStreamReadResult<Uint8Array<ArrayBufferLike>>'.",
+    "2026-10-28T13:47:32.4066545Z server/src/approvals/exact-http-owned-input.ts(165,4): error TS2322: Type 'string' is not assignable to type 'RequestCredentials | undefined'.",
+    "2026-10-28T13:47:32.4067533Z server/src/approvals/exact-http-owned-input.ts(165,37): error TS2322: Type 'string' is not assignable to type 'RequestCache | undefined'.",
+    "2026-10-28T13:47:32.4068466Z server/src/approvals/exact-http-owned-input.ts(165,58): error TS2322: Type 'string' is not assignable to type 'RequestRedirect | undefined'.",
+    "2026-10-28T13:47:32.4069374Z server/src/approvals/exact-http-owned-input.ts(166,31): error TS2322: Type 'string' is not assignable to type 'ReferrerPolicy | undefined'.",
+    "2026-10-28T13:47:32.4070272Z server/src/approvals/exact-http-owned-input.ts(167,33): error TS2322: Type 'string' is not assignable to type 'RequestMode | undefined'.",
+    "2026-10-28T13:47:32.4071301Z server/src/approvals/store.ts(170,27): error TS2339: Property 'runId' does not exist on type 'ApprovalRecord'."
+  ],
+  "diagnostic_count": 7,
+  "automatic_peak": "1.8G",
+  "service_runtime": "22.556s",
+  "cpu": "42.934s",
+  "source_changed": false,
+  "tests_not_included_by_original_config": true,
+  "pg17": "PG_PENDING",
+  "full_ci": "NOT_RUN"
+}

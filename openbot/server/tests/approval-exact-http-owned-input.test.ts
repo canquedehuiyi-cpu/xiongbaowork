@@ -310,3 +310,31 @@ test("unsupported native keepalive stays absent and caller shadow getters are ne
 	else expect(Object.hasOwn(replay, "keepalive")).toBe(false);
 	expect(getOwnedHttpEntryV1(replay)?.value).toBe(null);
 });
+
+// Exercise the native request/replay boundary across Fetch's accepted enum values.
+// Compare actual native getters because a runtime may normalize an input option.
+test("native Fetch enum variants and chunk EOF preserve replay fields and bytes", async () => {
+	const variants = [
+		{ credentials: "omit", cache: "default", redirect: "follow", referrerPolicy: "", mode: "cors" },
+		{ credentials: "same-origin", cache: "no-store", redirect: "error", referrerPolicy: "no-referrer", mode: "same-origin" },
+		{ credentials: "include", cache: "reload", redirect: "manual", referrerPolicy: "no-referrer-when-downgrade", mode: "no-cors" },
+		{ cache: "no-cache", referrerPolicy: "origin" },
+		{ cache: "force-cache", referrerPolicy: "origin-when-cross-origin" },
+		{ cache: "only-if-cached", referrerPolicy: "same-origin", mode: "same-origin" },
+		{ referrerPolicy: "strict-origin" },
+		{ referrerPolicy: "strict-origin-when-cross-origin" },
+		{ referrerPolicy: "unsafe-url" },
+	] as const satisfies readonly RequestInit[];
+	const raw = utf8(' {"untouched":[1,null]} ');
+	for (const options of variants) {
+		const stream = chunks([raw.subarray(0, 4), new Uint8Array(), raw.subarray(4)]);
+		const request = post(stream, options);
+		const replay = await preserveExactHttpRunInputV1(request);
+		for (const key of ["credentials", "cache", "redirect", "referrerPolicy", "mode"] as const) {
+			expect(replay[key]).toBe(request[key]);
+		}
+		expect(new Uint8Array(await replay.arrayBuffer())).toEqual(raw);
+		expect(getOwnedHttpEntryV1(replay)?.value).toEqual({ untouched: [1, null] });
+		expect(stream.locked).toBe(false);
+	}
+});

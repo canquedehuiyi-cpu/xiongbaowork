@@ -59,7 +59,7 @@ const ruleScope = (action: ApprovalAction) =>
 export async function openStoredApprovalInTransaction(
   tx: StoredApprovalTransaction,
   action: ApprovalAction,
-): Promise<ApprovalRecord> {
+): Promise<typeof approvalRequests.$inferSelect> {
   // A request the policy gate opened was opened because something asked for the person; a
   // saved "always" rule was already weighed there and must not approve it behind that.
   const [rule] = action.policy

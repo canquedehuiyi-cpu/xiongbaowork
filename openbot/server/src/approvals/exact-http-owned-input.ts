@@ -83,7 +83,7 @@ function snapshot(request: Request) {
 	const ownedHeaders = new NativeHeaders();
 	headersEach.call(headers, (value: string, key: string) => headersSet.call(ownedHeaders, key, value));
 	return { method, url, headers: ownedHeaders, signal, body, credentials, cache,
-		redirect, referrer, referrerPolicy, integrity, keepalive, mode };
+		redirect, referrer, referrerPolicy, integrity, keepalive, mode } as const;
 }
 
 function exceedsDeclaredCap(headers: Headers): boolean {
@@ -94,7 +94,7 @@ function exceedsDeclaredCap(headers: Headers): boolean {
 	return digits.length > cap.length || (digits.length === cap.length && digits > cap);
 }
 
-function visibleChunk(value: Uint8Array): Uint8Array<ArrayBuffer> {
+function visibleChunk(value: unknown): Uint8Array<ArrayBuffer> {
 	if (!isView(value) || !typedTag || !typedBuffer || !typedOffset || !typedLength || !bufferLength) throw INVALID;
 	if (typedTag.call(value) !== "Uint8Array") throw INVALID;
 	const buffer: ArrayBuffer = typedBuffer.call(value);
@@ -147,7 +147,7 @@ export async function preserveExactHttpRunInputV1(request: Request): Promise<Req
 		let used = 0;
 		while (true) {
 			if (isAborted(signal)) throw INVALID;
-			const next: ReadableStreamReadResult<Uint8Array> = await Promise.race([
+			const next = await Promise.race([
 				readerRead.call(reader), aborted,
 			]);
 			if (isAborted(signal)) throw INVALID;
