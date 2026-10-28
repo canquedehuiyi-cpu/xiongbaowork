@@ -1,0 +1,42 @@
+{
+  "schema": "xiongbaowork-resource-exception-proposal/1",
+  "status": "NOT_AUTHORIZED_NOT_PUBLISHED_NOT_EXECUTED",
+  "base_commit": "42296faa8b092d549b891b662380c4264b0966ca",
+  "source_files": 2054,
+  "source_bytes": 50007029,
+  "latest_runtime": {
+    "run": 40689788558,
+    "job": 122821353836,
+    "pass": 673,
+    "fail": 0,
+    "expects": 10804,
+    "named_files": 38
+  },
+  "blocked_typecheck": {
+    "run": 40678526201,
+    "job": 122782977940,
+    "status": "V8_HEAP_SIGABRT_WITHIN512MiB_NO_DIAGNOSTICS",
+    "history_preserved": true
+  },
+  "proposed_exception": {
+    "phase": "original server/tsconfig.json noEmit only",
+    "project_and_all_descendants_memory_max": 2147483648,
+    "swap": 0,
+    "node_old_space_mib": 1408,
+    "auxiliary_heap_is_not_aggregate_gate": true,
+    "deadline_seconds": 300,
+    "restore512MiB_on_exit": true
+  },
+  "unchanged_gates": {
+    "source_data_copy": 67108864,
+    "other_project_phases": 536870912,
+    "full_dependency_install": "existing human512MiB exception; frozen lock private cache copyfile no lifecycle scripts",
+    "free_standard_linux": true,
+    "paid_provider_calls": 0,
+    "postgres17": "PG_PENDING",
+    "windows_source_writes": 0
+  },
+  "workflow_sha256": "a690a39ed96908ef737bd86f753b2ae44ccd99b60ad901998b00db44750a9b9f",
+  "requires_new_direct_human_approval": true,
+  "publishing_ref_before_approval": "PROHIBITED"
+}
