@@ -1,0 +1,114 @@
+{
+  "schema": "xiongbaowork-historical-source-candidate-recovery/1",
+  "status": "RECOVERED_BYTES_ONLY_NOT_ADOPTED",
+  "ticket": "K106-HISTORICAL-NOT-ADOPTED",
+  "author_source_index": {
+    "reference": "library-file:fde1_bGliZmlsZV83bnpFdmxPcHNlMkxjcGUzZGtlWm9B_FileDrive_ecfdc2761b3481918cafe0a7f422e7bf",
+    "bytes": 15655,
+    "sha256": "ba222a22905cccd25b1fbfb5d0db5472465e02ea2430d4bd4025403ac613bc70",
+    "historical_author_base": "formal V56"
+  },
+  "current_source_parent": "fbfb994aa735365581551ab0b82df0e8c9475c6a",
+  "current_source_files": 2045,
+  "current_source_bytes": 48463600,
+  "current_formal_overlays": 5,
+  "source_leaves": [
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql",
+      "record": 29,
+      "archive_path": "archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED/after-29.source.txt",
+      "bytes": 5270,
+      "sha256": "a5541d86f2d648301bc5c4e7bf5a2e623ccf43e2a1719130d9f95bad41290c72",
+      "blob": "434eb5204024a369249a062e0fdfd93cae99f059",
+      "before": "ABSENT",
+      "typed_manifest_mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json",
+      "record": 30,
+      "archive_path": "archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED/after-30.source.txt",
+      "bytes": 604775,
+      "sha256": "96e8bc9e6a7b89c008649ad0c964f9a6cf5460fad2db9f7c1fb33ebb7c2f3cd6",
+      "blob": "1d28ab313093757f712b067a1c4052f8a0790836",
+      "before": "ABSENT",
+      "typed_manifest_mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+      "record": 31,
+      "archive_path": "archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED/after-31.source.txt",
+      "bytes": 16159,
+      "sha256": "0be3bb0f19c52c21fc3ecc689d5eff41ae00a5e028de064cd9ad213d65ac44fb",
+      "blob": "9f5f277d95d265e45c40bd05b61300629f8d519b",
+      "before": {
+        "bytes": 15995,
+        "sha256": "c9eb36952c8af649fb8813def53240a1b8bc5e4a33a8a025ef3a394ee80f6951",
+        "blob": "738e4ecf8036435ebc487e6fbe4c3153a6adfd37"
+      },
+      "typed_manifest_mode": "100644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+      "record": 32,
+      "archive_path": "archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED/after-32.source.txt",
+      "bytes": 5314,
+      "sha256": "320f9f7742730e9b34a8ca6647ace9ad642541943ddb7da3af4a7b4e82c59d9f",
+      "blob": "c4a489c28255ecd5978d16c0a16ab80c30080654",
+      "before": "ABSENT",
+      "typed_manifest_mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "record": 33,
+      "archive_path": "archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED/after-33.source.txt",
+      "bytes": 1794,
+      "sha256": "f9ddd1c640db86a246e45095788bb3c140ec503a0a35be75a8e64d09c99ea2aa",
+      "blob": "b4d0e1c0d089d03d08f2662e2fc7f232f797c618",
+      "before": {
+        "bytes": 1747,
+        "sha256": "f2c7d495bfc245e148dc976669ed1da7b530ad71b99a5c22845cb14f1f4951ed",
+        "blob": "26afec75aeaf3183292e188f3239dfdcd0fe4780"
+      },
+      "typed_manifest_mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts",
+      "record": 34,
+      "archive_path": "archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED/after-34.source.txt",
+      "bytes": 104477,
+      "sha256": "065569edc900cb77ebd116957541d6c7bc3bc9af35b718243e9cfcd1f4877a15",
+      "blob": "33761f01441c333954baf3319ec568cdb1cc3a14",
+      "before": "ABSENT",
+      "typed_manifest_mode": "0o644"
+    }
+  ],
+  "data_checks": {
+    "strict_base64_gzip_crc_isize_raw_sha_git_blob_lfcr": true,
+    "all150_old_snapshot_tables_and_unknown_tops_inverse_exact": true,
+    "snapshot_before_bytes": 594705,
+    "snapshot_before_sha256": "c0477f74367fc3c80aec5a1596bee1ea1a7a3aa6247a0847f8c55a05cfab30a6",
+    "journal_entire0through105_prefix_and_tops_exact": true,
+    "new_event": {
+      "idx": 106,
+      "version": "7",
+      "when": 1792421265000,
+      "tag": "0106_plugin_assembly_foundations_closed",
+      "breakpoints": true
+    },
+    "barrel_exact_unique_line_inverse": true,
+    "current_two_mod_before_hash_and_blob_match": true,
+    "four_new_paths_absent_in_current_manifest_and_git_tree": true
+  },
+  "history": {
+    "legacy_v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED",
+    "old_author2047_projection": "V56_ONLY_NOT_CURRENT",
+    "no_original_fd_or_cache_history_cleared": true,
+    "earlier_native_app_reference_read": "task-routing unavailable; Pages connector independently authorizes and returned exact text bytes"
+  },
+  "project_source_applied": false,
+  "tests": "HISTORICAL19_DEFINITIONS_NOT_YET_RUN_ON_CURRENT_PARENT",
+  "server_typecheck": "NOT_VERIFIED",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "windows_source_writes": 0
+}
