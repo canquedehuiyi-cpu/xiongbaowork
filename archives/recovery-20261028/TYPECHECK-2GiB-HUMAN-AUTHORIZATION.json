@@ -1,0 +1,29 @@
+{
+  "schema": "xiongbaowork-human-resource-authorization/1",
+  "status": "AUTHORIZED_NOT_YET_VALIDATED",
+  "date_local": "2026-10-28",
+  "human_answer": "允许，仅完整类型检查阶段使用 2 GiB（推荐）",
+  "question_item": "call_bf5a7a01446b4e309daaf5faa55034b3",
+  "approved_proposal": "6018fc1e95c5c4b56373872b148cea2287ade042",
+  "phase": "full original server/tsconfig.json noEmit only",
+  "project_and_all_descendants_memory_max": 2147483648,
+  "swap": 0,
+  "deadline_seconds": 300,
+  "node_aux_heap_mib": 1408,
+  "restore512MiB_after_phase": true,
+  "unchanged": {
+    "data_copy_memory_max": 67108864,
+    "other_project_phases": 536870912,
+    "dependency_install": "existing512MiB exception",
+    "free_cloud_only": true,
+    "lifecycle_scripts": "DISABLED",
+    "private_cache": true,
+    "copyfile": true,
+    "windows_source_writes": 0,
+    "postgres17": "PG_PENDING"
+  },
+  "source_files": 2054,
+  "source_bytes": 50007029,
+  "full_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

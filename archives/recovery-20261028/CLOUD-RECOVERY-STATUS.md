@@ -82,3 +82,5 @@ Ptx两个历史leaf已完成当前父SourceOnly恢复及独审采用。store1547
 最新同一提交38文件结果：[56faabeec733e9dd8e62c6fda517d22c69c78f91](https://github.com/canquedehuiyi-cpu/xiongbaowork/commit/56faabeec733e9dd8e62c6fda517d22c69c78f91)，[40689788558/job122821353836](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40689788558/job/122821353836)：673pass/0fail/10804expects、38/38完成、exit0、Unhandled0。2054/50007029完整SHA/权限/FD核验通过；原两preload未改，完整冻结安装PASS/普通文件127738/符号链接3869/hardlink0/外部链接0/禁全部生命周期脚本；自动peak安装510.3M、测试475M、swap0。Ptx15项原生PG定义未导入，完整CI及server类型仍未通过。八个修复包及本次51名称/分层结构重建不等77/18/7完整验收。
 
 后续完整server类型检查受原512MiB聚合门/V8 heap OOM阻塞；仅完整依赖安装的512MiB例外已获准，不覆盖放宽编译项目总门。正在准备只对完整server编译步骤临时2GiB/swap0的可审方案，当前未获该例外、未执行或触发；其余阶段仍原资源门。PG_PENDING按人类要求保留，不重复索要PG环境。
+
+2026-10-28 新人类授权：仅完整server类型检查阶段，项目与全部后代聚合上限临时2GiB、swap0、300秒时限，结束恢复512MiB。明确回答“允许，仅完整类型检查阶段使用2GiB”；原安装512MiB例外保留，其余DATA64MiB/其他项目阶段512MiB、免费、私有缓存/copyfile/禁生命周期脚本及源码不落Windows均不变。按已审具体提案6018fc1e95c5c4b56373872b148cea2287ade042启动一次，结果另证；该授权不是类型通过、PG17或完整77/18/7过门。
