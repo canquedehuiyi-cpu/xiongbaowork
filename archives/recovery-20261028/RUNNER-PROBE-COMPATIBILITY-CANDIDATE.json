@@ -1,0 +1,71 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RUNNER-PROBE-COMPATIBILITY-20261029",
+  "formal_adoption": false,
+  "status": "CANDIDATE_PENDING_INDEPENDENT_REVIEW_AND_CLOUD_TESTS",
+  "base_commit": "73cc3efd3603ba4899b901c4e43df08c65871f14",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18768,
+        "sha256": "002ea4292f0cda73f668066f641a1fab45a480185db32f27c8e1e54904d325d7",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 18837,
+        "sha256": "a665fcb8c23082a8af66f665d6b620b7aebafb88b101454b28192b7fb3ed2c52",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-ref.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 299,
+        "sha256": "5fb6cc794dd59475953e791fc0435c92d1f1476790f8c120629e71d4855d8faa",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 3826,
+        "sha256": "add363687affff0e68ff057d9fad96828fc291da8195acc105982997b36ef60a",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Fix two pre-existing probe defects: use node:fs exports; probe token assertion matches current runner run-profile prefix and preserves original suffix class. New pure format helper and actual CLI without --run/fake-page producer regression tests. No actual Chrome, website, port or user-device verification.",
+  "projected_source_files": 2057,
+  "projected_source_bytes": 50023334,
+  "real_browser_probe": "NOT_RUN",
+  "pg17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "trigger": {
+    "independent_review": "APPROVAL-GUARD-LINT-INDEPENDENT-REVIEW.json",
+    "existing_nonintroduced_findings": [
+      {
+        "path": "openbot/scripts/ci/runner-browser-probe.ts",
+        "line": 1,
+        "origin": "Pre-existing before approval lint package",
+        "issue": "mkdtempSync/rmSync imported from node:os rather than node:fs",
+        "status": "OPEN_NOT_EXECUTED"
+      },
+      {
+        "path": "openbot/scripts/ci/runner-browser-probe.ts",
+        "line": 297,
+        "origin": "Pre-existing before approval lint package",
+        "issue": "Ref regex expects8hex:ref; current browser emits8hex-8hex:ref",
+        "status": "OPEN_NOT_EXECUTED"
+      }
+    ]
+  }
+}
