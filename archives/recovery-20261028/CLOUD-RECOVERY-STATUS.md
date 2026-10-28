@@ -1,3 +1,11 @@
+## ROOT123 current authorized verification, 2026-10-29
+
+17 source repair packages adopted with independent review; Source2057/50023334B. Exact original Biome lint passed with0errors/0warnings/181infos; full original app single process1207/0/4163 and originalapp tsc passed; named39 components691/0/10744 passed. Worker original tsc now passed at authorized2GiB in run40731418887/job122969353990; automaticpeak747.9M, actualrestore512MiB. Prior512MiB V8 OOM events retained. All four workspace original tsconfigs passed at separate evidenced stages; a combined current17 commit validation is now being activated. Resource exceptions remain individually scoped; all unexcepted project phases512MiB, data/copy64MiB, swap0. Lifecycle scripts disabled/private copyfile cache/free standard public Actions/Windows Source writes0.
+
+Isolated original tests/recovery-lineage.test.ts remains resource-stopped and NOT_RUN_CURRENT: proposal94d28e02758a9cec1b3aeb95a86aa6e0dcabc489 is manual-only, independently full-read/no runs; awaiting direct authorization. Its fake PG tests do not replace realPG17. Commercial77stories/18packages/7gates NOT_DELIVERED; PG_PENDING, original strictCIbaseline03df9efa unavailable, production wiring/nativeclient/browser/realprovider billing/cleanclient gates remain open.
+
+### Earlier checkpoints (historical records)
+
 ## root122Probe Source adoption, 2026-10-29
 
 RUNNER-PROBE-COMPATIBILITY-20261029 adopted unchanged from candidate 3758e246f175346660dd3edb1648d6c045fef5f1. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40731132905/job 122967442129; see exact validation JSON for pass/fail counts and remaining diagnostics. 2057 files / 50023334 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.

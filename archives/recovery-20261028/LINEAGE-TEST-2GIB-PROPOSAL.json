@@ -1,0 +1,30 @@
+{
+  "schema": "xiongbaowork-proposed-lineage-test-resource-exception/1",
+  "status": "PROPOSED_NOT_AUTHORIZED_NOT_RUN",
+  "source_commit": "d869c9b80800e77915e94f139ce01baa4e311a35",
+  "phase": "Only original tests/recovery-lineage.test.ts with --smol, original repository preloads and all original assertions",
+  "reason": "Historical512MiB/default and smol resource stops are retained. Other named39 component and full app checks do not cover this isolated original lineage file.",
+  "command": "bun test --smol --no-install --timeout5000 tests/recovery-lineage.test.ts",
+  "project_and_all_descendants_memory_max": 2147483648,
+  "swap": 0,
+  "timeout_seconds": 300,
+  "restore_after_phase": 536870912,
+  "prior_2GiB_permissions_do_not_cover_this_test": true,
+  "no_native_pg": "Fake PG evidence adapters and original frozen163-file bundle verification only; actualPG17 remainsPG_PENDING",
+  "unchanged": {
+    "free_standard_public_actions": true,
+    "data_copy_limit": 67108864,
+    "full_install_limit": 536870912,
+    "other_project_phases": 536870912,
+    "source_files": 2057,
+    "source_bytes": 50023334,
+    "source_changes": 0,
+    "lifecycle_scripts": "NOT_RUN",
+    "private_cache": true,
+    "copyfile": true,
+    "windows_source_writes": 0,
+    "paid_provider_calls": 0
+  },
+  "full_strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

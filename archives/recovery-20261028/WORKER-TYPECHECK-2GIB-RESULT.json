@@ -1,0 +1,147 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40731418887,
+  "job": 122969353990,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "d6d0ee3468cffda7f858166af14ebf33237c392d",
+    "head": "0dfdcc61593d041237b07cd8b4c3f5ed690a35f4",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50019140,
+    "verified_source_files": 2055,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "0dfdcc61593d041237b07cd8b4c3f5ed690a35f4",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "tests": {
+    "pass": 0,
+    "fail": 0,
+    "expects": 0
+  },
+  "lint": null,
+  "lint_counts": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 512.9M (swap: 0B)",
+    "Memory peak: 747.9M (swap: 0B)"
+  ],
+  "actual_restore512MiB_count": 1,
+  "strict_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "worker": {
+    "package": "worker",
+    "project": "worker/tsconfig.json",
+    "exit_code": 0,
+    "aggregate_limit": 2147483648,
+    "swap": 0,
+    "node_auxiliary_old_space_mb": 1792
+  },
+  "scope": "Original worker tsconfig include src, noEmit; worker-only directly authorized2GiB/swap0/300s; earlier Source16 content unchanged from adopted73cc",
+  "authorized_plan": {
+    "schema": "xiongbaowork-proposed-worker-resource-exception/1",
+    "status": "DIRECT_HUMAN_AUTHORIZED_ACTIVATION_PENDING_RUNTIME_RESULT",
+    "source_commit": "73cc3efd3603ba4899b901c4e43df08c65871f14",
+    "reason": "Original worker tsconfig at512MiB aggregate stopped at default V8 heap and at384MiB auxiliary heap; no type diagnostics. Same Source server/app/runner original types and full app tests passed.",
+    "evidence": [
+      {
+        "run": 40719764919,
+        "job": 122927137243,
+        "auxiliary_heap": "default",
+        "automatic_peak": "314.3M",
+        "return": -6
+      },
+      {
+        "run": 40721528612,
+        "job": 122933438438,
+        "auxiliary_heap_mib": 384,
+        "automatic_peak": "474.9M",
+        "return": -6
+      }
+    ],
+    "phase": "original worker/tsconfig.json --noEmit only; original include src unchanged",
+    "command": "node --max-old-space-size=1792 node_modules/typescript/bin/tsc --noEmit --project worker/tsconfig.json",
+    "project_and_all_descendants_memory_max": 2147483648,
+    "swap": 0,
+    "timeout_seconds": 300,
+    "restore_after_phase": 536870912,
+    "activation": "One normal on-push cloud workflow restricted to this compile phase; original Source unchanged",
+    "prior_exceptions_do_not_cover_worker": true,
+    "unchanged": {
+      "free_standard_public_actions": true,
+      "source_files": 2055,
+      "source_bytes": 50019140,
+      "data_copy_memory": 67108864,
+      "full_dependency_install_memory": 536870912,
+      "other_unexcepted_project_phases": 536870912,
+      "lifecycle_scripts": "DISABLED",
+      "private_cache": true,
+      "copyfile": true,
+      "windows_source_writes": 0,
+      "pg17": "PG_PENDING",
+      "paid_provider_calls": 0
+    },
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "authorization": {
+      "reply": "允许，仅 worker 完整类型检查使用 2 GiB（推荐）",
+      "date": "2026-10-29",
+      "original_reviewable_proposal": "7a8b96ec2ea40ff454bc8095e542a123da5c030b"
+    },
+    "source_files": 2055,
+    "source_bytes": 50019140
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "aeede7b26552cc17a623af90a57509573b11aa9c",
+  "candidate": "e24a91fbf2103e89403c40c0c45c749f378fe0fb",
+  "verdict": "REVISIONS_REQUIRED",
+  "findings": [
+    {
+      "priority": "P1",
+      "reason": "Sibling tests protect whole current Source identities; first-stage test style changes were not inversed before historical full size/SHA guards",
+      "locations": [
+        "knowledge-write current Resource inverse-entry1808-1810; gate1860-1864; reads2079/2082",
+        "K106 current KW/Resource entries1823-1825/1844-1846; gate1896-1900; read2115-2117",
+        "Remaining3 protectedCurrentSource1189-1191/1209-1211/1214-1216; read2089"
+      ]
+    }
+  ],
+  "closed_diff_and_full_utf8_identities_verified": true,
+  "old_literals_and_objects_unchanged": true,
+  "pg17": "PG_PENDING",
+  "runtime_not_inferred": true
+}

@@ -3,7 +3,7 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "3758e246f175346660dd3edb1648d6c045fef5f1",
+  "source_snapshot": "d869c9b80800e77915e94f139ce01baa4e311a35",
   "source_status": "V57_RESTORED_PLUS_17_APPROVED_PACKAGES",
   "story_requirements": [
     {
@@ -2249,11 +2249,465 @@
       "scope": "Retained37 excluding resource-stopped lineage plus existing50 fake browser cases plus new3 actual CLI-without-run/fake producer compatibility tests;39named files, not full server suite",
       "real_browser": "NOT_RUN",
       "website_or_port": "NOT_USED_IN_NEW_TESTS"
+    },
+    "worker_original_types_2GiB": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40731418887,
+      "job": 122969353990,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "d6d0ee3468cffda7f858166af14ebf33237c392d",
+        "head": "0dfdcc61593d041237b07cd8b4c3f5ed690a35f4",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50019140,
+        "verified_source_files": 2055,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "0dfdcc61593d041237b07cd8b4c3f5ed690a35f4",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3870,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": null,
+      "tests": {
+        "pass": 0,
+        "fail": 0,
+        "expects": 0
+      },
+      "lint": null,
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.9M (swap: 0B)",
+        "Memory peak: 747.9M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 1,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "worker": {
+        "package": "worker",
+        "project": "worker/tsconfig.json",
+        "exit_code": 0,
+        "aggregate_limit": 2147483648,
+        "swap": 0,
+        "node_auxiliary_old_space_mb": 1792
+      },
+      "scope": "Original worker tsconfig include src, noEmit; worker-only directly authorized2GiB/swap0/300s; earlier Source16 content unchanged from adopted73cc",
+      "authorized_plan": {
+        "schema": "xiongbaowork-proposed-worker-resource-exception/1",
+        "status": "DIRECT_HUMAN_AUTHORIZED_ACTIVATION_PENDING_RUNTIME_RESULT",
+        "source_commit": "73cc3efd3603ba4899b901c4e43df08c65871f14",
+        "reason": "Original worker tsconfig at512MiB aggregate stopped at default V8 heap and at384MiB auxiliary heap; no type diagnostics. Same Source server/app/runner original types and full app tests passed.",
+        "evidence": [
+          {
+            "run": 40719764919,
+            "job": 122927137243,
+            "auxiliary_heap": "default",
+            "automatic_peak": "314.3M",
+            "return": -6
+          },
+          {
+            "run": 40721528612,
+            "job": 122933438438,
+            "auxiliary_heap_mib": 384,
+            "automatic_peak": "474.9M",
+            "return": -6
+          }
+        ],
+        "phase": "original worker/tsconfig.json --noEmit only; original include src unchanged",
+        "command": "node --max-old-space-size=1792 node_modules/typescript/bin/tsc --noEmit --project worker/tsconfig.json",
+        "project_and_all_descendants_memory_max": 2147483648,
+        "swap": 0,
+        "timeout_seconds": 300,
+        "restore_after_phase": 536870912,
+        "activation": "One normal on-push cloud workflow restricted to this compile phase; original Source unchanged",
+        "prior_exceptions_do_not_cover_worker": true,
+        "unchanged": {
+          "free_standard_public_actions": true,
+          "source_files": 2055,
+          "source_bytes": 50019140,
+          "data_copy_memory": 67108864,
+          "full_dependency_install_memory": 536870912,
+          "other_unexcepted_project_phases": 536870912,
+          "lifecycle_scripts": "DISABLED",
+          "private_cache": true,
+          "copyfile": true,
+          "windows_source_writes": 0,
+          "pg17": "PG_PENDING",
+          "paid_provider_calls": 0
+        },
+        "strict_ci": "NOT_RUN",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "authorization": {
+          "reply": "允许，仅 worker 完整类型检查使用 2 GiB（推荐）",
+          "date": "2026-10-29",
+          "original_reviewable_proposal": "7a8b96ec2ea40ff454bc8095e542a123da5c030b"
+        },
+        "source_files": 2055,
+        "source_bytes": 50019140
+      }
+    },
+    "lint_exact_current": {
+      "exit_code": 0,
+      "version": "Version: 2.5.10",
+      "arguments": [
+        "lint",
+        "--error-on-warnings",
+        "."
+      ],
+      "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+      "source_fixes": "NONE_NO_WRITE_FLAG",
+      "project_limit": 536870912,
+      "swap": 0,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "probe_compatibility": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40731132905,
+      "job": 122967442129,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "b25401052b347f67b7a53eb7ec7120235011a370",
+        "head": "3758e246f175346660dd3edb1648d6c045fef5f1",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50023334,
+        "verified_source_files": 2057,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "3758e246f175346660dd3edb1648d6c045fef5f1",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3869,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 39,
+        "completed_files": 39,
+        "results": [
+          {
+            "path": "server/tests/approval-exact-http-owned-input.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-approval-direct-execution-domains.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-approval-exact-input-objects.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-automation-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-automation-run-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-device-binding-leases.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-customization-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-customization-turns.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-official-bindings.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-run-coordination.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-sharing-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-original-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-run-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-runtime-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-group-pipeline-start-receipts.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-knowledge-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-knowledge-write-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-outbox-knowledge-heads.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-resource-project-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-role-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-security-policy-fences.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-subject-binding.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-task-flow-audit.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-threads-parent-key.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-input-json.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-object-header.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-object-wire.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-object-crypto.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approvals-continuation-protocol.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/server-readiness-gates.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/role-writer-lifecycle.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-plugin-assembly-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/proactive.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-import-proactive-token-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/runner-browser.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/runner-browser-probe.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "tests": {
+        "pass": 691,
+        "fail": 0,
+        "expects": 10744
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.4M (swap: 0B)",
+        "Memory peak: 332.2M (swap: 0B)",
+        "Memory peak: 399.6M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 0,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Retained37 excluding resource-stopped lineage plus existing50 fake browser cases plus new3 actual CLI-without-run/fake producer compatibility tests;39named files, not full server suite",
+      "real_browser": "NOT_RUN",
+      "website_or_port": "NOT_USED_IN_NEW_TESTS"
+    },
+    "combined_current17": {
+      "status": "PENDING_EXACT_RUN_RESULT",
+      "phases": [
+        "Source2057 full bytes/modes/FD",
+        "Frozen full installation",
+        "Named39 tests excluding lineage",
+        "Original server types",
+        "Original full161 app single process",
+        "Original app types includingtests",
+        "Original runner types",
+        "Original worker types",
+        "Original pinned Biome lint"
+      ],
+      "native_pg": "PG_PENDING",
+      "strict_ci": "NOT_RUN"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Continue remaining original lint blockers in <=8-file independently reviewed packages; original PG and strict-CI gates retained",
+  "next_source_package": "Await isolated original lineage-only2GiB resource authorization; combine current17 approved Source checks in one commit without widening any other phase. NativePG/real browser/paid provider/strict CI boundaries retained.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -2264,11 +2718,11 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 439372,
-    "sha256": "6deaaf9979092b3abc7fb7a7e6c3e0335ab6003caf21c6ae5ba95e6e97ab067d",
+    "bytes": 439336,
+    "sha256": "ffec5c27f86b76f17ef1819283077f91cb1d792a80f91f11f0de21f69b7ce4fd",
     "source_files": 2057,
     "source_bytes": 50023334,
-    "candidate_source_commit": "3758e246f175346660dd3edb1648d6c045fef5f1",
+    "source_commit": "d869c9b80800e77915e94f139ce01baa4e311a35",
     "source_validation_run": 40731132905
   },
   "latest_source_validation": {
@@ -2545,5 +2999,19 @@
     "scope": "Retained37 excluding resource-stopped lineage plus existing50 fake browser cases plus new3 actual CLI-without-run/fake producer compatibility tests;39named files, not full server suite",
     "real_browser": "NOT_RUN",
     "website_or_port": "NOT_USED_IN_NEW_TESTS"
+  },
+  "lineage_resource_exception_proposal": {
+    "commit": "94d28e02758a9cec1b3aeb95a86aa6e0dcabc489",
+    "status": "PROPOSED_NOT_AUTHORIZED_NOT_RUN",
+    "path": "archives/recovery-20261028/LINEAGE-TEST-2GIB-PROPOSAL.json"
+  },
+  "latest_gate_evidence": {
+    "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
+    "g2": "UNIT_COMPONENT_EVIDENCE_ONLY_NO_FULL_TENANT_INTEGRATION",
+    "g3": "Full app tests/types, named39 components, lint, and four workspace typechecks separately passed; combined current Source run pending; lineage resource stopped; original strict CI baseline unavailable",
+    "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
+    "g5": "REAL_USER_DEVICE_BROWSER_NOT_RUN; Source probe compatibility regressions only",
+    "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
+    "g7": "NO_CLEAN_WINDOWS_LINUX_CLIENT_DEPLOYMENT_EVIDENCE"
   }
 }
