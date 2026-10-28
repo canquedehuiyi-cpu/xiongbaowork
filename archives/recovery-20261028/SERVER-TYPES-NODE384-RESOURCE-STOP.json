@@ -1,0 +1,53 @@
+{
+  "schema": "xiongbaowork-server-type-resource-stop/1",
+  "source_head": "fbfb994aa735365581551ab0b82df0e8c9475c6a",
+  "run": 40676314709,
+  "job": 122775533054,
+  "start": {
+    "typescript": "5.9.3",
+    "host_runtime": "v24.22.1",
+    "node_path": "/usr/local/bin/node",
+    "node_old_space_mb": 384,
+    "project": "server/tsconfig.json",
+    "declared_includes": [
+      "src",
+      "scripts",
+      "../scripts/composio-smoke.ts"
+    ],
+    "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+    "timeout_seconds": 300
+  },
+  "reported_result": {
+    "exit_code": -6,
+    "project": "server/tsconfig.json",
+    "typescript": "5.9.3",
+    "host_runtime": "Bun1.3.14",
+    "full_ci": "NOT_RUN",
+    "test_sources": "NOT_INCLUDED",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "actual_runtime": {
+    "host": "Node v24.22.1",
+    "path": "/usr/local/bin/node",
+    "typescript": "5.9.3",
+    "old_space_mb": 384
+  },
+  "result_metadata_issue": "Old result line retained Bun1.3.14 label after Node command change. Actual START, executed command and fatal stack are Node. Corrected in subsequent controller without changing old evidence.",
+  "termination": {
+    "compiler_signal": "SIGABRT6",
+    "python_returncode": -6,
+    "systemd_step_exit": 250,
+    "reason": "V8 Reached heap limit / JavaScript heap out of memory",
+    "kernel_cgroup_oom": false,
+    "diagnostics_before_failure": 0,
+    "memory_peak": "466.6M",
+    "configured_aggregate_max": 536870912,
+    "swap": 0
+  },
+  "full_typecheck": "NOT_COMPLETED",
+  "next": "Single check with original Node default heap/no NODE_OPTIONS under same512MiB aggregate hard gate; no resource increase",
+  "project_source_changes": 0,
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

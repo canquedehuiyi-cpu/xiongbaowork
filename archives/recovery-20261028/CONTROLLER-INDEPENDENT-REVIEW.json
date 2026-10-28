@@ -1,0 +1,49 @@
+{
+  "schema": "xiongbaowork-controller-independent-review/1",
+  "verdict": "CONTROL_REVIEW_OK",
+  "reviewer": "/root/review_approval_input_readonly",
+  "subject_package_adoption": false,
+  "frozen_ref": "b0bc8b51f86bfb5fc83906f2eedd9996eede4f47",
+  "path": ".github/workflows/source-recovery-verify.yml",
+  "bytes": 36722,
+  "lines": 578,
+  "git_blob": "559ddc7fcfd4aafd36c6733c6ec152940ffd519e",
+  "full_text_read": true,
+  "findings": [],
+  "source_identity_gate": "V57 raw identity +5 whole ADOPTED overlays; before/path/mode;2045 unique files/48463600 bytes; per-file SHA/size/mode/no symlink/nlink1/FD named stability",
+  "aggregate_resource_gate": "Project slice512MiB/swap0; Source and runtime64MiB; named install512MiB; subsequent processes same parent512MiB; real cgroup reads",
+  "installer": "private HOME/cache, frozen lock,copyfile,ignore all scripts,6 input hashes,root+four workspace dependency link checks",
+  "ordering": "app7 follows all success; types follows successful install and !cancelled, sequential even after app failure",
+  "independently_read_historical_runs": [
+    {
+      "run": 40672999809,
+      "job": 122764245052,
+      "install": "PASS"
+    },
+    {
+      "run": 40674048676,
+      "job": 122767800762,
+      "files": 35,
+      "pass": 621,
+      "fail": 0,
+      "expects": 9151
+    }
+  ],
+  "official_docs": "https://github.com/oven-sh/bun/blob/bun-v1.3.14/docs/pm/lifecycle.mdx",
+  "activity": {
+    "github_readonly": true,
+    "tool_memory_only": true,
+    "subject_execution": 0,
+    "windows_writes": 0,
+    "repo_writes": 0,
+    "new_agents": 0
+  },
+  "not_covered": [
+    "Later controller refs/Node delta",
+    "app7/types run result",
+    "NativePG17",
+    "FullCI",
+    "Producer wiring",
+    "77/18/7 delivery"
+  ]
+}

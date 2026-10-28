@@ -51,6 +51,12 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 
 同作业原server tsconfig由TypeScript5.9.3在Bun承载执行，120秒到时exit124，CPU223.916秒/peak509.2M，未输出编译诊断；不是类型通过，也没有已确认类型错误。下一次仅改用原tsc shebang对应的stock云端Node运行方式，300秒时限，Node oldspace384MiB为额外堆控制，真实project及后代512MiB cgroup门/swap0保持，不用堆限制冒整体门。其他阶段资源门及具名安装例外不变，源码0修改。
 
+服务器Node检查：[40676314709/job122775533054](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40676314709/job/122775533054)。实际Node24.22.1 + TypeScript5.9.3在辅助oldspace384MiB处V8 heap OOM/SIGABRT6（controller return-6、步骤exit250），不是kernel cgroup OOM，peak466.6M；类型未完成，无编译诊断。旧RESULT错误保留Bun host标签，START/真实command/stack均Node；新控制器已更正标签，旧日志不改。将去除自设heap限制，仅在原512MiB聚合硬门内作一次原Node默认堆检查，不再提高项目资源。
+
+同一独审员已完整审冻结b0bc8b51…的578行36722B控制器，CONTROL_REVIEW_OK，Source五overlay/实际cgroup/具名安装例外/禁脚本/私有链接审计/步骤顺序/环境白名单无阻断；不计新主体包采用，也不覆盖后续Node差异。
+
+K106六历史after已通过Pages正常连接器按原ref取回、严格base64/gzip/CRC/ISIZE/raw SHA/Git blob/LFCR核验，原样归档在[历史未采用目录](https://github.com/canquedehuiyi-cpu/xiongbaowork/tree/codex/cloud-repairs-recovery-20261028/archives/recovery-20261028/K106-HISTORICAL-NOT-ADOPTED)，归档提交6970f22792c221bbdc825bfca95586aa477cfa89。4NEW在当前manifest/Git树ABSENT，2MOD完整before SHA/blob吻合，snapshot去新增2表和idprev后逐字还原旧150表及未知tops，journal0..105与全部tops、barrel唯一新增行inverse全核。仅恢复历史字节，不改正式2045源码/150表，不当V58采用或清旧FD/cache/机制红；下一包须在当前父上形成新候选、运行与复审。
+
 ## 持续边界与待验项
 
 - 本轮项目源码、patch、archive、JSON、依赖和项目执行均云端；Windows无项目源码写入/执行，仅保存获准无源码UI PNG。
