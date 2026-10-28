@@ -1,0 +1,202 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "AP-SCHEMA-RUNTIME-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "blocking_findings": [],
+  "before_ref": "6be5e1d72d18e8c2a46d4a221292a5c82f553274",
+  "after_source_ref": "2d4f23c074d3b367ff51b61fed58645a5458c2db",
+  "full_before_after_read": true,
+  "full_texts_read": 10,
+  "large_matrix_literal_read_chars": 43223,
+  "files": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "before": {
+        "bytes": 10532,
+        "sha256": "26db3f60910fff8fa968d3b0f55434c4207819e7fefccd6d391571b99b12bd71",
+        "blob": "8b085f21e09bf480a92d20550388340ac40f8e30",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 10520,
+        "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+        "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+      "before": {
+        "bytes": 12930,
+        "sha256": "0e9be153bdb8a0fb6ffd2dd0e6df4551dc9aeed0031eb0c39c7e2aaa0f98e4ab",
+        "blob": "aca215ba45a4df2ae60f7875e8d935723d9e008e",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 12894,
+        "sha256": "8d7489963d0de3f72be40a5a98f97500ecb58e05315bf52fc54b598d03d916fb",
+        "blob": "94d055b9cebe809b1e5e2ba4a2d84238ac0ee878",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "before": {
+        "bytes": 63126,
+        "sha256": "70b7bab9d23287b4acf6ef89edc4ee314e044b83ba13cd71acec6cda5038a053",
+        "blob": "7f87195ec3783504fe9565dba43dcaa1a352c68b",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 69721,
+        "sha256": "e4c5430aee248ffba36ec037470d97a4028d2927ee8939bbb21b4426e3055b14",
+        "blob": "8cdf8b21282c1916c9a9927373e34a1720c3cbd5",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+      "before": {
+        "bytes": 89597,
+        "sha256": "4b5bf1d66b25270dbed7436fc091f4f841bf71a463254b9e718d43cf737ec945",
+        "blob": "457c3c528e124c8ccf4e722fd584938c2d732e74",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 90384,
+        "sha256": "e319fe02133461d736bd263cee51af55121c79da0cecb5c5b0f32d2f355d0610",
+        "blob": "f6ddbbc9bfec9dbac28e692677914d326698922b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts",
+      "before": {
+        "bytes": 35292,
+        "sha256": "dea5acdb33039e8cea0f278ad3f65995887f7f21b270feb0fa26b5d5de9c4362",
+        "blob": "c81db5553879acb10c9c70a9792dfc17c94c08d9",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 35489,
+        "sha256": "d860b71f40a1fc10d74c5184bd9a9b74a516107e901b2fdb77abfe17186b0fc2",
+        "blob": "df5930855be36754e632ce1766052c1dabbd9b8b",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "reviewer_checked_utf8_bytes_and_github_blobs": true,
+  "reviewer_recomputed_sha256": false,
+  "root_sha256_and_blob_recomputed": true,
+  "judgments": [
+    {
+      "paths": [
+        "openbot/server/src/db/schema/approvals.ts",
+        "openbot/server/src/db/schema/approval-exact-input-objects.ts"
+      ],
+      "judgment": "All schema changes are exactly four .using(btree,...) to .on(...). Independently read Drizzle0.45.2 confirms .using sets only=true, .on sets only=false and default method is btree. Column ordering, asc/nullsLast, constraints and production permissions unchanged."
+    },
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "lines": [
+        695,
+        819,
+        847
+      ],
+      "judgment": "Closed AP4 successor delta matches the existing independent AP4 matrix: two columns, full ordered index, full composite FK, two CHECKs. Verify all allowed entries before inverse; remaining metadata goes into original complete AP2 matrix, so unknown extras still reject. Seven negative mutation classes retained. Every source inverse requires a unique exact literal, and both9393/149e4389 and9255/61ca3d5b frozen identities remain. AP2 matrix literal unchanged."
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+      "lines": [
+        467,
+        481,
+        594,
+        600
+      ],
+      "judgment": "Before snapshot inverse, all capture/prepared/ledger metadata still matches independent full AP4 matrix. Copies only snapshot/tables containers; compares complete top-level data, complete old table keyset and every complete old table object. Ledger replacement cannot hide an unverified delta. All139 RLS mutations and existing negatives remain, nonmutation assertion added, no timeout increase. AP4 matrix literal unchanged."
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-exact-input-objects.test.ts",
+      "lines": [
+        585,
+        591
+      ],
+      "judgment": "Custom JSONB type passes objects through; pinned Drizzle custom.ts returns unchanged value without fromDriver. Full object and identity assertions now match that contract, one sql.param parameter identity verified, mapFrom and bytea assertions retained. This is mapping evidence, not real PG storage evidence."
+    },
+    {
+      "path": "openbot/server/tests/recovery-approval-direct-execution-domains.test.ts",
+      "lines": [
+        295,
+        579,
+        584
+      ],
+      "judgment": "SQL expected changes only boundary spaces; complete closed statement and negative comparisons remain. Journal verifies fixed index94 and exact original0..93 literal plus complete top-level metadata; successors grant no execution authority."
+    }
+  ],
+  "primary_sources_read": [
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/indexes.ts",
+    "https://github.com/drizzle-team/drizzle-orm/blob/0.45.2/drizzle-orm/src/pg-core/columns/custom.ts",
+    "openbot/server/src/db/schema/json.ts"
+  ],
+  "independent_runtime_log_reads": [
+    {
+      "run": 40651549206,
+      "job": 122692551518,
+      "pass": 43,
+      "fail": 9,
+      "expects": 1101,
+      "snapshot_ms": 7252.01
+    },
+    {
+      "run": 40655849162,
+      "job": 122706574245,
+      "pass": 52,
+      "fail": 2,
+      "expects": 1120,
+      "snapshot_ms": 6222.09
+    },
+    {
+      "run": 40656168267,
+      "job": 122707604334,
+      "pass": 54,
+      "fail": 0,
+      "expects": 1126,
+      "snapshot_ms": 253.14,
+      "source_files": 2045,
+      "source_bytes": 48445588,
+      "source_mismatches": 0
+    }
+  ],
+  "resource_evidence": {
+    "parent_and_test_memory": 536870912,
+    "data_copy_memory": 67108864,
+    "swap": 0,
+    "bun": "1.3.14+0d9b296af",
+    "drizzle": "0.45.2",
+    "drizzle_sri_verified": true,
+    "full_workspace_install": "NOT_RUN",
+    "timeout_ms": 5000
+  },
+  "not_verified": [
+    "No reviewer project/parser/fixture/AST/driver/test/typecheck execution",
+    "Original preload suite",
+    "Full CI",
+    "NativePG17 catalog/DDL/FK/RLS behavior",
+    "Producer wiring",
+    "Writer permissions",
+    "Commercial acceptance",
+    "Workflow and control files outside these five"
+  ],
+  "activity": {
+    "github_read_only": true,
+    "tool_memory_only": true,
+    "windows_source_writes": 0,
+    "shell": false,
+    "repository_writes": 0,
+    "external_messages": 0,
+    "new_agents": 0
+  },
+  "root_decision": "ADOPT_EXACT_FIVE_REVIEWED_FILES_ONLY",
+  "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED"
+}

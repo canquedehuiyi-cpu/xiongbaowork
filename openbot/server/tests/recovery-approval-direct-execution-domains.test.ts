@@ -292,7 +292,7 @@ function assertClosedSQL(source: string) {
   ];
   const statements = source.split("--> statement-breakpoint").map(normalize);
   expect(statements).toEqual([
-    normalize(`CREATE TABLE ${tableName} (${[...columns, ...constraints].join(", ")});`),
+    normalize(`CREATE TABLE ${tableName} ( ${[...columns, ...constraints].join(", ")} );`),
     `ALTER TABLE ${tableName} ENABLE ROW LEVEL SECURITY;`,
     `ALTER TABLE ${tableName} FORCE ROW LEVEL SECURITY;`,
   ]);
@@ -576,10 +576,12 @@ describe("idx94 closed domain foundation (no execution authority)", () => {
     expect(prior.tables["public.threads"].uniqueConstraints.threads_id_tenant_agent_unique.columns).toEqual(["id","tenant_id","agent_id"]);
     expect(prior.tables["public.users"].columns.id).toMatchObject({type:"text",primaryKey:true,notNull:true});
   });
-  test("journal prefix 0..93 is byte-derived unchanged; only fixed idx94 appended", () => {
+  test("journal exact prefix 0..94 survives successors without suffix execution authority", () => {
     const journal = JSON.parse(read("meta/_journal.json"));
-    expect(journal.entries.pop()).toEqual({idx:94,version:"7",when:1792365686153,tag:"0094_approval_direct_execution_domains",breakpoints:true});
-    expect(journal).toEqual({
+    expect(journal.entries.length).toBeGreaterThanOrEqual(95);
+    expect(journal.entries[94]).toEqual({idx:94,version:"7",when:1792365686153,tag:"0094_approval_direct_execution_domains",breakpoints:true});
+    // Preserve every historical field and entry; later suffixes grant no authority.
+    expect({...journal,entries:journal.entries.slice(0,94)}).toEqual({
   "version": "7",
   "dialect": "postgresql",
   "entries": [

@@ -692,18 +692,159 @@ function equalTargets(actual: Record<string, Table>): void {
 
 function rejectSQL(before:string,after:string):void {assert.ok(migration.includes(before),'mutation must match actual original');const changed=migration.replace(before,after);assert.notEqual(changed,migration);expect(()=>checkSQL(changed)).toThrow();}
 
+// Closed AP4 successor delta from the existing independent AP4 contract.
+// Check every allowed addition before inverting it for this historical AP2 oracle.
+const AP4_LEDGER_DELTA = {
+  "columns": {
+    "exact_object_id": {
+      "name": "exact_object_id",
+      "type": "uuid",
+      "primaryKey": false,
+      "notNull": false
+    },
+    "exact_plaintext_sha256": {
+      "name": "exact_plaintext_sha256",
+      "type": "text",
+      "primaryKey": false,
+      "notNull": false
+    }
+  },
+  "indexes": {
+    "apx_ledger_prepared_idx": {
+      "name": "apx_ledger_prepared_idx",
+      "columns": [
+        {
+          "expression": "exact_object_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        },
+        {
+          "expression": "approval_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        },
+        {
+          "expression": "tenant_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        },
+        {
+          "expression": "owner_user_id",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        },
+        {
+          "expression": "exact_plaintext_sha256",
+          "isExpression": false,
+          "asc": true,
+          "nulls": "last"
+        }
+      ],
+      "isUnique": false,
+      "concurrently": false,
+      "method": "btree",
+      "with": {}
+    }
+  },
+  "foreignKeys": {
+    "apx_ledger_prepared_fk": {
+      "name": "apx_ledger_prepared_fk",
+      "tableFrom": "approval_continuations",
+      "tableTo": "approval_exact_input_objects",
+      "columnsFrom": [
+        "exact_object_id",
+        "approval_id",
+        "tenant_id",
+        "owner_user_id",
+        "exact_plaintext_sha256"
+      ],
+      "columnsTo": [
+        "id",
+        "approval_id",
+        "tenant_id",
+        "owner_user_id",
+        "plaintext_sha256"
+      ],
+      "onDelete": "no action",
+      "onUpdate": "no action"
+    }
+  },
+  "checkConstraints": {
+    "apx_ledger_ref_pair_ck": {
+      "name": "apx_ledger_ref_pair_ck",
+      "value": "(\"exact_object_id\" IS NULL) = (\"exact_plaintext_sha256\" IS NULL)"
+    },
+    "apx_ledger_ref_sha_ck": {
+      "name": "apx_ledger_ref_sha_ck",
+      "value": "\"exact_plaintext_sha256\" IS NULL OR \"exact_plaintext_sha256\" ~ '^[a-f0-9]{64}$'"
+    }
+  }
+} as const;
+function ap2ParentView(input: Table): Table {
+  if (input.name !== "approval_continuations") return input;
+  const table = structuredClone(input);
+  for (const key of Object.keys(AP4_LEDGER_DELTA.columns)) {
+    const expectedColumn = AP4_LEDGER_DELTA.columns[key as keyof typeof AP4_LEDGER_DELTA.columns];
+    assert.deepEqual(table.columns[key], expectedColumn);
+    delete table.columns[key];
+  }
+  for (const key of Object.keys(AP4_LEDGER_DELTA.indexes)) {
+    const expectedIndex = AP4_LEDGER_DELTA.indexes[key as keyof typeof AP4_LEDGER_DELTA.indexes];
+    assert.deepEqual(table.indexes[key], expectedIndex);
+    delete table.indexes[key];
+  }
+  for (const key of Object.keys(AP4_LEDGER_DELTA.foreignKeys)) {
+    const expectedForeignKey = AP4_LEDGER_DELTA.foreignKeys[key as keyof typeof AP4_LEDGER_DELTA.foreignKeys];
+    assert.deepEqual(table.foreignKeys[key], expectedForeignKey);
+    delete table.foreignKeys[key];
+  }
+  for (const key of Object.keys(AP4_LEDGER_DELTA.checkConstraints)) {
+    const expectedCheck = AP4_LEDGER_DELTA.checkConstraints[key as keyof typeof AP4_LEDGER_DELTA.checkConstraints];
+    const actual = table.checkConstraints[key];
+    assert.ok(actual);
+    assert.deepEqual({name:actual.name,value:expression(actual.value)},
+      {name:expectedCheck.name,value:expression(expectedCheck.value)});
+    delete table.checkConstraints[key];
+  }
+  return table;
+}
+const AP4_SOURCE_INVERSE_EDITS: readonly (readonly [string,string])[] = [["  check,\n  foreignKey,\n", "  check,\n"], ["  uniqueIndex,\n  uuid,\n  type PgTableExtraConfigValue,\n", "  uniqueIndex,\n"], ["import { approvalExactInputObjects } from \"./approval-exact-input-objects\";\n", ""], ["    exactObjectId: uuid(\"exact_object_id\"),\n    exactPlaintextSha256: text(\"exact_plaintext_sha256\"),\n", ""], ["  (table): PgTableExtraConfigValue[] => [", "  (table) => ["], ["    check(\"apx_ledger_ref_pair_ck\", sql`(\"exact_object_id\" IS NULL) = (\"exact_plaintext_sha256\" IS NULL)`),\n    check(\"apx_ledger_ref_sha_ck\", sql`\"exact_plaintext_sha256\" IS NULL OR \"exact_plaintext_sha256\" ~ '^[a-f0-9]{64}$'`),\n    foreignKey({ name: \"apx_ledger_prepared_fk\", columns: [table.exactObjectId, table.approvalId, table.tenantId, table.ownerId, table.exactPlaintextSha256], foreignColumns: [approvalExactInputObjects.id, approvalExactInputObjects.approvalId, approvalExactInputObjects.tenantId, approvalExactInputObjects.ownerUserId, approvalExactInputObjects.plaintextSha256] }).onDelete(\"no action\").onUpdate(\"no action\"),\n    index(\"apx_ledger_prepared_idx\").on(table.exactObjectId.asc().nullsLast(), table.approvalId.asc().nullsLast(), table.tenantId.asc().nullsLast(), table.ownerId.asc().nullsLast(), table.exactPlaintextSha256.asc().nullsLast()),\n", ""]];
+
+
 const models=[approvalContinuations,approvalContinuationSteps];
-const actualMetadata=()=>Object.fromEntries(models.map(t=>{const m=metadata(t);return [`public.${m.name}`,m];}));
+const actualMetadata=()=>Object.fromEntries(models.map(t=>{const m=ap2ParentView(metadata(t));return [`public.${m.name}`,m];}));
 function checkSQL(source:string):void {const p=parseSQL(source);equalTargets(p.tables);assert.deepEqual(p.parentUniques,{[parentUnique.name]:parentUnique});assert.deepEqual(p.forced,['approval_continuations','approval_continuation_steps']);}
 function parentExpected():Table {const parent=previous.tables['public.approval_requests'];assert.ok(parent);const value=structuredClone(parent);assert.ok(!Object.hasOwn(value.uniqueConstraints,parentUnique.name));value.uniqueConstraints[parentUnique.name]=parentUnique;return value;}
 function checkSnapshot(s:Snapshot):void {assert.equal(s.id,'5ae0628f-dd5e-42e2-8373-74c4312817aa');assert.equal(s.prevId,'14cbd1fd-93b6-4bc1-91fb-42ea053e7055');assert.equal(previous.id,s.prevId);assert.equal(Object.keys(previous.tables).length,137);assert.equal(Object.keys(s.tables).length,139);const restored=structuredClone(s),added:Record<string,Table>={};for(const key of Object.keys(s.tables))if(!(key in previous.tables)){const t=s.tables[key];assert.ok(t);added[key]=t;delete restored.tables[key];}assert.deepEqual(added,expected);assert.deepEqual(restored.tables['public.approval_requests'],parentExpected());const parent=restored.tables['public.approval_requests'];assert.ok(parent);delete parent.uniqueConstraints[parentUnique.name];restored.id=previous.id;restored.prevId=previous.prevId;assert.deepEqual(restored,previous,'all original137/toplevel retained except precise parentunique addition');}
 function checkJournal(j:Journal):void {const original=JSON.parse(readFileSync(join(server,'drizzle/meta/_journal.json'),'utf8')) as Journal;assert.equal(j.version,original.version);assert.equal(j.dialect,original.dialect);assert.ok(j.entries.length>=102,'prefix acceptance is not suffix execution authority');assert.deepEqual(j.entries.slice(0,81),original.entries);assert.equal(createHash('sha256').update(JSON.stringify(j.entries.slice(0,101))).digest('hex'),'926c5ee9dd0b3a96ecdf8927c0fe2efecbd7771bd7043ee42334d2adadb02ba0');const entry=j.entries[101],prev=j.entries[100];assert.ok(entry&&prev);assert.deepEqual(entry,{idx:101,version:prev.version,when:1792382901000,tag:'0101_ap2_parent_schema_reconcile_closed',breakpoints:true});assert.ok(entry.when>prev.when&&entry.when<=Date.now());}
 function filesUnder(path:string):string[]{return readdirSync(path,{withFileTypes:true}).flatMap(entry=>{assert.ok(!entry.isSymbolicLink());const full=join(path,entry.name);return entry.isDirectory()?filesUnder(full):[full];});}
 describe('AP2 current ORM reconcile CLOSED new design, no runtime authorization',()=>{
+ test('closed AP4 successor inversion rejects changed additions and unknown columns',()=>{
+  const edits: ((table: Table)=>void)[] = [
+    table=>{const column=table.columns.exact_object_id;assert.ok(column);column.notNull=true;},
+    table=>{const column=table.columns.exact_plaintext_sha256;assert.ok(column);column.type="uuid";},
+    table=>{const index=table.indexes.apx_ledger_prepared_idx;assert.ok(index);index.method="hash";},
+    table=>{const fk=table.foreignKeys.apx_ledger_prepared_fk;assert.ok(fk);fk.onDelete="cascade";},
+    table=>{const check=table.checkConstraints.apx_ledger_ref_pair_ck;assert.ok(check);check.value="TRUE";},
+    table=>{delete table.columns.exact_object_id;},
+    table=>{table.columns.unapproved={name:"unapproved",type:"text",primaryKey:false,notNull:false};},
+  ];
+  for(const edit of edits) expect(()=>{
+    const actual=actualMetadata(),changed=metadata(approvalContinuations);
+    edit(changed);
+    actual["public.approval_continuations"]=ap2ParentView(changed);
+    equalTargets(actual);
+  }).toThrow();
+ });
+
  test('independent full matrix hash and all10 SQL statements consume exactly',()=>{expect(createHash('sha256').update(expectedRaw).digest('hex')).toBe('44cf91ebadfc907467d6b95dcb2df8fd02bf944479a959ee60e46f000e82bf7e');expect(migration.split('--> statement-breakpoint')).toHaveLength(10);checkSQL(migration);});
  test('actual Drizzle28columns2PK2ordinaryUnique1index2FK7CHECK2RLS equal independent source matrix',()=>equalTargets(actualMetadata()));
  test('parent adds only ordered plain scoped unique, preserving old id PK action index and all other metadata',()=>{assert.deepEqual(normalize(metadata(approvalRequests)),normalize(parentExpected()));expect(approvalRequests.id.primary).toBe(true);for(const c of [approvalRequests.id,approvalRequests.tenantId,approvalRequests.ownerUserId]){expect(c.getSQLType()).toBe('text');expect(c.notNull).toBe(true);}const cfg=getTableConfig(approvalRequests);expect(cfg.uniqueConstraints.map(c=>c.getName())).toEqual([parentUnique.name]);expect(cfg.indexes.find(i=>i.config.name==='approval_requests_action_idx')?.config.unique).toBe(true);});
- test('full current9255 declarations survive exact allowed source inverse, never stale5955 overwrite',()=>{let current=readFileSync(join(server,'src/db/schema/approvals.ts'),'utf8');const importLine='  unique,\n';expect(current.split(importLine)).toHaveLength(2);current=current.replace(importLine,'');const uniqueLine='    unique("approval_requests_id_tenant_owner_unique").on(table.id, table.tenantId, table.ownerUserId),\n';expect(current.split(uniqueLine)).toHaveLength(2);current=current.replace(uniqueLine,'');expect(current.split(').enableRLS();')).toHaveLength(3);current=current.replaceAll(').enableRLS();',');');expect(Buffer.byteLength(current)).toBe(9255);expect(createHash('sha256').update(current).digest('hex')).toBe('61ca3d5b4ea5287ef22f30c8522fdaa7b176587a98c7603de495a3f2b5a27742');});
+ test('full current9255 declarations survive exact allowed source inverse, never stale5955 overwrite',()=>{let current=readFileSync(join(server,'src/db/schema/approvals.ts'),'utf8');for(const [after,before] of AP4_SOURCE_INVERSE_EDITS){assert.equal(current.split(after).length,2,'each closed AP4 successor edit must match exactly');current=current.replace(after,()=>before);}expect(Buffer.byteLength(current)).toBe(9393);expect(createHash('sha256').update(current).digest('hex')).toBe('149e43894542c7ce97ab1e65641b64de07eebd627fe68921898032598f3b3798');const importLine='  unique,\n';expect(current.split(importLine)).toHaveLength(2);current=current.replace(importLine,'');const uniqueLine='    unique("approval_requests_id_tenant_owner_unique").on(table.id, table.tenantId, table.ownerUserId),\n';expect(current.split(uniqueLine)).toHaveLength(2);current=current.replace(uniqueLine,'');expect(current.split(').enableRLS();')).toHaveLength(3);current=current.replaceAll(').enableRLS();',');');expect(Buffer.byteLength(current)).toBe(9255);expect(createHash('sha256').update(current).digest('hex')).toBe('61ca3d5b4ea5287ef22f30c8522fdaa7b176587a98c7603de495a3f2b5a27742');});
  test('lease fence0n and nullable intentFence remain bigint, not run generation or canonical hash',()=>{for(const column of [approvalContinuations.fence,approvalContinuationSteps.fence]){expect(column.default).toBe(0n);expect(column.columnType).toBe('PgBigInt64');expect(column.dataType).toBe('bigint');expect(column.notNull).toBe(true);expect(dialect.sqlToQuery(sql`select ${sql.param(0n,column)}::bigint`).params[0]).toBe(0n);}expect(approvalContinuations.intentFence.notNull).toBe(false);expect(approvalContinuations.intentFence.hasDefault).toBe(false);for(const c of [approvalContinuations.inputDigest,approvalContinuationSteps.inputDigest]){expect(c.getSQLType()).toBe('text');expect(c.notNull).toBe(true);expect(c.hasDefault).toBe(false);}});
  test('nullable receipts map object identity without double encoding, SQLNULL preserved',()=>{for(const column of [approvalContinuations.receipt,approvalContinuationSteps.receipt]){const value={fixture:true,opaque:'not-an-authority'};expect(column.notNull).toBe(false);expect(column.hasDefault).toBe(false);expect(column.mapToDriverValue(value)).toBe(value);expect(column.mapFromDriverValue(value)).toBe(value);expect(dialect.sqlToQuery(sql`select ${sql.param(value,column)}::jsonb`).params[0]).toBe(value);expect(dialect.sqlToQuery(sql`select ${sql.param(null,column)}`).params[0]).toBeNull();}});
  test('actual users-parent-ledger-steps single-column CASCADE chain and updateNOACTION remain explicit',()=>{const parentFK=getTableConfig(approvalRequests).foreignKeys[0];assert.ok(parentFK);expect(parentFK.reference().foreignTable).toBe(users);for(const [model,parent] of [[approvalContinuations,approvalRequests],[approvalContinuationSteps,approvalContinuations]] as const){const fk=getTableConfig(model).foreignKeys[0];assert.ok(fk);const ref=fk.reference();expect(ref.columns.map(c=>c.name)).toEqual(['approval_id']);expect(ref.foreignTable).toBe(parent);expect(fk.onDelete).toBe('cascade');expect(fk.onUpdate).toBe('no action');}expect(approvalContinuationSteps.admissionId.notNull).toBe(false);expect(approvalContinuations.admissionId.notNull).toBe(true);});
