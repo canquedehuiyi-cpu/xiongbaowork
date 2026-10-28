@@ -1,4 +1,4 @@
-name: Accepted Source checkpoint -manual validation
+name: Proposed isolated lineage test2GiB -manual authorization required
 on:
   workflow_dispatch:
 permissions:
@@ -474,5 +474,71 @@ jobs:
                 "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
                 "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
+          
+          PY
+      - name: Isolated original lineage test within proposed lineage-only2GiB exception
+        run: |
+          set -euo pipefail
+          restore_project_limit() {
+            sudo systemctl set-property --runtime xiongbaowork.slice MemoryMax=512M MemorySwapMax=0
+            test "$(cat /sys/fs/cgroup/xiongbaowork.slice/memory.max)" = "536870912"
+            test "$(cat /sys/fs/cgroup/xiongbaowork.slice/memory.swap.max)" = "0"
+            printf '%s\n' 'PROJECT_LIMIT_RESTORED {"project_memory_max":536870912,"swap":0}'
+          }
+          trap restore_project_limit EXIT
+          sudo systemctl set-property --runtime xiongbaowork.slice MemoryMax=2G MemorySwapMax=0
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=2G \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import json, os, subprocess, time
+          from pathlib import Path
+          base=Path.cwd()
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="2147483648"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg/"memory.oom.group").read_text().strip()=="1"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="2147483648"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("PROJECT_TEST_RESOURCE_GATE "+json.dumps({"cgroup":cg_line,"memory_limit":2147483648,"swap":0}),flush=True)
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          harness=base/"xiongbaowork-schema-components"
+          home=base/"xiongbaowork-original-preload38-smol-home"
+          home.mkdir(mode=0o700)
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
+          version=subprocess.run([str(binary),"--version"],env=env,check=True,capture_output=True,text=True).stdout.strip()
+          assert version=="1.3.14"
+          paths=json.loads("[\"tests/recovery-lineage.test.ts\"]")
+          deadline=time.monotonic()+300
+          results=[]
+          overall=0
+          for relative in paths:
+              remaining=deadline-time.monotonic()
+              if remaining<=0:
+                  overall=124
+                  break
+              print("COMPONENT_FILE_START "+json.dumps({"path":relative}),flush=True)
+              try:
+                  command=[str(binary),"test"]+ (["--smol"] if relative=="tests/recovery-lineage.test.ts" else []) + ["--no-install","--timeout","5000",str(root/relative)]
+                  print("COMPONENT_RUNTIME_MODE "+json.dumps({"path":relative,"smol":relative=="tests/recovery-lineage.test.ts"}),flush=True)
+                  result=subprocess.run(command,cwd=root,env=env,timeout=remaining)
+                  code=result.returncode
+              except subprocess.TimeoutExpired:
+                  code=124
+              results.append({"path":relative,"exit_code":code})
+              print("COMPONENT_FILE_RESULT "+json.dumps(results[-1]),flush=True)
+              if code!=0:
+                  overall=124 if code==124 else (overall or 1)
+              if code==124:
+                  break
+          print("COMPONENT_TEST_RESULT "+json.dumps({"exit_code":overall,"test_files":len(paths),"completed_files":len(results),"results":results,
+           "scope":"Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+           "batch_timeout_seconds":300,"test_timeout_ms":5000,"original_repo_preload_suite":"ISOLATED_ORIGINAL_LINEAGE_TEST_ONLY","repo_preloads":"ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+           "postgres17":"PG_PENDING","producer_wiring":"NOT_VERIFIED","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(overall)
           
           PY
