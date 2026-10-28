@@ -1,0 +1,70 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "TASKS-ATTENTION-FIXTURE-20261028",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_FIXTURE_ONLY_WITH_TARGETED_COMPONENT_PASS",
+  "base_commit": "ebed86b4a2a7f7728083bb2e7d177b49f4861cd8",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/app/tests/tasks-attention-region.test.tsx",
+      "before": {
+        "bytes": 6124,
+        "sha256": "e735dea27d4beb5ea1f4a539f08c565cfde117d8ba36c4ca9061e6619b409308",
+        "mode": "0o644",
+        "blob": "177b737ef74d3d00f42485735d17b35f16f2f40f"
+      },
+      "after": {
+        "bytes": 6471,
+        "sha256": "40144c4c938ccf301120cab812abb469340c02d6caa9ed63c76f15f03bb027db",
+        "mode": "0o644",
+        "blob": "e319c87eacfa90b282ae06c5d947e0a6da73ef0b"
+      }
+    }
+  ],
+  "scope": "Test fixture only: provide required pendingIds and seed/dispose private roster query clients; all original four assertions and production route unchanged",
+  "trigger": {
+    "run": 40705705886,
+    "job": 122877126008,
+    "observed_failures": 3,
+    "cause": "test direct mounts omitted required pendingIds prop; real TasksScreen supplies it at line833"
+  },
+  "full_app_one_process": "RESOURCE_STOP_RETAINED_NO_FULL_PASS",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "f30394a22972f8ebf76d03742a265c245fbc63e4",
+  "review": {
+    "path": "archives/recovery-20261028/TASKS-ATTENTION-FIXTURE-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime_validation": {
+    "run": 40708081193,
+    "job": 122885528186,
+    "targeted_file": {
+      "path": "app/tests/tasks-attention-region.test.tsx",
+      "exit_code": 0,
+      "pass": 4,
+      "fail": 0,
+      "skip": 0,
+      "todo": 0,
+      "unhandled_error_headers": 0,
+      "summary_tests": 4,
+      "summary_files": 1,
+      "verified_pass": true
+    },
+    "all161_separate_processes": {
+      "completed": 161,
+      "pass": 1205,
+      "fail": 2,
+      "unhandled": 0,
+      "verified_pass_files": 159
+    },
+    "other_two_failures": "business-read-errors and tasks-open-link retained; not full app pass",
+    "one_process_app": "RESOURCE_STOP_NOT_PASS",
+    "source_files": 2054,
+    "source_bytes": 50008985
+  },
+  "adoption_epoch": "ROOT114-TASKS-ATTENTION-FIXTURE-20261028"
+}

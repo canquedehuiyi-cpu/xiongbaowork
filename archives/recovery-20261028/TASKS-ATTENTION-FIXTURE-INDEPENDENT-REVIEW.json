@@ -1,0 +1,47 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "a05203530d4a4fb2dd301fa1257db551df0e98e6",
+  "candidate": "f30394a22972f8ebf76d03742a265c245fbc63e4",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/app/tests/tasks-attention-region.test.tsx",
+      "before": {
+        "bytes": 6124,
+        "sha256": "e735dea27d4beb5ea1f4a539f08c565cfde117d8ba36c4ca9061e6619b409308",
+        "mode": "0o644",
+        "blob": "177b737ef74d3d00f42485735d17b35f16f2f40f"
+      },
+      "after": {
+        "bytes": 6471,
+        "sha256": "40144c4c938ccf301120cab812abb469340c02d6caa9ed63c76f15f03bb027db",
+        "mode": "0o644",
+        "blob": "e319c87eacfa90b282ae06c5d947e0a6da73ef0b"
+      }
+    }
+  ],
+  "full_read": "Both complete bodies independently UTF8 bytes/SHA256 and Git blob matched in tool memory using GitHub connector; no Windows Source write or project execution",
+  "closed_checks": {
+    "production_api": "AttentionRegion requires pendingIds; real TasksScreen and both other TaskCard mounts pass it; only old test direct mounts omitted it",
+    "roster_key": "agentListQueryOptions hidden=false uses agentKeys.list(false), same seeded key",
+    "known_name_case": "Same seeded client overwritten at same key with agent-known/阿审 before render; group/name/unknown ID assertions retained",
+    "assertions": "All four original case titles and all twelve expect source texts preserved exactly",
+    "lifetime": "cleanup unmount observers before QueryClient.clear; then clear collection; no production client touched",
+    "dependency": "Lockfile TanStack5.102.2 official source: observer timers destroyed on unmount, client clears query/mutation caches, query.destroy clears GC timer/cancels"
+  },
+  "independent_original_runtime_read": {
+    "run": 40705705886,
+    "job": 122877126008,
+    "pass_lines": 574,
+    "fail_lines": 3,
+    "result": "oom-kill, no final summary",
+    "failure": "pendingIds.has on undefined"
+  },
+  "candidate_runtime_not_inferred": true,
+  "one_process_equivalence": "NOT_CLAIMED",
+  "pg17": "PG_PENDING",
+  "full_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
