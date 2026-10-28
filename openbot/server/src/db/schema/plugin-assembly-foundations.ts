@@ -16,7 +16,7 @@ export const pluginAssemblyOrigins = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("plugin_assembly_origins_source_idx").using("btree", table.sourceTenantId.asc().nullsLast(), table.kind.asc().nullsLast(), table.sourceId.asc().nullsLast()),
+    index("plugin_assembly_origins_source_idx").on(table.sourceTenantId.asc().nullsLast(), table.kind.asc().nullsLast(), table.sourceId.asc().nullsLast()),
     check("plugin_assembly_origins_kind_check", sql`"plugin_assembly_origins"."kind" IN ('mcp', 'skill')`),
     check("plugin_assembly_origin_publisher", sql`"plugin_assembly_origins"."tenant_id" = "plugin_assembly_origins"."publisher_user_id" AND "plugin_assembly_origins"."tenant_id" NOT IN ('system', 'platform')`),
     pgPolicy("plugin_assembly_origin_select", {
@@ -54,7 +54,7 @@ export const pluginAssemblyPublications = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("plugin_assembly_publications_ref_idx").using("btree", table.kind.asc().nullsLast(), table.ref.asc().nullsLast()),
+    index("plugin_assembly_publications_ref_idx").on(table.kind.asc().nullsLast(), table.ref.asc().nullsLast()),
     foreignKey({ name: "plugin_assembly_publications_id_fkey", columns: [table.id], foreignColumns: [pluginAssemblyOrigins.id] }).onDelete("no action").onUpdate("no action"),
     check("plugin_assembly_publications_kind_check", sql`"plugin_assembly_publications"."kind" IN ('mcp', 'skill')`),
     check("plugin_assembly_publications_state_check", sql`"plugin_assembly_publications"."state" IN ('published', 'withdrawn', 'stale')`),

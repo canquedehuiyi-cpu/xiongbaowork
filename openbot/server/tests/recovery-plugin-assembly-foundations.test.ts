@@ -1739,7 +1739,7 @@ function checkJournal(value: Journal): void {
 }
 function replaceOnce(source: string, from: string, to: string): string {
   assert.notEqual(from,to);assert.equal(source.split(from).length,2,"one exact consumed target");
-  const changed=source.replace(from,to);assert.notEqual(changed,source);return changed;
+  const changed=source.replace(from,()=>to);assert.notEqual(changed,source);return changed;
 }
 function rejectTableFragment(table: string, from: string, to: string): void {
   checkSQL(migration);
@@ -1787,7 +1787,141 @@ function filesUnder(path:string):string[]{
     assert.ok(!e.isSymbolicLink());const p=join(path,e.name);return e.isDirectory()?filesUnder(p):[p];
   });
 }
+type PluginPublicationReference = Readonly<{
+  foreignTable: unknown;
+  columns: readonly Readonly<{table: unknown; name: string}>[];
+  foreignColumns: readonly unknown[];
+}>;
+function checkPluginPublicationReference(ref: PluginPublicationReference): void {
+  assert.equal(ref.foreignTable === pluginAssemblyOrigins,true,"exact origin parent table");
+  assert.equal(ref.columns.length,1,"one publication child column");
+  assert.equal(ref.foreignColumns.length,1,"one origin parent column");
+  const column=ref.columns[0];assert.ok(column);
+  assert.equal(column.table === pluginAssemblyPublications,true,"child owner identity");
+  assert.equal(column.name,"id");
+  const native=getTableConfig(pluginAssemblyPublications).columns.filter(c=>c.table===pluginAssemblyPublications&&c.name===column.name);
+  assert.equal(native.length,1,"unique native child column");
+  assert.equal(native[0] === pluginAssemblyPublications.id,true,"exact native publication id");
+  assert.equal(native[0]?.getSQLType(),"uuid");
+  assert.equal(ref.foreignColumns[0] === pluginAssemblyOrigins.id,true,"exact native origin id");
+}
+
+type ApprovedK106PriorTestInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;
+const APPROVED_K106_PRIOR_TEST_INVERSES: Readonly<Record<string,ApprovedK106PriorTestInverse>> = {
+  "tests/recovery-knowledge-write-foundations.test.ts": {
+    "currentBytes": 130422,
+    "currentSha256": "27088e601b335f82efb159f938f77add9e3ed249fa420816e95e47560a3ccc1e",
+    "edits": [
+      {
+        "after": "      {path:\"src/db/schema/resource-project-foundations.ts\",bytes:7601,sha256:\"67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732\"},\n    ]) {const b=historicalProtectedSource(f.path,readFileSync(join(server,f.path)));expect(b.length).toBe(f.bytes);expect(createHash(\"sha256\").update(b).digest(\"hex\")).toBe(f.sha256);}\n    const walk=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(entry=>{assert.ok(!entry.isSymbolicLink());const p=join(dir,entry.name);return entry.isDirectory()?walk(p):[p];});\n",
+        "before": "      {path:\"src/db/schema/resource-project-foundations.ts\",bytes:7601,sha256:\"67a6aa010626fd0f9b46e602359fad7e50421002d975c18752621b14946e9732\"},\n    ]) {const b=readFileSync(join(server,f.path));expect(b.length).toBe(f.bytes);expect(createHash(\"sha256\").update(b).digest(\"hex\")).toBe(f.sha256);}\n    const walk=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(entry=>{assert.ok(!entry.isSymbolicLink());const p=join(dir,entry.name);return entry.isDirectory()?walk(p):[p];});\n",
+        "count": 1
+      },
+      {
+        "after": "\ntype ApprovedSourceInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;\nconst APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> = {\n  \"src/db/schema/knowledge-foundations.ts\": {\n    \"currentBytes\": 11998,\n    \"currentSha256\": \"ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da\",\n    \"edits\": [\n      {\n        \"after\": \"    index(\\\"knowledge_directories_notebook_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_directories_notebook_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"    index(\\\"knowledge_sources_notebook_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_sources_notebook_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"    index(\\\"knowledge_sources_directory_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_sources_directory_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\",\n        \"count\": 1\n      }\n    ]\n  },\n  \"src/db/schema/resource-project-foundations.ts\": {\n    \"currentBytes\": 7589,\n    \"currentSha256\": \"42cea04edea132637dd377fcc50d1625bb4d4ff25a416910b247d34bb8dcc3a0\",\n    \"edits\": [\n      {\n        \"after\": \"    index(\\\"resource_projects_device_scope_idx\\\").on(table.tenantId.asc().nullsLast(), table.deviceId.asc().nullsLast(), table.agentId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"resource_projects_device_scope_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.deviceId.asc().nullsLast(), table.agentId.asc().nullsLast()),\",\n        \"count\": 1\n      }\n    ]\n  },\n  \"tests/recovery-resource-project-foundations.test.ts\": {\n    \"currentBytes\": 115756,\n    \"currentSha256\": \"27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51\",\n    \"edits\": [\n      {\n        \"after\": \"describe(\\\"0104 resource/project foundations, complete historical snapshot reconstruction only\\\", () => {\\n  test(\\\"protected source inverse rejects unknown bytes and appended payloads\\\",()=>{\\n    const path=\\\"src/db/schema/knowledge-foundations.ts\\\",raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;\\n    expect(()=>historicalProtectedSource(path,changed)).toThrow();\\n    expect(()=>historicalProtectedSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();\\n  });\",\n        \"before\": \"describe(\\\"0104 resource/project foundations, complete historical snapshot reconstruction only\\\", () => {\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"const bytes = historicalProtectedSource(input.path,readFileSync(join(server, input.path))); expect(bytes.length).toBe(input.bytes);\",\n        \"before\": \"const bytes = readFileSync(join(server, input.path)); expect(bytes.length).toBe(input.bytes);\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"type ApprovedSourceInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;\\nconst APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> = {\\n  \\\"src/db/schema/knowledge-foundations.ts\\\": {\\n    \\\"currentBytes\\\": 11998,\\n    \\\"currentSha256\\\": \\\"ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da\\\",\\n    \\\"edits\\\": [\\n      {\\n        \\\"after\\\": \\\"    index(\\\\\\\"knowledge_directories_notebook_idx\\\\\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\\\",\\n        \\\"before\\\": \\\"    index(\\\\\\\"knowledge_directories_notebook_idx\\\\\\\").using(\\\\\\\"btree\\\\\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\\\",\\n        \\\"count\\\": 1\\n      },\\n      {\\n        \\\"after\\\": \\\"    index(\\\\\\\"knowledge_sources_notebook_idx\\\\\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\\\",\\n        \\\"before\\\": \\\"    index(\\\\\\\"knowledge_sources_notebook_idx\\\\\\\").using(\\\\\\\"btree\\\\\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\\\",\\n        \\\"count\\\": 1\\n      },\\n      {\\n        \\\"after\\\": \\\"    index(\\\\\\\"knowledge_sources_directory_idx\\\\\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\\\",\\n        \\\"before\\\": \\\"    index(\\\\\\\"knowledge_sources_directory_idx\\\\\\\").using(\\\\\\\"btree\\\\\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\\\",\\n        \\\"count\\\": 1\\n      }\\n    ]\\n  }\\n};\\nfunction historicalProtectedSource(path: string, raw: Buffer): Buffer {\\n  const inverse=APPROVED_SOURCE_INVERSES[path];\\n  if(!inverse) return raw;\\n  assert.equal(raw.length,inverse.currentBytes,\\\"exact approved repaired source size\\\");\\n  assert.equal(createHash(\\\"sha256\\\").update(raw).digest(\\\"hex\\\"),inverse.currentSha256,\\\"unknown source delta rejected\\\");\\n  let source=raw.toString(\\\"utf8\\\");\\n  assert.ok(Buffer.from(source,\\\"utf8\\\").equals(raw));\\n  for(const edit of inverse.edits){\\n    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);\\n    assert.equal(source.split(edit.after).length,edit.count+1,\\\"closed inverse must match exact literal multiplicity\\\");\\n    source=source.split(edit.after).join(edit.before);\\n  }\\n  return Buffer.from(source,\\\"utf8\\\");\\n}\\n\\nconst frozenSourceInputs = [\",\n        \"before\": \"const frozenSourceInputs = [\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"describe(\\\"0104 resource/project foundations, complete historical snapshot reconstruction only\\\", () => {\\n  test(\\\"literal mutation replacement preserves dollar quote text and permits actual deletion\\\",()=>{\\n    expect(replaceOnce(\\\"before TARGET after\\\",\\\"TARGET\\\",\\\"'^[a-f0-9]{63}$'\\\")).toBe(\\\"before '^[a-f0-9]{63}$' after\\\");\\n    expect(replaceOnce(\\\"left DROP right\\\",\\\"DROP\\\",\\\"\\\")).toBe(\\\"left  right\\\");\\n  });\",\n        \"before\": \"describe(\\\"0104 resource/project foundations, complete historical snapshot reconstruction only\\\", () => {\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"assert.ok(from);assert.notEqual(from,to);\",\n        \"before\": \"assert.ok(from && to);\",\n        \"count\": 2\n      },\n      {\n        \"after\": \"expect(ref.columns).toHaveLength(1);const from=ref.columns[0];assert.ok(from);\\n      expect(from.table === model).toBe(true);expect(from.name).toBe(column.name);\\n      // ExtraConfigColumn.getSQLType recurses in pinned Drizzle. Resolve the native column.\\n      const native=getTableConfig(model).columns.filter(candidate=>candidate.table===model&&candidate.name===from.name);\\n      expect(native).toHaveLength(1);expect(native[0] === column).toBe(true);\\n      expect(native[0]?.getSQLType()).toBe(column.getSQLType());\\n      expect(fk.onDelete).toBe(\\\"cascade\\\");expect(fk.onUpdate).toBe(\\\"no action\\\");\",\n        \"before\": \"expect(ref.columns).toEqual([column]); expect(fk.onDelete).toBe(\\\"cascade\\\"); expect(fk.onUpdate).toBe(\\\"no action\\\");\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"expect(ref.foreignTable === parent).toBe(true);expect(ref.foreignColumns).toHaveLength(1);\\n      expect(ref.foreignColumns[0] === parentColumn).toBe(true);\",\n        \"before\": \"expect(ref.foreignTable).toBe(parent); expect(ref.foreignColumns).toEqual([parentColumn]);\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"// Extra-config builders receive ExtraConfigColumns, not the native table field.\\n      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.some(from => from.table === model && from.name === column.name));\",\n        \"before\": \"const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.includes(column));\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;\",\n        \"before\": \"const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;\",\n        \"count\": 1\n      }\n    ]\n  }\n};\nfunction historicalProtectedSource(path: string, raw: Buffer): Buffer {\n  const inverse=APPROVED_SOURCE_INVERSES[path];\n  if(!inverse) return raw;\n  assert.equal(raw.length,inverse.currentBytes,\"exact approved repaired source size\");\n  assert.equal(createHash(\"sha256\").update(raw).digest(\"hex\"),inverse.currentSha256,\"unknown source delta rejected\");\n  let source=raw.toString(\"utf8\");\n  assert.ok(Buffer.from(source,\"utf8\").equals(raw));\n  for(const edit of inverse.edits){\n    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);\n    assert.equal(source.split(edit.after).length,edit.count+1,\"closed inverse must match exact literal multiplicity\");\n    source=source.split(edit.after).join(edit.before);\n  }\n  return Buffer.from(source,\"utf8\");\n}\n\ndescribe(\"0105 historical knowledge write foundations, SOURCE only not authority\", () => {\n  test(\"protected source inverse rejects changed or extended approved files\",()=>{\n    for(const path of Object.keys(APPROVED_SOURCE_INVERSES)){\n      const raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;\n      expect(()=>historicalProtectedSource(path,changed)).toThrow();\n      expect(()=>historicalProtectedSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();\n    }\n  });\n  test(\"literal mutation replacement preserves SQL regex dollar quote text\",()=>{\n    expect(replaceOnce(\"before TARGET after\",\"TARGET\",\"'^[a-f0-9]{63}$'\")).toBe(\"before '^[a-f0-9]{63}$' after\");\n  });\n  test(\"four original0121 objects retain independent exact complete bytes and43 columns\", () => {\n",
+        "before": "\ndescribe(\"0105 historical knowledge write foundations, SOURCE only not authority\", () => {\n  test(\"four original0121 objects retain independent exact complete bytes and43 columns\", () => {\n",
+        "count": 1
+      },
+      {
+        "after": "  assert.notEqual(from, to); assert.equal(source.split(from).length, 2, \"exactly one literal mutation target\");\n  const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;\n}\n",
+        "before": "  assert.notEqual(from, to); assert.equal(source.split(from).length, 2, \"exactly one literal mutation target\");\n  const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;\n}\n",
+        "count": 1
+      }
+    ]
+  },
+  "tests/recovery-resource-project-foundations.test.ts": {
+    "currentBytes": 115756,
+    "currentSha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+    "edits": [
+      {
+        "after": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {\n  test(\"protected source inverse rejects unknown bytes and appended payloads\",()=>{\n    const path=\"src/db/schema/knowledge-foundations.ts\",raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;\n    expect(()=>historicalProtectedSource(path,changed)).toThrow();\n    expect(()=>historicalProtectedSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();\n  });",
+        "before": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {",
+        "count": 1
+      },
+      {
+        "after": "const bytes = historicalProtectedSource(input.path,readFileSync(join(server, input.path))); expect(bytes.length).toBe(input.bytes);",
+        "before": "const bytes = readFileSync(join(server, input.path)); expect(bytes.length).toBe(input.bytes);",
+        "count": 1
+      },
+      {
+        "after": "type ApprovedSourceInverse = Readonly<{currentBytes:number;currentSha256:string;edits:readonly Readonly<{after:string;before:string;count:number}>[]}>;\nconst APPROVED_SOURCE_INVERSES: Readonly<Record<string,ApprovedSourceInverse>> = {\n  \"src/db/schema/knowledge-foundations.ts\": {\n    \"currentBytes\": 11998,\n    \"currentSha256\": \"ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da\",\n    \"edits\": [\n      {\n        \"after\": \"    index(\\\"knowledge_directories_notebook_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_directories_notebook_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.parentId.asc().nullsLast()),\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"    index(\\\"knowledge_sources_notebook_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_sources_notebook_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast()),\",\n        \"count\": 1\n      },\n      {\n        \"after\": \"    index(\\\"knowledge_sources_directory_idx\\\").on(table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\",\n        \"before\": \"    index(\\\"knowledge_sources_directory_idx\\\").using(\\\"btree\\\", table.tenantId.asc().nullsLast(), table.ownerUserId.asc().nullsLast(), table.notebookId.asc().nullsLast(), table.directoryId.asc().nullsLast()),\",\n        \"count\": 1\n      }\n    ]\n  }\n};\nfunction historicalProtectedSource(path: string, raw: Buffer): Buffer {\n  const inverse=APPROVED_SOURCE_INVERSES[path];\n  if(!inverse) return raw;\n  assert.equal(raw.length,inverse.currentBytes,\"exact approved repaired source size\");\n  assert.equal(createHash(\"sha256\").update(raw).digest(\"hex\"),inverse.currentSha256,\"unknown source delta rejected\");\n  let source=raw.toString(\"utf8\");\n  assert.ok(Buffer.from(source,\"utf8\").equals(raw));\n  for(const edit of inverse.edits){\n    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);\n    assert.equal(source.split(edit.after).length,edit.count+1,\"closed inverse must match exact literal multiplicity\");\n    source=source.split(edit.after).join(edit.before);\n  }\n  return Buffer.from(source,\"utf8\");\n}\n\nconst frozenSourceInputs = [",
+        "before": "const frozenSourceInputs = [",
+        "count": 1
+      },
+      {
+        "after": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {\n  test(\"literal mutation replacement preserves dollar quote text and permits actual deletion\",()=>{\n    expect(replaceOnce(\"before TARGET after\",\"TARGET\",\"'^[a-f0-9]{63}$'\")).toBe(\"before '^[a-f0-9]{63}$' after\");\n    expect(replaceOnce(\"left DROP right\",\"DROP\",\"\")).toBe(\"left  right\");\n  });",
+        "before": "describe(\"0104 resource/project foundations, complete historical snapshot reconstruction only\", () => {",
+        "count": 1
+      },
+      {
+        "after": "assert.ok(from);assert.notEqual(from,to);",
+        "before": "assert.ok(from && to);",
+        "count": 2
+      },
+      {
+        "after": "expect(ref.columns).toHaveLength(1);const from=ref.columns[0];assert.ok(from);\n      expect(from.table === model).toBe(true);expect(from.name).toBe(column.name);\n      // ExtraConfigColumn.getSQLType recurses in pinned Drizzle. Resolve the native column.\n      const native=getTableConfig(model).columns.filter(candidate=>candidate.table===model&&candidate.name===from.name);\n      expect(native).toHaveLength(1);expect(native[0] === column).toBe(true);\n      expect(native[0]?.getSQLType()).toBe(column.getSQLType());\n      expect(fk.onDelete).toBe(\"cascade\");expect(fk.onUpdate).toBe(\"no action\");",
+        "before": "expect(ref.columns).toEqual([column]); expect(fk.onDelete).toBe(\"cascade\"); expect(fk.onUpdate).toBe(\"no action\");",
+        "count": 1
+      },
+      {
+        "after": "expect(ref.foreignTable === parent).toBe(true);expect(ref.foreignColumns).toHaveLength(1);\n      expect(ref.foreignColumns[0] === parentColumn).toBe(true);",
+        "before": "expect(ref.foreignTable).toBe(parent); expect(ref.foreignColumns).toEqual([parentColumn]);",
+        "count": 1
+      },
+      {
+        "after": "// Extra-config builders receive ExtraConfigColumns, not the native table field.\n      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.some(from => from.table === model && from.name === column.name));",
+        "before": "const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.includes(column));",
+        "count": 1
+      },
+      {
+        "after": "const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;",
+        "before": "const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;",
+        "count": 1
+      }
+    ]
+  }
+};
+function historicalK106PriorTestSource(path:string,raw:Buffer):Buffer {
+  const inverse=APPROVED_K106_PRIOR_TEST_INVERSES[path];
+  if(!inverse) return raw;
+  assert.equal(raw.length,inverse.currentBytes,"exact approved prior repair size");
+  assert.equal(createHash("sha256").update(raw).digest("hex"),inverse.currentSha256,"unapproved prior source delta rejected");
+  let source=raw.toString("utf8");
+  assert.ok(Buffer.from(source,"utf8").equals(raw),"strict UTF8 round trip");
+  for(const edit of inverse.edits){
+    assert.ok(edit.after.length>0&&Number.isSafeInteger(edit.count)&&edit.count>0);
+    assert.equal(source.split(edit.after).length,edit.count+1,"exact closed inverse multiplicity");
+    source=source.split(edit.after).join(edit.before);
+  }
+  return Buffer.from(source,"utf8");
+}
+
 describe("0106 snapshot-derived plugin assembly foundations, no runtime activation",()=>{
+  test("literal negative SQL replacements preserve dollar suffix text and actual deletion",()=>{
+    expect(replaceOnce("left TARGET right","TARGET","'^[0-9a-f]{63}$'")).toBe("left '^[0-9a-f]{63}$' right");
+    expect(replaceOnce("left DROP right","DROP","")).toBe("left  right");
+  });
+  test("publication FK rejects wrong owners names parent identity and duplicate columns",()=>{
+    const fk=getTableConfig(pluginAssemblyPublications).foreignKeys[0];assert.ok(fk);
+    const ref=fk.reference();checkPluginPublicationReference(ref);
+    const child=ref.columns[0],parent=ref.foreignColumns[0];assert.ok(child&&parent);
+    const mutations:PluginPublicationReference[]=[
+      {...ref,foreignTable:pluginAssemblyPublications},
+      {...ref,columns:[{table:pluginAssemblyOrigins,name:child.name}]},
+      {...ref,columns:[{table:pluginAssemblyPublications,name:"revision"}]},
+      {...ref,columns:[child,child]},
+      {...ref,foreignColumns:[pluginAssemblyPublications.id]},
+      {...ref,foreignColumns:[parent,parent]},
+    ];
+    for(const changed of mutations)expect(()=>checkPluginPublicationReference(changed)).toThrow();
+  });
+  test("approved prior test inverse rejects changed and appended current source bytes",()=>{
+    for(const path of Object.keys(APPROVED_K106_PRIOR_TEST_INVERSES)){
+      const raw=readFileSync(join(server,path)),changed=Buffer.from(raw);changed[0]=(changed[0]??0)^1;
+      expect(()=>historicalK106PriorTestSource(path,changed)).toThrow();
+      expect(()=>historicalK106PriorTestSource(path,Buffer.concat([raw,Buffer.from([0])]))).toThrow();
+    }
+  });
   test("two independent complete original0121 objects retain exact bytes and all17 columns",()=>{
     expect(capsules).toHaveLength(2);
     expect(capsules.map(c=>Buffer.byteLength(c.raw))).toEqual([3698,5097]);
@@ -1841,8 +1975,7 @@ describe("0106 snapshot-derived plugin assembly foundations, no runtime activati
       .toEqual({name:"id",type:"uuid",primaryKey:true,notNull:true});
     expect(parent.primaryKeys).toHaveLength(0);expect(parent.uniqueConstraints).toHaveLength(0);
     expect(child.foreignKeys).toHaveLength(1);const fk=child.foreignKeys[0];assert.ok(fk);const ref=fk.reference();
-    expect(ref.foreignTable).toBe(pluginAssemblyOrigins);expect(ref.foreignColumns).toEqual([pluginAssemblyOrigins.id]);
-    expect(ref.columns).toEqual([pluginAssemblyPublications.id]);
+    checkPluginPublicationReference(ref);
     expect(fk.onDelete).toBe("no action");expect(fk.onUpdate).toBe("no action");
     const roles=previous.tables["public.user_roles"];assert.ok(roles);
     expect(roles.columns.user_id?.type).toBe("text");
@@ -1969,7 +2102,7 @@ describe("0106 snapshot-derived plugin assembly foundations, no runtime activati
       ["tests/recovery-knowledge-foundations.test.ts",95182,"8246be120f1ca64ec954512887140da90b785eb777082aaabbd10348ed7282cb"],
       ["tests/recovery-resource-project-foundations.test.ts",111726,"018f89eb541d2820fe6db0dcb327051b29407f7e2f77ecda637781d6b6645e81"],
       ["tests/recovery-knowledge-write-foundations.test.ts",119984,"83304cf4a0b066ad84153fefbe2ebfffd014bbb172f8b734f43b1d83faa05e85"],
-    ] as const){const b=readFileSync(join(server,path));expect(b.length).toBe(bytes);expect(createHash("sha256").update(b).digest("hex")).toBe(sha);}
+    ] as const){const b=historicalK106PriorTestSource(path,readFileSync(join(server,path)));expect(b.length).toBe(bytes);expect(createHash("sha256").update(b).digest("hex")).toBe(sha);}
     expect(filesUnder(join(server,"drizzle"))).toHaveLength(163);
   });
 });

@@ -1,8 +1,8 @@
 {
   "schema": "xiongbaowork-candidate-source-overlay/2",
-  "ticket": "ROOT111-K106-CURRENT-PARENT-BASELINE",
+  "ticket": "K106-CURRENT-PARENT-RUNTIME-20261028",
   "formal_adoption": false,
-  "status": "HISTORICAL_SOURCE_BYTES_RESTORED_TO_ISOLATED_CANDIDATE_NOT_ADOPTED",
+  "status": "CANDIDATE_REVISION2_NOT_ADOPTED",
   "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
   "current_parent": "0767ed8f14b5b9cd58e3a6a8b757c5cf71e14031",
   "required_prior_overlays": [
@@ -58,9 +58,9 @@
         "absent": true
       },
       "after": {
-        "bytes": 5314,
-        "sha256": "320f9f7742730e9b34a8ca6647ace9ad642541943ddb7da3af4a7b4e82c59d9f",
-        "blob": "c4a489c28255ecd5978d16c0a16ab80c30080654",
+        "bytes": 5290,
+        "sha256": "4b64d2d8cb7ac1f4e361ef3d91de64cda0180d61dce92d74c7e6c5a564d4f588",
+        "blob": "dbce0d05cdeb341ea01465b3dbe325cfbb9edc3d",
         "mode": "0o644"
       }
     },
@@ -85,9 +85,9 @@
         "absent": true
       },
       "after": {
-        "bytes": 104477,
-        "sha256": "065569edc900cb77ebd116957541d6c7bc3bc9af35b718243e9cfcd1f4877a15",
-        "blob": "33761f01441c333954baf3319ec568cdb1cc3a14",
+        "bytes": 128110,
+        "sha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
+        "blob": "0ab9b0090a8823a334c974dd93e295760d8795c6",
         "mode": "0o644"
       }
     }
@@ -108,8 +108,17 @@
     "tables": 152
   },
   "current_source_files_projected": 2049,
-  "current_source_bytes_projected": 49183647,
+  "current_source_bytes_projected": 49207256,
   "activation": "DISABLED; schemas and test definitions only, no publisher/role/native registration writer",
   "postgres17": "PG_PENDING",
-  "commercial_acceptance": "NOT_DELIVERED"
+  "commercial_acceptance": "NOT_DELIVERED",
+  "revision": 2,
+  "baseline_validation": {
+    "head": "fbf07b62ca112bb4ef036cbe49336dd80604fc1e",
+    "run": 40679810321,
+    "job": 122787335008,
+    "pass": 12,
+    "fail": 7,
+    "expects": 518
+  }
 }
