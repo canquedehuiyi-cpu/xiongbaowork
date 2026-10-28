@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   pgTable,
@@ -22,6 +24,8 @@ export const wakerFlows = pgTable(
     modelRef: uuid("model_ref"),
     plan: jsonb("plan").$type<WakerFlowPlan>(),
     revision: integer("revision").notNull().default(0),
+    definitionMode: text("definition_mode").notNull().default("json-plan-v1"),
+    activeSourceVersionId: uuid("active_source_version_id"),
     groupId: uuid("group_id"),
     templateId: uuid("template_id"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -32,7 +36,13 @@ export const wakerFlows = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("waker_flows_tenant_idx").on(table.tenantId)],
+  (table) => [
+    index("waker_flows_tenant_idx").on(table.tenantId),
+    check(
+      "waker_flows_definition_mode_check",
+      sql`("waker_flows"."definition_mode" = 'json-plan-v1' AND "waker_flows"."active_source_version_id" IS NULL) OR ("waker_flows"."definition_mode" = 'js-source-v1' AND "waker_flows"."active_source_version_id" IS NOT NULL AND "waker_flows"."plan" IS NULL AND "waker_flows"."group_id" IS NULL AND "waker_flows"."template_id" IS NULL)`,
+    ),
+  ],
 );
 
 /** A claimed request survives process loss. Pending requests are never automatically replayed. */

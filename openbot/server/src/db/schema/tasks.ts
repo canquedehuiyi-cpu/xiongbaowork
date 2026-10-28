@@ -62,6 +62,7 @@ export const tasks = pgTable(
      */
     executorAgentId: text("executor_agent_id"),
     source: taskSource("source").notNull(),
+    triggerSource: text("trigger_source"),
     status: taskStatus("status").notNull().default("running"),
     /** The channel or thread the work happens in, when there is one. */
     channelRef: text("channel_ref"),

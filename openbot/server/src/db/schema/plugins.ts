@@ -613,6 +613,7 @@ export const pluginGrants = pgTable(
       .notNull()
       .references(() => agents.id, { onDelete: "cascade" }),
     grantedBy: text("granted_by"),
+    assemblyBinding: jsonb("assembly_binding"),
     grantedAt: createdAt(),
     updatedAt: updatedAt(),
   },

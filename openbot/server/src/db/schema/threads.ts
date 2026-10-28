@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
 } from "drizzle-orm/pg-core";
 import { tenantId } from "./tenant";
 
@@ -35,7 +36,14 @@ export const threads = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [index("threads_tenant_created_idx").on(table.tenantId, table.createdAt)],
+  (table) => [
+    index("threads_tenant_created_idx").on(table.tenantId, table.createdAt),
+    unique("threads_id_tenant_agent_unique").on(
+      table.id,
+      table.tenantId,
+      table.agentId,
+    ),
+  ],
 );
 
 /** One row per AG-UI event, in run order; the replay source for `getThreadEvents`. */
