@@ -1,0 +1,116 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RECOVERY-PARSER-LINT-20261029",
+  "formal_adoption": false,
+  "status": "CANDIDATE_PENDING_INDEPENDENT_REVIEW_AND_CLOUD_TESTS",
+  "base_commit": "aeede7b26552cc17a623af90a57509573b11aa9c",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "before": {
+        "bytes": 69721,
+        "sha256": "e4c5430aee248ffba36ec037470d97a4028d2927ee8939bbb21b4426e3055b14",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 69816,
+        "sha256": "00916632b07c54585015a45b7f209b8234e1a321742ec945e61edf512b0f8d47",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-outbox-knowledge-heads.test.ts",
+      "before": {
+        "bytes": 56386,
+        "sha256": "b4d0f3c3cf27f14fc8834b3a7ad728467d4c9306749e16388aeb9d2c5c3c286e",
+        "blob": "7a9f2acf8dddd562fb881ee7af36d1ea6bfa2bb5",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 56495,
+        "sha256": "8dee735d62b20b0e2db3bb4ca2bf38402733f342f79ad46e752ab917148550e9",
+        "blob": "3f7542a5847e5f8069a0ba5f25b6260c9529e959",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-resource-project-foundations.test.ts",
+      "before": {
+        "bytes": 115756,
+        "sha256": "27b7105e8e8f0d26adcc7a92dd1c661b3b869af47ed202717bfbe81c79fb7b51",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 115974,
+        "sha256": "d8701c36d66fd26527d24bf3c8e1bfad358b082f5074a8e7f6a31bf746293099",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-security-policy-fences.test.ts",
+      "before": {
+        "bytes": 53329,
+        "sha256": "9bc8e5240cb3f3b70846f8760a2d1794faf3cbf90184c42c00fe76ef2f9f73a8",
+        "blob": "b24985f8eaf109c67fbccd20d79ed9fd161aac8c",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 53438,
+        "sha256": "796725b473e465e553971b33da1f5aa83e42f5db7094400fd867a08b56987ac4",
+        "blob": "407d88296b1833699f6ed8ee7a38a1c00bb98fa2",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-plugin-assembly-foundations.test.ts",
+      "before": {
+        "bytes": 128110,
+        "sha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 128328,
+        "sha256": "14955bc25e949f0807232824c278da1005023d7a88d25cf91bdbb64e710130fe",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-knowledge-write-foundations.test.ts",
+      "before": {
+        "bytes": 130422,
+        "sha256": "27088e601b335f82efb159f938f77add9e3ed249fa420816e95e47560a3ccc1e",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 130638,
+        "sha256": "ddaed3e64fbc98d665f7d5719eaec261518bdfb6026176cbeb738d7b7d10520b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts",
+      "before": {
+        "bytes": 123346,
+        "sha256": "a0c1b66a51db0ce18e0dfd35567d7339511c6af40533d23f016c0f248f5dbdbe",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 123564,
+        "sha256": "aee8669f909109250fa3c022807da24f45bc44c5f98be8f53b910e2d910b537d",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Seven recovery test files only: express the same ordered cursor consumption with explicit typed branches; optional inline unique guard; remove unused sql import; prevent implicit forEach callback return while preserving assertion. All expected oracles, SQL/ORM files, negative cases and runtime production unchanged.",
+  "projected_source_files": 2054,
+  "projected_source_bytes": 50010736,
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "trigger": {
+    "run": 40723668762,
+    "job": 122941058049,
+    "lint_errors": 3,
+    "lint_warnings": 36
+  }
+}
