@@ -1,3 +1,15 @@
+## ROOT126 current Source and validation, 2026-10-29
+
+Source2059/50026804B,19 independently approved source repair overlays; these are not completion of the original18delivery packages. Original77stories/18packages/7gates remain NOT_DELIVERED. Combined Source17 commit cd03397ec21d93fddb129ce2e9520fbdaa3c4179 run40733053569/job122974203077 passed: original161 app files in one process1207/0/4163/0Unhandled; named39 component files691/0/10744; originalserver/app/runner/worker tsconfigs each exit0; exact originalBiome2.5.10 lint exit0/0errors/0warnings/181infos. Four actualrestore512MiB records; automatic peaks in JSON, including install512.3M. This is not whole-server/strictCI or nativePG acceptance.
+
+Human directly authorized isolated original lineage2GiB/swap0/300s; run40733437062/job122977749310 passed37/0/355, automaticpeak636.6M, actualrestore512. SourceDATA automaticpeak64.2M and install512.5M retained. Its163 original-file/81 migration checks and fake PG adapters are not realPG17.
+
+Source18 fixes own probe BunHTTP lifecycle API;54targeted tests/219expects/lint passed at R1, R2 only corrects an ordinary comment, full2058 currentSource R2 bytes/modes/FD independently verified. Source19 fixes pending/key wrapper awaiting while retaining plainPromise cancellation handling, result/ok guards and all productionauthority blobs. Candidate run40738145401/job122992164275 passed56/0/227 and exactlint; whole2059 Source verified. Both adopted unchanged after independent Source review.
+
+First normal cloudChrome attempt run40736558021/job122986564595 stopped with script settle error at119.4M, no passmarker and no navigation proof; preserved, no fallback. Source19 identified/repairs its exact wrapper issue. New normal own-fixture headlessChrome run targets Source19 at unchanged512MiB/swap0, private new profile, preinstalledChrome only, sandbox kept; outcome pending. Source/archives/deps/tests remain cloud-only, Windows Source writes0, free standardpublicActions, privatecache/copyfile/ignore lifecycle scripts. All original old audit events, source missing-body/reconstruction distinctions, PG_PENDING, ready=false/ROOT_RELEASE=null/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED and native/client/provider/strictCI gates retained.
+
+### Earlier checkpoints (historical records)
+
 ## root126ProbePending Source adoption, 2026-10-29
 
 RUNNER-PROBE-PENDING-RESULT-20261029 adopted unchanged from candidate e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40738145401/job 122992164275; see exact validation JSON for pass/fail counts and remaining diagnostics. 2059 files / 50026804 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.

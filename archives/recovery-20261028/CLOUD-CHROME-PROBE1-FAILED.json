@@ -1,0 +1,17 @@
+{
+  "run": 40736558021,
+  "job": 122986564595,
+  "source_commit": "d0f2e9b47dcf569baaac0c403113cd18fcdbaebf",
+  "status": "FAILED_NORMAL_PROBE_NO_FALLBACK",
+  "exit_code": 1,
+  "peak": "119.4M",
+  "browser": "/usr/bin/google-chrome",
+  "version": "Google Chrome155.0.8059.39",
+  "stage": "Script settle awaited request wrapper {pending,key} instead of pending result Promise",
+  "unchanged_dispatcher_contract": "type action -> type result; dispatch.ts independently read",
+  "oom": false,
+  "pass_marker": false,
+  "user_device": "NOT_VERIFIED",
+  "new_chrome_navigation": "NOT_REACHED",
+  "pg17": "PG_PENDING"
+}

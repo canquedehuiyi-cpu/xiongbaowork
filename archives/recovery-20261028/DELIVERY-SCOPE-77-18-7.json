@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
-  "source_status": "V57_RESTORED_PLUS_19_APPROVED_PACKAGES",
+  "source_snapshot": "fc094fce0914aeb02882b93759778e6ab2fb7981",
+  "source_status": "V57_PLUS_19_APPROVED_SOURCE_REPAIR_OVERLAYS_ORIGINAL18_DELIVERY_PACKAGES_NOT_ACCEPTED",
   "story_requirements": [
     {
       "id": "A1",
@@ -3055,11 +3055,868 @@
       },
       "new_waiting_regression": "Real dispatcher/journal/executor metadata refusal before any launch",
       "real_browser": "NOT_RUN"
+    },
+    "combined_source17": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40733053569,
+      "job": 122974203077,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "da78ce2db9448ef6dff30ff0e54f3a3f977b5f14",
+        "head": "cd03397ec21d93fddb129ce2e9520fbdaa3c4179",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50023334,
+        "verified_source_files": 2057,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "cd03397ec21d93fddb129ce2e9520fbdaa3c4179",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3870,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 39,
+        "completed_files": 39,
+        "results": [
+          {
+            "path": "server/tests/approval-exact-http-owned-input.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-approval-direct-execution-domains.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-approval-exact-input-objects.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-automation-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-automation-run-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-device-binding-leases.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-customization-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-customization-turns.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-official-bindings.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-run-coordination.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-sharing-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-original-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-run-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-flow-source-runtime-records.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-group-pipeline-start-receipts.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-knowledge-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-knowledge-write-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-outbox-knowledge-heads.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-resource-project-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-role-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-security-policy-fences.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-subject-binding.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-task-flow-audit.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-threads-parent-key.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-input-json.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-object-header.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-object-wire.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approval-exact-object-crypto.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/approvals-continuation-protocol.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/server-readiness-gates.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/role-writer-lifecycle.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-plugin-assembly-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/proactive.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/recovery-import-proactive-token-foundations.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/runner-browser.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/runner-browser-probe.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "tests": {
+        "pass": 691,
+        "fail": 0,
+        "expects": 10744
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.3M (swap: 0B)",
+        "Memory peak: 333M (swap: 0B)",
+        "Memory peak: 1.8G (swap: 0B)",
+        "Memory peak: 1.1G (swap: 0B)",
+        "Memory peak: 1.5G (swap: 0B)",
+        "Memory peak: 228.3M (swap: 0B)",
+        "Memory peak: 674.2M (swap: 0B)",
+        "Memory peak: 370.9M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 4,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "source_commit": "cd03397ec21d93fddb129ce2e9520fbdaa3c4179",
+      "server_types": {
+        "exit_code": 0,
+        "project": "server/tsconfig.json",
+        "typescript": "5.9.3",
+        "host_runtime": "v24.21.0",
+        "node_path": "/usr/local/bin/node",
+        "node_old_space_mb": 1792,
+        "full_ci": "NOT_RUN",
+        "test_sources": "NOT_INCLUDED",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "app": {
+        "exit_code": 0,
+        "expected_test_files": 161,
+        "log_lines": 1684,
+        "source_commit": "FROM_VERIFIED_SOURCE",
+        "runtime_mode": "--smol",
+        "original_preloads": "UNCHANGED_TWO",
+        "full_strict_ci": "NOT_RUN",
+        "original_baseline": "UNAVAILABLE_03df9efa",
+        "postgres17": "PG_PENDING",
+        "real_browser_device": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "app_types": {
+        "exit_code": 0,
+        "project": "app/tsconfig.json",
+        "typescript": "5.9.3",
+        "host_runtime": "v24.21.0",
+        "aggregate_limit": 2147483648,
+        "swap": 0,
+        "node_options": "UNSET",
+        "test_sources": "INCLUDED",
+        "server2GiB_exception_used": false,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "workspaces": [
+        {
+          "package": "runner",
+          "project": "runner/tsconfig.json",
+          "exit_code": 0,
+          "aggregate_limit": 536870912,
+          "swap": 0
+        },
+        {
+          "package": "worker",
+          "project": "worker/tsconfig.json",
+          "exit_code": 0,
+          "aggregate_limit": 2147483648,
+          "swap": 0,
+          "node_auxiliary_old_space_mb": 1792
+        }
+      ],
+      "app_tests": {
+        "pass": 1207,
+        "fail": 0,
+        "expects": 4163,
+        "files": 161,
+        "unhandled_errors": []
+      },
+      "scope": "Same commit Source17; named39 components and full161 app single process, all4 original workspace tsconfigs and exact original pinned lint; not original whole server suite/strictCI/nativePG",
+      "lint_infos": 181
+    },
+    "original_lineage_2GiB": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40733437062,
+      "job": 122977749310,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "3bc104c8c70d2d4e313eed51b1288a76b3e056f9",
+        "head": "e42d7296f637673e65fd8e82cb131b024590ecfa",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50023334,
+        "verified_source_files": 2057,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "e42d7296f637673e65fd8e82cb131b024590ecfa",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3869,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 1,
+        "completed_files": 1,
+        "results": [
+          {
+            "path": "tests/recovery-lineage.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 300,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "ISOLATED_ORIGINAL_LINEAGE_TEST_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "tests": {
+        "pass": 37,
+        "fail": 0,
+        "expects": 355
+      },
+      "lint": null,
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64.2M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.5M (swap: 0B)",
+        "Memory peak: 636.6M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 1,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Only original tests/recovery-lineage.test.ts, --smol; fixed163 original files and fake PG adapters, no actualPG17",
+      "authorized_plan": {
+        "schema": "xiongbaowork-proposed-lineage-test-resource-exception/1",
+        "status": "DIRECT_HUMAN_AUTHORIZED_RUNTIME_PENDING",
+        "source_commit": "cd03397ec21d93fddb129ce2e9520fbdaa3c4179",
+        "phase": "Only original tests/recovery-lineage.test.ts with --smol, original repository preloads and all original assertions",
+        "reason": "Historical512MiB/default and smol resource stops are retained. Other named39 component and full app checks do not cover this isolated original lineage file.",
+        "command": "bun test --smol --no-install --timeout5000 tests/recovery-lineage.test.ts",
+        "project_and_all_descendants_memory_max": 2147483648,
+        "swap": 0,
+        "timeout_seconds": 300,
+        "restore_after_phase": 536870912,
+        "prior_2GiB_permissions_do_not_cover_this_test": true,
+        "no_native_pg": "Fake PG evidence adapters and original frozen163-file bundle verification only; actualPG17 remainsPG_PENDING",
+        "unchanged": {
+          "free_standard_public_actions": true,
+          "data_copy_limit": 67108864,
+          "full_install_limit": 536870912,
+          "other_project_phases": 536870912,
+          "source_files": 2057,
+          "source_bytes": 50023334,
+          "source_changes": 0,
+          "lifecycle_scripts": "NOT_RUN",
+          "private_cache": true,
+          "copyfile": true,
+          "windows_source_writes": 0,
+          "paid_provider_calls": 0
+        },
+        "full_strict_ci": "NOT_RUN",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "authorization": {
+          "reply": "允许，仅原始 lineage 测试使用 2 GiB（推荐）",
+          "date": "2026-10-29",
+          "reviewable_proposal": "94d28e02758a9cec1b3aeb95a86aa6e0dcabc489"
+        },
+        "activation": "One normal on-push cloud run restricted to original lineage file; no other test/nativePG scope widened"
+      },
+      "real_pg": "PG_PENDING"
+    },
+    "probe_lifecycle": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40735529839,
+      "job": 122982901554,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "61afdf485677bf7b27f6b728d7a3b56778377638",
+        "head": "a74183b107b73b31725b2b2de7e48c6ee0d1c392",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029",
+          "RUNNER-PROBE-LIFECYCLE-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50024257,
+        "verified_source_files": 2058,
+        "windows_source_files_written": 0
+      },
+      "physical_current_source": "R2_ALL2058_BYTES_MODES_FD_VERIFIED",
+      "runtime": {
+        "schema": "xiongbaowork-cloud-validation/1",
+        "run": 40734752452,
+        "job": 122980163147,
+        "source": {
+          "aggregate_memory_limit": 67108864,
+          "commercial_acceptance": "NOT_DELIVERED",
+          "fd_named_stability_verified": true,
+          "file_modes_verified": true,
+          "formal_baseline": "V57 with explicit source overlays",
+          "git_tree": "558aa3b591fdd905b58a2d83d451b6e76b80523c",
+          "head": "744614f83577dfabe617ee452cf597419f30b947",
+          "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+          "overlay_tickets": [
+            "AP-INPUT-BUN-20261028",
+            "AP-SCHEMA-RUNTIME-20261028",
+            "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+            "AUTOMATION-FK-ASSERTION-20261028",
+            "SECURITY-FK-ASSERTION-20261028",
+            "K106-CURRENT-PARENT-RUNTIME-20261028",
+            "PTX-CURRENT-PARENT-RECOVERY-20261028",
+            "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+            "SERVER-TYPE-CONTRACT-20261028",
+            "TASKS-ATTENTION-FIXTURE-20261028",
+            "TASKS-READ-LINK-FIXTURES-20261028",
+            "TASK-INFLIGHT-TYPE-GUARD-20261028",
+            "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+            "RECOVERY-PARSER-LINT-20261029",
+            "APPROVAL-GUARD-LINT-20261029",
+            "TEST-FIXTURE-LINT-20261029",
+            "RUNNER-PROBE-COMPATIBILITY-20261029",
+            "RUNNER-PROBE-LIFECYCLE-20261029"
+          ],
+          "postgres17": "PG_PENDING",
+          "project_tests": "NOT_RUN",
+          "project_upper_bound": 536870912,
+          "source_mismatches": 0,
+          "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+          "swap_limit": 0,
+          "verified_source_bytes": 50024208,
+          "verified_source_files": 2058,
+          "windows_source_files_written": 0
+        },
+        "install": {
+          "exit_code": 0,
+          "frozen_inputs_unchanged": true,
+          "lifecycle_scripts": "NOT_RUN",
+          "source_commit": "744614f83577dfabe617ee452cf597419f30b947",
+          "install_memory_limit": 536870912,
+          "other_data_copy_limit": 67108864,
+          "backend": "copyfile",
+          "private_cache": true,
+          "dependency_audit": {
+            "status": "PASS",
+            "regular_files": 127738,
+            "symlinks": 3869,
+            "hardlink_files": 0,
+            "outside_private_paths": 0
+          },
+          "full_ci": "NOT_RUN",
+          "original_preload_suite": "NOT_RUN",
+          "typecheck": "NOT_RUN",
+          "postgres17": "PG_PENDING",
+          "commercial_acceptance": "NOT_DELIVERED"
+        },
+        "component": {
+          "exit_code": 0,
+          "test_files": 2,
+          "completed_files": 2,
+          "results": [
+            {
+              "path": "server/tests/runner-browser.test.ts",
+              "exit_code": 0
+            },
+            {
+              "path": "server/tests/runner-browser-probe.test.ts",
+              "exit_code": 0
+            }
+          ],
+          "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+          "batch_timeout_seconds": 120,
+          "test_timeout_ms": 5000,
+          "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+          "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+          "postgres17": "PG_PENDING",
+          "producer_wiring": "NOT_VERIFIED",
+          "commercial_acceptance": "NOT_DELIVERED"
+        },
+        "tests": {
+          "pass": 54,
+          "fail": 0,
+          "expects": 219
+        },
+        "lint": {
+          "exit_code": 0,
+          "version": "Version: 2.5.10",
+          "arguments": [
+            "lint",
+            "--error-on-warnings",
+            "."
+          ],
+          "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+          "source_fixes": "NONE_NO_WRITE_FLAG",
+          "project_limit": 536870912,
+          "swap": 0,
+          "strict_ci": "NOT_RUN",
+          "postgres17": "PG_PENDING",
+          "commercial_acceptance": "NOT_DELIVERED"
+        },
+        "lint_counts": {
+          "errors": 0,
+          "warnings": 0
+        },
+        "automatic_memory_peaks": [
+          "Memory peak: 64M (swap: 0B)",
+          "Memory peak: 64M (swap: 0B)",
+          "Memory peak: 511.4M (swap: 0B)",
+          "Memory peak: 130.4M (swap: 0B)",
+          "Memory peak: 414.9M (swap: 0B)"
+        ],
+        "actual_restore512MiB_count": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "scope": "R1 executable Source; R2 differs by one ordinary comment only",
+        "real_browser": "NOT_RUN",
+        "fixed_bun_version": "1.3.14+0d9b296af",
+        "source_commit": "744614f83577dfabe617ee452cf597419f30b947"
+      },
+      "tests": {
+        "pass": 54,
+        "fail": 0,
+        "expects": 219
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "comment_only_reuse": {
+        "r1": "744614f83577dfabe617ee452cf597419f30b947",
+        "r2": "a74183b107b73b31725b2b2de7e48c6ee0d1c392",
+        "all_executable_text_identical": true,
+        "no_test_reexecution_claim_for_R2": true
+      },
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "probe_pending_result": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40738145401,
+      "job": 122992164275,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "98d3806c07f16aba9e4e437aae7361c3d2d0988b",
+        "head": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029",
+          "RUNNER-PROBE-LIFECYCLE-20261029",
+          "RUNNER-PROBE-PENDING-RESULT-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50026804,
+        "verified_source_files": 2059,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3869,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 2,
+        "completed_files": 2,
+        "results": [
+          {
+            "path": "server/tests/runner-browser.test.ts",
+            "exit_code": 0
+          },
+          {
+            "path": "server/tests/runner-browser-probe.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "tests": {
+        "pass": 56,
+        "fail": 0,
+        "expects": 227
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "lint_counts": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 63.9M (swap: 0B)",
+        "Memory peak: 512.1M (swap: 0B)",
+        "Memory peak: 125.6M (swap: 0B)",
+        "Memory peak: 373.6M (swap: 0B)"
+      ],
+      "actual_restore512MiB_count": 0,
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Existing50 fake browser unit cases and6 probe compatibility/lifecycle/pending-result regressions; no realChrome",
+      "prior_normal_probe_failure": {
+        "run": 40736558021,
+        "job": 122986564595,
+        "source_commit": "d0f2e9b47dcf569baaac0c403113cd18fcdbaebf",
+        "status": "FAILED_NORMAL_PROBE_NO_FALLBACK",
+        "exit_code": 1,
+        "peak": "119.4M",
+        "browser": "/usr/bin/google-chrome",
+        "version": "Google Chrome155.0.8059.39",
+        "stage": "Script settle awaited request wrapper {pending,key} instead of pending result Promise",
+        "unchanged_dispatcher_contract": "type action -> type result; dispatch.ts independently read",
+        "oom": false,
+        "pass_marker": false,
+        "user_device": "NOT_VERIFIED",
+        "new_chrome_navigation": "NOT_REACHED",
+        "pg17": "PG_PENDING"
+      },
+      "new_waiting_regression": "Real dispatcher/journal/executor metadata refusal before any launch",
+      "real_browser": "NOT_RUN"
+    },
+    "cloud_browser_first": {
+      "run": 40736558021,
+      "job": 122986564595,
+      "source_commit": "d0f2e9b47dcf569baaac0c403113cd18fcdbaebf",
+      "status": "FAILED_NORMAL_PROBE_NO_FALLBACK",
+      "exit_code": 1,
+      "peak": "119.4M",
+      "browser": "/usr/bin/google-chrome",
+      "version": "Google Chrome155.0.8059.39",
+      "stage": "Script settle awaited request wrapper {pending,key} instead of pending result Promise",
+      "unchanged_dispatcher_contract": "type action -> type result; dispatch.ts independently read",
+      "oom": false,
+      "pass_marker": false,
+      "user_device": "NOT_VERIFIED",
+      "new_chrome_navigation": "NOT_REACHED",
+      "pg17": "PG_PENDING"
+    },
+    "cloud_browser_after_pending_fix": {
+      "status": "RUNNING_AWAIT_REAL_RESULT",
+      "commit": "885423b047e0ef6ba769d4966000a677c7a0d0a8",
+      "scope": "OWN_CLOUD_HEADLESS_FIXTURE_ONLY_DEFAULT512MiB_NO_USER_DEVICE_ACCEPTANCE"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Continue remaining original lint blockers in <=8-file independently reviewed packages; original PG and strict-CI gates retained",
+  "next_source_package": "Complete normal cloud own-fixture Chrome verification after reviewed Source19; stop and classify any new actual failure. Original strictCI/nativePG/provider/nativeclient/real-device gates remain open.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -3070,11 +3927,11 @@
   },
   "current_expected_manifest": {
     "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
-    "bytes": 441566,
-    "sha256": "f385da8f059cb9ced27556aa466433e54aedf2ac870dcc0545ab079239bf6c20",
+    "bytes": 441531,
+    "sha256": "022b68ef5bd68a3583928a3b699a03ca430aae94115ee9a3539790b7dc5a46e1",
     "source_files": 2059,
     "source_bytes": 50026804,
-    "candidate_source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+    "source_commit": "fc094fce0914aeb02882b93759778e6ab2fb7981",
     "source_validation_run": 40738145401
   },
   "latest_source_validation": {
@@ -3225,16 +4082,25 @@
   },
   "lineage_resource_exception_proposal": {
     "commit": "94d28e02758a9cec1b3aeb95a86aa6e0dcabc489",
-    "status": "PROPOSED_NOT_AUTHORIZED_NOT_RUN",
-    "path": "archives/recovery-20261028/LINEAGE-TEST-2GIB-PROPOSAL.json"
+    "status": "DIRECT_HUMAN_AUTHORIZED_EXECUTED_PASS",
+    "run": 40733437062,
+    "tests": {
+      "pass": 37,
+      "fail": 0,
+      "expects": 355
+    },
+    "actual_restore512MiB": true,
+    "real_pg": "PG_PENDING"
   },
   "latest_gate_evidence": {
     "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
     "g2": "UNIT_COMPONENT_EVIDENCE_ONLY_NO_FULL_TENANT_INTEGRATION",
-    "g3": "Full app tests/types, named39 components, lint, and four workspace typechecks separately passed; combined current Source run pending; lineage resource stopped; original strict CI baseline unavailable",
+    "g3": "Same Source17 commit: full app1207/0/4163, named39component691/0/10744, all4 original workspace tsconfigs and exact pinned lint passed; isolated original lineage37/0/355 passed at authorized2GiB. Source18/19 script-only fixes independently reviewed and targeted56/0/227/lint pass. Whole server suite and strictCI not passed; original03df9efa baseline unavailable.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
-    "g5": "REAL_USER_DEVICE_BROWSER_NOT_RUN; Source probe compatibility regressions only",
+    "g5": "Probe fs/ref/cleanup/pending-result Source defects repaired; first normal Chrome attempt failed before navigation, preserved. After reviewed fix a normal512MiB own-cloud-fixture attempt is active. Real user device not verified.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
     "g7": "NO_CLEAN_WINDOWS_LINUX_CLIENT_DEPLOYMENT_EVIDENCE"
-  }
+  },
+  "approved_source_repair_overlays": 19,
+  "original_delivery_packages": 18
 }

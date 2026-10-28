@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "e6b3f81eea6bf8efb9eaf0c0c9a01b0d682fcae5",
+  "source_commit": "fc094fce0914aeb02882b93759778e6ab2fb7981",
   "basis": "immutable V57 plus 19 independently approved exact overlays; original history and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
@@ -12850,5 +12850,5 @@
     "not_native_pg_acceptance": true,
     "historical_V57_ledger_not_rewritten": true
   },
-  "source_commit_meaning": "Candidate Subject Source adopted without byte changes; promotion commit also changes administrative records and workflow"
+  "source_commit_meaning": "Last Subject Source19 adoption; later evidence-only commits preserve all source bytes"
 }
