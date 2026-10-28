@@ -1,0 +1,19 @@
+{
+  "schema": "xiongbaowork-cloud-own-fixture-browser-probe/1",
+  "source_commit": "f0eecf8077f60f7bc774829d04c042930fa7a7de",
+  "source_files": 2058,
+  "source_bytes": 50024257,
+  "scope": "One normal probe with preinstalled cloud Chrome, headless, new private profile, own loopback fixtures only",
+  "project_and_all_descendants": 536870912,
+  "swap": 0,
+  "timeout_seconds": 180,
+  "prior2GiB_exceptions_used": false,
+  "new_browser_install": false,
+  "sandbox": "KEEP_TRUE_NO_BYPASS",
+  "failure": "STOP_ON_NORMAL_FAILURE_NO_RETRY_OR_UNSAFE_FLAGS",
+  "real_user_device": "NOT_VERIFIED",
+  "paid_provider_calls": 0,
+  "windows_source_writes": 0,
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
