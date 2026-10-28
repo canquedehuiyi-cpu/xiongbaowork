@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { runnerProbeHandleHasToken } from "./runner-browser-probe-ref";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRunnerBrowser } from "../../runner/src/browser.ts";
@@ -294,7 +295,7 @@ try {
   const secret = refNamed(elements, "Secret");
   const link = refNamed(elements, "Proceed to the second page");
   assert(
-    /^[0-9a-f]{8}:[ex\d]+$/.test(secret),
+    runnerProbeHandleHasToken(secret),
     "an element handle carries this run's token",
     "browser",
   );

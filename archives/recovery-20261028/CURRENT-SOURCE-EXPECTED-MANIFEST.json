@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
-  "basis": "immutable V57 plus 16 independently approved exact overlays; original history and PG_PENDING retained",
+  "source_commit": "3758e246f175346660dd3edb1648d6c045fef5f1",
+  "basis": "immutable V57 plus 17 independently approved exact overlays; original history and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -317,10 +317,32 @@
       "candidate_source_commit": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
       "source_content_adopted_unchanged": true,
       "run": 40729144151
+    },
+    {
+      "ticket": "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/RUNNER-PROBE-COMPATIBILITY-ADOPTED.json",
+        "bytes": 3067,
+        "sha256": "b241345105d30013525e2c0dd10fdab132e2fd753a17b48082fa5e82b5f57859",
+        "formal_adoption": true,
+        "ticket": "RUNNER-PROBE-COMPATIBILITY-20261029",
+        "source_paths": [
+          "openbot/scripts/ci/runner-browser-probe.ts",
+          "openbot/scripts/ci/runner-browser-probe-ref.ts",
+          "openbot/server/tests/runner-browser-probe.test.ts"
+        ],
+        "source_new_paths": [
+          "openbot/scripts/ci/runner-browser-probe-ref.ts",
+          "openbot/server/tests/runner-browser-probe.test.ts"
+        ]
+      },
+      "candidate_source_commit": "3758e246f175346660dd3edb1648d6c045fef5f1",
+      "source_content_adopted_unchanged": true,
+      "run": 40731132905
     }
   ],
-  "file_count": 2055,
-  "source_bytes": 50019140,
+  "file_count": 2057,
+  "source_bytes": 50023334,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -6536,8 +6558,8 @@
     },
     {
       "path": "openbot/scripts/ci/runner-browser-probe.ts",
-      "bytes": 18768,
-      "sha256": "002ea4292f0cda73f668066f641a1fab45a480185db32f27c8e1e54904d325d7",
+      "bytes": 18837,
+      "sha256": "a665fcb8c23082a8af66f665d6b620b7aebafb88b101454b28192b7fb3ed2c52",
       "mode": "0o644"
     },
     {
@@ -12711,6 +12733,18 @@
       "bytes": 7362,
       "sha256": "2314cd991b89f6eca42a6df376c5ee977a897cb9f6b6fcbb4fd8286a69d485f3",
       "mode": "0o644"
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-ref.ts",
+      "bytes": 299,
+      "sha256": "5fb6cc794dd59475953e791fc0435c92d1f1476790f8c120629e71d4855d8faa",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "bytes": 3826,
+      "sha256": "add363687affff0e68ff057d9fad96828fc291da8195acc105982997b36ef60a",
+      "mode": "0o644"
     }
   ],
   "physical_verification": {
@@ -12719,8 +12753,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "03aee8ce447a7dcce1219c02425330970dcdf1c5",
-    "head": "729b50753123fe4cdf68358d6ad8a64fcafa159a",
+    "git_tree": "b25401052b347f67b7a53eb7ec7120235011a370",
+    "head": "3758e246f175346660dd3edb1648d6c045fef5f1",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12738,7 +12772,8 @@
       "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
       "RECOVERY-PARSER-LINT-20261029",
       "APPROVAL-GUARD-LINT-20261029",
-      "TEST-FIXTURE-LINT-20261029"
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12746,8 +12781,8 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50019140,
-    "verified_source_files": 2055,
+    "verified_source_bytes": 50023334,
+    "verified_source_files": 2057,
     "windows_source_files_written": 0
   },
   "commercial_acceptance": "NOT_DELIVERED",

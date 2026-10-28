@@ -1,0 +1,70 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "base": "73cc3efd3603ba4899b901c4e43df08c65871f14",
+  "candidate": "3758e246f175346660dd3edb1648d6c045fef5f1",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18768,
+        "sha256": "002ea4292f0cda73f668066f641a1fab45a480185db32f27c8e1e54904d325d7",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 18837,
+        "sha256": "a665fcb8c23082a8af66f665d6b620b7aebafb88b101454b28192b7fb3ed2c52",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-ref.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 299,
+        "sha256": "5fb6cc794dd59475953e791fc0435c92d1f1476790f8c120629e71d4855d8faa",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 3826,
+        "sha256": "add363687affff0e68ff057d9fad96828fc291da8195acc105982997b36ef60a",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "full_read_and_closed_diff": true,
+  "git_modes": "regular blob100644, candidate mode strings0o644 and absent optional blob preserved",
+  "new_paths_absent_in_complete_parent_tree": true,
+  "scope": "Only fs import and one probe-format assertion invocation changed in existing script; new pure helper and3 tests",
+  "actual_producer": {
+    "blob": "ef647eea0d74fad73e698acb50b1f221fce86091",
+    "format": "runToken8-profileHash8:rawRef",
+    "runner_authority": "Profile/run prefix, snapshot generation and refs map remain independent and unchanged"
+  },
+  "helper": {
+    "side_effects": false,
+    "old_suffix_constraint_preserved": true,
+    "authority": false
+  },
+  "run_gate": "Still before directory creation, Bun.serve and browser/journal/executor construction",
+  "tests_reviewed": [
+    "Actual CLI without --run with absent executable, empty private cwd,5000ms/output bound",
+    "Actual createRunnerBrowser snapshot/ref generation via fake page and private SQLite counter",
+    "Seven old/malformed prefix rejections"
+  ],
+  "real_browser_probe": "NOT_RUN",
+  "project_execution": false,
+  "pg17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

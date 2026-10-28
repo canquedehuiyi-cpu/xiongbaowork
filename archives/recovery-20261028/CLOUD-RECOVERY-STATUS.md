@@ -1,3 +1,9 @@
+## root122Probe Source adoption, 2026-10-29
+
+RUNNER-PROBE-COMPATIBILITY-20261029 adopted unchanged from candidate 3758e246f175346660dd3edb1648d6c045fef5f1. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40731132905/job 122967442129; see exact validation JSON for pass/fail counts and remaining diagnostics. 2057 files / 50023334 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 ## root121Test Source adoption, 2026-10-29
 
 TEST-FIXTURE-LINT-20261029 adopted unchanged from candidate 729b50753123fe4cdf68358d6ad8a64fcafa159a. 5 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40729144151/job 122960387839; see exact validation JSON for pass/fail counts and remaining diagnostics. 2055 files / 50019140 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB proposal remains unexecuted pending direct human reply. Windows Source writes 0.
