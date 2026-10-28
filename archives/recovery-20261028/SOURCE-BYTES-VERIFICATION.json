@@ -1,0 +1,108 @@
+{
+  "schema": "xiongbaowork-source-bytes-verification/1",
+  "result": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57",
+    "git_tree": "b6765c4d6a1d143cb7e41c091d04e165d3a5c2c4",
+    "head": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED",
+    "swap_limit": 0,
+    "verified_source_bytes": 48435806,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "run": {
+    "id": 40646288694,
+    "job": 122675764135,
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40646288694",
+    "conclusion": "success"
+  },
+  "root_readme": {
+    "commit": "ae91ef71d0dc7a1f89dacc5d9960288b09c5277b",
+    "archivePath": "archives/recovery-20261028/GITEE-ROOT-README-0089682.md",
+    "originalBlob": "45989b5d36d121c56148ed7f39166481c91e1b6f",
+    "previousBlob": "8f952108db1e7ff14c14a94e7f3e74f37d8e1c44",
+    "bytes": 7802,
+    "sha256": "1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7",
+    "provenance": {
+      "run": 40646040849,
+      "job": 122674973183,
+      "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40646040849",
+      "bytes": 7802,
+      "sha256": "1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7",
+      "blob": "45989b5d36d121c56148ed7f39166481c91e1b6f",
+      "identityLine": "2026-10-28T06:48:00.1104019Z ARCHIVE_README_IDENTITY {\"bytes\": 7802, \"sha256\": \"1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7\", \"tar_members\": 1875, \"tar_source_bytes\": 34529259}"
+    }
+  },
+  "history": {
+    "attempt1": {
+      "run": 40644759509,
+      "job": 122670865913,
+      "conclusion": "failure",
+      "cause": "Unsupported systemd MemoryOOMGroup assignment",
+      "subjectRun": false,
+      "gitRun": false,
+      "sourceValidation": false
+    },
+    "attempt2": {
+      "run": 40644920698,
+      "job": 122671379314,
+      "conclusion": "failure",
+      "resourceGate": {
+        "memory": 67108864,
+        "swap": 0,
+        "oomGroup": 1
+      },
+      "sourceResultAbsent": true,
+      "cause": "process exited 1 after resource gate; no Python traceback; OOM not independently confirmed",
+      "subjectRun": false
+    },
+    "attempt3": {
+      "run": 40645189903,
+      "job": 122672259643,
+      "conclusion": "failure",
+      "resourceGate": {
+        "memory": 67108864,
+        "swap": 0,
+        "oomGroup": 1
+      },
+      "gitAcquisitionSucceeded": true,
+      "manifestIdentitySucceeded": true,
+      "sourceResultAbsent": true,
+      "cause": "Source metadata assertion failed at verifier line 32; exact path/observed values not yet emitted",
+      "subjectRun": false
+    },
+    "archive_readme": {
+      "run": 40646040849,
+      "job": 122674973183,
+      "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40646040849",
+      "bytes": 7802,
+      "sha256": "1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7",
+      "blob": "45989b5d36d121c56148ed7f39166481c91e1b6f",
+      "identityLine": "2026-10-28T06:48:00.1104019Z ARCHIVE_README_IDENTITY {\"bytes\": 7802, \"sha256\": \"1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7\", \"tar_members\": 1875, \"tar_source_bytes\": 34529259}"
+    },
+    "readme_literal_candidate": {
+      "removedSuffixBytes": 143,
+      "candidateBytes": 7876,
+      "candidateSHA256": "454a84689a68d26b1b30baef822977f41dd01cc55b24352359a0a2d0c5d05bea",
+      "expectedBytes": 7802,
+      "expectedSHA256": "1d13ab42e442a276626ec40f074f7ac3dcca8460c1751ebfd52f4b62f57444a7",
+      "rejectedBeforeWrite": true
+    },
+    "readme_historical_candidates": []
+  },
+  "gates": {
+    "project_tests": "NOT_RUN_AT_SOURCE_VERIFICATION",
+    "postgres17": "PG_PENDING",
+    "v58": "NO_ADOPTION_EVIDENCE_HANDOFF_BLOCKED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}

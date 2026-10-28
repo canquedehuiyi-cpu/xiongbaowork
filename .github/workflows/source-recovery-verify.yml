@@ -1,8 +1,16 @@
-name: Source recovery bytes verification
+name: Recovery validation - source and components
 on:
   push:
     branches:
       - codex/cloud-repairs-recovery-20261028
+    paths:
+      - '.github/**'
+      - '.gitignore'
+      - 'CONTEXT.md'
+      - 'README.md'
+      - 'docs/**'
+      - 'openbot/**'
+      - 'archives/recovery-20261028/V57-MANIFEST.json'
 permissions:
   contents: read
 concurrency:
@@ -10,15 +18,36 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: Source bytes only - not delivery CI
+    name: V57 source and isolated approval components
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Verify restored source with enforced aggregate limits
+      - name: Establish project aggregate memory slice
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          from pathlib import Path
+          unit = Path("/run/systemd/system/xiongbaowork.slice")
+          with unit.open("x") as out:
+              out.write("[Unit]\nDescription=Dedicated xiongbaowork validation\n[Slice]\nMemoryMax=512M\nMemorySwapMax=0\n")
+          PY
+          sudo systemctl daemon-reload
+          sudo systemctl start xiongbaowork.slice
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("/sys/fs/cgroup/xiongbaowork.slice")
+          (p / "memory.oom.group").write_text("1")
+          assert (p / "memory.max").read_text().strip() == "536870912"
+          assert (p / "memory.swap.max").read_text().strip() == "0"
+          assert (p / "memory.oom.group").read_text().strip() == "1"
+          print("PROJECT_PARENT_RESOURCE_GATE " + json.dumps({"aggregate_memory_max": 536870912, "swap_max": 0}))
+          PY
+      - name: Verify all 2045 source files under 64 MiB DATA cap
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          sudo systemd-run --wait --pipe \
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
             --property=Type=exec --property=MemoryMax=64M \
             --property=MemorySwapMax=0 --property=OOMPolicy=kill \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
@@ -34,6 +63,9 @@ jobs:
           assert (cg / "memory.max").read_text().strip() == "67108864"
           assert (cg / "memory.swap.max").read_text().strip() == "0"
           assert (cg / "memory.oom.group").read_text().strip() == "1"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
           print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
           
           def command(args, cwd):
@@ -79,91 +111,178 @@ jobs:
               finally:
                   os.close(fd)
           
-          with tempfile.TemporaryDirectory(prefix="xiongbaowork-source-", dir=Path.cwd()) as work:
-              root = Path(work) / "repo"
-              command(["git", "init", "--quiet", str(root)], Path(work))
-              command(["git", "remote", "add", "origin", "https://github.com/canquedehuiyi-cpu/xiongbaowork.git"], root)
-              command(["git", "config", "remote.origin.promisor", "true"], root)
-              command(["git", "config", "remote.origin.partialclonefilter", "blob:none"], root)
-              command(["git", "fetch", "--quiet", "--no-tags", "--filter=blob:none", "--depth=1", "origin", target], root)
-              control_path = "archives/recovery-20261028/V57-MANIFEST.json"
-              shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
-                                      "show", target + ":" + control_path], cwd=root,
-                                     check=True, capture_output=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
-              assert len(shown) == 419227
-              assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
-              manifest = json.loads(shown)
-              command(["git", "sparse-checkout", "init", "--no-cone"], root)
-              def sparse_literal(path):
-                  return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
-              patterns = "\n".join(sparse_literal(f["path"]) for f in manifest["files"]) + "\n/" + control_path + "\n"
-              subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
-                             cwd=root, check=True, text=True, capture_output=True)
-              command(["git", "checkout", "--quiet", "--detach", target], root)
-              assert command(["git", "rev-parse", "HEAD"], root) == target
-              manifest_raw = verified_bytes(root, control_path, 419227,
-                  "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
-              assert manifest_raw == shown
-              readme_expected = next(f for f in manifest["files"] if f["path"] == "README.md")
-              if (root / "README.md").stat().st_size != readme_expected["bytes"]:
-                  archive = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
-                                            "show", target + ":archives/20261018/development-base-20261018.zip"],
-                                           cwd=root, check=True, capture_output=True,
-                                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
-                  assert len(archive) == 8777985
-                  assert hashlib.sha256(archive).hexdigest() == "d35fb1b9534b3008731687ef5177388351b6e7ec317e202e72b8ca47d1842e49"
-                  with zipfile.ZipFile(io.BytesIO(archive)) as outer:
-                      packed = outer.read("development-base/development-source.tar.gz")
-                  assert len(packed) == 8390351 and packed[:3] == b"\x1f\x8b\x08"
-                  assert hashlib.sha256(packed).hexdigest() == "75b2aa411dc58e7bfc84afaac78853e38eac481b04d208f95c8bfe32bb68ab4f"
-                  del archive
-                  seen = set()
-                  members = source_bytes = 0
-                  original_readme = None
-                  with gzip.GzipFile(fileobj=io.BytesIO(packed)) as stream:
-                      with tarfile.open(fileobj=stream, mode="r|") as source_tar:
-                          for member in source_tar:
-                              rel = Path(member.name)
-                              assert not rel.is_absolute() and ".." not in rel.parts
-                              assert "\\" not in member.name and member.name not in seen
-                              assert member.isfile() and not member.issym() and not member.islnk()
-                              seen.add(member.name)
-                              members += 1
-                              source_bytes += member.size
-                              assert members <= 1875 and source_bytes <= 34529259
-                              if member.name == "README.md":
-                                  original_readme = source_tar.extractfile(member).read(7803)
-                      while True:
-                          padding = stream.read(65536)
-                          if not padding:
-                              break
-                          assert not padding.strip(b"\x00")
-                          assert stream.tell() <= 64 * 1024 * 1024
-                  assert members == 1875 and source_bytes == 34529259
-                  assert original_readme is not None and len(original_readme) == 7802
-                  assert hashlib.sha256(original_readme).hexdigest() == readme_expected["sha256"]
-                  print("ARCHIVE_README_IDENTITY " + json.dumps({"bytes": 7802, "sha256": readme_expected["sha256"],
-                                                               "tar_members": members, "tar_source_bytes": source_bytes}), flush=True)
-                  print("ARCHIVE_README_DATA " + base64.b64encode(original_readme).decode("ascii"), flush=True)
-                  raise RuntimeError("Exact archived README recovered; remote README still requires Root restore")
-              assert manifest["file_count"] == len(manifest["files"]) == 2045
-              assert len({f["path"] for f in manifest["files"]}) == 2045
-              total = 0
-              for item in manifest["files"]:
-                  total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
-                                          expected_mode=item["mode"])
-              assert total == 48435806
-              tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
-              assert all(f["path"] in tracked for f in manifest["files"])
-              assert not command(["git", "status", "--porcelain"], root)
-              result = {"status": "SOURCE_BYTES_VERIFIED", "head": target,
-                        "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
-                        "formal_baseline": "V57", "verified_source_files": 2045, "verified_source_bytes": total,
-                        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
-                        "source_mismatches": 0, "file_modes_verified": True, "fd_named_stability_verified": True,
-                        "aggregate_memory_limit": 67108864, "project_upper_bound": 536870912, "swap_limit": 0,
-                        "project_tests": "NOT_RUN", "postgres17": "PG_PENDING",
-                        "commercial_acceptance": "NOT_DELIVERED", "windows_source_files_written": 0}
-              print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
+          work = Path.cwd() / "xiongbaowork-verified-source"
+          work.mkdir(mode=0o700)
+          root = Path(work) / "repo"
+          command(["git", "init", "--quiet", str(root)], Path(work))
+          command(["git", "remote", "add", "origin", "https://github.com/canquedehuiyi-cpu/xiongbaowork.git"], root)
+          command(["git", "config", "remote.origin.promisor", "true"], root)
+          command(["git", "config", "remote.origin.partialclonefilter", "blob:none"], root)
+          command(["git", "fetch", "--quiet", "--no-tags", "--filter=blob:none", "--depth=1", "origin", target], root)
+          control_path = "archives/recovery-20261028/V57-MANIFEST.json"
+          shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "pack.threads=1",
+                                  "show", target + ":" + control_path], cwd=root,
+                                 check=True, capture_output=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+          assert len(shown) == 419227
+          assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
+          manifest = json.loads(shown)
+          command(["git", "sparse-checkout", "init", "--no-cone"], root)
+          def sparse_literal(path):
+              return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
+          patterns = "\n".join(sparse_literal(f["path"]) for f in manifest["files"]) + "\n/" + control_path + "\n"
+          subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
+                         cwd=root, check=True, text=True, capture_output=True)
+          command(["git", "checkout", "--quiet", "--detach", target], root)
+          assert command(["git", "rev-parse", "HEAD"], root) == target
+          manifest_raw = verified_bytes(root, control_path, 419227,
+              "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
+          assert manifest_raw == shown
+          assert manifest["file_count"] == len(manifest["files"]) == 2045
+          assert len({f["path"] for f in manifest["files"]}) == 2045
+          total = 0
+          for item in manifest["files"]:
+              total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
+                                      expected_mode=item["mode"])
+          assert total == 48435806
+          tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
+          assert all(f["path"] in tracked for f in manifest["files"])
+          assert not command(["git", "status", "--porcelain"], root)
+          result = {"status": "SOURCE_BYTES_VERIFIED", "head": target,
+                    "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
+                    "formal_baseline": "V57", "verified_source_files": 2045, "verified_source_bytes": total,
+                    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+                    "source_mismatches": 0, "file_modes_verified": True, "fd_named_stability_verified": True,
+                    "aggregate_memory_limit": 67108864, "project_upper_bound": 536870912, "swap_limit": 0,
+                    "project_tests": "NOT_RUN", "postgres17": "PG_PENDING",
+                    "commercial_acceptance": "NOT_DELIVERED", "windows_source_files_written": 0}
+          print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
+          
+          PY
+      - name: Install pinned official runtime and copy eight exact component files
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib, json, os, stat, sys, urllib.request, zipfile
+          from pathlib import Path
+          
+          base = Path.cwd()
+          cg = Path("/sys/fs/cgroup") / Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "67108864"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
+          tools = base / "xiongbaowork-bun-1.3.14"
+          tools.mkdir(mode=0o700)
+          archive = tools / "vendor.zip"
+          digest = hashlib.sha256()
+          size = 0
+          with urllib.request.urlopen("https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip", timeout=60) as incoming, archive.open("xb") as out:
+              while True:
+                  block = incoming.read(65536)
+                  if not block:
+                      break
+                  size += len(block)
+                  assert size <= 35969274
+                  digest.update(block)
+                  out.write(block)
+          assert size == 35969274 and digest.hexdigest() == "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f"
+          binary = tools / "bun"
+          binary_hash = hashlib.sha256()
+          binary_bytes = 0
+          with zipfile.ZipFile(archive) as bundle:
+              files = [i for i in bundle.infolist() if not i.is_dir()]
+              assert len(files) == 1 and files[0].filename == "bun-linux-x64/bun"
+              assert not files[0].flag_bits & 1
+              assert stat.S_ISREG(files[0].external_attr >> 16)
+              assert files[0].file_size <= 256 * 1024 * 1024
+              with bundle.open(files[0]) as incoming, binary.open("xb") as out:
+                  while True:
+                      block = incoming.read(65536)
+                      if not block:
+                          break
+                      binary_bytes += len(block)
+                      assert binary_bytes <= files[0].file_size
+                      binary_hash.update(block)
+                      out.write(block)
+              assert binary_bytes == files[0].file_size
+          os.chmod(binary, 0o700)
+          
+          root = base / "xiongbaowork-verified-source" / "repo"
+          harness = base / "xiongbaowork-approval-components"
+          harness.mkdir(mode=0o700)
+          identities = json.loads("[{\"path\":\"openbot/server/tests/approval-exact-input-json.test.ts\",\"bytes\":8030,\"sha256\":\"a67781293ab350b0476aebfdbba74bd87f0618fe5f99ffaf3776c0f256f30392\"},{\"path\":\"openbot/server/tests/approval-exact-object-header.test.ts\",\"bytes\":13299,\"sha256\":\"233025a2aa0ca6ae2b78689df48588ea291c559e8bd11ba7a66b8d444f2c007a\"},{\"path\":\"openbot/server/tests/approval-exact-object-wire.test.ts\",\"bytes\":11179,\"sha256\":\"c0068686f81a6a8cbf10a7321294337a4997eeeba5cfdadefca48fe7775b3629\"},{\"path\":\"openbot/server/tests/approval-exact-object-crypto.test.ts\",\"bytes\":13447,\"sha256\":\"0f0bfba9bf7907db97d43fbbda66ee2d36b26356454687294ad2be4a00042c4e\"},{\"path\":\"openbot/server/src/approvals/exact-input-json.ts\",\"bytes\":6534,\"sha256\":\"24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45\"},{\"path\":\"openbot/server/src/approvals/exact-object-header.ts\",\"bytes\":7168,\"sha256\":\"e40e6dc5829c99af2ec204e91b5e25f71bd1fdca25f39987552973ebd68e5445\"},{\"path\":\"openbot/server/src/approvals/exact-object-wire.ts\",\"bytes\":5644,\"sha256\":\"7848e9b23a2dd2648b3f682e7be434885bbaddfd0052dbd8d9d0095874cdf2e8\"},{\"path\":\"openbot/server/src/approvals/exact-object-crypto.ts\",\"bytes\":7143,\"sha256\":\"52aecfa4c153d164fd8e5cc6e61ff7eb2e98613191393e5c2344a4cc3a428341\"}]")
+          for item in identities:
+              source = root / item["path"]
+              assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
+              target = harness / item["path"]
+              target.parent.mkdir(parents=True, exist_ok=True)
+              raw_hash = hashlib.sha256()
+              length = 0
+              with source.open("rb") as incoming, target.open("xb") as out:
+                  while True:
+                      block = incoming.read(65536)
+                      if not block:
+                          break
+                      length += len(block)
+                      raw_hash.update(block)
+                      out.write(block)
+              assert length == item["bytes"] and raw_hash.hexdigest() == item["sha256"]
+              assert target.stat().st_nlink == 1 and target.stat().st_ino != source.stat().st_ino
+          assert len(identities) == 8
+          print("RUNTIME_AND_HARNESS " + json.dumps({"bun_version": "1.3.14", "vendor_archive_bytes": size,
+              "vendor_archive_sha256": digest.hexdigest(), "binary_bytes": binary_bytes,
+              "binary_sha256": binary_hash.hexdigest(), "exact_component_files": len(identities),
+              "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
+          
+          PY
+      - name: Run isolated approval component tests under project limit
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          
+          base = Path.cwd()
+          cg_line = Path("/proc/self/cgroup").read_text().strip()
+          cg = Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "536870912"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert (cg / "memory.oom.group").read_text().strip() == "1"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
+          print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
+                                                          "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
+          binary = base / "xiongbaowork-bun-1.3.14" / "bun"
+          harness = base / "xiongbaowork-approval-components"
+          home = base / "xiongbaowork-component-home"
+          home.mkdir(mode=0o700)
+          env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
+                 "NODE_ENV": "test", "CI": "true", "NO_COLOR": "1"}
+          version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
+          assert version == "1.3.14"
+          revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
+          args = [str(binary), "test", "--no-install", "--timeout", "5000",
+                  "server/tests/approval-exact-input-json.test.ts",
+                  "server/tests/approval-exact-object-header.test.ts",
+                  "server/tests/approval-exact-object-wire.test.ts",
+                  "server/tests/approval-exact-object-crypto.test.ts"]
+          result = subprocess.run(args, cwd=harness / "openbot", env=env, capture_output=True, text=True, timeout=120)
+          print(result.stdout, end="", flush=True)
+          print(result.stderr, end="", flush=True)
+          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
+              "bun_revision": revision, "test_files": 4, "scope": "isolated exact-byte approval components",
+              "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
+              "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
+          raise SystemExit(result.returncode)
           
           PY
