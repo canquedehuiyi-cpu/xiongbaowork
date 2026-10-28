@@ -1,3 +1,19 @@
+## Source23 工作区断言修复，2026-10-29
+
+WORKSPACE-RUNNER-ASSERTION-20261029候选07942d953a304bd250648eb008a5ec0593eb2e29通过同一非作者独审SOURCE_APPROVED_ONLY/findings=[]，仅测试标题和严格四workspace数组两处字面修改。生产rootpackage/runnerpackage/lock/dev/build/start、原其他3case、逐目录和包名断言全部未改。当前2060文件/50032071字节；23为独审源码修复覆盖数，原18交付包另行验收。
+
+候选run40789153738/job123169745047核全Source大小/SHA/mode/FD稳定，原workspace4case全部通过、13expects；exact原Biome2.5.10 lint exit0。自动peaks64M/64M/512.8M/103.6M/357.8M原值保存。
+
+新177文件回归run40788312542全部完成：2371pass/14fail/0skip/6589expects，整体FAILED完整保留。一个workspace过期预期已由本包独立4/0结果修复；其余13fail位于approvals-policy.test.ts和approvals.test.ts，触发既有approval_recovery_blocked保护门。没有改这些断言、伪造fresh producer/exact-input readiness或取消保护，不冒原177批次变绿。
+
+Linux原shell/workspace/egress-policy/workspace-download4文件run40788663038已通过89/0/219，含真实Linux自有子进程取消和自有临时文件路径隔离，不是真实Windows/用户设备验收。另27个本机HTTP/LLMock和自有子进程fixture测试正在正常512MiB门执行；不启动PG、真实模型或Docker容器。
+
+本轮Root大段元数据经node_repl传入时被64000-byte strict auto-review代码限拒绝，发生于Git写入前；不重发同一超限调用。改用工具RAM内纯DATA的UTF8/SHA1/SHA256/Git tree编码，空串/abc/Git空blob、实际workspace全文及当前完整Git tree独立核合后继续。没有Windows文件落盘或Root执行Subject。
+
+PG_PENDING、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、ROOT_RELEASE=null/ready=false、原strictCI冻结03df9efa缺失和完整77故事/18包/7门NOT_DELIVERED均保留。所有Source/归档/JSON/依赖/测试仅云端；Windows Source写0、付费provider调用0、无生产部署/PR/默认分支变更，原自动化仍暂停。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## ROOT132 当前交付检查点，2026-10-29
 
 恢复Source22已正式采用于 3ee17798adf9524391a242d5b5903a2148cfe0ea：2060文件/50032053字节，22个独审源码修复覆盖包，与原18交付包严格分开。完整77故事、18交付包、7最终门及其原current_verification/status要求均未改，NOT_DELIVERED。

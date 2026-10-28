@@ -1,0 +1,43 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "base": "1d3c906db077fefd08e25dce9aa3b20bc2870452",
+  "candidate": "07942d953a304bd250648eb008a5ec0593eb2e29",
+  "files": [
+    {
+      "path": "openbot/tests/workspace.test.ts",
+      "before": {
+        "path": "openbot/tests/workspace.test.ts",
+        "bytes": 2084,
+        "sha256": "bc783ee67e831015d840ade5375022f27f29da48a4a83e4005cb8fe84db30745",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/tests/workspace.test.ts",
+        "bytes": 2102,
+        "sha256": "19ab8b22506d527885f6e682a7fc4afc929d6395d960c3b03691683d7b2a7847",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "before_blob": "17538c2feceff1b58d471f3cee6ee2fb7c09395c",
+  "after_blob": "126affe7a53b5f32fc0c0155146209c1e46c3e13",
+  "full_read_and_closed_diff": true,
+  "git_trees_untruncated": true,
+  "only_source_change": "openbot/tests/workspace.test.ts",
+  "exact_changes": "L31 test title plus L34 strict ordered array includes existing fourth runner workspace; only two literal replacements",
+  "all_other_assertions": "Byte-for-byte unchanged, including directory/package names and other3 cases",
+  "production_inputs": "Root/runner package declarations, lockfile, start script, all approval/PG code unchanged",
+  "candidate_card": {
+    "bytes": 1772,
+    "sha256": "3e9277031f1c37ab36824c7b8022dcacae900d9f4d56ef5b50bebbfe3f99d837"
+  },
+  "project_execution": false,
+  "windows_source_writes": 0,
+  "other13approval_failures": "RETAINED_NOT_FIXED_OR_RELAXED",
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

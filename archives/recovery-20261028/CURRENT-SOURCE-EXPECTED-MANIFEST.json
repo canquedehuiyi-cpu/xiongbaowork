@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
-  "basis": "immutable V57 plus 22 independently approved exact overlays; original history and PG_PENDING retained",
+  "source_commit": "07942d953a304bd250648eb008a5ec0593eb2e29",
+  "basis": "Immutable V57 plus23 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -435,10 +435,26 @@
       "candidate_source_commit": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
       "source_content_adopted_unchanged": true,
       "run": 40747020490
+    },
+    {
+      "ticket": "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/WORKSPACE-RUNNER-ASSERTION-ADOPTED.json",
+        "bytes": 2276,
+        "sha256": "287e60d9da1f05541a56a30192f402fb2aaaa673af37c7a4b34c1db8f256cce3",
+        "formal_adoption": true,
+        "ticket": "WORKSPACE-RUNNER-ASSERTION-20261029",
+        "source_paths": [
+          "openbot/tests/workspace.test.ts"
+        ]
+      },
+      "candidate_source_commit": "07942d953a304bd250648eb008a5ec0593eb2e29",
+      "source_content_adopted_unchanged": true,
+      "run": 40789153738
     }
   ],
   "file_count": 2060,
-  "source_bytes": 50032053,
+  "source_bytes": 50032071,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -12718,8 +12734,8 @@
     },
     {
       "path": "openbot/tests/workspace.test.ts",
-      "bytes": 2084,
-      "sha256": "bc783ee67e831015d840ade5375022f27f29da48a4a83e4005cb8fe84db30745",
+      "bytes": 2102,
+      "sha256": "19ab8b22506d527885f6e682a7fc4afc929d6395d960c3b03691683d7b2a7847",
       "mode": "0o644"
     },
     {
@@ -12867,8 +12883,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "709e259e49507f05175b2bc45389b4bb937e672a",
-    "head": "72856610a5fae2bd9a62da5d7bc0cb8554481dc4",
+    "git_tree": "c102389bc4119d2f57452961cf3718e29d9a49c7",
+    "head": "07942d953a304bd250648eb008a5ec0593eb2e29",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12892,7 +12908,8 @@
       "RUNNER-PROBE-PENDING-RESULT-20261029",
       "RUNNER-PROBE-FRAME-REF-20261029",
       "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
-      "SERVER-CI-TEST-MANIFEST-20261029"
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12900,7 +12917,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50032053,
+    "verified_source_bytes": 50032071,
     "verified_source_files": 2060,
     "windows_source_files_written": 0
   },
@@ -12913,5 +12930,5 @@
     "not_native_pg_acceptance": true,
     "historical_V57_ledger_not_rewritten": true
   },
-  "source_commit_meaning": "Candidate Subject Source adopted without byte changes; promotion commit also changes administrative records and workflow"
+  "source_commit_meaning": "Exact candidate Subject Source adopted unchanged; main promotion also changes administrative evidence/workflow"
 }
