@@ -1,0 +1,22 @@
+{
+  "run": 40648609117,
+  "job": 122683162324,
+  "head": "3f82518d737a321504190a2388ebea5611a34284",
+  "pass": 43,
+  "fail": 20,
+  "expect": 755,
+  "test_files": 2,
+  "result": {
+    "exit_code": 1,
+    "bun_version": "1.3.14",
+    "bun_revision": "1.3.14+0d9b296af",
+    "test_files": 2,
+    "scope": "isolated exact-byte HTTP input and JSON materializer components",
+    "native_pg17_executable_present": false,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "scope": "component tests only; failures preserved; no source changes applied"
+}

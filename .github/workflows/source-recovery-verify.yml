@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source-bytes:
-    name: V57 source and HTTP input components
+    name: Diagnose native Fetch compatibility - failure retained
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -250,7 +250,7 @@ jobs:
               "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           
           PY
-      - name: Run isolated input provenance component tests under project limit
+      - name: Diagnose native APIs and reproduce one known failure
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
@@ -260,38 +260,23 @@ jobs:
             /usr/bin/python3 -I -B - <<'PY'
           import json, os, subprocess
           from pathlib import Path
-          
-          base = Path.cwd()
-          cg_line = Path("/proc/self/cgroup").read_text().strip()
-          cg = Path("/sys/fs/cgroup") / cg_line[3:].lstrip("/")
-          assert (cg / "memory.max").read_text().strip() == "536870912"
-          assert (cg / "memory.swap.max").read_text().strip() == "0"
-          assert (cg / "memory.oom.group").read_text().strip() == "1"
-          assert cg.parent.name == "xiongbaowork.slice"
-          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
-          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
-          print("PROJECT_TEST_RESOURCE_GATE " + json.dumps({"cgroup": cg_line, "aggregate_memory_max": 536870912,
-                                                          "parent_memory_max": 536870912, "swap_max": 0}), flush=True)
-          binary = base / "xiongbaowork-bun-1.3.14" / "bun"
-          harness = base / "xiongbaowork-input-provenance-components"
-          home = base / "xiongbaowork-component-home"
-          home.mkdir(mode=0o700)
-          env = {"PATH": str(binary.parent) + ":/usr/bin:/bin", "HOME": str(home),
-                 "NODE_ENV": "test", "CI": "true", "NO_COLOR": "1"}
-          version = subprocess.run([str(binary), "--version"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          assert version == "1.3.14"
-          revision = subprocess.run([str(binary), "--revision"], env=env, check=True, capture_output=True, text=True).stdout.strip()
-          args = [str(binary), "test", "--no-install", "--timeout", "5000",
-                  "server/tests/approval-exact-input-json-materializer.test.ts",
-                  "server/tests/approval-exact-http-owned-input.test.ts"]
-          result = subprocess.run(args, cwd=harness / "openbot", env=env, capture_output=True, text=True, timeout=120)
-          print(result.stdout, end="", flush=True)
-          print(result.stderr, end="", flush=True)
-          print("COMPONENT_TEST_RESULT " + json.dumps({"exit_code": result.returncode, "bun_version": version,
-              "bun_revision": revision, "test_files": 2, "scope": "isolated exact-byte HTTP input and JSON materializer components",
-              "native_pg17_executable_present": Path("/usr/lib/postgresql/17/bin/postgres").is_file(),
-              "original_repo_preload_suite": "NOT_RUN", "postgres17": "PG_PENDING",
-              "producer_wiring": "NOT_VERIFIED", "commercial_acceptance": "NOT_DELIVERED"}), flush=True)
+          base=Path.cwd()
+          cg=Path("/sys/fs/cgroup") / Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(base/"diagnostic-home"),"NO_COLOR":"1","CI":"true"}
+          (base/"diagnostic-home").mkdir(mode=0o700)
+          probe=subprocess.run([str(binary),"--no-install","-e","const req = new Request(\"https://example.invalid/input\", {method:\"POST\", body:\"null\", headers:{\"content-type\":\"application/json\"}, credentials:\"include\", cache:\"no-store\", redirect:\"manual\", referrer:\"https://example.invalid/\", referrerPolicy:\"same-origin\", integrity:\"sha256-fixture\", keepalive:false, mode:\"cors\"});\nconst names=[\"method\",\"url\",\"headers\",\"signal\",\"body\",\"credentials\",\"cache\",\"redirect\",\"referrer\",\"referrerPolicy\",\"integrity\",\"keepalive\",\"mode\"];\nconst levels=[];let p=Request.prototype;\nfor(let n=0;p!==null&&n<8;n++,p=Object.getPrototypeOf(p)){const d=Object.getOwnPropertyDescriptors(p);levels.push({level:n,fields:Object.fromEntries(names.filter(k=>d[k]).map(k=>[k,{getter:typeof d[k].get,hasValue:Object.hasOwn(d[k],\"value\"),valueType:typeof d[k].value,value:typeof d[k].value===\"string\"||typeof d[k].value===\"boolean\"?d[k].value:undefined}]))});}\nconst fields={};const own=Object.getOwnPropertyDescriptors(Request.prototype);\nfor(const key of names){const d=own[key];try{const value=d?.get?d.get.call(req):d&&Object.hasOwn(d,\"value\")?d.value:undefined;fields[key]={type:typeof value,value:typeof value===\"string\"||typeof value===\"boolean\"?value:undefined,tag:value&&typeof value===\"object\"?Object.prototype.toString.call(value):undefined};}catch(error){fields[key]={error:error?.name};}}\nlet signal=Object.getOwnPropertyDescriptor(Request.prototype,\"signal\")?.get?.call(req);let signalLevels=[];p=AbortSignal.prototype;\nfor(let n=0;p!==null&&n<5;n++,p=Object.getPrototypeOf(p)){const d=Object.getOwnPropertyDescriptors(p);if(d.aborted)signalLevels.push({level:n,getter:typeof d.aborted.get,hasValue:Object.hasOwn(d.aborted,\"value\")});}\nconst fresh=new Error(\"fixed\");fresh.name=\"FixedError\";let thrown;try{throw new Error(\"fixed\");}catch(e){thrown=e;thrown.name=\"FixedError\";}\nlet proxyTraps=0;const proxy=new Proxy(req,{get(){proxyTraps++;throw Error(\"proxy trap\");},getPrototypeOf(){proxyTraps++;throw Error(\"proxy prototype trap\");}});let proxyRefused=false;try{Object.getOwnPropertyDescriptor(Request.prototype,\"method\").get.call(proxy);}catch{proxyRefused=true;}\nconsole.log(\"NATIVE_FETCH_DIAGNOSTIC \"+JSON.stringify({bun:Bun.version,levels,fields,signalLevels,requestOwnKeys:Reflect.ownKeys(req).map(String),freshErrorKeys:Reflect.ownKeys(fresh).map(String),thrownErrorKeys:Reflect.ownKeys(thrown).map(String),proxyRefused,proxyTraps}));\n"],env=env,capture_output=True,text=True,timeout=30,check=True)
+          print(probe.stdout,end="",flush=True)
+          print(probe.stderr,end="",flush=True)
+          harness=base/"xiongbaowork-input-provenance-components"/"openbot"
+          result=subprocess.run([str(binary),"test","--no-install","--timeout","5000","--test-name-pattern","replay preserves original bytes, whitespace and complete unknown fields","server/tests/approval-exact-http-owned-input.test.ts"],cwd=harness,env=env,capture_output=True,text=True,timeout=30)
+          print(result.stdout,end="",flush=True)
+          print(result.stderr,end="",flush=True)
+          print("KNOWN_FAILURE_REPRO "+json.dumps({"exit_code":result.returncode,"previous_baseline_pass":43,"previous_baseline_fail":20,"scope":"one failing HTTP input case only; diagnostic, not acceptance"}),flush=True)
           raise SystemExit(result.returncode)
           
           PY
