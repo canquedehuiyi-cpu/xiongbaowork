@@ -8,6 +8,7 @@ import { type BrowserLauncher, createRunnerBrowser } from "../../runner/src/brow
 import { runnerProbeHandleHasToken } from "../../scripts/ci/runner-browser-probe-ref";
 import { stopRunnerProbeServer } from "../../scripts/ci/runner-browser-probe-lifecycle";
 import { settleRunnerProbeAction } from "../../scripts/ci/runner-browser-probe-action";
+import { observeRunnerProbeRead } from "../../scripts/ci/runner-browser-probe-observe";
 import { createRunnerDispatcher } from "../../runner/src/dispatch";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { createActionJournal } from "../../runner/src/journal";
@@ -136,6 +137,36 @@ describe("runner browser probe compatibility", () => {
   test("unwrapping still rejects anything other than a result frame", async () => {
     await expect(settleRunnerProbeAction(Promise.resolve({ type: "ack" }))).rejects.toThrow("the runner answered nothing");
     await expect(settleRunnerProbeAction({ key: "missing", pending: Promise.resolve({}) })).rejects.toThrow("the runner answered nothing");
+  });
+
+  test("observes a delayed page effect with bounded reads and no action replay", async () => {
+    let reads = 0;
+    const result = await observeRunnerProbeRead(async () => {
+      reads++;
+      return { text: reads === 1 ? "scrolled=no" : "scrolled=yes" };
+    }, (value) => value.text.includes("scrolled=yes"), { maxReads: 3, delayMs: 0 });
+    expect(reads).toBe(2);
+    expect(result.text).toBe("scrolled=yes");
+  });
+
+  test("an unmet effect remains unmet when the observation budget is exhausted", async () => {
+    let reads = 0;
+    const result = await observeRunnerProbeRead(async () => ({ text: "scrolled=no", sequence: ++reads }),
+      (value) => value.text.includes("scrolled=yes"), { maxReads: 3, delayMs: 0 });
+    expect(reads).toBe(3);
+    expect(result.sequence).toBe(3);
+    expect(result.text.includes("scrolled=yes")).toBe(false);
+  });
+
+  test("observation propagates a failed read and refuses unbounded options", async () => {
+    await expect(observeRunnerProbeRead(async () => { throw new Error("read unavailable"); }, () => true,
+      { maxReads: 2, delayMs: 0 })).rejects.toThrow("read unavailable");
+    for (const maxReads of [0, 21, Number.POSITIVE_INFINITY]) {
+      await expect(observeRunnerProbeRead(async () => "unused", () => true,
+        { maxReads, delayMs: 0 })).rejects.toThrow("probe observation bounds rejected");
+    }
+    await expect(observeRunnerProbeRead(async () => "unused", () => true,
+      { maxReads: 1, delayMs: 51 })).rejects.toThrow("probe observation bounds rejected");
   });
 
   test("rejects old or malformed token prefixes without changing runner authority", () => {

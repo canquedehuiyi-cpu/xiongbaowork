@@ -1,0 +1,88 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "base_commit": "d9ddb9489be7165eccbfc08ffee1600581982ce1",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18915,
+        "sha256": "8a6c1b7eb67eade9208abfd339e2ba7a62450cd5e87c116c72953be692303a20",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 19091,
+        "sha256": "49d3608739e0e98514b93295601b18b409ba678f1d6a164e50bb03eb9cee29ad",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/runner-browser-probe.test.ts",
+      "before": {
+        "bytes": 6808,
+        "sha256": "01c20df6486148b64e85d91b88c17ab5b9d8a3e256721069dc3d03a771af2195",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 8435,
+        "sha256": "57fa34cf6b569df422b6e835e231f9b5c8a5a3997abb8804ced6706d5d22c020",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe-observe.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 740,
+        "sha256": "36d49b45403278fcb522dc503aa9ae840e0bda63e8995b96923c7ddc552d1127",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Probe-only bounded post-wheel read observations (<=20reads, delay<=50ms), not action retries. Exactly one original wheel dispatch and exact original scrolled=yes assertion retained. On exhausted budget return actual last value so original assertion fails; errors propagate. Production browser/dispatcher/journal/executor not changed.",
+  "projected_source_files": 2060,
+  "projected_source_bytes": 50029764,
+  "trigger": {
+    "run": 40743470005,
+    "job": 123010929839,
+    "source_commit": "2c6c58fefd18d026fdb8b47b521fb745fbbedb53",
+    "status": "FAILED_OWN_FIXTURE_SCROLL_POSTCONDITION",
+    "exit_code": 1,
+    "checks_passed": 22,
+    "version": "Google Chrome 156.0.8078.47",
+    "peak": "512M",
+    "pass_marker": false,
+    "assertion": "the real page actually moved",
+    "wheel_acknowledged": true,
+    "read_immediately_after_wheel": true,
+    "original_assertion_retained": true,
+    "real_user_device": "NOT_VERIFIED",
+    "pg17": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "primary_reference": "https://github.com/microsoft/playwright/blob/v1.62.1/docs/src/api/class-mouse.md#L151",
+  "global_probe_timeout_seconds": 170,
+  "real_user_device": "NOT_VERIFIED",
+  "pg17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "0c8f324f6c72953a40ecedabbaee175f05111910",
+  "review": {
+    "path": "archives/recovery-20261028/RUNNER-PROBE-SCROLL-OBSERVATION-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "path": "archives/recovery-20261028/RUNNER-PROBE-SCROLL-OBSERVATION-CANDIDATE-VALIDATION.json",
+    "run": 40745108351,
+    "job": 123016689878
+  },
+  "source_content_adopted_unchanged": true
+}

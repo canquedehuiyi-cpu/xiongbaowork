@@ -1,3 +1,9 @@
+## root130Observe Source adoption, 2026-10-29
+
+RUNNER-PROBE-SCROLL-OBSERVATION-20261029 adopted unchanged from candidate 0c8f324f6c72953a40ecedabbaee175f05111910. 3 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40745108351/job 123016689878; see exact validation JSON for pass/fail counts and remaining diagnostics. 2060 files / 50029764 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
+
+### Earlier checkpoints (historical evidence; current results above take precedence)
+
 ## root128FrameRef Source adoption, 2026-10-29
 
 RUNNER-PROBE-FRAME-REF-20261029 adopted unchanged from candidate bff32e41012b38dc45057f83a8a8eb1f1015a8b5. 2 Source files independently approved by /root/review_approval_input_readonly. Cloud validation run 40742687293/job 123008167660; see exact validation JSON for pass/fail counts and remaining diagnostics. 2059 files / 50027221 bytes. Original fingerprints and audit history retained; PG_PENDING, strict CI NOT_RUN, commercial acceptance NOT_DELIVERED. Worker-only2GiB original compile exception directly authorized; see its independent actual run record. Windows Source writes 0.
