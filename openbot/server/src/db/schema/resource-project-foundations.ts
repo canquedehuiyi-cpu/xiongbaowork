@@ -25,7 +25,7 @@ export const resourceProjects = pgTable(
   (table): PgTableExtraConfigValue[] => [
     foreignKey({ name: "resource_projects_device_id_registered_devices_id_fk", columns: [table.deviceId], foreignColumns: [registeredDevices.id] }).onDelete("cascade").onUpdate("no action"),
     foreignKey({ name: "resource_projects_agent_id_agents_id_fk", columns: [table.agentId], foreignColumns: [agents.id] }).onDelete("cascade").onUpdate("no action"),
-    index("resource_projects_device_scope_idx").using("btree", table.tenantId.asc().nullsLast(), table.deviceId.asc().nullsLast(), table.agentId.asc().nullsLast()),
+    index("resource_projects_device_scope_idx").on(table.tenantId.asc().nullsLast(), table.deviceId.asc().nullsLast(), table.agentId.asc().nullsLast()),
     check("resource_projects_scope_check", sql.raw("(\"resource_projects\".\"scope\" = 'public' AND \"resource_projects\".\"agent_id\" IS NULL) OR (\"resource_projects\".\"scope\" = 'agent' AND \"resource_projects\".\"agent_id\" IS NOT NULL)")),
     check("resource_projects_config_check", sql.raw("char_length(\"resource_projects\".\"name\") BETWEEN 1 AND 80 AND char_length(\"resource_projects\".\"description\") <= 500 AND \"resource_projects\".\"revision\" > 0")),
     pgPolicy("project_owner_select", { as: "permissive", for: "select", to: "public", using: sql.raw("\"tenant_id\" = current_setting('app.tenant_id', true)") }),

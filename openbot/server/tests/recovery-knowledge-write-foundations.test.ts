@@ -1713,7 +1713,7 @@ const actualMetadata = (): Record<string, Table> => Object.fromEntries(
 );
 function replaceOnce(source: string, from: string, to: string): string {
   assert.notEqual(from, to); assert.equal(source.split(from).length, 2, "exactly one literal mutation target");
-  const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;
+  const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;
 }
 function rejectSQLFragment(from: string, to: string): void {
   checkSQL(migration);
@@ -1760,6 +1760,9 @@ function rejectPolicySlot(table: string, name: string, slot: "using" | "withChec
 }
 
 describe("0105 historical knowledge write foundations, SOURCE only not authority", () => {
+  test("literal mutation replacement preserves SQL regex dollar quote text",()=>{
+    expect(replaceOnce("before TARGET after","TARGET","'^[a-f0-9]{63}$'")).toBe("before '^[a-f0-9]{63}$' after");
+  });
   test("four original0121 objects retain independent exact complete bytes and43 columns", () => {
     expect(capsules).toHaveLength(4);
     for (const c of capsules) expect(createHash("sha256").update(c.raw).digest("hex")).toBe(c.sha256);

@@ -1774,7 +1774,7 @@ const actualMetadata = (): Record<string, Table> => Object.fromEntries(
 );
 function replaceOnce(source: string, from: string, to: string): string {
   assert.notEqual(from, to); assert.equal(source.split(from).length, 2, "exactly one literal mutation target");
-  const changed = source.replace(from, to); assert.notEqual(changed, source); return changed;
+  const changed = source.replace(from, () => to); assert.notEqual(changed, source); return changed;
 }
 function rejectSQLFragment(from: string, to: string): void {
   checkSQL(migration);
@@ -1813,6 +1813,10 @@ function rejectPolicySlot(table: string, name: string, slot: "using" | "withChec
 }
 
 describe("0104 resource/project foundations, complete historical snapshot reconstruction only", () => {
+  test("literal mutation replacement preserves dollar quote text and permits actual deletion",()=>{
+    expect(replaceOnce("before TARGET after","TARGET","'^[a-f0-9]{63}$'")).toBe("before '^[a-f0-9]{63}$' after");
+    expect(replaceOnce("left DROP right","DROP","")).toBe("left  right");
+  });
   test("two independent complete0121 objects retain exact raw SHA identities", () => {
     expect(capsules).toHaveLength(2);
     for (const capsule of capsules) {
@@ -1840,10 +1844,13 @@ describe("0104 resource/project foundations, complete historical snapshot recons
       [projectContextBindings, projectContextBindings.agentId, agents, agents.id],
       [projectContextBindings, projectContextBindings.projectId, resourceProjects, resourceProjects.id],
     ] as const) {
-      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.includes(column));
+      // Extra-config builders receive Drizzle ExtraConfigColumns, not the table field object.
+      const matches = getTableConfig(model).foreignKeys.filter(fk => fk.reference().columns.some(from => from.table === model && from.name === column.name));
       expect(matches).toHaveLength(1); const fk = matches[0]; assert.ok(fk); const ref = fk.reference();
       expect(ref.foreignTable).toBe(parent); expect(ref.foreignColumns).toEqual([parentColumn]);
-      expect(ref.columns).toEqual([column]); expect(fk.onDelete).toBe("cascade"); expect(fk.onUpdate).toBe("no action");
+      expect(ref.columns).toHaveLength(1);const from=ref.columns[0];assert.ok(from);
+      expect(from.table).toBe(model);expect(from.name).toBe(column.name);expect(from.getSQLType()).toBe(column.getSQLType());
+      expect(fk.onDelete).toBe("cascade"); expect(fk.onUpdate).toBe("no action");
       expect(parentColumn.primary).toBe(true); expect(parentColumn.notNull).toBe(true);
       const table = previous.tables[`public.${getTableConfig(parent).name}`];
       if (parent !== resourceProjects) { assert.ok(table); expect(table.columns.id?.primaryKey).toBe(true); }
@@ -1956,7 +1963,7 @@ describe("0104 resource/project foundations, complete historical snapshot recons
       ['p."deleted_at" IS NULL', 'p."deleted_at" IS NOT NULL'],
       ['"scope" = \'public\' OR EXISTS', '"scope" = \'public\' AND EXISTS'],
       ['a."tenant_id" = "resource_projects"."tenant_id"', '(a."tenant_id" = "resource_projects"."tenant_id" OR a."tenant_id" = \'system\')'],
-    ]) { assert.ok(from && to); rejectPolicySlot("resource_projects", name, "withCheck", value => replaceOnce(value, from, to)); }
+    ]) { assert.ok(from);assert.notEqual(from,to); rejectPolicySlot("resource_projects", name, "withCheck", value => replaceOnce(value, from, to)); }
   });
   test("binding INSERT and UPDATE independently preserve device agent system and project scopes", () => {
     for (const name of ["project_binding_owner_insert", "project_binding_owner_update"]) for (const [from, to] of [
@@ -1971,7 +1978,7 @@ describe("0104 resource/project foundations, complete historical snapshot recons
       ['p."device_id" = "project_context_bindings"."device_id"', "true"],
       ['p."scope" = \'public\' OR p."agent_id"', 'p."scope" = \'public\' AND p."agent_id"'],
       ['p."agent_id" = "project_context_bindings"."agent_id"', 'p."agent_id" = \'other-agent\''],
-    ]) { assert.ok(from && to); rejectPolicySlot("project_context_bindings", name, "withCheck", value => replaceOnce(value, from, to)); }
+    ]) { assert.ok(from);assert.notEqual(from,to); rejectPolicySlot("project_context_bindings", name, "withCheck", value => replaceOnce(value, from, to)); }
   });
   test("UPDATE USING and WITH CHECK cannot substitute each other or lose a slot", () => {
     for (const [table, name] of [["resource_projects", "project_owner_update"], ["project_context_bindings", "project_binding_owner_update"]] as const) {

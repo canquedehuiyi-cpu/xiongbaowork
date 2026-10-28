@@ -1,0 +1,15 @@
+{
+  "schema": "xiongbaowork-component-failure-history/1",
+  "scope": "knowledge and resource foundation definitions",
+  "source_commit": "51f7b191e1a09fe1adb487c46f2ee2ade9b9a32b",
+  "run": 40658219110,
+  "job": 122714392527,
+  "pass": 34,
+  "fail": 20,
+  "expects": 1951,
+  "files": 3,
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "source_changes_after_failure": 0,
+  "limits_preserved": true
+}
