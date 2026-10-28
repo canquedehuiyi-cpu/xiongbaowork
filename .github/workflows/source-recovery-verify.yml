@@ -1,0 +1,111 @@
+name: Source recovery bytes verification
+on:
+  push:
+    branches:
+      - codex/cloud-repairs-recovery-20261028
+permissions:
+  contents: read
+concurrency:
+  group: source-recovery-bytes
+  cancel-in-progress: false
+jobs:
+  source-bytes:
+    name: Source bytes only - not delivery CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify restored source with enforced aggregate limits
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
+          sudo systemd-run --quiet --wait --pipe --collect \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=MemoryOOMGroup=yes \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
+          import hashlib, json, os, stat, subprocess, sys, tempfile
+          from pathlib import Path
+          
+          target = sys.argv[1]
+          assert len(target) == 40 and all(c in "0123456789abcdef" for c in target)
+          cg_lines = Path("/proc/self/cgroup").read_text().splitlines()
+          assert len(cg_lines) == 1 and cg_lines[0].startswith("0::/")
+          cg = Path("/sys/fs/cgroup") / cg_lines[0][3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "67108864"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
+          
+          def command(args, cwd):
+              return subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitLimit=8m", "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]], cwd=cwd, check=True, text=True, capture_output=True,
+                                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout.strip()
+          
+          def metadata(s):
+              return (s.st_dev, s.st_ino, s.st_size, s.st_mode, s.st_nlink, s.st_mtime_ns, s.st_ctime_ns)
+          
+          def verified_bytes(root, rel, expected_size, expected_sha, retain=False, expected_mode=None):
+              part = Path(rel)
+              assert not part.is_absolute() and ".." not in part.parts and part.parts[0] != ".git"
+              assert "\\" not in rel and "\x00" not in rel
+              path = root / part
+              for parent in [path, *path.parents]:
+                  if parent == root:
+                      break
+                  assert not parent.is_symlink()
+              assert path.resolve(strict=True).is_relative_to(root)
+              named = os.stat(path, follow_symlinks=False)
+              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1 and named.st_size == expected_size
+              if expected_mode is not None:
+                  assert stat.S_IMODE(named.st_mode) == (int(expected_mode.removeprefix("0o"), 8) & 0o7777)
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+              try:
+                  before = os.fstat(fd)
+                  assert metadata(before) == metadata(named)
+                  digest = hashlib.sha256()
+                  data = bytearray() if retain else None
+                  count = 0
+                  while True:
+                      chunk = os.read(fd, 65536)
+                      if not chunk:
+                          break
+                      count += len(chunk)
+                      assert count <= expected_size
+                      digest.update(chunk)
+                      if retain:
+                          data.extend(chunk)
+                  assert count == expected_size and digest.hexdigest() == expected_sha
+                  assert metadata(os.fstat(fd)) == metadata(before) == metadata(os.stat(path, follow_symlinks=False))
+                  return bytes(data) if retain else count
+              finally:
+                  os.close(fd)
+          
+          with tempfile.TemporaryDirectory(prefix="xiongbaowork-source-", dir=Path.cwd()) as work:
+              root = Path(work) / "repo"
+              command(["git", "init", "--quiet", str(root)], Path(work))
+              command(["git", "fetch", "--quiet", "--no-tags", "--depth=1",
+                       "https://github.com/canquedehuiyi-cpu/xiongbaowork.git", target], root)
+              command(["git", "checkout", "--quiet", "--detach", target], root)
+              assert command(["git", "rev-parse", "HEAD"], root) == target
+              manifest_raw = verified_bytes(root, "archives/recovery-20261028/V57-MANIFEST.json", 419227,
+                  "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
+              manifest = json.loads(manifest_raw)
+              assert manifest["file_count"] == len(manifest["files"]) == 2045
+              assert len({f["path"] for f in manifest["files"]}) == 2045
+              total = 0
+              for item in manifest["files"]:
+                  total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
+                                          expected_mode=item["mode"])
+              assert total == 48435806
+              tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
+              assert all(f["path"] in tracked for f in manifest["files"])
+              assert not command(["git", "status", "--porcelain"], root)
+              result = {"status": "SOURCE_BYTES_VERIFIED", "head": target,
+                        "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
+                        "formal_baseline": "V57", "verified_source_files": 2045, "verified_source_bytes": total,
+                        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+                        "source_mismatches": 0, "file_modes_verified": True, "fd_named_stability_verified": True,
+                        "aggregate_memory_limit": 67108864, "project_upper_bound": 536870912, "swap_limit": 0,
+                        "project_tests": "NOT_RUN", "postgres17": "PG_PENDING",
+                        "commercial_acceptance": "NOT_DELIVERED", "windows_source_files_written": 0}
+              print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
+          
+          PY
