@@ -1,0 +1,33 @@
+{
+  "schema": "xiongbaowork-human-resource-exception/1",
+  "scope": "FULL_FROZEN_WORKSPACE_DEPENDENCY_INSTALL_ONLY",
+  "direct_user_answer": "允许，仅完整依赖安装阶段使用 512 MiB（推荐）",
+  "prior_stop": {
+    "run": 40670946955,
+    "job": 122757246700,
+    "result": "64MiB oom-kill"
+  },
+  "limits": {
+    "named_install_phase_memory": 536870912,
+    "project_and_descendants_memory": 536870912,
+    "other_data_download_copy": 67108864,
+    "swap": 0
+  },
+  "conditions": {
+    "cloud_only": true,
+    "windows_source_files": 0,
+    "free_only": true,
+    "private_cache": true,
+    "backend": "copyfile",
+    "network_concurrency": 1,
+    "ignore_lifecycle_scripts": true,
+    "timeout_seconds": 240
+  },
+  "not_authorized": [
+    "Raise project total above512MiB",
+    "Raise other DATA/download/copy limits",
+    "Paid runners or providers",
+    "Production credentials or deployment"
+  ],
+  "original_77_18_7_retained": true
+}

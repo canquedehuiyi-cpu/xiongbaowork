@@ -36,7 +36,7 @@ Root新增测试曾误调用pinned Drizzle ExtraConfigColumn自递归的getSQLTy
 - 自动化/Flow8文件：109/0；原107/1保留。安全/Flow源8文件：97/0；原95/1保留。身份/谱系4文件：67/0。上述分组均包含于同一33文件集成运行。
 - 本地FK ExtraConfigColumn与原生列比较问题分别在两个单测试包修复，完整生产schema、SQL、RLS、旧oracle/hash、snapshot/journal与安全负例保持；同一独审员分别完整全文读审通过。
 - 最初Source64MiB OOM运行40664999884、分批无阶段输出十分钟停止40666293935均保留。显式从目标Git树取对象ID，按32文件/2MiB预取并fsync后，74批完成且同一64MiB硬门通过。
-- 完整原锁文件workspace安装已实际尝试一次：[40670946955/job122757246700](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40670946955/job/122757246700)。私有缓存/copyfile/网络并发1/忽略全部生命周期脚本；64MiB安装门下10.333秒后systemd `oom-kill`、main SIGKILL9，Actions步骤exit1。自动日志peak64.4M保留，不冒始终低于门；项目512MiB/swap0未放宽。安装后包/锁完整性与依赖审计未到达，原preload、类型、完整CI均NOT_RUN。此前576/0同提交组件结果独立保留。仅等待人类对“完整依赖安装阶段可否使用512MiB、其他DATA仍64MiB”的明确答复，不重复尝试或擅自提限。
+- 完整原锁文件workspace安装已实际尝试一次：[40670946955/job122757246700](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40670946955/job/122757246700)。私有缓存/copyfile/网络并发1/忽略全部生命周期脚本；64MiB安装门下10.333秒后systemd `oom-kill`、main SIGKILL9，Actions步骤exit1。自动日志peak64.4M保留，不冒始终低于门；项目512MiB/swap0未放宽。安装后包/锁完整性与依赖审计未到达，原preload、类型、完整CI均NOT_RUN。此前576/0同提交组件结果独立保留。该64MiB失败历史完整保留。人类随后明确批准仅完整依赖安装阶段512MiB；本次按该具名例外继续，其他DATA仍64MiB，项目及后代512MiB/swap0、免费、私有缓存/copyfile/禁全部生命周期脚本不变。
 - 原严格CI冻结基线03df9efa29cc51b64bd4a7b695dcb977ac0869f6在已导入历史中未取得；不会用当前分支或0089682冒替。原CI工作流还含不受原项目总门约束的并行/容器任务，未直接触发。
 
 ## 持续边界与待验项

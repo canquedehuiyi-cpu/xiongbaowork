@@ -344,26 +344,28 @@ jobs:
               "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
           
           PY
-      - name: Install frozen workspace dependencies within the original64MiB copy gate
+      - name: Install frozen workspace dependencies within the human-authorized512MiB install exception
         run: |
           set -euo pipefail
           sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
-            --property=Type=exec --property=MemoryMax=64M \
+            --property=Type=exec --property=MemoryMax=512M \
             --property=MemorySwapMax=0 --property=OOMPolicy=kill \
             --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
-            /usr/bin/python3 -I -B - <<'PY'
+            /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
           import hashlib, json, os, stat, subprocess, sys
           from pathlib import Path
           base=Path.cwd()
+          target=sys.argv[1]
+          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
           cg_line=Path("/proc/self/cgroup").read_text().strip()
           cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
-          assert (cg/"memory.max").read_text().strip()=="67108864"
+          assert (cg/"memory.max").read_text().strip()=="536870912"
           assert (cg/"memory.swap.max").read_text().strip()=="0"
           assert (cg/"memory.oom.group").read_text().strip()=="1"
           assert cg.parent.name=="xiongbaowork.slice"
           assert (cg.parent/"memory.max").read_text().strip()=="536870912"
           assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
-          print("WORKSPACE_INSTALL_RESOURCE_GATE "+json.dumps({"memory_limit":67108864,"project_memory_limit":536870912,"swap":0}),flush=True)
+          print("WORKSPACE_INSTALL_RESOURCE_GATE "+json.dumps({"memory_limit":536870912,"project_memory_limit":536870912,"swap":0}),flush=True)
           root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
           assert root.is_dir() and root.resolve().is_relative_to(base)
           assert not (root/".env").exists() and not (root/".npmrc").exists()
@@ -386,7 +388,7 @@ jobs:
                 "--cache-dir",str(cache),"--network-concurrency","1","--no-progress"]
           print("WORKSPACE_INSTALL_START "+json.dumps({"frozen_lockfile":True,"ignore_all_lifecycle_scripts":True,
                 "backend":"copyfile","cache":"private job directory","network_concurrency":1,"timeout_seconds":240,
-                "source_commit":os.environ.get("GITHUB_SHA","provided by preceding Source result")}),flush=True)
+                "source_commit":target}),flush=True)
           try:
               result=subprocess.run(args,cwd=root,env=env,timeout=240)
               code=result.returncode
@@ -421,7 +423,7 @@ jobs:
                                   resolved=item.resolve(strict=True)
                                   assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external workspace dependency link"
           print("WORKSPACE_INSTALL_RESULT "+json.dumps({"exit_code":code,"frozen_inputs_unchanged":True,
-                "lifecycle_scripts":"NOT_RUN","backend":"copyfile","private_cache":True,"dependency_audit":audit,
+                "lifecycle_scripts":"NOT_RUN","source_commit":target,"install_memory_limit":536870912,"other_data_copy_limit":67108864,"backend":"copyfile","private_cache":True,"dependency_audit":audit,
                 "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
                 "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
