@@ -1,0 +1,126 @@
+{
+  "candidate_source_head": "cd0b14e948be8d8fc5d837486cd80c8f5b2aefcd",
+  "run": 40669613882,
+  "job": 122752762517,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "565dbb2c239ed360b86986523a39a4dff828df43",
+    "head": "cd0b14e948be8d8fc5d837486cd80c8f5b2aefcd",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "CANDIDATE_SECURITY_FK_SOURCE_BYTES_VERIFIED_NOT_ADOPTED",
+    "swap_limit": 0,
+    "verified_source_bytes": 48463600,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "runtime": {
+    "exit_code": 0,
+    "test_files": 8,
+    "completed_files": 8,
+    "results": [
+      {
+        "path": "server/tests/recovery-flow-source-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-original-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-run-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-flow-source-runtime-records.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-group-pipeline-start-receipts.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-outbox-knowledge-heads.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-role-foundations.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/recovery-security-policy-fences.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "eight sequential isolated flow source, outbox, role and security foundation definition test files",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "counts": [
+    {
+      "pass": 10,
+      "fail": 0,
+      "expects": 57
+    },
+    {
+      "pass": 12,
+      "fail": 0,
+      "expects": 113
+    },
+    {
+      "pass": 10,
+      "fail": 0,
+      "expects": 77
+    },
+    {
+      "pass": 11,
+      "fail": 0,
+      "expects": 89
+    },
+    {
+      "pass": 11,
+      "fail": 0,
+      "expects": 103
+    },
+    {
+      "pass": 14,
+      "fail": 0,
+      "expects": 343
+    },
+    {
+      "pass": 11,
+      "fail": 0,
+      "expects": 42
+    },
+    {
+      "pass": 18,
+      "fail": 0,
+      "expects": 309
+    }
+  ],
+  "pass": 97,
+  "fail": 0,
+  "expects": 1133,
+  "formal_adoption": false,
+  "independent_review": "IN_PROGRESS",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "postgres17": "PG_PENDING"
+}
