@@ -1,0 +1,77 @@
+{
+  "schema": "xiongbaowork-workspace-install-progress/1",
+  "head": "e58784224b734e09d5c485dd43290daaba09e562",
+  "run": 40671814715,
+  "job": 122760205073,
+  "result": "INSTALL_TIMEOUT_240_SECONDS_NO_OOM",
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "9e81e08b7dff3bc9b3094242bcccad8574aa9c04",
+    "head": "e58784224b734e09d5c485dd43290daaba09e562",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_WITH_APPROVED_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 48463600,
+    "verified_source_files": 2045,
+    "windows_source_files_written": 0
+  },
+  "installer": {
+    "exit_code": 124,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "e58784224b734e09d5c485dd43290daaba09e562",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "regular_files": 0,
+      "symlinks": 0,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "post_install_protected_inputs": "six package/lock hashes unchanged",
+  "dependency_audit": "NOT_REACHED; default zero counters in original result are not audit evidence",
+  "source_after_install_all2045": "NOT_REVERIFIED",
+  "automatic_resource_log": {
+    "memory_peak": "510.1M",
+    "configured_memory_limit": 536870912,
+    "swap": 0,
+    "service_time": "4min76ms"
+  },
+  "next_control_delta": {
+    "verbose_progress": true,
+    "network_concurrency": 4,
+    "timeout_seconds": 480,
+    "memory_limits_unchanged": true,
+    "frozen_lockfile": true,
+    "no_lifecycle_scripts": true,
+    "private_cache": true,
+    "copyfile": true
+  },
+  "full_ci": "NOT_RUN",
+  "typecheck": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
