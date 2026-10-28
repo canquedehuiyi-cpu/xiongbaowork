@@ -1,0 +1,153 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40727650134,
+  "job": 122955130307,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "203477647d652e87cd80a8721a0f06b78bb60b7a",
+    "head": "eafa66655fc1af63b604448e28180aefe7bbfa00",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50019171,
+    "verified_source_files": 2055,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "eafa66655fc1af63b604448e28180aefe7bbfa00",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 6,
+    "completed_files": 6,
+    "results": [
+      {
+        "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-input-json.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-object-header.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-object-wire.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-object-crypto.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-exact-http-owned-input.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 170,
+    "fail": 0,
+    "expects": 2144
+  },
+  "lint": {
+    "exit_code": 1,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "--diagnostic-level=warn",
+      "--max-diagnostics=1000",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "lint_counts": {
+    "errors": 0,
+    "warnings": 6
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 512.5M (swap: 0B)",
+    "Memory peak: 207.1M (swap: 0B)",
+    "Memory peak: 1.8G (swap: 0B)",
+    "Memory peak: 376.3M (swap: 0B)"
+  ],
+  "actual_restore512MiB_count": 1,
+  "strict_ci": "NOT_RUN",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Six named approval component tests; no real browser probe executed",
+  "server_types": {
+    "exit_code": 0,
+    "project": "server/tsconfig.json",
+    "typescript": "5.9.3",
+    "host_runtime": "v24.21.0",
+    "node_old_space_mb": 1792,
+    "aggregate_limit": 2147483648,
+    "timeout_seconds": 300,
+    "restored512MiB": true
+  },
+  "real_browser_probe": "NOT_RUN"
+}

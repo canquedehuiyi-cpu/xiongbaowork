@@ -1,0 +1,113 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "APPROVAL-GUARD-LINT-20261029",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "base_commit": "c7912bebf8f7233e6486cb5b5c4b8a58f946253a",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/exact-input-json.ts",
+      "before": {
+        "bytes": 6534,
+        "sha256": "24a5f4a6597cf7822df10536fcafcc01e10b41fcdb21bbcf48c281492dd02b45",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 6546,
+        "sha256": "4fa8ea1cbf93bf1db66b3060f61c2fa2eaf1c5b0dda7d692422ee117a3058bf0",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-crypto.ts",
+      "before": {
+        "bytes": 7143,
+        "sha256": "52aecfa4c153d164fd8e5cc6e61ff7eb2e98613191393e5c2344a4cc3a428341",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 7202,
+        "sha256": "c959c1ea0a0d59500cc1cf8cf0d25926b98a71e863bba990c7c0c859606d11b0",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-header.ts",
+      "before": {
+        "bytes": 7168,
+        "sha256": "e40e6dc5829c99af2ec204e91b5e25f71bd1fdca25f39987552973ebd68e5445",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 7180,
+        "sha256": "621dd347c365e31b287544b6b3540e2b76ae9d158eb17d7715eb156f08a6de96",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-object-wire.ts",
+      "before": {
+        "bytes": 5644,
+        "sha256": "7848e9b23a2dd2648b3f682e7be434885bbaddfd0052dbd8d9d0095874cdf2e8",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 5657,
+        "sha256": "0a9e668cb4e36f3fc5b726e2c676411fd5e1ba3855ee602bbcdc127964f258da",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-input-json-materializer.ts",
+      "before": {
+        "bytes": 11512,
+        "sha256": "1f00ea78d598d1736512133066b12072f331f31c1e900aad9c97f1c718398b19",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 11567,
+        "sha256": "f06a7a0955ecedefb8bd6609820b559bfea2a3730195849acf10aeca8cf16316",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/scripts/ci/runner-browser-probe.ts",
+      "before": {
+        "bytes": 18748,
+        "sha256": "c76b6dcc8b6afe487c3fb2cb6d2587e401615fefbb7840351283039f2a5483c5",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 18768,
+        "sha256": "002ea4292f0cda73f668066f641a1fab45a480185db32f27c8e1e54904d325d7",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Six files only: split existing fail-closed truthiness guards from following property checks, preserving fail code/evaluation order. Rename local parser escape variable and CLI valueOf helper. No input limits, algorithms, payloads, API/business decisions, launch behavior or Source fingerprints weakened.",
+  "projected_source_files": 2055,
+  "projected_source_bytes": 50019171,
+  "real_browser_probe": "NOT_RUN",
+  "pg17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "trigger": {
+    "run": 40726107602,
+    "job": 122949694053,
+    "lint_errors": 2,
+    "lint_warnings": 11
+  },
+  "candidate_source_commit": "eafa66655fc1af63b604448e28180aefe7bbfa00",
+  "review": {
+    "path": "archives/recovery-20261028/APPROVAL-GUARD-LINT-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "path": "archives/recovery-20261028/APPROVAL-GUARD-LINT-CANDIDATE-VALIDATION.json",
+    "run": 40727650134,
+    "job": 122955130307
+  },
+  "source_content_adopted_unchanged": true
+}

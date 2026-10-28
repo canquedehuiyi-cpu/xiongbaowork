@@ -71,7 +71,8 @@ function frame(aad: Owned): Owned {
 
 function requiredKey(key: CryptoKey | null | undefined): CryptoKey {
 	try {
-		if (!key || key.type !== "secret" || key.extractable !== false || key.algorithm.name !== "AES-GCM") fail("EXACT_AEAD_KEY");
+		if (!key) fail("EXACT_AEAD_KEY");
+		if (key.type !== "secret" || key.extractable !== false || key.algorithm.name !== "AES-GCM") fail("EXACT_AEAD_KEY");
 		const algorithm = key.algorithm;
 		if (!("length" in algorithm) || algorithm.length !== 256 || !key.usages.includes("encrypt") || !key.usages.includes("decrypt")) fail("EXACT_AEAD_KEY");
 		return key;
@@ -132,7 +133,8 @@ export async function openExactObjectV1(
 		if (keys.length !== 4 || keys.some((name) => typeof name !== "string" || !["version", "algorithm", "nonce", "ciphertextAndTag"].includes(name))) fail("EXACT_AEAD_INPUT");
 		for (const name of keys) {
 			const descriptor = Object.getOwnPropertyDescriptor(envelope, name);
-			if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) fail("EXACT_AEAD_INPUT");
+			if (!descriptor) fail("EXACT_AEAD_INPUT");
+			if (!descriptor.enumerable || !("value" in descriptor)) fail("EXACT_AEAD_INPUT");
 		}
 		if (envelope.version !== EXACT_OBJECT_AEAD_VERSION || envelope.algorithm !== "AES-256-GCM") fail("EXACT_AEAD_INPUT");
 		nonce = snapshot(envelope.nonce, 12, 12);

@@ -57,7 +57,8 @@ export function encodeExactObjectWireV1(envelope: Envelope): Uint8Array {
 		for (const key of keys) {
 			if (typeof key !== "string" || !["version", "algorithm", "nonce", "ciphertextAndTag"].includes(key)) fail();
 			const descriptor = Object.getOwnPropertyDescriptor(envelope, key);
-			if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) fail();
+			if (!descriptor) fail();
+			if (!descriptor.enumerable || !("value" in descriptor)) fail();
 			fields.set(key, descriptor.value);
 		}
 		if (fields.get("version") !== EXACT_OBJECT_AEAD_VERSION || fields.get("algorithm") !== "AES-256-GCM") fail();

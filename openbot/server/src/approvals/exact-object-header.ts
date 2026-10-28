@@ -80,7 +80,8 @@ function validated(row: ExactHeaderRow): { fields: Map<string, unknown>; binding
 	for (const key of keys) {
 		if (typeof key !== "string") fail();
 		const descriptor = Object.getOwnPropertyDescriptor(row, key);
-		if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) fail();
+		if (!descriptor) fail();
+		if (!descriptor.enumerable || !("value" in descriptor)) fail();
 		descriptors.set(key, descriptor);
 	}
 	for (const [key, descriptor] of descriptors) fields.set(key, descriptor.value);

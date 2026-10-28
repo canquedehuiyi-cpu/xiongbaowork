@@ -94,7 +94,8 @@ export function canonicalExactInputJsonV1(value: unknown): Uint8Array {
 	}
 	function descriptor(object: object, key: string): PropertyDescriptor {
 		const result = Object.getOwnPropertyDescriptor(object, key);
-		if (!result || !result.enumerable || !("value" in result)) fail();
+		if (!result) fail();
+		if (!result.enumerable || !("value" in result)) fail();
 		return result;
 	}
 	function visit(current: unknown, depth: number): void {
