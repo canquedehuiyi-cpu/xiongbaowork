@@ -1,0 +1,38 @@
+{
+  "verdict": "INPUTS_QUALIFIED_ONLY_NO_SOURCE_APPROVAL",
+  "reviewer": "/root/review_approval_input_readonly",
+  "frozen_ref": "76a36c828e22c9667da895ee1c029407c3997a76",
+  "whole_current_bytes": "NOT_RETRIEVED",
+  "same_origin_capsule_matrix": "NOT_TWO_INDEPENDENT_ORIGINAL_EVIDENCE_STREAMS",
+  "codec_reviewer_layer": "reviewer did not independently decode compressed capsule in this input-only turn; Root did and archive records identities",
+  "objects": [
+    {
+      "name": "flow_import_proposals",
+      "bytes": 4155,
+      "blob": "c4597bd9675fadf9c215137bfe9457e31110cf1e",
+      "sha256": "737b0c1d304777b472d835f606364c005e00f9765470fa77659887a78a795546"
+    },
+    {
+      "name": "proactive_runs",
+      "bytes": 7851,
+      "blob": "afe147fb22b53315e03d4e581cd60610c99fdb19",
+      "sha256": "d3711f2d7d533f84555ee739ca2f456dd169a350b77001ef6dbceb43b2e0f226"
+    },
+    {
+      "name": "model_token_calls",
+      "bytes": 9256,
+      "blob": "bf2f99f295afcc4433e7cef675e6604ab9a492fc",
+      "sha256": "dbefab6c72124576aa7ff0a911fb4bddbe34c46ed8e4bee91550b16ae1c4f7cf"
+    }
+  ],
+  "source_body": "ORIGINAL_ORM_SQL_MISSING; only explicit reconstruction authorized",
+  "requirements": [
+    "new actual parent106 full152objects + unknown top inverse",
+    "58columns22CHECK12policy15slots all exact",
+    "fourDESC+NULLS LAST flags",
+    "sevenMAX_SAFEbigint and six nullable values no NULL to0 or total sum invented",
+    "receipt hashes not provider authenticity",
+    "PG_PENDING and no producer/writer/real model activation"
+  ],
+  "source_approved": false
+}

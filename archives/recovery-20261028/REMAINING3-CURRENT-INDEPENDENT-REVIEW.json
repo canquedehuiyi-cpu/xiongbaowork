@@ -1,0 +1,152 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "ticket": "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "formal_parent": "e1ac0f9005dae539fad875b30e4f82dd452c9ed3",
+  "candidate": "7b56b2f16f07ee77c8a65f5e5e0617025841739f",
+  "six_subject_files": [
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql",
+      "bytes": 11318,
+      "sha256": "e26e1d06bcd76d37baae4997df773de92c1785a2704e950b7d4ca4c8c0210ae4",
+      "blob": "ef29c0fe89be4c423f223e5128d7a53b7acb8b21",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+      "bytes": 629001,
+      "sha256": "74f51de19c8e22f82f3497567b5c351864de484b8fc4f9b781b511c2b96ec747",
+      "blob": "d3f5c2b6336cd53867d5b46feaebcc7049176c3c",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+      "bytes": 16330,
+      "sha256": "43fe7cd3af489bf7e6347f4a20402a82a7efd9c48a3c8334cbd296d15dbc1f7d",
+      "blob": "ba39023870aac242d749f048e8ed8141cf3a68bd",
+      "mode": "100644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+      "bytes": 12135,
+      "sha256": "ce495a487ceb9cdcfef3fcbc8470d9df80123e721784ad91df9e6aac04f37fb1",
+      "blob": "11b84fb058d8bef880d3db508c105c7584285f03",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "bytes": 1848,
+      "sha256": "a3268a149e2a6de7e2a8cc2879b11d34273e78dc5bf4cf496dc1733248fbc66e",
+      "blob": "1a7506958d0cf5cff0a1d087bdf6d2af87df9fbe",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/recovery-import-proactive-token-foundations.test.ts",
+      "bytes": 123346,
+      "sha256": "a0c1b66a51db0ce18e0dfd35567d7339511c6af40533d23f016c0f248f5dbdbe",
+      "blob": "b35bd6bd72852c2ef96eac29136efe9a7016643e",
+      "mode": "0o644"
+    }
+  ],
+  "scope": "six Subject files only; workflow/control records excluded",
+  "full_read": {
+    "sql": 11318,
+    "orm": 12135,
+    "barrel": 1848,
+    "test": 123346,
+    "snapshot": 629001,
+    "journal": 16330,
+    "large_data_literals": 4
+  },
+  "checks": {
+    "oracles": "three static complete object raws equal frozen input; parentJournalRaw equal actual parent; not generated from implementation",
+    "columns": 58,
+    "indexes": 4,
+    "unique_indexes": 2,
+    "desc_columns": 4,
+    "checks": 22,
+    "policies": 12,
+    "policy_slots": 15,
+    "rls": 3,
+    "inline_primary_keys": 2,
+    "composite_primary_keys": 1,
+    "foreign_keys": 0,
+    "ordinary_unique_constraints": 0,
+    "full_check_raws_in_sql_and_orm_exact_once": true,
+    "original_jsonb_minus_actor_lease_finished_usage_xor_counter_bounds_digest_receipt_retained": true,
+    "no_sum_or_nullable_counter_default_added": true,
+    "snapshot": {
+      "old_tables": 152,
+      "new_tables": 3,
+      "previous_raw_bytes": 604775,
+      "inverse_full_text_equal": true,
+      "all_unknown_tops_values_order_preserved": true
+    },
+    "journal": {
+      "inverse_full_text_bytes": 16159,
+      "new_event": {
+        "idx": 107,
+        "tag": "0107_import_proactive_token_foundations_closed",
+        "when": 1793189723181,
+        "id": "4a391a26-1651-46e0-a0a7-15a64289a6c3",
+        "prevId": "90530f50-0fa9-4dc2-9ced-7d718a08fe76"
+      },
+      "only107_added": true
+    },
+    "barrel_only_one_export": true,
+    "full_sql_consumption": "independent minus token; exact ASC/DESC and NULLS LAST; full object comparison",
+    "check_negative_consumption": "modified actual SQL parses before complete oracle comparison rejects; no syntax gate used as coverage",
+    "policy_negative_preservation": "mutated slot restored and all other objects equal",
+    "protected_groups": 223,
+    "historical_artifacts": 216,
+    "current_source_pins": 7,
+    "all_bytes_sha_match_actual_parent_manifest": true,
+    "bigint": {
+      "mode": "number",
+      "native_pinned_column": "PgBigInt53",
+      "columns": 7,
+      "nullable_counters": 6,
+      "no_defaults": true
+    },
+    "jsonb": "existing customType and original object identity, no double encoding"
+  },
+  "runtime_log_independently_read": {
+    "run": 40687597154,
+    "job": 122813860960,
+    "head": "7b56b2f16f07ee77c8a65f5e5e0617025841739f",
+    "source_files": 2054,
+    "source_bytes": 50007029,
+    "source_mismatches": 0,
+    "mode_fd_stability": true,
+    "pass": 22,
+    "fail": 0,
+    "expects": 994,
+    "exit": 0,
+    "test_memory_peak": "213.1M",
+    "data_memory_max": 67108864,
+    "project_memory_max": 536870912,
+    "swap": 0,
+    "test_timeout_ms": 5000,
+    "batch_timeout_seconds": 120
+  },
+  "boundaries": {
+    "original_whole_583049": "NOT_NEWLY_RETRIEVED",
+    "original93276_raw": "MISSING_NOT_CLEARED",
+    "historical_orm_sql": "SOURCE_BODY_MISSING_NEW_RECONSTRUCTION",
+    "same_origin_capsule_matrix": "NOT_TWO_INDEPENDENT_ORIGINAL_STREAMS",
+    "sql_checks": "text/structure not native PostgreSQL predicate execution",
+    "bigint_mapper_samples": "not actual driver/DTO precision or NULL roundtrip",
+    "receipt_sha": "text consistency not provider authenticity",
+    "pg17": "PG_PENDING_NO_EXECUTABLE_NO_RUN",
+    "original_preload": "NOT_RUN_IN_CANDIDATE_JOB",
+    "full_ci": "NOT_RUN",
+    "producer": "NOT_SERVICE_WIRED",
+    "activation": "AP_DISABLED",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "legacy_V58_V59": "NOT_ADOPTED_OLD_INCIDENTS_NOT_CLEARED"
+  },
+  "windows_writes": 0,
+  "reviewer_execution": 0
+}
