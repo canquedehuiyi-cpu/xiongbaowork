@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "/root/persistence_review",
   "base": "823744db378f508a1996f8c23faf1b42f115ad33",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a3",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a3",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a4",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a4",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A3",
+    "id": "A4",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_FIX_NOT_REVIEWED_NOT_RUN",
+    "status": "AUTHOR_NARROW_MODE_ADAPTER_NOT_REVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -803,18 +803,51 @@
     "oversized_log": "Prefix exported with full original identity and incomplete flag; failed outcome.",
     "a2": "b74eb935b96cc81d450c1a41a88763adca95cf4e",
     "late_gate": "Log actual cleanup remaining, assert nonnegative after restore/populated check.",
-    "activation_gate": "Root wrapper and runner stage main require time.monotonic()<deadline-8."
+    "activation_gate": "Root wrapper and runner stage main require time.monotonic()<deadline-8.",
+    "a3": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
+    "mode_adapter": "Accept only manifest strings 0o644 and100644; int(removeprefix0o,8)&07777 must equal0644; compare exact octal S_IMODE string with seal. No755, no fallback.",
+    "prior_real_attempt": {
+      "run": 40843372223,
+      "job": 123344875216,
+      "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+      "source": {
+        "batches": 74,
+        "files": 2065,
+        "bytes": 50175181,
+        "mode_fd_hash": true,
+        "DATA": 67108864,
+        "swap": 0
+      },
+      "failure": "copy verify_inputs L93 textual 100644 versus0o644 with identical bytes/hash",
+      "manifest_mode_counts": {
+        "100644": 71,
+        "0o644": 1994
+      },
+      "dependencies": "NOT_RUN",
+      "generator": "NOT_RUN",
+      "metadata": "NONE",
+      "terminal_parent": {
+        "memory_max": 536870912,
+        "swap_max": 0,
+        "oom_group": 1,
+        "populated": 0
+      },
+      "reviewer_log_digest": {
+        "bytes": 46145,
+        "sha256": "48265e559414be5b6ab09a3d85ab614929bd121a041f9251122203b9bf85a68b"
+      }
+    }
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 65732,
-    "sha256": "5091133aa12bff84dbc995ac05e23d4a85b98f37ee2c812a3889cc4852b70b67"
+    "bytes": 67069,
+    "sha256": "80a7cb626ed026ae2a3c6a676651f1d7861882543f0a36f965d623326194a570"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4017,
-    "sha256": "2da0a0f4b341dc1d4f9f0e14f0aef25c4d9189da7b467add544977faa8c286ae"
+    "sha256": "1315617c12fc80ee4023d967cc29b803d86902eea6e0496bd7e8a63512aae839"
   },
-  "author_readiness": "A3_PREPARED_FOR_NEW_NONAUTHOR_REVIEW_NO_RUN",
-  "review_required": "Root and delivery must reread exact A3; A1/A2 were never executed. Embedded and external core plan are identical; external identity/review fields are administrative additions."
+  "author_readiness": "A4_PREPARED_FOR_NEW_NONAUTHOR_REVIEW_NO_RUN",
+  "review_required": "Root/delivery must independently review exact A4. A3 real failure retained; generator never reached. New final commit has no CI-skip annotation so same SHA may later be pushed to approved run-a4 by coordinator."
 }
