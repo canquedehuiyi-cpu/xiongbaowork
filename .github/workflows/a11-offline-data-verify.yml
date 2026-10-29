@@ -1,8 +1,8 @@
-name: A11 delegated owned subtree control prototype
+name: A11 delegated fixed path read only evidence diagnostic
 on:
   push:
     branches:
-      - codex/a11-data-verify-run-20261030-a3
+      - codex/a11-data-verify-run-20261030-a4
 permissions:
   contents: read
 concurrency:
@@ -10,17 +10,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   data-only:
-    if: github.repository == 'canquedehuiyi-cpu/xiongbaowork' && github.ref == 'refs/heads/codex/a11-data-verify-run-20261030-a3' && github.event_name == 'push'
+    if: github.repository == 'canquedehuiyi-cpu/xiongbaowork' && github.ref == 'refs/heads/codex/a11-data-verify-run-20261030-a4' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify administrative controller and run teardown-only control
         env:
-          EXPECTED_CONTROLLER_SHA256: faa5b8f05b950b97fd5320456ba1cfd46bb0d923c0c1f77efe67d3708abcf312
+          EXPECTED_CONTROLLER_SHA256: ffb8820e4fd1d5581ea4aec9b252559b5c808e31420bd229a90ca68a4cdc2ca7
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/a11-data-verify-run-20261030-a3"
+          test "$GITHUB_REF" = "refs/heads/codex/a11-data-verify-run-20261030-a4"
           test "$GITHUB_EVENT_NAME" = "push"
           controller="$RUNNER_TEMP/a11-offline-data-controller.py"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 20 --max-filesize 32768 \
@@ -38,7 +38,7 @@ jobs:
               after=os.fstat(fd)
               assert (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)
           finally:os.close(fd)
-          assert hashlib.sha256(raw).hexdigest()=="faa5b8f05b950b97fd5320456ba1cfd46bb0d923c0c1f77efe67d3708abcf312"
+          assert hashlib.sha256(raw).hexdigest()=="ffb8820e4fd1d5581ea4aec9b252559b5c808e31420bd229a90ca68a4cdc2ca7"
           directory=Path("/run")/("xb-a11-code-"+runid+"-"+attempt)
           directory.mkdir(mode=0o755)
           path=directory/"controller.py"

@@ -220,19 +220,46 @@ def witness(runid,attempt):
     unit="xb-a11-delegated-"+runid+"-"+attempt+".service"
     state=unit_state(unit,time.monotonic()+3);props=state.get("properties",{})
     cg=props.get("ControlGroup")
-    root=None
-    if isinstance(cg,str) and cg.startswith("/") and ".." not in cg.split("/"):
-        candidate=Path("/sys/fs/cgroup")/cg.lstrip("/")
-        if candidate.parent==SHARED and candidate.name==unit:root=candidate
-    terminal=None;terminal_error=None
+    expected_root=SHARED/unit
+    expected_cg="/"+str(expected_root.relative_to(Path("/sys/fs/cgroup")))
+    terminal=None;terminal_error=None;terminal_fd_evidence=None
+    trusted_fixed_path=False;root=None;root_source="NOT_PROBED"
+    directory=Path("/run")/("xb-a11-delegated-"+runid+"-"+attempt)
     try:
-        file=Path("/run")/("xb-a11-delegated-"+runid+"-"+attempt)/"terminal.json"
-        fd=os.open(file,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+        dirfd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
         try:
-            info=os.fstat(fd);assert stat.S_ISREG(info.st_mode) and info.st_uid==0 and info.st_nlink==1 and info.st_size<30000
-            raw=os.read(fd,30001);assert len(raw)<=30000
-        finally:os.close(fd)
+            dirstat=os.fstat(dirfd)
+            assert stat.S_ISDIR(dirstat.st_mode) and dirstat.st_uid==0 and stat.S_IMODE(dirstat.st_mode)&0o022==0
+            fd=os.open("terminal.json",os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=dirfd)
+            try:
+                info=os.fstat(fd)
+                assert stat.S_ISREG(info.st_mode) and info.st_uid==0 and info.st_nlink==1
+                assert stat.S_IMODE(info.st_mode)==0o600 and 0<info.st_size<30000
+                raw=os.read(fd,30001);assert len(raw)==info.st_size and len(raw)<=30000
+                after=os.fstat(fd)
+                fields=("st_dev","st_ino","st_mode","st_uid","st_gid","st_nlink","st_size","st_mtime_ns","st_ctime_ns")
+                assert tuple(getattr(info,k) for k in fields)==tuple(getattr(after,k) for k in fields)
+                named=os.stat("terminal.json",dir_fd=dirfd,follow_symlinks=False)
+                assert tuple(getattr(info,k) for k in fields)==tuple(getattr(named,k) for k in fields)
+                terminal_fd_evidence={"dir_uid":dirstat.st_uid,"dir_mode":oct(stat.S_IMODE(dirstat.st_mode)),
+                    "file_uid":info.st_uid,"file_mode":oct(stat.S_IMODE(info.st_mode)),"nlink":info.st_nlink,
+                    "dev":str(info.st_dev),"ino":str(info.st_ino),"bytes":info.st_size,"fd_named_stable":True}
+            finally:os.close(fd)
+        finally:os.close(dirfd)
         terminal=json.loads(raw)
+        prior=terminal.get("before")
+        assert isinstance(prior,dict) and terminal.get("root_cgroup")==str(expected_root)
+        assert prior.get("root",{}).get("path")==str(expected_root)
+        assert prior.get("unit",{}).get("properties",{}).get("ControlGroup")==expected_cg
+        for key in ("dev","ino"):
+            assert isinstance(prior["root"].get(key),str) and prior["root"][key].isdecimal()
+        trusted_fixed_path=True
+        if cg==expected_cg:
+            root=expected_root;root_source="CURRENT_API_CONTROLGROUP_AND_TRUSTED_FIXED_PATH"
+        elif cg=="":
+            # Evidence-only probe of the exact earlier root path. This never
+            # substitutes for current API identity and cannot close that gate.
+            root=expected_root;root_source="TRUSTED_ROOT_TERMINAL_PRIOR_FIXED_PATH_ONLY"
     except BaseException as exc:terminal_error=type(exc).__name__
     observed={"monotonic":time.monotonic(),"unit":state,"root":snapshot(root) if root else None,
         "target":snapshot(root/"target") if root else None,
@@ -243,11 +270,15 @@ def witness(runid,attempt):
         "legacy_shared_unit":unit_state("xiongbaowork-data.slice",time.monotonic()+2)}
     observed["completed_monotonic"]=time.monotonic()
     emit("A11_DELEGATED_ALWAYS_ACTUAL_PRE_ASSERT",{"actual":observed,"terminal":terminal,
-        "terminal_error":terminal_error,"read_only_no_new_restore_budget":True})
+        "terminal_error":terminal_error,"terminal_fd_evidence":terminal_fd_evidence,
+        "trusted_fixed_path":trusted_fixed_path,"root_path_source":root_source,
+        "current_api_pointer_empty":cg=="","current_api_pointer_matches_known_unit":cg==expected_cg,
+        "fixed_path_probe_is_current_api_binding":False,"read_only_no_new_restore_budget":True})
     def absent(value):return value is not None and value.get("exists") is False and value.get("stat_error")=="FileNotFoundError"
     def empty(value):return value is not None and value.get("exists") is True and value.get("populated")=="0" and value.get("procs")==[]
     target=observed["target"];rootvalue=observed["root"]
-    checks={"terminal":terminal is not None and terminal.get("status")=="DELEGATED_CONTROL_PREPARED_FOR_EXTERNAL_EMPTY_WITNESS",
+    checks={"current_api_controlgroup_identity":cg==expected_cg,"trusted_fixed_path_record":trusted_fixed_path,
+        "terminal":terminal is not None and terminal.get("status")=="DELEGATED_CONTROL_PREPARED_FOR_EXTERNAL_EMPTY_WITNESS",
         "delegate":props.get("Delegate")=="yes","remain_after_exit":props.get("RemainAfterExit")=="yes",
         "service_active_exited":props.get("ActiveState")=="active" and props.get("SubState")=="exited",
         "no_service_pid_or_job":props.get("MainPID")=="0" and props.get("ControlPID")=="0" and "Job" in props and props["Job"] in ("","0"),
@@ -265,7 +296,8 @@ def witness(runid,attempt):
         "project_pop0":empty(observed["legacy_project"]),"shared_pop0":empty(observed["legacy_shared"])}
     legacy_ok=all(legacy.values())
     emit("A11_DELEGATED_ALWAYS_TERMINAL",{"prototype_status":"DELEGATED_OWNED_SUBTREE_CONTROL_VERIFIED" if prototype else "FAILED_OR_UNKNOWN",
-        "prototype_checks":checks,"legacy_checks":legacy,"legacy_gate":"RESTORED" if legacy_ok else "NOT_RESTORED_OR_UNKNOWN",
+        "prototype_checks":checks,"legacy_checks":legacy,"root_path_source":root_source,
+        "current_api_pointer_empty":cg=="","fixed_path_probe_is_not_current_api_binding":True,"legacy_gate":"RESTORED" if legacy_ok else "NOT_RESTORED_OR_UNKNOWN",
         "overall":"CONTROL_PROTOTYPE_AND_LEGACY_GATES_VERIFIED" if prototype and legacy_ok else "FAILED_OR_UNKNOWN",
         "restore_proven":prototype and legacy_ok,"prototype_is_project_migration_permission":False,
         "source_adopted":False,"raw_validation_repeated":False,"prior_raw_run":40912579798,"prior_raw_job":123584189279})

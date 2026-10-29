@@ -1,11 +1,11 @@
 {
-  "schema": "xiongbaowork-a11-delegated-control-prototype-v3",
+  "schema": "xiongbaowork-a11-delegated-fixed-path-evidence-v4",
   "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
   "author": "/root/a11_data_author",
-  "parent_candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
+  "parent_candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
   "prepare_branch": "codex/a11-data-verify-prep-20261030",
-  "only_run_branch": "codex/a11-data-verify-run-20261030-a3",
-  "purpose": "No-Subject delegated owned-subtree control lifecycle prototype, NOT an original managed-slice restoration fix and NOT permission to migrate project execution.",
+  "only_run_branch": "codex/a11-data-verify-run-20261030-a4",
+  "purpose": "Minimal read-only witness evidence repair. Same no-Subject delegated control lifecycle; independently probe exact earlier root path only after root-owned stable terminal and original actual ControlGroup identity checks. Does not claim a retention configuration or restore current API identity.",
   "actual_history": {
     "raw_run": 40912579798,
     "raw_job": 123584189279,
@@ -15,7 +15,16 @@
     "teardown_candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
     "actual": "same shared dev30/ino6792 exists/active/StopWhenUnneeded=no; admin afterrestore64/swap0/oom1, external sameinode64/swap0/oom0/pop0. Project dev30/ino6730 retained512/swap0/oom1/pop0. Both old services inactive/noJob/absent. Only shared_limits check false.",
     "actor": "The process that wrote oom.group is NOT identified by these observations; do not claim slice replacement or a proved manager code path.",
-    "old_failures_retained": true
+    "old_failures_retained": true,
+    "a3": {
+      "run": 40917993155,
+      "job": 123603242608,
+      "candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
+      "actual_admin": "delegation_verified=true, ownedroot64/target64/admin16 limits swap0/oom1, rootUID0, child0,errornull,elapsed0.0954515s",
+      "actual_external": "unit active(exited),RemainAfterExit=yes,Delegate=yes,MainPID0/ControlPID0/Jobempty/ExecMainStatus0; current ControlGroup empty; original project/shared existed/pop0 but oom.group0.",
+      "evidence_gap": "Previous witness set root/target/admin=null solely because current API ControlGroup was empty. It did NOT stat terminal.root_cgroup, so physical path disappearance/pruning is NOT proved.",
+      "result": "FAILED_OR_UNKNOWN; stable final owned64/oom1/pop0 evidence not obtained; no raw DATA rerun."
+    }
   },
   "structure": {
     "original_project_slice": {
@@ -58,7 +67,7 @@
     "no_internal_process_sequence": "Verify root64+actualDelegate; create bootstrap leaf and move own PID into it; independently read own /proc/cgroup and root cgroup.procs empty; only then enable +memory at delegated root. Create empty owned target64; enable its memory controller while it has no direct PIDs; create admin16/noop48; move own PID to admin and verify before any further child.",
     "cleanup": "Only direct own fork PID migrates to noop48, verified through /proc/PID/cgroup before permit then irreversible UID/GID/groups drop. Reap within same deadline; cgroup.kill and rmdir only own empty noop. Empty bootstrap removed. Root writer remains in target/admin16 through final owned target restoration; target/admin retained for independent pop0 proof after process exits.",
     "empty_evidence": "External witness must see entire systemd service root, owned target, retained admin, original shared and original project populated0, with no direct PIDs; subgroup empty never replaces whole-parent empty.",
-    "service_lifecycle": "Typeoneshot start job waits until admin exits; RemainAfterExit preserves active(exited) logical unit with no process. No --wait/--pipe because those wait for deactivation. Final witness requires MainPID0/ControlPID0/noJob/ExecMainStatus0/active(exited), actual same root+target dev/ino, and all empty. No daemon or holder process survives."
+    "service_lifecycle": "RemainAfterExit documents logical active state after processes exit; it does NOT provide an established empty-cgroup persistence contract. Same Typeoneshot start-job/TimeoutStartSec mechanism retained. Current API identity, whole-root/target/admin cap+empty, noPID/noJob and stable dev/ino remain mandatory separately."
   },
   "deadlines": {
     "t0": "Captured before starting delegated oneshot service",
@@ -91,7 +100,7 @@
       "contract": "Normal invocation waits for start-job completion; --wait/--pipe wait for service termination and are deliberately not used with retained active(exited) service."
     }
   ],
-  "verdict_boundary": "Prototype own target64/0/1/pop0 can pass separately. Original project512/0/1 and original shared64/0/1 plus both pop0 remain mandatory legacy gates; any original0 field is LEGACY_NOT_RESTORED_OR_UNKNOWN and overall FAILED_OR_UNKNOWN, even if prototype succeeds.",
+  "verdict_boundary": "Current API ControlGroup identity remains mandatory alongside actual fixed-path root/target/admin limits/stabledevino/pop0 and original legacy gates. Evidence-only fallback never overrides current identity or missing limits. Any original slice oom0 remains NOT_RESTORED_OR_UNKNOWN and overall FAILED_OR_UNKNOWN.",
   "no_token": true,
   "no_original_log_fetch": true,
   "no_codec": true,
@@ -107,7 +116,7 @@
     "migrationNOT_WIRED": true,
     "PG": "PG_PENDING"
   },
-  "next_action": "Complete exact3-file nonauthor review. Sole valid leaseowner may, after original expiry/epoch rules and idle queue/dedup, dispatch a3 once. Keep raw verification success and original restoration failure separate; any project-controller migration needs its own review.",
+  "next_action": "Exact3-file nonauthor review then sole valid leaseowner may dispatch reserved a4 once after idlequeue/dedup. Collect actual fixed-path existence/identity; preserve current API missing as separate failed identity gate. No new candidate or repeated probe without a factual difference.",
   "execution_branch_created": false,
   "permission_finding_response": {
     "candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
@@ -115,5 +124,46 @@
     "finding": "owned target/admin/noop mode0700 prevented post-drop path traversal/readback.",
     "fix": "owned directories now root-owned0755 with actual UID/mode assertion; all memory and cgroup control files remain root-owned with no group/other write bits; no chown/unprivileged write access. Managed delegated root actual UID/mode traversal gate added. Independent post-drop limits gate retained.",
     "evidence": "Every directory snapshot records actual uid/gid/mode alongside dev/ino. Runtime traversal and readback remain unproven until exact reviewed execution."
+  },
+  "fixed_path_read_only_repair": {
+    "terminal_directory": "Exact /run/xb-a11-delegated-<current GITHUB_RUN_ID>-<ATTEMPT>, opened O_DIRECTORY|O_NOFOLLOW; directory UID0 and no group/other write.",
+    "terminal_file": "dirfd open O_NOFOLLOW/O_NONBLOCK; regular UID0/mode0600/nlink1/size0..30000; FD before/after and named device/inode/mode/uid/gid/nlink/size/mtime/ctime stable; output safe metadata.",
+    "path": "Construct exactly SHARED/current known unit; require terminal.root_cgroup equal it, before.root.path equal it, before.unit actual ControlGroup equal exact kernel path, prior dev/ino decimal. No arbitrary terminal path or caller ID mapping.",
+    "probe": "If current API matches expected or is empty, read only the exact trusted earlier path and fixed owned descendants, recording actual exists/stat-error/dev/ino/limits/procs/pop0. Unexpected nonempty different API path is not followed.",
+    "source_and_validation": "Output root_path_source, trusted_fixed_path, current_api_pointer_empty, current_api_pointer_matches_known_unit, terminal_fd_evidence. Fallback old-path probe is never current API binding.",
+    "gates": "current_api_controlgroup_identity remains separately required. Physical missing does not imply any limits or populated0; physical retained does not cure current API identity."
+  },
+  "official_empty_pruning_audit": {
+    "bounded_reads": [
+      {
+        "repository": "systemd/systemd",
+        "ref": "v255",
+        "path": "src/core/service.c",
+        "blob": "b9eb40c5559c1c17928bb50eb17207b8ddec1d63",
+        "sha256": "63f6d0b5aa92b7fa4338616aaa5203c73dd0578e10365f8dbbf3bd95aa58705e",
+        "lines": "1263-1266",
+        "finding": "SERVICE_EXITED transition requests unit_prune_cgroup unless manager reloading."
+      },
+      {
+        "repository": "systemd/systemd",
+        "ref": "v255",
+        "path": "src/core/cgroup.c",
+        "blob": "61ac4df1a65ce421cdc919a0f6805f7eac036dc6",
+        "sha256": "ac2af6fb199b8e831c93654e4c2ba2c5d39c788508ad3eaff2c2230ccd7cc344",
+        "lines": "3100-3163",
+        "finding": "Prune attempts recursive trim then conditionally releases cgroup mapping when recursively empty; examined path has no Delegate or RemainAfterExit skip."
+      }
+    ],
+    "contract_result": "No supported empty-tree-retention setting found in the examined public v255 source/docs. RemainAfterExit is logical service state, not retained cgroup identity guarantee.",
+    "actual_limit": "Runner exact systemd binary/source version and runtime pruning actor were not captured. Source is explanatory evidence, not a runtime trace or proof of physical deletion.",
+    "no_speculation": "No guessed property, holder, manual managed-slice cgroup, always restore or new lifecycle implementation added.",
+    "next_dependency": "First close implementation evidence gap with this exact fixed-path read-only probe after review. If actual path absent, any different supported lifecycle/resource-witness model needs separate review; do not repeat old a3."
+  },
+  "changes_from_parent": {
+    "scope": "Only current3 administrative files; controller witness terminal-read/path-probe/check-output, workflow a4 filter+wholecontroller pin, plan evidence/audit. Main delegated lifecycle/permissions/resources/deadlines unchanged.",
+    "no_new_holder": true,
+    "no_new_restore_grace": true,
+    "no_codec_or_token_or_source": true,
+    "no_runtime_claim": true
   }
 }
