@@ -3428,8 +3428,34 @@
         "sha256": "78cc9a2ccfb9091f27d4422a2376757ed36b8a91ddbf0807116510a88894da5d"
       }
     ],
-    "status": "NONAUTHOR_APPROVED_FOR_ONE_BOUNDED_PUSH_NOT_YET_DISPATCHED",
+    "status": "DISPATCHED_IN_PROGRESS_NOT_ACCEPTED",
     "review_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A8-NONAUTHOR-REVIEW-20261029.json",
-    "old_a6_a7_not_run": true
+    "old_a6_a7_not_run": true,
+    "dispatch": {
+      "schema": "xiongbaowork-a8-exact-dispatch-v1",
+      "at": "2026-10-29T14:52:38.844Z",
+      "candidate": "560f711ba995dc06d0eaa38955505670bbd964d4",
+      "tree": "ca75a8955062a6c61cbfb462bf28e9785ddfc498",
+      "branch": "codex/cloud-minimal-generator-run-20261029-a8",
+      "event": "push",
+      "run": 40895889335,
+      "job": 123524744262,
+      "status": "in_progress",
+      "conclusion": null,
+      "review_commit": "01dde8fab91010e7b493ac2cb1fe442a78c47e97",
+      "review_blob": "448b198592807d0083111d76956e5344b6460743",
+      "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review",
+      "preflight": {
+        "queue_empty": true,
+        "ref404": true,
+        "head_sha_runs0": true,
+        "lease_rechecked": true
+      },
+      "dispatch_count": 1,
+      "Source_adopted": false,
+      "generator_status": "NOT_YET_OBSERVED",
+      "next_action": "Read this same run/job terminal log; never create another ref or rerun unchanged. Preserve actual outputs and cleanup before any next resourcejob."
+    }
   }
 }
