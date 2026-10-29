@@ -7,17 +7,17 @@
   "run_id": "bounded-generator-a4-2026-10-29T08:57:06.433Z",
   "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
   "acquired_at": "2026-10-29T08:57:06.433Z",
-  "renewed_at": "2026-10-29T09:02:30.018Z",
-  "expires_at": "2026-10-29T09:32:30.018Z",
+  "renewed_at": "2026-10-29T09:15:32.665Z",
+  "expires_at": "2026-10-29T09:42:06.433Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "fe4c838c302dd5899c8ae63e8d41b8b957fc77c2",
+  "expected_parent": "a400386cfa922d95c26b13bb95a99ffc0e45531e",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "No unchanged rerun. Prepare reviewed bounded no-follow header-only diagnostic of exact first locked URL, preserve URL/SRI, do not follow unknown Location/read tarball body; decide narrow redirect handling only from actual evidence.",
+  "next_action": "Read saved exact header A2 independent report, recheck lease/head/idle and unique ref, then one no-follow/no-body GET of original locked brocli URL only; no Subject/dependency rerun.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",

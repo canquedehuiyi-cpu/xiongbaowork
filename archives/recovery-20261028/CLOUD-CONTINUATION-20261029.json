@@ -504,8 +504,8 @@
       }
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
-    "lease_expires_at": "2026-10-29T09:32:30.018Z",
-    "next_action": "No unchanged rerun. Prepare reviewed bounded no-follow header-only diagnostic of exact first locked URL, preserve URL/SRI, do not follow unknown Location/read tarball body; decide narrow redirect handling only from actual evidence.",
+    "lease_expires_at": "2026-10-29T09:42:06.433Z",
+    "next_action": "Read saved exact header A2 independent report, recheck lease/head/idle and unique ref, then one no-follow/no-body GET of original locked brocli URL only; no Subject/dependency rerun.",
     "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
@@ -1353,6 +1353,23 @@
       "PG": "PG_PENDING",
       "full_ci": "NOT_RUN",
       "commercial": "NOT_DELIVERED"
+    },
+    "execution_review": {
+      "commit": "38c530cf3fb67bb92d935afa9c04f2224f9bbb2e",
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-EXECUTION-REVIEW-20261029.json",
+      "blob": "07edbe04646fc21974e1a6136c5d30b7f0e89986"
     }
+  },
+  "cloud_lock_header_candidate": {
+    "sha": "b2a95ba0b346b70834b30edf07855d668c0c7dc7",
+    "tree": "12f683a9c2615ecf5c3cfd36a7d7e54b1ae17a55",
+    "status": "NON_AUTHOR_CONCLUSION_RECEIVED_AWAITING_EXACT_SAVED_REPORT_NOT_DISPATCHED",
+    "execution_branch": "codex/cloud-lock-redirect-run-20261029-a2",
+    "prior_unrun": {
+      "sha": "b739cbd47eaeb5f73717c80d4816239d25933d6d",
+      "review": "803cda027e982a89e42b35d8c10aee2fc7fdfef6",
+      "verdict": "CHANGES_REQUIRED_QUERY_LIST_SHADOWED_RESOURCE_KEYS"
+    },
+    "scope": "one original fixed URL GET only, no redirect/body/Subject/install/retry"
   }
 }
