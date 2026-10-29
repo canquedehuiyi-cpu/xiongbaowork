@@ -1,0 +1,155 @@
+{
+  "schema": "a11-teardown-a2-independent-admin-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+  "parent": "67331334888b96d7d56fe98a897cbfa7e797fd77",
+  "tree": "6ee83d102ea65fc4daf3ae683e86f92b3f544010",
+  "verdict": "ADMIN_TEARDOWN_ONLY_DIAGNOSTIC_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/a11-offline-data-verify.yml",
+      "blob": "99aa9a17531453b18064b8910082913ed3b5b7bd",
+      "mode": "100644",
+      "bytes": 5064,
+      "sha256": "c3337bd9c8620c6514be2a876368059735665bec66c4d26cd45a6dfdcbc321d3",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "blob": "a8a5a80748f4263c438efe43f141302db2fc8741",
+      "mode": "100644",
+      "bytes": 13933,
+      "sha256": "3000046e0e37bad7f4f865210860e65f21815710aaef2268e3b51c74b876e5d9",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+      "blob": "3b717d6130f1a37f7b2679a19577c5374275a758",
+      "mode": "100644",
+      "bytes": 6033,
+      "sha256": "3abfe7b02dfd519db59d4b85d6ce3645e35102775808d0cceedecbedf7733741",
+      "full_read": true
+    }
+  ],
+  "scope": {
+    "only_three_admin_modified_from_6733": true,
+    "Source_changes": 0,
+    "no_canonical_lease_jobs_Page_automation_changes": true,
+    "prior_raw_verification_not_repeated": true,
+    "no_token_handling": true,
+    "no_actions_read_permission": true,
+    "no_original_log_request": true,
+    "no_codec_or_SQL_or_Source_execution": true,
+    "root_authorized_pure_control_diagnostic_only": true
+  },
+  "resource_static": {
+    "project": 536870912,
+    "shared_aggregate": 67108864,
+    "admin_and_management_descendants": 16777216,
+    "child_and_descendants": 50331648,
+    "swap": 0,
+    "pure_outer_bootstrap": "fixed immutable controller pin/copy, two fixed slices, admin start/wait; no DATA/Subject/token",
+    "actual_admin_and_child_membership_checked": true,
+    "actual_child_shared_project_limits_checked": true,
+    "OOMPolicy_kill_kernel_oomgroup_repairs": true,
+    "irreversible_UID_GID_groups_drop_and_oom0": true,
+    "no_unsupported_MemoryOOMGroup_property": true,
+    "no_StopWhenUnneeded_override": true
+  },
+  "clock_static": {
+    "t0": "captured in bootstrap immediately before admin service launch",
+    "inner": 120,
+    "outer": 150,
+    "admin_runtime_remaining_minus1_with_Stop1": true,
+    "all_child_stop_restore_records_consume_same_deadlines": true,
+    "outer_bootstrap_client_wait_only_secondary_plus1_not_subject_or_restore_budget": true,
+    "always": "read-only observe bounded8s, no cleanup/restore; passing verdict additionally requires observation completed before saved original outer150"
+  },
+  "witness_static": {
+    "phases": [
+      "before child",
+      "after child stop before restore",
+      "after restore while admin alive",
+      "after admin exit external always"
+    ],
+    "actual_fields": [
+      "exists",
+      "dev",
+      "ino",
+      "memory.max",
+      "memory.swap.max",
+      "memory.oom.group",
+      "populated"
+    ],
+    "units": [
+      "project slice",
+      "shared slice",
+      "exact owned admin service",
+      "exact owned child service"
+    ],
+    "unit_fields": [
+      "ActiveState",
+      "LoadState",
+      "Job",
+      "ControlGroup",
+      "StopWhenUnneeded",
+      "MemoryMax",
+      "MemorySwapMax"
+    ],
+    "errors_explicit_not_zero": true,
+    "actual_output_before_any_final_acceptance_assert": true,
+    "admin_never_claims_full_parent_empty": true,
+    "final_requires_both_ancestor_limits_exact_and_populated0": true,
+    "final_requires_owned_services_empty_inactive_failed_noJob": true,
+    "final_requires_slices_active_and_same_original_deadline": true,
+    "missing_late_or_failed_witness": "FAILED_OR_UNKNOWN"
+  },
+  "history": {
+    "prior_runtime": {
+      "run": 40912579798,
+      "job": 123584189279,
+      "raw_result": "FOUR_RAW_EXPORT_IDENTITIES_RUNTIME_VERIFIED",
+      "overall": "failure",
+      "restoration": "UNKNOWN",
+      "failed_assert": "combined ancestor limits failed before actual values",
+      "changed_field": "UNKNOWN_NOT_GUESSED"
+    },
+    "prior_report_commit": "bd35da76ba9472a214dec6ab6067e9cd2461e65b",
+    "d876_aggregate_finding_report": "33619a9e61c7d1ffd8b8b5552d3d531dce58e0ae"
+  },
+  "evidence_level": {
+    "static_fullfile_read_and_independent_digest": true,
+    "parsed_or_compiled_YAML_Python": false,
+    "project_or_codec_or_control_execution": false,
+    "DATA_PASS": false,
+    "Source_or_migration_or_PG_approval": false
+  },
+  "dispatch": {
+    "max": 1,
+    "branch": "codex/a11-data-verify-run-20261030-a2",
+    "event": "push",
+    "repository_ref_event_exact_guards": true,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "requirements": [
+      "Persist this exact report",
+      "Valid current corrected-executor owner/epoch",
+      "Fresh actual empty project queue",
+      "Branch/ref/run dedup and reuse any already-created original run",
+      "Exact candidate and reviewed files, no new changes"
+    ],
+    "no_unchanged_retry": true
+  },
+  "next_action": "Sole leaseowner may consider one exact a2 CONTROL diagnostic. Collect the full pre-assert actual observations and every final boolean. Do not infer DATA pass or repair an unseen prior field; use actual evidence to design next bounded fix if necessary.",
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  }
+}
