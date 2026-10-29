@@ -1,3 +1,19 @@
+## 前端生产构建已通过，2026-10-29｜保留原77/18/7及所有旧失败
+
+直接人类授权2GiB构建后，原Bun模式run40798601807/job123200989988在2GiB聚合门oom-kill；官方Bun --smol run40799381218/job123203539628也在2GiB门oom-kill。随后支持的Nodev24.22.1、V8oldspace1536MiB run40800266509/job123206411399发生真实V8heapOOM/child-6(SIGABRT)，wrapper250，非聚合OOM。这三轮均实际恢复512MiB后以64MiB进行Source/artifact DATA核验，原结果均保留；不把退出250当child250或测试断言失败。
+
+人类随后明确授权“允许，仅前端生产构建使用4 GiB（推荐）”，具体方案ae801f31d81a111fae4908a1f82dd90a7b14fab4。实际执行workflow04ae319935fcd19eb9d3161b61bc483b1962e9f3/run40801046219/job123208968546 SUCCESS：原Vite7.3.6配置、原冻结锁及原brand generator，Nodev24.22.1/V8oldspace3072MiB；构建约28.27s，unit29.735s，automaticmemorypeak2.8G(swap0B)。整个项目及后代仅此build暂升4294967296B，outer300s/inner270s；真实FRONTEND_BUILD_RESTORE512确认536870912B/swap0，后续DATA64MiB核验通过。其他阶段仍512，Source/复制/清点64，免费standard ubuntu-latest公共Actions，无付费大runner/provider。
+
+共465个产物/18896525字节，逐文件路径、bytes、完整SHA256已保存FRONTEND-BUNDLE-ARTIFACT-MANIFEST.json（79487B/SHA2f33486f2c4769cdc69704b9adc4adabd94765b2deab59377ba16b1c7a1e1475）。395JS/3CSS/1HTML/66fonts；index.html905B/SHAcfeac8d1274b64368878b27e9a5532ee075e225cb31aad4092b8a00c4d7c47f7，入口assets/index-BZTYvB69.js549671B/SHA5ac8175ac402ec57ea987846ad69fa5f54711f366a8a30567385519bcdf70661。HTML/config/入口均观察到熊宝数字员工，生产HTML无烘入开发WSport，入口不含Self-host OpenBot。原Vite>500kB chunkwarning保留，未提高或关闭阈值。仅日志/完整校验清单持久保存仓库，产物实体在临时云端runner构建，未上传持久ZIP、不冒已发布或正式image8GET。
+
+构建前原Source24完整2060文件/50032071字节0mismatch。构建后2059项内容未变，仅TanStack生成器临时改写已跟踪app/src/routeTree.gen.ts：48763/d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae ->49276/6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d。四轮相同after，完整生成DATA已云端归档，Root内存strictbase64/padbits/bytes/SHA/UTF8roundtrip/Gitblob50399b63fa0119c9439866e7250049378af617e3核合；postbuild实际mode未记录为UNKNOWN。此DATA未成为Source候选或正式采用；源码仍Source24/b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc，24Source修复包/原18交付包分别保留。原package.json的Bun build命令仍未通过；Node构建成功单列，日志中generic original-script标签不替代实际Node argv。
+
+原77故事/18包/7门完整要求及覆盖状态逐字保留，ready=false/ROOT_RELEASE=null/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING，商业交付NOT_DELIVERED。13原审批失败、1loader角色writer/DB边界失败、Mastra冻结SDK缺口、原strictCI03df9efa缺失、正式同SHAimage8GET、WakerFlow真实链路、用户设备/离线重连/审批闭环、真实模型计费与干净客户部署仍未验收。本build不冒新的全套tests/tsc/strictCI/真实浏览器/PG通过。
+
+本阶段没有正式Source采用变更，Windows Source/依赖/产物写0；所有构建、Source生成、DATA载荷、归档与JSON在云端。所有旧失败/内存中止/历史审计保留，无PR/默认分支改动/部署/自动化恢复。此刻无运行job、无Source候选、无待答资源许可。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## 非阻塞验收本轮完成，2026-10-29
 
 当前正式采用Source24提交b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc，完整2060文件/50032071字节。24个Source修复包与原18交付包分开；77故事、18包、7门完整要求及原覆盖状态逐字保留，交付仍NOT_DELIVERED。最新两个云端验证先核完整Source，均0mismatch；本后续归档只修改证据/状态元数据，无新Source采用。

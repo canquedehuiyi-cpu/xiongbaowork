@@ -5438,26 +5438,60 @@
       "real_user_device": "NOT_VERIFIED"
     },
     "frontend_production_build": {
-      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-512-RESOURCE-STOP.json",
-      "bytes": 7099,
-      "sha256": "a9f375dd2153670b2556a855179764551efa0a06ef2e67bc233c6091eb125f38",
-      "blob": "4ccda7615c66888bec120c4c798905dd82368a23",
-      "run": 40795427951,
-      "job": 123190636436,
-      "status": "OOM_KILL_512M",
-      "final_artifact": "NOT_PRODUCED",
-      "post_build_source": "UNKNOWN_UNIT_KILLED",
-      "proposal": {
-        "commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
-        "status": "PREPARED_NOT_AUTHORIZED_NOT_TRIGGERED",
-        "scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
-        "bytes": 2147483648,
-        "swap": 0,
-        "timeout": 300,
-        "restore": 536870912,
-        "data_limit": 67108864
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-NODE4GIB-RESULT.json",
+      "bytes": 19471,
+      "sha256": "c50c692097bb9a0d35b570d477cd8e0224467d0efbf875806b96c047e5623997",
+      "blob": "8d44a1f3fc2415a839e5adff0e4bf14e8675c4dd",
+      "status": "PASS_NODE_VITE_BUNDLE_ONLY",
+      "run": 40801046219,
+      "job": 123208968546,
+      "workflow_commit": "04ae319935fcd19eb9d3161b61bc483b1962e9f3",
+      "source_content_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
+      "runtime": "Nodev24.22.1",
+      "original_vite_configuration": "UNCHANGED",
+      "frozen_lock_inputs": "UNCHANGED",
+      "original_bun_package_script": "NOT_PASSED_2GIB_FAILURES_RETAINED",
+      "build_duration": "28.27s",
+      "unit_runtime": "29.735s",
+      "automatic_memory_peak": "2.8G(swap0B)",
+      "authorized_aggregate_limit": 4294967296,
+      "swap": 0,
+      "outer_timeout": 300,
+      "inner_timeout": 270,
+      "restore512_verified": true,
+      "postcheck_data_limit": 67108864,
+      "artifact_manifest": {
+        "path": "archives/recovery-20261028/FRONTEND-BUNDLE-ARTIFACT-MANIFEST.json",
+        "bytes": 79487,
+        "sha256": "2f33486f2c4769cdc69704b9adc4adabd94765b2deab59377ba16b1c7a1e1475",
+        "blob": "8d971e7cbe21b99f20fc0aa580167a0a55a7fc21",
+        "files": 465,
+        "total_bytes": 18896525
       },
-      "prior2GiB_grants_reused": false
+      "brand_observations": {
+        "html_contains_product": true,
+        "generated_config_contains_product": true,
+        "production_html_no_baked_dev_port": true,
+        "entry_scripts": [
+          "/assets/index-BZTYvB69.js"
+        ],
+        "entry_contains_product": true,
+        "entry_contains_legacy_self_host_text": false
+      },
+      "generated_source_delta": {
+        "path": "openbot/app/src/routeTree.gen.ts",
+        "before_bytes": 48763,
+        "after_bytes": 49276,
+        "after_sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+        "data_archive": "archives/recovery-20261028/ROUTE-TREE-GENERATOR-DATA-NOT-ADOPTED.json",
+        "postbuild_mode": "UNKNOWN_NOT_RECORDED",
+        "source_adoption": false
+      },
+      "artifact_storage": "Cloud runner transient outputs; exact manifest and logs retained in repository, no durableZIP uploaded",
+      "formal_image8GET": "NOT_RUN",
+      "strict_ci": "NOT_RUN",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
     },
     "test_file_evidence_ledger": {
       "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
@@ -5483,11 +5517,79 @@
         "not_new_execution": true
       },
       "case_totals_across_overlapping_batches": "NOT_SUMMED"
+    },
+    "frontend_512_resource_stop": {
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-512-RESOURCE-STOP.json",
+      "bytes": 7099,
+      "sha256": "a9f375dd2153670b2556a855179764551efa0a06ef2e67bc233c6091eb125f38",
+      "blob": "4ccda7615c66888bec120c4c798905dd82368a23",
+      "run": 40795427951,
+      "job": 123190636436,
+      "status": "OOM_KILL_512M",
+      "final_artifact": "NOT_PRODUCED",
+      "post_build_source": "UNKNOWN_UNIT_KILLED",
+      "proposal": {
+        "commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
+        "status": "PREPARED_NOT_AUTHORIZED_NOT_TRIGGERED",
+        "scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
+        "bytes": 2147483648,
+        "swap": 0,
+        "timeout": 300,
+        "restore": 536870912,
+        "data_limit": 67108864
+      },
+      "prior2GiB_grants_reused": false
+    },
+    "frontend_bun2GiB_resource_stop": {
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-2GIB-RESOURCE-STOP.json",
+      "run": 40798601807,
+      "job": 123200989988,
+      "status": "AGGREGATE_OOM_KILL",
+      "restore512_verified": true,
+      "generated_source_adopted": false
+    },
+    "frontend_bun_smol2GiB_resource_stop": {
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-SMOL2GIB-RESOURCE-STOP.json",
+      "run": 40799381218,
+      "job": 123203539628,
+      "status": "AGGREGATE_OOM_KILL",
+      "restore512_verified": true,
+      "generated_source_adopted": false
+    },
+    "frontend_node2GiB_resource_stop": {
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-NODE2GIB-RESOURCE-STOP.json",
+      "run": 40800266509,
+      "job": 123206411399,
+      "status": "NODE_V8_HEAP_OOM",
+      "node_child_returncode": -6,
+      "wrapper_exit": 250,
+      "restore512_verified": true,
+      "generated_source_adopted": false
+    },
+    "frontend_build_resource_authorizations": {
+      "human2GiB": {
+        "reply": "允许，仅前端生产构建使用2 GiB（推荐）",
+        "proposal_commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
+        "plan_file": "archives/recovery-20261028/FRONTEND-BUNDLE-2GIB-AUTHORIZED-PLAN.json",
+        "status": "EXECUTED_RESOURCE_STOPS_RETAINED"
+      },
+      "human4GiB": {
+        "reply": "允许，仅前端生产构建使用4 GiB（推荐）",
+        "proposal_commit": "ae801f31d81a111fae4908a1f82dd90a7b14fab4",
+        "plan_file": "archives/recovery-20261028/FRONTEND-BUNDLE-4GIB-AUTHORIZED-PLAN.json",
+        "status": "EXECUTED_SCOPED_NODE_VITE_BUILD_PASS_RESTORED512"
+      },
+      "scope": "ONLY_FRONTEND_PRODUCTION_BUILD",
+      "other_phases_limit": 536870912,
+      "data_limit": 67108864,
+      "swap": 0,
+      "timeout": 300,
+      "paid_larger_runner": false
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "No Source candidate or running validation job outstanding. Independent original mocked UI/metadata and own HTTP fixtures completed.13 original approval failures need complete fresh-producer/exact-input/continuation wiring; production-loader role-writer/DB-boundary fixture remains1failure; Mastra SDK import lacks an original frozen standalone lock. Original nativePG, strictCI baseline, final image, WakerFlow, real device/approval, model billing and clean-client deployment gates remain. Frontend build stopped512MiB OOM; concrete manual-only2GiB proposal awaits specific human authorization.",
+  "next_source_package": "No Source candidate, live validation job or pending resource approval remains. Scoped Node Vite frontend bundle passed under directly authorized4GiB then restored512MiB; exact original Bun package script remains unpassed and prior resource stops retained. Generated tracked route-tree DATA captured but not adopted. Remaining13 original approval failures need fresh-producer/exact-input/continuation wiring,1production-loader role-writer/DB-boundary fixture failure and missing original frozen Mastra SDK baseline; nativePG17, strictCI frozen baseline, formal image8GET, WakerFlow, real user device/approval, real provider billing and clean clients remain unverified.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -5645,14 +5747,62 @@
     "real_pg": "PG_PENDING"
   },
   "latest_gate_evidence": {
-    "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
+    "g1": "Node24.22.1/Vite7.3.6 frontend production bundle passedrun40801046219 within directly authorized4GiB/swap0/300s, completed28.27s, parent restored512MiB before64MiB inventory.465artifacts/18896525B with individual SHA256 retained asDATA manifest; Chinese product HTML/config/entry and no baked dev-port observations passed. Files existed in transient cloud runner; no bundleZIP uploaded. This is not final same-SHA formal image8GET evidence; native server/image endpoints NOT_RUN.",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered.",
+    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered. Latest additional frontend Node Vite production build passed40801046219 at4GiB and restored512MiB. Original Bun build command remains unpassed; tracked generated route-tree changed only in transient build and not adopted. No full test/tsc/strictCI rerun is claimed from this build.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
     "g5": "Cloud Linux Chrome own-loopback fixture35checks/26actions passed historicallyrun40746063116; original own HTTP control/download/reset3files18/0 now passedrun40796716582 under512MiB/swap0 without Chromium. Mocked desktop UI3files144/0 is HappyDOM/Tauri fakes. Real user device, durable offline reconnect queue, fresh approval producer/exact-input and human approval closure remain NOT_VERIFIED.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
     "g7": "Original full desktop tsc passed under512MiB and desktop telemetry5/0 plus3mocked UI files144/0 passed. No native Tauri binary/image or clean Windows/Linux client deployment proof."
   },
   "approved_source_repair_overlays": 24,
-  "original_delivery_packages": 18
+  "original_delivery_packages": 18,
+  "latest_cloud_source_byte_verification": {
+    "stage": "BEFORE_BUNDLE_NOT_AFTER_GENERATOR",
+    "run": 40801046219,
+    "job": 123208968546,
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "24bbd1e4226a2d70c334638c0f04f37f9a098691",
+    "head": "04ae319935fcd19eb9d3161b61bc483b1962e9f3",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  }
 }
