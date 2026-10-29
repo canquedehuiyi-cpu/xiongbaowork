@@ -74,7 +74,7 @@
     },
     "updated_at": "2026-10-29T08:17:27.423219+00:00"
   },
-  "run_status": "RECORDED_HOSTED_START_IN_PROGRESS_RESULT_PENDING",
+  "run_status": "FIRST_PASS_COMPLETED_NATIVE_RESULT_CONFIRMED_PROJECT_ACCEPTANCE_UNCHANGED",
   "planned_first_occurrence": {
     "from_saved_dtstart": "2026-10-29T08:19:26Z",
     "asia_singapore": "2026-10-29 16:19:26 +08:00",
@@ -167,5 +167,51 @@
     "page_instructions_hash": "fbcba02c5eb3184c5f2d0b09af723e222ce386ba5c10881dd18d09ef42ca06ae",
     "actions_this_pass": "Read-only native/registry/Page/GitHub ref and queue verification plus exclusive administrative evidence writes; no plan changes, Source/canonical writes, leases acquired, resourceprobe, or projectjob. Latest direct instruction narrowed work to first-run administrative verification; honored.",
     "next_action": "Retain current worker and main ownership. Future native recorded completion/result required before calling end-to-end continuation successful; no loop or artificial scheduler message."
+  },
+  "final_first_run_acceptance": {
+    "method": "One native automations.peek requested by Root; no wait, repeated probe or scheduler invocation",
+    "automation_id": "6ae30014bbac8191baa1a3497f062b7d",
+    "last_run": {
+      "id": "c4016dcf-263c-8328-bcd9-2a0d4cf4a836",
+      "recorded_status": "completed",
+      "scheduled_for": "2026-10-29T08:19:26Z",
+      "started_at": "2026-10-29T08:23:39.399216Z",
+      "completed_at": "2026-10-29T08:26:00.092317Z",
+      "chat_ref": {
+        "type": "chatgpt",
+        "id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988"
+      }
+    },
+    "latest_result": {
+      "run_id": "c4016dcf-263c-8328-bcd9-2a0d4cf4a836",
+      "created_at": "2026-10-29T08:25:59.917111Z",
+      "scheduled_for": "2026-10-29T08:19:26Z",
+      "completed_at": "2026-10-29T08:26:00.092317Z",
+      "content_text": "已取得真实启动记录，但完成时间与结果仍为空，也没有可回读的结果会话指针，因此**尚不能认定端到端执行成功**。\n\n[证据已保存并完整回读](https://github.com/canquedehuiyi-cpu/xiongbaowork/blob/5e593088172bc068f64215403e459a32dbbc3c6e/archives/recovery-20261028/HOSTED-CONTINUATION-SCHEDULE-20261029.json)，Page 状态已同步。未改计划、Source/canonical，未触发项目作业。\n\n::page-preview{page_id=\"page_7812bfd830a08191ab1fb84da54f173f\"}",
+      "content_truncated": false,
+      "chat_ref": {
+        "type": "chatgpt",
+        "id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988"
+      },
+      "requires_user_action": false,
+      "is_failure_message": false
+    },
+    "delivery_status": "unknown",
+    "result_identity_matches": true,
+    "result_created_after_start": true,
+    "content_truncated": false,
+    "actual_chat_ref_read": {
+      "type": "chatgpt",
+      "id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988"
+    },
+    "pointer_read_scope": "Native peek returned the complete content_text associated with this exactrun_id and chat_ref; that text was fully read. No direct conversation-by-id transcript reader is exposed in current tool catalog. No conversation ID inferred fromrun_id; no guessed HTTP/browser/local access.",
+    "recorded_status": "COMPLETED_WITH_NATIVE_RESULT",
+    "acceptance_scope": "Native hosted first-pass start/completion/result association confirmed; result describes administrative checks and evidence persistence only. No project job, Source adoption, PG/production acceptance or notification delivery success inferred.",
+    "historical_observations_retained": true,
+    "plan_changed": false,
+    "automations_created": 0,
+    "project_jobs_started": 0,
+    "source_canonical_or_lease_writes": 0,
+    "next_action": "End this acceptance round. Leave existing controller/worker unchanged; main owns generator diagnostic and resource queue. Subsequent maintenance uses current controller, not another local probe."
   }
 }
