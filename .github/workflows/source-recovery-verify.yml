@@ -1,6 +1,7 @@
-name: Accepted Source checkpoint -manual validation
+name: Mock agent contracts and full frozen standalone Bot deps -512MiB
 on:
-  workflow_dispatch:
+  push:
+    branches: ["codex/mock-agent-and-declared-bot-20261029"]
 permissions:
   contents: read
 concurrency:
@@ -474,5 +475,299 @@ jobs:
                 "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
                 "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
+          
+          PY
+      - name: Copy exact standalone agent-bot lock inputs as DATA64MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,os,stat
+          from pathlib import Path
+          base=Path.cwd()
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864" and (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          dest=base/"xiongbaowork-agent-bot-frozen-install";dest.mkdir(mode=0o700)
+          inputs=json.loads("[{\"relative\":\"bun.lock\",\"identity\":{\"path\":\"openbot/agent-bot/bun.lock\",\"bytes\":9012,\"sha256\":\"a33347e1b5248d4d80bc5b8069047d2f3b79117f8bad6b7e38ca3ffe72fddb5a\",\"mode\":\"0o644\"}},{\"relative\":\"package.json\",\"identity\":{\"path\":\"openbot/agent-bot/package.json\",\"bytes\":296,\"sha256\":\"95901afcb3dfb6a454d2bbf5fb9ec500b4e78326e807f74349e7caf5eae44cd4\",\"mode\":\"0o644\"}}]")
+          for x in inputs:
+              src=root/"agent-bot"/x["relative"];expected=x["identity"]
+              before=src.lstat();assert stat.S_ISREG(before.st_mode) and before.st_nlink==1
+              fd=os.open(src,os.O_RDONLY|os.O_NOFOLLOW)
+              try:
+                  fs=os.fstat(fd);assert (fs.st_dev,fs.st_ino,fs.st_size,fs.st_mtime_ns,fs.st_ctime_ns)==(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)
+                  data=b""
+                  while True:
+                      b=os.read(fd,65536)
+                      if not b:break
+                      data+=b;assert len(data)<=expected["bytes"]
+                  assert len(data)==expected["bytes"] and hashlib.sha256(data).hexdigest()==expected["sha256"]
+                  out=os.open(dest/x["relative"],os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+                  try:
+                      at=0
+                      while at<len(data):at+=os.write(out,data[at:])
+                  finally:os.close(out)
+                  after=src.lstat();final=os.fstat(fd)
+                  assert (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)==(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)
+                  assert (final.st_dev,final.st_ino,final.st_size,final.st_mtime_ns,final.st_ctime_ns)==(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)
+              finally:os.close(fd)
+          protected=["bun.lock","package.json","app/package.json","server/package.json","worker/package.json","runner/package.json","agent-bot/bun.lock","agent-bot/package.json"]
+          def seal(p):
+              st=p.lstat();assert stat.S_ISREG(st.st_mode) and st.st_nlink==1
+              return {"bytes":st.st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()}
+          control={p:seal(root/p) for p in protected}
+          with (base/"agent-bot-original-inputs.json").open("x") as f:json.dump(control,f,sort_keys=True)
+          print("AGENT_BOT_INPUT_COPY "+json.dumps({"inputs":inputs,"fd_named_stability":True,"exclusive_outputs":True,"root_inputs_protected":len(control),"DATA_limit":67108864}),flush=True)
+          
+          PY
+      - name: Install full declared standalone agent-bot lock within existing512MiB install gate
+        id: standalone_agent_bot_install
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
+          import collections, hashlib, json, os, selectors, signal, stat, subprocess, sys, time
+          from pathlib import Path
+          base=Path.cwd()
+          target=sys.argv[1]
+          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg/"memory.oom.group").read_text().strip()=="1"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("AGENT_BOT_INSTALL_RESOURCE_GATE "+json.dumps({"memory_limit":536870912,"project_memory_limit":536870912,"swap":0}),flush=True)
+          root=base/"xiongbaowork-agent-bot-frozen-install"
+          assert root.is_dir() and root.resolve().is_relative_to(base)
+          assert not (root/".env").exists() and not (root/".npmrc").exists()
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          assert binary.is_file()
+          cache=base/"xiongbaowork-agent-bot-install-cache"
+          home=base/"xiongbaowork-agent-bot-install-home"
+          cache.mkdir(mode=0o700); home.mkdir(mode=0o700)
+          protected=["bun.lock","package.json"]
+          def seal(path):
+              s=path.lstat()
+              assert stat.S_ISREG(s.st_mode) and s.st_nlink==1
+              return {"bytes":s.st_size,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
+          before={p:seal(root/p) for p in protected}
+          assert before["bun.lock"]=={"bytes":9012,"sha256":"a33347e1b5248d4d80bc5b8069047d2f3b79117f8bad6b7e38ca3ffe72fddb5a"}
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"CI":"true","NO_COLOR":"1",
+               "NPM_CONFIG_IGNORE_SCRIPTS":"true","GIT_TERMINAL_PROMPT":"0"}
+          assert subprocess.run([str(binary),"--version"],env=env,capture_output=True,text=True,check=True).stdout.strip()=="1.3.14"
+          args=[str(binary),"install","--frozen-lockfile","--ignore-scripts","--backend","copyfile",
+                "--cache-dir",str(cache),"--network-concurrency","4","--no-progress","--verbose"]
+          print("AGENT_BOT_INSTALL_START "+json.dumps({"frozen_lockfile":True,"ignore_all_lifecycle_scripts":True,
+                "backend":"copyfile","cache":"private job directory","network_concurrency":4,"timeout_seconds":480,
+                "source_commit":target}),flush=True)
+          proc=subprocess.Popen(args,cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
+          selector=selectors.DefaultSelector()
+          selector.register(proc.stdout,selectors.EVENT_READ)
+          deadline=time.monotonic()+480
+          pending=""
+          tail=collections.deque(maxlen=40)
+          lines=0
+          timed_out=False
+          def installer_line(line):
+              global lines
+              lines+=1
+              line=line[:1600]
+              tail.append(line)
+              if lines<=80 or lines%250==0 or any(marker in line.lower() for marker in ["error:","failed","timed out","timeout","404","403"]):
+                  print("AGENT_BOT_BUN_INSTALL_PROGRESS "+line,flush=True)
+          while selector.get_map():
+              remaining=deadline-time.monotonic()
+              if remaining<=0:
+                  timed_out=True
+                  os.killpg(proc.pid,signal.SIGKILL)
+                  break
+              for key,event in selector.select(min(remaining,1)):
+                  chunk=os.read(key.fd,65536)
+                  if not chunk:
+                      selector.unregister(key.fileobj)
+                      continue
+                  pending+=chunk.decode("utf8",errors="replace")
+                  while "\n" in pending:
+                      line,pending=pending.split("\n",1)
+                      installer_line(line)
+                  if len(pending)>8192:
+                      installer_line(pending[:1600]);pending=""
+              if proc.poll() is not None and not selector.get_map():
+                  break
+          if pending:
+              installer_line(pending)
+          proc.wait()
+          selector.close()
+          code=124 if timed_out else proc.returncode
+          print("AGENT_BOT_BUN_INSTALL_LOG_TAIL "+json.dumps({"lines_seen":lines,"last40":list(tail)}),flush=True)
+          after={p:seal(root/p) for p in protected}
+          assert after==before,"install changed frozen package/lock inputs"
+          audit={"status":"NOT_REACHED","regular_files":0,"symlinks":0,"hardlink_files":0,"outside_private_paths":0}
+          if code==0:
+              audit["status"]="PASS"
+              modules=root/"node_modules"
+              assert modules.is_dir()
+              for current,dirs,files in os.walk(modules,followlinks=False):
+                  for name in dirs+files:
+                      item=Path(current)/name
+                      s=item.lstat()
+                      if stat.S_ISLNK(s.st_mode):
+                          audit["symlinks"]+=1
+                          resolved=item.resolve(strict=True)
+                          assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external dependency link"
+                      elif stat.S_ISREG(s.st_mode):
+                          assert s.st_nlink==1,"hardlinked dependency rejected"
+                          audit["regular_files"]+=1
+              for package in ["app","server","worker","runner"]:
+                  nested=root/package/"node_modules"
+                  if nested.exists():
+                      for current,dirs,files in os.walk(nested,followlinks=False):
+                          for name in dirs+files:
+                              item=Path(current)/name;s=item.lstat()
+                              if stat.S_ISREG(s.st_mode):
+                                  assert s.st_nlink==1,"hardlinked workspace dependency rejected"
+                              elif stat.S_ISLNK(s.st_mode):
+                                  resolved=item.resolve(strict=True)
+                                  assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external workspace dependency link"
+          partial_inventory={}
+          for label,directory in [("private_cache",cache),("root_node_modules",root/"node_modules")]:
+              files=0; total=0
+              if directory.exists():
+                  for current,dirs,names in os.walk(directory,followlinks=False):
+                      for name in names:
+                          s=(Path(current)/name).lstat()
+                          if stat.S_ISREG(s.st_mode):
+                              files+=1;total+=s.st_size
+              partial_inventory[label]={"regular_files":files,"bytes":total}
+          print("AGENT_BOT_INSTALL_FILESYSTEM_PROGRESS "+json.dumps(partial_inventory),flush=True)
+          print("AGENT_BOT_INSTALL_RESULT "+json.dumps({"exit_code":code,"frozen_inputs_unchanged":True,
+                "lifecycle_scripts":"NOT_RUN","source_commit":target,"install_memory_limit":536870912,"other_data_copy_limit":67108864,"backend":"copyfile","private_cache":True,"dependency_audit":audit,
+                "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
+                "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(code)
+          
+          PY
+      - name: Copy standalone modules into own verified package under DATA64MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,os,shutil,stat
+          from pathlib import Path
+          base=Path.cwd()
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864" and (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          src=base/"xiongbaowork-agent-bot-frozen-install"/"node_modules"
+          cache=base/"xiongbaowork-agent-bot-install-cache"
+          dst=root/"agent-bot"/"node_modules"
+          assert src.is_dir() and not src.is_symlink() and not dst.exists() and not dst.is_symlink()
+          shutil.copytree(src,dst,symlinks=True,copy_function=shutil.copyfile)
+          regular=links=0
+          for current,dirs,files in os.walk(dst,followlinks=False):
+              for name in dirs+files:
+                  p=Path(current)/name;s=p.lstat()
+                  if stat.S_ISLNK(s.st_mode):
+                      links+=1;r=p.resolve(strict=True)
+                      assert r.is_relative_to(dst) or r.is_relative_to(cache) or r.is_relative_to(src),"outside own standalone dependency paths"
+                  elif stat.S_ISREG(s.st_mode):
+                      regular+=1;assert s.st_nlink==1
+                      original=src/p.relative_to(dst)
+                      assert original.stat().st_ino!=s.st_ino or original.stat().st_dev!=s.st_dev
+          def seal(p):
+              s=p.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1
+              return {"bytes":s.st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()}
+          before=json.loads((base/"agent-bot-original-inputs.json").read_text())
+          assert {p:seal(root/p) for p in before}==before,"source package/lock inputs changed"
+          for rel in ["bun.lock","package.json"]:
+              assert seal(base/"xiongbaowork-agent-bot-frozen-install"/rel)==before["agent-bot/"+rel]
+          assert (dst/"@ag-ui"/"encoder"/"package.json").is_file()
+          print("AGENT_BOT_MODULE_COPY "+json.dumps({"regular_files":regular,"symlinks":links,"hardlink_files":0,"all8_source_package_lock_inputs_unchanged":True,"backend":"copyfile","copy_limit":67108864,"node_modules_only":True,"no_source_edits":True}),flush=True)
+          
+          PY
+      - name: Validate agent-computer mock contracts and actual no-key startup refusal under512MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --property=RuntimeMaxSec=340 \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib, json, os, re, subprocess, time
+          from pathlib import Path
+          base=Path.cwd()
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg/"memory.oom.group").read_text().strip()=="1"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("PROJECT_TEST_RESOURCE_GATE "+json.dumps({"project_and_descendants":536870912,"swap":0,"uses_2GiB_exception":False}),flush=True)
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          home=base/"mock-agent-and-declared-agent-bot-home";home.mkdir(mode=0o700)
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"NODE_ENV":"test","CI":"true","NO_COLOR":"1"}
+          assert not any(k in env for k in ["DATABASE_URL","TEST_DATABASE_URL","COMPOSIO_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","OPENBOT_LIVE_COMPOSIO","OPENBOT_LIVE_SCREEN"])
+          assert not (root/".env").exists()
+          items=json.loads("[{\"path\":\"agent-computer/tests/action-barrier.test.ts\",\"bytes\":935,\"sha256\":\"a5ac4d2fb87ad3eab59195b62966decbacb528e508ecd0a73492100eb8e4b1e9\",\"flags\":[]},{\"path\":\"agent-computer/tests/aria-snapshot.test.ts\",\"bytes\":13105,\"sha256\":\"83f2d9f95b7a6b02535a72298bcb65c03ea1cdad97c252dc9f2fd76b5f1ba7f6\",\"flags\":[]},{\"path\":\"agent-computer/tests/authorisation.test.ts\",\"bytes\":4807,\"sha256\":\"d86a6cc070255fcc2e7f8845d9c25169458e822d954725454fdaeef490397183\",\"flags\":[]},{\"path\":\"agent-computer/tests/bot-id.test.ts\",\"bytes\":2376,\"sha256\":\"85d9ac8478e04a980ad3c58a4d95a901beddb5a39e0e6b6f84452450e872c774\",\"flags\":[]},{\"path\":\"agent-computer/tests/browser-eviction.test.ts\",\"bytes\":6413,\"sha256\":\"44040ac257f6aa9cbda7b8db7c5829ae6066962314ddbc653dd7410b7e355275\",\"flags\":[]},{\"path\":\"agent-computer/tests/browser-mode.test.ts\",\"bytes\":786,\"sha256\":\"ecb81da9801a0ec31f689d390a55e17e61d06d2b5801393b59d15ea88490efe4\",\"flags\":[]},{\"path\":\"agent-computer/tests/browser-runtime.test.ts\",\"bytes\":1758,\"sha256\":\"61bd7c8a402d4bc28b0f3dc9e37a624d851cf87ba020530808d940289aa185ed\",\"flags\":[]},{\"path\":\"agent-computer/tests/challenge.test.ts\",\"bytes\":1257,\"sha256\":\"107f2a62264ce8aaaa4736c53347bab3d6eedad9a96d87ee9f07223da6ab17dc\",\"flags\":[]},{\"path\":\"agent-computer/tests/control-store.test.ts\",\"bytes\":4837,\"sha256\":\"1d445e4af6ef79274b0f46d6e9bd286bdcc76cbb216fb17969d22f309243b7e8\",\"flags\":[]},{\"path\":\"agent-computer/tests/control.test.ts\",\"bytes\":7646,\"sha256\":\"9e0eded783779eaa705b2a74c198f9489f9f5cf799d4c70f8d1b833049d97213\",\"flags\":[]},{\"path\":\"agent-computer/tests/demonstration.test.ts\",\"bytes\":1062,\"sha256\":\"d9fb2b694c722ab11209a22163ff61e6f9a6e08ab8c93a3686fc11e561aedadd\",\"flags\":[]},{\"path\":\"agent-computer/tests/egress.test.ts\",\"bytes\":5667,\"sha256\":\"5693534bef281cdf77ef337e97168127e528ad5217ed8718b92ea4f1d6218993\",\"flags\":[]},{\"path\":\"agent-computer/tests/identity.test.ts\",\"bytes\":4514,\"sha256\":\"611a22af70a5467d2c2f98ef7a16f01d1fb7d1cfa9c9eab3d76f34ece01f47fe\",\"flags\":[]},{\"path\":\"agent-computer/tests/live-page.test.ts\",\"bytes\":1277,\"sha256\":\"4f358b5ffdae1450f11c637f1c28e82499641df2f56cc52a1ca55f9375814ac1\",\"flags\":[]},{\"path\":\"agent-computer/tests/local-chrome-startup.test.ts\",\"bytes\":4354,\"sha256\":\"a62be3fb91c39c545a3a8c9da09e0823a338bf2cd9e94cdcccd46e900ad791f7\",\"flags\":[]},{\"path\":\"agent-computer/tests/navigation-recovery.test.ts\",\"bytes\":2189,\"sha256\":\"f268506ff67d6d29ee2f6a08d1656438220830d22ca17c69c0e22399b61ba80b\",\"flags\":[]},{\"path\":\"agent-computer/tests/number-from-env.test.ts\",\"bytes\":5318,\"sha256\":\"bb4a9c92d3be91d3f9e32eedda5532458f8aff82c98f7e23ad22696f3c78bf9a\",\"flags\":[]},{\"path\":\"agent-computer/tests/profile-listing.test.ts\",\"bytes\":2233,\"sha256\":\"c756a82a8508a582c8f81e2e7b2db78d4a53acfa34a18a5b1816e48130eb8972\",\"flags\":[]},{\"path\":\"agent-computer/tests/request-validation.test.ts\",\"bytes\":4615,\"sha256\":\"20b2d32ab41d9e042d41f8a96356881fd272755a11a695059948198d4ca956dc\",\"flags\":[]},{\"path\":\"agent-computer/tests/runtime-hardening.test.ts\",\"bytes\":1628,\"sha256\":\"bd55a3a98f262a9fed23bcee67f2181b0836b67db285aa91bb12aa094e00ffba\",\"flags\":[]},{\"path\":\"agent-computer/tests/screencast.test.ts\",\"bytes\":4268,\"sha256\":\"34f515e68ef93fc3cb94c07cc6ecb8a44f4429613bfb0d00b67daf291cd780f4\",\"flags\":[]},{\"path\":\"agent-computer/tests/sessions.test.ts\",\"bytes\":6998,\"sha256\":\"b2c5a5e7ea84c8f6e0f582ec0633f780d8560141adcc2de339bba2312a7f100c\",\"flags\":[]},{\"path\":\"agent-computer/tests/viewer.test.ts\",\"bytes\":19851,\"sha256\":\"2616cdcb4ce1d08f56d0516c9901a9175aad6dfeb257462688c4274a84c701d7\",\"flags\":[]},{\"path\":\"agent-computer/tests/virtual-display.test.ts\",\"bytes\":3819,\"sha256\":\"a14c6e1c58343204e272a31a81f48479a18b07634853d8b24baf704b4d3987b9\",\"flags\":[]},{\"path\":\"tests/agent-bot.test.ts\",\"bytes\":2519,\"sha256\":\"dd4ddce04a1266f1db112a8e60083cfa777ee63a08cfa77ec641162916834e61\",\"flags\":[]}]")
+          for x in items:
+              p=root/x["path"];b=p.read_bytes()
+              assert p.is_file() and not p.is_symlink() and p.stat().st_nlink==1
+              assert len(b)==x["bytes"] and hashlib.sha256(b).hexdigest()==x["sha256"]
+              s=b.decode("utf8")
+              assert not re.search(r'testDatabaseUrl|TEST_DATABASE_URL|createDatabase\s*\(|TEST_POOL|Bun\.SQL|new\s+SQL\s*\(',s)
+              assert not re.search(r'OPENBOT_LIVE|OPENBOT_SMOKE|composio-live|tests/smoke',s)
+              assert ".integration.test." not in x["path"] and x["path"]!="tests/recovery-lineage.test.ts"
+          print("EXPLICIT_OFFLINE_SELECTION "+json.dumps({"files":len(items),"identity_verified":True,"source_changes":0,"original_preloads":"UNCHANGED","realPG":"PG_PENDING","scope":"Explicit additional files, not whole server suite/strictCI."}),flush=True)
+          # The original pretest producer runs explicitly, with no dotenv/credential file and no install hook.
+          gen=subprocess.run([str(binary),"--no-install","scripts/generate-app-config.ts"],cwd=root,env=env,capture_output=True,text=True,timeout=30)
+          print("ORIGINAL_APP_CONFIG_GENERATOR "+json.dumps({"exit_code":gen.returncode,"stdout":gen.stdout[-1600:],"stderr":gen.stderr[-1600:]}),flush=True)
+          if gen.returncode:raise SystemExit(gen.returncode)
+          deadline=time.monotonic()+300
+          results=[];overall=0; totals={"pass":0,"fail":0,"skip":0,"expects":0}
+          for x in items:
+              remaining=deadline-time.monotonic()
+              if remaining<=0:overall=124;break
+              relative=x["path"]
+              print("OFFLINE_FILE_START "+json.dumps({"path":relative}),flush=True)
+              try:
+                  r=subprocess.run([str(binary),"test","--no-install","--timeout","5000",str(root/relative)],cwd=root,env=env,capture_output=True,text=True,timeout=min(remaining,60))
+                  code=r.returncode;out=r.stdout+"\n"+r.stderr
+              except subprocess.TimeoutExpired as e:
+                  code=124;out=str(e.stdout or "")+"\n"+str(e.stderr or "")
+              counts={k:sum(int(v) for v in re.findall(r"(?m)^\s*(\d+) "+(r"expect\(\) calls" if k=="expects" else k)+r"\s*$",out)) for k in totals}
+              summary=re.search(r"Ran (\d+) tests? across",out)
+              errors=re.findall(r"(?m)^\s*(\d+) errors?\s*$",out)
+              valid=bool(summary and int(summary.group(1))>0 and counts["pass"]>0 and counts["fail"]==0 and not any(int(v)>0 for v in errors))
+              row={"path":relative,"exit_code":code,"counts":counts,"summary_present":bool(summary),"valid_pass":code==0 and valid,"error_summary":errors}
+              results.append(row)
+              for k,v in counts.items():totals[k]+=v
+              print("OFFLINE_FILE_RESULT "+json.dumps(row),flush=True)
+              lines=out.splitlines()
+              if not row["valid_pass"]:
+                  overall=overall or (124 if code==124 else 1)
+                  print("OFFLINE_FAILURE_LOG "+json.dumps({"path":relative,"lines":len(lines),"tail100":lines[-100:],"failure_headers":[l for l in lines if "(fail)" in l]}),flush=True)
+              else:
+                  print("OFFLINE_PASS_LOG "+json.dumps({"path":relative,"lines":len(lines),"tail8":lines[-8:]}),flush=True)
+              if code==124:break
+          print("MOCK_AGENT_AND_DECLARED_BOT_TEST_RESULT "+json.dumps({"exit_code":overall,"expected_files":len(items),"completed_files":len(results),"files":results,"totals":totals,"batch_timeout":300,"per_file_timeout":60,"per_test_timeout_ms":5000,"runtime":"Bun1.3.14","original_preloads":"UNCHANGED_TWO","original_strict_ci":"NOT_RUN","original400_floor":"UNCHANGED_NOT_USED_AS_A_SUBSTITUTE","postgres17":"PG_PENDING","real_provider":"NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(overall)
           
           PY

@@ -1,0 +1,200 @@
+{
+  "schema": "xiongbaowork-mock-agent-declared-bot-plan/1",
+  "source_commit": "9012793c25b5d9dbdb00ba623462e91245087439",
+  "selection": [
+    {
+      "path": "agent-computer/tests/action-barrier.test.ts",
+      "bytes": 935,
+      "sha256": "a5ac4d2fb87ad3eab59195b62966decbacb528e508ecd0a73492100eb8e4b1e9",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/aria-snapshot.test.ts",
+      "bytes": 13105,
+      "sha256": "83f2d9f95b7a6b02535a72298bcb65c03ea1cdad97c252dc9f2fd76b5f1ba7f6",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/authorisation.test.ts",
+      "bytes": 4807,
+      "sha256": "d86a6cc070255fcc2e7f8845d9c25169458e822d954725454fdaeef490397183",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/bot-id.test.ts",
+      "bytes": 2376,
+      "sha256": "85d9ac8478e04a980ad3c58a4d95a901beddb5a39e0e6b6f84452450e872c774",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/browser-eviction.test.ts",
+      "bytes": 6413,
+      "sha256": "44040ac257f6aa9cbda7b8db7c5829ae6066962314ddbc653dd7410b7e355275",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/browser-mode.test.ts",
+      "bytes": 786,
+      "sha256": "ecb81da9801a0ec31f689d390a55e17e61d06d2b5801393b59d15ea88490efe4",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/browser-runtime.test.ts",
+      "bytes": 1758,
+      "sha256": "61bd7c8a402d4bc28b0f3dc9e37a624d851cf87ba020530808d940289aa185ed",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/challenge.test.ts",
+      "bytes": 1257,
+      "sha256": "107f2a62264ce8aaaa4736c53347bab3d6eedad9a96d87ee9f07223da6ab17dc",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/control-store.test.ts",
+      "bytes": 4837,
+      "sha256": "1d445e4af6ef79274b0f46d6e9bd286bdcc76cbb216fb17969d22f309243b7e8",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/control.test.ts",
+      "bytes": 7646,
+      "sha256": "9e0eded783779eaa705b2a74c198f9489f9f5cf799d4c70f8d1b833049d97213",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/demonstration.test.ts",
+      "bytes": 1062,
+      "sha256": "d9fb2b694c722ab11209a22163ff61e6f9a6e08ab8c93a3686fc11e561aedadd",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/egress.test.ts",
+      "bytes": 5667,
+      "sha256": "5693534bef281cdf77ef337e97168127e528ad5217ed8718b92ea4f1d6218993",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/identity.test.ts",
+      "bytes": 4514,
+      "sha256": "611a22af70a5467d2c2f98ef7a16f01d1fb7d1cfa9c9eab3d76f34ece01f47fe",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/live-page.test.ts",
+      "bytes": 1277,
+      "sha256": "4f358b5ffdae1450f11c637f1c28e82499641df2f56cc52a1ca55f9375814ac1",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/local-chrome-startup.test.ts",
+      "bytes": 4354,
+      "sha256": "a62be3fb91c39c545a3a8c9da09e0823a338bf2cd9e94cdcccd46e900ad791f7",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/navigation-recovery.test.ts",
+      "bytes": 2189,
+      "sha256": "f268506ff67d6d29ee2f6a08d1656438220830d22ca17c69c0e22399b61ba80b",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/number-from-env.test.ts",
+      "bytes": 5318,
+      "sha256": "bb4a9c92d3be91d3f9e32eedda5532458f8aff82c98f7e23ad22696f3c78bf9a",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/profile-listing.test.ts",
+      "bytes": 2233,
+      "sha256": "c756a82a8508a582c8f81e2e7b2db78d4a53acfa34a18a5b1816e48130eb8972",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/request-validation.test.ts",
+      "bytes": 4615,
+      "sha256": "20b2d32ab41d9e042d41f8a96356881fd272755a11a695059948198d4ca956dc",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/runtime-hardening.test.ts",
+      "bytes": 1628,
+      "sha256": "bd55a3a98f262a9fed23bcee67f2181b0836b67db285aa91bb12aa094e00ffba",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/screencast.test.ts",
+      "bytes": 4268,
+      "sha256": "34f515e68ef93fc3cb94c07cc6ecb8a44f4429613bfb0d00b67daf291cd780f4",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/sessions.test.ts",
+      "bytes": 6998,
+      "sha256": "b2c5a5e7ea84c8f6e0f582ec0633f780d8560141adcc2de339bba2312a7f100c",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/viewer.test.ts",
+      "bytes": 19851,
+      "sha256": "2616cdcb4ce1d08f56d0516c9901a9175aad6dfeb257462688c4274a84c701d7",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/virtual-display.test.ts",
+      "bytes": 3819,
+      "sha256": "a14c6e1c58343204e272a31a81f48479a18b07634853d8b24baf704b4d3987b9",
+      "flags": []
+    },
+    {
+      "path": "tests/agent-bot.test.ts",
+      "bytes": 2519,
+      "sha256": "dd4ddce04a1266f1db112a8e60083cfa777ee63a08cfa77ec641162916834e61",
+      "flags": []
+    }
+  ],
+  "agent_bot_full_install": {
+    "inputs": [
+      {
+        "relative": "bun.lock",
+        "identity": {
+          "path": "openbot/agent-bot/bun.lock",
+          "bytes": 9012,
+          "sha256": "a33347e1b5248d4d80bc5b8069047d2f3b79117f8bad6b7e38ca3ffe72fddb5a",
+          "mode": "0o644"
+        }
+      },
+      {
+        "relative": "package.json",
+        "identity": {
+          "path": "openbot/agent-bot/package.json",
+          "bytes": 296,
+          "sha256": "95901afcb3dfb6a454d2bbf5fb9ec500b4e78326e807f74349e7caf5eae44cd4",
+          "mode": "0o644"
+        }
+      }
+    ],
+    "unchanged_root_and_own_inputs": 8,
+    "outside_source_standalone_install": true,
+    "full_declared_lock": true,
+    "ignore_all_lifecycle_scripts": true,
+    "private_cache": true,
+    "backend": "copyfile",
+    "install_limit": 536870912,
+    "module_copy_limit": 67108864,
+    "no_new_dependencies_or_lock_updates": true
+  },
+  "scope": "24 original offline mocked agent-computer files plus3 original no-key startup refusals after installing existing standalone lock. No browser/live-screen opt-in, real model/provider, actualPG, or user device acceptance.",
+  "resources": {
+    "project_and_descendants": 536870912,
+    "swap": 0,
+    "data": 67108864,
+    "uses2GiB": false
+  },
+  "extra_install_authorization_basis": "Existing full dependency-install512MiB exception within unchanged512MiB project gate, full declared own lock only, not new dependency additions",
+  "windows_source_writes": 0,
+  "source_changes": 0,
+  "paid_provider_calls": 0,
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
