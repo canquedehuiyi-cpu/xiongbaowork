@@ -4,20 +4,20 @@
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
   "state": "held",
   "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
-  "run_id": "bounded-generator-a4-2026-10-29T08:57:06.433Z",
-  "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
-  "acquired_at": "2026-10-29T08:57:06.433Z",
-  "renewed_at": "2026-10-29T09:36:16.165Z",
-  "expires_at": "2026-10-29T09:42:06.433Z",
+  "run_id": "administrative-close-2026-10-29T09:43:24.320Z",
+  "epoch": "2026-10-29T09:43:24.320Z:admin-close-c5add435",
+  "acquired_at": "2026-10-29T09:43:24.320Z",
+  "renewed_at": "2026-10-29T09:43:24.320Z",
+  "expires_at": "2026-10-29T09:48:24.320Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "c20e316c7aac8f7347d3b3dc91842ccf03e32c5f",
+  "expected_parent": "94b4731eba7be14bfbd0e61fea07fd975e31bf97",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "No unchanged A5/full17 rerun and no skip/weakening peer check. Prepare/review one exact ORM0.45.2 archive SRI-authenticated metadata-only DATA64 job; compare actual public declaration fields with original lock, no install/native/Source/otherpackage requests. Unknown actual values must remain unknown until that evidence.",
+  "next_action": "Administrative close only: persist exact unreviewed c5add435 candidate and last real results, then release. No project job.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -32,5 +32,10 @@
     "queued": [],
     "in_progress": [],
     "observed_at": "2026-10-29T08:46:28.635Z"
+  },
+  "predecessor_expiry": {
+    "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
+    "expires_at": "2026-10-29T09:42:06.433Z",
+    "takeover_basis": "Confirmed expired and queued/in_progress empty"
   }
 }
