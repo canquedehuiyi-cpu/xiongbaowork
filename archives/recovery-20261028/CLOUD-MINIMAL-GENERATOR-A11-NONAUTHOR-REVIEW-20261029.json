@@ -1,0 +1,161 @@
+{
+  "schema": "xiongbaowork-independent-a11-review-v1",
+  "reviewer": "/root/a6_review",
+  "review_kind": "NON_AUTHOR_READ_ONLY_STATIC_REVIEW",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+  "tree": "14a2032b051b486790e2873fd146852b6564168b",
+  "parent": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f",
+  "author": "/root/a7_prepare",
+  "verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_DIAGNOSTIC_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "writes": false,
+  "execution": false,
+  "local_files": false,
+  "method": "NormalGitHub complete3files/independentbytesSHA/immutabletrees/wholeunchangedsections,dataonlynoAST/exec",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "mode": "100644",
+      "blob": "38b0b3594e68303ca876ed36d831a9ce4db5a644",
+      "bytes": 4019,
+      "sha256": "059f7d3906068983015909ac45423f779aa5989cb7c27e151f3b63f835173dfe",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "mode": "100644",
+      "blob": "60353703fd08235815157a03c010f7f6246df461",
+      "bytes": 90984,
+      "sha256": "b9294c2c04b5f9830b489e3e4c9f759138ae56b5ba0cfc7f155d1c45368903e6",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "mode": "100644",
+      "blob": "6210477fc94c4b1b42ad492d52ebf5ecbef5ba5c",
+      "bytes": 40267,
+      "sha256": "42a238bb718ce9272f8dc0a2aeaf770d7afab6d5ff5e4f999d1f1b8854bd9f62",
+      "full_read": true
+    }
+  ],
+  "identities": {
+    "workflow_both_bytes": 90984,
+    "workflow_hash_matches": true,
+    "plan_identities_match": true,
+    "embedded_core_equal": true,
+    "head_skip": false
+  },
+  "tree_scope": {
+    "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "truncated": false,
+    "changed3admin": true,
+    "all_other_path_blob_type_mode_equal": true,
+    "deleted": 0,
+    "formalSource_changed": false
+  },
+  "retained_controls": {
+    "original17nodes15edges": true,
+    "URL_SRI_strictdeps": true,
+    "ORMfixedguard2pos14neg": true,
+    "FULL50": true,
+    "Source2065fullmanifestbyteshashmodeFD": true,
+    "seed_overlay_not_adopted": true,
+    "no_learning_fabricated": true,
+    "no_recovery_stitch": true,
+    "private_cache_copyfile_nohooks_nolinks": true,
+    "all3native_nested_beforegenerator": true,
+    "export_before_structurefail": true,
+    "parent": 536870912,
+    "DATA": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "root_admin_only": true,
+    "activation_repair_beforeirreversible_drop": true,
+    "kernel_gatechecks": true,
+    "prep480": true,
+    "generation120": true,
+    "export120": true,
+    "reserve8": true,
+    "late_refuse_RuntimeMaxreserve": true,
+    "idempotent_cgroupkill_boundedstop": true,
+    "final_always_limits_pop0": true
+  },
+  "workflow": {
+    "branch": "codex/cloud-minimal-generator-run-20261029-a11",
+    "event": "push",
+    "runner": "ubuntu-latest",
+    "contents": "read",
+    "jobs": 1,
+    "minutes": 15,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false
+  },
+  "dispatch": {
+    "exactSHA": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+    "max": 1,
+    "requires": [
+      "savedreport",
+      "currentvalidleasefreshhead",
+      "idlequeue",
+      "exactref/headsharundedup"
+    ],
+    "not_proof": [
+      "Formal Source adoption",
+      "Complete migration package",
+      "Actual output correctness",
+      "CPU/types",
+      "PG/production"
+    ]
+  },
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  },
+  "overlay": {
+    "path": "openbot/server/src/db/schema/approvals.ts",
+    "mode": "100644",
+    "blob": "178dd18f90315ed952c2b7e8bac6246453ae49dc",
+    "bytes": 13100,
+    "sha256": "f86495a58bd580d633b0a3a3f0e61138ecd91cec133aef4e9e3851e4d2d47c12",
+    "ref": "95ebc15ba4c6f53ead7a1a659565a1cdfbecf549",
+    "privatefiles": 2065,
+    "privatebytes": 50177761,
+    "calculation": "50175181-10520+13100",
+    "full_read": true,
+    "exact_two_defaults_replacement": true,
+    "adopted": false
+  },
+  "initial_review": {
+    "commit": "46533fc10e131d9afe47ca93f63bd861ad50ba5a",
+    "blob": "2288e8357e1b197bba2dd7ca3bfd6f51ee4e9303",
+    "path": "archives/recovery-20261028/CLOUD-SEED-SERIALIZABLE-DEFAULTS-INITIAL-REVIEW-20261029.json",
+    "full_read": true,
+    "boundary": "Diagnostic overlay only,not full migration package. Exact schema independently verified; nine upstream Sources not newly reread by this reviewer."
+  },
+  "unchanged": {
+    "SOURCE_SCRIPT_through_main_byte_equal_A10": true,
+    "baseline2065_50175181": true,
+    "FULL50_absolute": true,
+    "only_approvals_identity_updated": true,
+    "original0080_chain": true,
+    "no_recovery_stitch": true,
+    "original17_lock_nodes_15edges": true,
+    "ORM_TSX_guards": true,
+    "privatecache_copyfile_nohooks_nolinks": true,
+    "relative_out_binding": true,
+    "native3_resolution": true,
+    "output_export_shape_gate": true,
+    "DDL_consistency_still_pending": true
+  }
+}

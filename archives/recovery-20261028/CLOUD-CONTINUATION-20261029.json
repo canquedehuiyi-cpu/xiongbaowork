@@ -3647,12 +3647,13 @@
     "owner": "/root/route_review NOW_AUTHOR_NOT_REVIEWER_OF_SUCCESSOR",
     "preparation_branch": "codex/route-cloud-activation-fix-20261029",
     "base": "092e47957ce1608e37cc40a116162c90255c7555",
-    "status": "41DD_STATIC_MODE_COMPARISON_BLOCKER_SUCCESSOR_AUTHOR_PREPARING",
+    "status": "AUTHOR_SUCCESSOR_SAVED_NONAUTHOR_REVIEW_PENDING_NOT_RUN",
     "scope": "Only twoadministrativefiles; rootactivationbarrier everyprelude+same270/300/fallback/restorewitness; noSource/automation/canonical/resourcepermission",
     "independent_reviewer": "/root/a6_review afterexactcandidate",
     "oldbf_disagreement_and_ea0_and092finding_preserved": true,
-    "candidate": "41dd55287dbc7dca61c70303199a6cad11860a0a",
-    "finding": "Snapshot compares octalobserved0o644 vs71manifest100644 asrawstrings; failclosed. Noexecution."
+    "candidate": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+    "finding": "Snapshot compares octalobserved0o644 vs71manifest100644 asrawstrings; failclosed. Noexecution.",
+    "rejected41dd_report": "archives/recovery-20261028/CLOUD-ROUTE-41DD-NONAUTHOR-REVIEW-20261029.json"
   },
   "cloud_seed_serializable_defaults": {
     "candidate": "95ebc15ba4c6f53ead7a1a659565a1cdfbecf549",
@@ -3698,5 +3699,37 @@
     "original_prompt_bytes": 6155,
     "restored_paused": true,
     "no_newworker_orretry_authorized": true
+  },
+  "cloud_generator_a11": {
+    "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+    "tree": "14a2032b051b486790e2873fd146852b6564168b",
+    "files": [
+      {
+        "path": ".github/workflows/cloud-minimal-generator.yml",
+        "mode": "100644",
+        "blob": "38b0b3594e68303ca876ed36d831a9ce4db5a644",
+        "bytes": 4019,
+        "sha256": "059f7d3906068983015909ac45423f779aa5989cb7c27e151f3b63f835173dfe",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+        "mode": "100644",
+        "blob": "60353703fd08235815157a03c010f7f6246df461",
+        "bytes": 90984,
+        "sha256": "b9294c2c04b5f9830b489e3e4c9f759138ae56b5ba0cfc7f155d1c45368903e6",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+        "mode": "100644",
+        "blob": "6210477fc94c4b1b42ad492d52ebf5ecbef5ba5c",
+        "bytes": 40267,
+        "sha256": "42a238bb718ce9272f8dc0a2aeaf770d7afab6d5ff5e4f999d1f1b8854bd9f62",
+        "full_read": true
+      }
+    ],
+    "status": "NONAUTHOR_APPROVED_NOT_YET_DISPATCHED",
+    "review_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A11-NONAUTHOR-REVIEW-20261029.json"
   }
 }
