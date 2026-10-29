@@ -977,8 +977,8 @@
     }
   },
   "cloud_generator_next": {
-    "status": "A9_EXACT_TSX_BIN_GUARD_AUTHOR_PREPARING_UNREVIEWED",
-    "next_action": "Exact identity TSX bin compatibility guard only; original URL/SRI/raw1601 hash/exactstring/exactlockcommandtarget; no generalized conversion or dropped checks. Non-author review before justified next generator execution."
+    "status": "A10_PRIVATE_OUTPUT_RELATIVE_PATH_AUTHOR_PREPARING_UNREVIEWED",
+    "next_action": "Narrow privateconfig outputpath correction,relativefromactualcwd mustresolve exactcontrolledprivate-drizzle. Preserve50schema/originalchain. Exactsuccessorindependentreview beforeonejustifiedrun."
   },
   "latest_bounded_round": {
     "ended_at": "2026-10-29T09:45:04.134Z",
@@ -3520,7 +3520,7 @@
         "full_read": true
       }
     ],
-    "status": "DISPATCHED_IN_PROGRESS_NOT_ACCEPTED",
+    "status": "DEPENDENCIES_AND_NATIVE_PASS_GENERATOR_INVOKED_BUT_NO_DDL_ENOENT",
     "review_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A9-NONAUTHOR-REVIEW-20261029.json",
     "dispatch": {
       "schema": "xiongbaowork-a9-exact-dispatch-v1",
@@ -3531,8 +3531,8 @@
       "run": 40898247886,
       "job": 123533162634,
       "event": "push",
-      "status": "in_progress",
-      "conclusion": null,
+      "status": "completed",
+      "conclusion": "failure",
       "review_commit": "106b22baebbe594a794471b701403545bb706f7f",
       "review_blob": "0318352796922b537542857dacafc7990b1b9d88",
       "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
@@ -3548,6 +3548,16 @@
       },
       "Source_adopted": false,
       "next_action": "Read same run/job terminal log; no newjob orref. Preserve actualdeps/native/generator/output/final gates."
+    },
+    "result": {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A9-RESULT.json",
+      "run": 40898247886,
+      "job": 123533162634,
+      "SRI": 17,
+      "prepared": 17,
+      "native": "PASSED_MINIMAL_CLOSURE",
+      "generator": "ACTUALLY_INVOKED_INTERNAL_ENOENT",
+      "metadata": "NONE"
     }
   },
   "cloud_ack_wb_source_reconciliation": {

@@ -1,0 +1,4308 @@
+{
+  "schema": "xiongbaowork-a9-independent-execution-review-v1",
+  "reviewer": "/root/a6_review",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+  "run": 40898247886,
+  "job": 123533162634,
+  "run_attempt": 1,
+  "event": "push",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-10-29T15:06:53Z",
+  "updated_at": "2026-10-29T15:07:58Z",
+  "verdict": "DEPENDENCIES_AND_NATIVE_PASS_GENERATOR_INVOKED_BUT_NO_DDL_ENOENT",
+  "decoded_job_log": {
+    "full": true,
+    "characters": 80842,
+    "utf8_bytes": 80844,
+    "sha256": "c3338a19195de207365df59025ba8b6efdf5c91e487a997fff5fac2162e6b0d6",
+    "leading_BOM": true
+  },
+  "source_copy": {
+    "exit0": true,
+    "files": 2065,
+    "bytes": 50175181,
+    "byte_hash_mode_FD": true,
+    "mismatches": 0,
+    "private_files": 2065,
+    "private_bytes": 50177753,
+    "rechecks_after_deps_export": true,
+    "FULL50": true,
+    "original0080_tables": 99,
+    "recovery_stitch": false,
+    "adopted": false
+  },
+  "deps": {
+    "exit": 0,
+    "SRI": 17,
+    "prepared": 17,
+    "ready": true,
+    "private_cache": true,
+    "links": 0,
+    "hooks": false,
+    "fullworkspace": false,
+    "optionalDBpeers": false,
+    "actual_ORM_contract": {
+      "positive": 2,
+      "negative": 14,
+      "synthetic": true
+    },
+    "actual_bin_contract": {
+      "positive": 3,
+      "negative": 16,
+      "synthetic": true
+    },
+    "actual_ORM_TSX_fixedguards_pass": true
+  },
+  "native": {
+    "Node": {
+      "path": "/usr/local/bin/node",
+      "version": "v24.22.1"
+    },
+    "nested_resolution_passed": true,
+    "actual_direct_and_JS_transform": [
+      "0.18.20",
+      "0.25.12",
+      "0.28.2"
+    ],
+    "nohooks": true,
+    "boundary": "Minimal generator closure native proof only,not appnative/imageacceptance"
+  },
+  "generator": {
+    "actually_invoked": true,
+    "kit": "0.31.10",
+    "ORM": "0.45.2",
+    "schema50": true,
+    "process_exit": 0,
+    "successful_generation": false,
+    "added": [],
+    "changed": [],
+    "removed": [],
+    "metadata_complete": false,
+    "finding": "GENERATOR_OUTPUT_SHAPE_INCOMPLETE",
+    "failure": "ENOENT migration-foldervalidation: absoluteoutprefixed./",
+    "error_path": ".//home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json",
+    "SQL_snapshot_journal": "NONE",
+    "migration": "NOT_RUN"
+  },
+  "generator_log_integrity": {
+    "path": "diagnostic/generator.log",
+    "complete": true,
+    "chunks": 1,
+    "gzip_bytes": 526,
+    "gzip_sha256": "a5bdb8b654af3f83e9f94d747d2daf7c488651efc683a27e02d3c10083cd9943",
+    "raw_bytes": 1196,
+    "raw_sha256": "56bda287017f3dcb05db756b436294a741cc14d8eb651bbf8c1df59fd583ed1b",
+    "independent_SHA_CRC_ISIZE_verified": true,
+    "method": "PureJS base64gzipDEFLATE data decode/noexec/AST/filesystem",
+    "raw_text": "Reading config file '/home/runner/work/_temp/offline.config.cjs'\nError: ENOENT: no such file or directory, open './/home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json'\n    at Object.openSync (node:fs:621:18)\n    at readFileSync (node:fs:487:35)\n    at snapshots.reduce.malformed (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:8159:62)\n    at Array.reduce (<anonymous>)\n    at validateWithReport (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:8157:32)\n    at prepareMigrationFolder (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:8199:22)\n    at prepareAndMigratePg (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:32165:40)\n    at Object.handler (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91988:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async run (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91472:7) {\n  errno: -2,\n  code: 'ENOENT',\n  syscall: 'open',\n  path: './/home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json'\n}\n"
+  },
+  "actual_events": [
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-source.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "RESOURCE_GATE",
+      "value": {
+        "cgroup": "0::/xiongbaowork.slice/xb-min-source.service",
+        "aggregate_memory_max": 67108864,
+        "project_upper_bound": 536870912,
+        "swap_max": 0
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "init",
+        "argument_count": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "init"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "remote",
+        "argument_count": 5
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "remote"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "config",
+        "argument_count": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "config"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "config",
+        "argument_count": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "config"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 8
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 8
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "diff",
+        "argument_count": 5
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "diff"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "sparse-checkout",
+        "argument_count": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "sparse-checkout"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 5
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "ls-tree",
+        "argument_count": 5
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "ls-tree"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 37
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 39
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 39
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 24
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 22
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 16
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 30
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 28
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 22
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 30
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 30
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 28
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 22
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 16
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 14
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 8
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 15
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 13
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 7
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 15
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 13
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 7
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 15
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 13
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 7
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 17
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 15
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 9
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 13
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 11
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 5
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 12
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 10
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 12
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 10
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 12
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 10
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 4
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 11
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 9
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 3
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 40
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 38
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 32
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "fetch",
+        "argument_count": 35
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "fetch"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "checkout",
+        "argument_count": 33
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "checkout"
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_COMPLETE",
+      "value": {
+        "files": 27
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_MATERIALIZATION",
+      "value": {
+        "batches": 74,
+        "max_files": 32,
+        "max_source_bytes": 2097152,
+        "fsync_after_each_batch": true,
+        "memory_limit": 67108864
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "rev-parse",
+        "argument_count": 3
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "rev-parse"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "ls-files",
+        "argument_count": 3
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "ls-files"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "status",
+        "argument_count": 3
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "status"
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_START",
+      "value": {
+        "operation": "rev-parse",
+        "argument_count": 3
+      }
+    },
+    {
+      "event": "SOURCE_COMMAND_END",
+      "value": {
+        "operation": "rev-parse"
+      }
+    },
+    {
+      "event": "SOURCE_RECOVERY_RESULT",
+      "value": {
+        "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "aggregate_memory_limit": 67108864,
+        "candidate_administrative_base_sha": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+        "git_tree": "b1e97c65a6d75d046aa4d41b3d1987f7ede1a4ef",
+        "head": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+        "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+        "overlay_tickets": [],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50175181,
+        "verified_source_files": 2065,
+        "windows_source_files_written": 0
+      }
+    },
+    {
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 447.213649392,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-source"
+      }
+    },
+    {
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 447.213510772,
+        "exit": 0,
+        "stage": "source"
+      }
+    },
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-copy.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50175181,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": false
+      }
+    },
+    {
+      "event": "DIAGNOSTIC_ONLY_SCHEMA_OVERLAY",
+      "value": {
+        "adopted": false,
+        "after": {
+          "bytes": 13092,
+          "mode": "0o644",
+          "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1"
+        },
+        "before": {
+          "bytes": 10520,
+          "mode": "0o644",
+          "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7"
+        },
+        "path": "openbot/server/src/db/schema/approvals.ts",
+        "reference": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332"
+      }
+    },
+    {
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50177753,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": true
+      }
+    },
+    {
+      "event": "OFFLINE_FULL50_PREPARED",
+      "value": {
+        "complete_source_copy": 2065,
+        "credentials": false,
+        "learning_removed_with0078_evidence": true,
+        "original_drizzle_tables": 99,
+        "recovery_stitched": false,
+        "runtime_helpers": [
+          "json.ts",
+          "tenant.ts"
+        ],
+        "schema_files": 50
+      }
+    },
+    {
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 443.935521378,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-copy"
+      }
+    },
+    {
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 443.935398417,
+        "exit": 0,
+        "stage": "copy"
+      }
+    },
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-deps.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "METADATA_GUARD_CONTRACT_CHECKS",
+      "value": {
+        "actual_package_authentication": false,
+        "negative": 14,
+        "positive": 2,
+        "synthetic_only": true
+      }
+    },
+    {
+      "event": "BIN_GUARD_CONTRACT_CHECKS",
+      "value": {
+        "actual_package_authentication": false,
+        "negative": 16,
+        "positive": 3,
+        "synthetic_only": true
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+        "followed_hop_budget": 1,
+        "package": "@drizzle-team/brocli@0.10.2",
+        "source_original_lock_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 82,
+          "url_sha256": "305d8e623931fc51f4da4278776d94fe7d5af1189e4bf4d9d09fcd1d781c4982",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 76527,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==",
+        "original_lock_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+        "package": "@drizzle-team/brocli@0.10.2"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "@drizzle-team/brocli@0.10.2",
+        "package_json": {
+          "bytes": 1483,
+          "sha256": "e31fb1484547591a3ad6c42d0665b57eef7dc02777426c54d6cc06cf7fb55b58"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 76527,
+        "extracted": {
+          "bytes": 360392,
+          "files": 8
+        },
+        "hooks": "NOT_RUN",
+        "key": "@drizzle-team/brocli",
+        "placement": "node_modules/@drizzle-team/brocli",
+        "version": "0.10.2"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/%40esbuild-kit/core-utils/3.3.2/core-utils-3.3.2.tgz",
+        "followed_hop_budget": 1,
+        "package": "@esbuild-kit/core-utils@3.3.2",
+        "source_original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/%40esbuild-kit/core-utils/3.3.2/core-utils-3.3.2.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 87,
+          "url_sha256": "1416d61182059df14a2c01bbf349d8b58e51e1ba953561d6f33ba0db85134783",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 24011,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+        "package": "@esbuild-kit/core-utils@3.3.2"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "@esbuild-kit/core-utils@3.3.2",
+        "package_json": {
+          "bytes": 688,
+          "sha256": "80f3fe0f8dbd03e69c7c0dbd2029c14aec6bcb9c0dca8db3e27d2d6007474cf3"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 24011,
+        "extracted": {
+          "bytes": 64096,
+          "files": 5
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/core-utils",
+        "placement": "node_modules/@esbuild-kit/core-utils",
+        "version": "3.3.2"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/esbuild/0.18.20/esbuild-0.18.20.tgz",
+        "followed_hop_budget": 1,
+        "package": "esbuild@0.18.20",
+        "source_original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/esbuild/0.18.20/esbuild-0.18.20.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 70,
+          "url_sha256": "6ba5ccc653bd27a42ad27a3367580534b66d93cc6f0126656702ed0521800c42",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 29378,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==",
+        "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+        "package": "esbuild@0.18.20"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "esbuild@0.18.20",
+        "package_json": {
+          "bytes": 1283,
+          "sha256": "37251f359539b55497a78f9daaff4545c30ed6c3d1c2e4fac01aa5a5d3d5bf7b"
+        }
+      }
+    },
+    {
+      "event": "PINNED_BIN_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_dictionary",
+        "package": "esbuild@0.18.20",
+        "package_json": {
+          "bytes": 1283,
+          "sha256": "37251f359539b55497a78f9daaff4545c30ed6c3d1c2e4fac01aa5a5d3d5bf7b"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 29378,
+        "extracted": {
+          "bytes": 131272,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/core-utils/esbuild",
+        "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+        "version": "0.18.20"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/%40esbuild/linux-x64/0.18.20/linux-x64-0.18.20.tgz",
+        "followed_hop_budget": 1,
+        "package": "@esbuild/linux-x64@0.18.20",
+        "source_original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/%40esbuild/linux-x64/0.18.20/linux-x64-0.18.20.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 85,
+          "url_sha256": "e1d2157ed955e0252b64f1f59f3cc3b70f2ad15cfe3a3e4ccb0f250a256e1f62",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 3923240,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-UYqiqemphJcNsFEskc73jQ7B9jgwjWrSayxawS6UVFZGWrAAtkzjxSqnoclCXxWtfwLdzU+vTpcNYhpn43uP1w==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+        "package": "@esbuild/linux-x64@0.18.20"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "@esbuild/linux-x64@0.18.20",
+        "package_json": {
+          "bytes": 329,
+          "sha256": "16bd46d3a19f5ead6bd98bf67ae52fd302795dd98bb441a55756d16bdf83e276"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 3923240,
+        "extracted": {
+          "bytes": 9347542,
+          "files": 3
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+        "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+        "version": "0.18.20"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/%40esbuild-kit/esm-loader/2.6.5/esm-loader-2.6.5.tgz",
+        "followed_hop_budget": 1,
+        "package": "@esbuild-kit/esm-loader@2.6.5",
+        "source_original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/%40esbuild-kit/esm-loader/2.6.5/esm-loader-2.6.5.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 87,
+          "url_sha256": "df6da94a337eb025af1e706e7b3b8e67ab1655f272afd50a8b434d3e48e672d9",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 5048,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+        "package": "@esbuild-kit/esm-loader@2.6.5"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "@esbuild-kit/esm-loader@2.6.5",
+        "package_json": {
+          "bytes": 627,
+          "sha256": "56ade3647ebf2b2fff598431b0a6bedf0dc1d3e89ef6ad7d37e8f1abe057b085"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 5048,
+        "extracted": {
+          "bytes": 13364,
+          "files": 4
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/esm-loader",
+        "placement": "node_modules/@esbuild-kit/esm-loader",
+        "version": "2.6.5"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/%40esbuild/linux-x64/0.28.2/linux-x64-0.28.2.tgz",
+        "followed_hop_budget": 1,
+        "package": "@esbuild/linux-x64@0.28.2",
+        "source_original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/%40esbuild/linux-x64/0.28.2/linux-x64-0.28.2.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 83,
+          "url_sha256": "c90c0861579428952c7e590d3dcc1455fa8222d22327f30eab5088cce709d0c9",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 4741809,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+        "package": "@esbuild/linux-x64@0.28.2"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "@esbuild/linux-x64@0.28.2",
+        "package_json": {
+          "bytes": 372,
+          "sha256": "a3924c1835c7849adeb3d82ac24525da0d4190607b60d05265dc6746bde2ddb8"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 4741809,
+        "extracted": {
+          "bytes": 11428465,
+          "files": 3
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild/linux-x64",
+        "placement": "node_modules/@esbuild/linux-x64",
+        "version": "0.28.2"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/buffer-from/1.1.2/buffer-from-1.1.2.tgz",
+        "followed_hop_budget": 1,
+        "package": "buffer-from@1.1.2",
+        "source_original_lock_url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/buffer-from/1.1.2/buffer-from-1.1.2.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 74,
+          "url_sha256": "a3e20dc25b26454800e48e9c55592ff6d3c90c8470afdebd4053b9d90b900cc2",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 2313,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==",
+        "original_lock_url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+        "package": "buffer-from@1.1.2"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "buffer-from@1.1.2",
+        "package_json": {
+          "bytes": 304,
+          "sha256": "f7cde31d1db3e71738045206397d472e1f12513643ba4b9fd60ea337f22b1e3f"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 2313,
+        "extracted": {
+          "bytes": 5047,
+          "files": 4
+        },
+        "hooks": "NOT_RUN",
+        "key": "buffer-from",
+        "placement": "node_modules/buffer-from",
+        "version": "1.1.2"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/drizzle-kit/0.31.10/drizzle-kit-0.31.10.tgz",
+        "followed_hop_budget": 1,
+        "package": "drizzle-kit@0.31.10",
+        "source_original_lock_url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/drizzle-kit/0.31.10/drizzle-kit-0.31.10.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 78,
+          "url_sha256": "fb68c080e67e8f81c7c419a779f9b86a3973f5e5ba1a7c159592550d3c359149",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 1638315,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==",
+        "original_lock_url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+        "package": "drizzle-kit@0.31.10"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "drizzle-kit@0.31.10",
+        "package_json": {
+          "bytes": 3683,
+          "sha256": "c258e6134d938d6d718448274fd3e89ed9c05aeca7bb6bc7df22c89d943615c8"
+        }
+      }
+    },
+    {
+      "event": "PINNED_BIN_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_dictionary",
+        "package": "drizzle-kit@0.31.10",
+        "package_json": {
+          "bytes": 3683,
+          "sha256": "c258e6134d938d6d718448274fd3e89ed9c05aeca7bb6bc7df22c89d943615c8"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 1638315,
+        "extracted": {
+          "bytes": 10267084,
+          "files": 13
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-kit",
+        "placement": "node_modules/drizzle-kit",
+        "version": "0.31.10"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/esbuild/0.25.12/esbuild-0.25.12.tgz",
+        "followed_hop_budget": 1,
+        "package": "esbuild@0.25.12",
+        "source_original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/esbuild/0.25.12/esbuild-0.25.12.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 70,
+          "url_sha256": "ca99d61377e010c18016930ef7921430651191b171ec3d6dfeefedaaad85155f",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 30947,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==",
+        "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+        "package": "esbuild@0.25.12"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "esbuild@0.25.12",
+        "package_json": {
+          "bytes": 1490,
+          "sha256": "cb7d5b1fe478f8cbaae566a86031b6fdf5f7d444354f35d1cb3cba9adf6d2935"
+        }
+      }
+    },
+    {
+      "event": "PINNED_BIN_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_dictionary",
+        "package": "esbuild@0.25.12",
+        "package_json": {
+          "bytes": 1490,
+          "sha256": "cb7d5b1fe478f8cbaae566a86031b6fdf5f7d444354f35d1cb3cba9adf6d2935"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 30947,
+        "extracted": {
+          "bytes": 135343,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-kit/esbuild",
+        "placement": "node_modules/drizzle-kit/node_modules/esbuild",
+        "version": "0.25.12"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/%40esbuild/linux-x64/0.25.12/linux-x64-0.25.12.tgz",
+        "followed_hop_budget": 1,
+        "package": "@esbuild/linux-x64@0.25.12",
+        "source_original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/%40esbuild/linux-x64/0.25.12/linux-x64-0.25.12.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 85,
+          "url_sha256": "0565cac5027cb31929707ffcc977c93f9fde5850dbaff675aba4059abb154ce1",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 4395720,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+        "package": "@esbuild/linux-x64@0.25.12"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "@esbuild/linux-x64@0.25.12",
+        "package_json": {
+          "bytes": 373,
+          "sha256": "fdf02f1b53a4651a3eea731e2ad0a9c7d4fd8646430a5935d551e610e8d469fc"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 4395720,
+        "extracted": {
+          "bytes": 10359450,
+          "files": 3
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-kit/esbuild/@esbuild/linux-x64",
+        "placement": "node_modules/drizzle-kit/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+        "version": "0.25.12"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz",
+        "followed_hop_budget": 1,
+        "package": "drizzle-orm@0.45.2",
+        "source_original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 76,
+          "url_sha256": "7d66838e2e3d6845c71d4ead978ce3617bcd3975f3339f0b66a04fa9fb14a809",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 1223890,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+        "original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+        "package": "drizzle-orm@0.45.2"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "exact_orm0452_optional_prisma_representation",
+        "package": "drizzle-orm@0.45.2",
+        "package_json": {
+          "bytes": 177277,
+          "sha256": "9fd30ce718965c19178ac6936462b77017f1fffe56865124d0cfe55850de09ff"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 1223890,
+        "extracted": {
+          "bytes": 10420427,
+          "files": 2666
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-orm",
+        "placement": "node_modules/drizzle-orm",
+        "version": "0.45.2"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/esbuild/0.28.2/esbuild-0.28.2.tgz",
+        "followed_hop_budget": 1,
+        "package": "esbuild@0.28.2",
+        "source_original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.28.2.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/esbuild/0.28.2/esbuild-0.28.2.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 68,
+          "url_sha256": "cc206637991820ab5021e25ed72040df8ad6b23e72cbee3040a7d0c636314451",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 34207,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==",
+        "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.28.2.tgz",
+        "package": "esbuild@0.28.2"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "esbuild@0.28.2",
+        "package_json": {
+          "bytes": 3980,
+          "sha256": "9d0bc453f4e791553c4cc2298ba023b409241fd9801e494741666eb0f6051490"
+        }
+      }
+    },
+    {
+      "event": "PINNED_BIN_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_dictionary",
+        "package": "esbuild@0.28.2",
+        "package_json": {
+          "bytes": 3980,
+          "sha256": "9d0bc453f4e791553c4cc2298ba023b409241fd9801e494741666eb0f6051490"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 34207,
+        "extracted": {
+          "bytes": 147361,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "esbuild",
+        "placement": "node_modules/esbuild",
+        "version": "0.28.2"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/get-tsconfig/4.14.3/get-tsconfig-4.14.3.tgz",
+        "followed_hop_budget": 1,
+        "package": "get-tsconfig@4.14.3",
+        "source_original_lock_url": "https://registry.npmmirror.com/get-tsconfig/-/get-tsconfig-4.14.3.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/get-tsconfig/4.14.3/get-tsconfig-4.14.3.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 78,
+          "url_sha256": "6edbe5df6ef3201ec11796af4b4814bbd380a6e58527c56a326bd09d7a7e0757",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 49036,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==",
+        "original_lock_url": "https://registry.npmmirror.com/get-tsconfig/-/get-tsconfig-4.14.3.tgz",
+        "package": "get-tsconfig@4.14.3"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "get-tsconfig@4.14.3",
+        "package_json": {
+          "bytes": 1031,
+          "sha256": "4e5880985b33ecaa87f6aef1b6581dec5555d88a0738a7379576e80891873355"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 49036,
+        "extracted": {
+          "bytes": 163865,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "get-tsconfig",
+        "placement": "node_modules/get-tsconfig",
+        "version": "4.14.3"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/resolve-pkg-maps/1.0.0/resolve-pkg-maps-1.0.0.tgz",
+        "followed_hop_budget": 1,
+        "package": "resolve-pkg-maps@1.0.0",
+        "source_original_lock_url": "https://registry.npmmirror.com/resolve-pkg-maps/-/resolve-pkg-maps-1.0.0.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/resolve-pkg-maps/1.0.0/resolve-pkg-maps-1.0.0.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 84,
+          "url_sha256": "55db41e3507db80fa65fb36635cdc7dcef4db6fd459d3830b113d7a744b47450",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 5194,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==",
+        "original_lock_url": "https://registry.npmmirror.com/resolve-pkg-maps/-/resolve-pkg-maps-1.0.0.tgz",
+        "package": "resolve-pkg-maps@1.0.0"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "resolve-pkg-maps@1.0.0",
+        "package_json": {
+          "bytes": 951,
+          "sha256": "e372f809865bc3fc6ad75be76a90b031eece36e9d12d283de9955aca6be8537d"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 5194,
+        "extracted": {
+          "bytes": 15037,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "resolve-pkg-maps",
+        "placement": "node_modules/resolve-pkg-maps",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/source-map/0.6.1/source-map-0.6.1.tgz",
+        "followed_hop_budget": 1,
+        "package": "source-map@0.6.1",
+        "source_original_lock_url": "https://registry.npmmirror.com/source-map/-/source-map-0.6.1.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/source-map/0.6.1/source-map-0.6.1.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 72,
+          "url_sha256": "1563e8e92abd0ff1140f88b74953a418f491f606faeb1aca2b2acb0d4db9d25d",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 199644,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==",
+        "original_lock_url": "https://registry.npmmirror.com/source-map/-/source-map-0.6.1.tgz",
+        "package": "source-map@0.6.1"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "source-map@0.6.1",
+        "package_json": {
+          "bytes": 2579,
+          "sha256": "3fdebd9f5c0107bcf7b73e0d17e0147042bcfb74884106e4428afbf17171ef06"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 199644,
+        "extracted": {
+          "bytes": 805224,
+          "files": 20
+        },
+        "hooks": "NOT_RUN",
+        "key": "source-map",
+        "placement": "node_modules/source-map",
+        "version": "0.6.1"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/source-map-support/0.5.21/source-map-support-0.5.21.tgz",
+        "followed_hop_budget": 1,
+        "package": "source-map-support@0.5.21",
+        "source_original_lock_url": "https://registry.npmmirror.com/source-map-support/-/source-map-support-0.5.21.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/source-map-support/0.5.21/source-map-support-0.5.21.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 90,
+          "url_sha256": "04f671533de441a45249b7232e0bdfc419035d1e69ae02bc62592fc021588558",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 26650,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==",
+        "original_lock_url": "https://registry.npmmirror.com/source-map-support/-/source-map-support-0.5.21.tgz",
+        "package": "source-map-support@0.5.21"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "source-map-support@0.5.21",
+        "package_json": {
+          "bytes": 764,
+          "sha256": "f54089d5208d092e8bebc7547a3bd2dc35d27668717158bfc3562c55ec4861bf"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 26650,
+        "extracted": {
+          "bytes": 85177,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "source-map-support",
+        "placement": "node_modules/source-map-support",
+        "version": "0.5.21"
+      }
+    },
+    {
+      "event": "PINNED_REDIRECT_PERMITTED",
+      "value": {
+        "SRI_verified": false,
+        "expected_package_path": "/packages/tsx/4.23.12/tsx-4.23.12.tgz",
+        "followed_hop_budget": 1,
+        "package": "tsx@4.23.12",
+        "source_original_lock_url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+        "status": 302,
+        "target": {
+          "fragment_present": false,
+          "hostname": "cdn.npmmirror.com",
+          "path": "/packages/tsx/4.23.12/tsx-4.23.12.tgz",
+          "path_truncated": false,
+          "port": null,
+          "query_present": false,
+          "scheme": "https",
+          "url_chars": 62,
+          "url_sha256": "76f2ea275254b12e34d7a6a90ebaf79ae556695e84cbbadf0d680212b10e4947",
+          "userinfo_present": false
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 187918,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+        "original_lock_url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+        "package": "tsx@4.23.12"
+      }
+    },
+    {
+      "event": "PINNED_METADATA_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "strict_equal",
+        "package": "tsx@4.23.12",
+        "package_json": {
+          "bytes": 1601,
+          "sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"
+        }
+      }
+    },
+    {
+      "event": "PINNED_BIN_VALIDATION",
+      "value": {
+        "SRI_already_verified": true,
+        "mode": "exact_tsx42312_bin_representation",
+        "package": "tsx@4.23.12",
+        "package_json": {
+          "bytes": 1601,
+          "sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"
+        }
+      }
+    },
+    {
+      "event": "PINNED_PACKAGE_PREPARED",
+      "value": {
+        "download_bytes": 187918,
+        "extracted": {
+          "bytes": 534311,
+          "files": 50
+        },
+        "hooks": "NOT_RUN",
+        "key": "tsx",
+        "placement": "node_modules/tsx",
+        "version": "4.23.12"
+      }
+    },
+    {
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50177753,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": true
+      }
+    },
+    {
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50175181,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": false
+      }
+    },
+    {
+      "event": "MINIMAL_DEPENDENCIES_READY",
+      "value": {
+        "full_workspace_install": "NOT_RUN",
+        "hooks": "NOT_RUN",
+        "links": 0,
+        "optional_db_peers_installed": false,
+        "packages": 17,
+        "private_cache": true
+      }
+    },
+    {
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 425.578108904,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-deps"
+      }
+    },
+    {
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 425.577987927,
+        "exit": 0,
+        "stage": "deps"
+      }
+    },
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-generate.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "ACTUAL_NODE",
+      "value": {
+        "path": "/usr/local/bin/node",
+        "version": "v24.22.1"
+      }
+    },
+    {
+      "event": "ESBUILD_NATIVE_NO_HOOK",
+      "value": {
+        "direct": "0.18.20",
+        "js_api_transform": "0.18.20",
+        "version": "0.18.20"
+      }
+    },
+    {
+      "event": "ESBUILD_NATIVE_NO_HOOK",
+      "value": {
+        "direct": "0.25.12",
+        "js_api_transform": "0.25.12",
+        "version": "0.25.12"
+      }
+    },
+    {
+      "event": "ESBUILD_NATIVE_NO_HOOK",
+      "value": {
+        "direct": "0.28.2",
+        "js_api_transform": "0.28.2",
+        "version": "0.28.2"
+      }
+    },
+    {
+      "event": "ACTUAL_OFFLINE_GENERATOR_RESULT",
+      "value": {
+        "adopted": false,
+        "exit_code": 0,
+        "generator": "ACTUALLY_INVOKED",
+        "kit": "0.31.10",
+        "log_bytes": 1196,
+        "log_evidence_complete": true,
+        "metadata": "PENDING_EXPORT",
+        "migration": "NOT_RUN",
+        "orm": "0.45.2",
+        "postgres": "PG_PENDING",
+        "schema_modules": 50
+      }
+    },
+    {
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 118.475530094,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-generate"
+      }
+    },
+    {
+      "event": "GENERATION_SERVICE_TERMINAL",
+      "value": {
+        "exit": 0
+      }
+    },
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-export.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50177753,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": true
+      }
+    },
+    {
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50175181,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": false
+      }
+    },
+    {
+      "event": "FULL_GENERATED_DDL_DIFF",
+      "value": {
+        "added": [],
+        "adopted": false,
+        "changed": [],
+        "generator": {
+          "adopted": false,
+          "exit_code": 0,
+          "generator": "ACTUALLY_INVOKED",
+          "kit": "0.31.10",
+          "log_bytes": 1196,
+          "log_evidence_complete": true,
+          "metadata": "PENDING_EXPORT",
+          "migration": "NOT_RUN",
+          "orm": "0.45.2",
+          "postgres": "PG_PENDING",
+          "schema_modules": 50
+        },
+        "removed": []
+      }
+    },
+    {
+      "event": "GENERATOR_STRUCTURE_FINDINGS",
+      "value": {
+        "export_actual_before_failure": true,
+        "findings": [
+          {
+            "detail": "Generator exit or actual added/changed/removed shape is not the expected complete candidate.",
+            "id": "GENERATOR_OUTPUT_SHAPE_INCOMPLETE"
+          }
+        ]
+      }
+    },
+    {
+      "event": "GENERATED_DATA_HEADER",
+      "value": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 1196,
+        "exported_sha256": "56bda287017f3dcb05db756b436294a741cc14d8eb651bbf8c1df59fd583ed1b",
+        "gzip_bytes": 526,
+        "gzip_sha256": "a5bdb8b654af3f83e9f94d747d2daf7c488651efc683a27e02d3c10083cd9943",
+        "original_identity": {
+          "bytes": 1196,
+          "mode": "0o644",
+          "sha256": "56bda287017f3dcb05db756b436294a741cc14d8eb651bbf8c1df59fd583ed1b"
+        },
+        "path": "diagnostic/generator.log"
+      }
+    },
+    {
+      "event": "GENERATED_DATA_CHUNK",
+      "value": {
+        "base64": "H4sICAAAAAAC/2V4cG9ydC01ODU3ZWZhM2MwMTA2ZTcyNjljZGU1OTNkYjdhZjdkMTFhOWY1NDI4MzRjODBjNGEwYzM1ZmZiZGMzNzgyMmVmALWTQW/bMAyF7/kVujkBGit2ksYWhgE9pLe1Q1Zgx0CxaFuJLHqU3CEd9t8nL266tRh2aXQRRDzwe4+gNiCVthUr0Ja6YqU2wCJeYwOcOmuB+HekA996aFqOZWm0hfgkjou9i0ZrIiTB1nf367sHwSwy1xX1qRESU5qg8EjHK4YtWBbF/F/dW9KP0sNUkX56MsAb8JLPwtk6K1tXo4/3Dm00YuFIz+53+9A67tt+OdqCjS0qEKUT12kikmzyrKMQ8TbY+Vu0yFZivjyLnhEuJlBdAXEjTYnUgGLj/xl2XlbAex879LwHbBtUnQHHhyzTg/Z8p20/MpElyzx4PKNviORxwLLxB2nRHhvs3Mez4lEarQLpq/b1BlokfwlTYR4vplqCVhJ80hVJr9HeolFAF8DmuUjfYG+sOpHhc/XuzHmaXC/FYjZ5tUi1tMpcIGOe5FkmkvkfIbEA5+LhftDFwYXEG+hthFm7YUu19UBWGj4IuZfusP3WQQdOJLOFeFlf6frlDpYv4H6xSsVqwn4EFhBZFGyaXoVH0Xtk0ennR33FHV0hjQnFvv3vUit9Ld7l1/8c/QIq/2pgrAQAAA==",
+        "index": 0,
+        "path": "diagnostic/generator.log"
+      }
+    },
+    {
+      "event": "GENERATED_DATA_END",
+      "value": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 1196,
+        "path": "diagnostic/generator.log"
+      }
+    },
+    {
+      "event": "GENERATOR_CANDIDATE_TERMINAL",
+      "value": {
+        "PG": "PG_PENDING",
+        "ROOT_RELEASE": null,
+        "findings": [
+          {
+            "detail": "Generator exit or actual added/changed/removed shape is not the expected complete candidate.",
+            "id": "GENERATOR_OUTPUT_SHAPE_INCOMPLETE"
+          }
+        ],
+        "formal_adoption": false,
+        "log_export_limit_bytes": 16777216,
+        "metadata_complete": false,
+        "ready": false
+      }
+    },
+    {
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 119.42728169099999,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-export"
+      }
+    },
+    {
+      "event": "PROJECT_LIMIT_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "populated": "0"
+      }
+    },
+    {
+      "event": "GENERATOR_ALWAYS_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "Source_adopted": false,
+        "ROOT_RELEASE": null,
+        "ready": false,
+        "PG": "PG_PENDING"
+      }
+    }
+  ],
+  "resources": {
+    "UID": 1001,
+    "GID": 1001,
+    "parent": 536870912,
+    "DATA": 67108864,
+    "generate": 536870912,
+    "swap": 0,
+    "oom_group": 1,
+    "cleanup_once_remaining": [
+      447.213649392,
+      443.935521378,
+      425.578108904,
+      118.475530094,
+      119.42728169099999
+    ],
+    "peak_verbatim": {
+      "source": "64M",
+      "copy": "64M",
+      "deps": "64.5M",
+      "generate": "143.9M",
+      "export": "41.4M"
+    },
+    "peak_boundary": "Actual64.5Mdeps preserved,not claim historicalunder nominal64MiB",
+    "final": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "always": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    }
+  },
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  },
+  "next_action": "Narrow privateconfig outputpath correction,relativefromactualcwd mustresolve exactcontrolledprivate-drizzle. Preserve50schema/originalchain. Exactsuccessorindependentreview beforeonejustifiedrun."
+}

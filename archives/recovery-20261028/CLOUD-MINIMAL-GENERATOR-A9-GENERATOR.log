@@ -1,0 +1,17 @@
+Reading config file '/home/runner/work/_temp/offline.config.cjs'
+Error: ENOENT: no such file or directory, open './/home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json'
+    at Object.openSync (node:fs:621:18)
+    at readFileSync (node:fs:487:35)
+    at snapshots.reduce.malformed (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:8159:62)
+    at Array.reduce (<anonymous>)
+    at validateWithReport (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:8157:32)
+    at prepareMigrationFolder (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:8199:22)
+    at prepareAndMigratePg (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:32165:40)
+    at Object.handler (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91988:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async run (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91472:7) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: './/home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json'
+}
