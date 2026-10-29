@@ -1,0 +1,171 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/1",
+  "ticket": "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029",
+  "formal_adoption": false,
+  "base_commit": "e08a5035a73c1bb9baed0887d9c4b320d9d5f125",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "before": {
+        "path": "openbot/server/src/approvals/types.ts",
+        "bytes": 14252,
+        "sha256": "1974d5dedb34f00c94d979b30c18e0962e648e14d28b8ff618d1fe5fb857d37c",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/types.ts",
+        "bytes": 16446,
+        "sha256": "28e35e512a3f6f17ba9fd798804039640638707268a9eb06d76e0f435693b23b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/service.ts",
+      "before": {
+        "path": "openbot/server/src/approvals/service.ts",
+        "bytes": 29420,
+        "sha256": "c04faac55fa7b47ea7e933e8a3500fa0442121a6a70ad35a2046c124004af0a1",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/service.ts",
+        "bytes": 31509,
+        "sha256": "1537e3e54fb0965aded1a258a916c5ef6203c101f25db2249eee99a956fe2b09",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/fresh-producer.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/fresh-producer.ts",
+        "bytes": 4527,
+        "sha256": "f67303d3258807ceb9bd02f10db9b1dc593b0fb3c84b50ad636f2ae53e1976e4",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+        "bytes": 10832,
+        "sha256": "1cd2b2287be451d56843a0bcda6d7b0f6551cb85c288ac524d193c6ffb42475f",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approvals.test.ts",
+      "before": {
+        "path": "openbot/server/tests/approvals.test.ts",
+        "bytes": 25129,
+        "sha256": "b75d256b1694e33fc3d8feef54fe525919e2174b0b2fce147d9d110344ea444a",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/tests/approvals.test.ts",
+        "bytes": 25120,
+        "sha256": "cd6812fe10b30ceae01aef8ce04b7d96e2858f2c4836c52e322a66172469dd0e",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approvals-policy.test.ts",
+      "before": {
+        "path": "openbot/server/tests/approvals-policy.test.ts",
+        "bytes": 29405,
+        "sha256": "1fb693ed3955293cc551175c64ed2226ad44168a28bacc318afb8bd86f4154d8",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/tests/approvals-policy.test.ts",
+        "bytes": 30708,
+        "sha256": "e58c3a442e5a71ae1e7b8745272641164275f723aed0c636b40b8c09d72a4d7b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+        "bytes": 9554,
+        "sha256": "b3e728d5859083a16bbe7e3248d73ff22502072f20190b19a2d295dee7defa11",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "before": {
+        "path": "openbot/server/src/approvals/store.ts",
+        "bytes": 19543,
+        "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/store.ts",
+        "bytes": 19676,
+        "sha256": "7dbd504163735daaf17764fe65c98c3f26c837f58bb2bb0cad1a0aff95bc513f",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "source_new_paths": [
+    "openbot/server/src/approvals/fresh-producer.ts",
+    "openbot/server/tests/helpers/approval-producer-model.ts",
+    "openbot/server/tests/approval-fresh-producer.test.ts"
+  ],
+  "scope": "Implement trusted frozen producer prepare/verify/result-disposition commit/publish orchestration; reload committed context, preserve original13positive behavior assertions in explicit CPU model; add8fresh/state-gap regressions. No production adapter/default grant/release or PG wiring.",
+  "preserved": {
+    "original_positive_approval_cases": true,
+    "no_seeded_result_bypass": true,
+    "current_authority_validate_digest_consume_executionAuthority": true,
+    "saved_result_receipt_protocol": true,
+    "no_legacy_continue_fallback_in_production": true,
+    "default_fresh_without_port": "BLOCKED",
+    "consumed_without_result": "UNKNOWN_NOT_REPEATED",
+    "final_refusal": "NO_MODEL_CONTINUATION",
+    "cpu_model": "NOT_DURABLE_PG_CAS_RLS_COMMIT_ACK_PROOF"
+  },
+  "boundaries": {
+    "source_files_in_package": 8,
+    "project": 536870912,
+    "swap": 0,
+    "data": 67108864,
+    "ROOT_RELEASE": null,
+    "AP_DISABLED": true,
+    "postgres17": "PG_PENDING",
+    "production_fresh_adapter": "NOT_WIRED",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "windows_source_writes": 0
+  },
+  "revision": "R2",
+  "prior_candidate": {
+    "head": "99989c6a66c692fc9b7e6f8754eb808024971c13",
+    "verdict": "FIX_REQUIRED_P1_STALE_RESUME_AFTER_ABANDON_RESULT",
+    "tests": {
+      "run": 40820034960,
+      "pass": 80,
+      "fail": 0,
+      "expects": 243
+    },
+    "lint": {
+      "run": 40820034960,
+      "exit_code": 1,
+      "warning": "helper import type declaration"
+    },
+    "server_typecheck": {
+      "run": 40820279732,
+      "exit_code": 0
+    },
+    "source_adopted": false
+  },
+  "R2_fix": "Real consume row lock + SQL CAS require result IS NULL; result-disposition commit requires expectedStatus and serializes against consume. CPU model and three fixture CAS match. Both directions of stale resume/abandon race tested; unknown target ACK never re-admits. RAM seed frozen without claiming durable proof."
+}
