@@ -1,0 +1,281 @@
+{
+  "schema": "xiongbaowork-cloud-persistence-independent-source-review-v1",
+  "review_date": "2026-10-29",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "handoff_commit": "8ac186e801aa4a2492e96c3b16ed33a2275198d8",
+  "reviewer": {
+    "role": "Independent non-author persistence Source reviewer",
+    "authorship": "This reviewing session authored none of the five candidate Source blobs.",
+    "scope": "Five candidate Source files plus three read-only types/store/client context files; eight unique Source originals total."
+  },
+  "cloud_capability_evidence": {
+    "provider": "Connected GitHub cloud tools invoked through functions.exec; orchestration-only V8, no shell or local executor",
+    "repository_read": "SUCCESS: immutable handoff JSON/MD, all five full control files and five full candidate files fetched by exact SHA; candidate blobs fetched separately by exact blob SHA and content compared equal",
+    "managed_environment_status_tool": "NOT_AVAILABLE in current tool inventory",
+    "project_cloud_execution": "NOT_ESTABLISHED_AND_NOT_PERFORMED",
+    "windows_or_localhost_use": false,
+    "paid_provider_calls": 0,
+    "capability_boundary": "GitHub access is proved by successful connector responses; this does not establish hosted Linux project runtime, memory/swap containment or PG behavior."
+  },
+  "input_integrity": {
+    "status": "MATCHED_ALL_FIVE_HANDOFF_BYTES_AND_SHA256",
+    "method": "Complete UTF-8 strings retained in orchestration memory; SHA-256 calculated over their UTF-8 bytes using an administrative digest implementation self-checked with the standard abc vector. No Subject module, SQL, parser or test was executed.",
+    "controls": [
+      {
+        "path": "DELIVERY-SCOPE-77-18-7.json",
+        "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+        "bytes": 286013,
+        "sha256": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146"
+      },
+      {
+        "path": "CURRENT-GATE-SUMMARY.json",
+        "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+        "bytes": 45225,
+        "sha256": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac"
+      },
+      {
+        "path": "CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+        "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+        "bytes": 479194,
+        "sha256": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5"
+      },
+      {
+        "path": "CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+        "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+        "bytes": 456310,
+        "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632"
+      },
+      {
+        "path": "CLOUD-RECOVERY-STATUS.md",
+        "blob": "2c576298ea45a3d21f66e67dfeb6033301a934d9",
+        "bytes": 66979,
+        "sha256": "478c295fa0a41eade2a5af73746b24653027f293ac46bbd458dcbd8ba0abefce"
+      }
+    ]
+  },
+  "original_scope": {
+    "stories": 77,
+    "delivery_packages": 18,
+    "final_gates": 7,
+    "authoritative_scope": {
+      "commit": "8ac186e801aa4a2492e96c3b16ed33a2275198d8",
+      "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+      "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+      "story_rows": 77,
+      "package_rows": 18,
+      "gate_rows": 7
+    },
+    "requirements": "Full original requirement arrays and status records remain authoritative and unchanged; this review report does not replace them or perform their acceptance.",
+    "adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "source_files": 2065,
+    "source_bytes": 50175181,
+    "repair_overlays": 28,
+    "source28_validation": "Historical handoff evidence only: 32 focused tests/lint/full server types passed; no new execution by reviewer."
+  },
+  "subjects": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
+      "bytes": 13092,
+      "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+      "commit": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "full_path_read": true,
+      "full_blob_read": true,
+      "blob_content_equal": true,
+      "git_mode": "NOT_EXPOSED_BY_AVAILABLE_READ_CONNECTOR"
+    },
+    {
+      "path": "openbot/server/drizzle/0081_approval_fresh_seeds.sql",
+      "blob": "07e6b4173fad075b76c3cbdf32637ed07e1a8f36",
+      "bytes": 2891,
+      "sha256": "617eba73970280dd15b1eb480ae02f6e3133bb46fa44dda1ee56e92b36315eb1",
+      "commit": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "full_path_read": true,
+      "full_blob_read": true,
+      "blob_content_equal": true,
+      "git_mode": "NOT_EXPOSED_BY_AVAILABLE_READ_CONNECTOR"
+    },
+    {
+      "path": "openbot/server/tests/approval-fresh-seed.test.ts",
+      "blob": "813f4143d64f374eb95441b25b5dad4da0798501",
+      "bytes": 9120,
+      "sha256": "64f51afedfa3e7302f2e89ffb4826ee0bcd15815355c0617f43d4142ef38165b",
+      "commit": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "full_path_read": true,
+      "full_blob_read": true,
+      "blob_content_equal": true,
+      "git_mode": "NOT_EXPOSED_BY_AVAILABLE_READ_CONNECTOR"
+    },
+    {
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39",
+      "bytes": 7576,
+      "sha256": "b6578d8066d3340e5de7577373bc4076ef4fc3648fef5aed8eb737994c998f0a",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "full_path_read": true,
+      "full_blob_read": true,
+      "blob_content_equal": true,
+      "git_mode": "NOT_EXPOSED_BY_AVAILABLE_READ_CONNECTOR"
+    },
+    {
+      "path": "openbot/server/tests/approval-pg-fresh-result.test.ts",
+      "blob": "48806bc3125be84ad79a481d50c9abc7cde85f0f",
+      "bytes": 14100,
+      "sha256": "34c9c0316f26a9e2387150c492dcb33556d023047651d007fa769f19d9d5b5da",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "full_path_read": true,
+      "full_blob_read": true,
+      "blob_content_equal": true,
+      "git_mode": "NOT_EXPOSED_BY_AVAILABLE_READ_CONNECTOR"
+    }
+  ],
+  "context": [
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "blob": "2365ebe562751271190713a27c4f54968f6085b8",
+      "bytes": 16446,
+      "sha256": "28e35e512a3f6f17ba9fd798804039640638707268a9eb06d76e0f435693b23b",
+      "purpose": "Read-only dependency context; not modified or approved as a new repair"
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "blob": "11c60539afb0153669766bd59caff5298de0f427",
+      "bytes": 19676,
+      "sha256": "7dbd504163735daaf17764fe65c98c3f26c837f58bb2bb0cad1a0aff95bc513f",
+      "purpose": "Read-only dependency context; not modified or approved as a new repair"
+    },
+    {
+      "path": "openbot/server/src/db/client.ts",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "blob": "fbf0693879f03bed8275fd371678929a1c836d92",
+      "bytes": 14674,
+      "sha256": "1844135d201deb8f96b5228694a83e1f5c3ef2203cea251157f77f14e9341985",
+      "purpose": "Read-only dependency context; not modified or approved as a new repair"
+    }
+  ],
+  "ancestry_evidence": {
+    "method": "GitHub compare_commits",
+    "base": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+    "head": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+    "merge_base": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+    "status": "ahead",
+    "ahead_by": 1,
+    "behind_by": 0,
+    "total_commits": 1,
+    "changed_files": [
+      {
+        "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+        "status": "added",
+        "additions": 177,
+        "deletions": 0
+      },
+      {
+        "path": "openbot/server/tests/approval-pg-fresh-result.test.ts",
+        "status": "added",
+        "additions": 297,
+        "deletions": 0
+      }
+    ],
+    "limits": "Connector commit/compare snapshots do not expose full Git tree/modes; no invented tree or mode proof. Exact tree/mode containment remains coordinator integration precondition."
+  },
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "package_verdicts": [
+    {
+      "candidate": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "verdict": "SOURCE_APPROVED_ONLY",
+      "scope": "Only the three exact seed proposal blobs; not a complete migration approval, execution approval or adoption."
+    },
+    {
+      "candidate": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "verdict": "SOURCE_APPROVED_ONLY",
+      "scope": "Only the two exact new transaction primitive blobs on the reviewed seed parent; unused transaction-local primitive, not a production adapter."
+    }
+  ],
+  "review_evidence": [
+    {
+      "id": "capture-before-await",
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "detail": "capture synchronously structuredClones the caller input before first query await. It validates nonblank eight seed identity strings, template SHA shape, ambient tenant equality, approved/denied/consumed expected status, continue/final disposition, exact content/error result shape, then freezes copied seed/result. Used scalar fields no longer alias caller-owned values across lock waits."
+    },
+    {
+      "id": "parent-lock-and-identity",
+      "detail": "First query selects approval_requests with all six persisted identity predicates, FOR UPDATE, limit1. Readback rechecks all six columns plus JSON actor/digest/run/tool and continuation run/tool. Missing/invisible parent only returns transaction-local request_missing. No authority or physical session guarantee is inferred from ambient tenant."
+    },
+    {
+      "id": "legal-state-and-empty-pair",
+      "detail": "Input whitelists approved/denied/consumed; stored status must equal expectedStatus, pending/completed refused, completedAt must be null. Any non-null decoded result OR disposition refuses the write. Actual UPDATE independently predicates SQL result IS NULL and result_disposition IS NULL, so decoded JSON null cannot replace the SQL NULL guard."
+    },
+    {
+      "id": "seed-lock-and-full-binding",
+      "detail": "After parent lock, SELECT approval_fresh_seeds under FOR SHARE with approval/tenant/owner predicates; compares all eight stored binding fields (including run/tool/action/template/proof) and valid preparedAt Date. The ninth stored prepared_at is only a validity observation, not a sealed timestamp/provenance proof. No insert, upsert, preparation, reconstruction or seed mutation occurs. Missing seed refuses; mismatching extant seed refuses."
+    },
+    {
+      "id": "cas-and-final-clock",
+      "detail": "Single UPDATE approval_requests sets result+disposition and predicates six-field identity, expected status, result SQL NULL and disposition SQL NULL. Parent lock stays held by caller transaction. final adds status completed and completed_at=clock_timestamp() in that same UPDATE. continue leaves status/completion untouched. Zero rows is cas_miss, >1 throws; no receipt, continuation ledger, model/tool, finish call or audit fabrication."
+    },
+    {
+      "id": "transaction-not-commit",
+      "detail": "Return names are written_in_transaction or not_written_in_transaction only. There is no committed/lost/rollback/replay classification. No catch turns DB/transport errors into lost; errors propagate. A successful RETURNING row is still not COMMIT/ACK proof. Missing or conflict outcomes say nothing about other transaction outcomes."
+    },
+    {
+      "id": "outer-authority-pending",
+      "detail": "Module explicitly requires already-authorized tenant-bound physical transaction with per-transaction authority/catalog/FORCE RLS revalidation; outer owner must supply required atomic audit, COMMIT and ACK readback. Imported Database transaction callback type is the real types/client relation. Inspected store has no import/call to this module. Compare proves candidate adds only the two new files, without changing existing store/index/Root verifier. Type annotations alone do not attest physical session, actor authority or provenance."
+    },
+    {
+      "id": "closed-seed-foundation",
+      "detail": "Nine not-null seed columns, approval_id PK, six-column parent FK with no-action delete/update and matching parent UNIQUE. Nullable result_disposition allows continue/final and only implies result presence, preserving legacy result-without-disposition rows. SQL explicitly ENABLEs and FORCEs RLS, adds zero policies, REVOKEs ALL from openbot_app and PUBLIC, no owner GUC or writer opening. This prevents normal application access until a separately reviewed authorized design; it does not make seed SQL immutable against privileged future writers."
+    },
+    {
+      "id": "tests-static-only",
+      "detail": "Read complete seed SQL allowlist/metadata tests including actual CR grant/policy mutations and CR/LF comment stripping. Read complete pg-proxy CPU tests for query order/locks, caller mutation during await, input/tenant/binding/status/result/seed refusal, CAS0/>1, update exception propagation and final DB clock/no receipt. These are definitions only; pg-proxy cast intentionally supplies no actual transaction, RLS, locks, audit, COMMIT or PG behavior. Reviewer executed none, counted no tests as passed."
+    }
+  ],
+  "pending_and_nonapproval": [
+    "Full seed migration still requires real consistent generated snapshot + journal + full SQL/schema delta closure and a new non-author final review of the complete package; do not pair this hand SQL with unrelated generated metadata.",
+    "Candidate test/lint/type results are NOT_RUN in this review. Prior Source28 passes do not cover these new candidates.",
+    "Physical PG17/RLS/FORCE/privileges/tenant separation/lock serialization/durable CAS/final atomic audit and completion/commit failure/unknown ACK/readback remain unverified.",
+    "No result equality implies committed; SQL NULL never authorizes replay. An outer ACK protocol must prove original transaction ended, current real authority and full stored bindings/state/audit; uncertainty stays unknown or blocked.",
+    "No canonical adoption or production wiring is authorized by this administrative report. Coordinator must verify exact full tree/mode/diff and retain per-package <=8 Source serial adoption gates.",
+    "Original77/18/7 acceptance, full strict CI, same-final-SHA image8GET, device/offline/approval loop, native clean clients and commercial delivery remain outstanding."
+  ],
+  "gates_retained": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "actions": {
+    "project_execution": 0,
+    "sql_execution": 0,
+    "subject_parser_execution": 0,
+    "tests": 0,
+    "dependencies": 0,
+    "workflow_dispatch": 0,
+    "canonical_writes": 0,
+    "source_writes": 0,
+    "default_branch_writes": 0,
+    "production_deploys": 0,
+    "windows_writes": 0,
+    "local_executor_calls": 0,
+    "local_browser_calls": 0,
+    "localhost_mcp_calls": 0,
+    "paid_calls": 0,
+    "OpenCode": "HUMAN_PAUSED_NOT_RESTARTED",
+    "WorkBuddy_Qoder": "Cloud responsibility only; no claim native clients remain running"
+  },
+  "persistence": {
+    "authorized_branch": "codex/cloud-review-persistence-20261029",
+    "base_commit": "8ac186e801aa4a2492e96c3b16ed33a2275198d8",
+    "path": "archives/recovery-20261028/CLOUD-PERSISTENCE-REVIEW-20261029.json",
+    "branch_preflight": "Exact-name search returned no branches; create_branch then succeeded at specified immutable handoff base.",
+    "writes": "One new administrative JSON only; no canonical/Source/default branch write; commit message requests skip ci.",
+    "readback": "Caller must fetch the resulting immutable commit and compare complete report bytes before reporting success."
+  }
+}
