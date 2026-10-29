@@ -1,33 +1,120 @@
 {
-  "schema": "xiongbaowork-a11-offline-data-plan-v1",
-  "status": "AUTHOR_SAFER_NO_PAYLOAD_PREPARED_UNREVIEWED_NOT_EXECUTED",
+  "schema": "xiongbaowork-a11-teardown-only-plan-v2",
+  "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
   "author": "/root/a11_data_author",
-  "administrative_base": "c48d77d85386ffac616e016f50c5fac0e2b8416e",
+  "parent_candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
   "prepare_branch": "codex/a11-data-verify-prep-20261030",
-  "only_run_branch": "codex/a11-data-verify-run-20261030-a1",
-  "origin": {
-    "run": 40902334215,
-    "job": 123547693853,
-    "head": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
-    "transport_report_commit": "bd71fddfbc56a0edb2c78b10e6818abafea695ed",
-    "transport_report_blob": "55045b5fe521dac3d0351c697026e39163fdc0e8"
+  "only_run_branch": "codex/a11-data-verify-run-20261030-a2",
+  "scope": "Three original administrative files only; no Source/canonical/lease/job/Page/automation mutation by author.",
+  "purpose": "Obtain missing real post-admin-teardown kernel and systemd unit evidence. No token, original-log fetch, gzip/CRC/JSON codec or generator rerun. No claim to repair an unobserved field.",
+  "actual_prior": {
+    "run": 40912579798,
+    "job": 123584189279,
+    "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
+    "overall": "failure",
+    "raw_verification": "Four A11_DATA_FILE_VERIFIED and FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED actually succeeded",
+    "raw_scope": "Strict base64, exact compressed/raw lengths and SHA256, single gzip member/trailing rejection, CRC/ISIZE, bounded safe JSON for snapshot/journal; SQL/log bytes only",
+    "snapshot_json_nodes": 17279,
+    "journal_json_nodes": 496,
+    "journal_entries": 82,
+    "admin_terminal": "DATA_VERIFIED with child empty and actual project512/shared64/swap0/oom1 while admin alive; restore_proven=false/PENDING_EXTERNAL",
+    "always_failure": "line338 combined limits assert failed before actual values were printed; exact changed level/key and any cgroup replacement are UNKNOWN",
+    "source_adopted": false
   },
   "resources": {
     "project_parent": 536870912,
-    "shared_data_aggregate": 67108864,
-    "admin_service_and_all_management_descendants": 16777216,
-    "codec_service_and_all_descendants": 50331648,
+    "shared_aggregate": 67108864,
+    "admin_and_all_management_descendants": 16777216,
+    "unprivileged_control_child_and_descendants": 50331648,
     "swap": 0,
     "ordinary_only": true,
-    "systemd_compatibility": "OOMPolicy=kill; actual kernel child/sharedDATA/project oom.group repair and independent readback before codec UID drop. No MemoryOOMGroup property.",
-    "inner_seconds": 120,
-    "outer_seconds": 150,
-    "outer_bootstrap": "Only fixed slice establishment + immutable admin verification/launch, no plan/log/gzip/Subject access; final read-only witness after admin exits.",
-    "failure": "Any admin16/codec48/shared64 headroom/OOM/timeout/missing receipt fails UNKNOWN; no enlargement inferred."
+    "clock": "One t0 captured in fixed bootstrap before admin service start; inner=t0+120, outer=t0+150; child/stop/readback/restore/record share these immutable deadlines; no new restore budget in always.",
+    "bootstrap": "Only fixed administrative controller integrity+immutable copy, slice establishment, fixed admin launch/wait; no plan/log/gzip/Subject/token reads.",
+    "outside_witness": "Read-only kernel and systemctl show observations after admin service exit, always emit actual values before computing verdict; no stop/kill/restore or fresh cleanup grace. All management and restoration remain inside admin16/shared64."
   },
-  "input_contract": "Plan stores identities only, never compressed or raw exports. DATA64 service reads exactly original job123547693853 logs via documented same-repository Actions logs endpoint using ephemeral least-privilege Actions:read GITHUB_TOKEN; validates one normal signed-storage redirect without forwarding Authorization; parses exact header/chunk/end records only in memory.",
-  "outputs": "Only bounded identity/CRC/JSON structural summaries, no raw SQL/snapshot/journal/log stored or emitted.",
-  "adoption": "NONE; DATA-only identity validation is not Source/migration/PG approval.",
+  "observations": {
+    "phases": [
+      "before child launch under admin",
+      "after child stop/noJob before restore",
+      "after restoration while admin remains active",
+      "external always after admin exit"
+    ],
+    "cgroups": [
+      "project512",
+      "shared64",
+      "admin16",
+      "child48"
+    ],
+    "fields": [
+      "exists",
+      "stat dev/ino as decimal strings",
+      "memory.max",
+      "memory.swap.max",
+      "memory.oom.group",
+      "cgroup.events populated"
+    ],
+    "systemd_units": [
+      "project slice",
+      "shared slice",
+      "exact owned admin service",
+      "exact owned child service"
+    ],
+    "unit_fields": [
+      "ActiveState",
+      "LoadState",
+      "Job",
+      "ControlGroup",
+      "StopWhenUnneeded",
+      "MemoryMax",
+      "MemorySwapMax"
+    ],
+    "errors": "Missing/inaccessible cgroups, timeouts or missing terminal are explicit evidence values, never silently omitted or read as zero."
+  },
+  "official_documentation": [
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.unit.html",
+      "section": "StopWhenUnneeded",
+      "observed_contract": "The common option stops unused units when true; documented generic default is false. Actual deployed unit values and lifecycle were not observed in the failed run."
+    },
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.slice.html",
+      "observed_contract": "Slices hierarchically constrain all processes in contained units; common Unit settings are supported. This does not prove why prior teardown changed a field."
+    }
+  ],
+  "hypotheses": [
+    {
+      "name": "slice stop or cgroup replacement after last service exit",
+      "status": "UNPROVEN_NOT_ASSUMED",
+      "differentiating_evidence": "before/after existence, dev/ino, unit active/load/job and ControlGroup"
+    },
+    {
+      "name": "in-place kernel field reset by manager",
+      "status": "UNPROVEN_NOT_ASSUMED",
+      "differentiating_evidence": "same observed cgroup identity with actual changed field"
+    }
+  ],
+  "changes": {
+    "no_stopwhenunneeded_override": true,
+    "no_new_systemd_property": true,
+    "removed": [
+      "Actions:read permission",
+      "default token handling",
+      "original job API/storage requests",
+      "plan/log download",
+      "gzip/raw/JSON codec"
+    ],
+    "retained": [
+      "shared64 aggregate",
+      "admin16+child48 descendants",
+      "project512/swap0",
+      "root activation parent oom.group repair+readback",
+      "irreversible UID/GID+groups drop",
+      "owned stop/kill/noJob/empty",
+      "same absolute cleanup deadline",
+      "complete pre-assert final observations"
+    ]
+  },
+  "acceptance": "CONTROL_TEARDOWN_WITNESS_MATCHED only if actual two-level limits, both aggregate pop0, owned service empty/noJob, active slices and original deadline all match; otherwise FAILED_OR_UNKNOWN. Neither outcome reclaims or invalidates prior real raw verification, Source approval, PG or migration semantics.",
   "gates": {
     "scope": "77/18/7",
     "ROOT_RELEASE": null,
@@ -37,107 +124,8 @@
     "migrationNOT_WIRED": true,
     "PG": "PG_PENDING"
   },
-  "files": [
-    {
-      "header": {
-        "adopted": false,
-        "complete_file": true,
-        "exported_bytes": 155827,
-        "exported_sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",
-        "gzip_bytes": 14698,
-        "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
-        "original_identity": {
-          "bytes": 155827,
-          "mode": "0o644",
-          "sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7"
-        },
-        "path": "generated/0081_full50_approval_seed_diagnostic.sql"
-      },
-      "end": {
-        "chunks": 1,
-        "complete_file": true,
-        "exported_bytes": 155827,
-        "path": "generated/0081_full50_approval_seed_diagnostic.sql"
-      }
-    },
-    {
-      "header": {
-        "adopted": false,
-        "complete_file": true,
-        "exported_bytes": 633425,
-        "exported_sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1",
-        "gzip_bytes": 36005,
-        "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
-        "original_identity": {
-          "bytes": 633425,
-          "mode": "0o644",
-          "sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1"
-        },
-        "path": "generated/meta/0081_snapshot.json"
-      },
-      "end": {
-        "chunks": 2,
-        "complete_file": true,
-        "exported_bytes": 633425,
-        "path": "generated/meta/0081_snapshot.json"
-      }
-    },
-    {
-      "header": {
-        "adopted": false,
-        "complete_file": true,
-        "exported_bytes": 12118,
-        "exported_sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0",
-        "gzip_bytes": 2116,
-        "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
-        "original_identity": {
-          "bytes": 12118,
-          "mode": "0o644",
-          "sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0"
-        },
-        "path": "generated/meta/_journal.json"
-      },
-      "end": {
-        "chunks": 1,
-        "complete_file": true,
-        "exported_bytes": 12118,
-        "path": "generated/meta/_journal.json"
-      }
-    },
-    {
-      "header": {
-        "adopted": false,
-        "complete_file": true,
-        "exported_bytes": 7289,
-        "exported_sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550",
-        "gzip_bytes": 1863,
-        "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
-        "original_identity": {
-          "bytes": 7289,
-          "mode": "0o644",
-          "sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550"
-        },
-        "path": "diagnostic/generator.log"
-      },
-      "end": {
-        "chunks": 1,
-        "complete_file": true,
-        "exported_bytes": 7289,
-        "path": "diagnostic/generator.log"
-      }
-    }
-  ],
-  "authorization": "Root explicitly approved safer runtime-only fixed-job read after automatic review rejected payload persistence; no new credentials or repo payload persistence.",
-  "prior_auto_review": {
-    "action": "create_commit of embedded compressed exports",
-    "status": "REJECTED_NO_COMMIT_NO_BRANCH_UPDATE",
-    "reason": "Persisting compressed exports in repo plan was rejected as sensitive egress. Full payload was removed, not renamed/split/encoded elsewhere."
-  },
-  "revision_history": [
-    {
-      "candidate": "d8769361ffb91d0cd3fa71f01c645d1515ab2043",
-      "status": "NONAUTHOR_BLOCKED_NOT_RUN",
-      "finding": "Management admin/systemctl/systemd-run outside DATA aggregate; replaced with shared64 containing admin16+codec48, all management descendants inside admin service."
-    }
-  ]
+  "next_action": "Non-author full exact SHA review of all3 files. Only sole valid leaseowner after empty queue/dedup may create reserved a2 push branch once. If failure, use actual emitted fields before proposing bounded restore changes; no unchanged retry/no resource expansion.",
+  "execution_branch_created": false,
+  "project_execution": false,
+  "source_adopted": false
 }

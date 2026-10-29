@@ -1,34 +1,32 @@
-name: A11 offline original export DATA verification
+name: A11 bounded teardown-only control diagnostic
 on:
   push:
     branches:
-      - codex/a11-data-verify-run-20261030-a1
+      - codex/a11-data-verify-run-20261030-a2
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: source-recovery-bytes
   cancel-in-progress: false
 jobs:
   data-only:
-    if: github.repository == 'canquedehuiyi-cpu/xiongbaowork' && github.ref == 'refs/heads/codex/a11-data-verify-run-20261030-a1' && github.event_name == 'push'
+    if: github.repository == 'canquedehuiyi-cpu/xiongbaowork' && github.ref == 'refs/heads/codex/a11-data-verify-run-20261030-a2' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify administrative controller and run only fixed compressed DATA
+      - name: Verify administrative controller and run teardown-only control
         env:
-          EXPECTED_CONTROLLER_SHA256: db31c05de7a12400228eb3b6e78dbf532c104d21b4f180ef3e4ec83128e0e6b5
-          A11_READ_TOKEN: ${{ github.token }}
+          EXPECTED_CONTROLLER_SHA256: 3000046e0e37bad7f4f865210860e65f21815710aaef2268e3b51c74b876e5d9
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/a11-data-verify-run-20261030-a1"
+          test "$GITHUB_REF" = "refs/heads/codex/a11-data-verify-run-20261030-a2"
           test "$GITHUB_EVENT_NAME" = "push"
           controller="$RUNNER_TEMP/a11-offline-data-controller.py"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 20 --max-filesize 32768 \
             "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$GITHUB_SHA/archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py" -o "$controller"
-          sudo --preserve-env=A11_READ_TOKEN /usr/bin/python3 -I -B - "$controller" "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$(id -u)" "$(id -g)" <<'PY'
-          import hashlib, os, stat, sys
+          sudo /usr/bin/python3 -I -B - "$controller" "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$(id -u)" "$(id -g)" <<'PY'
+          import hashlib, math, os, stat, sys, time
           from pathlib import Path
           source,base,target,runid,attempt,uid,gid=sys.argv[1:]
           assert os.geteuid()==0 and runid.isdecimal() and attempt.isdecimal()
@@ -40,7 +38,7 @@ jobs:
               after=os.fstat(fd)
               assert (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)
           finally:os.close(fd)
-          assert hashlib.sha256(raw).hexdigest()=="db31c05de7a12400228eb3b6e78dbf532c104d21b4f180ef3e4ec83128e0e6b5"
+          assert hashlib.sha256(raw).hexdigest()=="3000046e0e37bad7f4f865210860e65f21815710aaef2268e3b51c74b876e5d9"
           directory=Path("/run")/("xb-a11-code-"+runid+"-"+attempt)
           directory.mkdir(mode=0o755)
           path=directory/"controller.py"
@@ -60,14 +58,15 @@ jobs:
               (cg/"memory.oom.group").write_text("1")
               assert {k:(cg/k).read_text().strip() for k in keys}==dict(zip(keys,(cap,"0","1")))
           adminunit="xb-a11-admin-"+runid+"-"+attempt+".service"
+          started=time.monotonic();outer=started+150
           args=["systemd-run","--wait","--pipe","--unit="+adminunit,"--slice=xiongbaowork-data.slice",
-                "--setenv=A11_READ_TOKEN","--property=Type=exec","--property=MemoryMax=16777216",
+                "--property=Type=exec","--property=MemoryMax=16777216",
                 "--property=MemorySwapMax=0","--property=OOMPolicy=kill","--property=KillMode=control-group",
-                "--property=RuntimeMaxSec=150","--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
+                "--property=RuntimeMaxSec="+str(max(1,math.floor(outer-time.monotonic()-1))),"--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
                 "--property=SendSIGKILL=yes","--property=KillSignal=SIGKILL","--property=FinalKillSignal=SIGKILL",
-                "/usr/bin/python3","-I","-B",str(path),"admin",base,target,runid,attempt,uid,gid]
-          completed=subprocess.run(args,stdin=subprocess.DEVNULL,timeout=153,
-              env={"PATH":"/usr/bin:/bin","A11_READ_TOKEN":os.environ.pop("A11_READ_TOKEN")})
+                "/usr/bin/python3","-I","-B",str(path),"admin",base,runid,attempt,uid,gid,str(started)]
+          completed=subprocess.run(args,stdin=subprocess.DEVNULL,timeout=max(0.01,outer-time.monotonic()+1),
+              env={"PATH":"/usr/bin:/bin"})
           raise SystemExit(completed.returncode)
           PY
       - name: Always independently verify original terminal and actual empty aggregate
@@ -78,6 +77,6 @@ jobs:
           if test -f "$script"; then
             sudo /usr/bin/python3 -I -B "$script" witness "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           else
-            echo 'A11_DATA_ALWAYS_UNKNOWN {"status":"SETUP_FAILED_OR_UNKNOWN","restore_proven":false,"source_adopted":false}'
+            echo 'A11_TEARDOWN_ALWAYS_UNKNOWN {"status":"SETUP_FAILED_OR_UNKNOWN","restore_proven":false,"source_adopted":false}'
             exit 1
           fi
