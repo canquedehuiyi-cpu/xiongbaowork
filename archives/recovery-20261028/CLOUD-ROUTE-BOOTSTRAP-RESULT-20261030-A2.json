@@ -1,0 +1,582 @@
+{
+  "schema": "route-bootstrap-a2-runtime-result/v1",
+  "at": "2026-10-29T16:44:29.467Z",
+  "candidate": "576d176424df248222299db2c49d0fa545c90579",
+  "run": 40912983831,
+  "job": 123585627390,
+  "status": "completed",
+  "conclusion": "failure",
+  "review_commit": "ada8728408ec8404131f4122f55837fce22646fc",
+  "records": [
+    {
+      "type": "ROUTE_REPRO_BOOTSTRAP_PARENT_GATE",
+      "data": {
+        "control_services_started": false,
+        "observed_after": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "observed_at": 177.249308327,
+        "observed_before": {
+          "memory.max": "536870912",
+          "memory.oom.group": "0",
+          "memory.swap.max": "0"
+        },
+        "outer": 477.24756582,
+        "parent_populated0": true,
+        "restore_proven": false,
+        "source_adopted": false,
+        "started": 177.24756582,
+        "status": "BOOTSTRAP_GATE_VERIFIED_NOT_FINAL_RESTORE",
+        "workflow_commit": "576d176424df248222299db2c49d0fa545c90579"
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_BUILD_RESULT",
+      "data": {
+        "phase": "a",
+        "exit_code": 0,
+        "timed_out": false,
+        "runtime": "v24.22.1",
+        "argv": [
+          "/usr/local/bin/node",
+          "--max-old-space-size=3072",
+          "node_modules/vite/bin/vite.js",
+          "build"
+        ],
+        "project_and_descendants": 4294967296,
+        "swap": 0,
+        "shared_inner_limit_seconds": 270,
+        "shared_outer_limit_seconds": 300,
+        "elapsed_from_a_start": 35.940410125,
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_SOURCE_POSTCHECK",
+      "data": {
+        "data_limit": 67108864,
+        "leaf_after": {
+          "bytes": 49276,
+          "ctime_ns": "1793291855158286247",
+          "dev": "2049",
+          "git_blob_sha1": "50399b63fa0119c9439866e7250049378af617e3",
+          "ino": "8610894",
+          "mode": "0o644",
+          "mode_bits": 420,
+          "mtime_ns": "1793291855152286269",
+          "nlink": 1,
+          "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+        },
+        "only_tracked_source_changes": [
+          {
+            "after": {
+              "bytes": 49276,
+              "ctime_ns": "1793291855158286247",
+              "dev": "2049",
+              "git_blob_sha1": "50399b63fa0119c9439866e7250049378af617e3",
+              "ino": "8610894",
+              "mode": "0o644",
+              "mode_bits": 420,
+              "mtime_ns": "1793291855152286269",
+              "nlink": 1,
+              "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+            },
+            "before": {
+              "bytes": 48763,
+              "mode": "0o644",
+              "path": "openbot/app/src/routeTree.gen.ts",
+              "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae"
+            },
+            "path": "openbot/app/src/routeTree.gen.ts"
+          }
+        ],
+        "phase": "a",
+        "post_source_bytes": 50175694,
+        "project_limit_restored": 536870912,
+        "source_adopted": false,
+        "source_files_checked": 2065
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_BEFORE_B_VERIFIED",
+      "data": {
+        "mode": "0o644",
+        "mode_bits": 420,
+        "bytes": 48763,
+        "dev": "2049",
+        "ino": "8610894",
+        "mtime_ns": "1793291890371165056",
+        "ctime_ns": "1793291890371165056",
+        "nlink": 1,
+        "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae",
+        "git_blob_sha1": "fb94519738b3d7eec42dab5e8c4e592232e4c5fd"
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_BUILD_RESULT",
+      "data": {
+        "phase": "b",
+        "exit_code": 0,
+        "timed_out": false,
+        "runtime": "v24.22.1",
+        "argv": [
+          "/usr/local/bin/node",
+          "--max-old-space-size=3072",
+          "node_modules/vite/bin/vite.js",
+          "build"
+        ],
+        "project_and_descendants": 4294967296,
+        "swap": 0,
+        "shared_inner_limit_seconds": 270,
+        "shared_outer_limit_seconds": 300,
+        "elapsed_from_a_start": 71.703310389,
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_SOURCE_POSTCHECK",
+      "data": {
+        "candidate_payload_bytes": 8490,
+        "data_limit": 67108864,
+        "leaf_after": {
+          "bytes": 49276,
+          "ctime_ns": "1793291891899157205",
+          "dev": "2049",
+          "git_blob_sha1": "50399b63fa0119c9439866e7250049378af617e3",
+          "ino": "8611368",
+          "mode": "0o644",
+          "mode_bits": 420,
+          "mtime_ns": "1793291891893157229",
+          "nlink": 1,
+          "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+        },
+        "only_tracked_source_changes": [
+          {
+            "after": {
+              "bytes": 49276,
+              "ctime_ns": "1793291891899157205",
+              "dev": "2049",
+              "git_blob_sha1": "50399b63fa0119c9439866e7250049378af617e3",
+              "ino": "8611368",
+              "mode": "0o644",
+              "mode_bits": 420,
+              "mtime_ns": "1793291891893157229",
+              "nlink": 1,
+              "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+            },
+            "before": {
+              "bytes": 48763,
+              "mode": "0o644",
+              "path": "openbot/app/src/routeTree.gen.ts",
+              "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae"
+            },
+            "path": "openbot/app/src/routeTree.gen.ts"
+          }
+        ],
+        "phase": "b",
+        "post_source_bytes": 50175694,
+        "project_limit_restored": 536870912,
+        "source_adopted": false,
+        "source_files_checked": 2065,
+        "status": "REPRODUCED_CANDIDATE_NOT_ADOPTED",
+        "two_fresh_before_runs_identical": true
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_FINAL",
+      "data": {
+        "controller_terminal_required": true,
+        "data_limit": 67108864,
+        "formal_image_8GET": "NOT_RUN",
+        "paid_provider_calls": 0,
+        "postgres17": "PG_PENDING",
+        "privileged_restore_proof": "NOT_SUPPLIED_BY_SUBJECT",
+        "production_deploys": 0,
+        "project_memory_limit": 536870912,
+        "source_adopted": false,
+        "stage_records": [
+          "before-build-a.json",
+          "before-build-b.json",
+          "brand.json",
+          "budget.json",
+          "build-a.json",
+          "build-b.json",
+          "expected-manifest.json",
+          "proof-a.json",
+          "proof-b.json",
+          "reset-before-b.json",
+          "state.json"
+        ],
+        "status": "REPRODUCED_CANDIDATE_NOT_ADOPTED",
+        "strict_ci": "NOT_RUN",
+        "two_fresh_before_runs_identical": true,
+        "windows_source_writes": 0
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_OUTER_TERMINAL",
+      "data": {
+        "PG": "PG_PENDING",
+        "ROOT_RELEASE": null,
+        "absolute_outer_deadline": 477.24756582,
+        "actual_elapsed": 73.19262979499999,
+        "controls_exit": {
+          "fallback": 0,
+          "supervisor": 0
+        },
+        "fallback_terminal": {
+          "errors": [],
+          "observed_at": 250.386687074,
+          "outer": 477.24756582,
+          "parent_populated0_claim": false,
+          "restore": {
+            "absolute_deadline": 477.24756582,
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "observed_at": 250.376436195
+          },
+          "status": "RESTORED_SUBJECT_EMPTY",
+          "subjects": {
+            "budget-a": "absent",
+            "budget-b": "absent",
+            "build-a": "absent",
+            "build-b": "absent",
+            "finish": "absent",
+            "reset-before": "absent",
+            "snapshot-a": "absent",
+            "snapshot-b": "absent"
+          },
+          "supervisor_death": false
+        },
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "0",
+          "memory.swap.max": "0"
+        },
+        "observed_at": 250.440200083,
+        "parent_populated0": true,
+        "privileged_stage_receipts": {
+          "budget-a": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-budget-a.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 177.542605613
+            },
+            "stage": "budget-a",
+            "status": "PASSED"
+          },
+          "budget-b": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-budget-b.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 214.782590897
+            },
+            "stage": "budget-b",
+            "status": "PASSED"
+          },
+          "build-a": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-build-a.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 213.303735305
+            },
+            "stage": "build-a",
+            "status": "PASSED"
+          },
+          "build-b": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-build-b.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 249.026832541
+            },
+            "stage": "build-b",
+            "status": "PASSED"
+          },
+          "finish": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-finish.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 250.217193563
+            },
+            "stage": "finish",
+            "status": "PASSED"
+          },
+          "reset-before": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-reset-before.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 214.595480417
+            },
+            "stage": "reset-before",
+            "status": "PASSED"
+          },
+          "snapshot-a": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-snapshot-a.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 214.40835149
+            },
+            "stage": "snapshot-a",
+            "status": "PASSED"
+          },
+          "snapshot-b": {
+            "cleanup": {
+              "cgroup_absent_after_stop": true,
+              "job": "",
+              "load_state": "not-found",
+              "stop_completed": true,
+              "subject_populated0": false,
+              "unit": "xb-route-40912983831-1-snapshot-b.service"
+            },
+            "exit": 0,
+            "restore": {
+              "absolute_deadline": 477.24756582,
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "observed_at": 250.031337732
+            },
+            "stage": "snapshot-b",
+            "status": "PASSED"
+          }
+        },
+        "ready": false,
+        "source_adopted": false,
+        "status": "FAILED_OR_UNKNOWN",
+        "supervisor_terminal": {
+          "actual_parent_empty_claim": false,
+          "cleaned": [
+            "budget-a",
+            "budget-b",
+            "build-a",
+            "build-b",
+            "finish",
+            "reset-before",
+            "snapshot-a",
+            "snapshot-b"
+          ],
+          "error": null,
+          "observed_at": 250.259584119,
+          "outer": 477.24756582,
+          "restore": {
+            "absolute_deadline": 477.24756582,
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "observed_at": 250.249308045
+          },
+          "status": "SUCCESS_PENDING_OUTER_WITNESS",
+          "subjects": {
+            "budget-a": "absent",
+            "budget-b": "absent",
+            "build-a": "absent",
+            "build-b": "absent",
+            "finish": "absent",
+            "reset-before": "absent",
+            "snapshot-a": "absent",
+            "snapshot-b": "absent"
+          }
+        },
+        "workflow_commit": "576d176424df248222299db2c49d0fa545c90579"
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_OUTER_UNKNOWN",
+      "data": {
+        "actual_control_terminal": null,
+        "controls_exit": {
+          "fallback": 0,
+          "supervisor": 0
+        },
+        "detail": "no complete privileged restoration/deadline witness",
+        "evidence_write": "DEADLINE_EXHAUSTED_NO_NEW_BUDGET",
+        "failure_type": "AssertionError",
+        "observed_at": 477.247640589,
+        "outer": 477.24756582,
+        "restore_proven": false,
+        "source_adopted": false,
+        "status": "FAILED_OR_UNKNOWN"
+      }
+    },
+    {
+      "type": "ROUTE_REPRO_ALWAYS_UNKNOWN",
+      "data": {
+        "actual_parent_limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "0",
+          "memory.swap.max": "0"
+        },
+        "bootstrap_failure": "NOT_AVAILABLE",
+        "error_type": "AssertionError",
+        "restore_proven": false,
+        "source_adopted": false,
+        "status": "FAILED_OR_UNKNOWN"
+      }
+    }
+  ],
+  "candidate_payload_identity_only": {
+    "after": {
+      "bytes": 49276,
+      "ctime_ns": "1793291891899157205",
+      "dev": "2049",
+      "git_blob_sha1": "50399b63fa0119c9439866e7250049378af617e3",
+      "ino": "8611368",
+      "mode": "0o644",
+      "mode_bits": 420,
+      "mtime_ns": "1793291891893157229",
+      "nlink": 1,
+      "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+    },
+    "base64_ascii_bytes": 7380,
+    "base64_ascii_sha256": "4368ea6cd38b04d0c54ca4dc422c13213423e5957420c44b89180ab544b16830",
+    "before": {
+      "bytes": 48763,
+      "mode": "0o644",
+      "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae"
+    },
+    "commercial_acceptance": "NOT_DELIVERED",
+    "encoding": "gzip+base64",
+    "gzip_bytes": 5535,
+    "gzip_sha256": "a70f57d426256fa943a65b987bfa5704abb39eb87235627dcb2ee6c32ff321a8",
+    "path": "openbot/app/src/routeTree.gen.ts",
+    "postgres17": "PG_PENDING",
+    "raw_bytes": 49276,
+    "raw_sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+    "schema": "xiongbaowork-route-tree-gzb64-candidate/1",
+    "source_adopted": false,
+    "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "two_fresh_before_runs_identical": true,
+    "workflow_commit": "576d176424df248222299db2c49d0fa545c90579"
+  },
+  "payload_persisted": false,
+  "log": {
+    "characters": 358625,
+    "sha256_utf8": "079c661f1ffe757135ecdbac2e14e1e5c279929ea6fdc81eedadd5de5d1c1334",
+    "full_read": true,
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40912983831/job/123585627390"
+  },
+  "actual_scoped_results": {
+    "buildA_exit": 0,
+    "buildB_exit": 0,
+    "two_fresh_before_outputs_identical": true,
+    "source_postcheck_each": 2065,
+    "only_leaf": "openbot/app/src/routeTree.gen.ts",
+    "source_adopted": false,
+    "subject_and_controls_elapsed": 73.19262979499999
+  },
+  "final_resource_gate": {
+    "memory_max": 536870912,
+    "swap_max": 0,
+    "parent_populated0": true,
+    "memory_oom_group": 0,
+    "controls_exit": {
+      "fallback": 0,
+      "supervisor": 0
+    },
+    "restoration": "FAILED_OR_UNKNOWN_NOT_ACCEPTED"
+  },
+  "history_limits": "Only this exact run proves final oom.group0. Old bare assertions still have unknown failed fields.",
+  "next_action": "Minimal control-only final teardown repair/diagnosis within original aggregate/deadline; no unchanged A/B retry. Independent A11 teardown-only diagnostic is ready after fresh idle queue."
+}

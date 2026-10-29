@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:41:25.621Z",
+  "checkpoint_update_at": "2026-10-29T16:44:29.467Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4187,7 +4187,7 @@
   },
   "cloud_route_bootstrap_successor": {
     "candidate": "576d176424df248222299db2c49d0fa545c90579",
-    "status": "DISPATCHED_IN_PROGRESS_NOT_ACCEPTED",
+    "status": "A_B_REPRODUCED_BUT_FINAL_OOMGROUP0_FAILED_NOT_ADOPTED",
     "review_commit": "ada8728408ec8404131f4122f55837fce22646fc",
     "review_path": "archives/recovery-20261028/CLOUD-ROUTE-BOOTSTRAP-GATE-NONAUTHOR-REVIEW-20261030-A2.json",
     "review_blob": "22f0a52b2e80cb993e561c0a281e2a53f05d6874",
@@ -4227,6 +4227,26 @@
       "preflight": "valid matching fresh lease/head, actual queued0/in_progress0, targetref404 and exactheadruns0",
       "source_adopted": false,
       "next_action": "Read same run40912983831/job123585627390 terminal only; no other resource job until terminal. A11 teardown-only candidate prepares independently."
+    },
+    "result": {
+      "path": "archives/recovery-20261028/CLOUD-ROUTE-BOOTSTRAP-RESULT-20261030-A2.json",
+      "run": 40912983831,
+      "job": 123585627390,
+      "conclusion": "failure",
+      "buildA_exit": 0,
+      "buildB_exit": 0,
+      "candidate_leaf_sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+      "final_resource_gate": {
+        "memory_max": 536870912,
+        "swap_max": 0,
+        "parent_populated0": true,
+        "memory_oom_group": 0,
+        "controls_exit": {
+          "fallback": 0,
+          "supervisor": 0
+        },
+        "restoration": "FAILED_OR_UNKNOWN_NOT_ACCEPTED"
+      }
     }
   },
   "cloud_a11_teardown_diagnostic": {

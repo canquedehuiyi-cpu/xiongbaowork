@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "acquired_at": "2026-10-29T16:19:08.289Z",
-  "renewed_at": "2026-10-29T16:41:25.621Z",
+  "renewed_at": "2026-10-29T16:44:29.467Z",
   "expires_at": "2026-10-29T17:04:08.289Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T16:19:08.289Z"
   },
-  "next_action": "Read same run40912983831/job123585627390 terminal only; no other resource job until terminal. A11 teardown-only candidate prepares independently.",
+  "next_action": "Minimal control-only final teardown repair/diagnosis within original aggregate/deadline; no unchanged A/B retry. Independent A11 teardown-only diagnostic is ready after fresh idle queue.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -32,7 +32,8 @@
     "run": 40912983831,
     "job": 123585627390,
     "candidate": "576d176424df248222299db2c49d0fa545c90579",
-    "status": "in_progress"
+    "status": "completed",
+    "conclusion": "failure"
   },
   "queue_at_release": {
     "queued": [],
