@@ -1,0 +1,144 @@
+{
+  "schema": "xiongbaowork-route-tree-reproduction-plan/1",
+  "status": "PREPARED_NOT_DISPATCHED_NOT_EXECUTED",
+  "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
+  "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+  "source_files": 2065,
+  "source_bytes": 50175181,
+  "branch": "codex/route-tree-repro-plan-20261029",
+  "trigger": "workflow_dispatch only; no push/pull_request/schedule/workflow_run; Root serial dispatch after seed diagnostic",
+  "concurrency": {
+    "group": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "jobs": 1,
+    "matrix": false
+  },
+  "files_owned": [
+    ".github/workflows/route-tree-repro-candidate.yml",
+    "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json"
+  ],
+  "source_paths_allowed_to_change_at_runtime": [
+    "openbot/app/src/routeTree.gen.ts"
+  ],
+  "before": {
+    "bytes": 48763,
+    "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae",
+    "mode": "0o644"
+  },
+  "expected_manifest": {
+    "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+    "bytes": 456310,
+    "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+    "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff"
+  },
+  "unchanged_first_four_steps_from": {
+    "path": ".github/workflows/source-recovery-verify.yml",
+    "commit": "5c7ef397598edec073cc491972376f75d326a8bb",
+    "blob": "37f9b77df6146f2f4812a30a58072dfa75b444d1",
+    "byte_identical_steps_body": true
+  },
+  "original_successful_build": {
+    "workflow_commit": "04ae319935fcd19eb9d3161b61bc483b1962e9f3",
+    "workflow_blob": "10587e5b6ba549609ee5fa78febeb739313c11c1",
+    "run": 40801046219,
+    "job": 123208968546,
+    "historical_node": "v24.22.1"
+  },
+  "frozen_versions": {
+    "bun": "1.3.14",
+    "vite": "7.3.6",
+    "router_plugin": "1.168.35",
+    "router_generator": "1.167.33",
+    "standalone_router_cli": "NOT_CONFIRMED_NOT_INVOKED"
+  },
+  "preparation": {
+    "cwd": "openbot",
+    "argv": [
+      "<pinned Bun1.3.14>",
+      "--no-install",
+      "scripts/generate-app-config.ts"
+    ],
+    "tenant_package_dir": "../examples/qoderwake",
+    "limit": 536870912
+  },
+  "build": {
+    "cwd": "openbot/app",
+    "argv": [
+      "/usr/local/bin/node",
+      "--max-old-space-size=3072",
+      "node_modules/vite/bin/vite.js",
+      "build"
+    ],
+    "node_version_guard": "Original Vite supported runner guard; capture actual runtime, do not install another version",
+    "iterations": 2,
+    "shared_inner_seconds": 270,
+    "shared_outer_seconds": 300,
+    "memory_limit": 4294967296,
+    "swap": 0,
+    "restore_after_each": 536870912,
+    "no_third_iteration": true,
+    "original_bun_build_script_pass_claim": false
+  },
+  "resources": {
+    "ordinary_project_and_descendants": 536870912,
+    "data_source_capture_reset_inventory": 67108864,
+    "full_frozen_install": 536870912,
+    "only_node_vite_build_A_and_B": 4294967296,
+    "swap": 0,
+    "paid_larger_runner": false
+  },
+  "source_capture": {
+    "regular_file": true,
+    "nlink": 1,
+    "no_symlinks": true,
+    "O_NOFOLLOW": true,
+    "FD_named_before_after_exact": true,
+    "nanoseconds_and_inode": "decimal strings",
+    "mode": "observed octal string, must equal before; never chmod/utime repair",
+    "strict_utf8_roundtrip": true,
+    "raw_sha256": true,
+    "git_blob_sha1": true,
+    "two_runs_start_from_verified_before": true,
+    "post_each": "All2065 Source paths/modes/bytes/SHA checked; only target leaf may differ; Git tracked diff allowlist is identical",
+    "raw_leaf_cap": 131072
+  },
+  "payload": {
+    "encoding": "gzip+base64",
+    "gzip_mtime": 0,
+    "raw_gzip_base64_ascii_sizes_and_SHA256": true,
+    "complete_UTF8_JSON_max_bytes": 250000,
+    "log_prefix": "ROUTE_TREE_CANDIDATE_GZB64",
+    "never_truncate_to_pass": true,
+    "storage": "Own ephemeral cloud control directory and bounded GitHub joblog; Root may archive verified candidate via connector only; no Windows download"
+  },
+  "runtime_control_helper": {
+    "bytes": 18046,
+    "sha256": "e2072399ba6f215acad996983aaebdf2f5c68e8c3ed1637653dcbf2629b33871"
+  },
+  "stop_conditions": [
+    "Any source/manifest/runtime dependency identity mismatch",
+    "Any source leaf outside target changed",
+    "Mode mismatch, symlink/hardlink or unstable FD/named metadata",
+    "Build A failure or A/B shared deadline exhausted: mark incomplete, no B/third retry",
+    "A/B outputs differ",
+    "Payload over cap or invalid UTF8",
+    "No passing proof-b: final is INCOMPLETE"
+  ],
+  "review_and_adoption": "No automatic adoption/stage/commit/push from runner. Root must fully read exact candidate, non-author Source review, then own bounded adoption.",
+  "source_adopted": false,
+  "canonical_branch_changed": false,
+  "default_branch_changed": false,
+  "workflow_dispatched": false,
+  "project_executed": false,
+  "postgres17": "PG_PENDING",
+  "ROOT_RELEASE": null,
+  "AP_DISABLED": true,
+  "NOT_SERVICE_WIRED": true,
+  "migrationNOT_WIRED": true,
+  "strict_ci": "NOT_RUN",
+  "formal_image_8GET": "NOT_RUN",
+  "production_deploys": 0,
+  "paid_provider_calls": 0,
+  "windows_source_writes": 0,
+  "commercial_acceptance": "NOT_DELIVERED"
+}
