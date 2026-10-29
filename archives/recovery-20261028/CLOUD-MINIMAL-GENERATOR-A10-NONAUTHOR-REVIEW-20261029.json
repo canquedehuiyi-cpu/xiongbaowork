@@ -1,0 +1,187 @@
+{
+  "schema": "xiongbaowork-independent-a10-review-v1",
+  "reviewer": "/root/a6_review",
+  "review_kind": "NON_AUTHOR_READ_ONLY_STATIC_REVIEW",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f",
+  "tree": "edf947d3b75f4ac9a811e5e8352ca77993ab4cd4",
+  "parent": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+  "author": "/root/a7_prepare",
+  "verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "writes": false,
+  "execution": false,
+  "local_files": false,
+  "method": "NormalGitHub complete3files/independentbytesSHA/immutabletrees/wholeunchangedsections,dataonlynoAST/exec",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "mode": "100644",
+      "blob": "de6927e3089affba120eb9da67795feef9439120",
+      "bytes": 4019,
+      "sha256": "9f844ca9b00a4fbbc2f381f4fe0d66dccceb6871e66b4ba28e62efd7718ad80a",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "mode": "100644",
+      "blob": "f3e2cc4f4c8cc488a3e1f31c0d7b4d99c5fd55bf",
+      "bytes": 89362,
+      "sha256": "85c3b522cb1a6c1b35815e1121a14e105acfb6a5b89bf193987a8c0dd94cc4bc",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "mode": "100644",
+      "blob": "3bc958568c67bf3c5edf03e85ac484ca3b2627f2",
+      "bytes": 38479,
+      "sha256": "9e743ea5dd853c6665483cb8fa963b3e46efc23157b69e5d21f21120f64c9b3f",
+      "full_read": true
+    }
+  ],
+  "identities": {
+    "bothbytes": 89362,
+    "workflowSHA_matches": true,
+    "plan_identities_match": true,
+    "embedded_core_equal": true,
+    "head_skip": false
+  },
+  "tree_scope": {
+    "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "baseline_tree": "0877bb2bb252935d54e8f7d234c91c6703d600cf",
+    "truncated": false,
+    "changed3": true,
+    "paths": [
+      ".github/workflows/cloud-minimal-generator.yml",
+      "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json"
+    ],
+    "deleted": 0,
+    "all_other_path_blob_type_mode_equal": true,
+    "Source_changed": false,
+    "SourceSCRIPT_equal_A9": true
+  },
+  "output_path_fix": {
+    "prior_run": 40898247886,
+    "prior_job": 123533162634,
+    "prior_exit0_noDDL": true,
+    "raw_generatorlog": {
+      "bytes": 1196,
+      "sha256": "56bda287017f3dcb05db756b436294a741cc14d8eb651bbf8c1df59fd583ed1b"
+    },
+    "error_path": ".//home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json",
+    "copy_root": "<base>/private-stage",
+    "copy_cwd": "<base>/private-stage/openbot/server",
+    "generate_root": "<base>/private-stage/openbot",
+    "generate_cwd": "<base>/private-stage/openbot/server",
+    "samecwd": true,
+    "out": "../../../private-drizzle",
+    "resolved": "<base>/private-drizzle",
+    "checks": [
+      "baseabsolute",
+      "outparentbase+nameprivate-drizzle",
+      "exactstrictresolvedcwd",
+      "outnosymlinkstrictresolveequalsout",
+      "os.path.relpathfromexactcwd",
+      "relativeonlyexact../../../private-drizzle",
+      "strictcwdrelativeequalscontrolledout",
+      "50schemaabsolute",
+      "generate_rechecksallpathbindings",
+      "actualsubprocesscwdchecked"
+    ],
+    "original_Source_config_changed": false,
+    "originalmigrationcopy_changed": false,
+    "schemalist_changed": false,
+    "runtime_proof": false,
+    "upstream_evidence": "SupportingtagSourceonly,notexactbundleauthentication; actualA9decodederror isdirectevidence"
+  },
+  "unchanged_sections": {
+    "KEYS_beforecopy_equal_A9": true,
+    "fetcharchive_throughdeps_equal_A9": true,
+    "export_through_main_equal_A9": true,
+    "planfields_equal": [
+      "base",
+      "source",
+      "overlay",
+      "schema_paths",
+      "schema_modules",
+      "nodes",
+      "edges",
+      "limits",
+      "baseline",
+      "learning",
+      "gates",
+      "redirect_policy",
+      "orm_metadata_compatibility",
+      "candidate_tree_guard",
+      "tsx_bin_compatibility"
+    ]
+  },
+  "retained_controls": {
+    "original17nodes15edges": true,
+    "URL_SRI_strictdeps": true,
+    "ORMfixedguard2pos14neg": true,
+    "FULL50": true,
+    "Source2065fullmanifestbyteshashmodeFD": true,
+    "seed_overlay_not_adopted": true,
+    "no_learning_fabricated": true,
+    "no_recovery_stitch": true,
+    "private_cache_copyfile_nohooks_nolinks": true,
+    "all3native_nested_beforegenerator": true,
+    "export_before_structurefail": true,
+    "parent": 536870912,
+    "DATA": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "root_admin_only": true,
+    "activation_repair_beforeirreversible_drop": true,
+    "kernel_gatechecks": true,
+    "prep480": true,
+    "generation120": true,
+    "export120": true,
+    "reserve8": true,
+    "late_refuse_RuntimeMaxreserve": true,
+    "idempotent_cgroupkill_boundedstop": true,
+    "final_always_limits_pop0": true
+  },
+  "workflow": {
+    "branch": "codex/cloud-minimal-generator-run-20261029-a10",
+    "event": "push",
+    "runner": "ubuntu-latest",
+    "contents": "read",
+    "jobs": 1,
+    "minutes": 15,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false
+  },
+  "dispatch": {
+    "exactSHA": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f",
+    "max": 1,
+    "requires": [
+      "savedreport",
+      "currentvalidleasefreshhead",
+      "idlequeue",
+      "exactref/headsharundedup"
+    ],
+    "not_proof": [
+      "actualgeneration",
+      "SQLsnapshotjournalconsistency",
+      "Sourceadoption",
+      "PGproduction"
+    ]
+  },
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  }
+}
