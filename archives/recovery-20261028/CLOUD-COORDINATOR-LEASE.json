@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:manager-contract-audit-20261030",
   "run_id": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
   "epoch": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
   "acquired_at": "2026-10-29T17:40:04.878Z",
-  "renewed_at": "2026-10-29T17:40:04.878Z",
-  "expires_at": "2026-10-29T18:25:04.878Z",
+  "renewed_at": "2026-10-29T17:44:58.002Z",
+  "expires_at": "2026-10-29T17:44:58.002Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "16c13a54fb8a769793da9b44205f08c14225781c",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T17:40:04.878Z"
   },
-  "next_action": "Prepare exact one-file contract with BLOCKED version-match/retention gaps, existing nonauthor static review, persist evidence then idle CAS release.",
+  "next_action": "Static contract remains BLOCKED/UNKNOWN. Need trustworthy existing actual manager/kernel/package identity and matching official lifecycle/retention contract before further static architecture review. No new implementation/configuration/job/Source/identity/Page work authorized by this audit.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -38,7 +38,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T17:23:42.565Z"
+    "observed_at": "2026-10-29T17:44:58.002Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -56,5 +56,6 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Read-only manager lifecycle contract analysis and <=8 administrative evidence files only; no implementation/configuration/job/Source/Page/automation changes"
+  "scope": "Read-only manager lifecycle contract analysis and <=8 administrative evidence files only; no implementation/configuration/job/Source/Page/automation changes",
+  "released_at": "2026-10-29T17:44:58.002Z"
 }

@@ -1,0 +1,160 @@
+{
+  "schema": "manager-resource-lifecycle-contract-independent-static-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+  "candidate": {
+    "commit": "b214e03715846033d6fa86a3b289e2b84b88317b",
+    "parent": "33e41e6616eb34dbba2f3133eb414870397bf8ad",
+    "tree": "99d92cf4cba57344fdd5f5878bcc4fed54e0ca72",
+    "path": "archives/recovery-20261028/MANAGER-RESOURCE-LIFECYCLE-CONTRACT-20261030.json",
+    "blob": "288b6837bd743bcb1de388f635b46ddc35cdd4fd",
+    "mode": "100644",
+    "bytes": 12685,
+    "sha256": "f83232259a84c718758cfc0159e34b59109938e98b574af9b27dc2ae009d9752",
+    "full_read": true,
+    "only_one_added_declarative_JSON": true
+  },
+  "verdict": "ADMIN_STATIC_CONTRACT_REVIEW_ONLY",
+  "findings": [],
+  "actual_implementation_status": "BLOCKED_UNKNOWN_NO_PLATFORM_MATCHED_SUPPORTED_FINAL_RETENTION_MECHANISM_ESTABLISHED",
+  "independent_evidence": {
+    "logs": [
+      {
+        "job": 123608267218,
+        "characters": 21992,
+        "sha256_utf8": "4ef372d4554abe55b14686cd7a82de458b607555b6fd9e8e71919bb466b7e2ed"
+      },
+      {
+        "job": 123585627390,
+        "characters": 358625,
+        "sha256_utf8": "079c661f1ffe757135ecdbac2e14e1e5c279929ea6fdc81eedadd5de5d1c1334"
+      },
+      {
+        "job": 123547693853,
+        "characters": 154651,
+        "sha256_utf8": "0cbee1a3b55b6489a1c5d7b2ab89ad28f979a9b5bd43b439159b7593cc3396f7"
+      }
+    ],
+    "all_three_full_connector_reads_and_independent_hashes": true,
+    "observed_same": {
+      "os": "Ubuntu26.04.1",
+      "runner": "2.338.0",
+      "image": "ubuntu-26.04",
+      "image_version": "20261025.179.1",
+      "provisioner": "20261021.618"
+    },
+    "actual_systemd_kernel_version_outputs": "NONE_IN_INSPECTED_LOGS",
+    "not_inferred_from_image": true,
+    "upstream_static_files": [
+      {
+        "path": "src/core/service.c",
+        "repository": "systemd/systemd",
+        "ref": "v255",
+        "blob": "b9eb40c5559c1c17928bb50eb17207b8ddec1d63",
+        "full_text_read": true
+      },
+      {
+        "path": "src/core/cgroup.c",
+        "repository": "systemd/systemd",
+        "ref": "v255",
+        "blob": "61ac4df1a65ce421cdc919a0f6805f7eac036dc6",
+        "full_text_read": true
+      },
+      {
+        "path": "man/systemd.service.xml",
+        "repository": "systemd/systemd",
+        "ref": "v255",
+        "blob": "b43ec14c375b2e7adc08e2ab9b09365d6c4dd00b",
+        "full_text_read": true
+      },
+      {
+        "path": "docs/CGROUP_DELEGATION.md",
+        "repository": "systemd/systemd",
+        "ref": "v255",
+        "blob": "4210a75767643f3c1ff965ccadc58734c1f79fcd",
+        "full_text_read": true
+      }
+    ],
+    "upstream_not_actual_platform_version": true
+  },
+  "image_resolution_review": {
+    "observed_full_ref": "ubuntu26/20261025.179",
+    "exact_fetch_404": "Contract records no commit found for full ref, a scoped read outcome only.",
+    "observed_blob_URL_404": "Connector resolved ubuntu26 rather than full slash-containing tag; cannot prove intended full tag absent.",
+    "encoded_release_URL_400": "Connector INVALID_ARGUMENT, no upstream release existence conclusion.",
+    "reviewer_repeated_failed_queries": false,
+    "raw_query_receipts_independently_refetched": false,
+    "assessment": "Error semantics and uncertainty retained accurately; reviewer checked observed links and conclusions, not new availability probes.",
+    "no_other_distro_or_latest_substitution": true
+  },
+  "architecture_review": [
+    {
+      "id": "ARCH-1",
+      "contract_status": "BLOCKED",
+      "assessment": "Actual manager+distribution patch/kernel identity and supported original512/64 finaloom1 mechanism remain missing. Configured max and upstreamv255 are explicitly insufficient.",
+      "supported_complete": false
+    },
+    {
+      "id": "ARCH-2",
+      "contract_status": "BLOCKED",
+      "assessment": "Trusted a4 FileNotFound and earliera3 unresolvednull correctly separated. Still requires same actual existing final paths/identity/caps/swap0/oom1/pop0/zeroPIDs.",
+      "supported_complete": false
+    },
+    {
+      "id": "ARCH-3",
+      "contract_status": "CONSTRAINT_SUPPORTED_BUT_COMPLETE_MECHANISM_BLOCKED",
+      "assessment": "Aggregate ownership, noholder/noescape/nooutbudgetwriter restrictions retained; nesteddelegation inservice evidence not upgraded to postexit originalgate proof.",
+      "supported_complete": false
+    },
+    {
+      "id": "ARCH-4",
+      "contract_status": "EXISTING_BUDGET_CONSTRAINT_RETAINED_NEW_ARCHITECTURE_NOT_VALIDATED",
+      "assessment": "One original monotonic budget and failunknown retained; no newalwaysgrace. Historical timeoutdocs not actualplatform semantics or runtime deadlinePASS.",
+      "supported_complete": false
+    },
+    {
+      "id": "ARCH-5",
+      "contract_status": "PROCESS_PLAN_ONLY_NOT_DISPATCH_AUTHORITY",
+      "assessment": "One nonexecutable JSON with exact nonauthor review, no workflow/controller/config/job. This review supplies staticcontract review only, no future implementation/execution authority.",
+      "supported_process_only": true
+    }
+  ],
+  "history_and_authority_checks": {
+    "a4_physicalabsence_exactrun_only": true,
+    "a3null_not_retroactive_absence": true,
+    "A11_fourrawidentities_not_wholeDATAjobPASS": true,
+    "route_twoidenticalbuilds_not_finalresourcePASS_or_Sourceadoption": true,
+    "upstream_prunepath_explanatory_not_runtime_actor": true,
+    "no_global_platform_impossibility_claim": true,
+    "no_new_permission_purchase_environment_or_probe_requested": true,
+    "no_holder_outsidewriter_gate_relax_or_implementation": true,
+    "no_dispatch_or_runtime_approval": true
+  },
+  "limitations": [
+    "No actual platform-version matched manager/kernel/patch evidence was obtained by this review.",
+    "No supported complete retention/restoration mechanism was established; BLOCKED/UNKNOWN remains.",
+    "Image lookup rawerror receipts were not independently rerun; contract safely preserves scoped404/connector400 uncertainty.",
+    "This is static review, not project/control/codec/parser/test execution or resource acceptance."
+  ],
+  "next_action": "Persist static contract and review as a concrete blocked checkpoint. Accept trustworthy preexisting manager/kernel/package identity, then perform a separate bounded version-matched static architecture review against all ARCH1..5. Do not repeat tested jobs, guess properties, implement or dispatch based on this report.",
+  "side_effects": {
+    "project_or_control_or_codec_execution": 0,
+    "environment_or_identity_probe": 0,
+    "canonical_lease_jobs_Page_automation_writes": 0,
+    "review_report_only": true
+  },
+  "preserved": {
+    "scope": "77/18/7",
+    "Source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "Source_files": 2065,
+    "Source_bytes": 50175181,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "worker": "PAUSED_UNVERIFIED",
+    "Page_automation": "FROZEN"
+  }
+}

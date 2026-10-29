@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T17:23:42.565Z",
+  "checkpoint_update_at": "2026-10-29T17:44:58.002Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,13 +4427,13 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
-    "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
-    "acquisition_commit": "e3880111fd9f299cd426c9e7dfea071531371508",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:manager-contract-audit-20261030",
+    "epoch": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
+    "acquisition_commit": "33e41e6616eb34dbba2f3133eb414870397bf8ad",
     "state": "released",
-    "expires_at": "2026-10-29T17:23:42.565Z",
-    "authority": "Explicit normal human executor delegation and fresh lease CAS; not hosted caller binding.",
-    "released_at": "2026-10-29T17:23:42.565Z"
+    "released_at": "2026-10-29T17:44:58.002Z",
+    "expires_at": "2026-10-29T17:44:58.002Z",
+    "scope": "Read-only manager lifecycle contract analysis and <=8 administrative evidence files only; no implementation/configuration/job/Source/Page/automation changes"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -4520,5 +4520,47 @@
     "no_new_jobs": true,
     "scope": "a4 evidence bookkeeping and lease release only",
     "next_action": "Review a documented manager/resource lifecycle contract meeting ARCH-1..5 before implementation. Do not repeat a3/a4, generator, raw export verification or route A/B. Preserve physical absence only for a4; a3 remains path-not-read. Identity/Page/automations frozen; independent authorized work may be separately assigned."
+  },
+  "manager_resource_lifecycle_contract_audit": {
+    "status": "BLOCKED_NO_PLATFORM_VERSION_MATCHED_SUPPORTED_FINAL_RETENTION_MECHANISM_ESTABLISHED",
+    "contract": {
+      "path": "archives/recovery-20261028/MANAGER-RESOURCE-LIFECYCLE-CONTRACT-20261030.json",
+      "reviewed_candidate": "b214e03715846033d6fa86a3b289e2b84b88317b",
+      "blob": "288b6837bd743bcb1de388f635b46ddc35cdd4fd",
+      "bytes": 12685,
+      "sha256": "f83232259a84c718758cfc0159e34b59109938e98b574af9b27dc2ae009d9752"
+    },
+    "nonauthor_review": {
+      "commit": "cee9fa1860519a194860591c9252cf659ee8931d",
+      "path": "archives/recovery-20261028/MANAGER-RESOURCE-LIFECYCLE-CONTRACT-NONAUTHOR-REVIEW-20261030.json",
+      "blob": "7d2184d58f856393363fe6c89fee6c188be6b80a",
+      "sha256": "b724c1146106cdb928ce20c5bc9df5274bf92871e4ee6316b030d183def68dc6",
+      "verdict": "ADMIN_STATIC_CONTRACT_REVIEW_ONLY",
+      "findings": []
+    },
+    "actual_platform": {
+      "os": "Ubuntu26.04.1",
+      "runner": "2.338.0",
+      "image": "ubuntu-26.04",
+      "image_version": "20261025.179.1",
+      "manager_kernel_patch_versions": "NOT_OBTAINED_FROM_EXISTING_EVIDENCE"
+    },
+    "mechanism_supported_complete": false,
+    "implementation": false,
+    "new_jobs": 0,
+    "source_adoptions": 0,
+    "next_action": "Keep final resource gates failed/unknown. Supply trustworthy already-existing actual manager/kernel/package identity and corresponding official retention contract; then conduct separate bounded static architecture review. Do not repeat tested jobs or guess attributes.",
+    "authority_boundary": {
+      "already_authorized": "This bounded read-only audit, one reviewable administrative contract, existing different nonauthor static review, and lease-CAS persistence/release.",
+      "not_authorized_this_round": [
+        "new CONTROL or project job",
+        "implementation of a new architecture",
+        "manager configuration edit",
+        "new environment/account/worker/goal/automation",
+        "Source or identity/Page changes"
+      ],
+      "would_require_separate_explicit_authorization": "Any departure from present resource/ownership/finalwitness/holder/noescape/deadline constraints, or new permissions/environment/paid service; none proposed as a solution or requested here.",
+      "next_normal_step": "Separate read-only architecture review after trustworthy actual platform-version evidence is available; future execution is not implied."
+    }
   }
 }

@@ -1,0 +1,256 @@
+{
+  "schema": "manager-resource-lifecycle-static-contract-audit/v1",
+  "status": "BLOCKED_NO_PLATFORM_VERSION_MATCHED_SUPPORTED_FINAL_RETENTION_MECHANISM_ESTABLISHED",
+  "scope": "One bounded read-only capability/architecture analysis and reviewable administrative plan; not implementation or execution.",
+  "author": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+  "platform_identity": {
+    "observed_in_jobs": [
+      123608267218,
+      123585627390,
+      123547693853
+    ],
+    "os": "Ubuntu26.04.1",
+    "runner": "2.338.0",
+    "image": "ubuntu-26.04",
+    "image_version": "20261025.179.1",
+    "provisioner_version": "20261021.618",
+    "systemd_binary_version": "NOT_RECORDED_IN_INSPECTED_LOGS",
+    "systemd_distribution_patchset": "UNKNOWN",
+    "kernel_release_build": "NOT_RECORDED_IN_INSPECTED_LOGS",
+    "not_inferred": "Ubuntu/image/runner identity is not a systemd or kernel version; successful cgroup interfaces do not identify an implementation version."
+  },
+  "runtime_log_evidence": [
+    {
+      "job": 123608267218,
+      "characters": 21992,
+      "sha256_utf8": "4ef372d4554abe55b14686cd7a82de458b607555b6fd9e8e71919bb466b7e2ed",
+      "full_read": true,
+      "actual_version_output_matches": 0
+    },
+    {
+      "job": 123585627390,
+      "characters": 358625,
+      "sha256_utf8": "079c661f1ffe757135ecdbac2e14e1e5c279929ea6fdc81eedadd5de5d1c1334",
+      "full_read": true,
+      "actual_version_output_matches": 0
+    },
+    {
+      "job": 123547693853,
+      "characters": 154651,
+      "sha256_utf8": "0cbee1a3b55b6489a1c5d7b2ab89ad28f979a9b5bd43b439159b7593cc3396f7",
+      "full_read": true,
+      "actual_version_output_matches": 0
+    }
+  ],
+  "official_image_identity_resolution": {
+    "observed_ref": "ubuntu26/20261025.179",
+    "observed_path": "images/ubuntu/Ubuntu2604-Readme.md",
+    "exact_fetch_file_result": "404 No commit found for the ref ubuntu26/20261025.179",
+    "observed_blob_url_result": "Connector resolved ref as ubuntu26 and returned404; not independent proof full intended tag absent.",
+    "observed_release_url_result": "Connector INVALID_ARGUMENT400 for encoded tag path; upstream release existence NOT_DETERMINED.",
+    "queries_stopped": true,
+    "no_latest_image_or_other_distro_substitution": true
+  },
+  "official_static_evidence": {
+    "version": "UPSTREAM_v255_ONLY_NOT_PROVEN_RUNNER_VERSION",
+    "files": [
+      {
+        "path": "src/core/service.c",
+        "blob": "b9eb40c5559c1c17928bb50eb17207b8ddec1d63",
+        "lines": [
+          1265,
+          1266
+        ],
+        "basis": "SERVICE_EXITED branch requests unit_prune_cgroup outside manager reload."
+      },
+      {
+        "path": "src/core/cgroup.c",
+        "blob": "61ac4df1a65ce421cdc919a0f6805f7eac036dc6",
+        "lines": [
+          3100,
+          3123,
+          3144,
+          3156
+        ],
+        "basis": "Prune attempts trim, then releases empty unit cgroup bookkeeping. No Delegate/RemainAfterExit keep-empty exemption is established in these inspected paths."
+      },
+      {
+        "path": "man/systemd.service.xml",
+        "blob": "b43ec14c375b2e7adc08e2ab9b09365d6c4dd00b",
+        "lines": [
+          330,
+          604,
+          725
+        ],
+        "basis": "RemainAfterExit defines logical active after process exit; TimeoutStartSec covers startup; RuntimeMaxSec does not bound oneshot. None establishes physical empty-tree retention."
+      },
+      {
+        "path": "docs/CGROUP_DELEGATION.md",
+        "blob": "4210a75767643f3c1ff965ccadc58734c1f79fcd",
+        "lines": [
+          49,
+          56,
+          207,
+          215,
+          246,
+          256
+        ],
+        "basis": "Single writer/no internal processes; Delegate service/scope boundary with manager-owned unit attributes and owned descendants, not slices; user.delegate version caveat. This is not an identified platform-after-exit retention contract."
+      }
+    ],
+    "repository": "systemd/systemd",
+    "ref": "v255",
+    "version_matching": "UNCONFIRMED_EXPLANATORY_ONLY",
+    "runtime_pruning_actor": "NOT_TRACED_NOT_PROVEN",
+    "no_global_impossibility_claim": true
+  },
+  "actual_history": {
+    "a4": {
+      "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+      "run": 40919415179,
+      "job": 123608267218,
+      "conclusion": "failure",
+      "trusted_previous_root_target_admin": "FileNotFoundError physically observed after verified rootowned stable terminal fixedpath probe",
+      "logical_service": "active(exited), Delegateyes, RemainAfterExityes, MainPID0/ControlPID0/noJob/ExecMainStatus0, ControlGroup empty",
+      "legacy": "project512/shared64 max,swap0,populated0 but both oom.group0",
+      "final_restore": "NOT_ACCEPTED"
+    },
+    "a3": "External snapshotsnull were path-unresolved only; not retrospectively reclassified as physical absence.",
+    "raw_A11": "Four original export lengths/CRC/rawSHA/safeJSON verified in40912579798/job123584189279; overall final resource gate remained failed/unknown.",
+    "route_A2": "Two actual builds exit0/identical singleleaf candidate, but original parent finaloom0; no Source adoption."
+  },
+  "architecture_matrix": [
+    {
+      "id": "ARCH-1",
+      "requirement": "After all actual control/Subject exits, original stable project512/sharedDATA64 paths retain actual max/swap0/oom1.",
+      "supported_observation": "Actual max512/64 and swap0 were observed; oom1 existed while controllers ran, final managed slices oom0.",
+      "documented_mechanism": "NONE_ESTABLISHED_FOR_IDENTIFIED_PLATFORM",
+      "status": "BLOCKED",
+      "missing": [
+        "Actual manager version+distribution patch identity",
+        "Resolvable official exact image package ledger or equivalent existing trusted version evidence",
+        "Matching implementation/public contract for managed-original paths maintaining finaloom1 with no remaining process"
+      ],
+      "not_sufficient": [
+        "configured MemoryMax",
+        "unknown MemoryOOMGroup property",
+        "v255 treated as runner",
+        "ownership of descendants treated as ownership of original managed slices"
+      ]
+    },
+    {
+      "id": "ARCH-2",
+      "requirement": "Independent read-only final witness sees same exact paths/devino, actual512/64 swap0oom1,populated0,zero directPIDs after all writers exit.",
+      "supported_observation": "a4 trusted exact prior service/target/admin paths physically absent; logical active/exited did not provide physical tree.",
+      "documented_mechanism": "NONE_ESTABLISHED",
+      "status": "BLOCKED",
+      "missing": [
+        "Version-matched supported physical empty-tree lifecycle/retention mechanism",
+        "Stable post-exit exact-path identity and full-parent evidence under that mechanism"
+      ],
+      "not_sufficient": [
+        "missingdirectory",
+        "nullsnapshot",
+        "active(exited)",
+        "onlyownedchildempty",
+        "pre-exitrestore1"
+      ]
+    },
+    {
+      "id": "ARCH-3",
+      "requirement": "No holder/daemon, no outside/unbudgeted writer, no leaf-only emptiness, no perprocess substitute; all actual control/Subject descendants aggregate bounded.",
+      "supported_observation": "Reviewed nested64 root/admin16/noop48 code and actual in-service gates; no persistent holder was left.",
+      "documented_mechanism": "Historical delegation explains bounded owned descendants while controller is alive; no accepted post-exit closure of original gates.",
+      "status": "CONSTRAINT_SUPPORTED_BUT_COMPLETE_MECHANISM_BLOCKED",
+      "missing": [
+        "Same manager contract must jointly satisfy ownership, aggregate accounting and complete post-exit empty witness"
+      ],
+      "forbidden_workarounds": [
+        "holder violates fullaggregate0",
+        "write outside aggregate to fix final state",
+        "hand-create below manager-owned slice",
+        "move final writer outside target before empty claim"
+      ]
+    },
+    {
+      "id": "ARCH-4",
+      "requirement": "One monotonic deadline spans startup/Subject/stopkillreap/restore/record/finalread; no new always grace or swallowed unknown.",
+      "supported_observation": "Existing reviewed270/300 route and120/150 control budgets retain failure on missing final witness; actual route failfast successor is static-only.",
+      "documented_mechanism": "v255 oneshot TimeoutStartSec versus ineffective RuntimeMax is historical documented support, not identified platform proof.",
+      "status": "EXISTING_BUDGET_CONSTRAINT_RETAINED_NEW_ARCHITECTURE_NOT_VALIDATED",
+      "missing": [
+        "Version-matched timeout/start/stop semantics for any proposed mechanism",
+        "Full failure-path/deadline accounting in a separately reviewed administrative design"
+      ],
+      "no_new_grace": true
+    },
+    {
+      "id": "ARCH-5",
+      "requirement": "Minimal<=8 administrative plan, exact bytes/blob/mode nonauthor review; no project migration from prototype result.",
+      "supported_observation": "This is one declarative JSON contract with no executable workflow/controller/config changes; existing nonauthor will review immutable exact bytes.",
+      "documented_mechanism": "Existing GitHub expectedSHA/forcefalse lease protocol and static fullfile review",
+      "status": "PROCESS_PLAN_ONLY_NOT_DISPATCH_AUTHORITY",
+      "missing": [
+        "Exact nonauthor review of this contract",
+        "Any future different mechanism needs separate explicit task scope and exact review before implementation/execution"
+      ]
+    }
+  ],
+  "minimal_administrative_plan": {
+    "files": 1,
+    "executable_files": 0,
+    "configuration_changes": 0,
+    "resource_jobs": 0,
+    "steps": [
+      {
+        "step": 1,
+        "action": "Accept only preexisting trusted actual manager/kernel/package identity evidence or a resolvable exact official image package ledger.",
+        "if_missing": "Remain BLOCKED; no new version probe in this round."
+      },
+      {
+        "step": 2,
+        "action": "Read official docs/implementation matching that exact version and distribution patchset; trace original managed parent resource application and empty-tree release.",
+        "if_unmatched": "Label UNKNOWN; historicalv255 does not authorize a mechanism."
+      },
+      {
+        "step": 3,
+        "action": "Produce a declarative ownership/lifetime/state-transition matrix showing who owns each exact original512/64 path, writes each kernel field, exits when, and how zeroPIDs plus stable path/readable limits persist.",
+        "if_no_supported_mechanism": "Record concrete lifecycle gap; no speculative property list or alternative environment."
+      },
+      {
+        "step": 4,
+        "action": "Independently review budget equation for every actual descendant plus same deadline/failure/readonly witness contract against ARCH1..5.",
+        "if_any_gap": "No implementation, configuration edit, execution branch or job."
+      }
+    ],
+    "completion": "Static evidence matrix and concrete missing inputs only. No supported complete mechanism has been established; plans and review are not executed or queued work."
+  },
+  "authority_boundary": {
+    "already_authorized": "This bounded read-only audit, one reviewable administrative contract, existing different nonauthor static review, and lease-CAS persistence/release.",
+    "not_authorized_this_round": [
+      "new CONTROL or project job",
+      "implementation of a new architecture",
+      "manager configuration edit",
+      "new environment/account/worker/goal/automation",
+      "Source or identity/Page changes"
+    ],
+    "would_require_separate_explicit_authorization": "Any departure from present resource/ownership/finalwitness/holder/noescape/deadline constraints, or new permissions/environment/paid service; none proposed as a solution or requested here.",
+    "next_normal_step": "Separate read-only architecture review after trustworthy actual platform-version evidence is available; future execution is not implied."
+  },
+  "preserved": {
+    "scope": "77/18/7",
+    "Source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "Source_files": 2065,
+    "Source_bytes": 50175181,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "worker": "PAUSED_UNVERIFIED",
+    "Page_automation": "FROZEN",
+    "Source_adoptions": 0
+  },
+  "next_action": "Keep final resource gates failed/unknown. Supply trustworthy already-existing actual manager/kernel/package identity and corresponding official retention contract; then conduct separate bounded static architecture review. Do not repeat tested jobs or guess attributes."
+}
