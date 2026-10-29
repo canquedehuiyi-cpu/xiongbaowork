@@ -48,5 +48,22 @@
     "overstrong_claim_rejected": "Allcommitted requireindependent servertermination; M1nevercommitted",
     "coordinator_policy": "Distinguish callbackcompletion,realdriveroutertransactionCOMMITsuccesscontract,ACKunknowncompletepositiveC-ALLdurablereadback,negativeabsence/lost/replayqualifications. No permanentban onfull-evidencecommitted orlawfulidempotentpublish."
   },
-  "identity_admin_latest": "Humanreportsapproveda3caafa0 strict9300B metadataonlypausedsameIDpromptdiagnosis,SG/hourlynormal15:19; not independently verified here,not project/lease/jobauthority."
+  "identity_admin_latest": "Humanreportsapproveda3caafa0 strict9300B metadataonlypausedsameIDpromptdiagnosis,SG/hourlynormal15:19; not independently verified here,not project/lease/jobauthority.",
+  "Qoder_R7": {
+    "id": "0fa29e7a-f1ec-4d5f-bebd-697903cb4bbb",
+    "task": "2b8f07ae-da15-4044-9e63-a2c49ea1f06e",
+    "at": "2026-10-29T15:25:36Z",
+    "classification": "HUMAN_REPORTED_PARTIAL_SOURCE_PATCH_READS_NOT_COMPLETE_8FILE_REVIEW",
+    "claimed_full_added": 3,
+    "claimed_partial_patch": 3,
+    "unread": 2,
+    "not_independently_verified_current_blobs": true,
+    "no_CPU_PG_execution": true,
+    "boundaries": [
+      "No subset-import absence inference",
+      "Target continuation terminal/receipt differs approvalfreshfinal",
+      "CPU assertions not CPU execution",
+      "RealPG integration remainsblocked absent realgatedinputs"
+    ]
+  }
 }

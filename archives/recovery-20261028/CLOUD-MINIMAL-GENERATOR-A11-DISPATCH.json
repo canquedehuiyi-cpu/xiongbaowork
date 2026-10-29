@@ -1,0 +1,21 @@
+{
+  "schema": "xiongbaowork-a11-exact-dispatch-v1",
+  "at": "2026-10-29T15:30:44.975Z",
+  "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+  "tree": "14a2032b051b486790e2873fd146852b6564168b",
+  "branch": "codex/cloud-minimal-generator-run-20261029-a11",
+  "run": 40902334215,
+  "job": 123547693853,
+  "event": "push",
+  "status": "in_progress",
+  "review_commit": "7f543d1a33450ab19a54bf664c1cf299286980fa",
+  "review_blob": "38ac058eb2e3d9411e258b73a001a785cf4f325f",
+  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
+  "dispatch_count": 1,
+  "preflight": {
+    "validlease_freshhead_idlequeue_ref404_headruns0": true
+  },
+  "Source_adopted": false,
+  "next_action": "Read same run40902334215/job123547693853 terminal; no duplicate. Preserve outputs and actual physical restoration; route awaits idlequeue."
+}

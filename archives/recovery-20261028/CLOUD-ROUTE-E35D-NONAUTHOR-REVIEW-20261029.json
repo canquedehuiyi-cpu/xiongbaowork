@@ -1,0 +1,159 @@
+{
+  "schema": "xiongbaowork-route-mode-successor-independent-review-v1",
+  "reviewer": "/root/a6_review",
+  "author": "/root/route_review",
+  "candidate": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+  "tree": "3b86580d071419cb52d41fe5c59813e9e4727098",
+  "verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "project_execution": false,
+  "findings": [],
+  "actual_barrier": {
+    "bytes": 2123,
+    "sha256": "a5aa649866e4454c630593284e3f37be95605b5d0827c0887481430e36c13e12"
+  },
+  "text_barrier": {
+    "bytes": 2124,
+    "sha256": "739f048d069d174e348456a261f3dcdfaa46b4a7d918628e666081c268378e79"
+  },
+  "scope": "77/18/7",
+  "history": "bf conflicting reports,ea0,092 all retained; no execution approval",
+  "files": [
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "mode": "100644",
+      "blob": "1ac9e92e26048faeee144ec8902dea8769a4dd4b",
+      "bytes": 139433,
+      "sha256": "b3ccb1dd15ec0262081a8aa068d9825ffb2fc442ee6444f65d8c6d6284a32652",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "mode": "100644",
+      "blob": "4c60754cbd38902d32fefb2b91102ec57d2e063f",
+      "bytes": 34596,
+      "sha256": "c3e7ab13c429ceb70b8bb91ac78356769cbc779cad8564d641376fad316710fc",
+      "full_read": true
+    }
+  ],
+  "helpers": {
+    "admin": {
+      "bytes": 28968,
+      "sha256": "f11740c2121bb37010dd69c29e96e2dc9a3290511cb74ac29cb74fabee3eeb90",
+      "unchanged": true
+    },
+    "Subject": {
+      "bytes": 20451,
+      "sha256": "1232c499068b810ff0c74d9d68dd09f6bf86edf6b041dc510b04e4b01798762f",
+      "copies_pins_equal": true
+    }
+  },
+  "prelude_static": {
+    "six_activation_barriers": true,
+    "YAML_shell_argv_stdin_handoff_inspected": true,
+    "root_proc_cgroup_only": true,
+    "actual_child_parent_gate": true,
+    "parent_oom_repair": true,
+    "irreversible_groups_UID_GID_drop": true,
+    "OOMadj0": true,
+    "postdrop_recheck": true,
+    "not_runtime_proof": true
+  },
+  "lifecycle_static": {
+    "unchanged_supervisor_fallback": true,
+    "shared270_300": true,
+    "COW_nonblocking_management_hardkill": true,
+    "physical_stop_empty_restore_witness": true,
+    "controls16plus16_DATA32_total64": true,
+    "only_originalbuild4G": true,
+    "final_controls_exit_parentpop0": true,
+    "always_no_newbudget": true,
+    "not_runtime_proof": true
+  },
+  "manifest": {
+    "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+    "bytes": 456310,
+    "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+    "mode_counts": {
+      "100644": 71,
+      "0o644": 1994
+    }
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "parent": "41dd55287dbc7dca61c70303199a6cad11860a0a",
+  "finding_closure": [
+    {
+      "id": "ROUTE-P1-SNAPSHOT-MODE-REPRESENTATION-ALLOWLIST-FAILURE",
+      "status": "RESOLVED_STATICALLY",
+      "runtime_proven": false
+    },
+    {
+      "id": "ROUTE-P3-BARRIER-IDENTITY-TERMINAL-LF",
+      "status": "RESOLVED_ADMINISTRATIVELY",
+      "runtime_proven": false
+    }
+  ],
+  "mode_fix": {
+    "only_literals": [
+      "100644",
+      "0o644"
+    ],
+    "mapped_permission_bits": 420,
+    "actual_stat_S_IMODE_compared": true,
+    "no_generic_parser_fallback": true,
+    "initial_gate_restricted": true,
+    "bytes_hash_FD_nlink_regular_path_singleleaf_checks_retained": true,
+    "no_chmod_or_timestamprepair": true
+  },
+  "scope_checks": {
+    "two_admin_paths_only": true,
+    "truncated": false,
+    "Source0": true,
+    "whole_workflow_onlymodefix_helperliteralpins_changed": true,
+    "head_skip": false
+  },
+  "activation_controls_retained": true,
+  "lifecycle_controls_retained": true,
+  "source_controls": {
+    "files": 2065,
+    "bytes": 50175181,
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "only_runtime_leaf": "openbot/app/src/routeTree.gen.ts",
+    "all2065postcheckseachrun": true,
+    "twofreshbeforeidentical": true,
+    "rawUTF8_hash_blob_mode_FD": true,
+    "completeboundedpayload": true,
+    "payload_not_privilegedrestoreproof": true,
+    "no_automaticadoption": true,
+    "not_originalBun_or_fullimage_acceptance": true
+  },
+  "workflow": {
+    "event": "push",
+    "branch": "codex/route-cloud-activation-run-20261029-a1",
+    "contents": "read",
+    "runner": "ubuntu-latest",
+    "jobs": 1,
+    "minutes": 20,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false
+  },
+  "dispatch": {
+    "max": 1,
+    "requires": [
+      "savereport",
+      "currentvalidleasefreshhead",
+      "idlequeue_no_generator",
+      "exactrefrundedup"
+    ],
+    "runtime_missing_failed_or_late_witness": "FAILED_OR_UNKNOWN",
+    "no_unchangedretry_or_resourceexpansion": true
+  }
+}
