@@ -3406,5 +3406,64 @@
       "SRI_verified": 17,
       "prepared": 16
     }
+  },
+  "cloud_tsx_metadata": {
+    "candidate": "97c63f88dfeada5f7bf3a55afecf290542657ada",
+    "tree": "a7037e7d34828f42293d9aec47e5f20d1ae4890c",
+    "status": "NONAUTHOR_APPROVED_NOT_YET_DISPATCHED",
+    "review_path": "archives/recovery-20261028/CLOUD-TSX-METADATA-A1-NONAUTHOR-REVIEW-20261029.json",
+    "files": [
+      {
+        "path": ".github/workflows/cloud-tsx-metadata.yml",
+        "mode": "100644",
+        "blob": "985ce50b9985034a9a6efbd8b2eccc6dc9b8fcce",
+        "bytes": 3844,
+        "sha256": "bff5031ddb88d75c27e1f3bd403680ecb96a573fe5aca83dd6e72e14ae38f72c",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-TSX-METADATA-CONTROLLER-20261029.py",
+        "mode": "100644",
+        "blob": "16841128aedcdfe12363a6c575046ac1ca8db8d2",
+        "bytes": 23961,
+        "sha256": "1b62216bbbdcdd99ab7690925a8381d0987836eba5f3978ac81321209e8c709a",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-TSX-METADATA-PLAN-20261029.json",
+        "mode": "100644",
+        "blob": "594f530633644d2a6cdacce3865b8ed048000eca",
+        "bytes": 5119,
+        "sha256": "c76ae24dcfa130867db9157a45e4dc7d7392dbf2b0d67a73c3e7a1d7b08ea3ff",
+        "full_read": true
+      }
+    ]
+  },
+  "local_design_contract_inputs": {
+    "received_at": "2026-10-29T14:57:50.165Z",
+    "classification": "HUMAN_REPORTED_DESIGN_ONLY_NOT_SOURCE_OR_CPU_PROOF",
+    "WorkBuddy": {
+      "task": "6bc08ebc-cbd6-488f-8993-d51881644610",
+      "status": "human reports processing",
+      "contract": "Physical transaction end/ACK/restart; driver callback resolve/reject is not physical server transaction termination witness"
+    },
+    "Qoder": {
+      "task": "42f12593-a96a-4f83-8554-b87d794ae088",
+      "report": "9977ea54-6813-4855-bee8-d8e83cb79242",
+      "Source_reads": 0,
+      "get_file_contents_once_error": "-32602",
+      "retry": false,
+      "classification": "DESIGN_ONLY",
+      "corrections": [
+        "No AP_LOCAL_RECOVERY_UNWIRED interface change without real Source",
+        "Invalid lease does not universally prohibit necessary authority/catalog DB reads",
+        "External replay prohibition differs from legitimate existing10s/maxattempt queue release/retry",
+        "Real final completed state differs from forged continuation receipt",
+        "Committed verification requires full6identity/disposition/status/final/requiredatomic audit, not abbreviatedC-ALL"
+      ]
+    },
+    "authoritative_audit": "684c9253d5a9bb54d431bffe7a148d3dfbd1a466",
+    "local_heartbeat": "Human-restored auxiliary communication only; no canonical/Source/resourcewriter and no cloud execution dependency",
+    "worker_identity_admin": "Separate existing context preparing metadata-only requestMeta diagnosis for human review; worker remains paused; no configuration changes by this coordinator"
   }
 }

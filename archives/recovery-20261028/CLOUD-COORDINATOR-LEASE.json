@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T14:42:16.560Z:human-a6-route-review",
   "epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review",
   "acquired_at": "2026-10-29T14:42:16.560Z",
-  "renewed_at": "2026-10-29T14:56:20.352Z",
+  "renewed_at": "2026-10-29T14:59:48.182Z",
   "expires_at": "2026-10-29T15:27:16.560Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -17,7 +17,7 @@
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Single exact original lockedtsx4.23.12 metadata evidence only,include actualbin representation; do notguess/dropcheck/generalize/fullSource17rerun. Exact successor independent review before another justified execution.",
+  "next_action": "Exact97c63f88 independent approved single TSX metadata probe. Check ref/runs and idlequeue then one normalpush; no full17 unchanged.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
