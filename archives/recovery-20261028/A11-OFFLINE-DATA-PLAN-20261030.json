@@ -13,13 +13,17 @@
     "transport_report_blob": "55045b5fe521dac3d0351c697026e39163fdc0e8"
   },
   "resources": {
-    "parent": 536870912,
-    "data_aggregate": 67108864,
+    "project_parent": 536870912,
+    "shared_data_aggregate": 67108864,
+    "admin_service_and_all_management_descendants": 16777216,
+    "codec_service_and_all_descendants": 50331648,
     "swap": 0,
     "ordinary_only": true,
-    "systemd_compatibility": "OOMPolicy=kill plus root activation actual child/parent kernel memory.oom.group write/readback; no unsupported MemoryOOMGroup property",
+    "systemd_compatibility": "OOMPolicy=kill; actual kernel child/sharedDATA/project oom.group repair and independent readback before codec UID drop. No MemoryOOMGroup property.",
     "inner_seconds": 120,
-    "outer_seconds": 150
+    "outer_seconds": 150,
+    "outer_bootstrap": "Only fixed slice establishment + immutable admin verification/launch, no plan/log/gzip/Subject access; final read-only witness after admin exits.",
+    "failure": "Any admin16/codec48/shared64 headroom/OOM/timeout/missing receipt fails UNKNOWN; no enlargement inferred."
   },
   "input_contract": "Plan stores identities only, never compressed or raw exports. DATA64 service reads exactly original job123547693853 logs via documented same-repository Actions logs endpoint using ephemeral least-privilege Actions:read GITHUB_TOKEN; validates one normal signed-storage redirect without forwarding Authorization; parses exact header/chunk/end records only in memory.",
   "outputs": "Only bounded identity/CRC/JSON structural summaries, no raw SQL/snapshot/journal/log stored or emitted.",
@@ -128,5 +132,12 @@
     "action": "create_commit of embedded compressed exports",
     "status": "REJECTED_NO_COMMIT_NO_BRANCH_UPDATE",
     "reason": "Persisting compressed exports in repo plan was rejected as sensitive egress. Full payload was removed, not renamed/split/encoded elsewhere."
-  }
+  },
+  "revision_history": [
+    {
+      "candidate": "d8769361ffb91d0cd3fa71f01c645d1515ab2043",
+      "status": "NONAUTHOR_BLOCKED_NOT_RUN",
+      "finding": "Management admin/systemctl/systemd-run outside DATA aggregate; replaced with shared64 containing admin16+codec48, all management descendants inside admin service."
+    }
+  ]
 }

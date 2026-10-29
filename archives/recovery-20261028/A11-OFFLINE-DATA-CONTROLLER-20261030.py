@@ -1,11 +1,14 @@
 import os, sys, time
 from pathlib import Path
 
-PARENT = Path("/sys/fs/cgroup/xiongbaowork.slice")
+PROJECT = Path("/sys/fs/cgroup/xiongbaowork.slice")
+PARENT = PROJECT / "xiongbaowork-data.slice"
 KEYS = ("memory.max", "memory.swap.max", "memory.oom.group")
-PARENT_EXPECTED = dict(zip(KEYS, ("536870912", "0", "1")))
-DATA_EXPECTED = dict(zip(KEYS, ("67108864", "0", "1")))
-PLAN_SHA = "4230852838939b42b64829e03659070eb147d9c939fdce324cc78a5754e3a8cf"
+PROJECT_EXPECTED = dict(zip(KEYS, ("536870912", "0", "1")))
+PARENT_EXPECTED = dict(zip(KEYS, ("67108864", "0", "1")))
+ADMIN_EXPECTED = dict(zip(KEYS, ("16777216", "0", "1")))
+DATA_EXPECTED = dict(zip(KEYS, ("50331648", "0", "1")))
+PLAN_SHA = "f1cd63ee1b6280003388dc8452d919ec16399aaf32bbfb5ced70ab984b0fc9b6"
 PLAN_PATH = "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json"
 EXPECTED = {
  "generated/0081_full50_approval_seed_diagnostic.sql": (155827, "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",14698,"39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9"),
@@ -30,8 +33,8 @@ def emit(prefix,value):
     print(prefix+" "+raw,flush=True)
 def own_gate(unit):
     assert os.geteuid()!=0
-    assert Path("/proc/self/cgroup").read_text().strip()=="0::/xiongbaowork.slice/"+unit
-    assert limits(PARENT/unit)==DATA_EXPECTED and limits(PARENT)==PARENT_EXPECTED
+    assert Path("/proc/self/cgroup").read_text().strip()=="0::/xiongbaowork.slice/xiongbaowork-data.slice/"+unit
+    assert limits(PARENT/unit)==DATA_EXPECTED and limits(PARENT)==PARENT_EXPECTED and limits(PROJECT)==PROJECT_EXPECTED
     assert Path("/proc/self/oom_score_adj").read_text().strip()=="0"
     assert os.getgroups()==[] and len(set(os.getresuid()))==1 and len(set(os.getresgid()))==1
 def data(unit,target):
@@ -224,6 +227,11 @@ def admin(base,target,runid,attempt,uid,gid):
     assert 0<len(credential)<4096 and "\n" not in credential and "\r" not in credential
     assert runid.isdecimal() and attempt.isdecimal()
     base=Path(base);assert base.is_absolute()
+    admin_unit="xb-a11-admin-"+runid+"-"+attempt+".service"
+    assert Path("/proc/self/cgroup").read_text().strip()=="0::/xiongbaowork.slice/xiongbaowork-data.slice/"+admin_unit
+    assert limits(PARENT/admin_unit)==ADMIN_EXPECTED
+    fixed(PARENT/"memory.oom.group","1");fixed(PROJECT/"memory.oom.group","1")
+    assert limits(PARENT)==PARENT_EXPECTED and limits(PROJECT)==PROJECT_EXPECTED
     unit="xb-a11-data-"+runid+"-"+attempt+".service"
     root=Path("/run")/("xb-a11-data-"+runid+"-"+attempt)
     root.mkdir(mode=0o755)
@@ -233,19 +241,15 @@ def admin(base,target,runid,attempt,uid,gid):
         return subprocess.run(args,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                timeout=left,env={"PATH":"/usr/bin:/bin","LC_ALL":"C"},check=False)
     def restore():
-        for k,v in PARENT_EXPECTED.items():fixed(PARENT/k,v)
-        assert limits(PARENT)==PARENT_EXPECTED
+        for path,expected in ((PROJECT,PROJECT_EXPECTED),(PARENT,PARENT_EXPECTED)):
+            for k,v in expected.items():fixed(path/k,v)
+            assert limits(path)==expected
     def record(value):
         encoded=(json.dumps(value,sort_keys=True)+"\n").encode();assert len(encoded)<12000
         fd=os.open(root/"terminal.json",os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,"wb") as out:out.write(encoded)
     proc=None;code=None;cleanup=False;error=None
     try:
-        unitfile=Path("/run/systemd/system/xiongbaowork.slice")
-        fd=os.open(unitfile,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o644)
-        with os.fdopen(fd,"w") as out:out.write("[Unit]\nDescription=Project ordinary aggregate\n[Slice]\nMemoryMax=512M\nMemorySwapMax=0\n")
-        assert command(["systemctl","daemon-reload"],inner).returncode==0
-        assert command(["systemctl","start","xiongbaowork.slice"],inner).returncode==0
         restore()
         emit("A11_DATA_PARENT_INITIAL",{"limits":limits(PARENT),"populated":populated(PARENT)})
         # As in actually-run A11: OOMPolicy=kill creates child's group policy.
@@ -256,24 +260,26 @@ from pathlib import Path
 controller,unit,uid,gid,target,deadline=sys.argv[1:]
 uid=int(uid);gid=int(gid);deadline=float(deadline)
 assert os.geteuid()==0 and uid>0 and gid>0 and time.monotonic()<deadline
-parent=Path('/sys/fs/cgroup/xiongbaowork.slice')
-assert Path('/proc/self/cgroup').read_text().strip()=='0::/xiongbaowork.slice/'+unit
+project=Path('/sys/fs/cgroup/xiongbaowork.slice')
+parent=project/'xiongbaowork-data.slice'
+assert Path('/proc/self/cgroup').read_text().strip()=='0::/xiongbaowork.slice/xiongbaowork-data.slice/'+unit
 cg=parent/unit;keys=('memory.max','memory.swap.max','memory.oom.group')
 def observed(p):return {k:(p/k).read_text().strip() for k in keys}
-assert observed(cg)==dict(zip(keys,('67108864','0','1')))
+assert observed(cg)==dict(zip(keys,('50331648','0','1')))
 (parent/'memory.oom.group').write_text('1')
-assert observed(parent)==dict(zip(keys,('536870912','0','1')))
+(project/'memory.oom.group').write_text('1')
+assert observed(parent)==dict(zip(keys,('67108864','0','1'))) and observed(project)==dict(zip(keys,('536870912','0','1')))
 Path('/proc/self/oom_score_adj').write_text('0')
 os.setgroups([]);os.setresgid(gid,gid,gid);os.setresuid(uid,uid,uid)
 assert os.getresuid()==(uid,uid,uid) and os.getresgid()==(gid,gid,gid) and os.getgroups()==[]
 assert Path('/proc/self/oom_score_adj').read_text().strip()=='0'
-assert observed(cg)==dict(zip(keys,('67108864','0','1'))) and observed(parent)==dict(zip(keys,('536870912','0','1')))
+assert observed(cg)==dict(zip(keys,('50331648','0','1'))) and observed(parent)==dict(zip(keys,('67108864','0','1'))) and observed(project)==dict(zip(keys,('536870912','0','1')))
 assert time.monotonic()<deadline
 credential=os.environ.pop('A11_READ_TOKEN')
 os.execve('/usr/bin/python3',['/usr/bin/python3','-I','-B',controller,'data',unit,target],{'PATH':'/usr/bin:/bin','PYTHONDONTWRITEBYTECODE':'1','A11_READ_TOKEN':credential})
 """
-        args=["systemd-run","--wait","--pipe","--unit="+unit,"--slice=xiongbaowork.slice",
-              "--setenv=A11_READ_TOKEN","--property=Type=exec","--property=MemoryMax=67108864","--property=MemorySwapMax=0",
+        args=["systemd-run","--wait","--pipe","--unit="+unit,"--slice=xiongbaowork-data.slice",
+              "--setenv=A11_READ_TOKEN","--property=Type=exec","--property=MemoryMax=50331648","--property=MemorySwapMax=0",
               "--property=OOMPolicy=kill","--property=KillMode=control-group",
               "--property=RuntimeMaxSec="+str(max(1,math.floor(inner-time.monotonic()-2))),
               "--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
@@ -302,12 +308,15 @@ os.execve('/usr/bin/python3',['/usr/bin/python3','-I','-B',controller,'data',uni
             if proc is not None and proc.poll() is None:
                 proc.kill();proc.wait(timeout=max(0.01,outer-time.monotonic()-2))
             restore()
-            assert populated(PARENT)=="0" and time.monotonic()<outer
+            assert populated(PARENT/admin_unit)=="1" and limits(PARENT/admin_unit)==ADMIN_EXPECTED
+            assert limits(PARENT)==PARENT_EXPECTED and limits(PROJECT)==PROJECT_EXPECTED and time.monotonic()<outer
             cleanup=True
             terminal={"status":"DATA_VERIFIED" if code==0 and error is None else "FAILED_OR_UNKNOWN",
-                      "data_exit":code,"error":error,"restore_proven":True,
+                      "data_exit":code,"error":error,"restore_proven":False,
+                      "codec_child_empty_and_limits_restored":True,
+                      "full_parent_empty_witness":"PENDING_EXTERNAL_AFTER_ADMIN_EXIT",
                       "subject_populated":populated(cg),"parent_populated":populated(PARENT),
-                      "limits":limits(PARENT),"unit_state":props,
+                      "limits":limits(PARENT),"project_limits":limits(PROJECT),"admin_limits":limits(PARENT/admin_unit),"unit_state":props,
                       "elapsed":time.monotonic()-started,"absolute_seconds":150,
                       "source_adopted":False,"origin_run":40902334215,"origin_job":123547693853}
             record(terminal);emit("A11_DATA_PRIVILEGED_TERMINAL",terminal)
@@ -316,7 +325,7 @@ os.execve('/usr/bin/python3',['/usr/bin/python3','-I','-B',controller,'data',uni
                  "data_exit":code,"source_adopted":False})
     if not cleanup or code!=0 or error is not None:raise SystemExit(1)
 def witness(runid,attempt):
-    import json, stat
+    import json, stat, subprocess
     root=Path("/run")/("xb-a11-data-"+runid+"-"+attempt);p=root/"terminal.json"
     assert os.geteuid()==0
     fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
@@ -326,10 +335,22 @@ def witness(runid,attempt):
     finally:os.close(fd)
     value=json.loads(raw)
     unit="xb-a11-data-"+runid+"-"+attempt+".service"
-    assert limits(PARENT)==PARENT_EXPECTED and populated(PARENT)=="0" and populated(PARENT/unit) in ("0",None)
-    assert value["restore_proven"] is True
+    assert limits(PARENT)==PARENT_EXPECTED and limits(PROJECT)==PROJECT_EXPECTED
+    assert populated(PARENT)=="0" and populated(PROJECT)=="0" and populated(PARENT/unit) in ("0",None)
+    assert populated(PARENT/("xb-a11-admin-"+runid+"-"+attempt+".service")) in ("0",None)
+    assert value["codec_child_empty_and_limits_restored"] is True and value["restore_proven"] is False
+    adminunit="xb-a11-admin-"+runid+"-"+attempt+".service"
+    shown=subprocess.run(["systemctl","show",adminunit,"--property=ActiveState","--property=LoadState","--property=Job"],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=3,env={"PATH":"/usr/bin:/bin","LC_ALL":"C"})
+    assert shown.returncode in (0,1) and len(shown.stdout)<8192
+    props=dict(l.split("=",1) for l in shown.stdout.decode().splitlines() if "=" in l)
+    assert props.get("ActiveState") in ("inactive","failed") and "Job" in props and props["Job"] in ("","0")
+    assert props.get("LoadState") in ("loaded","not-found")
+    if shown.returncode:assert props["LoadState"]=="not-found"
+    assert value["elapsed"]<value["absolute_seconds"]==150
     emit("A11_DATA_ALWAYS_INDEPENDENT",{"terminal":value,"actual_parent":limits(PARENT),
-         "actual_parent_populated":populated(PARENT),"actual_child_populated":populated(PARENT/unit),
+         "actual_parent_populated":populated(PARENT),"actual_project":limits(PROJECT),
+         "actual_project_populated":populated(PROJECT),"actual_child_populated":populated(PARENT/unit),
+         "restore_proven":True,"admin_actual_state":props,
          "read_only_no_new_cleanup":True})
     if value["status"]!="DATA_VERIFIED":raise SystemExit(1)
 if __name__=="__main__":

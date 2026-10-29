@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Verify administrative controller and run only fixed compressed DATA
         env:
-          EXPECTED_CONTROLLER_SHA256: 43be7d741d67756bb04110e28cfc74304112bd78dc899002c21844b89d9eb966
+          EXPECTED_CONTROLLER_SHA256: db31c05de7a12400228eb3b6e78dbf532c104d21b4f180ef3e4ec83128e0e6b5
           A11_READ_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -40,13 +40,35 @@ jobs:
               after=os.fstat(fd)
               assert (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)
           finally:os.close(fd)
-          assert hashlib.sha256(raw).hexdigest()=="43be7d741d67756bb04110e28cfc74304112bd78dc899002c21844b89d9eb966"
+          assert hashlib.sha256(raw).hexdigest()=="db31c05de7a12400228eb3b6e78dbf532c104d21b4f180ef3e4ec83128e0e6b5"
           directory=Path("/run")/("xb-a11-code-"+runid+"-"+attempt)
           directory.mkdir(mode=0o755)
           path=directory/"controller.py"
           fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o444)
           with os.fdopen(fd,"wb") as out:out.write(raw)
-          os.execve("/usr/bin/python3",["/usr/bin/python3","-I","-B",str(path),"admin",base,target,runid,attempt,uid,gid],{"PATH":"/usr/bin:/bin","PYTHONDONTWRITEBYTECODE":"1","A11_READ_TOKEN":os.environ.pop("A11_READ_TOKEN")})
+          import subprocess
+          for name,limit in (("xiongbaowork.slice","512M"),("xiongbaowork-data.slice","64M")):
+              unitpath=Path("/run/systemd/system")/name
+              fd=os.open(unitpath,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o644)
+              with os.fdopen(fd,"w") as out:out.write("[Unit]\nDescription=Fixed ordinary DATA aggregate\n[Slice]\nMemoryMax="+limit+"\nMemorySwapMax=0\n")
+          for args in (["systemctl","daemon-reload"],["systemctl","start","xiongbaowork-data.slice"]):
+              subprocess.run(args,check=True,timeout=5,env={"PATH":"/usr/bin:/bin"})
+          project=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          shared=project/"xiongbaowork-data.slice"
+          keys=("memory.max","memory.swap.max","memory.oom.group")
+          for cg,cap in ((project,"536870912"),(shared,"67108864")):
+              (cg/"memory.oom.group").write_text("1")
+              assert {k:(cg/k).read_text().strip() for k in keys}==dict(zip(keys,(cap,"0","1")))
+          adminunit="xb-a11-admin-"+runid+"-"+attempt+".service"
+          args=["systemd-run","--wait","--pipe","--unit="+adminunit,"--slice=xiongbaowork-data.slice",
+                "--setenv=A11_READ_TOKEN","--property=Type=exec","--property=MemoryMax=16777216",
+                "--property=MemorySwapMax=0","--property=OOMPolicy=kill","--property=KillMode=control-group",
+                "--property=RuntimeMaxSec=150","--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
+                "--property=SendSIGKILL=yes","--property=KillSignal=SIGKILL","--property=FinalKillSignal=SIGKILL",
+                "/usr/bin/python3","-I","-B",str(path),"admin",base,target,runid,attempt,uid,gid]
+          completed=subprocess.run(args,stdin=subprocess.DEVNULL,timeout=153,
+              env={"PATH":"/usr/bin:/bin","A11_READ_TOKEN":os.environ.pop("A11_READ_TOKEN")})
+          raise SystemExit(completed.returncode)
           PY
       - name: Always independently verify original terminal and actual empty aggregate
         if: always()
