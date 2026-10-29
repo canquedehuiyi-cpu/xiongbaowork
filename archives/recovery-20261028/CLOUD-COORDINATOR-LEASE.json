@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "acquired_at": "2026-10-29T16:19:08.289Z",
-  "renewed_at": "2026-10-29T16:44:29.467Z",
+  "renewed_at": "2026-10-29T16:48:29.832Z",
   "expires_at": "2026-10-29T17:04:08.289Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T16:19:08.289Z"
   },
-  "next_action": "Minimal control-only final teardown repair/diagnosis within original aggregate/deadline; no unchanged A/B retry. Independent A11 teardown-only diagnostic is ready after fresh idle queue.",
+  "next_action": "Prepare reviewed supported delegated-owned-subtree CONTROL prototype, aggregate64 and same deadline; retain original managedslice gate failure, do not claim project migration or restored. Route only prepares failfast terminal-path repair, no A/B rerun.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,9 +29,9 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40912983831,
-    "job": 123585627390,
-    "candidate": "576d176424df248222299db2c49d0fa545c90579",
+    "run": 40914666271,
+    "job": 123591585627,
+    "candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
     "status": "completed",
     "conclusion": "failure"
   },

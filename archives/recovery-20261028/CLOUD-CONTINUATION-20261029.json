@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:44:29.467Z",
+  "checkpoint_update_at": "2026-10-29T16:48:29.832Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4251,7 +4251,7 @@
   },
   "cloud_a11_teardown_diagnostic": {
     "candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
-    "status": "NONAUTHOR_ADMIN_TEARDOWN_ONLY_APPROVED_NOT_RUN",
+    "status": "TERMINAL_FAILURE_SAME_SHARED_INODE_OOMGROUP0",
     "review_commit": "dcfdbc79eda96d37082e05f2b88190665c52b46a",
     "review_path": "archives/recovery-20261028/A11-TEARDOWN-A2-NONAUTHOR-REVIEW-20261030.json",
     "review_blob": "0e322531db84fe929b79fa8b771166e0eb197b30",
@@ -4283,6 +4283,14 @@
     ],
     "execution_branch": "codex/a11-data-verify-run-20261030-a2",
     "no_token_logfetch_codec": true,
-    "not_DATA_PASS": true
+    "not_DATA_PASS": true,
+    "result": {
+      "path": "archives/recovery-20261028/A11-TEARDOWN-RESULT-20261030-A2.json",
+      "run": 40914666271,
+      "job": 123591585627,
+      "conclusion": "failure",
+      "evidence_conclusion": "SAME_SHARED_CGROUP_IDENTITY_OOMGROUP1_DURING_ADMIN_TO0_AFTER_ADMIN_EXIT",
+      "overall_acceptance": "FAILED_OR_UNKNOWN_NOT_RESTORED"
+    }
   }
 }
