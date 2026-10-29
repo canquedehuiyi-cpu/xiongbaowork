@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-current-delivery-gates/1",
-  "source_content_commit": "3ee17798adf9524391a242d5b5903a2148cfe0ea",
+  "source_content_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
   "source_files": 2060,
-  "source_bytes": 50032053,
-  "approved_source_repair_overlays": 22,
+  "source_bytes": 50032071,
+  "approved_source_repair_overlays": 24,
   "original_delivery_packages": 18,
   "original_stories": 77,
   "original_final_gates": 7,
@@ -61,16 +61,507 @@
       },
       "all4_original_tsconfigs": "PASS",
       "lint": "0 errors /0 warnings /181infos"
+    },
+    "source24_manifest": {
+      "source_content_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
+      "files": 2060,
+      "bytes": 50032071,
+      "manifest": {
+        "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+        "bytes": 445399,
+        "sha256": "fdd20eda65a9576e35d35bef0d9a1b4b2bd5321500f60158a9909fc4771d5843",
+        "source_files": 2060,
+        "source_bytes": 50032071,
+        "candidate_source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+        "source_validation_run": 40791104860
+      },
+      "latest_source_verification_runs": [
+        40796459661,
+        40796716582
+      ]
+    },
+    "workspace_assertion": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40789153738,
+      "job": 123169745047,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "c102389bc4119d2f57452961cf3718e29d9a49c7",
+        "head": "07942d953a304bd250648eb008a5ec0593eb2e29",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029",
+          "RUNNER-PROBE-LIFECYCLE-20261029",
+          "RUNNER-PROBE-PENDING-RESULT-20261029",
+          "RUNNER-PROBE-FRAME-REF-20261029",
+          "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+          "SERVER-CI-TEST-MANIFEST-20261029",
+          "WORKSPACE-RUNNER-ASSERTION-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50032071,
+        "verified_source_files": 2060,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "07942d953a304bd250648eb008a5ec0593eb2e29",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3869,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 1,
+        "completed_files": 1,
+        "results": [
+          {
+            "path": "tests/workspace.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "remaining_offline": null,
+      "native_linux": null,
+      "generator": null,
+      "tests": {
+        "pass": 4,
+        "fail": 0,
+        "expects": 13
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.8M (swap: 0B)",
+        "Memory peak: 103.6M (swap: 0B)",
+        "Memory peak: 357.8M (swap: 0B)"
+      ],
+      "postgres17": "PG_PENDING",
+      "strict_ci": "NOT_RUN",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Only original workspace4 cases with strict exact fourth-runner expectation, original unchanged lint; no production changes/PG/approval gate relaxation",
+      "source_commit": "07942d953a304bd250648eb008a5ec0593eb2e29"
+    },
+    "start_health_assertion": {
+      "schema": "xiongbaowork-cloud-validation/1",
+      "run": 40791104860,
+      "job": 123176261175,
+      "source": {
+        "aggregate_memory_limit": 67108864,
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "V57 with explicit source overlays",
+        "git_tree": "e8d397aed5bde580b01f33a104402a2f21331a0f",
+        "head": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+        "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+        "overlay_tickets": [
+          "AP-INPUT-BUN-20261028",
+          "AP-SCHEMA-RUNTIME-20261028",
+          "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+          "AUTOMATION-FK-ASSERTION-20261028",
+          "SECURITY-FK-ASSERTION-20261028",
+          "K106-CURRENT-PARENT-RUNTIME-20261028",
+          "PTX-CURRENT-PARENT-RECOVERY-20261028",
+          "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+          "SERVER-TYPE-CONTRACT-20261028",
+          "TASKS-ATTENTION-FIXTURE-20261028",
+          "TASKS-READ-LINK-FIXTURES-20261028",
+          "TASK-INFLIGHT-TYPE-GUARD-20261028",
+          "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+          "RECOVERY-PARSER-LINT-20261029",
+          "APPROVAL-GUARD-LINT-20261029",
+          "TEST-FIXTURE-LINT-20261029",
+          "RUNNER-PROBE-COMPATIBILITY-20261029",
+          "RUNNER-PROBE-LIFECYCLE-20261029",
+          "RUNNER-PROBE-PENDING-RESULT-20261029",
+          "RUNNER-PROBE-FRAME-REF-20261029",
+          "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+          "SERVER-CI-TEST-MANIFEST-20261029",
+          "WORKSPACE-RUNNER-ASSERTION-20261029",
+          "START-HEALTH-ORDER-ASSERTION-20261029"
+        ],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50032071,
+        "verified_source_files": 2060,
+        "windows_source_files_written": 0
+      },
+      "install": {
+        "exit_code": 0,
+        "frozen_inputs_unchanged": true,
+        "lifecycle_scripts": "NOT_RUN",
+        "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+        "install_memory_limit": 536870912,
+        "other_data_copy_limit": 67108864,
+        "backend": "copyfile",
+        "private_cache": true,
+        "dependency_audit": {
+          "status": "PASS",
+          "regular_files": 127738,
+          "symlinks": 3870,
+          "hardlink_files": 0,
+          "outside_private_paths": 0
+        },
+        "full_ci": "NOT_RUN",
+        "original_preload_suite": "NOT_RUN",
+        "typecheck": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "component": {
+        "exit_code": 0,
+        "test_files": 1,
+        "completed_files": 1,
+        "results": [
+          {
+            "path": "scripts/start-restart-guard.test.ts",
+            "exit_code": 0
+          }
+        ],
+        "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+        "batch_timeout_seconds": 120,
+        "test_timeout_ms": 5000,
+        "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+        "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+        "postgres17": "PG_PENDING",
+        "producer_wiring": "NOT_VERIFIED",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "remaining_offline": null,
+      "native_linux": null,
+      "generator": null,
+      "tests": {
+        "pass": 12,
+        "fail": 0,
+        "expects": 57
+      },
+      "lint": {
+        "exit_code": 0,
+        "version": "Version: 2.5.10",
+        "arguments": [
+          "lint",
+          "--error-on-warnings",
+          "."
+        ],
+        "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+        "source_fixes": "NONE_NO_WRITE_FLAG",
+        "project_limit": 536870912,
+        "swap": 0,
+        "strict_ci": "NOT_RUN",
+        "postgres17": "PG_PENDING",
+        "commercial_acceptance": "NOT_DELIVERED"
+      },
+      "automatic_memory_peaks": [
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 64M (swap: 0B)",
+        "Memory peak: 512.8M (swap: 0B)",
+        "Memory peak: 126M (swap: 0B)",
+        "Memory peak: 354.7M (swap: 0B)"
+      ],
+      "postgres17": "PG_PENDING",
+      "strict_ci": "NOT_RUN",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "scope": "Only exact existing startup health fixture literal reordered. Original12case scripts/start-restart-guard and exact original pinned lint, no production/PG/approval changes.",
+      "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e"
+    },
+    "additional_offline": {
+      "path": "archives/recovery-20261028/REMAINING-OFFLINE-ACCEPTANCE-RESULT.json",
+      "bytes": 115950,
+      "sha256": "ce045b24c74374cd2fa16e13c4d6efb54c8bea1e47cc4eecbc4d046919a77daa",
+      "run": 40788312542,
+      "job": 123166945250,
+      "status": "FAILED",
+      "completed_files": 177,
+      "expected_files": 177,
+      "tests": {
+        "pass": 2371,
+        "fail": 14,
+        "skip": 0,
+        "expects": 6589
+      },
+      "failed_files": [
+        "server/tests/approvals-policy.test.ts",
+        "server/tests/approvals.test.ts",
+        "tests/workspace.test.ts"
+      ],
+      "workspace_fix": {
+        "run": 40789153738,
+        "pass": 4,
+        "fail": 0,
+        "adopted": "9012793c25b5d9dbdb00ba623462e91245087439"
+      },
+      "remaining_original_approval_failures": 13,
+      "old_failure_result_retained": true
+    },
+    "linux_shell_workspace": {
+      "path": "archives/recovery-20261028/LINUX-SHELL-WORKSPACE-ACCEPTANCE-RESULT.json",
+      "bytes": 6891,
+      "sha256": "7db3ecc57a0c7ee7d0b41798887c465b4fe7c62749061a9b22d2e1a5989d5ad9",
+      "run": 40788663038,
+      "job": 123168742311,
+      "status": "PASS_LINUX_OWN_FIXTURE_ONLY",
+      "files": 4,
+      "tests": {
+        "pass": 89,
+        "fail": 0,
+        "skip": 0,
+        "expects": 219
+      },
+      "real_windows": "NOT_VERIFIED"
+    },
+    "local_http_subprocess": {
+      "path": "archives/recovery-20261028/LOCAL-FIXTURE-ACCEPTANCE-RESULT.json",
+      "bytes": 30351,
+      "sha256": "95a2907837ed1a5afb185da380f3e8775165d102934f122b5eb62612de8dee41",
+      "run": 40789730098,
+      "job": 123171654707,
+      "status": "FAILED",
+      "files": 27,
+      "tests": {
+        "pass": 468,
+        "fail": 5,
+        "skip": 0,
+        "expects": 1473
+      },
+      "startup_sentence_fix": {
+        "run": 40791104860,
+        "pass": 12,
+        "fail": 0,
+        "adopted": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc"
+      },
+      "agent_bot_missing_dependencies": {
+        "resolved_by_run": 40791381738,
+        "case_pass": 3,
+        "case_fail": 0,
+        "full_original_agent_bot_lock_unchanged": true
+      },
+      "remaining_loader_role_writer_boundary_failure": 1
+    },
+    "mock_agent": {
+      "path": "archives/recovery-20261028/MOCK-AGENT-DECLARED-BOT-RESULT.json",
+      "bytes": 20487,
+      "sha256": "c31d4969f406fbd3f993e7aa1f200a8b546c87b060d6d9672b70c975131bfd27",
+      "run": 40791381738,
+      "job": 123177480271,
+      "status": "PASS_EXPLICIT_FILES_ONLY",
+      "files": 25,
+      "tests": {
+        "pass": 295,
+        "fail": 0,
+        "skip": 0,
+        "expects": 585
+      },
+      "full_standalone_agent_bot_inputs_unchanged": true,
+      "original_root_inputs_unchanged": true
+    },
+    "remaining_protocol": {
+      "path": "archives/recovery-20261028/REMAINING-PROTOCOL-FIXTURE-RESULT.json",
+      "bytes": 22241,
+      "sha256": "f71448d137de54a683cad905956d3c070a212391672309fb710809e52dd67d2d",
+      "blob": "70acdc43a0e0957787b3b175094b1d4c8722e4d0",
+      "run": 40793547635,
+      "job": 123184357410,
+      "status": "FAILED_BATCH_KEPT",
+      "files": 20,
+      "tests": {
+        "pass": 342,
+        "fail": 2,
+        "skip": 7,
+        "expects": 1420
+      },
+      "original_skips": 7,
+      "desktop_import_later_resolved": {
+        "run": 40794975287,
+        "pass": 5,
+        "fail": 0
+      },
+      "remaining_mastra_import": "MISSING_FROZEN_STANDALONE_SDK_BASELINE",
+      "r1_duplicate_step_id": {
+        "run": 40792836035,
+        "jobs": 0,
+        "root_control_error_retained": true
+      }
+    },
+    "desktop_telemetry_types": {
+      "path": "archives/recovery-20261028/DESKTOP-TELEMETRY-TYPES-RESULT.json",
+      "bytes": 7930,
+      "sha256": "e29bf8a49fd27069244571960a642c4bfb152ba95bbbe0c794f6f4d5fd04d88b",
+      "blob": "66d9a3c1c80a59a834869de9aeb58294449bf4a0",
+      "run": 40794975287,
+      "job": 123189125522,
+      "telemetry": {
+        "pass": 5,
+        "fail": 0,
+        "skip": 0,
+        "expects": 14
+      },
+      "original_full_desktop_typecheck": {
+        "exit_code": 0,
+        "limit": 536870912,
+        "swap": 0
+      },
+      "native_tauri_windows": "NOT_VERIFIED",
+      "original_desktop_lock": "UNCHANGED",
+      "run_overall": "FAILED_R1_FRONTEND_CONTROL_ERROR_BEFORE_BUILD"
+    },
+    "desktop_views_metadata_ci": {
+      "path": "archives/recovery-20261028/DESKTOP-VIEW-CI-FIXTURE-RESULT.json",
+      "bytes": 9044,
+      "sha256": "4967aff0b2f56409ceaf6fd8a5eaf58772ae63d2a6aff12e38b90b7be91a5318",
+      "blob": "1dc1659d3e029b4235347dc4c269e231a39e96d9",
+      "run": 40796459661,
+      "job": 123193995642,
+      "files": 5,
+      "tests": {
+        "pass": 158,
+        "fail": 0,
+        "skip": 0,
+        "expects": 868
+      },
+      "status": "PASS_MOCKED_VIEW_AND_METADATA_ONLY"
+    },
+    "owned_http_control_download_reset": {
+      "path": "archives/recovery-20261028/OWNED-HTTP-CONTROL-DOWNLOAD-RESET-RESULT.json",
+      "bytes": 7772,
+      "sha256": "9c0f75be0e5a931cd2083172d3b730382664f412b77637f5647637e25bca4180",
+      "blob": "2ef76123987c4a7b8d1d1098b66c9b0bb7f33b23",
+      "run": 40796716582,
+      "job": 123195065303,
+      "files": 3,
+      "tests": {
+        "pass": 18,
+        "fail": 0,
+        "skip": 0,
+        "expects": 65
+      },
+      "status": "PASS_REAL_CLOUD_OWN_LOOPBACK_NO_BROWSER",
+      "real_user_device": "NOT_VERIFIED"
+    },
+    "frontend_build": {
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-512-RESOURCE-STOP.json",
+      "bytes": 7099,
+      "sha256": "a9f375dd2153670b2556a855179764551efa0a06ef2e67bc233c6091eb125f38",
+      "blob": "4ccda7615c66888bec120c4c798905dd82368a23",
+      "run": 40795427951,
+      "job": 123190636436,
+      "status": "OOM_KILL_512M",
+      "final_artifact": "NOT_PRODUCED",
+      "post_build_source": "UNKNOWN_UNIT_KILLED",
+      "proposal": {
+        "commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
+        "status": "PREPARED_NOT_AUTHORIZED_NOT_TRIGGERED",
+        "scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
+        "bytes": 2147483648,
+        "swap": 0,
+        "timeout": 300,
+        "restore": 536870912,
+        "data_limit": 67108864
+      },
+      "prior2GiB_grants_reused": false
+    },
+    "test_file_ledger": {
+      "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+      "bytes": 394202,
+      "sha256": "31d497a423eabad7b2ed92beeecb639916bf05e61e232c7fcf91f8440f12ebc8",
+      "blob": "737768e1e31c073d7efc3be1492ffec49c3ae103",
+      "test_files": 610,
+      "latest_named_or_historical_whole_app_evidence_paths": 469,
+      "status_counts": {
+        "PASS_SCOPED_BATCH_ONLY": 463,
+        "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
+        "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
+        "FAILED_SDK_IMPORT_NO_OWN_FROZEN_LOCK": 1,
+        "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
+        "FAILED_SCOPED_BATCH": 3,
+        "NOT_RUN_REAL_VENDOR": 1
+      },
+      "whole_current_backend": "NOT_PASSED",
+      "app_source17_tree_comparison": {
+        "paths": 547,
+        "deltas": 0,
+        "full_app_run": 40733053569,
+        "not_new_execution": true
+      },
+      "case_totals_across_overlapping_batches": "NOT_SUMMED"
     }
   },
   "remaining_gate_evidence": {
     "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Source22 complete2060-file/50032053B identity verified; original CI shard/report contracts8/0/32 and exact original pinned lint0err/0warn/181info. Combined Source17 fullapp1207/0/4163, named39component691/0/10744, all4 original tsconfigs passed. Original lineage37/0/355 passed authorized2GiB; Source21 offline runner163/0/437 passed. Whole backend and strictCI remain not passed, nativePG_PENDING and frozen03df9efa baseline unavailable.",
+    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
-    "g5": "Cloud Linux headless Chrome156.0.8078.47 own-loopback fixture35checks/26actions passed under512MiB/swap0/sandboxtrue, run40746063116; offline7 runner policy files163/0/437 passed separately. Real user device, durable offline reconnect/queue, real human approval closure and clean client deployment remain not verified.",
+    "g5": "Cloud Linux Chrome own-loopback fixture35checks/26actions passed historicallyrun40746063116; original own HTTP control/download/reset3files18/0 now passedrun40796716582 under512MiB/swap0 without Chromium. Mocked desktop UI3files144/0 is HappyDOM/Tauri fakes. Real user device, durable offline reconnect queue, fresh approval producer/exact-input and human approval closure remain NOT_VERIFIED.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
-    "g7": "NO_CLEAN_WINDOWS_LINUX_CLIENT_DEPLOYMENT_EVIDENCE"
+    "g7": "Original full desktop tsc passed under512MiB and desktop telemetry5/0 plus3mocked UI files144/0 passed. No native Tauri binary/image or clean Windows/Linux client deployment proof."
   },
   "ready": false,
   "ROOT_RELEASE": null,
@@ -78,7 +569,7 @@
   "NOT_SERVICE_WIRED": true,
   "migrationNOT_WIRED": true,
   "postgres17": "PG_PENDING",
-  "strict_ci": "NOT_RUN_FROZEN_BASELINE_03df9efa_UNAVAILABLE",
+  "strict_ci": "NOT_RUN",
   "paid_provider_calls": 0,
   "windows_source_writes": 0,
   "production_deploys": 0,

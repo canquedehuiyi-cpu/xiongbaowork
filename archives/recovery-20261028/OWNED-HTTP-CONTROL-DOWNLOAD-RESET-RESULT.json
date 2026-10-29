@@ -1,0 +1,246 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40796716582,
+  "job": 123195065303,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "26df2291626ae69f0aecb2d0d7bfba17676c310f",
+    "head": "e5f3607b220693eb3956140dc08a07fe7296dc32",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "e5f3607b220693eb3956140dc08a07fe7296dc32",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": {
+    "pass": 18,
+    "fail": 0,
+    "skip": 0,
+    "expects": 65
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 63.9M (swap: 0B)",
+    "Memory peak: 512.6M (swap: 0B)",
+    "Memory peak: 7M (swap: 0B)",
+    "Memory peak: 189.8M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 274.9M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Only original3 explicit fixtures. Real own cloud loopback agent-computer process and temporary paths; no Chromium launch, real user device, nativePG, paid provider or Windows execution. Existing switch values are set for only each exact file.",
+  "plan": {
+    "schema": "xiongbaowork-owned-http-fixtures-plan/1",
+    "source_commit": "20515cbf3fc4136759c647f11e9f507daf3972b3",
+    "source_files": 2060,
+    "source_bytes": 50032071,
+    "tests": [
+      {
+        "path": "agent-computer/tests/control-http.test.ts",
+        "bytes": 5161,
+        "sha256": "6d25400555aed24d56383610ba43b7faac549a3b2e70fc98eab046af7114df90",
+        "env": {
+          "OPENBOT_CONTROL_HTTP": "1"
+        }
+      },
+      {
+        "path": "agent-computer/tests/file-download-http.test.ts",
+        "bytes": 5256,
+        "sha256": "c41fee6c5f5c42e9ad103522c4066da55de0f8d6e6297e0e42dd7d9eea44c427",
+        "env": {
+          "OPENBOT_FILE_DOWNLOAD_HTTP": "1"
+        }
+      },
+      {
+        "path": "agent-computer/tests/reset-run.test.ts",
+        "bytes": 7392,
+        "sha256": "d791cdfb437dad9214fd903f9eb683ba5fbbacbaf8e047586d1707490b753c71",
+        "env": {
+          "OPENBOT_LIVE_SCREEN": "1"
+        }
+      }
+    ],
+    "scope": "Only original3 explicit fixtures. Real own cloud loopback agent-computer process and temporary paths; no Chromium launch, real user device, nativePG, paid provider or Windows execution. Existing switch values are set for only each exact file.",
+    "full_existing_agent_computer_lock": true,
+    "private_cache": true,
+    "copyfile": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "resources": {
+      "project_and_descendants": 536870912,
+      "swap": 0,
+      "data_copy": 67108864,
+      "install": 536870912,
+      "uses2GiB": false
+    },
+    "source_changes": 0,
+    "windows_source_writes": 0,
+    "postgres17": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "source_commit": "e5f3607b220693eb3956140dc08a07fe7296dc32",
+  "status": "PASS_CLOUD_OWNED_HTTP_FIXTURES_ONLY",
+  "batch": {
+    "exit_code": 0,
+    "expected_files": 3,
+    "completed_files": 3,
+    "files": [
+      {
+        "path": "agent-computer/tests/control-http.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 27
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/file-download-http.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 16
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/reset-run.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 22
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      }
+    ],
+    "totals": {
+      "pass": 18,
+      "fail": 0,
+      "skip": 0,
+      "expects": 65
+    },
+    "batch_timeout": 600,
+    "per_file_timeout": 60,
+    "per_test_timeout_ms": 5000,
+    "runtime": "Bun1.3.14",
+    "original_preloads": "UNCHANGED_TWO",
+    "original_strict_ci": "NOT_RUN",
+    "original400_floor": "UNCHANGED_NOT_USED_AS_A_SUBSTITUTE",
+    "postgres17": "PG_PENDING",
+    "real_provider": "NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_computer_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "e5f3607b220693eb3956140dc08a07fe7296dc32",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 2706,
+      "symlinks": 6,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_computer_module_copy": {
+    "regular_files": 2706,
+    "symlinks": 6,
+    "hardlink_files": 0,
+    "all8_source_package_lock_inputs_unchanged": true,
+    "backend": "copyfile",
+    "copy_limit": 67108864,
+    "node_modules_only": true,
+    "no_source_edits": true
+  },
+  "failure_logs": []
+}

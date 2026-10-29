@@ -5353,11 +5353,141 @@
       },
       "full_standalone_agent_bot_inputs_unchanged": true,
       "original_root_inputs_unchanged": true
+    },
+    "remaining_protocol_fixtures": {
+      "path": "archives/recovery-20261028/REMAINING-PROTOCOL-FIXTURE-RESULT.json",
+      "bytes": 22241,
+      "sha256": "f71448d137de54a683cad905956d3c070a212391672309fb710809e52dd67d2d",
+      "blob": "70acdc43a0e0957787b3b175094b1d4c8722e4d0",
+      "run": 40793547635,
+      "job": 123184357410,
+      "status": "FAILED_BATCH_KEPT",
+      "files": 20,
+      "tests": {
+        "pass": 342,
+        "fail": 2,
+        "skip": 7,
+        "expects": 1420
+      },
+      "original_skips": 7,
+      "desktop_import_later_resolved": {
+        "run": 40794975287,
+        "pass": 5,
+        "fail": 0
+      },
+      "remaining_mastra_import": "MISSING_FROZEN_STANDALONE_SDK_BASELINE",
+      "r1_duplicate_step_id": {
+        "run": 40792836035,
+        "jobs": 0,
+        "root_control_error_retained": true
+      }
+    },
+    "desktop_telemetry_types": {
+      "path": "archives/recovery-20261028/DESKTOP-TELEMETRY-TYPES-RESULT.json",
+      "bytes": 7930,
+      "sha256": "e29bf8a49fd27069244571960a642c4bfb152ba95bbbe0c794f6f4d5fd04d88b",
+      "blob": "66d9a3c1c80a59a834869de9aeb58294449bf4a0",
+      "run": 40794975287,
+      "job": 123189125522,
+      "telemetry": {
+        "pass": 5,
+        "fail": 0,
+        "skip": 0,
+        "expects": 14
+      },
+      "original_full_desktop_typecheck": {
+        "exit_code": 0,
+        "limit": 536870912,
+        "swap": 0
+      },
+      "native_tauri_windows": "NOT_VERIFIED",
+      "original_desktop_lock": "UNCHANGED",
+      "run_overall": "FAILED_R1_FRONTEND_CONTROL_ERROR_BEFORE_BUILD"
+    },
+    "desktop_view_metadata_ci": {
+      "path": "archives/recovery-20261028/DESKTOP-VIEW-CI-FIXTURE-RESULT.json",
+      "bytes": 9044,
+      "sha256": "4967aff0b2f56409ceaf6fd8a5eaf58772ae63d2a6aff12e38b90b7be91a5318",
+      "blob": "1dc1659d3e029b4235347dc4c269e231a39e96d9",
+      "run": 40796459661,
+      "job": 123193995642,
+      "files": 5,
+      "tests": {
+        "pass": 158,
+        "fail": 0,
+        "skip": 0,
+        "expects": 868
+      },
+      "status": "PASS_MOCKED_VIEW_AND_METADATA_ONLY"
+    },
+    "owned_http_control_download_reset": {
+      "path": "archives/recovery-20261028/OWNED-HTTP-CONTROL-DOWNLOAD-RESET-RESULT.json",
+      "bytes": 7772,
+      "sha256": "9c0f75be0e5a931cd2083172d3b730382664f412b77637f5647637e25bca4180",
+      "blob": "2ef76123987c4a7b8d1d1098b66c9b0bb7f33b23",
+      "run": 40796716582,
+      "job": 123195065303,
+      "files": 3,
+      "tests": {
+        "pass": 18,
+        "fail": 0,
+        "skip": 0,
+        "expects": 65
+      },
+      "status": "PASS_REAL_CLOUD_OWN_LOOPBACK_NO_BROWSER",
+      "real_user_device": "NOT_VERIFIED"
+    },
+    "frontend_production_build": {
+      "path": "archives/recovery-20261028/FRONTEND-BUNDLE-512-RESOURCE-STOP.json",
+      "bytes": 7099,
+      "sha256": "a9f375dd2153670b2556a855179764551efa0a06ef2e67bc233c6091eb125f38",
+      "blob": "4ccda7615c66888bec120c4c798905dd82368a23",
+      "run": 40795427951,
+      "job": 123190636436,
+      "status": "OOM_KILL_512M",
+      "final_artifact": "NOT_PRODUCED",
+      "post_build_source": "UNKNOWN_UNIT_KILLED",
+      "proposal": {
+        "commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
+        "status": "PREPARED_NOT_AUTHORIZED_NOT_TRIGGERED",
+        "scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
+        "bytes": 2147483648,
+        "swap": 0,
+        "timeout": 300,
+        "restore": 536870912,
+        "data_limit": 67108864
+      },
+      "prior2GiB_grants_reused": false
+    },
+    "test_file_evidence_ledger": {
+      "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+      "bytes": 394202,
+      "sha256": "31d497a423eabad7b2ed92beeecb639916bf05e61e232c7fcf91f8440f12ebc8",
+      "blob": "737768e1e31c073d7efc3be1492ffec49c3ae103",
+      "test_files": 610,
+      "latest_named_or_historical_whole_app_evidence_paths": 469,
+      "status_counts": {
+        "PASS_SCOPED_BATCH_ONLY": 463,
+        "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
+        "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
+        "FAILED_SDK_IMPORT_NO_OWN_FROZEN_LOCK": 1,
+        "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
+        "FAILED_SCOPED_BATCH": 3,
+        "NOT_RUN_REAL_VENDOR": 1
+      },
+      "whole_current_backend": "NOT_PASSED",
+      "app_source17_tree_comparison": {
+        "paths": 547,
+        "deltas": 0,
+        "full_app_run": 40733053569,
+        "not_new_execution": true
+      },
+      "case_totals_across_overlapping_batches": "NOT_SUMMED"
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Remaining20 protocol fixtures currently validating with existing own agent-langgraph and agent-computer locks. No Source candidate outstanding.13 approval and1loader boundary failures retained; realPG/CI/image/device/provider/client gates unchanged.",
+  "next_source_package": "No Source candidate or running validation job outstanding. Independent original mocked UI/metadata and own HTTP fixtures completed.13 original approval failures need complete fresh-producer/exact-input/continuation wiring; production-loader role-writer/DB-boundary fixture remains1failure; Mastra SDK import lacks an original frozen standalone lock. Original nativePG, strictCI baseline, final image, WakerFlow, real device/approval, model billing and clean-client deployment gates remain. Frontend build stopped512MiB OOM; concrete manual-only2GiB proposal awaits specific human authorization.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -5517,11 +5647,11 @@
   "latest_gate_evidence": {
     "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Additional177 files ran2371pass14fail. Workspace1stale expectation repaired separately4/0; original13 approval fails remain. Additional27 fixture files ran468pass5fail; startup1expectation repaired12/0, agent-bot3startup refusals passed after existing own frozen lock install, loader1blocked by required role-writer config/DB boundary remains. Linux4files89/0 andmock25files295/0 passed. Whole backend and strictCI still NOT_PASSED; PG_PENDING and frozen03df9efa unavailable retained.",
+    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
-    "g5": "Cloud Linux headless Chrome156.0.8078.47 own-loopback fixture35checks/26actions passed under512MiB/swap0/sandboxtrue, run40746063116; offline7 runner policy files163/0/437 passed separately. Real user device, durable offline reconnect/queue, real human approval closure and clean client deployment remain not verified.",
+    "g5": "Cloud Linux Chrome own-loopback fixture35checks/26actions passed historicallyrun40746063116; original own HTTP control/download/reset3files18/0 now passedrun40796716582 under512MiB/swap0 without Chromium. Mocked desktop UI3files144/0 is HappyDOM/Tauri fakes. Real user device, durable offline reconnect queue, fresh approval producer/exact-input and human approval closure remain NOT_VERIFIED.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
-    "g7": "NO_CLEAN_WINDOWS_LINUX_CLIENT_DEPLOYMENT_EVIDENCE"
+    "g7": "Original full desktop tsc passed under512MiB and desktop telemetry5/0 plus3mocked UI files144/0 passed. No native Tauri binary/image or clean Windows/Linux client deployment proof."
   },
   "approved_source_repair_overlays": 24,
   "original_delivery_packages": 18

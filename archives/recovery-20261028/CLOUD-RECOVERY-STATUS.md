@@ -1,3 +1,22 @@
+## 非阻塞验收本轮完成，2026-10-29
+
+当前正式采用Source24提交b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc，完整2060文件/50032071字节。24个Source修复包与原18交付包分开；77故事、18包、7门完整要求及原覆盖状态逐字保留，交付仍NOT_DELIVERED。最新两个云端验证先核完整Source，均0mismatch；本后续归档只修改证据/状态元数据，无新Source采用。
+
+新增实际结果：
+- Source23严格四workspace期待及Source24严格启动摘要期待，均已同一非作者独审通过后采用，分别4/0/13与12/0/57，原Biome2.5.10 lint均0error0warning181info；生产入口、package/lock与审批/PG保护门未改。
+- 协议/历史/监管器/元数据20文件：342pass/2fail/7skip/1420expects，原FAILED回执保留。缺Desktop SDK导入已用它原38019B冻结独立锁完整安装解决，原telemetry5/0/14及原完整desktop tsc0均在512MiB通过。另Mastra缺@mastra/core/agent且没有自己的冻结锁，未新解其4个*依赖；原7个live浏览器skip保留。
+- 新补5文件desktop mock界面/server元数据/CI分片：158pass/0fail/0skip/868expects，run40796459661/job123193995642；其中desktop3UI文件144pass，HappyDOM和mock Tauri，不是原生安装或真实账号登录。原完整desktop锁输入仍未变。
+- 三个原自有HTTP fixture：18pass/0fail/0skip/65expects，run40796716582/job123195065303，真实云端临时agent-computer进程、loopback、控制权交接、下载路径/权限/size/header拒绝与reset runID；没有启动Chromium或访问用户设备，现有agent-computer独立锁完整冻结安装，未新增依赖。
+- 当前610个test/spec文件逐路径证据清单已保存：463个有scoped/historical pass，2个mixed文件含原7skip，3个失败文件与1个Mastra import failure，132个PG-import标记文件未运行（literal advisory），1个真实vendor与8个真实浏览器/部署文件未运行。469条有历史/本轮运行证据不等于完整当前后端通过；不跨重叠批次相加case总数。原app161文件历史1207/0仍单列，完整Git trees独核app/shared/root锁配置547路径自Source17至今0变化，不冒本轮重跑。
+
+前端原生产bundle：R1在读取稀疏清单路径前置控制错误处停止，未执行build；R2已正常从现有Git objects精确读445399B清单后运行原brand generator和原Bun/Vite build，实际512MiB/swap0聚合门OOM终止（systemd controller killed9，40.696s，automaticpeak497.4M）。未取得最终build结果/产物或postbuild Source核验，状态UNKNOWN不能称0生成变更。资源方案3ab441fbe72b16ead4e3bd33e188ee9843e93c50仅manual-only保存，前端bundle单步2GiB/swap0/300秒后恢复512，DATA仍64，其余仍512；尚未获该步骤授权，未触发，未借用旧types/test2GiB许可。
+
+仍需后续：原13个审批失败处于fresh producer/exact-input/continuation安全门，不能删门让老用例绿；1个production-loader fixture在ROLE_WRITER_DATABASE_URL必需配置/DB边界前拒绝，未造假角色/UID/PG结果；Mastra缺冻结SDK基线。原PG_PENDING、冻结strictCI03df9efa缺失、正式同SHA镜像8GET、WakerFlow真实全链、用户设备/离线重连/人类审批闭环、真实模型计费、Windows/Linux干净客户端部署均未验收，ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED保持。
+
+所有原失败/资源中止/Root控制错误与旧审计事件保留，最新自动memorypeak原样保存，不凭配置标签抹峰值。源码/archives/JSON/patch/deps/test产物均在云端；Windows Source写0，无PR/生产部署/默认分支变更/付费provider/自动化恢复。此刻无Source候选、无活跃验证job；仅前端build新资源例外待人类回复。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## 非阻塞回归进展，2026-10-29
 
 当前Source24采用提交b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc，2060文件/50032071字节；源码修复覆盖24包与原18交付包分开。Source23严格四workspace期待与Source24严格启动摘要期待均已独审并单独测试/lint通过，生产package/lock/start.sh及审批/PG门未改。
