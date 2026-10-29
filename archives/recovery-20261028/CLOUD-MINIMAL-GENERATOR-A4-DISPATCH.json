@@ -1,0 +1,15 @@
+{
+  "schema": "xiongbaowork-generator-a4-dispatch-v1",
+  "run": 40845991318,
+  "job": 123353492043,
+  "head": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+  "status": "in_progress",
+  "observed_at": "2026-10-29T08:59:03.077Z",
+  "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
+  "repeat_prohibited": true,
+  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
+  "review_commit": "45629eb4bcae774f405f6b3ac300f9c3d4d4f11f",
+  "candidate_tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
+  "source_adopted": false
+}

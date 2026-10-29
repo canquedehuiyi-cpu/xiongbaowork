@@ -504,8 +504,8 @@
       }
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
-    "lease_expires_at": "2026-10-29T09:27:06.433Z",
-    "next_action": "After final latest-head/lease/idle/ref check, create unique run-a4 at exact reviewed c6f51d2673e608895ab826ed7437dbef9dab0340 once; reuse if present. Capture terminal result, checkpoint and release.",
+    "lease_expires_at": "2026-10-29T09:29:03.077Z",
+    "next_action": "Read existing run40845991318/job123353492043 terminal and logs; do not dispatch again. Separate Source/deps/generator/output/restoration results; checkpoint and release own lease.",
     "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
@@ -572,7 +572,15 @@
     "previous_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "previous_epoch": "2026-10-29T08:04:59.948Z:972136c2",
     "lease_state": "held",
-    "active_job": null,
+    "active_job": {
+      "run": 40845991318,
+      "job": 123353492043,
+      "head": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+      "status": "in_progress",
+      "observed_at": "2026-10-29T08:59:03.077Z",
+      "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
+      "repeat_prohibited": true
+    },
     "next_candidate": {
       "sha": "c6f51d2673e608895ab826ed7437dbef9dab0340",
       "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
@@ -617,7 +625,7 @@
       "failed_generator_head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
       "route_old_head": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106"
     },
-    "next_action": "NEXT BOUNDED PASS: verify current Page/controller/worker authority if hosted; read latest canonical head+lease and queued/in_progress. Only released/expired+idle permits expected-head CAS new unique owner/run/epoch. Then re-read exact A4 candidate c6f51d2673e608895ab826ed7437dbef9dab0340 + review45629eb4bcae774f405f6b3ac300f9c3d4d4f11f, verify three file identities/tree/modes/HEAD no-skip and unique run-a4 absence. Legal lease owner may create ONLY codex/cloud-minimal-generator-run-20261029-a4 at exact candidate once, using normal GitHub create_branch. If ref/run already exists, inspect and reuse it, never repeat. Capture terminal stage/log/output evidence; do not repeat failed e4cdae or probe. Full generated DDL needs separate reconciliation/review before Source adoption. End checkpoint and release own lease.",
+    "next_action": "Read existing run40845991318/job123353492043 terminal and logs; do not dispatch again. Separate Source/deps/generator/output/restoration results; checkpoint and release own lease.",
     "epoch": "2026-10-29T08:57:06.433Z:c6f51d26"
   },
   "restart_ack_audit": {
@@ -953,9 +961,9 @@
     "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
     "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a4",
     "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
-    "run": null,
-    "job": null,
-    "status": "STATIC_REVIEWED_NOT_RUN_NOT_ADOPTED",
+    "run": 40845991318,
+    "job": 123353492043,
+    "status": "ACTUAL_RUN_IN_PROGRESS_NO_SUCCESS_CLAIM",
     "review": {
       "commit": "45629eb4bcae774f405f6b3ac300f9c3d4d4f11f",
       "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-ROOT-REVIEW-20261029.json",
