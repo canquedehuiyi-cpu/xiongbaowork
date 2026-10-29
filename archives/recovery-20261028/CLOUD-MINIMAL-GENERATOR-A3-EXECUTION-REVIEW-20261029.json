@@ -1,0 +1,217 @@
+{
+  "schema": "xiongbaowork-minimal-generator-a3-actual-run-independent-review/1",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "run": 40843372223,
+  "job": 123344875216,
+  "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+  "tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
+  "retrieval": "Normal GitHub connector full decoded job log and job steps; filtered actual event lines exclude echoed shell script",
+  "verdict": "JOB_FAILED_COPY_MODE_REPRESENTATION_MISMATCH",
+  "source_stage": {
+    "verdict": "PASS_SOURCE_BYTES_ONLY",
+    "files": 2065,
+    "bytes": 50175181,
+    "batches": 74,
+    "max_batch_files": 32,
+    "max_batch_bytes": 2097152,
+    "modes_verified": true,
+    "fd_named_stability_verified": true,
+    "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+    "source_mismatches": 0,
+    "uid": 1001,
+    "gid": 1001,
+    "own_memory": 67108864,
+    "parent_memory": 536870912,
+    "swap": 0,
+    "oom_group": 1,
+    "cleanup_deadline_remaining": 452.41481352899996
+  },
+  "copy_stage": {
+    "verdict": "FAILED_BEFORE_COPY_OR_OVERLAY",
+    "path": "openbot/app/src/lib/tasks/actions.ts",
+    "actual": {
+      "bytes": 478,
+      "sha256": "81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63",
+      "mode": "0o644"
+    },
+    "expected": {
+      "bytes": 478,
+      "sha256": "81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63",
+      "mode": "100644"
+    },
+    "location": "verify_inputs line93 from prepare_copy line103",
+    "interpretation": "Mode representation mismatch: POSIX permission octal versus full Git regular-file mode; bytes and SHA256 equal. Not evidence of byte corruption or permission-bit discrepancy.",
+    "cleanup_deadline_remaining": 452.141980645
+  },
+  "deps": "NOT_RUN",
+  "generator": "NOT_RUN",
+  "metadata": "NONE",
+  "overlay_applied": false,
+  "steps": [
+    {
+      "name": "Set up job",
+      "conclusion": "success"
+    },
+    {
+      "name": "Verify administrative controller then run bounded serial stages",
+      "conclusion": "failure"
+    },
+    {
+      "name": "Always kill only owned descendant groups and restore project gate",
+      "conclusion": "success"
+    },
+    {
+      "name": "Complete job",
+      "conclusion": "success"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-10-29T08:37:09.1873194Z",
+      "event": "SOURCE_BATCH_MATERIALIZATION",
+      "value": {
+        "batches": 74,
+        "max_files": 32,
+        "max_source_bytes": 2097152,
+        "fsync_after_each_batch": true,
+        "memory_limit": 67108864
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:09.8939956Z",
+      "event": "SOURCE_RECOVERY_RESULT",
+      "value": {
+        "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "aggregate_memory_limit": 67108864,
+        "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+        "git_tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
+        "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+        "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+        "overlay_tickets": [],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50175181,
+        "verified_source_files": 2065,
+        "windows_source_files_written": 0
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:09.9323554Z",
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 452.41481352899996,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-source"
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:09.9324498Z",
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 452.414666303,
+        "exit": 0,
+        "stage": "source"
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:10.2050920Z",
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 452.141980645,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-copy"
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:10.2051791Z",
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 452.141851864,
+        "exit": 1,
+        "stage": "copy"
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:10.2054410Z",
+      "event": "PROJECT_LIMIT_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "populated": "0"
+      }
+    },
+    {
+      "at": "2026-10-29T08:37:10.3272869Z",
+      "event": "GENERATOR_ALWAYS_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "Source_adopted": false,
+        "ROOT_RELEASE": null,
+        "ready": false,
+        "PG": "PG_PENDING"
+      }
+    }
+  ],
+  "restoration": {
+    "controller_final": {
+      "memory": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "workflow_always": {
+      "memory": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    }
+  },
+  "required_next": [
+    "Do not retry unchanged failing SHA.",
+    "Narrow mode normalization must distinguish Git regular-file type from permission bits, preserve executable modes and reject unsupported type/special modes; no chmod-to-pass or byte/hash weakening.",
+    "Review exact new administrative candidate and unchanged resource/identity blocks before any later dispatch.",
+    "Only Root or legal successor holding canonical lease may serialize next resource job; reviewer never schedules."
+  ],
+  "reviewer_actions": {
+    "executed": false,
+    "dispatched": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "full77_18_7_acceptance": false
+  }
+}
