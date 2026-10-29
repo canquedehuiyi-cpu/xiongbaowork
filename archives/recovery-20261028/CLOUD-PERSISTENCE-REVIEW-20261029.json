@@ -1,0 +1,168 @@
+{
+  "schema": "xiongbaowork-independent-persistence-source-review-v1",
+  "reviewer": "/root/persistence_review",
+  "review_kind": "NEW_NON_AUTHOR_CLOUD_REVIEW",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "transport": "normal GitHub connector fetch_file and fetch_commit",
+  "project_execution": false,
+  "repository_writes": false,
+  "canonical_writes": false,
+  "findings": [],
+  "primitive": {
+    "reviewed_sha": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+    "verdict": "SOURCE_REVIEW_APPROVED_ONLY",
+    "adoption_authorized": false,
+    "files": [
+      {
+        "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+        "bytes": 7576,
+        "git_blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39"
+      },
+      {
+        "path": "openbot/server/tests/approval-pg-fresh-result.test.ts",
+        "bytes": 14100,
+        "git_blob": "48806bc3125be84ad79a481d50c9abc7cde85f0f"
+      }
+    ],
+    "static_checks": [
+      "Transaction type derives from actual Database.transaction callback type.",
+      "Capture clones caller-owned input before first await; seed and result values are then frozen.",
+      "Ambient tenant comparison is explicitly only a mismatch guard, not connection or authority proof.",
+      "Parent SELECT FOR UPDATE precedes seed SELECT FOR SHARE, matching consume parent-lock order.",
+      "Parent query and subsequent checks bind all six persisted identity fields and parent JSON action/continuation identity.",
+      "Stored seed checks bind all eight input seed fields and require a valid prepared_at without claiming timestamp provenance.",
+      "CAS checks six-field identity, expected status, SQL NULL result and SQL NULL disposition.",
+      "Final disposition writes result, disposition, completed status and DB clock in the same UPDATE.",
+      "Existing result or disposition is not cleared.",
+      "Zero returned rows means only cas_miss; multi-row response throws; database errors propagate.",
+      "Return values explicitly describe transaction-local observations, never COMMIT or ACK.",
+      "CPU tests use actual Drizzle builders with a non-network pg-proxy callback and explicitly disclaim PG, RLS, serialization, audit, authority and durability proof.",
+      "Candidate commit changes only the two named new files and does not modify production store or index."
+    ],
+    "required_before_adoption": [
+      "Complete consistent seed schema/SQL/snapshot/journal package must first be independently reviewed, validated and adopted.",
+      "Rebase or reconstruct this two-Source package on the resulting canonical parent, preserving explicit identity, then obtain non-author review of that exact successor.",
+      "Run authorized bounded cloud CPU/SQL-shape tests and original full server typecheck; this review did not run them."
+    ],
+    "required_before_production": [
+      "Store-owned outer physical transaction with real current authority/catalog/FORCE RLS checks.",
+      "Required atomic audit and final completion requirements.",
+      "Real COMMIT/ACK classification and readback, preserving unknown where outcome is uncertain.",
+      "Tenant context must be explicitly available inside the physical transaction callback; db/client.ts documents that Bun callback scope cannot be assumed.",
+      "Independent capture/plan/ledger publication and continuation protocol prerequisites.",
+      "No conversion of written_in_transaction to committed and no conversion of missing/conflicting/invisible result to safe replay."
+    ]
+  },
+  "seed": {
+    "reviewed_sha": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+    "verdict": "THREE_SOURCE_STATIC_REVIEW_ONLY",
+    "full_migration_verdict": "BLOCKED_METADATA_CLOSURE",
+    "adoption_authorized": false,
+    "files": [
+      {
+        "path": "openbot/server/src/db/schema/approvals.ts",
+        "bytes": 13092,
+        "git_blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2"
+      },
+      {
+        "path": "openbot/server/drizzle/0081_approval_fresh_seeds.sql",
+        "bytes": 2891,
+        "git_blob": "07e6b4173fad075b76c3cbdf32637ed07e1a8f36"
+      },
+      {
+        "path": "openbot/server/tests/approval-fresh-seed.test.ts",
+        "bytes": 9120,
+        "git_blob": "813f4143d64f374eb95441b25b5dad4da0798501"
+      }
+    ],
+    "static_checks": [
+      "Nine non-null seed columns, one seed per approval primary key.",
+      "Six-column parent FK with NO ACTION and matching six-column parent UNIQUE.",
+      "Nullable result_disposition with continue/final check and one-way disposition-implies-result check.",
+      "ORM enables RLS; SQL explicitly enables and forces RLS, introduces zero policies and revokes both real application role and PUBLIC privileges.",
+      "0054_app_role.sql confirms inherited default table grants, making explicit application-role revoke necessary.",
+      "SQL oracle consumes the complete allowlisted statement sequence and includes missing-FORCE, missing-revoke, added-grant, added-policy, partial-FK and reversed-result-check negatives.",
+      "Comment removal recognizes CR as well as LF; actual CR-comment GRANT and POLICY negatives are present."
+    ],
+    "missing_proof": [
+      "Real generated consistent snapshot and journal.",
+      "Full pending DDL delta reconciliation against all existing migrations and schema inputs.",
+      "Real bounded cloud generator and tests.",
+      "Non-author final review of the complete migration package.",
+      "Actual PostgreSQL role, RLS, constraint and migration execution validation."
+    ],
+    "restriction": "Do not pair the current hand-authored seed-only SQL with an unrelated full generated snapshot. Existing-history duplicate constraint applicability is not established by this static review."
+  },
+  "additional_references_read": [
+    {
+      "path": "openbot/server/src/db/client.ts",
+      "git_blob": "fbf0693879f03bed8275fd371678929a1c836d92"
+    },
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "git_blob": "2365ebe562751271190713a27c4f54968f6085b8"
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "purpose": "Original consume row-lock order, saveResult and finish semantics."
+    },
+    {
+      "path": "openbot/server/src/tenant/context.ts",
+      "git_blob": "1d66c82b62d326993ba64aeab7550caae9dee333"
+    },
+    {
+      "path": "openbot/server/drizzle/0054_app_role.sql",
+      "git_blob": "86b28b0842e79724b8c4bcc43386437ed586e04f"
+    }
+  ],
+  "unchanged_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial": "NOT_DELIVERED"
+  },
+  "appendix_learning_input_gap": {
+    "reviewed_sha": "548de959f08527d2e74db19482e34d9faa1145a0",
+    "verdict": "CONFIRMED_STATIC_BLOCKER_BEFORE_GENERATOR",
+    "independently_read_evidence": [
+      {
+        "path": "openbot/server/drizzle.config.ts",
+        "git_blob": "ac2b6776cb74c19b4540c08b30fcefe6223e39e9",
+        "fact": "Explicit schema array includes ./src/db/schema/learning.ts."
+      },
+      {
+        "path": "openbot/server/src/db/schema/learning.ts",
+        "response": "GitHub fetch_file 404 NOT_FOUND at exact reviewed SHA."
+      },
+      {
+        "path": ".github/workflows/ap-seed-generate-diagnostic.yml",
+        "git_blob": "9cab7fe10e7d6812ec6fa3de7ef75fbb95531565",
+        "bytes": 52813,
+        "fact": "L513 offline paths includes same learning.ts; L515 asserts len(paths)==28 and all(Path(p).is_file() for p in paths), before config output/generator."
+      },
+      {
+        "path": "openbot/server/drizzle/0078_drop_learning.sql",
+        "git_blob": "d0734c88bfc6f3d5b9906a555a38825745023cac",
+        "bytes": 110,
+        "fact": "Drops learning_settings and learning_thread_bindings CASCADE."
+      },
+      {
+        "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/trees/548de959f08527d2e74db19482e34d9faa1145a0?recursive=1",
+        "truncated": false,
+        "fact": "Complete recursive tree contains no learning.ts Source; learning.ts/drop_learning.sql suffix filter returns only 0078_drop_learning.sql."
+      }
+    ],
+    "conclusion": "On this exact tree, offline preparation's all-is_file assertion cannot succeed even after dependency installation succeeds. Do not repeat installation as a complete resolution. Generator was not run by reviewer. Need a separately owned and reviewed configuration/input reconciliation; do not invent learning.ts, silently remove schema inputs, change DATABASE_URL guard or manufacture metadata.",
+    "source_changes": 0
+  },
+  "persistence": {
+    "branch": "codex/persistence-review-root-20261029",
+    "base": "8ac186e801aa4a2492e96c3b16ed33a2275198d8",
+    "path": "archives/recovery-20261028/CLOUD-PERSISTENCE-REVIEW-20261029.json",
+    "collision_avoidance": "External report already exists on codex/cloud-review-persistence-20261029 (blob cb38e9da3033a866888dc6c975542060d6ba85e9); leave untouched. New exact branch preflight returned no matches.",
+    "administrative_report_only": true
+  }
+}
