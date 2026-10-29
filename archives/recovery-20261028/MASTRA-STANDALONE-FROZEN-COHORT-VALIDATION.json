@@ -1,0 +1,172 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40817450733,
+  "job": 123261761883,
+  "source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "fa226008e9ec39ee0893c101ac8c0b25b70153f7",
+    "head": "88c15bf3adbc697161bbd6573d19567775852725",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029",
+      "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+      "MASTRA-STANDALONE-FROZEN-COHORT-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50136290,
+    "verified_source_files": 2061,
+    "windows_source_files_written": 0
+  },
+  "root_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "standalone_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "memory_limit": 536870912,
+    "swap": 0,
+    "timeout": 300,
+    "lifecycle_scripts": "NOT_RUN",
+    "private_cache": true,
+    "backend": "copyfile"
+  },
+  "standalone_identity": {
+    "versions": {
+      "@mastra/core": "1.64.0",
+      "@ai-sdk/openai": "3.0.99",
+      "@ai-sdk/anthropic": "3.0.111",
+      "mastra": "1.27.3",
+      "@mastra/deployer": "1.64.0",
+      "@mastra/server": "1.64.0",
+      "@mastra/loggers": "1.3.1"
+    },
+    "regular_files_audited": 31680,
+    "hardlinks": 0,
+    "outside_private_paths": 0,
+    "copy_memory_limit": 67108864,
+    "root_workspaces": "UNCHANGED_4",
+    "root_lock": "UNCHANGED"
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 1,
+    "completed_files": 1,
+    "results": [
+      {
+        "path": "agent-mastra/src/mastra/index.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "cli": {
+    "exit_code": 0,
+    "stdout": "1.27.3\n",
+    "stderr": "",
+    "scope": "version only; no server/model/build",
+    "memory_limit": 536870912,
+    "swap": 0
+  },
+  "tests": {
+    "pass": 34,
+    "fail": 0,
+    "expects": 70,
+    "files": 1
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 512.9M (swap: 0B)",
+    "Memory peak: 6.9M (swap: 0B)",
+    "Memory peak: 503.7M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 423.8M (swap: 0B)",
+    "Memory peak: 205.6M (swap: 0B)"
+  ],
+  "paid_provider_calls": 0,
+  "provider_test_scope": "OWN_LOOPBACK_FAKE_ONLY",
+  "cli_scope": "Installed actual CLI --version only; no production server, build or model",
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "windows_source_writes": 0,
+  "lint": {
+    "run": 40817923786,
+    "job": 123263300125,
+    "head": "d6ae59d311ba06e3f143c9bb79abf44c446f3feb",
+    "exit_code": 0,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "reviewed_candidate_and_lint_source_identical": true
+}

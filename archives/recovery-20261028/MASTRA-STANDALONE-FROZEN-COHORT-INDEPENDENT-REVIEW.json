@@ -1,0 +1,62 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "reviewer": "/root/review_approval_input_readonly",
+  "base_commit": "87d2d0b4eaa61db18eda35421148d3e8395cec0a",
+  "candidate_commit": "88c15bf3adbc697161bbd6573d19567775852725",
+  "source_files": [
+    {
+      "path": "openbot/agent-mastra/package.json",
+      "before": {
+        "path": "openbot/agent-mastra/package.json",
+        "bytes": 202,
+        "sha256": "afb0f6749935cd7ba121a82050194a7ebe289f81866e59d284d7f3819c4ddbf2",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/agent-mastra/package.json",
+        "bytes": 342,
+        "sha256": "930b82cabfa863e9a5b9b03e77724c870ccc6c9864de14d95cb0b02dd4ff7b17",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/agent-mastra/bun.lock",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/agent-mastra/bun.lock",
+        "bytes": 102844,
+        "sha256": "1823f00ae1b55e8419f3e81dd9725baf92e8b79b2860e983b22a966472bda169",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "full_tree_untruncated": true,
+  "subject_only_changed_paths": [
+    "openbot/agent-mastra/package.json",
+    "openbot/agent-mastra/bun.lock"
+  ],
+  "candidate_card": {
+    "bytes": 1915,
+    "sha256": "082199eb71db1c264dc1acdb8a2eba7f969c0ca9550e76a8ae06f4b0ef42d57c"
+  },
+  "lock": {
+    "packages": 439,
+    "all_exact_npm_versions_with_sha512_SRI": true,
+    "all_reachable": true,
+    "dependency_edges_resolved_and_compatible": 711,
+    "peer_edges": 56,
+    "installed_matching_peers": 37,
+    "absent_optional_peers": 19,
+    "missing_required_peers": 0,
+    "duplicate_keys": 0,
+    "tarballs_independently_downloaded_by_reviewer": false
+  },
+  "root_package_and_lock_unchanged": true,
+  "original_CI_unchanged": true,
+  "review_execution": "READ_ONLY_GITHUB_AND_RAM_DATA_ONLY_NO_PROJECT_OR_CLI_EXECUTION",
+  "scope": "Source dependency/peer closure only, not dev/build/optional integration/platform or production acceptance"
+}

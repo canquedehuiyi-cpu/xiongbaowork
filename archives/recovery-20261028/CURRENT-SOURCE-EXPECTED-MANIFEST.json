@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+  "source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
   "basis": "Immutable V57 plus25 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
@@ -483,10 +483,30 @@
       "candidate_source_commit": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
       "source_content_adopted_unchanged": true,
       "run": 40804154815
+    },
+    {
+      "ticket": "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/MASTRA-STANDALONE-FROZEN-COHORT-ADOPTED.json",
+        "bytes": 2333,
+        "sha256": "c1dc242c230df4373e84317be482691ae4605361ac12bd2f8034bfaa39840c57",
+        "formal_adoption": true,
+        "ticket": "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+        "source_paths": [
+          "openbot/agent-mastra/package.json",
+          "openbot/agent-mastra/bun.lock"
+        ],
+        "source_new_paths": [
+          "openbot/agent-mastra/bun.lock"
+        ]
+      },
+      "candidate_source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
+      "source_content_adopted_unchanged": true,
+      "run": 40817450733
     }
   ],
-  "file_count": 2060,
-  "source_bytes": 50033306,
+  "file_count": 2061,
+  "source_bytes": 50136290,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -1660,8 +1680,8 @@
     },
     {
       "path": "openbot/agent-mastra/package.json",
-      "bytes": 202,
-      "sha256": "afb0f6749935cd7ba121a82050194a7ebe289f81866e59d284d7f3819c4ddbf2",
+      "bytes": 342,
+      "sha256": "930b82cabfa863e9a5b9b03e77724c870ccc6c9864de14d95cb0b02dd4ff7b17",
       "mode": "0o644"
     },
     {
@@ -12906,6 +12926,12 @@
       "path": "openbot/scripts/ci/runner-browser-probe-observe.ts",
       "bytes": 740,
       "sha256": "36d49b45403278fcb522dc503aa9ae840e0bda63e8995b96923c7ddc552d1127",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/agent-mastra/bun.lock",
+      "bytes": 102844,
+      "sha256": "1823f00ae1b55e8419f3e81dd9725baf92e8b79b2860e983b22a966472bda169",
       "mode": "0o644"
     }
   ],

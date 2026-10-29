@@ -1,0 +1,67 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+  "formal_adoption": true,
+  "base_commit": "87d2d0b4eaa61db18eda35421148d3e8395cec0a",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/agent-mastra/package.json",
+      "before": {
+        "path": "openbot/agent-mastra/package.json",
+        "bytes": 202,
+        "sha256": "afb0f6749935cd7ba121a82050194a7ebe289f81866e59d284d7f3819c4ddbf2",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/agent-mastra/package.json",
+        "bytes": 342,
+        "sha256": "930b82cabfa863e9a5b9b03e77724c870ccc6c9864de14d95cb0b02dd4ff7b17",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/agent-mastra/bun.lock",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/agent-mastra/bun.lock",
+        "bytes": 102844,
+        "sha256": "1823f00ae1b55e8419f3e81dd9725baf92e8b79b2860e983b22a966472bda169",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "source_new_paths": [
+    "openbot/agent-mastra/bun.lock"
+  ],
+  "scope": "Pin existing three SDK versions plus compatible official CLI1.27.3/deployer1.64/server1.64/loggers1.3.1; own standalone frozen lock; no runtime/test implementation/root workspace lock changes",
+  "preparation": {
+    "run": 40817179638,
+    "job": 123260883110,
+    "source_lock_only": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "first_incompatible_preparation": {
+      "run": 40816947526,
+      "cli": "1.35.0",
+      "deployer": "1.80.0",
+      "status": "REJECTED_NOT_SOURCE"
+    }
+  },
+  "boundaries": {
+    "project": 536870912,
+    "swap": 0,
+    "data": 67108864,
+    "paid_provider_calls": 0,
+    "windows_source_writes": 0,
+    "nativePG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "candidate_source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
+  "source_content_adopted_unchanged": true,
+  "independent_review_file": "archives/recovery-20261028/MASTRA-STANDALONE-FROZEN-COHORT-INDEPENDENT-REVIEW.json",
+  "validation_file": "archives/recovery-20261028/MASTRA-STANDALONE-FROZEN-COHORT-VALIDATION.json",
+  "lint_run": 40817923786
+}
