@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "/root/persistence_review",
   "base": "823744db378f508a1996f8c23faf1b42f115ad33",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a1",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a1",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a2",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a2",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -792,16 +792,26 @@
     "migrationNOT_WIRED": true,
     "PG": "PG_PENDING"
   },
+  "revision": {
+    "id": "A2",
+    "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
+    "status": "AUTHOR_FIX_NOT_REVIEWED_NOT_RUN",
+    "cleanup_reserve_seconds": 8,
+    "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
+    "structure": "Findings do not block export of real generated files.",
+    "log_export_max_bytes": 16777216,
+    "oversized_log": "Prefix exported with full original identity and incomplete flag; failed outcome."
+  },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 62253,
-    "sha256": "08dcaa2759b716b40051cecc316260d28cf857975f17f5e09aa5847e55a645a2"
+    "bytes": 65352,
+    "sha256": "f7e45b1965405c7d2ed371315cd6b23391c3a27c5aa145b3a321ba1665303358"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
-    "bytes": 3667,
-    "sha256": "ad5f589c84c84b4975e11df36da707300c3a1ea2ca9f2b87493953198c990cdc"
+    "bytes": 4017,
+    "sha256": "d2b6b8891d616b8dd470b7640b61de08fc36d2ea3e4df3d84de88db3a4726a6b"
   },
-  "author_readiness": "PREPARED_FOR_NEW_NONAUTHOR_REVIEW_NO_RUN",
-  "review_required": "Author formerly reviewed static closure; this implementation needs separate Root/delivery nonauthor review before any run-branch push. Prepare branch cannot match trigger."
+  "author_readiness": "A2_PREPARED_FOR_NEW_NONAUTHOR_REVIEW_NO_RUN",
+  "review_required": "Root and delivery must reread exact A2; A1 was never executed. Embedded and external core plan are identical; external identity/review fields are administrative additions."
 }

@@ -1,7 +1,7 @@
 name: Exact minimal full50 Drizzle generator diagnostic
 on:
   push:
-    branches: [codex/cloud-minimal-generator-run-20261029-a1]
+    branches: [codex/cloud-minimal-generator-run-20261029-a2]
 permissions:
   contents: read
 concurrency:
@@ -17,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/cloud-minimal-generator-run-20261029-a1"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-minimal-generator-run-20261029-a2"
           test "$GITHUB_EVENT_NAME" = "push"
           /usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'
           import hashlib,os,sys,urllib.request
@@ -31,10 +31,10 @@ jobs:
               while True:
                   b=incoming.read(65536)
                   if not b:break
-                  total+=len(b);assert total<=62253
+                  total+=len(b);assert total<=65352
                   digest.update(b);out.write(b)
               out.flush();os.fsync(out.fileno())
-          assert total==62253 and digest.hexdigest()=="08dcaa2759b716b40051cecc316260d28cf857975f17f5e09aa5847e55a645a2"
+          assert total==65352 and digest.hexdigest()=="f7e45b1965405c7d2ed371315cd6b23391c3a27c5aa145b3a321ba1665303358"
           os.chmod(path,0o600)
           print("ADMIN_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)
           PY
@@ -45,16 +45,22 @@ jobs:
         run: |
           set -euo pipefail
           sudo /usr/bin/python3 -I -B - <<'PY'
-          import json,subprocess
+          import json,subprocess,time
           from pathlib import Path
           parent=Path("/sys/fs/cgroup/xiongbaowork.slice")
           units=("xb-min-source","xb-min-copy","xb-min-deps","xb-min-generate","xb-min-export")
+          cleanup_deadline=time.monotonic()+10
           for unit in units:
               cg=parent/(unit+".service")
-              if cg.exists() and (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")
-              try:subprocess.run(["systemctl","stop",unit+".service"],timeout=3,check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-              except subprocess.TimeoutExpired:
-                  if cg.exists() and (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")
+              if not cg.exists():continue
+              populated=dict(line.split() for line in (cg/"cgroup.events").read_text().splitlines())["populated"]
+              if populated=="0":continue
+              if (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")
+              remaining=cleanup_deadline-time.monotonic()-2
+              if remaining>0:
+                  try:subprocess.run(["systemctl","stop",unit+".service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                  except subprocess.TimeoutExpired:
+                      if cg.exists() and (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")
           assert parent.exists(),"project resource parent was not established; no execution success"
           for name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:
               (parent/name).write_text(value)
