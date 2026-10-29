@@ -3595,7 +3595,32 @@
         "full_read": true
       }
     ],
-    "status": "NONAUTHOR_APPROVED_NOT_YET_DISPATCHED",
-    "review_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A10-NONAUTHOR-REVIEW-20261029.json"
+    "status": "BRANCH_CREATED_RUN_NOT_YET_OBSERVED",
+    "review_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A10-NONAUTHOR-REVIEW-20261029.json",
+    "dispatch": {
+      "schema": "xiongbaowork-a10-exact-dispatch-v1",
+      "at": "2026-10-29T15:14:50.837Z",
+      "candidate": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f",
+      "tree": "edf947d3b75f4ac9a811e5e8352ca77993ab4cd4",
+      "branch": "codex/cloud-minimal-generator-run-20261029-a10",
+      "event": "push",
+      "status": "BRANCH_CREATED_RUN_NOT_YET_OBSERVED",
+      "run": null,
+      "job": null,
+      "review_commit": "d10c52ffaa59cc11188ed9124947d640bee69387",
+      "review_blob": "39673b2400677d2ee271a4b888acef457db1720f",
+      "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
+      "dispatch_count": 1,
+      "preflight": {
+        "freshleasehead": true,
+        "idlequeue": true,
+        "ref404": true,
+        "headruns0": true,
+        "exactreviewedSHA": true
+      },
+      "next_action": "Read exact same branch/head_sha Actions records; do not recreate ref/rerun/claim execution before realrun.",
+      "Source_adopted": false
+    }
   }
 }
