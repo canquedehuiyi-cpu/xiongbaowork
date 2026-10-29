@@ -1,3 +1,10 @@
+import {
+  AP_LOCAL_RECOVERY_UNWIRED,
+  composeLocalRecovery,
+  LOCAL_RECOVERY_MAX_LEASE_MS,
+  type LocalRecoveryWiring,
+} from "../src/approvals/local-recovery-composition";
+import { localDigest, localRunId } from "../src/approvals/continuation-target-local";
 import { expect, test } from "bun:test";
 import { createApprovalService } from "../src/approvals/service";
 import {
@@ -463,3 +470,144 @@ test("lease loss cannot dispatch or complete", async () => {
   await expect(h.run()).rejects.toThrow("unknown");
   expect(h.counts.admit + h.counts.finish).toBe(0);
 });
+
+// Composition guard coverage only: NOT a PG/release/persistence attestation.
+// No fixture makes authorizeRelease return true or supplies a passing verifier.
+function localCompositionFixture() {
+  const counts = { db: 0, load: 0, prepare: 0, run: 0, worker: 0, authority: 0 };
+  const pool = () =>
+    new Proxy({}, {
+      get() {
+        counts.db++;
+        throw new Error("unexpected database access");
+      },
+    }) as LocalRecoveryWiring["database"];
+  const wiring: LocalRecoveryWiring = {
+    database: pool(),
+    authorityPool: pool(),
+    release: {
+      readVerifiedRelease: async () => {
+        counts.authority++;
+        return null;
+      },
+    },
+    runner: {
+      runContinuation: async () => {
+        counts.run++;
+        throw new Error("unexpected runner");
+      },
+    },
+    leaseMs: 1000,
+    workerId: () => {
+      counts.worker++;
+      return " stable-worker ";
+    },
+    loadPersistedPlan: async () => {
+      counts.load++;
+      return null;
+    },
+    prepareExactInput: async () => {
+      counts.prepare++;
+      return null;
+    },
+  };
+  return { wiring, counts };
+}
+
+test("composition absent authority and same pool remain cold and unwired", () => {
+  expect(composeLocalRecovery(null)).toBeNull();
+  expect(composeLocalRecovery(undefined)).toBeNull();
+  expect(AP_LOCAL_RECOVERY_UNWIRED).toBeNull();
+  for (const missing of ["pool", "same_pool", "release"] as const) {
+    const h = localCompositionFixture();
+    const invalid = {
+      ...h.wiring,
+      ...(missing === "pool" ? { authorityPool: null } :
+        missing === "same_pool" ? { authorityPool: h.wiring.database } :
+        { release: null }),
+    };
+    expect(composeLocalRecovery(invalid)).toBeNull();
+    expect(h.counts).toEqual({ db: 0, load: 0, prepare: 0, run: 0, worker: 0, authority: 0 });
+  }
+});
+
+test("composition invalid leases cannot access loaders, pools or runner", () => {
+  for (const leaseMs of [0, -1, 1.5, NaN, Infinity, LOCAL_RECOVERY_MAX_LEASE_MS + 1]) {
+    const h = localCompositionFixture();
+    expect(composeLocalRecovery({ ...h.wiring, leaseMs })).toBeNull();
+    expect(h.counts).toEqual({ db: 0, load: 0, prepare: 0, run: 0, worker: 0, authority: 0 });
+  }
+});
+
+test("composition invalid worker identity remains cold", () => {
+  for (const worker of ["", "  ", undefined, 17, "throws"] as const) {
+    const h = localCompositionFixture();
+    const workerId = (() => {
+      h.counts.worker++;
+      if (worker === "throws") throw new Error("private worker failure");
+      return worker;
+    }) as LocalRecoveryWiring["workerId"];
+    expect(composeLocalRecovery({ ...h.wiring, workerId })).toBeNull();
+    expect(h.counts).toEqual({ db: 0, load: 0, prepare: 0, run: 0, worker: 1, authority: 0 });
+  }
+});
+
+test("composition captures dependencies without authorizing persistence", async () => {
+  const h = localCompositionFixture();
+  const port = composeLocalRecovery(h.wiring);
+  expect(typeof port?.recover).toBe("function");
+  expect(h.counts).toEqual({ db: 0, load: 0, prepare: 0, run: 0, worker: 1, authority: 0 });
+  const changed = h.wiring as { -readonly [K in keyof LocalRecoveryWiring]: LocalRecoveryWiring[K] };
+  changed.workerId = () => { throw new Error("mutated worker"); };
+  changed.loadPersistedPlan = async () => { throw new Error("mutated loader"); };
+  const fixture = recoveryFixture();
+  const outcome = await runAsTenant("tenant", () => port!.recover({
+    context: fixture.context(), mode: "resume", result: { content: "saved" },
+  }));
+  expect(outcome).toEqual({ kind: "blocked", reason: "trusted_current_plan_missing" });
+  expect(h.counts).toEqual({ db: 0, load: 1, prepare: 0, run: 0, worker: 1, authority: 0 });
+  expect(composeLocalRecovery({ ...h.wiring, leaseMs: 0 })).toBeNull();
+  const fresh = localCompositionFixture();
+  expect(typeof composeLocalRecovery(fresh.wiring)?.recover).toBe("function");
+});
+
+test("valid saved plan with missing release blocks before DB, input or runner", async () => {
+  const h = recoveryFixture();
+  const cold = localCompositionFixture();
+  const identity = {
+    approvalId: "approval", ownerId: "owner", tenantId: "tenant",
+    inputDigest: "fixed", admissionId: "admission",
+  };
+  const saved: PersistedApprovalLocalPlan = {
+    origin: "current", backend: "local_postgres", branchKind: "thread",
+    otherContinuationBranchesExcluded: true, exactInputRef: "persisted-ref",
+    actionResultDigest: localDigest({ content: "saved" }),
+    plan: { ...identity, threadId: "thread", agentId: "bot", runId: localRunId(identity) },
+  };
+  const port = createApprovalLocalRecoveryPort({
+    ...cold.wiring,
+    authorityDatabase: cold.wiring.authorityPool!,
+    release: undefined,
+    loadPersistedPlan: async () => saved,
+  });
+  const outcome = await runAsTenant("tenant", () => port.recover({
+    context: h.context(), mode: "resume", result: { content: "saved" },
+  }));
+  expect(outcome).toEqual({ kind: "blocked", reason: "root_release_not_ready" });
+  expect(cold.counts.db + cold.counts.prepare + cold.counts.run + cold.counts.authority).toBe(0);
+});
+
+for (const mode of ["resume", "abandon"] as const) {
+  test(`composition unwired ${mode} cannot execute, finish, save or continue`, async () => {
+    const h = recoveryFixture();
+    const port = composeLocalRecovery(null);
+    const service = createApprovalService(h.store, undefined, undefined, {
+      continuationRecovery: port ?? undefined,
+    });
+    await expect(runAsTenant("tenant", () => mode === "resume"
+      ? service.resume("owner", "approval", h.deps)
+      : service.abandon("owner", "approval", "exhausted", h.deps),
+    )).rejects.toThrow("approval_recovery_blocked");
+    expect(h.counts).toMatchObject({ execute: 0, oldContinue: 0, save: 0, ordinaryFinish: 0, admit: 0 });
+  });
+}

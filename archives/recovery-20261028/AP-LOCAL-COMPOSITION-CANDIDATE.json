@@ -1,0 +1,37 @@
+{
+  "schema": "xiongbaowork-source-candidate-v1",
+  "ticket": "APPROVAL-LOCAL-COMPOSITION-20261029",
+  "formal_adoption": false,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "parent_commit": "6b123a5b99a1ecf7c4154f961a231cf4ecb21012",
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 2224,
+        "sha256": "fea0eee18df6776b842e4156d081f904bfbe19eb822f3f0993b504276a66813e",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-recovery-port.test.ts",
+      "before": {
+        "bytes": 13015,
+        "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 19059,
+        "sha256": "1690b01daf482fce6a338bccc470f5e377c8f2f54ff24ce9c12928ac02380ffa",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "source_only": true,
+  "postgres17": "PG_PENDING",
+  "production_wiring": "NOT_SERVICE_WIRED",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
