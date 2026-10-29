@@ -7,17 +7,17 @@
   "run_id": "bounded-probe-development-20261029T0804Z",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "acquired_at": "2026-10-29T08:04:59.948Z",
-  "renewed_at": "2026-10-29T08:20:40.320Z",
+  "renewed_at": "2026-10-29T08:31:20.275Z",
   "expires_at": "2026-10-29T08:49:59.948Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "bd940eab42ee7eba15775ab2f64bab3c68be110d",
+  "expected_parent": "0ee28aae485a8b179f5dbde49bc73f5f95092cd7",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "A1 generator d824f9cc is CHANGES_REQUIRED_DO_NOT_DISPATCH; author preparing A2 deadline+output-retention correction. Obtain exact A2 non-author review, then only legitimate lease owner can dispatch unique run-a2 once after idle queue check. Probe already passed; never repeat probe.",
+  "next_action": "Root may dispatch exact approved generator1469b230 on unique run-a3 once after final head/epoch/idle check. If branch/run exists, read existing run, never repeat. Capture full result, preserve all gates, then release own lease.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",

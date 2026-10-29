@@ -1,0 +1,25 @@
+{
+  "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+  "status": "UNRESOLVED_REVIEW_DISAGREEMENT_NEW_REVISION_REVIEW_REQUIRED",
+  "dispatch_prohibited": true,
+  "history": [
+    {
+      "commit": "7ef4fcac96e6b76a8c84f873854d1cc5d905fd2a",
+      "path": "archives/recovery-20261028/CLOUD-DELIVERY-REVIEW-20261029.json",
+      "blob": "98af8b58e9dcf65957c1ee17ce6b94dac2b420ac",
+      "verdict": "FINDING_P2_PLAN_NOT_APPROVED",
+      "finding": "DELIVERY-B-P2-ABSOLUTE-RESTORE-UNBOUNDED",
+      "scope": "300s outer supervisor/restoration synchronous reclaim and unbounded outer set-property"
+    },
+    {
+      "commit": "9d80392d8b39ccbbd89338f026eeb8986ff6c8aa",
+      "path": "archives/recovery-20261028/CLOUD-DELIVERY-ROOT-REVIEW-20261029.json",
+      "blob": "a4127db3940595bc566e1c23f5f1f96a7d9f4e91",
+      "verdict": "ADMIN_PLAN_APPROVED_FOR_BOUNDED_DISPATCH_ONLY",
+      "findings": []
+    }
+  ],
+  "resolution_rule": "Preserve both exact historical reports. Current route blocked; no majority/overwriting approval. New author must answer every original P2 and independent non-author review exact successor. No new Source or run proof.",
+  "new_author_conversation": "6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9",
+  "new_preparation_branch": "codex/route-tree-deadline-fix-20261029"
+}

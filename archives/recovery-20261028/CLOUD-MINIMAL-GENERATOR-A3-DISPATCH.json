@@ -1,0 +1,59 @@
+{
+  "schema": "xiongbaowork-cloud-generator-single-dispatch-ticket-v1",
+  "candidate": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
+  "tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
+  "source_adoption": false,
+  "review": {
+    "commit": "fa8e0ec601f72848cced073a8b13df1a28ee3c44",
+    "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-ROOT-REVIEW-20261029.json",
+    "blob": "c1a27097130aea41f54074056fff6957da560b80",
+    "verdict": "ADMIN_GENERATOR_DIAGNOSTIC_APPROVED_FOR_ROOT_SINGLE_DISPATCH_AFTER_LEASE_AND_IDLE"
+  },
+  "prior_unrun_revisions": [
+    {
+      "sha": "d824f9cc45cf13bbe198bd210514121636bca501",
+      "review": "ddf90ebfb2550924570d98333a0ce71c8b293d55",
+      "status": "CHANGES_REQUIRED_NOT_RUN"
+    },
+    {
+      "sha": "b74eb935b96cc81d450c1a41a88763adca95cf4e",
+      "review": "a85bf11aa4ec73c405e74f7f0dd8aa60d9a4867b",
+      "status": "CHANGES_REQUIRED_NOT_RUN"
+    }
+  ],
+  "execution_branch": "codex/cloud-minimal-generator-run-20261029-a3",
+  "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a3",
+  "state": "REVIEWED_DISPATCH_NOT_YET_CREATED",
+  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+  "limits": {
+    "project": 536870912,
+    "data": 67108864,
+    "swap": 0,
+    "prep": 480,
+    "generation": 120,
+    "export": 120
+  },
+  "actual_run": null,
+  "actual_job": null,
+  "resource_queue": "source-recovery-bytes",
+  "cancel_in_progress": false,
+  "raw_source": {
+    "files": 2065,
+    "bytes": 50175181,
+    "adopted_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed"
+  },
+  "diagnostic_schema_overlay": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+  "dependencies": 17,
+  "schema_modules": 50,
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  }
+}
