@@ -1,7 +1,7 @@
 name: Cloud resource scheduling probe
 on:
   push:
-    branches: [codex/cloud-exec-probe-run-20261029-a1]
+    branches: [codex/cloud-exec-probe-run-20261029-a2]
 permissions:
   contents: read
 concurrency:
@@ -17,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/cloud-exec-probe-run-20261029-a1"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-exec-probe-run-20261029-a2"
           test "$GITHUB_EVENT_NAME" = "push"
           sudo /usr/bin/python3 -I -B - <<'PY'
           import json, os, subprocess, sys
@@ -38,11 +38,16 @@ jobs:
           expected = {"memory.max":"67108864", "memory.swap.max":"0", "memory.oom.group":"1"}
           actual = {n:(cg/n).read_text().strip() for n in expected}
           assert actual == expected, actual
+          activation_before = {n:(cg.parent/n).read_text().strip() for n in expected}
+          (cg.parent/"memory.oom.group").write_text("1")
           upper = {n:(cg.parent/n).read_text().strip() for n in expected}
           assert upper == {"memory.max":"536870912", "memory.swap.max":"0", "memory.oom.group":"1"}, upper
-          descendant = subprocess.run([sys.executable, "-I", "-B", "-c", "from pathlib import Path; print(Path('/proc/self/cgroup').read_text().strip())"], check=True, capture_output=True, text=True, timeout=5)
-          assert descendant.stdout.strip() == line
-          print("CLOUD_PROBE_DATA " + json.dumps({"cgroup":line,"data":actual,"project":upper,"descendant_cgroup":descendant.stdout.strip(),"descendant_exit":descendant.returncode,"subject_acquired":False,"subject_executed":False,"dependencies_installed":False,"secrets_read":False}), flush=True)
+          witness = "import json; from pathlib import Path; line=Path('/proc/self/cgroup').read_text().strip(); cg=Path('/sys/fs/cgroup')/line[3:].lstrip('/'); keys=['memory.max','memory.swap.max','memory.oom.group']; own={n:(cg/n).read_text().strip() for n in keys}; upper={n:(cg.parent/n).read_text().strip() for n in keys}; assert cg.parent==Path('/sys/fs/cgroup/xiongbaowork.slice'); assert own==dict(zip(keys,['67108864','0','1'])); assert upper==dict(zip(keys,['536870912','0','1'])); print(json.dumps(dict(cgroup=line,data=own,project=upper)))"
+          descendant = subprocess.run([sys.executable, "-I", "-B", "-c", witness], check=True, capture_output=True, text=True, timeout=5)
+          evidence=json.loads(descendant.stdout)
+          assert evidence == {"cgroup":line,"data":actual,"project":upper}
+          assert {n:(cg.parent/n).read_text().strip() for n in expected} == upper
+          print("CLOUD_PROBE_DATA " + json.dumps({"cgroup":line,"data":actual,"project":upper,"activation_before":activation_before,"activation_admin_fix":"parent oom.group1 before descendant; probe only","descendant_evidence":evidence,"descendant_exit":descendant.returncode,"subject_acquired":False,"subject_executed":False,"dependencies_installed":False,"secrets_read":False}), flush=True)
           '''
           try:
               path = Path("/run/systemd/system/xiongbaowork.slice")
