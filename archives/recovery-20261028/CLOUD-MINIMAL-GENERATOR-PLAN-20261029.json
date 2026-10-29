@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "cloud-agent:/root/a7_prepare",
   "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a7",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a7",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a8",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a8",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A7",
+    "id": "A8",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_A7_PREPARED_UNREVIEWED_NOT_RUN",
+    "status": "AUTHOR_A8_PREPARED_UNREVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -840,7 +840,9 @@
     "a4": "c6f51d2673e608895ab826ed7437dbef9dab0340",
     "change_scope": "Only correct candidate administrative comparison baseline to immutable A6; all outside three candidate administrative entries must remain unchanged. Formal Source28 manifest and all byte/hash/mode checks, 17 original locked nodes/URLs/SRIs, fixed ORM guard, FULL50, resources/identity/deadlines/cleanup unchanged.",
     "a5": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
-    "a6": "f97260fa06af41ea8a5e7d94420de53eee99cb49"
+    "a6": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "a7": "f689c5b3c89c66a52fe883681c1256a520fc0c1a",
+    "a7_pin_finding": "A7 workflow stale80700/5a770146 pin did not equal actual80775/4fbbc391 controller. Prior author pin-match assertion retracted. A8 constructs both workflow byte constants/hash from final controller raw bytes, then independently parses and asserts them again after GitHub full readback."
   },
   "redirect_policy": {
     "basis": {
@@ -895,15 +897,15 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 80775,
-    "sha256": "4fbbc39171102e1c45790dc876956c8220630101739aaef0c0f0d08c9024cb98"
+    "bytes": 81135,
+    "sha256": "c9e6abda737f18de427e1fbd1afd212fc1697d56d5c23afd8491f1d560651ada"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4017,
-    "sha256": "e253de4d860b52c4a9c46951f31a116ae132822f6ae5cfa23fe3c9f95516b136"
+    "sha256": "4e92ade6d806028e1ea611dc9775988ab7125c904435c205e1430dfb56c651e9"
   },
-  "author_readiness": "A7_PREPARED_UNREVIEWED_NOT_RUN",
+  "author_readiness": "A8_PREPARED_UNREVIEWED_NOT_RUN",
   "review_required": "Non-author exact full3file review required. Author has not executed guard contract checks or project. No dispatch or adoption authorized by this author report.",
   "orm_metadata_compatibility": {
     "evidence_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478",
