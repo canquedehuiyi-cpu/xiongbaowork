@@ -468,7 +468,7 @@
       "status": "AWAITING_HUMAN_REPORTED_ID"
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
-    "lease_expires_at": "2026-10-29T08:44:02.234Z",
+    "lease_expires_at": "2026-10-29T08:45:41.847Z",
     "next_action": "Root holds lease while generator author prepares exact17/FULL50 diagnostic controller, then delivery+Root review. Never create execution branch before exact review and lease/queue recheck. ACK audit parallel read-only."
   },
   "cloud_push_probe_a2": {
@@ -543,5 +543,14 @@
       "agent": "/root/restart_ack_audit",
       "status": "READ_ONLY_NO_PRODUCTION_WIRING"
     }
+  },
+  "restart_ack_audit": {
+    "commit": "684c9253d5a9bb54d431bffe7a148d3dfbd1a466",
+    "path": "archives/recovery-20261028/CLOUD-RESTART-ACK-AUDIT-20261029.json",
+    "blob": "4f21677cd9e7afe34c021fec7c53bea5c237471c",
+    "kind": "DESIGN_ONLY_READ_ONLY",
+    "critical_boundary": "No physical original-transaction termination witness exists; new row lock or NULL is not replay authority. Preserve unknown. No default production wiring.",
+    "next_source_max": 5,
+    "precondition": "Full seed migration adopted and candidate primitive reviewed/revalidated on new canonical parent."
   }
 }

@@ -7,11 +7,11 @@
   "run_id": "bounded-probe-development-20261029T0804Z",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "acquired_at": "2026-10-29T08:04:59.948Z",
-  "renewed_at": "2026-10-29T08:14:02.234Z",
-  "expires_at": "2026-10-29T08:44:02.234Z",
+  "renewed_at": "2026-10-29T08:15:41.846Z",
+  "expires_at": "2026-10-29T08:45:41.847Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+  "expected_parent": "084a720e7517c08f957799fc5e10d0e905bfe30b",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
@@ -21,7 +21,7 @@
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
-    "renew": "Current matching owner/run/epoch only, before expiry, every real checkpoint and no later than15min. CAS from current head. expires <=45min from renewal. Never renew after losing epoch or expiration; successor rules apply.",
+    "renew": "Current matching owner/run/epoch only, before expiry, every real checkpoint and no later than15min. Retain original acquired_at for this epoch, set renewed_at to actual UTC CAS preparation time. expires_at <= min(acquired_at+45min, renewed_at+45min). No indefinite rolling epoch. Before45min limit, continue only by queue-idle release and separate CAS acquisition with new unique epoch. Never renew after losing epoch or expiration; successor rules apply.",
     "pre_mutation": "Before Source adoption, new execution branch, project job or canonical mutation, re-read exact head and held/unexpired owner/run/epoch. Only this owner serially schedules resources; if mismatch, stop.",
     "release": "Before ending bounded round, CAS state released with released_at and expires_at equal UTC now, active jobs accurately recorded and clear next_action. Do not release while concealing queued/running work.",
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
