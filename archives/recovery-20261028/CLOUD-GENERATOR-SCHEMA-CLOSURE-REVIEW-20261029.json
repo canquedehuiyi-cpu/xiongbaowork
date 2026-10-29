@@ -1,0 +1,2942 @@
+{
+  "schema": "xiongbaowork-generator-schema-and-lock-closure-independent-review-v1",
+  "reviewer": "/root/persistence_review",
+  "date": "2026-10-29",
+  "kind": "STATIC_SOURCE_AND_LOCK_REVIEW_NOT_PROJECT_EXECUTION",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_administrative_commit": "1e606f7c6d18277c348d15cc87750abdb2fd3e3f",
+  "reviewed_analysis": {
+    "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CLOSURE-20261029.json",
+    "blob": "6b8278825f7e8fcd306c5939ee9321d93ef914db"
+  },
+  "subject_source_sha": "548de959f08527d2e74db19482e34d9faa1145a0",
+  "method": {
+    "transport": "normal GitHub connector GET/fetch_file",
+    "source_files_read": "Full content of all53 immediate schema .ts files from exact subject SHA, original config, original and recovery current snapshots/journals, 0077/0078 snapshots and0078 SQL; no Subject imports/evaluation/CLI/test.",
+    "analysis": "Literal imports/exports/pgTable/pgEnum source inventory with relative path normalization, set comparison to full untruncated Git tree and frozen snapshots, and independent JSONC trailing-comma parsing of unchanged bun.lock. Static inventory is not runtime Drizzle output.",
+    "resource_jobs": 0,
+    "dependencies_downloaded": 0,
+    "windows_or_localhost_use": false
+  },
+  "verdict": "STATIC_CLOSURE_CONFIRMED_WITH_SCHEMA_COVERAGE_CORRECTION_REQUIRED",
+  "findings": [
+    {
+      "id": "GEN-SCHEMA-LEARNING-STALE",
+      "severity": "BLOCKS_OLD_PREPARE",
+      "detail": "Old28 config includes missing learning.ts. Remove only stale path in a separately reviewed diagnostic config using recorded deletion evidence; do not fabricate Source or silently suppress missing entries."
+    },
+    {
+      "id": "GEN-SCHEMA-27-NOT-FULL",
+      "severity": "BLOCKS_FULL_SCHEMA_CLAIM",
+      "detail": "Removing learning only yields27 active original config modules with102 table declarations;23 more table modules/54 tables are omitted. Complete current-schema diagnostics require all50 table modules, or independently validated full index exports. A successful27-only run cannot establish complete migration closure."
+    },
+    {
+      "id": "GEN-CHAIN-NOT-INTERCHANGEABLE",
+      "severity": "BLOCKS_SEED_ONLY_ADOPTION_FROM_ORIGINAL_DIFF",
+      "detail": "Original drizzle tip0080 has99 tables; recovery0107 has155 and an independent27-entry extension. Full50 current modules have156 declared tables. A diff against original0080 includes56 previously recovered tables as well as seed, plus existing-table differences, and cannot be packaged as only seed SQL."
+    }
+  ],
+  "schema_inventory": {
+    "directory": "openbot/server/src/db/schema",
+    "git_tree_untruncated": true,
+    "total_ts_files": 53,
+    "table_modules": 50,
+    "declared_pg_tables": 156,
+    "unique_pg_table_names": 156,
+    "declared_enums": 9,
+    "index": {
+      "path": "openbot/server/src/db/schema/index.ts",
+      "blob": "1a7506958d0cf5cff0a1d087bdf6d2af87df9fbe",
+      "bytes": 1848,
+      "mode": "100644"
+    },
+    "index_exports_all50_table_modules": true,
+    "index_missing_table_modules": [],
+    "helpers": [
+      {
+        "path": "openbot/server/src/db/schema/json.ts",
+        "blob": "71c553859e46a4d971ed19809d604188ca2cd97a",
+        "bytes": 1280,
+        "mode": "100644"
+      },
+      {
+        "path": "openbot/server/src/db/schema/tenant.ts",
+        "blob": "e2d79a8e609cb01fd9e42076ef77597b992f2d58",
+        "bytes": 1214,
+        "mode": "100644"
+      }
+    ],
+    "all50_offline_schema_paths": [
+      "./src/db/schema/admin.ts",
+      "./src/db/schema/approval-direct-execution-domains.ts",
+      "./src/db/schema/approval-exact-input-objects.ts",
+      "./src/db/schema/approvals.ts",
+      "./src/db/schema/automation-foundations.ts",
+      "./src/db/schema/automation-run-records.ts",
+      "./src/db/schema/components.ts",
+      "./src/db/schema/computer.ts",
+      "./src/db/schema/core.ts",
+      "./src/db/schema/coworker.ts",
+      "./src/db/schema/delivery.ts",
+      "./src/db/schema/demonstrations.ts",
+      "./src/db/schema/device-binding-leases.ts",
+      "./src/db/schema/devices.ts",
+      "./src/db/schema/flow-customization-foundations.ts",
+      "./src/db/schema/flow-customization-turns.ts",
+      "./src/db/schema/flow-official-bindings.ts",
+      "./src/db/schema/flow-run-coordination.ts",
+      "./src/db/schema/flow-sharing-foundations.ts",
+      "./src/db/schema/flow-source-foundations.ts",
+      "./src/db/schema/flow-source-original-records.ts",
+      "./src/db/schema/flow-source-run-records.ts",
+      "./src/db/schema/flow-source-runtime-records.ts",
+      "./src/db/schema/group-pipeline-start-receipts.ts",
+      "./src/db/schema/group.ts",
+      "./src/db/schema/import-proactive-token-foundations.ts",
+      "./src/db/schema/knowledge-foundations.ts",
+      "./src/db/schema/knowledge-write-foundations.ts",
+      "./src/db/schema/lifecycle.ts",
+      "./src/db/schema/memory.ts",
+      "./src/db/schema/model.ts",
+      "./src/db/schema/outbox-knowledge-heads.ts",
+      "./src/db/schema/passwords.ts",
+      "./src/db/schema/pipeline.ts",
+      "./src/db/schema/plans.ts",
+      "./src/db/schema/plugin-assembly-foundations.ts",
+      "./src/db/schema/plugins.ts",
+      "./src/db/schema/proactive.ts",
+      "./src/db/schema/resource-project-foundations.ts",
+      "./src/db/schema/responsibilities.ts",
+      "./src/db/schema/roles.ts",
+      "./src/db/schema/scim.ts",
+      "./src/db/schema/security-policy-fences.ts",
+      "./src/db/schema/tasks.ts",
+      "./src/db/schema/team-bots.ts",
+      "./src/db/schema/threads.ts",
+      "./src/db/schema/voice.ts",
+      "./src/db/schema/waker-groups.ts",
+      "./src/db/schema/wakerflows.ts",
+      "./src/db/schema/work.ts"
+    ],
+    "all50_exact_modules": [
+      {
+        "path": "openbot/server/src/db/schema/admin.ts",
+        "blob": "33a0585b979bd07d939be4c2bc71a5ed20939591",
+        "bytes": 5688,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "capability_settings",
+          "enterprise_settings",
+          "network_policies",
+          "action_records",
+          "model_usage"
+        ],
+        "exports": [
+          "capabilitySettings",
+          "enterpriseSettings",
+          "networkPolicies",
+          "actionRecords",
+          "modelUsage"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+        "blob": "f4b7167267c32030a4043e0d8fe6815656983f3b",
+        "bytes": 3336,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "approval_direct_execution_domains"
+        ],
+        "exports": [
+          "approvalDirectExecutionDomains"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/threads.ts",
+            "binding": "{ threads }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+        "blob": "94d055b9cebe809b1e5e2ba4a2d84238ac0ee878",
+        "bytes": 12894,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "approval_exact_input_captures",
+          "approval_exact_input_objects"
+        ],
+        "exports": [
+          "approvalExactInputCaptures",
+          "approvalExactInputObjects"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/approvals.ts",
+            "binding": "{ approvalRequests }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+            "binding": "{ approvalDirectExecutionDomains }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/threads.ts",
+            "binding": "{ threads }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/approvals.ts",
+        "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
+        "bytes": 13092,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "approval_preferences",
+          "approval_team_settings",
+          "approval_requests",
+          "approval_rules",
+          "approval_team_rules",
+          "approval_continuations",
+          "approval_continuation_steps",
+          "approval_fresh_seeds"
+        ],
+        "exports": [
+          "approvalPreferences",
+          "approvalTeamSettings",
+          "approvalRequests",
+          "approvalRules",
+          "approvalTeamRules",
+          "approvalContinuations",
+          "approvalContinuationSteps",
+          "approvalFreshSeeds"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+            "binding": "{ approvalExactInputObjects }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/automation-foundations.ts",
+        "blob": "30aaa057c907399272562ecc5d2a24db2b0074bf",
+        "bytes": 1735,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "automations",
+          "automation_triggers"
+        ],
+        "exports": [
+          "automations",
+          "automationTriggers"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/automation-run-records.ts",
+        "blob": "befc051b34c25e703f63e15b109d6fce2995a295",
+        "bytes": 3043,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "automation_firings",
+          "automation_continuations"
+        ],
+        "exports": [
+          "automationFirings",
+          "automationContinuations"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/automation-foundations.ts",
+            "binding": "{ automations, automationTriggers }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/components.ts",
+        "blob": "667bb125dcc2c2ccb7ad5fc2cddb4cb0a5619b82",
+        "bytes": 4598,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "components",
+          "component_exclusions",
+          "component_functions"
+        ],
+        "exports": [
+          "components",
+          "componentExclusions",
+          "componentFunctions"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/computer.ts",
+        "blob": "595c8df8c218668f343b86ef754d1335e2ac853e",
+        "bytes": 6668,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "action_policy",
+          "computer_snapshot",
+          "computer_page_frame"
+        ],
+        "exports": [
+          "actionPolicy",
+          "computerSnapshot",
+          "computerPageFrame"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/core.ts",
+        "blob": "38b94cc1b66876764af887a7c268c30d500f4c26",
+        "bytes": 26447,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "users",
+          "sessions",
+          "accounts",
+          "verifications",
+          "user_roles",
+          "user_instructions",
+          "sso_providers",
+          "revoked_access",
+          "deployment_packages",
+          "agents",
+          "channels",
+          "channel_memberships",
+          "channel_agents",
+          "credentials",
+          "audit_events",
+          "intelligence_channel_mappings",
+          "attachments"
+        ],
+        "exports": [
+          "role",
+          "agentType",
+          "credentialKind",
+          "users",
+          "sessions",
+          "accounts",
+          "verifications",
+          "userRoles",
+          "userInstructions",
+          "ssoProviders",
+          "revokedAccess",
+          "deploymentPackages",
+          "agents",
+          "channels",
+          "channelMemberships",
+          "channelAgents",
+          "credentials",
+          "auditEvents",
+          "intelligenceChannelMappings",
+          "attachments"
+        ],
+        "enums": [
+          "role",
+          "agent_type",
+          "credential_kind"
+        ],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/coworker.ts",
+        "blob": "ac64d935fc7d3add63226152360ae2aae74d8ca2",
+        "bytes": 8323,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "agent_profiles",
+          "persona_templates",
+          "agent_preferences",
+          "routines",
+          "routine_sweeps",
+          "routine_runs"
+        ],
+        "exports": [
+          "agentVisibility",
+          "agentProfiles",
+          "personaTemplates",
+          "agentPreferences",
+          "routineRunStatus",
+          "routines",
+          "routineSweeps",
+          "routineRuns"
+        ],
+        "enums": [
+          "agent_visibility",
+          "routine_run_status"
+        ],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/model.ts",
+            "binding": "{ modelRegistry }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/delivery.ts",
+        "blob": "a5e6e0dfb69d7b4bd9b345bf5da41ca38fb3c1bf",
+        "bytes": 4337,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "delivery_bindings",
+          "delivery_challenges",
+          "push_devices",
+          "delivery_inbox",
+          "delivery_outbox"
+        ],
+        "exports": [
+          "deliveryBindings",
+          "deliveryChallenges",
+          "pushDevices",
+          "deliveryInbox",
+          "deliveryOutbox"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, channels, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/demonstrations.ts",
+        "blob": "6d38c3af143cd7493bdae1ebab7518cac97558d2",
+        "bytes": 1442,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "demonstrations"
+        ],
+        "exports": [
+          "demonstrations"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/device-binding-leases.ts",
+        "blob": "b5ed0f66f5bd95f8a3969c895da7847248190380",
+        "bytes": 4516,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "employee_device_bindings",
+          "runner_device_connection_leases"
+        ],
+        "exports": [
+          "employeeDeviceBindings",
+          "runnerDeviceConnectionLeases"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/devices.ts",
+        "blob": "f3b333abeea3edf006d9fe19f3f6fcd0f9147440",
+        "bytes": 3584,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "registered_devices",
+          "device_pair_codes"
+        ],
+        "exports": [
+          "registeredDevices",
+          "OFFLINE_AFTER_MS",
+          "devicePairCodes"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-customization-foundations.ts",
+        "blob": "400dc055c5513d59cebc0e7df2391ebb990eb06e",
+        "bytes": 4446,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_customization_sessions",
+          "flow_customization_heads"
+        ],
+        "exports": [
+          "flowCustomizationSessions",
+          "flowCustomizationHeads"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-customization-turns.ts",
+        "blob": "2cb8ce28c0f69fbb3d6462b698761d6d10659c16",
+        "bytes": 2785,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_customization_turns"
+        ],
+        "exports": [
+          "flowCustomizationTurns"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/flow-customization-foundations.ts",
+            "binding": "{ flowCustomizationSessions }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-official-bindings.ts",
+        "blob": "d43cb340cf59275ef0d7654d0ff6f161a7d102c3",
+        "bytes": 3548,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_official_source_heads",
+          "flow_official_bindings"
+        ],
+        "exports": [
+          "flowOfficialSourceHeads",
+          "flowOfficialBindings"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-run-coordination.ts",
+        "blob": "20eb3ade1788bdee9aab7f0086604846094a8d1f",
+        "bytes": 8003,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_confirmations",
+          "flow_run_events",
+          "flow_run_retries"
+        ],
+        "exports": [
+          "flowConfirmations",
+          "flowRunEvents",
+          "flowRunRetries"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/pipeline.ts",
+            "binding": "{ groupTaskRuns }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-sharing-foundations.ts",
+        "blob": "eaa4a802dab9495cde061f69268e83a485962a85",
+        "bytes": 4682,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_share_links",
+          "flow_share_imports"
+        ],
+        "exports": [
+          "flowShareLinks",
+          "flowShareImports"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-foundations.ts",
+        "blob": "6a1f57e5ab7ef5098394ef901bbb43f7ac70fa85",
+        "bytes": 8436,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_source_versions",
+          "flow_source_public_operations",
+          "flow_source_operations"
+        ],
+        "exports": [
+          "flowSourceVersions",
+          "flowSourcePublicOperations",
+          "flowSourceOperations"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-original-records.ts",
+        "blob": "f5bb0137285216ef8b75a2b78ce4e196f8cdeb65",
+        "bytes": 12222,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_source_inline_invocations",
+          "flow_source_original_activations",
+          "flow_source_original_projection_observations"
+        ],
+        "exports": [
+          "flowSourceInlineInvocations",
+          "flowSourceOriginalActivations",
+          "flowSourceOriginalProjectionObservations"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/flow-source-foundations.ts",
+            "binding": "{ flowSourcePublicOperations }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/flow-source-run-records.ts",
+            "binding": "{ flowSourceRuns }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/flow-source-runtime-records.ts",
+            "binding": "{ flowSourceInvocations }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-run-records.ts",
+        "blob": "2ded0ffb62d4282fed03518a5ebc046044e8bb1d",
+        "bytes": 13400,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_source_candidates",
+          "flow_source_resource_snapshots",
+          "flow_source_runs"
+        ],
+        "exports": [
+          "flowSourceCandidates",
+          "flowSourceResourceSnapshots",
+          "flowSourceRuns"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/flow-source-foundations.ts",
+            "binding": "{ flowSourcePublicOperations, flowSourceVersions, }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tasks.ts",
+            "binding": "{ tasks }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/wakerflows.ts",
+            "binding": "{ wakerFlows }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-runtime-records.ts",
+        "blob": "d3a8ebc4b807ec54d4210177d649cecc009d025b",
+        "bytes": 8919,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_source_invocations",
+          "flow_source_runtime_events",
+          "flow_source_stop_operations"
+        ],
+        "exports": [
+          "flowSourceInvocations",
+          "flowSourceRuntimeEvents",
+          "flowSourceStopOperations"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/flow-source-run-records.ts",
+            "binding": "{ flowSourceRuns }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/group-pipeline-start-receipts.ts",
+        "blob": "34983f1233a976e012361d4b7a39b13b92d83a19",
+        "bytes": 2392,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "group_pipeline_start_receipts"
+        ],
+        "exports": [
+          "groupPipelineStartReceipts"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/group.ts",
+        "blob": "a1039777623174604be91312f72fdf8702dca8df",
+        "bytes": 1996,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "group_bot_threads",
+          "group_messages"
+        ],
+        "exports": [
+          "groupBotThreads",
+          "groupMessages"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ channels, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+        "blob": "11b84fb058d8bef880d3db508c105c7584285f03",
+        "bytes": 12135,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "flow_import_proposals",
+          "proactive_runs",
+          "model_token_calls"
+        ],
+        "exports": [
+          "flowImportProposals",
+          "proactiveRuns",
+          "modelTokenCalls"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+        "blob": "cfd27190f54d100d85a75b321d5dd63b44133644",
+        "bytes": 11998,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "knowledge_notebooks",
+          "knowledge_directories",
+          "knowledge_sources"
+        ],
+        "exports": [
+          "knowledgeNotebooks",
+          "knowledgeDirectories",
+          "knowledgeSources"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+        "blob": "36ffe8885a0ecbf4a3c757035af62929c1f07560",
+        "bytes": 12825,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "knowledge_bindings",
+          "knowledge_receipts",
+          "knowledge_write_executions",
+          "knowledge_write_claims"
+        ],
+        "exports": [
+          "knowledgeBindings",
+          "knowledgeReceipts",
+          "knowledgeWriteExecutions",
+          "knowledgeWriteClaims"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ users, agents }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+            "binding": "{ knowledgeNotebooks }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/lifecycle.ts",
+        "blob": "f65b11453f14b1de3a9c08d86a0ac5e7226eaafa",
+        "bytes": 2605,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "bot_lifecycle",
+          "update_routing_preferences"
+        ],
+        "exports": [
+          "botLifecycle",
+          "updateRoutingPreferences"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/memory.ts",
+        "blob": "9ef5ad6f349797a17b62a7d6d79b7a9deacc821e",
+        "bytes": 3857,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "memory_sources",
+          "personal_memories"
+        ],
+        "exports": [
+          "memorySources",
+          "personalMemories"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/model.ts",
+        "blob": "6a168a9be775e456a443d5893d1df1789666962c",
+        "bytes": 2024,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "model_registry",
+          "provider_templates"
+        ],
+        "exports": [
+          "modelRegistry",
+          "providerTemplates"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ credentials }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/outbox-knowledge-heads.ts",
+        "blob": "7ba19932c19644f36a81bf68f3c335cc232ac166",
+        "bytes": 5866,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "security_egress_outbox",
+          "knowledge_binding_heads"
+        ],
+        "exports": [
+          "securityEgressOutbox",
+          "knowledgeBindingHeads"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/passwords.ts",
+        "blob": "fd9b880d342bdc23465d006b67c8b8041ba74226",
+        "bytes": 3709,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "saved_logins",
+          "sign_in_requests"
+        ],
+        "exports": [
+          "savedLogins",
+          "signInRequests"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/pipeline.ts",
+        "blob": "66d0d6f417a78a5b384ac311c459620dd74982b3",
+        "bytes": 7462,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "group_task_templates",
+          "group_task_runs"
+        ],
+        "exports": [
+          "stepIsSettled",
+          "groupTaskTemplates",
+          "groupTaskRuns"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/waker-groups.ts",
+            "binding": "{ wakerGroups }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/plans.ts",
+        "blob": "2f72854f920231c81b27bf4bc2c5640214be368d",
+        "bytes": 1691,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "plans",
+          "subscriptions",
+          "usage_counters"
+        ],
+        "exports": [
+          "plans",
+          "subscriptions",
+          "usageCounters"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+        "blob": "dbce0d05cdeb341ea01465b3dbe325cfbb9edc3d",
+        "bytes": 5290,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "plugin_assembly_origins",
+          "plugin_assembly_publications"
+        ],
+        "exports": [
+          "pluginAssemblyOrigins",
+          "pluginAssemblyPublications"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/plugins.ts",
+        "blob": "5e27d88839b386af9e3ca871c9ecc23bfa6fe912",
+        "bytes": 39993,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "mcp_servers",
+          "mcp_tools",
+          "composio_connections",
+          "mcp_user_credentials",
+          "skills",
+          "skill_tools",
+          "plugin_grants",
+          "sandboxed_components"
+        ],
+        "exports": [
+          "mcpServers",
+          "mcpTools",
+          "composioConnections",
+          "mcpUserCredentials",
+          "skills",
+          "skillTools",
+          "pluginGrants",
+          "sandboxedComponents"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, credentials, deploymentPackages, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/proactive.ts",
+        "blob": "76c9b976275224514e79eb14975a5088b297e7ee",
+        "bytes": 3765,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "proactive_settings",
+          "proactive_suggestions"
+        ],
+        "exports": [
+          "proactiveSettings",
+          "proactiveSuggestions"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/resource-project-foundations.ts",
+        "blob": "f2072820bd8938a4211c939b24dcc4927dffa063",
+        "bytes": 7589,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "resource_projects",
+          "project_context_bindings"
+        ],
+        "exports": [
+          "resourceProjects",
+          "projectContextBindings"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/devices.ts",
+            "binding": "{ registeredDevices }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/responsibilities.ts",
+        "blob": "59233d88d5247d75ab0c25aa3cb8368d4a815988",
+        "bytes": 6378,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "responsibilities",
+          "responsibility_events",
+          "responsibility_runs",
+          "responsibility_source_bindings",
+          "responsibility_triggers"
+        ],
+        "exports": [
+          "responsibilityStatus",
+          "responsibilityRunStatus",
+          "responsibilities",
+          "responsibilityEvents",
+          "responsibilityRuns",
+          "responsibilitySourceBindings",
+          "responsibilityTriggers"
+        ],
+        "enums": [
+          "responsibility_status",
+          "responsibility_run_status"
+        ],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, credentials, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/roles.ts",
+        "blob": "e3db171720a01d26941c25a690e011b141681aee",
+        "bytes": 5115,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "role_templates",
+          "employee_role_snapshots",
+          "role_generation_requests",
+          "role_write_receipts"
+        ],
+        "exports": [
+          "roleTemplates",
+          "employeeRoleSnapshots",
+          "roleGenerationRequests",
+          "roleWriteReceipts"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/scim.ts",
+        "blob": "5db9efdab299e9c51f0ca024b178eb71a1c5d5b5",
+        "bytes": 7405,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "scim_connection_bindings",
+          "scim_identity_tombstones",
+          "scim_subjects",
+          "scim_users",
+          "scim_projection_grants",
+          "scim_groups",
+          "scim_group_members"
+        ],
+        "exports": [
+          "scimConnectionBindings",
+          "scimIdentityTombstones",
+          "scimSubjects",
+          "scimUsers",
+          "scimProjectionGrants",
+          "scimGroups",
+          "scimGroupMembers"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ users }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/security-policy-fences.ts",
+        "blob": "22a1a3f0acc07c5b947866e0fb38cd6add23cacd",
+        "bytes": 6038,
+        "mode": "100644",
+        "group": "OMITTED_RECOVERY_MODULE",
+        "tables": [
+          "agent_security_policies",
+          "security_egress_fences"
+        ],
+        "exports": [
+          "agentSecurityPolicies",
+          "securityEgressFences"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/tasks.ts",
+        "blob": "d54c14ff4630ad93c9714dbcef8d19beaefdd323",
+        "bytes": 3589,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "tasks"
+        ],
+        "exports": [
+          "taskSource",
+          "taskStatus",
+          "tasks"
+        ],
+        "enums": [
+          "task_source",
+          "task_status"
+        ],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/team-bots.ts",
+        "blob": "f77e7df444f8b424c69088f61c1ef92b9a0d2a83",
+        "bytes": 4098,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "team_bot_publications",
+          "team_bot_audience",
+          "team_bot_assignments",
+          "team_bot_consents",
+          "team_bot_consent_defaults"
+        ],
+        "exports": [
+          "teamBotPublications",
+          "teamBotAudience",
+          "teamBotAssignments",
+          "teamBotConsents",
+          "teamBotConsentDefaults"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ agents, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/threads.ts",
+        "blob": "4c613d8a5bc400cbde5d8789c1848d727b07c408",
+        "bytes": 2571,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "threads",
+          "thread_run_events",
+          "thread_runs"
+        ],
+        "exports": [
+          "threads",
+          "threadRunEvents",
+          "threadRuns"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/voice.ts",
+        "blob": "6800d6ad403772f8accf378a7ec3a02df63bda71",
+        "bytes": 1686,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "voice_sessions"
+        ],
+        "exports": [
+          "voiceSessions"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/core.ts",
+            "binding": "{ channels, users }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/waker-groups.ts",
+        "blob": "4ab797c85d80ed8f87e685bfa8c8bbafd5ceac88",
+        "bytes": 1983,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "waker_groups",
+          "waker_group_members"
+        ],
+        "exports": [
+          "wakerGroups",
+          "wakerGroupMembers"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/wakerflows.ts",
+        "blob": "2b2d4efd53f6979cc17916d9eb0c0650df4f828c",
+        "bytes": 2706,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "waker_flows",
+          "waker_flow_requests"
+        ],
+        "exports": [
+          "wakerFlows",
+          "wakerFlowRequests"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/work.ts",
+        "blob": "e1cf394067f0e1994925e078a8aae8079f27dee1",
+        "bytes": 4789,
+        "mode": "100644",
+        "group": "ORIGINAL_CONFIG_ACTIVE_MODULE",
+        "tables": [
+          "work_items"
+        ],
+        "exports": [
+          "workItems"
+        ],
+        "enums": [],
+        "value_dependencies": [
+          {
+            "path": "openbot/server/src/db/schema/json.ts",
+            "binding": "{ jsonb }"
+          },
+          {
+            "path": "openbot/server/src/db/schema/tenant.ts",
+            "binding": "{ tenantId }"
+          }
+        ]
+      }
+    ],
+    "original27_active_paths": [
+      "./src/db/schema/core.ts",
+      "./src/db/schema/computer.ts",
+      "./src/db/schema/coworker.ts",
+      "./src/db/schema/components.ts",
+      "./src/db/schema/plugins.ts",
+      "./src/db/schema/work.ts",
+      "./src/db/schema/voice.ts",
+      "./src/db/schema/responsibilities.ts",
+      "./src/db/schema/approvals.ts",
+      "./src/db/schema/memory.ts",
+      "./src/db/schema/proactive.ts",
+      "./src/db/schema/demonstrations.ts",
+      "./src/db/schema/delivery.ts",
+      "./src/db/schema/group.ts",
+      "./src/db/schema/admin.ts",
+      "./src/db/schema/scim.ts",
+      "./src/db/schema/lifecycle.ts",
+      "./src/db/schema/passwords.ts",
+      "./src/db/schema/team-bots.ts",
+      "./src/db/schema/plans.ts",
+      "./src/db/schema/threads.ts",
+      "./src/db/schema/tasks.ts",
+      "./src/db/schema/model.ts",
+      "./src/db/schema/devices.ts",
+      "./src/db/schema/waker-groups.ts",
+      "./src/db/schema/pipeline.ts",
+      "./src/db/schema/wakerflows.ts"
+    ],
+    "original27_direct_table_count": 102,
+    "omitted23_paths": [
+      "./src/db/schema/approval-direct-execution-domains.ts",
+      "./src/db/schema/approval-exact-input-objects.ts",
+      "./src/db/schema/automation-foundations.ts",
+      "./src/db/schema/automation-run-records.ts",
+      "./src/db/schema/device-binding-leases.ts",
+      "./src/db/schema/flow-customization-foundations.ts",
+      "./src/db/schema/flow-customization-turns.ts",
+      "./src/db/schema/flow-official-bindings.ts",
+      "./src/db/schema/flow-run-coordination.ts",
+      "./src/db/schema/flow-sharing-foundations.ts",
+      "./src/db/schema/flow-source-foundations.ts",
+      "./src/db/schema/flow-source-original-records.ts",
+      "./src/db/schema/flow-source-run-records.ts",
+      "./src/db/schema/flow-source-runtime-records.ts",
+      "./src/db/schema/group-pipeline-start-receipts.ts",
+      "./src/db/schema/import-proactive-token-foundations.ts",
+      "./src/db/schema/knowledge-foundations.ts",
+      "./src/db/schema/knowledge-write-foundations.ts",
+      "./src/db/schema/outbox-knowledge-heads.ts",
+      "./src/db/schema/plugin-assembly-foundations.ts",
+      "./src/db/schema/resource-project-foundations.ts",
+      "./src/db/schema/roles.ts",
+      "./src/db/schema/security-policy-fences.ts"
+    ],
+    "omitted23_table_count": 54,
+    "original_runtime_value_dependency_closure": [
+      "openbot/server/src/db/schema/core.ts",
+      "openbot/server/src/db/schema/computer.ts",
+      "openbot/server/src/db/schema/coworker.ts",
+      "openbot/server/src/db/schema/components.ts",
+      "openbot/server/src/db/schema/plugins.ts",
+      "openbot/server/src/db/schema/work.ts",
+      "openbot/server/src/db/schema/voice.ts",
+      "openbot/server/src/db/schema/responsibilities.ts",
+      "openbot/server/src/db/schema/approvals.ts",
+      "openbot/server/src/db/schema/memory.ts",
+      "openbot/server/src/db/schema/proactive.ts",
+      "openbot/server/src/db/schema/demonstrations.ts",
+      "openbot/server/src/db/schema/delivery.ts",
+      "openbot/server/src/db/schema/group.ts",
+      "openbot/server/src/db/schema/admin.ts",
+      "openbot/server/src/db/schema/scim.ts",
+      "openbot/server/src/db/schema/lifecycle.ts",
+      "openbot/server/src/db/schema/passwords.ts",
+      "openbot/server/src/db/schema/team-bots.ts",
+      "openbot/server/src/db/schema/plans.ts",
+      "openbot/server/src/db/schema/threads.ts",
+      "openbot/server/src/db/schema/tasks.ts",
+      "openbot/server/src/db/schema/model.ts",
+      "openbot/server/src/db/schema/devices.ts",
+      "openbot/server/src/db/schema/waker-groups.ts",
+      "openbot/server/src/db/schema/pipeline.ts",
+      "openbot/server/src/db/schema/wakerflows.ts",
+      "openbot/server/src/db/schema/json.ts",
+      "openbot/server/src/db/schema/tenant.ts",
+      "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+      "openbot/server/src/db/schema/approval-direct-execution-domains.ts"
+    ],
+    "all50_runtime_value_closure": [
+      "openbot/server/src/db/schema/admin.ts",
+      "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+      "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+      "openbot/server/src/db/schema/approvals.ts",
+      "openbot/server/src/db/schema/automation-foundations.ts",
+      "openbot/server/src/db/schema/automation-run-records.ts",
+      "openbot/server/src/db/schema/components.ts",
+      "openbot/server/src/db/schema/computer.ts",
+      "openbot/server/src/db/schema/core.ts",
+      "openbot/server/src/db/schema/coworker.ts",
+      "openbot/server/src/db/schema/delivery.ts",
+      "openbot/server/src/db/schema/demonstrations.ts",
+      "openbot/server/src/db/schema/device-binding-leases.ts",
+      "openbot/server/src/db/schema/devices.ts",
+      "openbot/server/src/db/schema/flow-customization-foundations.ts",
+      "openbot/server/src/db/schema/flow-customization-turns.ts",
+      "openbot/server/src/db/schema/flow-official-bindings.ts",
+      "openbot/server/src/db/schema/flow-run-coordination.ts",
+      "openbot/server/src/db/schema/flow-sharing-foundations.ts",
+      "openbot/server/src/db/schema/flow-source-foundations.ts",
+      "openbot/server/src/db/schema/flow-source-original-records.ts",
+      "openbot/server/src/db/schema/flow-source-run-records.ts",
+      "openbot/server/src/db/schema/flow-source-runtime-records.ts",
+      "openbot/server/src/db/schema/group-pipeline-start-receipts.ts",
+      "openbot/server/src/db/schema/group.ts",
+      "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+      "openbot/server/src/db/schema/json.ts",
+      "openbot/server/src/db/schema/knowledge-foundations.ts",
+      "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+      "openbot/server/src/db/schema/lifecycle.ts",
+      "openbot/server/src/db/schema/memory.ts",
+      "openbot/server/src/db/schema/model.ts",
+      "openbot/server/src/db/schema/outbox-knowledge-heads.ts",
+      "openbot/server/src/db/schema/passwords.ts",
+      "openbot/server/src/db/schema/pipeline.ts",
+      "openbot/server/src/db/schema/plans.ts",
+      "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+      "openbot/server/src/db/schema/plugins.ts",
+      "openbot/server/src/db/schema/proactive.ts",
+      "openbot/server/src/db/schema/resource-project-foundations.ts",
+      "openbot/server/src/db/schema/responsibilities.ts",
+      "openbot/server/src/db/schema/roles.ts",
+      "openbot/server/src/db/schema/scim.ts",
+      "openbot/server/src/db/schema/security-policy-fences.ts",
+      "openbot/server/src/db/schema/tasks.ts",
+      "openbot/server/src/db/schema/team-bots.ts",
+      "openbot/server/src/db/schema/tenant.ts",
+      "openbot/server/src/db/schema/threads.ts",
+      "openbot/server/src/db/schema/voice.ts",
+      "openbot/server/src/db/schema/waker-groups.ts",
+      "openbot/server/src/db/schema/wakerflows.ts",
+      "openbot/server/src/db/schema/work.ts"
+    ],
+    "runtime_external_imports": [
+      "drizzle-orm",
+      "drizzle-orm/pg-core"
+    ],
+    "runtime_missing_local_paths": [],
+    "type_only_external_references": [
+      {
+        "from": "openbot/server/src/db/schema/approvals.ts",
+        "to": "../../approvals/continuation-protocol",
+        "binding": "type { ContinuationReceipt, ContinuationRecord, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/approvals.ts",
+        "to": "../../approvals/types",
+        "binding": "type { ApprovalAction, ApprovalDecision, HostCommandPolicy, RuleBehaviour, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/core.ts",
+        "to": "../../../../shared/user-preferences",
+        "binding": "type { UserPreferences }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/coworker.ts",
+        "to": "../../../../shared/persona",
+        "binding": "type { Persona }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/delivery.ts",
+        "to": "../../delivery/types",
+        "binding": "type { BindingTransport, DeliveryScope, DeliveryState, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/demonstrations.ts",
+        "to": "../../demonstrations/types",
+        "binding": "type { DemonstrationAction, DemonstrationDraft, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/memory.ts",
+        "to": "../../memory/types",
+        "binding": "type { MemoryRecord, MemorySource }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/passwords.ts",
+        "to": "../../passwords/types",
+        "binding": "type { SignInMethod, SignInStatus }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/proactive.ts",
+        "to": "../../proactive/types",
+        "binding": "type { ProactiveRunStatus, SuggestionStatus, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/responsibilities.ts",
+        "to": "../../computer/headless-tools",
+        "binding": "type { HeadlessWaiting }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/responsibilities.ts",
+        "to": "../../responsibilities/triggers",
+        "binding": "type { TriggerConfig, TriggerKind, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/responsibilities.ts",
+        "to": "../../responsibilities/types",
+        "binding": "type { ResponsibilityContinuation, ResponsibilitySource, ResponsibilitySubscription, }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/voice.ts",
+        "to": "../../../../shared/voice-session",
+        "binding": "type { VoiceTranscriptEntry }"
+      },
+      {
+        "from": "openbot/server/src/db/schema/wakerflows.ts",
+        "to": "../../../../shared/wakerflows",
+        "binding": "type { WakerFlowPlan }"
+      }
+    ],
+    "type_only_note": "These explicit import type declarations should be erased by the real TypeScript loader; do not expand them into runtime application dependencies or connect DB/client. Verify actual package loader behavior at runtime without running service entrypoints.",
+    "imported_but_not_exported_from_original_inputs": [
+      {
+        "chain": [
+          "approvals.ts",
+          "approval-exact-input-objects.ts"
+        ],
+        "module": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+        "exports": [
+          "approvalExactInputCaptures",
+          "approvalExactInputObjects"
+        ],
+        "tables": [
+          "approval_exact_input_captures",
+          "approval_exact_input_objects"
+        ]
+      },
+      {
+        "chain": [
+          "approvals.ts",
+          "approval-exact-input-objects.ts",
+          "approval-direct-execution-domains.ts"
+        ],
+        "module": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+        "exports": [
+          "approvalDirectExecutionDomains"
+        ],
+        "tables": [
+          "approval_direct_execution_domains"
+        ]
+      }
+    ],
+    "export_visibility_warning": "Loading a dependency to resolve an FK is not exporting its tables from the configured schema module. approvals.ts has no re-export of APX/domain tables. A generator enumerating configured module exports can omit those three imported tables; it can also omit remaining recovery modules entirely. Explicit all50 paths avoid relying on dependency traversal. Actual pinned-kit export enumeration and table count still require runtime validation.",
+    "cyclic_runtime_imports": [
+      [
+        "approvals.ts",
+        "approval-exact-input-objects.ts",
+        "approvals.ts"
+      ]
+    ],
+    "cycle_note": "Cross-module callback columns are deferred in Source; whether the exact installed loader handles the cycle remains runtime proof, not established by static table count."
+  },
+  "learning_deletion": {
+    "config": {
+      "path": "openbot/server/drizzle.config.ts",
+      "blob": "ac2b6776cb74c19b4540c08b30fcefe6223e39e9",
+      "bytes": 1617,
+      "mode": "100644"
+    },
+    "stale_entry": "./src/db/schema/learning.ts",
+    "source_path_in_complete_tree": false,
+    "previous404": "Normal GitHub fetch_file exact548de959 path returned404 NOT_FOUND.",
+    "sql": {
+      "path": "openbot/server/drizzle/0078_drop_learning.sql",
+      "blob": "d0734c88bfc6f3d5b9906a555a38825745023cac",
+      "bytes": 110,
+      "mode": "100644"
+    },
+    "sql_text": "DROP TABLE \"learning_settings\" CASCADE;--> statement-breakpoint\nDROP TABLE \"learning_thread_bindings\" CASCADE;",
+    "journal_entry": {
+      "idx": 78,
+      "version": "7",
+      "when": 1791463239711,
+      "tag": "0078_drop_learning",
+      "breakpoints": true
+    },
+    "before_snapshot": {
+      "path": "openbot/server/drizzle/meta/0077_snapshot.json",
+      "blob": "af76d147a739ec071a21ffda23339d7a1b6b16b7",
+      "bytes": 293918,
+      "mode": "100644",
+      "id": "52262e68-7aed-4003-be73-276b3495ba7e",
+      "learning_tables": [
+        "public.learning_settings",
+        "public.learning_thread_bindings"
+      ]
+    },
+    "after_snapshot": {
+      "path": "openbot/server/drizzle/meta/0078_snapshot.json",
+      "blob": "9439dc6db107148496d958491eb843c71e20e1f5",
+      "bytes": 291567,
+      "mode": "100644",
+      "id": "62f60e95-93dc-4a22-9dc1-af103108177e",
+      "prevId": "52262e68-7aed-4003-be73-276b3495ba7e",
+      "learning_tables": []
+    },
+    "both_current_chain_tips_have_no_learning_tables": true,
+    "proposed_change_scope": "New offline diagnostic config removes the one stale reference with this explicit evidence, and separately declares complete coverage. Original production config remains immutable until its own reviewed Source package.",
+    "not_authorized": "No synthetic learning.ts, no new table drops, no DB URL fabrication and no silent missing-path filtering."
+  },
+  "chains": {
+    "original": {
+      "directory": "openbot/server/drizzle",
+      "snapshot": {
+        "path": "openbot/server/drizzle/meta/0080_snapshot.json",
+        "blob": "de6a0b41c088c0bd46de019cb888575c95a07bb5",
+        "bytes": 299339,
+        "mode": "100644",
+        "id": "9830a73c-12c1-4c08-89a9-894184de1449",
+        "prevId": "1fa3d60b-41d7-4eb9-9f4b-fae4b93a1f18",
+        "version": "7",
+        "dialect": "postgresql",
+        "tables": 99
+      },
+      "journal": {
+        "path": "openbot/server/drizzle/meta/_journal.json",
+        "blob": "956003923fe45c220653c71affa6e0c56fd45d0e",
+        "bytes": 11958,
+        "mode": "100644",
+        "entries": 81,
+        "last_idx": 80,
+        "last_tag": "0080_wakerflow_quota_contracts"
+      },
+      "purpose": "Original lineage only. Safe private copy as a diagnostic baseline; do not replace its0081 with recovery0081 or stitch only selected recovery snapshots into it."
+    },
+    "recovery": {
+      "directory": "openbot/server/recovery/recovery-20261018-v1",
+      "snapshot": {
+        "path": "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+        "blob": "d3f5c2b6336cd53867d5b46feaebcc7049176c3c",
+        "bytes": 629001,
+        "mode": "100644",
+        "id": "4a391a26-1651-46e0-a0a7-15a64289a6c3",
+        "prevId": "90530f50-0fa9-4dc2-9ced-7d718a08fe76",
+        "version": "7",
+        "dialect": "postgresql",
+        "tables": 155
+      },
+      "journal": {
+        "path": "openbot/server/recovery/recovery-20261018-v1/meta/_journal.json",
+        "blob": "ba39023870aac242d749f048e8ed8141cf3a68bd",
+        "bytes": 16330,
+        "mode": "100644",
+        "entries": 108,
+        "last_idx": 107,
+        "last_tag": "0107_import_proactive_token_foundations_closed",
+        "first81_entries_equal_original_journal": true
+      },
+      "additional_entries": 27,
+      "additional_tables": 56,
+      "sql_layout": "recovery/.../sql holds0081..0107; meta holds recovery snapshots/journal. This is not original drizzle's SQL directory.",
+      "purpose": "Frozen recovery lineage remains independently attributable and migrationNOT_WIRED. Its static snapshot must not be passed off as a newly generated original0081 snapshot."
+    },
+    "table_set_comparison": {
+      "current_vs_original_added": [
+        "public.approval_direct_execution_domains",
+        "public.approval_exact_input_captures",
+        "public.approval_exact_input_objects",
+        "public.approval_continuations",
+        "public.approval_continuation_steps",
+        "public.approval_fresh_seeds",
+        "public.automations",
+        "public.automation_triggers",
+        "public.automation_firings",
+        "public.automation_continuations",
+        "public.employee_device_bindings",
+        "public.runner_device_connection_leases",
+        "public.flow_customization_sessions",
+        "public.flow_customization_heads",
+        "public.flow_customization_turns",
+        "public.flow_official_source_heads",
+        "public.flow_official_bindings",
+        "public.flow_confirmations",
+        "public.flow_run_events",
+        "public.flow_run_retries",
+        "public.flow_share_links",
+        "public.flow_share_imports",
+        "public.flow_source_versions",
+        "public.flow_source_public_operations",
+        "public.flow_source_operations",
+        "public.flow_source_inline_invocations",
+        "public.flow_source_original_activations",
+        "public.flow_source_original_projection_observations",
+        "public.flow_source_candidates",
+        "public.flow_source_resource_snapshots",
+        "public.flow_source_runs",
+        "public.flow_source_invocations",
+        "public.flow_source_runtime_events",
+        "public.flow_source_stop_operations",
+        "public.group_pipeline_start_receipts",
+        "public.flow_import_proposals",
+        "public.proactive_runs",
+        "public.model_token_calls",
+        "public.knowledge_notebooks",
+        "public.knowledge_directories",
+        "public.knowledge_sources",
+        "public.knowledge_bindings",
+        "public.knowledge_receipts",
+        "public.knowledge_write_executions",
+        "public.knowledge_write_claims",
+        "public.security_egress_outbox",
+        "public.knowledge_binding_heads",
+        "public.plugin_assembly_origins",
+        "public.plugin_assembly_publications",
+        "public.resource_projects",
+        "public.project_context_bindings",
+        "public.role_templates",
+        "public.employee_role_snapshots",
+        "public.role_generation_requests",
+        "public.role_write_receipts",
+        "public.agent_security_policies",
+        "public.security_egress_fences"
+      ],
+      "current_vs_original_missing": [],
+      "current_vs_recovery_added": [
+        "public.approval_fresh_seeds"
+      ],
+      "current_vs_recovery_missing": []
+    },
+    "important_overlap": {
+      "path": "openbot/server/recovery/recovery-20261018-v1/sql/0101_ap2_parent_schema_reconcile_closed.sql",
+      "blob": "7fc3a74fb4dd42e81b12b45a54e78ea7e1465e46",
+      "fact": "Recovery0101 already adds approval_requests_id_tenant_owner_unique and continuation tables. Seed-only candidate0081 also adds this3-column unique for original0080. Do not apply both SQLs blindly to the same DB."
+    },
+    "table_set_is_not_full_ddl_equality": "156=155+seed is only table-name coverage; column/index/constraint/FK/policy changes can remain. Snapshot cannot express FORCE RLS and grants/revokes completely. Full generated DDL and preserved security SQL require item-by-item review."
+  },
+  "dependency_closure": {
+    "lock": {
+      "path": "openbot/bun.lock",
+      "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+      "bytes": 453991,
+      "mode": "100644",
+      "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"
+    },
+    "platform": "linux-x64",
+    "roots": [
+      "drizzle-kit@0.31.10",
+      "drizzle-orm@0.45.2"
+    ],
+    "declared_runtime_node_count": 17,
+    "independent_exact_lock_four_tuple_match": true,
+    "independent_resolved_edges_match_root_analysis": true,
+    "missing_nodes": [],
+    "extra_nodes": [],
+    "edges": [
+      {
+        "from": "drizzle-kit",
+        "name": "@drizzle-team/brocli",
+        "range": "^0.10.2",
+        "to": "@drizzle-team/brocli"
+      },
+      {
+        "from": "drizzle-kit",
+        "name": "@esbuild-kit/esm-loader",
+        "range": "^2.5.5",
+        "to": "@esbuild-kit/esm-loader"
+      },
+      {
+        "from": "drizzle-kit",
+        "name": "esbuild",
+        "range": "^0.25.4",
+        "to": "drizzle-kit/esbuild"
+      },
+      {
+        "from": "drizzle-kit",
+        "name": "tsx",
+        "range": "^4.21.0",
+        "to": "tsx"
+      },
+      {
+        "from": "@esbuild-kit/esm-loader",
+        "name": "@esbuild-kit/core-utils",
+        "range": "^3.3.2",
+        "to": "@esbuild-kit/core-utils"
+      },
+      {
+        "from": "@esbuild-kit/esm-loader",
+        "name": "get-tsconfig",
+        "range": "^4.7.0",
+        "to": "get-tsconfig"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-x64",
+        "range": "0.25.12",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-x64",
+        "optional": true
+      },
+      {
+        "from": "tsx",
+        "name": "esbuild",
+        "range": "~0.28.0",
+        "to": "esbuild"
+      },
+      {
+        "from": "@esbuild-kit/core-utils",
+        "name": "esbuild",
+        "range": "~0.18.20",
+        "to": "@esbuild-kit/core-utils/esbuild"
+      },
+      {
+        "from": "@esbuild-kit/core-utils",
+        "name": "source-map-support",
+        "range": "^0.5.21",
+        "to": "source-map-support"
+      },
+      {
+        "from": "get-tsconfig",
+        "name": "resolve-pkg-maps",
+        "range": "^1.0.0",
+        "to": "resolve-pkg-maps"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-x64",
+        "range": "0.28.2",
+        "to": "@esbuild/linux-x64",
+        "optional": true
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-x64",
+        "range": "0.18.20",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+        "optional": true
+      },
+      {
+        "from": "source-map-support",
+        "name": "buffer-from",
+        "range": "^1.0.0",
+        "to": "buffer-from"
+      },
+      {
+        "from": "source-map-support",
+        "name": "source-map",
+        "range": "^0.6.0",
+        "to": "source-map"
+      }
+    ],
+    "exact_private_node_modules_placements": [
+      {
+        "key": "@drizzle-team/brocli",
+        "pinned": "@drizzle-team/brocli@0.10.2",
+        "relative_path": "node_modules/@drizzle-team/brocli",
+        "url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+        "integrity": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="
+      },
+      {
+        "key": "@esbuild-kit/core-utils",
+        "pinned": "@esbuild-kit/core-utils@3.3.2",
+        "relative_path": "node_modules/@esbuild-kit/core-utils",
+        "url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+        "integrity": "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ=="
+      },
+      {
+        "key": "@esbuild-kit/core-utils/esbuild",
+        "pinned": "esbuild@0.18.20",
+        "relative_path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+        "url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+        "integrity": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA=="
+      },
+      {
+        "key": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+        "pinned": "@esbuild/linux-x64@0.18.20",
+        "relative_path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+        "url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+        "integrity": "sha512-UYqiqemphJcNsFEskc73jQ7B9jgwjWrSayxawS6UVFZGWrAAtkzjxSqnoclCXxWtfwLdzU+vTpcNYhpn43uP1w=="
+      },
+      {
+        "key": "@esbuild-kit/esm-loader",
+        "pinned": "@esbuild-kit/esm-loader@2.6.5",
+        "relative_path": "node_modules/@esbuild-kit/esm-loader",
+        "url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+        "integrity": "sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA=="
+      },
+      {
+        "key": "@esbuild/linux-x64",
+        "pinned": "@esbuild/linux-x64@0.28.2",
+        "relative_path": "node_modules/@esbuild/linux-x64",
+        "url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+        "integrity": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ=="
+      },
+      {
+        "key": "buffer-from",
+        "pinned": "buffer-from@1.1.2",
+        "relative_path": "node_modules/buffer-from",
+        "url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+        "integrity": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ=="
+      },
+      {
+        "key": "drizzle-kit",
+        "pinned": "drizzle-kit@0.31.10",
+        "relative_path": "node_modules/drizzle-kit",
+        "url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+        "integrity": "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw=="
+      },
+      {
+        "key": "drizzle-kit/esbuild",
+        "pinned": "esbuild@0.25.12",
+        "relative_path": "node_modules/drizzle-kit/node_modules/esbuild",
+        "url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+        "integrity": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg=="
+      },
+      {
+        "key": "drizzle-kit/esbuild/@esbuild/linux-x64",
+        "pinned": "@esbuild/linux-x64@0.25.12",
+        "relative_path": "node_modules/drizzle-kit/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+        "url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+        "integrity": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw=="
+      },
+      {
+        "key": "drizzle-orm",
+        "pinned": "drizzle-orm@0.45.2",
+        "relative_path": "node_modules/drizzle-orm",
+        "url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+        "integrity": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q=="
+      },
+      {
+        "key": "esbuild",
+        "pinned": "esbuild@0.28.2",
+        "relative_path": "node_modules/esbuild",
+        "url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.28.2.tgz",
+        "integrity": "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA=="
+      },
+      {
+        "key": "get-tsconfig",
+        "pinned": "get-tsconfig@4.14.3",
+        "relative_path": "node_modules/get-tsconfig",
+        "url": "https://registry.npmmirror.com/get-tsconfig/-/get-tsconfig-4.14.3.tgz",
+        "integrity": "sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA=="
+      },
+      {
+        "key": "resolve-pkg-maps",
+        "pinned": "resolve-pkg-maps@1.0.0",
+        "relative_path": "node_modules/resolve-pkg-maps",
+        "url": "https://registry.npmmirror.com/resolve-pkg-maps/-/resolve-pkg-maps-1.0.0.tgz",
+        "integrity": "sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw=="
+      },
+      {
+        "key": "source-map",
+        "pinned": "source-map@0.6.1",
+        "relative_path": "node_modules/source-map",
+        "url": "https://registry.npmmirror.com/source-map/-/source-map-0.6.1.tgz",
+        "integrity": "sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g=="
+      },
+      {
+        "key": "source-map-support",
+        "pinned": "source-map-support@0.5.21",
+        "relative_path": "node_modules/source-map-support",
+        "url": "https://registry.npmmirror.com/source-map-support/-/source-map-support-0.5.21.tgz",
+        "integrity": "sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w=="
+      },
+      {
+        "key": "tsx",
+        "pinned": "tsx@4.23.12",
+        "relative_path": "node_modules/tsx",
+        "url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+        "integrity": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q=="
+      }
+    ],
+    "platform_optional_selected": [
+      {
+        "package": "@esbuild/linux-x64@0.18.20",
+        "parent": "@esbuild-kit/core-utils/esbuild",
+        "path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild/node_modules/@esbuild/linux-x64"
+      },
+      {
+        "package": "@esbuild/linux-x64@0.25.12",
+        "parent": "drizzle-kit/esbuild",
+        "path": "node_modules/drizzle-kit/node_modules/esbuild/node_modules/@esbuild/linux-x64"
+      },
+      {
+        "package": "@esbuild/linux-x64@0.28.2",
+        "parent": "esbuild",
+        "path": "node_modules/@esbuild/linux-x64"
+      }
+    ],
+    "optional_platform_exclusions": [
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/aix-ppc64",
+        "to": "drizzle-kit/esbuild/@esbuild/aix-ppc64",
+        "os": "aix",
+        "cpu": "ppc64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/android-arm",
+        "to": "drizzle-kit/esbuild/@esbuild/android-arm",
+        "os": "android",
+        "cpu": "arm"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/android-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/android-arm64",
+        "os": "android",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/android-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/android-x64",
+        "os": "android",
+        "cpu": "x64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/darwin-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/darwin-arm64",
+        "os": "darwin",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/darwin-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/darwin-x64",
+        "os": "darwin",
+        "cpu": "x64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/freebsd-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/freebsd-arm64",
+        "os": "freebsd",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/freebsd-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/freebsd-x64",
+        "os": "freebsd",
+        "cpu": "x64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-arm",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-arm",
+        "os": "linux",
+        "cpu": "arm"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-arm64",
+        "os": "linux",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-ia32",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-ia32",
+        "os": "linux",
+        "cpu": "ia32"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-loong64",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-loong64",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-mips64el",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-mips64el",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-ppc64",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-ppc64",
+        "os": "linux",
+        "cpu": "ppc64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-riscv64",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-riscv64",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/linux-s390x",
+        "to": "drizzle-kit/esbuild/@esbuild/linux-s390x",
+        "os": "linux",
+        "cpu": "s390x"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/netbsd-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/netbsd-arm64",
+        "os": "none",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/netbsd-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/netbsd-x64",
+        "os": "none",
+        "cpu": "x64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/openbsd-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/openbsd-arm64",
+        "os": "openbsd",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/openbsd-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/openbsd-x64",
+        "os": "openbsd",
+        "cpu": "x64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/openharmony-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/openharmony-arm64",
+        "os": "none",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/sunos-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/sunos-x64",
+        "os": "sunos",
+        "cpu": "x64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/win32-arm64",
+        "to": "drizzle-kit/esbuild/@esbuild/win32-arm64",
+        "os": "win32",
+        "cpu": "arm64"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/win32-ia32",
+        "to": "drizzle-kit/esbuild/@esbuild/win32-ia32",
+        "os": "win32",
+        "cpu": "ia32"
+      },
+      {
+        "from": "drizzle-kit/esbuild",
+        "name": "@esbuild/win32-x64",
+        "to": "drizzle-kit/esbuild/@esbuild/win32-x64",
+        "os": "win32",
+        "cpu": "x64"
+      },
+      {
+        "from": "tsx",
+        "name": "fsevents",
+        "to": "fsevents",
+        "os": "darwin"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/aix-ppc64",
+        "to": "@esbuild/aix-ppc64",
+        "os": "aix",
+        "cpu": "ppc64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/android-arm",
+        "to": "@esbuild/android-arm",
+        "os": "android",
+        "cpu": "arm"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/android-arm64",
+        "to": "@esbuild/android-arm64",
+        "os": "android",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/android-x64",
+        "to": "@esbuild/android-x64",
+        "os": "android",
+        "cpu": "x64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/darwin-arm64",
+        "to": "@esbuild/darwin-arm64",
+        "os": "darwin",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/darwin-x64",
+        "to": "@esbuild/darwin-x64",
+        "os": "darwin",
+        "cpu": "x64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/freebsd-arm64",
+        "to": "@esbuild/freebsd-arm64",
+        "os": "freebsd",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/freebsd-x64",
+        "to": "@esbuild/freebsd-x64",
+        "os": "freebsd",
+        "cpu": "x64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-arm",
+        "to": "@esbuild/linux-arm",
+        "os": "linux",
+        "cpu": "arm"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-arm64",
+        "to": "@esbuild/linux-arm64",
+        "os": "linux",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-ia32",
+        "to": "@esbuild/linux-ia32",
+        "os": "linux",
+        "cpu": "ia32"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-loong64",
+        "to": "@esbuild/linux-loong64",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-mips64el",
+        "to": "@esbuild/linux-mips64el",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-ppc64",
+        "to": "@esbuild/linux-ppc64",
+        "os": "linux",
+        "cpu": "ppc64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-riscv64",
+        "to": "@esbuild/linux-riscv64",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/linux-s390x",
+        "to": "@esbuild/linux-s390x",
+        "os": "linux",
+        "cpu": "s390x"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/netbsd-arm64",
+        "to": "@esbuild/netbsd-arm64",
+        "os": "none",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/netbsd-x64",
+        "to": "@esbuild/netbsd-x64",
+        "os": "none",
+        "cpu": "x64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/openbsd-arm64",
+        "to": "@esbuild/openbsd-arm64",
+        "os": "openbsd",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/openbsd-x64",
+        "to": "@esbuild/openbsd-x64",
+        "os": "openbsd",
+        "cpu": "x64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/openharmony-arm64",
+        "to": "@esbuild/openharmony-arm64",
+        "os": "none",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/sunos-x64",
+        "to": "@esbuild/sunos-x64",
+        "os": "sunos",
+        "cpu": "x64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/win32-arm64",
+        "to": "@esbuild/win32-arm64",
+        "os": "win32",
+        "cpu": "arm64"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/win32-ia32",
+        "to": "@esbuild/win32-ia32",
+        "os": "win32",
+        "cpu": "ia32"
+      },
+      {
+        "from": "esbuild",
+        "name": "@esbuild/win32-x64",
+        "to": "@esbuild/win32-x64",
+        "os": "win32",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/android-arm",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/android-arm",
+        "os": "android",
+        "cpu": "arm"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/android-arm64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/android-arm64",
+        "os": "android",
+        "cpu": "arm64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/android-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/android-x64",
+        "os": "android",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/darwin-arm64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/darwin-arm64",
+        "os": "darwin",
+        "cpu": "arm64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/darwin-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/darwin-x64",
+        "os": "darwin",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/freebsd-arm64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/freebsd-arm64",
+        "os": "freebsd",
+        "cpu": "arm64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/freebsd-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/freebsd-x64",
+        "os": "freebsd",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-arm",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-arm",
+        "os": "linux",
+        "cpu": "arm"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-arm64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-arm64",
+        "os": "linux",
+        "cpu": "arm64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-ia32",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-ia32",
+        "os": "linux",
+        "cpu": "ia32"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-loong64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-loong64",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-mips64el",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-mips64el",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-ppc64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-ppc64",
+        "os": "linux",
+        "cpu": "ppc64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-riscv64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-riscv64",
+        "os": "linux",
+        "cpu": "none"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/linux-s390x",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-s390x",
+        "os": "linux",
+        "cpu": "s390x"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/netbsd-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/netbsd-x64",
+        "os": "none",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/openbsd-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/openbsd-x64",
+        "os": "openbsd",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/sunos-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/sunos-x64",
+        "os": "sunos",
+        "cpu": "x64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/win32-arm64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/win32-arm64",
+        "os": "win32",
+        "cpu": "arm64"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/win32-ia32",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/win32-ia32",
+        "os": "win32",
+        "cpu": "ia32"
+      },
+      {
+        "from": "@esbuild-kit/core-utils/esbuild",
+        "name": "@esbuild/win32-x64",
+        "to": "@esbuild-kit/core-utils/esbuild/@esbuild/win32-x64",
+        "os": "win32",
+        "cpu": "x64"
+      }
+    ],
+    "orm_optional_peers_excluded": [
+      "@aws-sdk/client-rds-data",
+      "@cloudflare/workers-types",
+      "@electric-sql/pglite",
+      "@libsql/client",
+      "@libsql/client-wasm",
+      "@neondatabase/serverless",
+      "@op-engineering/op-sqlite",
+      "@opentelemetry/api",
+      "@planetscale/database",
+      "@prisma/client",
+      "@tidbcloud/serverless",
+      "@types/better-sqlite3",
+      "@types/pg",
+      "@types/sql.js",
+      "@upstash/redis",
+      "@vercel/postgres",
+      "@xata.io/client",
+      "better-sqlite3",
+      "bun-types",
+      "expo-sqlite",
+      "gel",
+      "knex",
+      "kysely",
+      "mysql2",
+      "pg",
+      "postgres",
+      "prisma",
+      "sql.js",
+      "sqlite3"
+    ],
+    "optional_peer_reason": "All29 lock-recorded ORM peers are optional; Source runtime imports inspected here use drizzle-orm and drizzle-orm/pg-core only. Offline PG schema generation does not justify installing DB adapters or connecting any database. If real pinned-package imports demand an additional module, stop and report exact missing dependency before widening closure.",
+    "static_sufficiency": "17 nodes exactly close all lock-declared dependencies plus linux-x64 optional native packages. This is sufficient as a STATIC DECLARED graph only, not proof real tarball package.json, actual Node resolution, native executable compatibility or successful generator.",
+    "runtime_still_needed": [
+      "Fetch exact original lock URLs, verify original SHA512 SRI for each tarball. Do not switch registry, resolve new versions or rerun full/server workspace install.",
+      "Validate extracted real package metadata (name, version, deps, optionalDeps, bin); stop on any undeclared requirement. Static lock metadata is not a substitute for tarball metadata.",
+      "Retain all three esbuild versions in exact nested placements and their matching native optional binary packages; do not flatten into one esbuild.",
+      "Disable all lifecycle hooks. Preserve regular executable binary mode; no postinstall downloading/copying native binary through an unrecorded fallback.",
+      "Run bounded non-network resolution/version checks using actual Node and each actual module's directory to prove correct nested resolution and native binary version, under the resource contract.",
+      "Stage private node_modules as an ancestor of the copied Source schema modules, so their real module resolution finds the exact same pinned ORM instance; no NODE_PATH/global modules/ambient workspace dependencies.",
+      "Run actual kit generation only after reviewed complete schema config and copied baseline are verified; no DATABASE_URL or DB/server import."
+    ]
+  },
+  "recommended_diagnostics": [
+    {
+      "id": "ORIGINAL27_REPAIRED_INPUT_DIAGNOSTIC",
+      "schema_count": 27,
+      "baseline": "Private exact original drizzle/meta0080 + original journal/SQL",
+      "purpose": "Explicitly named restricted original-config diagnostic after evidence-backed learning removal. Expect102 direct table declarations, not complete current156; APX/domain table imports are not full exports. Do not adopt as complete migration."
+    },
+    {
+      "id": "FULL50_CURRENT_SCHEMA_DIAGNOSTIC",
+      "schema_count": 50,
+      "baseline": "Separate private exact original drizzle chain copy, with no stitched recovery snapshot",
+      "purpose": "Generate complete current156-table structure and full delta relative original99. Review every generated pending DDL against recovery history; halt on destructive/unexpected changes or interactive ambiguity."
+    },
+    {
+      "id": "OPTIONAL_RECOVERY_BASELINE_DIAGNOSTIC",
+      "schema_count": 50,
+      "baseline": "Only if independently approved: separate exact recovery0107/meta+full journal with explicit recovery lineage identity and separately preserved recoverySQL layout",
+      "purpose": "May isolate post-recovery drift, but not an original0081 replacement. Do not infer migration applied or hand-rewrite snapshot IDs/journal to force compatibility; runtime loader may reject and that rejection remains evidence."
+    }
+  ],
+  "formal_adoption_requirements": [
+    "Complete migration package must account for all50 current table modules and both helpers, even when final package is at most8Source.",
+    "Generated SQL/snapshot/journal must correspond to the same selected and explicitly identified baseline and full schema inputs.",
+    "Do not manually pair seed-only SQL with full current snapshot or copy recovery journal entries into original chain.",
+    "Review generated DDL individually against all original/recovery migrations, including duplicate3-column unique and security protections not represented by snapshot.",
+    "Each legal <=8Source package requires exact non-author review and cloud adaptation validation; if generated delta cannot fit safely, split dependent legal packages with explicit boundaries.",
+    "Keep ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING; CPU generation is not PG/production proof."
+  ],
+  "constraints": {
+    "project_execution": 0,
+    "resource_jobs": 0,
+    "source_writes": 0,
+    "canonical_writes": 0,
+    "default_branch_writes": 0,
+    "paid_calls": 0,
+    "deployments": 0,
+    "OpenCode": "HUMAN_PAUSED"
+  },
+  "persistence": {
+    "branch": "codex/generator-schema-review-root-20261029",
+    "base": "1e606f7c6d18277c348d15cc87750abdb2fd3e3f",
+    "path": "archives/recovery-20261028/CLOUD-GENERATOR-SCHEMA-CLOSURE-REVIEW-20261029.json",
+    "administrative_report_only": true
+  }
+}
