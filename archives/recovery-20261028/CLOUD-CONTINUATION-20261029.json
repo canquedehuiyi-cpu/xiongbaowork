@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:35:58.759Z",
+  "checkpoint_update_at": "2026-10-29T16:41:25.621Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4228,5 +4228,41 @@
       "source_adopted": false,
       "next_action": "Read same run40912983831/job123585627390 terminal only; no other resource job until terminal. A11 teardown-only candidate prepares independently."
     }
+  },
+  "cloud_a11_teardown_diagnostic": {
+    "candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+    "status": "NONAUTHOR_ADMIN_TEARDOWN_ONLY_APPROVED_NOT_RUN",
+    "review_commit": "dcfdbc79eda96d37082e05f2b88190665c52b46a",
+    "review_path": "archives/recovery-20261028/A11-TEARDOWN-A2-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "0e322531db84fe929b79fa8b771166e0eb197b30",
+    "files": [
+      {
+        "path": ".github/workflows/a11-offline-data-verify.yml",
+        "blob": "99aa9a17531453b18064b8910082913ed3b5b7bd",
+        "mode": "100644",
+        "bytes": 5064,
+        "sha256": "c3337bd9c8620c6514be2a876368059735665bec66c4d26cd45a6dfdcbc321d3",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+        "blob": "a8a5a80748f4263c438efe43f141302db2fc8741",
+        "mode": "100644",
+        "bytes": 13933,
+        "sha256": "3000046e0e37bad7f4f865210860e65f21815710aaef2268e3b51c74b876e5d9",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+        "blob": "3b717d6130f1a37f7b2679a19577c5374275a758",
+        "mode": "100644",
+        "bytes": 6033,
+        "sha256": "3abfe7b02dfd519db59d4b85d6ce3645e35102775808d0cceedecbedf7733741",
+        "full_read": true
+      }
+    ],
+    "execution_branch": "codex/a11-data-verify-run-20261030-a2",
+    "no_token_logfetch_codec": true,
+    "not_DATA_PASS": true
   }
 }
