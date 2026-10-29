@@ -1,0 +1,76 @@
+{
+  "schema": "hosted-worker-metadata-diagnostic-result/v1",
+  "date": "2026-10-29",
+  "status": "DIAGNOSTIC_TERMINAL_UNVERIFIED_ORIGINAL_DEVELOPMENT_PROMPT_RESTORED_PAUSED",
+  "worker_id": "6ae30014bbac8191baa1a3497f062b7d",
+  "page_id": "page_7812bfd830a08191ab1fb84da54f173f",
+  "controller_id": "Automation_a9042438d098819180d8686afa9cd66e",
+  "approved_plan_commit": "a3caafa0f876c361ae83de8fa7dda9849d789572",
+  "configuration_receipt_commit": "f5a5f8a39c7aeb298045dea9edec96eae79b3274",
+  "external_operator_peek_count_this_phase": 1,
+  "native_run": {
+    "id": "6da83cee-dfb8-8327-b509-bc1dd105864a",
+    "recorded_status": "completed",
+    "scheduled_for": "2026-10-29T15:19:26Z",
+    "started_at": "2026-10-29T15:19:14.268180Z",
+    "completed_at": "2026-10-29T15:20:20.269352Z",
+    "chat_ref": {
+      "type": "chatgpt",
+      "id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988"
+    }
+  },
+  "native_private_result": {
+    "run_id": "6da83cee-dfb8-8327-b509-bc1dd105864a",
+    "created_at": "2026-10-29T15:20:19.740120Z",
+    "scheduled_for": "2026-10-29T15:19:26Z",
+    "completed_at": "2026-10-29T15:20:20.269352Z",
+    "content_text": "结论：**UNVERIFIED**。本轮未形成可交 Root 复核的当前 task/run 身份绑定；开发身份未恢复。\n\n| 检查项 | 实际结果 |\n|---|---|\n| 本轮来源 | 可信平台上下文声明为 scheduled invocation，但未提供当前 automation/task/run ID |\n| 元数据接口 | **INTERFACE_NOT_EXPOSED**：当前 catalog 无 `node_repl`，也无文档化的 `requestMeta` 接口 |\n| 顶层键名／嵌套键名 | **NOT_READ／NOT_READ**，未猜测属性或替代接口 |\n| 安全 caller ID | 未取得 |\n| Page 对照 | 原生 `get_page_auto_update`、`list_page_automations` 确认指定 controller 启用，目标 worker 以 task 身份挂接且启用 |\n| 目标 peek | 对配置目标查询一次；返回记录 `6da83cee-dfb8-8327-b509-bc1dd105864a` 为 `in_progress`、无 `chat_ref`；最新结果属于另一记录 |\n| 自身所属字段 | schema 支持可选 `is_self_owned_automation`，本次返回中未出现 |\n| Page 正文读取 | 未执行 |\n\n实际使用 `functions.exec` 读取工具 catalog 并调用上述原生只读工具；它不等同 Node REPL。registry 与 peek 均只是**查询目标记录，不是 caller 证明**。\n\n所有副作用计数均为 **0**：仓库访问、Page/仓库写入、计划管理、租约操作、项目执行及外部发布均未发生。全部原安全门保留，本轮诊断结束。",
+    "content_truncated": false,
+    "chat_ref": {
+      "type": "chatgpt",
+      "id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988"
+    },
+    "requires_user_action": false,
+    "is_failure_message": false
+  },
+  "identity_conclusion": "UNVERIFIED",
+  "evidence_limits": [
+    "Native scheduled record and completed status prove the recorded diagnostic execution, not a caller identity chain.",
+    "Diagnostic reports no node_repl/requestMeta interface exposed and no safe current caller ID.",
+    "Started_at precedes scheduled_for by about 12 seconds; preserve exact native timestamps without interpreting as identity evidence.",
+    "Result is complete: content_truncated=false; run_id and scheduled_for match new native run."
+  ],
+  "phase3": {
+    "success": true,
+    "returned_enabled": false
+  },
+  "phase4": {
+    "success": true,
+    "returned_enabled": false,
+    "returned_prompt_sha256": "3ab3ee5a1f5756a6aa7317314b18937df487664abf1281f9e6aed7190c8d3a65",
+    "original_prompt_utf8_bytes": 6155,
+    "registry_full_prompt_exact": true,
+    "registry_prompt_sha256": "3ab3ee5a1f5756a6aa7317314b18937df487664abf1281f9e6aed7190c8d3a65",
+    "registry_status": "paused",
+    "runtime": "cloud",
+    "updated_at": "2026-10-29T15:21:03.296687+00:00"
+  },
+  "preserved": {
+    "schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+    "timezone": "Asia/Singapore",
+    "title": "熊宝云端开发续跑",
+    "attachment_current_controller": true,
+    "controller_active": true
+  },
+  "side_effects": {
+    "run_now": 0,
+    "origin_messages": 0,
+    "automation_creates": 0,
+    "automation_updates_this_phase": 2,
+    "page_edits": 0,
+    "project_jobs": 0,
+    "project_source_access": 0,
+    "canonical_or_lease_changes": 0
+  },
+  "next_action": "Keep this worker paused. Root reviews exact scheduled diagnostic evidence; development identity remains UNVERIFIED. Do not enable development or create substitute worker absent a supported verifiable runtime binding."
+}
