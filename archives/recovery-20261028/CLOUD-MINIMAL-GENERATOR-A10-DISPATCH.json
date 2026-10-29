@@ -5,9 +5,9 @@
   "tree": "edf947d3b75f4ac9a811e5e8352ca77993ab4cd4",
   "branch": "codex/cloud-minimal-generator-run-20261029-a10",
   "event": "push",
-  "status": "BRANCH_CREATED_RUN_NOT_YET_OBSERVED",
-  "run": null,
-  "job": null,
+  "status": "in_progress",
+  "run": 40899621474,
+  "job": 123538022770,
   "review_commit": "d10c52ffaa59cc11188ed9124947d640bee69387",
   "review_blob": "39673b2400677d2ee271a4b888acef457db1720f",
   "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
@@ -20,6 +20,7 @@
     "headruns0": true,
     "exactreviewedSHA": true
   },
-  "next_action": "Read exact same branch/head_sha Actions records; do not recreate ref/rerun/claim execution before realrun.",
-  "Source_adopted": false
+  "next_action": "Read exactrun40899621474/job123538022770 terminal; do not duplicate. Preserve all actual outputs plus physical restoration.",
+  "Source_adopted": false,
+  "observed_at": "2026-10-29T15:16:16.840Z"
 }
