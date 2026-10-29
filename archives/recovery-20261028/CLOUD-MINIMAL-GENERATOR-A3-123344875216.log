@@ -1,0 +1,536 @@
+﻿2026-10-29T08:36:41.0910520Z Current runner version: '2.338.0'
+2026-10-29T08:36:41.0938618Z ##[group]Runner Image Provisioner
+2026-10-29T08:36:41.0939591Z Hosted Compute Agent
+2026-10-29T08:36:41.0940282Z Version: 20261021.618
+2026-10-29T08:36:41.0941054Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T08:36:41.0941824Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T08:36:41.0942563Z Worker ID: {60d26788-b559-4d22-806b-606784515892}
+2026-10-29T08:36:41.0943576Z Region: westus
+2026-10-29T08:36:41.0944129Z Cloud: Azure
+2026-10-29T08:36:41.0945265Z ##[endgroup]
+2026-10-29T08:36:41.0947279Z ##[group]Operating System
+2026-10-29T08:36:41.0948305Z Ubuntu
+2026-10-29T08:36:41.0948952Z 26.04.1
+2026-10-29T08:36:41.0949541Z LTS
+2026-10-29T08:36:41.0950346Z ##[endgroup]
+2026-10-29T08:36:41.0950955Z ##[group]Runner Image
+2026-10-29T08:36:41.0951796Z Image: ubuntu-26.04
+2026-10-29T08:36:41.0952429Z Version: 20261025.179.1
+2026-10-29T08:36:41.0954124Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T08:36:41.0956503Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T08:36:41.0957568Z ##[endgroup]
+2026-10-29T08:36:41.0958744Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T08:36:41.0961307Z Contents: read
+2026-10-29T08:36:41.0962012Z Metadata: read
+2026-10-29T08:36:41.0962553Z ##[endgroup]
+2026-10-29T08:36:41.0965224Z Secret source: Actions
+2026-10-29T08:36:41.0966178Z Cache mode: write
+2026-10-29T08:36:41.0967031Z Prepare workflow directory
+2026-10-29T08:36:41.1328468Z Prepare all required actions
+2026-10-29T08:36:41.1462010Z Complete job name: source-generator
+2026-10-29T08:36:41.2559694Z ##[group]Run set -euo pipefail
+2026-10-29T08:36:41.2560573Z [36;1mset -euo pipefail[0m
+2026-10-29T08:36:41.2561498Z [36;1mtest "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"[0m
+2026-10-29T08:36:41.2562799Z [36;1mtest "$GITHUB_REF" = "refs/heads/codex/cloud-minimal-generator-run-20261029-a3"[0m
+2026-10-29T08:36:41.2563857Z [36;1mtest "$GITHUB_EVENT_NAME" = "push"[0m
+2026-10-29T08:36:41.2564933Z [36;1m/usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'[0m
+2026-10-29T08:36:41.2565935Z [36;1mimport hashlib,os,sys,urllib.request[0m
+2026-10-29T08:36:41.2566662Z [36;1mfrom pathlib import Path[0m
+2026-10-29T08:36:41.2567490Z [36;1mtarget=sys.argv[1];base=Path(sys.argv[2]).resolve()[0m
+2026-10-29T08:36:41.2568461Z [36;1massert len(target)==40 and all(c in "0123456789abcdef" for c in target)[0m
+2026-10-29T08:36:41.2569372Z [36;1mpath=base/"minimal-generator-controller.py"[0m
+2026-10-29T08:36:41.2571202Z [36;1murl="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py"[0m
+2026-10-29T08:36:41.2572644Z [36;1mdigest=hashlib.sha256();total=0[0m
+2026-10-29T08:36:41.2573657Z [36;1mwith urllib.request.urlopen(url,timeout=30) as incoming,path.open("xb") as out:[0m
+2026-10-29T08:36:41.2574614Z [36;1m    while True:[0m
+2026-10-29T08:36:41.2575427Z [36;1m        b=incoming.read(65536)[0m
+2026-10-29T08:36:41.2576083Z [36;1m        if not b:break[0m
+2026-10-29T08:36:41.2576858Z [36;1m        total+=len(b);assert total<=65732[0m
+2026-10-29T08:36:41.2577581Z [36;1m        digest.update(b);out.write(b)[0m
+2026-10-29T08:36:41.2578343Z [36;1m    out.flush();os.fsync(out.fileno())[0m
+2026-10-29T08:36:41.2579499Z [36;1massert total==65732 and digest.hexdigest()=="5091133aa12bff84dbc995ac05e23d4a85b98f37ee2c812a3889cc4852b70b67"[0m
+2026-10-29T08:36:41.2580625Z [36;1mos.chmod(path,0o600)[0m
+2026-10-29T08:36:41.2581493Z [36;1mprint("ADMIN_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)[0m
+2026-10-29T08:36:41.2582380Z [36;1mPY[0m
+2026-10-29T08:36:41.2583461Z [36;1msudo /usr/bin/python3 -I -B "$RUNNER_TEMP/minimal-generator-controller.py" admin "$RUNNER_TEMP" "$GITHUB_SHA" "$(id -u)" "$(id -g)"[0m
+2026-10-29T08:36:41.3031388Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:36:41.3033588Z ##[endgroup]
+2026-10-29T08:36:41.5249498Z ADMIN_CONTROLLER_IDENTITY 65732 5091133aa12bff84dbc995ac05e23d4a85b98f37ee2c812a3889cc4852b70b67
+2026-10-29T08:36:42.3532099Z Running as unit: xb-min-source.service
+2026-10-29T08:36:42.4491545Z SUBJECT_RUNNER_RESOURCE {"canonical_source_base":"823744db378f508a1996f8c23faf1b42f115ad33","cgroup":"0::/xiongbaowork.slice/xb-min-source.service","gid":1001,"overlay_formally_adopted":false,"own":{"memory.max":"67108864","memory.oom.group":"1","memory.swap.max":"0"},"parent":{"memory.max":"536870912","memory.oom.group":"1","memory.swap.max":"0"},"schema_overlay_ref":"b7205b9d5a1af42d920e0775e29d5c6ec6dc7332","schema_overlay_sha256":"6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1","uid":1001}
+2026-10-29T08:36:42.4537914Z RESOURCE_GATE {"cgroup": "0::/xiongbaowork.slice/xb-min-source.service", "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}
+2026-10-29T08:36:42.4539703Z SOURCE_COMMAND_START {"operation": "init", "argument_count": 4}
+2026-10-29T08:36:42.4693310Z SOURCE_COMMAND_END {"operation": "init"}
+2026-10-29T08:36:42.4758162Z SOURCE_COMMAND_START {"operation": "remote", "argument_count": 5}
+2026-10-29T08:36:42.4759227Z SOURCE_COMMAND_END {"operation": "remote"}
+2026-10-29T08:36:42.4760146Z SOURCE_COMMAND_START {"operation": "config", "argument_count": 4}
+2026-10-29T08:36:42.4814533Z SOURCE_COMMAND_END {"operation": "config"}
+2026-10-29T08:36:42.4816138Z SOURCE_COMMAND_START {"operation": "config", "argument_count": 4}
+2026-10-29T08:36:42.4863598Z SOURCE_COMMAND_END {"operation": "config"}
+2026-10-29T08:36:42.4865550Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 8}
+2026-10-29T08:36:42.9043774Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:42.9046358Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 8}
+2026-10-29T08:36:43.2176187Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:43.2178042Z SOURCE_COMMAND_START {"operation": "diff", "argument_count": 5}
+2026-10-29T08:36:43.2252876Z SOURCE_COMMAND_END {"operation": "diff"}
+2026-10-29T08:36:43.5334266Z SOURCE_COMMAND_START {"operation": "sparse-checkout", "argument_count": 4}
+2026-10-29T08:36:43.5395283Z SOURCE_COMMAND_END {"operation": "sparse-checkout"}
+2026-10-29T08:36:43.5421516Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 5}
+2026-10-29T08:36:43.5552495Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:43.5553550Z SOURCE_COMMAND_START {"operation": "ls-tree", "argument_count": 5}
+2026-10-29T08:36:43.5631481Z SOURCE_COMMAND_END {"operation": "ls-tree"}
+2026-10-29T08:36:43.5672770Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:43.9184937Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:43.9206851Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:43.9331466Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:43.9332394Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:43.9461919Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 37}
+2026-10-29T08:36:44.2252031Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:44.2256601Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:44.2421042Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:44.2421951Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:44.2556969Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:44.5257668Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:44.5262402Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:44.5379078Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:44.5379737Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:44.5501978Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:44.8267873Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:44.8272892Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:44.8410348Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:44.8410893Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:44.8555808Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:45.1328157Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:45.1333419Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:45.1491372Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:45.1492018Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:45.1623717Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 39}
+2026-10-29T08:36:45.4347493Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:45.4360579Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:45.4488409Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:45.4488939Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:45.4619204Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 38}
+2026-10-29T08:36:45.7204230Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:45.7210784Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:45.7352665Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:45.7353164Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:45.7482846Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:46.0501599Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:46.0509047Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:46.0679360Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:46.0679987Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:46.0828676Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:46.3759176Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:46.3766074Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:46.3915437Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:46.4061191Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:46.4061886Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:46.7339427Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:46.7346915Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:46.7543049Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:46.7543468Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:46.7672935Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:47.1018904Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:47.1025559Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:47.1213409Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:47.1214308Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:47.1338949Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:47.4121509Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:47.4128814Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:47.4269717Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:47.4270495Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:47.4396675Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:47.7526091Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:47.7532722Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:47.7670741Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:47.7671246Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:47.7808136Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:48.1165661Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:48.1172631Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:48.1323013Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:48.1323730Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:48.1445367Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:48.4636228Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:48.4643298Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:48.4762262Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:48.4762805Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:48.4884893Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:48.7379561Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:48.7389053Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:48.7523681Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:48.7524053Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:48.7656625Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:49.0494365Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:49.0501806Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:49.0659156Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:49.0659629Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:49.0805431Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:49.3718811Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:49.3727019Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:49.3878753Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:49.3879542Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:49.4037818Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:49.6743490Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:49.6751829Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:49.6921301Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:49.6921821Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:49.7058206Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:50.0124114Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:50.0131732Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:50.0334134Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:50.0334885Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:50.0476029Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:50.3448049Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:50.3456313Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:50.3584297Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:50.3585101Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:50.3720989Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:50.6336357Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:50.6345635Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:50.6492705Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:50.6493376Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:50.6622232Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:50.9718915Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:50.9726946Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:50.9917622Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:50.9918188Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:51.0058522Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:51.2591500Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:51.2600032Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:51.2821774Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:51.2822311Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:51.2945079Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 39}
+2026-10-29T08:36:51.5967211Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:51.5975664Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:51.6209470Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:51.6210005Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:51.6393679Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 24}
+2026-10-29T08:36:52.2133187Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:52.2143097Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 22}
+2026-10-29T08:36:52.2334323Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:52.2335099Z SOURCE_BATCH_COMPLETE {"files": 16}
+2026-10-29T08:36:52.2454358Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 30}
+2026-10-29T08:36:52.5903927Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:52.5914100Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 28}
+2026-10-29T08:36:52.6156421Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:52.6157017Z SOURCE_BATCH_COMPLETE {"files": 22}
+2026-10-29T08:36:52.6282443Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:52.9558723Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:52.9568218Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:52.9908992Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:52.9909547Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:53.0090377Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 38}
+2026-10-29T08:36:53.2848756Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:53.2858301Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:53.3261960Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:53.3262487Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:53.3380753Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 30}
+2026-10-29T08:36:53.6067380Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:53.6077320Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:53.6199372Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:53.6200090Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:53.6299837Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:53.9088183Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:53.9097782Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:53.9242028Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:53.9242571Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:53.9388434Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:54.2149506Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:54.2159585Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:54.2315107Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:54.2315516Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:54.2431531Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:54.5244547Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:54.5255353Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:54.5387880Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:54.5388283Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:54.5519135Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:54.8340293Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:54.8349654Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:54.8521663Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:54.8522055Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:54.8676499Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:55.1548103Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:55.1557790Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:55.1752906Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:55.1753464Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:55.1886640Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:55.4291729Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:55.4301698Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:55.4413597Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:55.4414140Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:55.4535471Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:55.7089287Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:55.7099714Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:55.7222079Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:55.7222479Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:55.7351660Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:56.0033930Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:56.0045219Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:56.0192323Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:56.0192890Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:56.0339115Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 30}
+2026-10-29T08:36:56.2941637Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:56.2952745Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 28}
+2026-10-29T08:36:56.3156159Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:56.3156644Z SOURCE_BATCH_COMPLETE {"files": 22}
+2026-10-29T08:36:56.3267167Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 16}
+2026-10-29T08:36:56.5930405Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:56.5941994Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 14}
+2026-10-29T08:36:56.6229620Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:56.6230086Z SOURCE_BATCH_COMPLETE {"files": 8}
+2026-10-29T08:36:56.6277303Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 15}
+2026-10-29T08:36:56.8878704Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:56.8889707Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 13}
+2026-10-29T08:36:56.9255698Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:56.9256425Z SOURCE_BATCH_COMPLETE {"files": 7}
+2026-10-29T08:36:56.9307579Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 15}
+2026-10-29T08:36:57.2139630Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:57.2150922Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 13}
+2026-10-29T08:36:57.2666631Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:57.2667136Z SOURCE_BATCH_COMPLETE {"files": 7}
+2026-10-29T08:36:57.2715381Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 15}
+2026-10-29T08:36:57.5457859Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:57.5468987Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 13}
+2026-10-29T08:36:57.5675895Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:57.5676320Z SOURCE_BATCH_COMPLETE {"files": 7}
+2026-10-29T08:36:57.5729493Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 17}
+2026-10-29T08:36:57.8621371Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:57.8632969Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 15}
+2026-10-29T08:36:57.8920440Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:57.8920842Z SOURCE_BATCH_COMPLETE {"files": 9}
+2026-10-29T08:36:57.8971625Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 13}
+2026-10-29T08:36:58.1786082Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:58.1797916Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 11}
+2026-10-29T08:36:58.2210777Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:58.2211438Z SOURCE_BATCH_COMPLETE {"files": 5}
+2026-10-29T08:36:58.2248757Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 12}
+2026-10-29T08:36:58.5133887Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:58.5146484Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 10}
+2026-10-29T08:36:58.5343780Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:58.5344288Z SOURCE_BATCH_COMPLETE {"files": 4}
+2026-10-29T08:36:58.5381525Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 12}
+2026-10-29T08:36:58.8186783Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:58.8198690Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 10}
+2026-10-29T08:36:58.8475133Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:58.8475837Z SOURCE_BATCH_COMPLETE {"files": 4}
+2026-10-29T08:36:58.8507688Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 12}
+2026-10-29T08:36:59.1176203Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:59.1189531Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 10}
+2026-10-29T08:36:59.1552221Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:59.1552828Z SOURCE_BATCH_COMPLETE {"files": 4}
+2026-10-29T08:36:59.1595305Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 11}
+2026-10-29T08:36:59.4493888Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:59.4508427Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 9}
+2026-10-29T08:36:59.4713085Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:59.4713705Z SOURCE_BATCH_COMPLETE {"files": 3}
+2026-10-29T08:36:59.4748251Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:36:59.7792376Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:36:59.7805118Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:36:59.8100550Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:36:59.8101047Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:36:59.8247886Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:00.1032046Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:00.1044591Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:00.1408949Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:00.1409544Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:00.1540819Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:00.4655431Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:00.4668062Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:00.4819486Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:00.4819995Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:00.4986446Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:00.7889037Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:00.7901158Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:00.8100519Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:00.8100976Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:00.8225934Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:01.2211877Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:01.2225463Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:01.2464975Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:01.2465372Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:01.2629419Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:01.6087647Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:01.6101193Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:01.6252023Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:01.6252430Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:01.6398291Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:01.9866925Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:01.9880846Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:02.0050856Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:02.0051233Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:02.0177620Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:02.3857539Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:02.3871084Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:02.3992804Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:02.3993235Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:02.4146887Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:02.8569081Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:02.8583684Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:02.8775609Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:02.8776131Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:02.8922473Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:03.2257831Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:03.2271440Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:03.2528234Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:03.2528749Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:03.2677733Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:03.6019860Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:03.6035874Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:03.6199446Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:03.6200551Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:03.6381352Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:04.0045802Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:04.0060915Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:04.0248678Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:04.0249126Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:04.0377819Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:04.3892841Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:04.3907204Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:04.4066563Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:04.4067017Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:04.4201966Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:04.8282524Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:04.8296436Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:04.8520527Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:04.8523186Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:04.8654502Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:05.2298647Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:05.2312634Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:05.2584966Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:05.2585418Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:05.2725878Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:05.6307794Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:05.6322892Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:05.6471456Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:05.6471888Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:05.6604247Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:06.0086633Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:06.0102200Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:06.0279680Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:06.0280250Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:06.0412810Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:06.4185312Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:06.4199833Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:06.4359346Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:06.4359894Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:06.4488797Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:06.8411926Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:06.8426270Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:06.8655562Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:06.8656090Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:06.8821130Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:07.2479192Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:07.2492991Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:07.2791525Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:07.2792191Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:07.2915059Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:07.6093276Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:07.6108090Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:07.6264913Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:07.6265538Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:07.6391498Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:07.9829164Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:07.9842842Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:08.0018704Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:08.0019252Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:08.0132202Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:08.3498830Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:08.3513776Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:08.3620699Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:08.3621147Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:08.3737625Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 40}
+2026-10-29T08:37:08.7346923Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:08.7362458Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 38}
+2026-10-29T08:37:08.7492312Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:08.7492750Z SOURCE_BATCH_COMPLETE {"files": 32}
+2026-10-29T08:37:08.7610924Z SOURCE_COMMAND_START {"operation": "fetch", "argument_count": 35}
+2026-10-29T08:37:09.1545934Z SOURCE_COMMAND_END {"operation": "fetch"}
+2026-10-29T08:37:09.1561306Z SOURCE_COMMAND_START {"operation": "checkout", "argument_count": 33}
+2026-10-29T08:37:09.1738637Z SOURCE_COMMAND_END {"operation": "checkout"}
+2026-10-29T08:37:09.1739092Z SOURCE_BATCH_COMPLETE {"files": 27}
+2026-10-29T08:37:09.1873194Z SOURCE_BATCH_MATERIALIZATION {"batches": 74, "max_files": 32, "max_source_bytes": 2097152, "fsync_after_each_batch": true, "memory_limit": 67108864}
+2026-10-29T08:37:09.1874162Z SOURCE_COMMAND_START {"operation": "rev-parse", "argument_count": 3}
+2026-10-29T08:37:09.1919718Z SOURCE_COMMAND_END {"operation": "rev-parse"}
+2026-10-29T08:37:09.8440990Z SOURCE_COMMAND_START {"operation": "ls-files", "argument_count": 3}
+2026-10-29T08:37:09.8509959Z SOURCE_COMMAND_END {"operation": "ls-files"}
+2026-10-29T08:37:09.8515969Z SOURCE_COMMAND_START {"operation": "status", "argument_count": 3}
+2026-10-29T08:37:09.8791847Z SOURCE_COMMAND_END {"operation": "status"}
+2026-10-29T08:37:09.8871390Z SOURCE_COMMAND_START {"operation": "rev-parse", "argument_count": 3}
+2026-10-29T08:37:09.8934274Z SOURCE_COMMAND_END {"operation": "rev-parse"}
+2026-10-29T08:37:09.8939956Z SOURCE_RECOVERY_RESULT {"adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed", "aggregate_memory_limit": 67108864, "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33", "commercial_acceptance": "NOT_DELIVERED", "fd_named_stability_verified": true, "file_modes_verified": true, "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays", "git_tree": "2716f39bdebab52c82d971284d2e062a2473c5c8", "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c", "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632", "overlay_tickets": [], "postgres17": "PG_PENDING", "project_tests": "NOT_RUN", "project_upper_bound": 536870912, "source_mismatches": 0, "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS", "swap_limit": 0, "verified_source_bytes": 50175181, "verified_source_files": 2065, "windows_source_files_written": 0}
+2026-10-29T08:37:09.9111071Z           Finished with result: success
+2026-10-29T08:37:09.9111927Z Main processes terminated with: code=exited, status=0/SUCCESS
+2026-10-29T08:37:09.9112799Z                Service runtime: 27.552s
+2026-10-29T08:37:09.9113760Z              CPU time consumed: 6.691s
+2026-10-29T08:37:09.9114248Z                    Memory peak: 64M (swap: 0B)
+2026-10-29T08:37:09.9323554Z SERVICE_CLEANUP_ONCE {"deadline_remaining":452.41481352899996,"limits":{"memory.max":"536870912","memory.oom.group":"1","memory.swap.max":"0"},"unit":"xb-min-source"}
+2026-10-29T08:37:09.9324498Z STAGE_TERMINAL {"deadline_remaining":452.414666303,"exit":0,"stage":"source"}
+2026-10-29T08:37:09.9376003Z Running as unit: xb-min-copy.service
+2026-10-29T08:37:10.0281044Z SUBJECT_RUNNER_RESOURCE {"canonical_source_base":"823744db378f508a1996f8c23faf1b42f115ad33","cgroup":"0::/xiongbaowork.slice/xb-min-copy.service","gid":1001,"overlay_formally_adopted":false,"own":{"memory.max":"67108864","memory.oom.group":"1","memory.swap.max":"0"},"parent":{"memory.max":"536870912","memory.oom.group":"1","memory.swap.max":"0"},"schema_overlay_ref":"b7205b9d5a1af42d920e0775e29d5c6ec6dc7332","schema_overlay_sha256":"6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1","uid":1001}
+2026-10-29T08:37:10.1631693Z Traceback (most recent call last):
+2026-10-29T08:37:10.1636286Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 456, in <module>
+2026-10-29T08:37:10.1637020Z     if __name__=="__main__":main()
+2026-10-29T08:37:10.1637395Z                             ~~~~^^
+2026-10-29T08:37:10.1638052Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 451, in main
+2026-10-29T08:37:10.1638775Z     elif stage=="copy":prepare_copy(base,target)
+2026-10-29T08:37:10.1639235Z                        ~~~~~~~~~~~~^^^^^^^^^^^^^
+2026-10-29T08:37:10.1639925Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 103, in prepare_copy
+2026-10-29T08:37:10.1640731Z     assert verify_inputs(original,manifest)==50175181
+2026-10-29T08:37:10.1641201Z            ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+2026-10-29T08:37:10.1641903Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 93, in verify_inputs
+2026-10-29T08:37:10.1642785Z     assert s==wanted,{"path":item["path"],"actual":s,"expected":wanted}
+2026-10-29T08:37:10.1643408Z            ^^^^^^^^^
+2026-10-29T08:37:10.1645443Z AssertionError: {'path': 'openbot/app/src/lib/tasks/actions.ts', 'actual': {'bytes': 478, 'sha256': '81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63', 'mode': '0o644'}, 'expected': {'bytes': 478, 'sha256': '81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63', 'mode': '100644'}}
+2026-10-29T08:37:10.1854294Z           Finished with result: exit-code
+2026-10-29T08:37:10.1855403Z Main processes terminated with: code=exited, status=1/FAILURE
+2026-10-29T08:37:10.1856145Z                Service runtime: 242ms
+2026-10-29T08:37:10.1856673Z              CPU time consumed: 178ms
+2026-10-29T08:37:10.1857243Z                    Memory peak: 23.3M (swap: 0B)
+2026-10-29T08:37:10.2050920Z SERVICE_CLEANUP_ONCE {"deadline_remaining":452.141980645,"limits":{"memory.max":"536870912","memory.oom.group":"1","memory.swap.max":"0"},"unit":"xb-min-copy"}
+2026-10-29T08:37:10.2051791Z STAGE_TERMINAL {"deadline_remaining":452.141851864,"exit":1,"stage":"copy"}
+2026-10-29T08:37:10.2054410Z PROJECT_LIMIT_RESTORED {"limits":{"memory.max":"536870912","memory.oom.group":"1","memory.swap.max":"0"},"populated":"0"}
+2026-10-29T08:37:10.2449259Z Traceback (most recent call last):
+2026-10-29T08:37:10.2452222Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 456, in <module>
+2026-10-29T08:37:10.2452963Z     if __name__=="__main__":main()
+2026-10-29T08:37:10.2453263Z                             ~~~~^^
+2026-10-29T08:37:10.2453727Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 440, in main
+2026-10-29T08:37:10.2454257Z     admin_run(base,target,uid,gid);return
+2026-10-29T08:37:10.2454598Z     ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T08:37:10.2455522Z   File "/home/runner/work/_temp/minimal-generator-controller.py", line 422, in admin_run
+2026-10-29T08:37:10.2456476Z     if code:raise RuntimeError("preparation failed: "+stage)
+2026-10-29T08:37:10.2456895Z             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T08:37:10.2457253Z RuntimeError: preparation failed: copy
+2026-10-29T08:37:10.2670502Z ##[error]Process completed with exit code 1.
+2026-10-29T08:37:10.2792231Z ##[group]Run set -euo pipefail
+2026-10-29T08:37:10.2792604Z [36;1mset -euo pipefail[0m
+2026-10-29T08:37:10.2792908Z [36;1msudo /usr/bin/python3 -I -B - <<'PY'[0m
+2026-10-29T08:37:10.2793236Z [36;1mimport json,subprocess,time[0m
+2026-10-29T08:37:10.2793519Z [36;1mfrom pathlib import Path[0m
+2026-10-29T08:37:10.2793844Z [36;1mparent=Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T08:37:10.2794344Z [36;1munits=("xb-min-source","xb-min-copy","xb-min-deps","xb-min-generate","xb-min-export")[0m
+2026-10-29T08:37:10.2795157Z [36;1mcleanup_deadline=time.monotonic()+10[0m
+2026-10-29T08:37:10.2795466Z [36;1mfor unit in units:[0m
+2026-10-29T08:37:10.2795726Z [36;1m    cg=parent/(unit+".service")[0m
+2026-10-29T08:37:10.2796009Z [36;1m    if not cg.exists():continue[0m
+2026-10-29T08:37:10.2796503Z [36;1m    populated=dict(line.split() for line in (cg/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T08:37:10.2797051Z [36;1m    if populated=="0":continue[0m
+2026-10-29T08:37:10.2797424Z [36;1m    if (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")[0m
+2026-10-29T08:37:10.2797874Z [36;1m    remaining=cleanup_deadline-time.monotonic()-2[0m
+2026-10-29T08:37:10.2798201Z [36;1m    if remaining>0:[0m
+2026-10-29T08:37:10.2798847Z [36;1m        try:subprocess.run(["systemctl","stop",unit+".service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)[0m
+2026-10-29T08:37:10.2799558Z [36;1m        except subprocess.TimeoutExpired:[0m
+2026-10-29T08:37:10.2800024Z [36;1m            if cg.exists() and (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")[0m
+2026-10-29T08:37:10.2800660Z [36;1massert parent.exists(),"project resource parent was not established; no execution success"[0m
+2026-10-29T08:37:10.2801335Z [36;1mfor name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:[0m
+2026-10-29T08:37:10.2801828Z [36;1m    (parent/name).write_text(value)[0m
+2026-10-29T08:37:10.2802362Z [36;1mactual={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}[0m
+2026-10-29T08:37:10.2803229Z [36;1massert actual=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T08:37:10.2803836Z [36;1mevents=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())[0m
+2026-10-29T08:37:10.2804300Z [36;1massert events["populated"]=="0"[0m
+2026-10-29T08:37:10.2805386Z [36;1mprint("GENERATOR_ALWAYS_RESTORED "+json.dumps({"limits":actual,"populated":events["populated"],"Source_adopted":False,"ROOT_RELEASE":None,"ready":False,"PG":"PG_PENDING"}),flush=True)[0m
+2026-10-29T08:37:10.2806187Z [36;1mPY[0m
+2026-10-29T08:37:10.2836792Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:37:10.2837149Z ##[endgroup]
+2026-10-29T08:37:10.3272869Z GENERATOR_ALWAYS_RESTORED {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "Source_adopted": false, "ROOT_RELEASE": null, "ready": false, "PG": "PG_PENDING"}
+2026-10-29T08:37:10.3426400Z Cleaning up orphan processes

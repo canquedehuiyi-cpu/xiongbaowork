@@ -24,7 +24,7 @@
   ],
   "execution_branch": "codex/cloud-minimal-generator-run-20261029-a3",
   "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a3",
-  "state": "IN_PROGRESS_NO_PASS_CLAIM",
+  "state": "COMPLETED_FAILURE_COPY_MODE_GUARD",
   "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "limits": {

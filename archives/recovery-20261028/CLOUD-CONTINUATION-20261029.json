@@ -494,7 +494,7 @@
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
     "lease_expires_at": "2026-10-29T08:49:59.948Z",
-    "next_action": "Read existing run40843372223/job123344875216 terminal/logs only; do not create/retry any execution branch. Persist exact stages and output. If lease expires, no writes until terminal+idle and lawful successor CAS; then checkpoint and release. No Source adoption."
+    "next_action": "No rerun of this SHA. Prepare strict normalization of only existing manifest mode strings100644/0o644 preserving exact permissions and every byte/hash/FD check; obtain new nonauthor exact review before next worker single dispatch."
   },
   "cloud_push_probe_a2": {
     "schema": "xiongbaowork-cloud-resource-probe-result-v2",
@@ -557,24 +557,14 @@
   "cloud_work_queue": {
     "resource_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "epoch": "2026-10-29T08:04:59.948Z:972136c2",
-    "active_job": {
-      "run": 40843372223,
-      "job": 123344875216,
-      "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
-      "status": "in_progress",
-      "resource_group": "source-recovery-bytes",
-      "repeat_prohibited": true
-    },
+    "active_job": null,
     "preparation": {
       "agent": "/root/persistence_review",
-      "candidate": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
-      "status": "EXECUTING_EXISTING_RUN_ONLY",
-      "review": {
-        "commit": "fa8e0ec601f72848cced073a8b13df1a28ee3c44",
-        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-ROOT-REVIEW-20261029.json",
-        "blob": "c1a27097130aea41f54074056fff6957da560b80",
-        "verdict": "ADMIN_GENERATOR_DIAGNOSTIC_APPROVED_FOR_ROOT_SINGLE_DISPATCH_AFTER_LEASE_AND_IDLE"
-      }
+      "status": "A4_MODE_ADAPTER_PREPARING_NOT_RUN",
+      "failed_candidate": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+      "failed_run": 40843372223,
+      "independent_review": "pending exact report",
+      "repeat_same_sha": false
     },
     "independent_reviewer": "/root/delivery_review",
     "restart_ack_audit": {
@@ -617,7 +607,7 @@
     ],
     "execution_branch": "codex/cloud-minimal-generator-run-20261029-a3",
     "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a3",
-    "state": "IN_PROGRESS_NO_PASS_CLAIM",
+    "state": "COMPLETED_FAILURE_COPY_MODE_GUARD",
     "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "epoch": "2026-10-29T08:04:59.948Z:972136c2",
     "limits": {
@@ -694,5 +684,215 @@
     "resolution_rule": "Preserve both exact historical reports. Current route blocked; no majority/overwriting approval. New author must answer every original P2 and independent non-author review exact successor. No new Source or run proof.",
     "new_author_conversation": "6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9",
     "new_preparation_branch": "codex/route-tree-deadline-fix-20261029"
+  },
+  "cloud_generator_result": {
+    "schema": "xiongbaowork-minimal-generator-run-result-v1",
+    "candidate": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+    "tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
+    "run": 40843372223,
+    "job": 123344875216,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "failure",
+    "source_stage": {
+      "exit": 0,
+      "files": 2065,
+      "bytes": 50175181,
+      "mode_and_fd_checks": true,
+      "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "data_memory_max": 67108864,
+      "project_max": 536870912,
+      "swap": 0,
+      "batches": 74,
+      "runtime_seconds": 27.552,
+      "automatic_peak": "64M"
+    },
+    "copy_stage": {
+      "exit": 1,
+      "cause": "MODE_REPRESENTATION_TEXT_COMPARISON",
+      "path": "openbot/app/src/lib/tasks/actions.ts",
+      "actual": {
+        "bytes": 478,
+        "sha256": "81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63",
+        "mode": "0o644"
+      },
+      "expected": {
+        "bytes": 478,
+        "sha256": "81ab06bdc9476eae70354c7996e3af0bce2f0a54939b940f9c8883931062ff63",
+        "mode": "100644"
+      },
+      "explanation": "Git regular-file mode100644 and filesystem0o644 carry identical permission bits; existing source-stage integer-mask check passed; copy helper wrongly compares raw representations."
+    },
+    "dependencies": "NOT_RUN",
+    "generator": "NOT_RUN",
+    "metadata": "NONE",
+    "tests": "NOT_RUN",
+    "sql_execution": "NOT_RUN",
+    "source_adopted": false,
+    "events": [
+      {
+        "time": "2026-10-29T08:36:42.4491545Z",
+        "name": "SUBJECT_RUNNER_RESOURCE",
+        "data": {
+          "canonical_source_base": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "cgroup": "0::/xiongbaowork.slice/xb-min-source.service",
+          "gid": 1001,
+          "overlay_formally_adopted": false,
+          "own": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+          "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+          "uid": 1001
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:09.8939956Z",
+        "name": "SOURCE_RECOVERY_RESULT",
+        "data": {
+          "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+          "aggregate_memory_limit": 67108864,
+          "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "commercial_acceptance": "NOT_DELIVERED",
+          "fd_named_stability_verified": true,
+          "file_modes_verified": true,
+          "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+          "git_tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
+          "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+          "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+          "overlay_tickets": [],
+          "postgres17": "PG_PENDING",
+          "project_tests": "NOT_RUN",
+          "project_upper_bound": 536870912,
+          "source_mismatches": 0,
+          "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+          "swap_limit": 0,
+          "verified_source_bytes": 50175181,
+          "verified_source_files": 2065,
+          "windows_source_files_written": 0
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:09.9323554Z",
+        "name": "SERVICE_CLEANUP_ONCE",
+        "data": {
+          "deadline_remaining": 452.41481352899996,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-source"
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:09.9324498Z",
+        "name": "STAGE_TERMINAL",
+        "data": {
+          "deadline_remaining": 452.414666303,
+          "exit": 0,
+          "stage": "source"
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:10.0281044Z",
+        "name": "SUBJECT_RUNNER_RESOURCE",
+        "data": {
+          "canonical_source_base": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "cgroup": "0::/xiongbaowork.slice/xb-min-copy.service",
+          "gid": 1001,
+          "overlay_formally_adopted": false,
+          "own": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+          "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+          "uid": 1001
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:10.2050920Z",
+        "name": "SERVICE_CLEANUP_ONCE",
+        "data": {
+          "deadline_remaining": 452.141980645,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-copy"
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:10.2051791Z",
+        "name": "STAGE_TERMINAL",
+        "data": {
+          "deadline_remaining": 452.141851864,
+          "exit": 1,
+          "stage": "copy"
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:10.2054410Z",
+        "name": "PROJECT_LIMIT_RESTORED",
+        "data": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "0"
+        }
+      },
+      {
+        "time": "2026-10-29T08:37:10.3272869Z",
+        "name": "GENERATOR_ALWAYS_RESTORED",
+        "data": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "Source_adopted": false,
+          "ROOT_RELEASE": null,
+          "ready": false,
+          "PG": "PG_PENDING"
+        }
+      }
+    ],
+    "final": {
+      "memory_max": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0,
+      "always_step": "success"
+    },
+    "raw_log": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-123344875216.log",
+    "next": "No rerun of this SHA. Prepare strict normalization of only existing manifest mode strings100644/0o644 preserving exact permissions and every byte/hash/FD check; obtain new nonauthor exact review before next worker single dispatch.",
+    "gates": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "full_ci": "NOT_RUN",
+      "commercial": "NOT_DELIVERED"
+    }
   }
 }

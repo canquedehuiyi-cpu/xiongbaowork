@@ -7,17 +7,17 @@
   "run_id": "bounded-probe-development-20261029T0804Z",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "acquired_at": "2026-10-29T08:04:59.948Z",
-  "renewed_at": "2026-10-29T08:37:16.691Z",
+  "renewed_at": "2026-10-29T08:40:16.525Z",
   "expires_at": "2026-10-29T08:49:59.948Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "aac369c414884081b020e1f0914b30a5e0997986",
+  "expected_parent": "89968a96f7c05bde9e33bc936d6ddddeb2a97160",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Read existing run40843372223/job123344875216 terminal/logs only; do not create/retry any execution branch. Persist exact stages and output. If lease expires, no writes until terminal+idle and lawful successor CAS; then checkpoint and release. No Source adoption.",
+  "next_action": "No rerun of this SHA. Prepare strict normalization of only existing manifest mode strings100644/0o644 preserving exact permissions and every byte/hash/FD check; obtain new nonauthor exact review before next worker single dispatch.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -27,12 +27,5 @@
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
-  "active_job": {
-    "run": 40843372223,
-    "job": 123344875216,
-    "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
-    "status": "in_progress",
-    "resource_group": "source-recovery-bytes",
-    "repeat_prohibited": true
-  }
+  "active_job": null
 }
