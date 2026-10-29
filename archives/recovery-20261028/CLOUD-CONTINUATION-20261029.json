@@ -573,41 +573,69 @@
     "previous_epoch": "2026-10-29T09:43:24.320Z:admin-close-c5add435",
     "lease_state": "released",
     "active_job": null,
-    "next_action": "Prepare exact pinned ORM0.45.2/SRI metadata validation repair from actual lock_only /peerDependencies/prisma and matching optionalPeers/peerDependenciesMeta(prisma.optional=true) evidence; explain declared versus lock representation. Do not drop peer validation or rerun full17 unchanged. Independent review before any next diagnostic.",
+    "next_action": "A different author-independent reviewer must fully review exact f97260fa06af41ea8a5e7d94420de53eee99cb49 three files/byte hashes/modes, including 16 defined guard cases and all inherited gates. This worker authored A6 and cannot approve its own candidate in a later pass. Only after that review may a valid coordinator lease+idlequeue dispatch a single new A6 run; never rerunA5 unchanged or adopt source.",
     "preparation": {
-      "schema": "xiongbaowork-next-bounded-pass-v2",
-      "recorded_at": "2026-10-29T09:45:04.133Z",
-      "state": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
-      "purpose": "Obtain actual SRI-authenticated drizzle-orm0.45.2 public package metadata and exact lock comparison; do not weaken peerDependencies validation or rerun Source+17 chain.",
-      "preparation_branch": "codex/cloud-orm-metadata-prep-20261029-a1",
-      "preparation_base": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
-      "candidate_sha": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
-      "review_sha": null,
-      "execution_branch": "codex/cloud-orm-metadata-run-20261029-a1",
-      "paths": [
-        ".github/workflows/cloud-orm-metadata.yml",
-        "archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py",
-        "archives/recovery-20261028/CLOUD-ORM-METADATA-PLAN-20261029.json"
+      "schema": "xiongbaowork-generator-a6-author-preparation-v1",
+      "author": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d",
+      "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_RUN_NOT_ADOPTED",
+      "candidate_sha": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+      "candidate_tree": "0877bb2bb252935d54e8f7d234c91c6703d600cf",
+      "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a6",
+      "execution_branch": "codex/cloud-minimal-generator-run-20261029-a6",
+      "base_controller_candidate": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+      "files": [
+        {
+          "path": ".github/workflows/cloud-minimal-generator.yml",
+          "blob": "43656e7f84cb64b305f6dd5f35d4ddc3bf199bf2",
+          "bytes": 4017,
+          "sha256": "25756cf70470e2eb3ed49b9e0979c66e5b15db766b528c46d278d2d35fe157ac",
+          "mode": "100644",
+          "exact_readback": true
+        },
+        {
+          "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+          "blob": "0bb05f47a78fe7229bb7e3f25ce068f5f1746e58",
+          "bytes": 79617,
+          "sha256": "303f75f521291fb5e57912b8a28ba25e8b3649f46ac65b0297cdcb3ebace1815",
+          "mode": "100644",
+          "exact_readback": true
+        },
+        {
+          "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+          "blob": "a9acbb7a5b3f33e3966c2a54d116b4e56197804f",
+          "bytes": 33364,
+          "sha256": "e845f3cd869d2d633ac2abcfefcf85d496ded88571c719e6cdeb30eb17fbe971",
+          "mode": "100644",
+          "exact_readback": true
+        }
       ],
-      "author_status": "Candidate is now committed to exclusive preparation branch and files retrieved by exact SHA; no independent implementation review has approved it.",
-      "dispatch_allowed": false,
-      "required_next": "Read latest canonical head/lease and Actions queue. Acquire new unique owner/run/epoch by expected-head CAS only if released/expired+idle. Read preparation branch actual latest commit/diff/three full files; if still base or absent, no candidate. Obtain non-author exact SHA/blob/bytes/SHA/mode/full review before any execution branch. Then legal coordinator may single-dispatch only reviewed one-package metadata DATA64/parent512/swap0/nohooks/noinstall/nonnative/noSource job. If ref/run exists reuse it, never repeat. Capture actual fields and raw JSON identities/differences; only then propose precise metadata validation repair. Persist and release.",
-      "old_runs_no_repeat": [
-        40845991318,
-        40850003450
-      ],
-      "last_actual": {
-        "run": 40850003450,
-        "job": 123366832250,
-        "overall": "failure",
-        "sri_archives": 11,
-        "prepared_packages": 10,
-        "failed_field": "drizzle-orm.peerDependencies",
-        "actual_values": "UNKNOWN_NOT_LOGGED",
-        "native": "NOT_RUN",
-        "generator": "NOT_RUN",
-        "metadata": "NONE"
+      "source_paths_changed": 0,
+      "administrative_paths": 3,
+      "change": "Keep every original lock node/URL/SRI/edge, FULL50 source/copy and resource/deadline stages. Strict dependency equality default; only fixed ORM0.45.2/url/SRI/rawpackageJSON177277B+9fd30ce7... allows sole absent declaredprisma with unchanged complete optionalPeer metadata. No package/lock mutation.",
+      "evidence": {
+        "run": 40857520611,
+        "job": 123392107062,
+        "result_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478"
       },
+      "guard_contract": {
+        "positive_definitions": 2,
+        "negative_definitions": 14,
+        "executed": false,
+        "future_stage": "DATA64 deps before downloads",
+        "identity_in_test_is_synthetic": true
+      },
+      "validation": {
+        "full_three_file_readbacks": true,
+        "compare_only_three_administrative_paths": true,
+        "original_lock_nodes_unchanged": true,
+        "subject_executed": false,
+        "workflow_dispatched": false,
+        "package_installed": false,
+        "generator_run": false,
+        "tests_run": false,
+        "source_adopted": false
+      },
+      "required_next": "A different author-independent reviewer must fully review exact f97260fa06af41ea8a5e7d94420de53eee99cb49 three files/byte hashes/modes, including 16 defined guard cases and all inherited gates. This worker authored A6 and cannot approve its own candidate in a later pass. Only after that review may a valid coordinator lease+idlequeue dispatch a single new A6 run; never rerunA5 unchanged or adopt source.",
       "gates": {
         "ROOT_RELEASE": null,
         "ready": false,
@@ -617,28 +645,7 @@
         "PG": "PG_PENDING",
         "full_ci": "NOT_RUN",
         "commercial": "NOT_DELIVERED"
-      },
-      "candidate_tree": "398724616dda35c8ed4f47b5f86eb0fe16a7ae00",
-      "files": [
-        {
-          "path": ".github/workflows/cloud-orm-metadata.yml",
-          "blob": "e6f9af0095b0f938b6adf133c267c31a724db940",
-          "bytes": 3844,
-          "sha256": "8c73c3580260658f8a21e3ddc9699e259063fe2ae2513209ceaf09b987958d50"
-        },
-        {
-          "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py",
-          "blob": "6df31b07543cdc15fdb6a4d8162eed4b44f94699",
-          "bytes": 25893,
-          "sha256": "457c5697da9f723b7061b4d7296b3b39121f4590d670c60369124f04b1ba76cb"
-        },
-        {
-          "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-PLAN-20261029.json",
-          "blob": "7ba75adb79ecdd63d21b0869d7f6fb8102627901",
-          "bytes": 7814,
-          "sha256": "5f79a10a6770656f87e5872e239650a617da33fae795a1a53fcd0f5f78087969"
-        }
-      ]
+      }
     }
   },
   "restart_ack_audit": {
@@ -2664,7 +2671,7 @@
     ],
     "author_status": "Candidate is now committed to exclusive preparation branch and files retrieved by exact SHA; no independent implementation review has approved it.",
     "dispatch_allowed": false,
-    "required_next": "Prepare exact pinned ORM0.45.2/SRI metadata validation repair from actual lock_only /peerDependencies/prisma and matching optionalPeers/peerDependenciesMeta(prisma.optional=true) evidence; explain declared versus lock representation. Do not drop peer validation or rerun full17 unchanged. Independent review before any next diagnostic.",
+    "required_next": "A different author-independent reviewer must fully review exact f97260fa06af41ea8a5e7d94420de53eee99cb49 three files/byte hashes/modes, including 16 defined guard cases and all inherited gates. This worker authored A6 and cannot approve its own candidate in a later pass. Only after that review may a valid coordinator lease+idlequeue dispatch a single new A6 run; never rerunA5 unchanged or adopt source.",
     "old_runs_no_repeat": [
       40845991318,
       40850003450
@@ -2713,7 +2720,9 @@
       }
     ],
     "actual_run": 40857520611,
-    "actual_job": 123392107062
+    "actual_job": 123392107062,
+    "compatibility_candidate": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "compatibility_status": "AUTHOR_PREPARED_UNREVIEWED_NOT_RUN_NOT_ADOPTED"
   },
   "cloud_orm_metadata_result": {
     "schema": "xiongbaowork-orm-metadata-actual-result-v1",
@@ -3281,5 +3290,78 @@
       "commercial": "NOT_DELIVERED"
     },
     "next_action": "Prepare exact pinned ORM0.45.2/SRI metadata validation repair from actual lock_only /peerDependencies/prisma and matching optionalPeers/peerDependenciesMeta(prisma.optional=true) evidence; explain declared versus lock representation. Do not drop peer validation or rerun full17 unchanged. Independent review before any next diagnostic."
+  },
+  "cloud_generator_a6_preparation": {
+    "schema": "xiongbaowork-generator-a6-author-preparation-v1",
+    "author": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d",
+    "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_RUN_NOT_ADOPTED",
+    "candidate_sha": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "candidate_tree": "0877bb2bb252935d54e8f7d234c91c6703d600cf",
+    "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a6",
+    "execution_branch": "codex/cloud-minimal-generator-run-20261029-a6",
+    "base_controller_candidate": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+    "files": [
+      {
+        "path": ".github/workflows/cloud-minimal-generator.yml",
+        "blob": "43656e7f84cb64b305f6dd5f35d4ddc3bf199bf2",
+        "bytes": 4017,
+        "sha256": "25756cf70470e2eb3ed49b9e0979c66e5b15db766b528c46d278d2d35fe157ac",
+        "mode": "100644",
+        "exact_readback": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+        "blob": "0bb05f47a78fe7229bb7e3f25ce068f5f1746e58",
+        "bytes": 79617,
+        "sha256": "303f75f521291fb5e57912b8a28ba25e8b3649f46ac65b0297cdcb3ebace1815",
+        "mode": "100644",
+        "exact_readback": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+        "blob": "a9acbb7a5b3f33e3966c2a54d116b4e56197804f",
+        "bytes": 33364,
+        "sha256": "e845f3cd869d2d633ac2abcfefcf85d496ded88571c719e6cdeb30eb17fbe971",
+        "mode": "100644",
+        "exact_readback": true
+      }
+    ],
+    "source_paths_changed": 0,
+    "administrative_paths": 3,
+    "change": "Keep every original lock node/URL/SRI/edge, FULL50 source/copy and resource/deadline stages. Strict dependency equality default; only fixed ORM0.45.2/url/SRI/rawpackageJSON177277B+9fd30ce7... allows sole absent declaredprisma with unchanged complete optionalPeer metadata. No package/lock mutation.",
+    "evidence": {
+      "run": 40857520611,
+      "job": 123392107062,
+      "result_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478"
+    },
+    "guard_contract": {
+      "positive_definitions": 2,
+      "negative_definitions": 14,
+      "executed": false,
+      "future_stage": "DATA64 deps before downloads",
+      "identity_in_test_is_synthetic": true
+    },
+    "validation": {
+      "full_three_file_readbacks": true,
+      "compare_only_three_administrative_paths": true,
+      "original_lock_nodes_unchanged": true,
+      "subject_executed": false,
+      "workflow_dispatched": false,
+      "package_installed": false,
+      "generator_run": false,
+      "tests_run": false,
+      "source_adopted": false
+    },
+    "required_next": "A different author-independent reviewer must fully review exact f97260fa06af41ea8a5e7d94420de53eee99cb49 three files/byte hashes/modes, including 16 defined guard cases and all inherited gates. This worker authored A6 and cannot approve its own candidate in a later pass. Only after that review may a valid coordinator lease+idlequeue dispatch a single new A6 run; never rerunA5 unchanged or adopt source.",
+    "gates": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "full_ci": "NOT_RUN",
+      "commercial": "NOT_DELIVERED"
+    }
   }
 }
