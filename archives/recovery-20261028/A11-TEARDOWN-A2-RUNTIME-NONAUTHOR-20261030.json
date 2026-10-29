@@ -1,0 +1,1208 @@
+{
+  "schema": "a11-teardown-a2-independent-runtime-evidence/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+  "run": 40914666271,
+  "job": 123591585627,
+  "status": "completed",
+  "conclusion": "failure",
+  "verdict": "EXACT_POST_ADMIN_SHARED_OOMGROUP_ZERO_OBSERVED_ORIGINAL_GATE_FAILED",
+  "log": {
+    "characters": 30455,
+    "sha256_utf8": "10361c15192f3125efc1ebbc27d04c042db9f6c8933974f9152cf5536b39faa6",
+    "full_connector_read": true
+  },
+  "native_jobs": [
+    {
+      "id": 123591585627,
+      "name": "data-only",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_id": 40914666271,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Verify administrative controller and run teardown-only control",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Always independently verify original terminal and actual empty aggregate",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 3
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        }
+      ]
+    }
+  ],
+  "actual_markers": [
+    {
+      "prefix": "A11_TEARDOWN_BEFORE_CHILD",
+      "value": {
+        "admin_cgroup": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6836",
+          "limits": {
+            "memory.max": "16777216",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+          "populated": "1"
+        },
+        "child_cgroup": {
+          "exists": false,
+          "limits": {},
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+          "stat_error": "FileNotFoundError"
+        },
+        "completed_monotonic": 35.523231707,
+        "monotonic": 35.494831195,
+        "project": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6730",
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice",
+          "populated": "1"
+        },
+        "shared": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6792",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+          "populated": "1"
+        },
+        "units": {
+          "xb-a11-admin-40914666271-1.service": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "16777216",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xb-a11-data-40914666271-1.service": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "inactive",
+              "ControlGroup": "",
+              "Job": "",
+              "LoadState": "not-found",
+              "MemoryMax": "infinity",
+              "MemorySwapMax": "infinity",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xiongbaowork-data.slice": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "67108864",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xiongbaowork.slice": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "536870912",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          }
+        }
+      }
+    },
+    {
+      "prefix": "A11_TEARDOWN_CHILD_GATE",
+      "value": {
+        "child": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6880",
+          "limits": {
+            "memory.max": "50331648",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+          "populated": "1"
+        },
+        "prior_raw_job": 123584189279,
+        "prior_raw_run": 40912579798,
+        "project": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6730",
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice",
+          "populated": "1"
+        },
+        "raw_validation_repeated": false,
+        "scope": "RESOURCE_CONTROL_ONLY_NO_CODEC_NO_TOKEN_NO_LOG_OR_SOURCE_READ",
+        "shared": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6792",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+          "populated": "1"
+        }
+      }
+    },
+    {
+      "prefix": "A11_TEARDOWN_AFTER_CHILD_BEFORE_RESTORE",
+      "value": {
+        "admin_cgroup": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6836",
+          "limits": {
+            "memory.max": "16777216",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+          "populated": "1"
+        },
+        "child_cgroup": {
+          "exists": false,
+          "limits": {},
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+          "stat_error": "FileNotFoundError"
+        },
+        "completed_monotonic": 35.617200869,
+        "monotonic": 35.596541572,
+        "project": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6730",
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice",
+          "populated": "1"
+        },
+        "shared": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6792",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+          "populated": "1"
+        },
+        "units": {
+          "xb-a11-admin-40914666271-1.service": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "16777216",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xb-a11-data-40914666271-1.service": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "inactive",
+              "ControlGroup": "",
+              "Job": "",
+              "LoadState": "not-found",
+              "MemoryMax": "infinity",
+              "MemorySwapMax": "infinity",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xiongbaowork-data.slice": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "67108864",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xiongbaowork.slice": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "536870912",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          }
+        }
+      }
+    },
+    {
+      "prefix": "A11_TEARDOWN_AFTER_RESTORE_ADMIN_STILL_ACTIVE",
+      "value": {
+        "admin_cgroup": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6836",
+          "limits": {
+            "memory.max": "16777216",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+          "populated": "1"
+        },
+        "child_cgroup": {
+          "exists": false,
+          "limits": {},
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+          "stat_error": "FileNotFoundError"
+        },
+        "completed_monotonic": 35.637528926,
+        "monotonic": 35.617691982,
+        "project": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6730",
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice",
+          "populated": "1"
+        },
+        "shared": {
+          "dev": "30",
+          "exists": true,
+          "ino": "6792",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+          "populated": "1"
+        },
+        "units": {
+          "xb-a11-admin-40914666271-1.service": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "16777216",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xb-a11-data-40914666271-1.service": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "inactive",
+              "ControlGroup": "",
+              "Job": "",
+              "LoadState": "not-found",
+              "MemoryMax": "infinity",
+              "MemorySwapMax": "infinity",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xiongbaowork-data.slice": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "67108864",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          },
+          "xiongbaowork.slice": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "536870912",
+              "MemorySwapMax": "0",
+              "StopWhenUnneeded": "no"
+            }
+          }
+        }
+      }
+    },
+    {
+      "prefix": "A11_TEARDOWN_ADMIN_TERMINAL",
+      "value": {
+        "absolute_seconds": 150,
+        "after_child_before_restore": {
+          "admin_cgroup": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6836",
+            "limits": {
+              "memory.max": "16777216",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+            "populated": "1"
+          },
+          "child_cgroup": {
+            "exists": false,
+            "limits": {},
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+            "stat_error": "FileNotFoundError"
+          },
+          "completed_monotonic": 35.617200869,
+          "monotonic": 35.596541572,
+          "project": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6730",
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice",
+            "populated": "1"
+          },
+          "shared": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6792",
+            "limits": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+            "populated": "1"
+          },
+          "units": {
+            "xb-a11-admin-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "16777216",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xb-a11-data-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "inactive",
+                "ControlGroup": "",
+                "Job": "",
+                "LoadState": "not-found",
+                "MemoryMax": "infinity",
+                "MemorySwapMax": "infinity",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork-data.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "67108864",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "536870912",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            }
+          }
+        },
+        "after_restore": {
+          "admin_cgroup": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6836",
+            "limits": {
+              "memory.max": "16777216",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+            "populated": "1"
+          },
+          "child_cgroup": {
+            "exists": false,
+            "limits": {},
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+            "stat_error": "FileNotFoundError"
+          },
+          "completed_monotonic": 35.637528926,
+          "monotonic": 35.617691982,
+          "project": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6730",
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice",
+            "populated": "1"
+          },
+          "shared": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6792",
+            "limits": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+            "populated": "1"
+          },
+          "units": {
+            "xb-a11-admin-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "16777216",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xb-a11-data-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "inactive",
+                "ControlGroup": "",
+                "Job": "",
+                "LoadState": "not-found",
+                "MemoryMax": "infinity",
+                "MemorySwapMax": "infinity",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork-data.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "67108864",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "536870912",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            }
+          }
+        },
+        "before": {
+          "admin_cgroup": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6836",
+            "limits": {
+              "memory.max": "16777216",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+            "populated": "1"
+          },
+          "child_cgroup": {
+            "exists": false,
+            "limits": {},
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+            "stat_error": "FileNotFoundError"
+          },
+          "completed_monotonic": 35.523231707,
+          "monotonic": 35.494831195,
+          "project": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6730",
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice",
+            "populated": "1"
+          },
+          "shared": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6792",
+            "limits": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+            "populated": "1"
+          },
+          "units": {
+            "xb-a11-admin-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "16777216",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xb-a11-data-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "inactive",
+                "ControlGroup": "",
+                "Job": "",
+                "LoadState": "not-found",
+                "MemoryMax": "infinity",
+                "MemorySwapMax": "infinity",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork-data.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "67108864",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "536870912",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            }
+          }
+        },
+        "child_empty_and_limits_restored": true,
+        "child_exit": 0,
+        "elapsed": 0.1849265279999983,
+        "error": null,
+        "full_parent_empty_witness": "PENDING_EXTERNAL_AFTER_ADMIN_EXIT",
+        "inner": 155.452857469,
+        "outer": 185.452857469,
+        "prior_raw_validation": {
+          "job": 123584189279,
+          "repeated": false,
+          "run": 40912579798,
+          "status": "FOUR_RAW_BYTES_VERIFIED_IN_PRIOR_RUN_ONLY"
+        },
+        "restore_proven": false,
+        "source_adopted": false,
+        "started": 35.452857469,
+        "status": "CONTROL_LIFECYCLE_COMPLETE"
+      }
+    },
+    {
+      "prefix": "A11_TEARDOWN_ALWAYS_ACTUAL_PRE_ASSERT",
+      "value": {
+        "actual": {
+          "admin_cgroup": {
+            "exists": false,
+            "limits": {},
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+            "stat_error": "FileNotFoundError"
+          },
+          "child_cgroup": {
+            "exists": false,
+            "limits": {},
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+            "stat_error": "FileNotFoundError"
+          },
+          "completed_monotonic": 35.856389224,
+          "monotonic": 35.831901283,
+          "project": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6730",
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice",
+            "populated": "0"
+          },
+          "shared": {
+            "dev": "30",
+            "exists": true,
+            "ino": "6792",
+            "limits": {
+              "memory.max": "67108864",
+              "memory.oom.group": "0",
+              "memory.swap.max": "0"
+            },
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+            "populated": "0"
+          },
+          "units": {
+            "xb-a11-admin-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "inactive",
+                "ControlGroup": "",
+                "Job": "",
+                "LoadState": "not-found",
+                "MemoryMax": "infinity",
+                "MemorySwapMax": "infinity",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xb-a11-data-40914666271-1.service": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "inactive",
+                "ControlGroup": "",
+                "Job": "",
+                "LoadState": "not-found",
+                "MemoryMax": "infinity",
+                "MemorySwapMax": "infinity",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork-data.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "67108864",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            },
+            "xiongbaowork.slice": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "active",
+                "ControlGroup": "/xiongbaowork.slice",
+                "Job": "",
+                "LoadState": "loaded",
+                "MemoryMax": "536870912",
+                "MemorySwapMax": "0",
+                "StopWhenUnneeded": "no"
+              }
+            }
+          }
+        },
+        "read_only_no_new_cleanup": true,
+        "source_adopted": false,
+        "terminal": {
+          "absolute_seconds": 150,
+          "after_child_before_restore": {
+            "admin_cgroup": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6836",
+              "limits": {
+                "memory.max": "16777216",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+              "populated": "1"
+            },
+            "child_cgroup": {
+              "exists": false,
+              "limits": {},
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+              "stat_error": "FileNotFoundError"
+            },
+            "completed_monotonic": 35.617200869,
+            "monotonic": 35.596541572,
+            "project": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6730",
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice",
+              "populated": "1"
+            },
+            "shared": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6792",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+              "populated": "1"
+            },
+            "units": {
+              "xb-a11-admin-40914666271-1.service": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "16777216",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xb-a11-data-40914666271-1.service": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "inactive",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "not-found",
+                  "MemoryMax": "infinity",
+                  "MemorySwapMax": "infinity",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xiongbaowork-data.slice": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "67108864",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xiongbaowork.slice": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "536870912",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              }
+            }
+          },
+          "after_restore": {
+            "admin_cgroup": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6836",
+              "limits": {
+                "memory.max": "16777216",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+              "populated": "1"
+            },
+            "child_cgroup": {
+              "exists": false,
+              "limits": {},
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+              "stat_error": "FileNotFoundError"
+            },
+            "completed_monotonic": 35.637528926,
+            "monotonic": 35.617691982,
+            "project": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6730",
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice",
+              "populated": "1"
+            },
+            "shared": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6792",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+              "populated": "1"
+            },
+            "units": {
+              "xb-a11-admin-40914666271-1.service": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "16777216",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xb-a11-data-40914666271-1.service": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "inactive",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "not-found",
+                  "MemoryMax": "infinity",
+                  "MemorySwapMax": "infinity",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xiongbaowork-data.slice": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "67108864",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xiongbaowork.slice": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "536870912",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              }
+            }
+          },
+          "before": {
+            "admin_cgroup": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6836",
+              "limits": {
+                "memory.max": "16777216",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+              "populated": "1"
+            },
+            "child_cgroup": {
+              "exists": false,
+              "limits": {},
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-data-40914666271-1.service",
+              "stat_error": "FileNotFoundError"
+            },
+            "completed_monotonic": 35.523231707,
+            "monotonic": 35.494831195,
+            "project": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6730",
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice",
+              "populated": "1"
+            },
+            "shared": {
+              "dev": "30",
+              "exists": true,
+              "ino": "6792",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+              "populated": "1"
+            },
+            "units": {
+              "xb-a11-admin-40914666271-1.service": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-admin-40914666271-1.service",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "16777216",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xb-a11-data-40914666271-1.service": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "inactive",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "not-found",
+                  "MemoryMax": "infinity",
+                  "MemorySwapMax": "infinity",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xiongbaowork-data.slice": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "67108864",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              },
+              "xiongbaowork.slice": {
+                "exit": 0,
+                "properties": {
+                  "ActiveState": "active",
+                  "ControlGroup": "/xiongbaowork.slice",
+                  "Job": "",
+                  "LoadState": "loaded",
+                  "MemoryMax": "536870912",
+                  "MemorySwapMax": "0",
+                  "StopWhenUnneeded": "no"
+                }
+              }
+            }
+          },
+          "child_empty_and_limits_restored": true,
+          "child_exit": 0,
+          "elapsed": 0.1849265279999983,
+          "error": null,
+          "full_parent_empty_witness": "PENDING_EXTERNAL_AFTER_ADMIN_EXIT",
+          "inner": 155.452857469,
+          "outer": 185.452857469,
+          "prior_raw_validation": {
+            "job": 123584189279,
+            "repeated": false,
+            "run": 40912579798,
+            "status": "FOUR_RAW_BYTES_VERIFIED_IN_PRIOR_RUN_ONLY"
+          },
+          "restore_proven": false,
+          "source_adopted": false,
+          "started": 35.452857469,
+          "status": "CONTROL_LIFECYCLE_COMPLETE"
+        },
+        "terminal_error": null,
+        "terminal_present": true
+      }
+    },
+    {
+      "prefix": "A11_TEARDOWN_ALWAYS_TERMINAL",
+      "value": {
+        "checks": {
+          "admin_empty": true,
+          "admin_stopped_no_job": true,
+          "admin_terminal": true,
+          "child_empty": true,
+          "child_stopped_no_job": true,
+          "project_exists": true,
+          "project_limits": true,
+          "project_populated0": true,
+          "project_slice_active": true,
+          "same_budget": true,
+          "shared_exists": true,
+          "shared_limits": false,
+          "shared_populated0": true,
+          "shared_slice_active": true,
+          "within_original_deadline": true
+        },
+        "prior_raw_job": 123584189279,
+        "prior_raw_run": 40912579798,
+        "raw_validation_repeated": false,
+        "restore_proven": false,
+        "source_adopted": false,
+        "status": "FAILED_OR_UNKNOWN"
+      }
+    }
+  ],
+  "evidence_findings": [
+    {
+      "id": "A11-A2-SHARED-SAME-INODE-OOMGROUP-CHANGED",
+      "scope": "This exact run only",
+      "shared": {
+        "dev": "30",
+        "ino": "6792",
+        "before_admin_child_and_after_restore": {
+          "memory_max": "67108864",
+          "swap_max": "0",
+          "oom_group": "1",
+          "populated": "1"
+        },
+        "external_after_admin_exit": {
+          "memory_max": "67108864",
+          "swap_max": "0",
+          "oom_group": "0",
+          "populated": "0"
+        },
+        "unit_active": true,
+        "StopWhenUnneeded": "no"
+      },
+      "project": {
+        "dev": "30",
+        "ino": "6730",
+        "all_observed_limits": {
+          "memory_max": "536870912",
+          "swap_max": "0",
+          "oom_group": "1"
+        },
+        "external_populated": "0"
+      },
+      "owned_services_after_exit": {
+        "admin": "absent/inactive/not-found/Job empty",
+        "child": "absent/inactive/not-found/Job empty"
+      },
+      "only_false_final_check": "shared_limits",
+      "restore_proven": false,
+      "actor_or_causal_mechanism": "UNKNOWN_NOT_ESTABLISHED_BY_LOG"
+    }
+  ],
+  "acceptance": {
+    "control_diagnostic_completed": true,
+    "original_shared_limits_gate": "FAILED",
+    "overall_accepted": false,
+    "restore": "FAILED_OR_UNKNOWN",
+    "raw_validation_repeated": false,
+    "prior_raw_identity_evidence_retained": {
+      "run": 40912579798,
+      "job": 123584189279,
+      "status": "FOUR_RAW_IDENTITIES_VERIFIED_OVERALL_RESTORE_UNKNOWN"
+    },
+    "Source_adopted": false,
+    "PG": "PG_PENDING"
+  },
+  "non_inference": [
+    "Does not prove which field failed in old6733 run; old result has no post-admin actual values.",
+    "Same dev/ino and active slice argue against a newly-created cgroup in this exact observation sequence, but do not identify writer or systemd rule.",
+    "No StopWhenUnneeded override was applied; no workaround is approved by this evidence report."
+  ],
+  "next_action": "Author may prepare Root-authorized pure-control a3 using documented Delegate ownership only after verifying actual Delegate property and exact owned service ControlGroup; never manually create children in a manager-owned slice and call them delegated. Any new structure requires full exact nonauthor review; keep original managed-slice failure gate explicit, no token/network/codec/Subject or aggregate expansion.",
+  "side_effects": {
+    "project_execution": 0,
+    "codec_execution": 0,
+    "canonical_lease_jobs_Page_automation_writes": 0,
+    "review_report_only": true
+  }
+}
