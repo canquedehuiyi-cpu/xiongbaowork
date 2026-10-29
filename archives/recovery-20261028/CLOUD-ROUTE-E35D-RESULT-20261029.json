@@ -1,0 +1,187 @@
+{
+  "schema": "route-e35d-bounded-runtime-result/v1",
+  "at": "2026-10-29T16:14:13.867Z",
+  "dispatch": {
+    "schema": "route-e35d-exact-dispatch/v1",
+    "at": "2026-10-29T16:13:15.652Z",
+    "candidate": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+    "branch": "codex/route-cloud-activation-run-20261029-a1",
+    "run": 40909348331,
+    "job": 123572739303,
+    "status": "completed",
+    "event": "push",
+    "dispatch_count": 1,
+    "owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+    "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+    "external_review_path": "archives/recovery-20261028/CLOUD-ROUTE-E35D-NONAUTHOR-REVIEW-20261029.json",
+    "review_blob": "087820fe2f0a75a466f88440c64f94da1bf3b7f8",
+    "review_verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "mode": "100644",
+        "blob": "1ac9e92e26048faeee144ec8902dea8769a4dd4b",
+        "bytes": 139433,
+        "sha256": "b3ccb1dd15ec0262081a8aa068d9825ffb2fc442ee6444f65d8c6d6284a32652",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "mode": "100644",
+        "blob": "4c60754cbd38902d32fefb2b91102ec57d2e063f",
+        "bytes": 34596,
+        "sha256": "c3e7ab13c429ceb70b8bb91ac78356769cbc779cad8564d641376fad316710fc",
+        "full_read": true
+      }
+    ],
+    "preflight": {
+      "exact_files_hash_blob_match": true,
+      "head_message_no_skip": true,
+      "target_ref_before_creation": "404",
+      "head_runs_before_creation": 0,
+      "valid_lease": true,
+      "queued": 0,
+      "in_progress": 0,
+      "canonical_head": "8182e8cd6ff6ad88f07e36ba0cbd0268b74e949d"
+    },
+    "source_adopted": false,
+    "next_action": "Read only this same run/job terminal; no duplicate route or generator job. Missing restoration witness is FAILED_OR_UNKNOWN; raw route candidate is not adoption.",
+    "conclusion": "failure"
+  },
+  "run": 40909348331,
+  "job": 123572739303,
+  "head_sha": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+  "status": "completed",
+  "conclusion": "failure",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1
+    },
+    {
+      "name": "Establish project aggregate memory slice",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2
+    },
+    {
+      "name": "Verify all 2065 source files under 64 MiB DATA cap",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 3
+    },
+    {
+      "name": "Install pinned official runtime and copy exact input component files",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 4
+    },
+    {
+      "name": "Install frozen workspace dependencies within the human-authorized512MiB install exception",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 5
+    },
+    {
+      "name": "Prepare one-leaf reproducibility guard and before DATA within64MiB",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6
+    },
+    {
+      "name": "Generate original brand config within unchanged512MiB",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 7
+    },
+    {
+      "name": "One living A and B lifecycle with same absolute300s including restore",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 8
+    },
+    {
+      "name": "Always independent read-only witness - no late restore budget",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 9
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 10
+    }
+  ],
+  "job_log": {
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40909348331/job/123572739303",
+    "characters": 43765,
+    "sha256_utf8": "a55e8e14aaeed7a5186b708e489e494bf5f4d83a1a407159bef0a8a40496bf02",
+    "full_connector_log_read": true,
+    "actual_markers": [
+      "2026-10-29T16:13:01.3202771Z PROJECT_PARENT_RESOURCE_GATE {\"aggregate_memory_max\": 536870912, \"swap_max\": 0}",
+      "2026-10-29T16:13:01.4051830Z Unknown assignment: MemoryOOMGroup=yes",
+      "2026-10-29T16:13:01.4738135Z ROUTE_REPRO_ALWAYS_UNKNOWN {\"status\":\"SETUP_FAILED_OR_UNKNOWN\",\"restore_proven\":false,\"source_adopted\":false}"
+    ]
+  },
+  "finding": {
+    "id": "ROUTE-RUNTIME-SYSTEMD-MEMORYOOMGROUP-ASSIGNMENT-UNSUPPORTED",
+    "severity": "BLOCKING",
+    "actual": "systemd-run rejected MemoryOOMGroup=yes before first Source service; source verification, install, build A/B did not run.",
+    "restore": "UNKNOWN_NOT_PROVEN: always script absent and emitted restore_proven=false; initial parent512/swap0 is not a final restoration witness.",
+    "next": "Prepare minimal administrative successor using actually supported systemd property/explicit kernel oom.group activation semantics while retaining exact caps, UID drop, all6 barriers and full terminal witnesses. Obtain exact nonauthor review before a distinct legal push; never retry e35d unchanged."
+  },
+  "source_adopted": false,
+  "source_baseline": {
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "approved_repair_overlays": 28,
+    "original_delivery_packages": 18,
+    "files": 2065,
+    "bytes": 50175181,
+    "manifest": {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "bytes": 456310,
+      "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff"
+    },
+    "validation": {
+      "candidate_sha": "d139f73ad599c344184d3023a80beeeafa2e6297",
+      "run_id": 40830714143,
+      "job_id": 123304042601,
+      "focused": {
+        "pass": 32,
+        "fail": 0,
+        "skip": 0,
+        "expects": 98
+      },
+      "original_biome_lint_exit": 0,
+      "original_full_server_typecheck_exit": 0,
+      "typecheck_memory_bytes": 2147483648,
+      "restored_parent_bytes": 536870912,
+      "swap_bytes": 0
+    },
+    "historical_scoped_evidence": {
+      "source27_offline_files": 178,
+      "pass": 2396,
+      "fail": 0,
+      "skip": 0,
+      "expects": 6673,
+      "current_source28_full_rerun": false
+    },
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "a11_raw_validation": "PENDING_DATA_CODEC_AND_REAL64MiB_AGGREGATE_ENVIRONMENT",
+  "next_action": "Route administrative systemd compatibility successor plus independent review; separately prepare reviewed DATA-only offline gzip verification without rerunning generator. No Source adoption."
+}

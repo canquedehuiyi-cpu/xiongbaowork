@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
   "run_id": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
   "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
   "acquired_at": "2026-10-29T16:10:49.878Z",
-  "renewed_at": "2026-10-29T16:11:53.219Z",
-  "expires_at": "2026-10-29T16:55:49.878Z",
+  "renewed_at": "2026-10-29T16:14:13.867Z",
+  "expires_at": "2026-10-29T16:14:13.867Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "1dfa34ab734ae362b6a9505ae7cef03bd7ce2083",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T16:10:49.878Z"
   },
-  "next_action": "Persist A11 actual success and partial transport evidence; inspect exact external e35d route review before any dispatch. Raw inflate/CRC/SHA/JSON pending.",
+  "next_action": "Route administrative systemd compatibility successor plus independent review; separately prepare reviewed DATA-only offline gzip verification without rerunning generator. No Source adoption.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,21 +29,22 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40902334215,
-    "job": 123547693853,
-    "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+    "run": 40909348331,
+    "job": 123572739303,
+    "candidate": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
     "status": "completed",
-    "conclusion": "success"
+    "conclusion": "failure"
   },
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T15:11:58.700Z"
+    "observed_at": "2026-10-29T16:14:13.867Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
     "expires_at": "2026-10-29T15:57:44.644Z",
     "takeover_basis": "Explicit human reassignment; old epoch UTC expired; actual queued/in_progress both zero"
   },
-  "predecessor_epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator"
+  "predecessor_epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
+  "released_at": "2026-10-29T16:14:13.867Z"
 }

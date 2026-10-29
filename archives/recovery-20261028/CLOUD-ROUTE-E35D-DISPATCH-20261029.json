@@ -1,0 +1,47 @@
+{
+  "schema": "route-e35d-exact-dispatch/v1",
+  "at": "2026-10-29T16:13:15.652Z",
+  "candidate": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+  "branch": "codex/route-cloud-activation-run-20261029-a1",
+  "run": 40909348331,
+  "job": 123572739303,
+  "status": "completed",
+  "event": "push",
+  "dispatch_count": 1,
+  "owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+  "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+  "external_review_path": "archives/recovery-20261028/CLOUD-ROUTE-E35D-NONAUTHOR-REVIEW-20261029.json",
+  "review_blob": "087820fe2f0a75a466f88440c64f94da1bf3b7f8",
+  "review_verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "files": [
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "mode": "100644",
+      "blob": "1ac9e92e26048faeee144ec8902dea8769a4dd4b",
+      "bytes": 139433,
+      "sha256": "b3ccb1dd15ec0262081a8aa068d9825ffb2fc442ee6444f65d8c6d6284a32652",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "mode": "100644",
+      "blob": "4c60754cbd38902d32fefb2b91102ec57d2e063f",
+      "bytes": 34596,
+      "sha256": "c3e7ab13c429ceb70b8bb91ac78356769cbc779cad8564d641376fad316710fc",
+      "full_read": true
+    }
+  ],
+  "preflight": {
+    "exact_files_hash_blob_match": true,
+    "head_message_no_skip": true,
+    "target_ref_before_creation": "404",
+    "head_runs_before_creation": 0,
+    "valid_lease": true,
+    "queued": 0,
+    "in_progress": 0,
+    "canonical_head": "8182e8cd6ff6ad88f07e36ba0cbd0268b74e949d"
+  },
+  "source_adopted": false,
+  "next_action": "Read only this same run/job terminal; no duplicate route or generator job. Missing restoration witness is FAILED_OR_UNKNOWN; raw route candidate is not adoption.",
+  "conclusion": "failure"
+}
