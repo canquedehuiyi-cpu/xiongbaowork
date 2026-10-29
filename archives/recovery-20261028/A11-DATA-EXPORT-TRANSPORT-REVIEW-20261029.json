@@ -1,0 +1,252 @@
+{
+  "schema": "a11-data-export-independent-transport-verification/v1",
+  "status": "PARTIAL_RAW_EXPORT_UNVERIFIED_CODEC_RESOURCE_GATE_UNAVAILABLE",
+  "run_id": 40902334215,
+  "job_id": 123547693853,
+  "run_status": "completed",
+  "run_conclusion": "success",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "head_sha": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+  "branch": "codex/cloud-minimal-generator-run-20261029-a11",
+  "evidence": {
+    "job_log_characters": 154651,
+    "headers": 4,
+    "chunks": 5,
+    "ends": 4,
+    "complete_decoded_log_returned_by_connector": true,
+    "byte_completeness_of_upstream_log_not_independently_proven": true
+  },
+  "files": [
+    {
+      "path": "generated/0081_full50_approval_seed_diagnostic.sql",
+      "raw_header_observation": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 155827,
+        "exported_sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",
+        "gzip_bytes": 14698,
+        "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
+        "original_identity": {
+          "bytes": 155827,
+          "mode": "0o644",
+          "sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7"
+        },
+        "path": "generated/0081_full50_approval_seed_diagnostic.sql"
+      },
+      "raw_end_observation": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 155827,
+        "path": "generated/0081_full50_approval_seed_diagnostic.sql"
+      },
+      "actual_computed": {
+        "chunk_indexes": [
+          0
+        ],
+        "marker_line_numbers": [
+          591,
+          592,
+          593
+        ],
+        "strict_base64_canonical": true,
+        "gzip_bytes": 14698,
+        "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
+        "gzip_hash_matches_header": true,
+        "gzip_length_matches_header": true,
+        "gzip_magic_method": [
+          31,
+          139,
+          8
+        ],
+        "gzip_trailer_crc32_declared": "009c2339",
+        "gzip_trailer_isize_declared": 155827,
+        "trailer_isize_matches_exported_length": true
+      },
+      "not_verified": [
+        "deflate/gzip decompression",
+        "CRC32 recomputation over uncompressed bytes",
+        "uncompressed exact length and SHA256",
+        "snapshot/journal JSON decoding"
+      ],
+      "status": "COMPRESSED_TRANSPORT_CHECKED_RAW_EXPORT_UNVERIFIED"
+    },
+    {
+      "path": "generated/meta/0081_snapshot.json",
+      "raw_header_observation": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 633425,
+        "exported_sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1",
+        "gzip_bytes": 36005,
+        "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
+        "original_identity": {
+          "bytes": 633425,
+          "mode": "0o644",
+          "sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1"
+        },
+        "path": "generated/meta/0081_snapshot.json"
+      },
+      "raw_end_observation": {
+        "chunks": 2,
+        "complete_file": true,
+        "exported_bytes": 633425,
+        "path": "generated/meta/0081_snapshot.json"
+      },
+      "actual_computed": {
+        "chunk_indexes": [
+          0,
+          1
+        ],
+        "marker_line_numbers": [
+          594,
+          595,
+          601,
+          602
+        ],
+        "strict_base64_canonical": true,
+        "gzip_bytes": 36005,
+        "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
+        "gzip_hash_matches_header": true,
+        "gzip_length_matches_header": true,
+        "gzip_magic_method": [
+          31,
+          139,
+          8
+        ],
+        "gzip_trailer_crc32_declared": "64ac703f",
+        "gzip_trailer_isize_declared": 633425,
+        "trailer_isize_matches_exported_length": true
+      },
+      "not_verified": [
+        "deflate/gzip decompression",
+        "CRC32 recomputation over uncompressed bytes",
+        "uncompressed exact length and SHA256",
+        "snapshot/journal JSON decoding"
+      ],
+      "status": "COMPRESSED_TRANSPORT_CHECKED_RAW_EXPORT_UNVERIFIED"
+    },
+    {
+      "path": "generated/meta/_journal.json",
+      "raw_header_observation": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 12118,
+        "exported_sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0",
+        "gzip_bytes": 2116,
+        "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
+        "original_identity": {
+          "bytes": 12118,
+          "mode": "0o644",
+          "sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0"
+        },
+        "path": "generated/meta/_journal.json"
+      },
+      "raw_end_observation": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 12118,
+        "path": "generated/meta/_journal.json"
+      },
+      "actual_computed": {
+        "chunk_indexes": [
+          0
+        ],
+        "marker_line_numbers": [
+          603,
+          604,
+          605
+        ],
+        "strict_base64_canonical": true,
+        "gzip_bytes": 2116,
+        "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
+        "gzip_hash_matches_header": true,
+        "gzip_length_matches_header": true,
+        "gzip_magic_method": [
+          31,
+          139,
+          8
+        ],
+        "gzip_trailer_crc32_declared": "364fa205",
+        "gzip_trailer_isize_declared": 12118,
+        "trailer_isize_matches_exported_length": true
+      },
+      "not_verified": [
+        "deflate/gzip decompression",
+        "CRC32 recomputation over uncompressed bytes",
+        "uncompressed exact length and SHA256",
+        "snapshot/journal JSON decoding"
+      ],
+      "status": "COMPRESSED_TRANSPORT_CHECKED_RAW_EXPORT_UNVERIFIED"
+    },
+    {
+      "path": "diagnostic/generator.log",
+      "raw_header_observation": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 7289,
+        "exported_sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550",
+        "gzip_bytes": 1863,
+        "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
+        "original_identity": {
+          "bytes": 7289,
+          "mode": "0o644",
+          "sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550"
+        },
+        "path": "diagnostic/generator.log"
+      },
+      "raw_end_observation": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 7289,
+        "path": "diagnostic/generator.log"
+      },
+      "actual_computed": {
+        "chunk_indexes": [
+          0
+        ],
+        "marker_line_numbers": [
+          606,
+          607,
+          608
+        ],
+        "strict_base64_canonical": true,
+        "gzip_bytes": 1863,
+        "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
+        "gzip_hash_matches_header": true,
+        "gzip_length_matches_header": true,
+        "gzip_magic_method": [
+          31,
+          139,
+          8
+        ],
+        "gzip_trailer_crc32_declared": "540b67eb",
+        "gzip_trailer_isize_declared": 7289,
+        "trailer_isize_matches_exported_length": true
+      },
+      "not_verified": [
+        "deflate/gzip decompression",
+        "CRC32 recomputation over uncompressed bytes",
+        "uncompressed exact length and SHA256",
+        "snapshot/journal JSON decoding"
+      ],
+      "status": "COMPRESSED_TRANSPORT_CHECKED_RAW_EXPORT_UNVERIFIED"
+    }
+  ],
+  "method": {
+    "data_only": true,
+    "strict_base64_and_compressed_sha256": "Executed in functions.exec memory; byte-oriented SHA256 self-checked against abc standard vector; canonical base64 padding checked.",
+    "resource_limit": "No own executor used. functions.exec exposes no documented aggregate memory/swap control; no claim of 64MiB enforcement. DATA runtime gzip verification not attempted.",
+    "codec": "Current catalog has no documented gzip decode interface; functions.exec is fresh V8/no Node. Did not implement a new inflater or use undocumented globals.",
+    "project_payload_files_written": 0
+  },
+  "boundary": {
+    "source_adopted": false,
+    "canonical_changed": false,
+    "lease_changed": false,
+    "actions_started": 0,
+    "page_or_automation_changes": 0,
+    "project_execution": 0
+  },
+  "next_action": "Main may reuse original job logs and the four verified compressed transport hashes. Complete bounded gzip decode, CRC32, uncompressed length/SHA256 and JSON validation in an already-authorized DATA environment with real aggregate64MiB/swap0; do not rerun A11 merely for export verification. This report is not full DATA PASS or Source adoption."
+}
