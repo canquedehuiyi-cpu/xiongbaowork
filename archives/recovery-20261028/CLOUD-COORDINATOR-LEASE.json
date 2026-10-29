@@ -3,22 +3,22 @@
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
   "state": "held",
-  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
-  "run_id": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
-  "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
-  "acquired_at": "2026-10-29T15:12:44.644Z",
-  "renewed_at": "2026-10-29T15:31:50.333Z",
-  "expires_at": "2026-10-29T15:57:44.644Z",
+  "owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+  "run_id": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+  "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+  "acquired_at": "2026-10-29T16:10:49.878Z",
+  "renewed_at": "2026-10-29T16:10:49.878Z",
+  "expires_at": "2026-10-29T16:55:49.878Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "5be6c3ad749a41fb2fe6411447008667fe149609",
+  "expected_parent": "1dfa34ab734ae362b6a9505ae7cef03bd7ce2083",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T15:12:44.644Z"
+    "observed_at": "2026-10-29T16:10:49.878Z"
   },
-  "next_action": "Read same run40902334215/job123547693853 terminal; no duplicate. Preserve outputs and actual physical restoration; route awaits idlequeue.",
+  "next_action": "Persist A11 actual success and partial transport evidence; inspect exact external e35d route review before any dispatch. Raw inflate/CRC/SHA/JSON pending.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -32,7 +32,8 @@
     "run": 40902334215,
     "job": 123547693853,
     "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
-    "status": "in_progress"
+    "status": "completed",
+    "conclusion": "success"
   },
   "queue_at_release": {
     "queued": [],
@@ -40,9 +41,9 @@
     "observed_at": "2026-10-29T15:11:58.700Z"
   },
   "predecessor_expiry": {
-    "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
-    "expires_at": "2026-10-29T09:42:06.433Z",
-    "takeover_basis": "Confirmed expired and queued/in_progress empty"
+    "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
+    "expires_at": "2026-10-29T15:57:44.644Z",
+    "takeover_basis": "Explicit human reassignment; old epoch UTC expired; actual queued/in_progress both zero"
   },
-  "predecessor_epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review"
+  "predecessor_epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator"
 }
