@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "acquired_at": "2026-10-29T16:19:08.289Z",
-  "renewed_at": "2026-10-29T16:33:59.530Z",
+  "renewed_at": "2026-10-29T16:35:58.759Z",
   "expires_at": "2026-10-29T17:04:08.289Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T16:19:08.289Z"
   },
-  "next_action": "Preserve actual four raw identity results; author minimal final witness/teardown diagnosis and exact nonauthor review. Do not rerun generator or mark total DATA pass. In parallel approved independent routeA2 may run only after fresh queue/lease gates.",
+  "next_action": "Read same run40912983831/job123585627390 terminal only; no other resource job until terminal. A11 teardown-only candidate prepares independently.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,11 +29,10 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40912579798,
-    "job": 123584189279,
-    "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
-    "status": "completed",
-    "conclusion": "failure"
+    "run": 40912983831,
+    "job": 123585627390,
+    "candidate": "576d176424df248222299db2c49d0fa545c90579",
+    "status": "in_progress"
   },
   "queue_at_release": {
     "queued": [],

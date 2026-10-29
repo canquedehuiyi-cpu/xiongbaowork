@@ -1,0 +1,180 @@
+{
+  "schema": "a11-data-6733-independent-runtime-evidence/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
+  "run": 40912579798,
+  "job": 123584189279,
+  "status": "completed",
+  "conclusion": "failure",
+  "verdict": "FOUR_RAW_EXPORT_IDENTITIES_RUNTIME_VERIFIED_OVERALL_NOT_ACCEPTED_RESTORE_UNKNOWN",
+  "origin": {
+    "run": 40902334215,
+    "job": 123547693853,
+    "transport_report": "bd71fddfbc56a0edb2c78b10e6818abafea695ed"
+  },
+  "log": {
+    "characters": 13445,
+    "sha256_utf8": "d90dddbb50cffd3b92c57a96ef658965ece7a8fb9c985cf16f83d6db3d25771e",
+    "full_connector_read": true
+  },
+  "files": [
+    {
+      "crc32": "009c2339",
+      "gzip_bytes": 14698,
+      "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
+      "json": "NOT_APPLICABLE_BYTES_ONLY_NO_SQL_OR_LOG_EXECUTION",
+      "path": "generated/0081_full50_approval_seed_diagnostic.sql",
+      "raw_bytes": 155827,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",
+      "single_member": true,
+      "trailing_bytes": 0
+    },
+    {
+      "crc32": "64ac703f",
+      "gzip_bytes": 36005,
+      "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
+      "json": {
+        "depth_cap": 64,
+        "duplicate_keys": false,
+        "node_cap": 200000,
+        "nodes": 17279,
+        "nonfinite": false,
+        "status": "SAFE_STRUCTURE_VALIDATED",
+        "top_level_keys": [
+          "_meta",
+          "dialect",
+          "enums",
+          "id",
+          "policies",
+          "prevId",
+          "roles",
+          "schemas",
+          "sequences",
+          "tables",
+          "version",
+          "views"
+        ]
+      },
+      "path": "generated/meta/0081_snapshot.json",
+      "raw_bytes": 633425,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1",
+      "single_member": true,
+      "trailing_bytes": 0
+    },
+    {
+      "crc32": "364fa205",
+      "gzip_bytes": 2116,
+      "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
+      "json": {
+        "depth_cap": 64,
+        "duplicate_keys": false,
+        "entries": 82,
+        "node_cap": 200000,
+        "nodes": 496,
+        "nonfinite": false,
+        "status": "SAFE_STRUCTURE_VALIDATED",
+        "top_level_keys": [
+          "dialect",
+          "entries",
+          "version"
+        ]
+      },
+      "path": "generated/meta/_journal.json",
+      "raw_bytes": 12118,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0",
+      "single_member": true,
+      "trailing_bytes": 0
+    },
+    {
+      "crc32": "540b67eb",
+      "gzip_bytes": 1863,
+      "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
+      "json": "NOT_APPLICABLE_BYTES_ONLY_NO_SQL_OR_LOG_EXECUTION",
+      "path": "diagnostic/generator.log",
+      "raw_bytes": 7289,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550",
+      "single_member": true,
+      "trailing_bytes": 0
+    }
+  ],
+  "identity_comparison": {
+    "four_unique_paths": true,
+    "raw_length_sha256_match_fixed_identity": true,
+    "compressed_length_sha256_match_transport": true,
+    "actual_CRC32_matches_original_trailer": true,
+    "single_member_no_trailing_bytes": true,
+    "raw_saved_or_executed": false
+  },
+  "observed_terminal": {
+    "data_exit": 0,
+    "status": "DATA_VERIFIED",
+    "restore_proven": false,
+    "codec_child_empty_and_limits_restored": true,
+    "full_parent_empty_witness": "PENDING_EXTERNAL_AFTER_ADMIN_EXIT",
+    "admin_bytes": 16777216,
+    "codec_bytes": 50331648,
+    "shared_bytes": 67108864,
+    "project_bytes": 536870912,
+    "terminal_reports_both_ancestor_oomgroup1_swap0": true
+  },
+  "failed_witness": {
+    "path": "controller.py",
+    "line": 338,
+    "expression": "assert limits(PARENT)==PARENT_EXPECTED and limits(PROJECT)==PROJECT_EXPECTED",
+    "actual_values_logged": false,
+    "which_ancestor_or_field_deviated": "UNKNOWN",
+    "restore_proven": false,
+    "do_not_infer": "No guessing that memory.oom.group specifically changed or either ancestor passed; full independent physical witness absent."
+  },
+  "jobs": [
+    {
+      "id": 123584189279,
+      "name": "data-only",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_id": 40912579798,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Verify administrative controller and run only fixed compressed DATA",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Always independently verify original terminal and actual empty aggregate",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 3
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        }
+      ]
+    }
+  ],
+  "acceptance_boundaries": {
+    "raw_byte_identity_only": true,
+    "safe_JSON_structure_only": true,
+    "migration_semantics": "NOT_REVIEWED",
+    "Source_adopted": false,
+    "PG": "PG_PENDING",
+    "overall_DATA_job_accepted": false,
+    "restore": "UNKNOWN",
+    "native_success_claim": false
+  },
+  "next_action": "Author prepares exact successor to witness/teardown path retaining actual limits/empty/noJob checks, aggregate64, 16+48 and same bounded deadlines. Obtain nonauthor exact fullfile review; do not rerun6733 unchanged or lower always assertions."
+}
