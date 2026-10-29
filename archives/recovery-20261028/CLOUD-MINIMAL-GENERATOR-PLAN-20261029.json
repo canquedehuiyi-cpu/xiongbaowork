@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "cloud-agent:/root/a7_prepare",
   "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a8",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a8",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a9",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a9",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A8",
+    "id": "A9",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_A8_PREPARED_UNREVIEWED_NOT_RUN",
+    "status": "AUTHOR_A9_PREPARED_UNREVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -838,11 +838,12 @@
       }
     },
     "a4": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-    "change_scope": "Only correct candidate administrative comparison baseline to immutable A6; all outside three candidate administrative entries must remain unchanged. Formal Source28 manifest and all byte/hash/mode checks, 17 original locked nodes/URLs/SRIs, fixed ORM guard, FULL50, resources/identity/deadlines/cleanup unchanged.",
+    "change_scope": "Only fixed TSX4.23.12 original URL/SRI/name/version/raw packageJSON identity-bound observed bin string representation; all other packages retain original strict dictionary comparison. No lock/package edits. Existing ORM guard/17nodes/FULL50/resources/identity/deadlines/cleanup unchanged.",
     "a5": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
     "a6": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
     "a7": "f689c5b3c89c66a52fe883681c1256a520fc0c1a",
-    "a7_pin_finding": "A7 workflow stale80700/5a770146 pin did not equal actual80775/4fbbc391 controller. Prior author pin-match assertion retracted. A8 constructs both workflow byte constants/hash from final controller raw bytes, then independently parses and asserts them again after GitHub full readback."
+    "a7_pin_finding": "A7 workflow stale80700/5a770146 pin did not equal actual80775/4fbbc391 controller. Prior author pin-match assertion retracted. A8 constructs both workflow byte constants/hash from final controller raw bytes, then independently parses and asserts them again after GitHub full readback.",
+    "a8": "560f711ba995dc06d0eaa38955505670bbd964d4"
   },
   "redirect_policy": {
     "basis": {
@@ -897,15 +898,15 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 81135,
-    "sha256": "c9e6abda737f18de427e1fbd1afd212fc1697d56d5c23afd8491f1d560651ada"
+    "bytes": 85866,
+    "sha256": "159d8497f122117372e2e522119846e3dfddae6790f00835a5eb90182557ca9d"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4017,
-    "sha256": "4e92ade6d806028e1ea611dc9775988ab7125c904435c205e1430dfb56c651e9"
+    "sha256": "5585fd484741cd4d1de85c88fc400facd42b20423d7d36f686c573f63e167c42"
   },
-  "author_readiness": "A8_PREPARED_UNREVIEWED_NOT_RUN",
+  "author_readiness": "A9_PREPARED_UNREVIEWED_NOT_RUN",
   "review_required": "Non-author exact full3file review required. Author has not executed guard contract checks or project. No dispatch or adoption authorized by this author report.",
   "orm_metadata_compatibility": {
     "evidence_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478",
@@ -933,5 +934,31 @@
     "reason": "A6 inherited twenty other administrative history paths relative to old823744db. Do not whitelist or ignore them: pin exact A6 immutable tree as candidate administrative comparison base.",
     "runtime": "Fetch exact base and target; git diff --name-only must equal exactly workflow/controller/plan. Git diff includes content, mode, additions/deletions; every other tree entry must be identical. Independently retain original2065 Source manifest byte/hash/mode verification.",
     "source_adoption": false
+  },
+  "tsx_bin_compatibility": {
+    "evidence_candidate": "97c63f88dfeada5f7bf3a55afecf290542657ada",
+    "run": 40897218451,
+    "job": 123529510039,
+    "archive_bytes": 187918,
+    "original_SRI_verified": true,
+    "actual_bin_type": "str",
+    "actual_bin": "./dist/cli.mjs",
+    "original_lock_bin": {
+      "tsx": "dist/cli.mjs"
+    },
+    "raw_package_json": {
+      "bytes": 1601,
+      "sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"
+    },
+    "guard": "Only exact pinned TSX node/URL/SRI/name/version/rawJSON identity + exact lock single bin/actual exact string. No generic string normalization. All nonstring bin metadata follows original strict dictionary path.",
+    "contract_checks": {
+      "positive_definitions": 3,
+      "negative_definitions": 16,
+      "execution": "NOT_RUN",
+      "future_stage": "deps DATA64 before downloads",
+      "synthetic_identity_is_fixture_not_authenticated_package": true
+    },
+    "mutates_package_or_lock": false,
+    "derived_absent_peer_meta": "Metadata diagnostic absent versus derived empty object is representation only; existing peer validation unchanged."
   }
 }
