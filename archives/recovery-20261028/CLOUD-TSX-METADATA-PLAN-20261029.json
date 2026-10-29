@@ -1,0 +1,145 @@
+{
+  "schema": "xiongbaowork-single-tsx-package-metadata-evidence-v1",
+  "author": "/root/a7_prepare",
+  "prepare_branch": "codex/cloud-tsx-metadata-prep-20261029-a1",
+  "only_execution_branch": "codex/cloud-tsx-metadata-run-20261029-a1",
+  "base": "560f711ba995dc06d0eaa38955505670bbd964d4",
+  "node": {
+    "key": "tsx",
+    "pinned": "tsx@4.23.12",
+    "url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+    "metadata": {
+      "dependencies": {
+        "esbuild": "~0.28.0"
+      },
+      "optionalDependencies": {
+        "fsevents": "~2.3.3"
+      },
+      "bin": {
+        "tsx": "dist/cli.mjs"
+      }
+    },
+    "integrity": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+    "placement": "node_modules/tsx"
+  },
+  "nodes": [
+    {
+      "key": "tsx",
+      "pinned": "tsx@4.23.12",
+      "url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+      "metadata": {
+        "dependencies": {
+          "esbuild": "~0.28.0"
+        },
+        "optionalDependencies": {
+          "fsevents": "~2.3.3"
+        },
+        "bin": {
+          "tsx": "dist/cli.mjs"
+        }
+      },
+      "integrity": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+      "placement": "node_modules/tsx"
+    }
+  ],
+  "lock": {
+    "path": "openbot/bun.lock",
+    "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+    "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"
+  },
+  "prior": {
+    "run": 40895889335,
+    "job": 123524744262,
+    "candidate": "560f711ba995dc06d0eaa38955505670bbd964d4",
+    "original_SRI_verified": true,
+    "archive_bytes": 187918,
+    "name_version_passed": true,
+    "package_json": {
+      "bytes": 1601,
+      "sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"
+    },
+    "dependency_comparisons": "strict_equal",
+    "failure": "line361 expected_bin/actual_bin dictionary type assertion; actual bin type/value NOT_LOGGED and unknown",
+    "generator": "NOT_RUN",
+    "metadata": "NONE",
+    "native": "NOT_RUN"
+  },
+  "resources": {
+    "project_bytes": 536870912,
+    "data_bytes": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "service_deadline_seconds": 60,
+    "cleanup_reserve_seconds": 8,
+    "http_timeout_seconds": 30,
+    "job_minutes": 5,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false
+  },
+  "scope": {
+    "single_package": "tsx@4.23.12",
+    "initial_original_lock_url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+    "other_package_requests": 0,
+    "redirect": "Reuse exact A5 single evidenced CDN host + pinned path one-hop policy; no changed lock/provider/network.",
+    "SRI_before_tar_metadata": true,
+    "extract_archive_files": false,
+    "install": false,
+    "hooks": false,
+    "Source_clone": false,
+    "native_execution": false,
+    "secrets": false
+  },
+  "allowed_fields": [
+    "name",
+    "version",
+    "dependencies",
+    "optionalDependencies",
+    "peerDependencies",
+    "peerDependenciesMeta",
+    "bin",
+    "os",
+    "cpu"
+  ],
+  "evidence": {
+    "package_json_original_bytes_sha256": true,
+    "actual_field_raw_JSON_value_span_bytes_sha256": true,
+    "lock_field_origin_and_corresponding_value": true,
+    "exact_recursive_difference": true,
+    "not_output": [
+      "scripts",
+      "credentials",
+      "other package fields"
+    ],
+    "unknown_private_value": "Redact detected private credential keys or credential-bearing URLs and preserve their hashes; do not suppress difference.",
+    "bin_actual_type_and_value": true,
+    "bin_lock_type_and_value": true
+  },
+  "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
+  "next": "Non-author exact3file review, then sole coordinator may dispatch once under valid lease and idle queue. Bin representation remains unknown; evidence does not authorize relaxed validation.",
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "controller_identity": {
+    "path": "archives/recovery-20261028/CLOUD-TSX-METADATA-CONTROLLER-20261029.py",
+    "bytes": 23961,
+    "sha256": "1b62216bbbdcdd99ab7690925a8381d0987836eba5f3978ac81321209e8c709a"
+  },
+  "workflow_identity": {
+    "path": ".github/workflows/cloud-tsx-metadata.yml",
+    "bytes": 3844,
+    "sha256": "bff5031ddb88d75c27e1f3bd403680ecb96a573fe5aca83dd6e72e14ae38f72c"
+  },
+  "bootstrap": "Hash-pinned administrative controller only from normal GitHub, no Source. One original-lock TSX archive request chain; other packages0.",
+  "review_required": "UNREVIEWED exact three administrative files. No install/native/generator/Source execution or adoption.",
+  "inherited_runtime": {
+    "candidate": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
+    "run": 40857520611,
+    "job": 123392107062,
+    "scope": "Reuse actual successful ORM-only metadata containment/UID-drop/descendant/safe-tar/deadline/finally/always structure; new package and extra explicit bin evidence require new independent review."
+  }
+}

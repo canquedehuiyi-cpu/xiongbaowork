@@ -1,0 +1,71 @@
+name: One locked TSX package metadata evidence only
+on:
+  push:
+    branches: [codex/cloud-tsx-metadata-run-20261029-a1]
+permissions:
+  contents: read
+concurrency:
+  group: source-recovery-bytes
+  cancel-in-progress: false
+jobs:
+  tsx-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify administrative controller then collect one package declaration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-tsx-metadata-run-20261029-a1"
+          test "$GITHUB_EVENT_NAME" = "push"
+          /usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'
+          import hashlib,os,sys,urllib.request
+          from pathlib import Path
+          target=sys.argv[1];base=Path(sys.argv[2]).resolve()
+          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
+          dest=base/"tsx-metadata-controller.py"
+          url="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-TSX-METADATA-CONTROLLER-20261029.py"
+          digest=hashlib.sha256();total=0
+          with urllib.request.urlopen(url,timeout=30) as incoming,dest.open("xb") as out:
+              while True:
+                  block=incoming.read(65536)
+                  if not block:break
+                  total+=len(block);assert total<=23961
+                  digest.update(block);out.write(block)
+              out.flush();os.fsync(out.fileno())
+          assert total==23961 and digest.hexdigest()=="1b62216bbbdcdd99ab7690925a8381d0987836eba5f3978ac81321209e8c709a"
+          os.chmod(dest,0o600)
+          print("ADMIN_TSX_METADATA_IDENTITY",total,digest.hexdigest(),flush=True)
+          PY
+          sudo /usr/bin/python3 -I -B "$RUNNER_TEMP/tsx-metadata-controller.py" "$(id -u)" "$(id -g)" "$RUNNER_TEMP"
+      - name: Always restore gate and verify empty owned group
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json,subprocess,time
+          from pathlib import Path
+          parent=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          owned=parent/"xb-tsx-metadata.service";deadline=time.monotonic()+8
+          if owned.exists():
+              populated=dict(line.split() for line in (owned/"cgroup.events").read_text().splitlines())["populated"]
+              if populated!="0":
+                  if (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")
+                  remaining=deadline-time.monotonic()-2
+                  if remaining>0:
+                      try:subprocess.run(["systemctl","stop","xb-tsx-metadata.service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                      except subprocess.TimeoutExpired:
+                          if owned.exists() and (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")
+          assert parent.exists()
+          for name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:
+              (parent/name).write_text(value)
+          limits={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}
+          assert limits=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}
+          populated=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())["populated"]
+          assert populated=="0"
+          remaining=deadline-time.monotonic()
+          print("TSX_METADATA_ALWAYS_FINAL "+json.dumps({"limits":limits,"populated":populated,"deadline_remaining":remaining,"Source_executed":False}),flush=True)
+          assert remaining>=0
+          PY
