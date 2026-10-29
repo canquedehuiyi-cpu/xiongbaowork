@@ -1,0 +1,100 @@
+﻿2026-10-29T10:26:04.9757874Z Current runner version: '2.338.0'
+2026-10-29T10:26:04.9777999Z ##[group]Runner Image Provisioner
+2026-10-29T10:26:04.9778610Z Hosted Compute Agent
+2026-10-29T10:26:04.9779071Z Version: 20261021.618
+2026-10-29T10:26:04.9779452Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T10:26:04.9779915Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T10:26:04.9780350Z Worker ID: {022532d5-5e5d-4c7c-b118-7dc174bc7d1d}
+2026-10-29T10:26:04.9780818Z Region: southcentralus
+2026-10-29T10:26:04.9781207Z Cloud: Azure
+2026-10-29T10:26:04.9781543Z ##[endgroup]
+2026-10-29T10:26:04.9782498Z ##[group]Operating System
+2026-10-29T10:26:04.9782925Z Ubuntu
+2026-10-29T10:26:04.9783284Z 26.04.1
+2026-10-29T10:26:04.9783658Z LTS
+2026-10-29T10:26:04.9783993Z ##[endgroup]
+2026-10-29T10:26:04.9784319Z ##[group]Runner Image
+2026-10-29T10:26:04.9784723Z Image: ubuntu-26.04
+2026-10-29T10:26:04.9785113Z Version: 20261025.179.1
+2026-10-29T10:26:04.9785924Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T10:26:04.9786803Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T10:26:04.9787422Z ##[endgroup]
+2026-10-29T10:26:04.9788136Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T10:26:04.9789403Z Contents: read
+2026-10-29T10:26:04.9789761Z Metadata: read
+2026-10-29T10:26:04.9790149Z ##[endgroup]
+2026-10-29T10:26:04.9791561Z Secret source: Actions
+2026-10-29T10:26:04.9792370Z Cache mode: write
+2026-10-29T10:26:04.9792825Z Prepare workflow directory
+2026-10-29T10:26:05.0018530Z Prepare all required actions
+2026-10-29T10:26:05.0113334Z Complete job name: orm-metadata
+2026-10-29T10:26:05.0970350Z ##[group]Run set -euo pipefail
+2026-10-29T10:26:05.0971181Z [36;1mset -euo pipefail[0m
+2026-10-29T10:26:05.0972055Z [36;1mtest "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"[0m
+2026-10-29T10:26:05.0973139Z [36;1mtest "$GITHUB_REF" = "refs/heads/codex/cloud-orm-metadata-run-20261029-a1"[0m
+2026-10-29T10:26:05.0974042Z [36;1mtest "$GITHUB_EVENT_NAME" = "push"[0m
+2026-10-29T10:26:05.0974786Z [36;1m/usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'[0m
+2026-10-29T10:26:05.0975690Z [36;1mimport hashlib,os,sys,urllib.request[0m
+2026-10-29T10:26:05.0976355Z [36;1mfrom pathlib import Path[0m
+2026-10-29T10:26:05.0977070Z [36;1mtarget=sys.argv[1];base=Path(sys.argv[2]).resolve()[0m
+2026-10-29T10:26:05.0977990Z [36;1massert len(target)==40 and all(c in "0123456789abcdef" for c in target)[0m
+2026-10-29T10:26:05.0978813Z [36;1mdest=base/"orm-metadata-controller.py"[0m
+2026-10-29T10:26:05.0980333Z [36;1murl="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py"[0m
+2026-10-29T10:26:05.0981678Z [36;1mdigest=hashlib.sha256();total=0[0m
+2026-10-29T10:26:05.0982783Z [36;1mwith urllib.request.urlopen(url,timeout=30) as incoming,dest.open("xb") as out:[0m
+2026-10-29T10:26:05.0983682Z [36;1m    while True:[0m
+2026-10-29T10:26:05.0984400Z [36;1m        block=incoming.read(65536)[0m
+2026-10-29T10:26:05.0985052Z [36;1m        if not block:break[0m
+2026-10-29T10:26:05.0985648Z [36;1m        total+=len(block);assert total<=25893[0m
+2026-10-29T10:26:05.0986444Z [36;1m        digest.update(block);out.write(block)[0m
+2026-10-29T10:26:05.0987091Z [36;1m    out.flush();os.fsync(out.fileno())[0m
+2026-10-29T10:26:05.0988147Z [36;1massert total==25893 and digest.hexdigest()=="457c5697da9f723b7061b4d7296b3b39121f4590d670c60369124f04b1ba76cb"[0m
+2026-10-29T10:26:05.0989170Z [36;1mos.chmod(dest,0o600)[0m
+2026-10-29T10:26:05.0989962Z [36;1mprint("ADMIN_ORM_METADATA_IDENTITY",total,digest.hexdigest(),flush=True)[0m
+2026-10-29T10:26:05.0990899Z [36;1mPY[0m
+2026-10-29T10:26:05.0991781Z [36;1msudo /usr/bin/python3 -I -B "$RUNNER_TEMP/orm-metadata-controller.py" "$(id -u)" "$(id -g)" "$RUNNER_TEMP"[0m
+2026-10-29T10:26:05.1595430Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T10:26:05.1596419Z ##[endgroup]
+2026-10-29T10:26:05.4188151Z ADMIN_ORM_METADATA_IDENTITY 25893 457c5697da9f723b7061b4d7296b3b39121f4590d670c60369124f04b1ba76cb
+2026-10-29T10:26:05.7308675Z Running as unit: xb-orm-metadata.service
+2026-10-29T10:26:05.8130968Z ORM_METADATA_RESOURCE {"own": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "parent": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "uid": 1001, "descendant": {"cgroup": "0::/xiongbaowork.slice/xb-orm-metadata.service", "uid": 1001, "data": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "parent": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}}}
+2026-10-29T10:26:06.5691541Z PINNED_REDIRECT_PERMITTED {"SRI_verified":false,"expected_package_path":"/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz","followed_hop_budget":1,"package":"drizzle-orm@0.45.2","source_original_lock_url":"https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz","status":302,"target":{"fragment_present":false,"hostname":"cdn.npmmirror.com","path":"/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz","path_truncated":false,"port":null,"query_present":false,"scheme":"https","url_chars":76,"url_sha256":"7d66838e2e3d6845c71d4ead978ce3617bcd3975f3339f0b66a04fa9fb14a809","userinfo_present":false}}
+2026-10-29T10:26:07.4107341Z PINNED_ARCHIVE_SRI_VERIFIED {"SRI_verified_before_extraction":true,"bytes":1223890,"followed_hops":1,"original_lock_SRI":"sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==","original_lock_url":"https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz","package":"drizzle-orm@0.45.2"}
+2026-10-29T10:26:07.4650999Z ORM_PUBLIC_PACKAGE_METADATA_EVIDENCE {"SRI_verified_before_tar":true,"Source_acquired":false,"actual_original_value_spans":{"name":{"bytes":13,"encoding":"exact original UTF8 JSON value span","sha256":"0eaa96180ec2a814b1d65566cba6fa50d016818be4ddcf39282ada6b76d67c57"},"peerDependencies":{"bytes":834,"encoding":"exact original UTF8 JSON value span","sha256":"49de1a8ba2ad62964ecf39e15c30a76a0b6a79f7b3fb59f37d1f620972b7f7f1"},"peerDependenciesMeta":{"bytes":1559,"encoding":"exact original UTF8 JSON value span","sha256":"6d023d25cc8ac9c2fd18e7be85110a7e543265b627fe276443161ceadb803aab"},"version":{"bytes":8,"encoding":"exact original UTF8 JSON value span","sha256":"b3f00a391d7d4db64a6a2ecec327f804310468f29fb21554065281b6449c7da9"}},"actual_public_fields":{"bin":{"absent":true},"cpu":{"absent":true},"dependencies":{"absent":true},"name":"drizzle-orm","optionalDependencies":{"absent":true},"os":{"absent":true},"peerDependencies":{"@aws-sdk/client-rds-data":">=3","@cloudflare/workers-types":">=4","@electric-sql/pglite":">=0.2.0","@libsql/client":">=0.10.0","@libsql/client-wasm":">=0.10.0","@neondatabase/serverless":">=0.10.0","@op-engineering/op-sqlite":">=2","@opentelemetry/api":"^1.4.1","@planetscale/database":">=1.13","@prisma/client":"*","@tidbcloud/serverless":"*","@types/better-sqlite3":"*","@types/pg":"*","@types/sql.js":"*","@upstash/redis":">=1.34.7","@vercel/postgres":">=0.8.0","@xata.io/client":"*","better-sqlite3":">=7","bun-types":"*","expo-sqlite":">=14.0.0","gel":">=2","knex":"*","kysely":"*","mysql2":">=2","pg":">=8","postgres":">=3","sql.js":">=1","sqlite3":">=5"},"peerDependenciesMeta":{"@aws-sdk/client-rds-data":{"optional":true},"@cloudflare/workers-types":{"optional":true},"@electric-sql/pglite":{"optional":true},"@libsql/client":{"optional":true},"@libsql/client-wasm":{"optional":true},"@neondatabase/serverless":{"optional":true},"@op-engineering/op-sqlite":{"optional":true},"@opentelemetry/api":{"optional":true},"@planetscale/database":{"optional":true},"@prisma/client":{"optional":true},"@tidbcloud/serverless":{"optional":true},"@types/better-sqlite3":{"optional":true},"@types/pg":{"optional":true},"@types/sql.js":{"optional":true},"@upstash/redis":{"optional":true},"@vercel/postgres":{"optional":true},"@xata.io/client":{"optional":true},"better-sqlite3":{"optional":true},"bun-types":{"optional":true},"expo-sqlite":{"optional":true},"gel":{"optional":true},"knex":{"optional":true},"kysely":{"optional":true},"mysql2":{"optional":true},"pg":{"optional":true},"postgres":{"optional":true},"prisma":{"optional":true},"sql.js":{"optional":true},"sqlite3":{"optional":true}},"version":"0.45.2"},"archive_bytes":1223890,"credentials_output":false,"differences_do_not_authorize_dropping_checks":true,"exact_declared_field_differences":[{"kind":"lock_only","lock":"*","path":"/peerDependencies/prisma"}],"generator_executed":false,"lock_corresponding_fields":{"bin":{"absent":true},"cpu":{"absent":true},"dependencies":{"absent":true},"name":"drizzle-orm","optionalDependencies":{"absent":true},"os":{"absent":true},"peerDependencies":{"@aws-sdk/client-rds-data":">=3","@cloudflare/workers-types":">=4","@electric-sql/pglite":">=0.2.0","@libsql/client":">=0.10.0","@libsql/client-wasm":">=0.10.0","@neondatabase/serverless":">=0.10.0","@op-engineering/op-sqlite":">=2","@opentelemetry/api":"^1.4.1","@planetscale/database":">=1.13","@prisma/client":"*","@tidbcloud/serverless":"*","@types/better-sqlite3":"*","@types/pg":"*","@types/sql.js":"*","@upstash/redis":">=1.34.7","@vercel/postgres":">=0.8.0","@xata.io/client":"*","better-sqlite3":">=7","bun-types":"*","expo-sqlite":">=14.0.0","gel":">=2","knex":"*","kysely":"*","mysql2":">=2","pg":">=8","postgres":">=3","prisma":"*","sql.js":">=1","sqlite3":">=5"},"peerDependenciesMeta":{"@aws-sdk/client-rds-data":{"optional":true},"@cloudflare/workers-types":{"optional":true},"@electric-sql/pglite":{"optional":true},"@libsql/client":{"optional":true},"@libsql/client-wasm":{"optional":true},"@neondatabase/serverless":{"optional":true},"@op-engineering/op-sqlite":{"optional":true},"@opentelemetry/api":{"optional":true},"@planetscale/database":{"optional":true},"@prisma/client":{"optional":true},"@tidbcloud/serverless":{"optional":true},"@types/better-sqlite3":{"optional":true},"@types/pg":{"optional":true},"@types/sql.js":{"optional":true},"@upstash/redis":{"optional":true},"@vercel/postgres":{"optional":true},"@xata.io/client":{"optional":true},"better-sqlite3":{"optional":true},"bun-types":{"optional":true},"expo-sqlite":{"optional":true},"gel":{"optional":true},"knex":{"optional":true},"kysely":{"optional":true},"mysql2":{"optional":true},"pg":{"optional":true},"postgres":{"optional":true},"prisma":{"optional":true},"sql.js":{"optional":true},"sqlite3":{"optional":true}},"version":"0.45.2"},"lock_field_origins":{"bin":"original lock metadata field or explicit absent marker","cpu":"original lock metadata field or explicit absent marker","dependencies":"original lock metadata field or explicit absent marker","name":"derived from original locked pinned package name","optionalDependencies":"original lock metadata field or explicit absent marker","os":"original lock metadata field or explicit absent marker","peerDependencies":"original lock metadata field or explicit absent marker","peerDependenciesMeta":"derived optional-only representation from original lock optionalPeers; not a raw lock peerDependenciesMeta field","version":"derived from original locked pinned package version"},"name_version_match":true,"native_executed":false,"node":"drizzle-orm@0.45.2","original_default_empty_dictionary_comparisons":{"dependencies":{"differences":[],"equal":true},"optionalDependencies":{"differences":[],"equal":true},"peerDependencies":{"differences":[{"kind":"lock_only","lock":"*","path":"/peerDependencies/prisma"}],"equal":false}},"original_lock_SRI":"sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==","original_lock_metadata":{"optionalPeers":["@aws-sdk/client-rds-data","@cloudflare/workers-types","@electric-sql/pglite","@libsql/client","@libsql/client-wasm","@neondatabase/serverless","@op-engineering/op-sqlite","@opentelemetry/api","@planetscale/database","@prisma/client","@tidbcloud/serverless","@types/better-sqlite3","@types/pg","@types/sql.js","@upstash/redis","@vercel/postgres","@xata.io/client","better-sqlite3","bun-types","expo-sqlite","gel","knex","kysely","mysql2","pg","postgres","prisma","sql.js","sqlite3"],"peerDependencies":{"@aws-sdk/client-rds-data":">=3","@cloudflare/workers-types":">=4","@electric-sql/pglite":">=0.2.0","@libsql/client":">=0.10.0","@libsql/client-wasm":">=0.10.0","@neondatabase/serverless":">=0.10.0","@op-engineering/op-sqlite":">=2","@opentelemetry/api":"^1.4.1","@planetscale/database":">=1.13","@prisma/client":"*","@tidbcloud/serverless":"*","@types/better-sqlite3":"*","@types/pg":"*","@types/sql.js":"*","@upstash/redis":">=1.34.7","@vercel/postgres":">=0.8.0","@xata.io/client":"*","better-sqlite3":">=7","bun-types":"*","expo-sqlite":">=14.0.0","gel":">=2","knex":"*","kysely":"*","mysql2":">=2","pg":">=8","postgres":">=3","prisma":"*","sql.js":">=1","sqlite3":">=5"}},"original_lock_url":"https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz","package_installed":false,"package_json":{"bytes":177277,"sha256":"9fd30ce718965c19178ac6936462b77017f1fffe56865124d0cfe55850de09ff"},"safe_tar_declared_bytes":10420427,"safe_tar_members":2666,"scripts_output":false}
+2026-10-29T10:26:07.4778791Z           Finished with result: success
+2026-10-29T10:26:07.4779351Z Main processes terminated with: code=exited, status=0/SUCCESS
+2026-10-29T10:26:07.4779932Z                Service runtime: 1.742s
+2026-10-29T10:26:07.4780400Z              CPU time consumed: 160ms
+2026-10-29T10:26:07.4780819Z                    Memory peak: 17.9M (swap: 0B)
+2026-10-29T10:26:07.5013789Z ORM_METADATA_PROBE_FINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "deadline_remaining": 58.224203475999985, "Subject_source_acquired": false, "Subject_executed": false}
+2026-10-29T10:26:07.5147472Z ##[group]Run set -euo pipefail
+2026-10-29T10:26:07.5147743Z [36;1mset -euo pipefail[0m
+2026-10-29T10:26:07.5147958Z [36;1msudo /usr/bin/python3 -I -B - <<'PY'[0m
+2026-10-29T10:26:07.5148210Z [36;1mimport json,subprocess,time[0m
+2026-10-29T10:26:07.5148415Z [36;1mfrom pathlib import Path[0m
+2026-10-29T10:26:07.5148659Z [36;1mparent=Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T10:26:07.5148957Z [36;1mowned=parent/"xb-orm-metadata.service";deadline=time.monotonic()+8[0m
+2026-10-29T10:26:07.5149224Z [36;1mif owned.exists():[0m
+2026-10-29T10:26:07.5149537Z [36;1m    populated=dict(line.split() for line in (owned/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T10:26:07.5149862Z [36;1m    if populated!="0":[0m
+2026-10-29T10:26:07.5150115Z [36;1m        if (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T10:26:07.5150408Z [36;1m        remaining=deadline-time.monotonic()-2[0m
+2026-10-29T10:26:07.5150655Z [36;1m        if remaining>0:[0m
+2026-10-29T10:26:07.5151070Z [36;1m            try:subprocess.run(["systemctl","stop","xb-orm-metadata.service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)[0m
+2026-10-29T10:26:07.5151515Z [36;1m            except subprocess.TimeoutExpired:[0m
+2026-10-29T10:26:07.5151991Z [36;1m                if owned.exists() and (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T10:26:07.5152294Z [36;1massert parent.exists()[0m
+2026-10-29T10:26:07.5152600Z [36;1mfor name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:[0m
+2026-10-29T10:26:07.5152928Z [36;1m    (parent/name).write_text(value)[0m
+2026-10-29T10:26:07.5153265Z [36;1mlimits={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}[0m
+2026-10-29T10:26:07.5153676Z [36;1massert limits=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T10:26:07.5154075Z [36;1mpopulated=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T10:26:07.5154533Z [36;1massert populated=="0"[0m
+2026-10-29T10:26:07.5154794Z [36;1mremaining=deadline-time.monotonic()[0m
+2026-10-29T10:26:07.5155209Z [36;1mprint("ORM_METADATA_ALWAYS_FINAL "+json.dumps({"limits":limits,"populated":populated,"deadline_remaining":remaining,"Source_executed":False}),flush=True)[0m
+2026-10-29T10:26:07.5155742Z [36;1massert remaining>=0[0m
+2026-10-29T10:26:07.5155923Z [36;1mPY[0m
+2026-10-29T10:26:07.5181583Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T10:26:07.5181946Z ##[endgroup]
+2026-10-29T10:26:07.5443162Z ORM_METADATA_ALWAYS_FINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "deadline_remaining": 7.999801082000005, "Source_executed": false}
+2026-10-29T10:26:07.5542883Z Cleaning up orphan processes

@@ -573,7 +573,7 @@
     "previous_epoch": "2026-10-29T09:43:24.320Z:admin-close-c5add435",
     "lease_state": "released",
     "active_job": null,
-    "next_action": "Read latest canonical head/lease and Actions queue. Acquire new unique owner/run/epoch by expected-head CAS only if released/expired+idle. Read preparation branch actual latest commit/diff/three full files; if still base or absent, no candidate. Obtain non-author exact SHA/blob/bytes/SHA/mode/full review before any execution branch. Then legal coordinator may single-dispatch only reviewed one-package metadata DATA64/parent512/swap0/nohooks/noinstall/nonnative/noSource job. If ref/run exists reuse it, never repeat. Capture actual fields and raw JSON identities/differences; only then propose precise metadata validation repair. Persist and release.",
+    "next_action": "Prepare exact pinned ORM0.45.2/SRI metadata validation repair from actual lock_only /peerDependencies/prisma and matching optionalPeers/peerDependenciesMeta(prisma.optional=true) evidence; explain declared versus lock representation. Do not drop peer validation or rerun full17 unchanged. Independent review before any next diagnostic.",
     "preparation": {
       "schema": "xiongbaowork-next-bounded-pass-v2",
       "recorded_at": "2026-10-29T09:45:04.133Z",
@@ -2650,12 +2650,12 @@
   "cloud_orm_metadata_next": {
     "schema": "xiongbaowork-next-bounded-pass-v2",
     "recorded_at": "2026-10-29T09:45:04.133Z",
-    "state": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
+    "state": "ACTUAL_METADATA_EVIDENCE_COMPLETE_NO_INSTALL_NO_GENERATOR",
     "purpose": "Obtain actual SRI-authenticated drizzle-orm0.45.2 public package metadata and exact lock comparison; do not weaken peerDependencies validation or rerun Source+17 chain.",
     "preparation_branch": "codex/cloud-orm-metadata-prep-20261029-a1",
     "preparation_base": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
     "candidate_sha": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
-    "review_sha": null,
+    "review_sha": "12a7dfda7491249489b7ee77ff5473959d9ac65c",
     "execution_branch": "codex/cloud-orm-metadata-run-20261029-a1",
     "paths": [
       ".github/workflows/cloud-orm-metadata.yml",
@@ -2664,7 +2664,7 @@
     ],
     "author_status": "Candidate is now committed to exclusive preparation branch and files retrieved by exact SHA; no independent implementation review has approved it.",
     "dispatch_allowed": false,
-    "required_next": "Read latest canonical head/lease and Actions queue. Acquire new unique owner/run/epoch by expected-head CAS only if released/expired+idle. Read preparation branch actual latest commit/diff/three full files; if still base or absent, no candidate. Obtain non-author exact SHA/blob/bytes/SHA/mode/full review before any execution branch. Then legal coordinator may single-dispatch only reviewed one-package metadata DATA64/parent512/swap0/nohooks/noinstall/nonnative/noSource job. If ref/run exists reuse it, never repeat. Capture actual fields and raw JSON identities/differences; only then propose precise metadata validation repair. Persist and release.",
+    "required_next": "Prepare exact pinned ORM0.45.2/SRI metadata validation repair from actual lock_only /peerDependencies/prisma and matching optionalPeers/peerDependenciesMeta(prisma.optional=true) evidence; explain declared versus lock representation. Do not drop peer validation or rerun full17 unchanged. Independent review before any next diagnostic.",
     "old_runs_no_repeat": [
       40845991318,
       40850003450
@@ -2711,6 +2711,575 @@
         "bytes": 7814,
         "sha256": "5f79a10a6770656f87e5872e239650a617da33fae795a1a53fcd0f5f78087969"
       }
-    ]
+    ],
+    "actual_run": 40857520611,
+    "actual_job": 123392107062
+  },
+  "cloud_orm_metadata_result": {
+    "schema": "xiongbaowork-orm-metadata-actual-result-v1",
+    "candidate": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
+    "independent_review_commit": "12a7dfda7491249489b7ee77ff5473959d9ac65c",
+    "run": 40857520611,
+    "job": 123392107062,
+    "status": "completed",
+    "conclusion": "success",
+    "scope": "ONE_SRI_AUTHENTICATED_ORM_PUBLIC_METADATA_ONLY",
+    "events": [
+      {
+        "at": "2026-10-29T10:26:05.8130968Z",
+        "event": "ORM_METADATA_RESOURCE",
+        "value": {
+          "own": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "uid": 1001,
+          "descendant": {
+            "cgroup": "0::/xiongbaowork.slice/xb-orm-metadata.service",
+            "uid": 1001,
+            "data": {
+              "memory.max": "67108864",
+              "memory.swap.max": "0",
+              "memory.oom.group": "1"
+            },
+            "parent": {
+              "memory.max": "536870912",
+              "memory.swap.max": "0",
+              "memory.oom.group": "1"
+            }
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T10:26:06.5691541Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz",
+          "followed_hop_budget": 1,
+          "package": "drizzle-orm@0.45.2",
+          "source_original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 76,
+            "url_sha256": "7d66838e2e3d6845c71d4ead978ce3617bcd3975f3339f0b66a04fa9fb14a809",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T10:26:07.4107341Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 1223890,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+          "original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+          "package": "drizzle-orm@0.45.2"
+        }
+      },
+      {
+        "at": "2026-10-29T10:26:07.4650999Z",
+        "event": "ORM_PUBLIC_PACKAGE_METADATA_EVIDENCE",
+        "value": {
+          "SRI_verified_before_tar": true,
+          "Source_acquired": false,
+          "actual_original_value_spans": {
+            "name": {
+              "bytes": 13,
+              "encoding": "exact original UTF8 JSON value span",
+              "sha256": "0eaa96180ec2a814b1d65566cba6fa50d016818be4ddcf39282ada6b76d67c57"
+            },
+            "peerDependencies": {
+              "bytes": 834,
+              "encoding": "exact original UTF8 JSON value span",
+              "sha256": "49de1a8ba2ad62964ecf39e15c30a76a0b6a79f7b3fb59f37d1f620972b7f7f1"
+            },
+            "peerDependenciesMeta": {
+              "bytes": 1559,
+              "encoding": "exact original UTF8 JSON value span",
+              "sha256": "6d023d25cc8ac9c2fd18e7be85110a7e543265b627fe276443161ceadb803aab"
+            },
+            "version": {
+              "bytes": 8,
+              "encoding": "exact original UTF8 JSON value span",
+              "sha256": "b3f00a391d7d4db64a6a2ecec327f804310468f29fb21554065281b6449c7da9"
+            }
+          },
+          "actual_public_fields": {
+            "bin": {
+              "absent": true
+            },
+            "cpu": {
+              "absent": true
+            },
+            "dependencies": {
+              "absent": true
+            },
+            "name": "drizzle-orm",
+            "optionalDependencies": {
+              "absent": true
+            },
+            "os": {
+              "absent": true
+            },
+            "peerDependencies": {
+              "@aws-sdk/client-rds-data": ">=3",
+              "@cloudflare/workers-types": ">=4",
+              "@electric-sql/pglite": ">=0.2.0",
+              "@libsql/client": ">=0.10.0",
+              "@libsql/client-wasm": ">=0.10.0",
+              "@neondatabase/serverless": ">=0.10.0",
+              "@op-engineering/op-sqlite": ">=2",
+              "@opentelemetry/api": "^1.4.1",
+              "@planetscale/database": ">=1.13",
+              "@prisma/client": "*",
+              "@tidbcloud/serverless": "*",
+              "@types/better-sqlite3": "*",
+              "@types/pg": "*",
+              "@types/sql.js": "*",
+              "@upstash/redis": ">=1.34.7",
+              "@vercel/postgres": ">=0.8.0",
+              "@xata.io/client": "*",
+              "better-sqlite3": ">=7",
+              "bun-types": "*",
+              "expo-sqlite": ">=14.0.0",
+              "gel": ">=2",
+              "knex": "*",
+              "kysely": "*",
+              "mysql2": ">=2",
+              "pg": ">=8",
+              "postgres": ">=3",
+              "sql.js": ">=1",
+              "sqlite3": ">=5"
+            },
+            "peerDependenciesMeta": {
+              "@aws-sdk/client-rds-data": {
+                "optional": true
+              },
+              "@cloudflare/workers-types": {
+                "optional": true
+              },
+              "@electric-sql/pglite": {
+                "optional": true
+              },
+              "@libsql/client": {
+                "optional": true
+              },
+              "@libsql/client-wasm": {
+                "optional": true
+              },
+              "@neondatabase/serverless": {
+                "optional": true
+              },
+              "@op-engineering/op-sqlite": {
+                "optional": true
+              },
+              "@opentelemetry/api": {
+                "optional": true
+              },
+              "@planetscale/database": {
+                "optional": true
+              },
+              "@prisma/client": {
+                "optional": true
+              },
+              "@tidbcloud/serverless": {
+                "optional": true
+              },
+              "@types/better-sqlite3": {
+                "optional": true
+              },
+              "@types/pg": {
+                "optional": true
+              },
+              "@types/sql.js": {
+                "optional": true
+              },
+              "@upstash/redis": {
+                "optional": true
+              },
+              "@vercel/postgres": {
+                "optional": true
+              },
+              "@xata.io/client": {
+                "optional": true
+              },
+              "better-sqlite3": {
+                "optional": true
+              },
+              "bun-types": {
+                "optional": true
+              },
+              "expo-sqlite": {
+                "optional": true
+              },
+              "gel": {
+                "optional": true
+              },
+              "knex": {
+                "optional": true
+              },
+              "kysely": {
+                "optional": true
+              },
+              "mysql2": {
+                "optional": true
+              },
+              "pg": {
+                "optional": true
+              },
+              "postgres": {
+                "optional": true
+              },
+              "prisma": {
+                "optional": true
+              },
+              "sql.js": {
+                "optional": true
+              },
+              "sqlite3": {
+                "optional": true
+              }
+            },
+            "version": "0.45.2"
+          },
+          "archive_bytes": 1223890,
+          "credentials_output": false,
+          "differences_do_not_authorize_dropping_checks": true,
+          "exact_declared_field_differences": [
+            {
+              "kind": "lock_only",
+              "lock": "*",
+              "path": "/peerDependencies/prisma"
+            }
+          ],
+          "generator_executed": false,
+          "lock_corresponding_fields": {
+            "bin": {
+              "absent": true
+            },
+            "cpu": {
+              "absent": true
+            },
+            "dependencies": {
+              "absent": true
+            },
+            "name": "drizzle-orm",
+            "optionalDependencies": {
+              "absent": true
+            },
+            "os": {
+              "absent": true
+            },
+            "peerDependencies": {
+              "@aws-sdk/client-rds-data": ">=3",
+              "@cloudflare/workers-types": ">=4",
+              "@electric-sql/pglite": ">=0.2.0",
+              "@libsql/client": ">=0.10.0",
+              "@libsql/client-wasm": ">=0.10.0",
+              "@neondatabase/serverless": ">=0.10.0",
+              "@op-engineering/op-sqlite": ">=2",
+              "@opentelemetry/api": "^1.4.1",
+              "@planetscale/database": ">=1.13",
+              "@prisma/client": "*",
+              "@tidbcloud/serverless": "*",
+              "@types/better-sqlite3": "*",
+              "@types/pg": "*",
+              "@types/sql.js": "*",
+              "@upstash/redis": ">=1.34.7",
+              "@vercel/postgres": ">=0.8.0",
+              "@xata.io/client": "*",
+              "better-sqlite3": ">=7",
+              "bun-types": "*",
+              "expo-sqlite": ">=14.0.0",
+              "gel": ">=2",
+              "knex": "*",
+              "kysely": "*",
+              "mysql2": ">=2",
+              "pg": ">=8",
+              "postgres": ">=3",
+              "prisma": "*",
+              "sql.js": ">=1",
+              "sqlite3": ">=5"
+            },
+            "peerDependenciesMeta": {
+              "@aws-sdk/client-rds-data": {
+                "optional": true
+              },
+              "@cloudflare/workers-types": {
+                "optional": true
+              },
+              "@electric-sql/pglite": {
+                "optional": true
+              },
+              "@libsql/client": {
+                "optional": true
+              },
+              "@libsql/client-wasm": {
+                "optional": true
+              },
+              "@neondatabase/serverless": {
+                "optional": true
+              },
+              "@op-engineering/op-sqlite": {
+                "optional": true
+              },
+              "@opentelemetry/api": {
+                "optional": true
+              },
+              "@planetscale/database": {
+                "optional": true
+              },
+              "@prisma/client": {
+                "optional": true
+              },
+              "@tidbcloud/serverless": {
+                "optional": true
+              },
+              "@types/better-sqlite3": {
+                "optional": true
+              },
+              "@types/pg": {
+                "optional": true
+              },
+              "@types/sql.js": {
+                "optional": true
+              },
+              "@upstash/redis": {
+                "optional": true
+              },
+              "@vercel/postgres": {
+                "optional": true
+              },
+              "@xata.io/client": {
+                "optional": true
+              },
+              "better-sqlite3": {
+                "optional": true
+              },
+              "bun-types": {
+                "optional": true
+              },
+              "expo-sqlite": {
+                "optional": true
+              },
+              "gel": {
+                "optional": true
+              },
+              "knex": {
+                "optional": true
+              },
+              "kysely": {
+                "optional": true
+              },
+              "mysql2": {
+                "optional": true
+              },
+              "pg": {
+                "optional": true
+              },
+              "postgres": {
+                "optional": true
+              },
+              "prisma": {
+                "optional": true
+              },
+              "sql.js": {
+                "optional": true
+              },
+              "sqlite3": {
+                "optional": true
+              }
+            },
+            "version": "0.45.2"
+          },
+          "lock_field_origins": {
+            "bin": "original lock metadata field or explicit absent marker",
+            "cpu": "original lock metadata field or explicit absent marker",
+            "dependencies": "original lock metadata field or explicit absent marker",
+            "name": "derived from original locked pinned package name",
+            "optionalDependencies": "original lock metadata field or explicit absent marker",
+            "os": "original lock metadata field or explicit absent marker",
+            "peerDependencies": "original lock metadata field or explicit absent marker",
+            "peerDependenciesMeta": "derived optional-only representation from original lock optionalPeers; not a raw lock peerDependenciesMeta field",
+            "version": "derived from original locked pinned package version"
+          },
+          "name_version_match": true,
+          "native_executed": false,
+          "node": "drizzle-orm@0.45.2",
+          "original_default_empty_dictionary_comparisons": {
+            "dependencies": {
+              "differences": [],
+              "equal": true
+            },
+            "optionalDependencies": {
+              "differences": [],
+              "equal": true
+            },
+            "peerDependencies": {
+              "differences": [
+                {
+                  "kind": "lock_only",
+                  "lock": "*",
+                  "path": "/peerDependencies/prisma"
+                }
+              ],
+              "equal": false
+            }
+          },
+          "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+          "original_lock_metadata": {
+            "optionalPeers": [
+              "@aws-sdk/client-rds-data",
+              "@cloudflare/workers-types",
+              "@electric-sql/pglite",
+              "@libsql/client",
+              "@libsql/client-wasm",
+              "@neondatabase/serverless",
+              "@op-engineering/op-sqlite",
+              "@opentelemetry/api",
+              "@planetscale/database",
+              "@prisma/client",
+              "@tidbcloud/serverless",
+              "@types/better-sqlite3",
+              "@types/pg",
+              "@types/sql.js",
+              "@upstash/redis",
+              "@vercel/postgres",
+              "@xata.io/client",
+              "better-sqlite3",
+              "bun-types",
+              "expo-sqlite",
+              "gel",
+              "knex",
+              "kysely",
+              "mysql2",
+              "pg",
+              "postgres",
+              "prisma",
+              "sql.js",
+              "sqlite3"
+            ],
+            "peerDependencies": {
+              "@aws-sdk/client-rds-data": ">=3",
+              "@cloudflare/workers-types": ">=4",
+              "@electric-sql/pglite": ">=0.2.0",
+              "@libsql/client": ">=0.10.0",
+              "@libsql/client-wasm": ">=0.10.0",
+              "@neondatabase/serverless": ">=0.10.0",
+              "@op-engineering/op-sqlite": ">=2",
+              "@opentelemetry/api": "^1.4.1",
+              "@planetscale/database": ">=1.13",
+              "@prisma/client": "*",
+              "@tidbcloud/serverless": "*",
+              "@types/better-sqlite3": "*",
+              "@types/pg": "*",
+              "@types/sql.js": "*",
+              "@upstash/redis": ">=1.34.7",
+              "@vercel/postgres": ">=0.8.0",
+              "@xata.io/client": "*",
+              "better-sqlite3": ">=7",
+              "bun-types": "*",
+              "expo-sqlite": ">=14.0.0",
+              "gel": ">=2",
+              "knex": "*",
+              "kysely": "*",
+              "mysql2": ">=2",
+              "pg": ">=8",
+              "postgres": ">=3",
+              "prisma": "*",
+              "sql.js": ">=1",
+              "sqlite3": ">=5"
+            }
+          },
+          "original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+          "package_installed": false,
+          "package_json": {
+            "bytes": 177277,
+            "sha256": "9fd30ce718965c19178ac6936462b77017f1fffe56865124d0cfe55850de09ff"
+          },
+          "safe_tar_declared_bytes": 10420427,
+          "safe_tar_members": 2666,
+          "scripts_output": false
+        }
+      },
+      {
+        "at": "2026-10-29T10:26:07.5013789Z",
+        "event": "ORM_METADATA_PROBE_FINAL",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "deadline_remaining": 58.224203475999985,
+          "Subject_source_acquired": false,
+          "Subject_executed": false
+        }
+      },
+      {
+        "at": "2026-10-29T10:26:07.5443162Z",
+        "event": "ORM_METADATA_ALWAYS_FINAL",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "deadline_remaining": 7.999801082000005,
+          "Source_executed": false
+        }
+      }
+    ],
+    "exact_differences": [
+      {
+        "kind": "lock_only",
+        "lock": "*",
+        "path": "/peerDependencies/prisma"
+      }
+    ],
+    "package_json": {
+      "bytes": 177277,
+      "sha256": "9fd30ce718965c19178ac6936462b77017f1fffe56865124d0cfe55850de09ff"
+    },
+    "raw_log": {
+      "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-123392107062.log",
+      "bytes": 17073,
+      "sha256": "16f1191194168ba4abab10565ab94e462fbf3a77d2631bf50d4a1c18417d9683"
+    },
+    "generator": "NOT_RUN",
+    "metadata_generation": "NONE",
+    "native": "NOT_RUN",
+    "install": "NOT_RUN",
+    "Source_adopted": false,
+    "source_changed": false,
+    "gates": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "full_ci": "NOT_RUN",
+      "commercial": "NOT_DELIVERED"
+    },
+    "next_action": "Prepare exact pinned ORM0.45.2/SRI metadata validation repair from actual lock_only /peerDependencies/prisma and matching optionalPeers/peerDependenciesMeta(prisma.optional=true) evidence; explain declared versus lock representation. Do not drop peer validation or rerun full17 unchanged. Independent review before any next diagnostic."
   }
 }
