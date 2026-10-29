@@ -1,0 +1,138 @@
+{
+  "schema": "a11-delegated-a4-administrative-closeout/v1",
+  "at": "2026-10-29T17:23:42.565Z",
+  "interrupted_write_reconciliation": {
+    "observed_canonical_before": "629bf5822e329fe60ae1005e098f8474a850bd63",
+    "prior_attempt": "INTERRUPTED_UNCONFIRMED_NOT_COUNTED_AS_PERSISTED",
+    "this_write": "NEW_ATOMIC_EXPECTED_HEAD_CAS_ONLY"
+  },
+  "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+  "run": 40919415179,
+  "job": 123608267218,
+  "status": "completed",
+  "conclusion": "failure",
+  "dispatch_count": 1,
+  "no_new_dispatch_this_closeout": true,
+  "log": {
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40919415179/job/123608267218",
+    "characters": 21992,
+    "sha256_utf8": "4ef372d4554abe55b14686cd7a82de458b607555b6fd9e8e71919bb466b7e2ed",
+    "full_connector_read": true,
+    "matches_independent_hash": true
+  },
+  "independent_runtime_review": {
+    "commit": "ae0bdcc34eb44198ab23ea400e9205b639d9d993",
+    "path": "archives/recovery-20261028/A11-DELEGATED-A4-RUNTIME-NONAUTHOR-20261030.json",
+    "blob": "58cc5c1ed50d2e0a9137dc80a29a998c1428a77f",
+    "sha256_utf8": "d86d03376f4e5c839e94ee6a461210f3fe102937c633c658ad23121cefc0b87d",
+    "reviewer": "/root/a11_data_reviewer",
+    "verdict": "TRUSTED_FIXED_OLD_CGROUP_PATH_ABSENCE_VERIFIED_EXTERNAL_LIFECYCLE_BLOCKER_RESTORE_NOT_ACCEPTED"
+  },
+  "actual": {
+    "terminal_verified": {
+      "dir_uid": 0,
+      "dir_mode": "0o755",
+      "file_uid": 0,
+      "file_mode": "0o600",
+      "nlink": 1,
+      "bytes": 9018,
+      "fd_named_stable": true,
+      "trusted_fixed_path": true
+    },
+    "physical_oldpath": {
+      "root": "FileNotFoundError",
+      "target": "FileNotFoundError",
+      "admin": "FileNotFoundError",
+      "only_this_run_proves_absence": true,
+      "not_populated0_or_limits": true
+    },
+    "logical_service": {
+      "ActiveState": "active",
+      "SubState": "exited",
+      "Delegate": "yes",
+      "RemainAfterExit": "yes",
+      "MainPID": "0",
+      "ControlPID": "0",
+      "Job": "",
+      "ExecMainStatus": "0",
+      "ControlGroup": "",
+      "logical_active_not_physical_retention": true
+    },
+    "legacy": {
+      "project": {
+        "memory_max": "536870912",
+        "swap_max": "0",
+        "oom_group": "0",
+        "populated": "0"
+      },
+      "shared": {
+        "memory_max": "67108864",
+        "swap_max": "0",
+        "oom_group": "0",
+        "populated": "0"
+      },
+      "original_oom1_gate": "FAILED_NOT_WAIVED"
+    },
+    "inservice_control": {
+      "delegation_verified": true,
+      "error": null,
+      "elapsed": 0.07476083999999972,
+      "root64_target64_admin16_oom1_before_exit": true,
+      "not_external_empty_or_restore_proof": true
+    }
+  },
+  "historical_boundaries": {
+    "a3_8a08_null_snapshots": "Only currentAPIempty path-unresolved observation, oldpath not statted; a4 absence cannot retrospectively prove oldrun absence.",
+    "raw6733": "Four original compressed/raw identities/CRC/safeJSON truly verified in run40912579798; overall restoration unknown, not repeated here.",
+    "a2_sameinode_oom0": "Exactrun40914666271 observation remains separate; no actor identified.",
+    "upstream_v255": "Static SERVICE_EXITED prune path is explanatory only; deployedrunner version/actualpruningactor not captured."
+  },
+  "final_resource_restoration": "FAILED_OR_UNKNOWN_NOT_ACCEPTED",
+  "absent_directory_is_not_populated0_or_limits": true,
+  "source_adopted": false,
+  "prototype_project_migration_permission": false,
+  "DATA_PASS": false,
+  "architecture_todo": [
+    {
+      "id": "ARCH-1-AUTHORITATIVE-MANAGER-CONTRACT",
+      "requirement": "Provide a documented supported lifecycle/resource ownership mechanism for the actual platform manager that preserves exact existing original project512/sharedDATA64 memory.max, swap0 and kernel oom.group1 after every project/control process exits. Logical serviceactive or configuredMemoryMax alone is insufficient; no guessed unsupported property."
+    },
+    {
+      "id": "ARCH-2-PHYSICAL-EMPTY-WITNESS",
+      "requirement": "A separately read-only witness must observe still-existing exact parent/aggregate paths with stable identity, actual limits512/64, swap0/oom1, cgroup.events populated0 and zero directPIDs after all controls/writers exited. Missing paths never become empty or restored."
+    },
+    {
+      "id": "ARCH-3-NO-HOLDER-NO-ESCAPE",
+      "requirement": "No daemon/holder/sentinel kept alive merely to retain tree, no writer moved outside target before claiming empty, no out-of-aggregate restoration helper, no perprocessRLIMIT substitute. Manager orchestration exception remains fixed pure bootstrap/finalread only; all actual control/Subject descendants counted in aggregate."
+    },
+    {
+      "id": "ARCH-4-BOUNDED-FAILURE",
+      "requirement": "Launch, stop/kill/reap/restoration/record/finalread use one original monotonic bounded budget; missing/late/OOM/unknown terminal fails, no newalwaysgrace or swallowed legacyfailure."
+    },
+    {
+      "id": "ARCH-5-SEPARATE-PURE-CONTROL-REVIEW",
+      "requirement": "Any materially different supported mechanism requires a new minimal <=8 administrative package and complete nonauthor exactSHA/blob/mode/bytes review; first validation pureCONTROL no token/network/codec/Subject. No project migration or original resource authorization follows from this stage."
+    }
+  ],
+  "authority_boundary": {
+    "already_authorized": "Read-only documented capability/design analysis and a concrete reviewable minimal administrative plan retaining all existing gates; any later exact package still requires nonauthor review and valid lease/queue/CAS before execution.",
+    "not_authorized_by_this_closeout": "Implementing/running a new architecture, any further CONTROL/project job, new environment/account/worker/goal, holder to fake empty, out-of-aggregate restore, altered limits/deadlines/finalwitness or gate relaxation. Material permission/resource changes require separate explicit human authorization; none requested or assumed here."
+  },
+  "next_action": "Review a documented manager/resource lifecycle contract meeting ARCH-1..5 before implementation. Do not repeat a3/a4, generator, raw export verification or route A/B. Preserve physical absence only for a4; a3 remains path-not-read. Identity/Page/automations frozen; independent authorized work may be separately assigned.",
+  "gates": {
+    "prototype": "FAILED_OR_UNKNOWN",
+    "overall": "FAILED_OR_UNKNOWN",
+    "restore_proven": false,
+    "DATA_PASS": false,
+    "Source_adopted": false,
+    "project_migration_permission": false,
+    "raw_validation_repeated": false,
+    "scope": "77/18/7",
+    "PG": "PG_PENDING",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true
+  }
+}

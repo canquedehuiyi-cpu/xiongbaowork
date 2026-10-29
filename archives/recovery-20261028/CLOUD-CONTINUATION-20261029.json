@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T17:13:28.082Z",
+  "checkpoint_update_at": "2026-10-29T17:23:42.565Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4430,13 +4430,14 @@
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
     "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
     "acquisition_commit": "e3880111fd9f299cd426c9e7dfea071531371508",
-    "state": "held",
-    "expires_at": "2026-10-29T17:45:04.986Z",
-    "authority": "Explicit normal human executor delegation and fresh lease CAS; not hosted caller binding."
+    "state": "released",
+    "expires_at": "2026-10-29T17:23:42.565Z",
+    "authority": "Explicit normal human executor delegation and fresh lease CAS; not hosted caller binding.",
+    "released_at": "2026-10-29T17:23:42.565Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
-    "status": "NONAUTHOR_PURE_CONTROL_FIXED_PATH_EVIDENCE_APPROVED_NOT_RUN",
+    "status": "TERMINAL_FAILURE_PHYSICAL_PRIOR_TREE_MISSING_FINAL_RESOURCE_GATE_UNCLOSED",
     "review_commit": "9deaf7fa5e6dc0c8b011d9d709c0339400dc16d5",
     "review_path": "archives/recovery-20261028/A11-DELEGATED-A4-NONAUTHOR-REVIEW-20261030.json",
     "review_blob": "562c3965c848fe7c1b3094354fe3cc576c67d0a5",
@@ -4471,6 +4472,53 @@
     ],
     "execution_branch": "codex/a11-data-verify-run-20261030-a4",
     "legacy_gate_not_replaced": true,
-    "Source_adopted": false
+    "Source_adopted": false,
+    "result": {
+      "path": "archives/recovery-20261028/A11-DELEGATED-RESULT-20261030-A4.json",
+      "run": 40919415179,
+      "job": 123608267218,
+      "status": "completed",
+      "conclusion": "failure",
+      "physical_absence_only_proven_for_a4": true,
+      "final_resource_restoration": "FAILED_OR_UNKNOWN_NOT_ACCEPTED"
+    },
+    "runtime_nonauthor": {
+      "commit": "ae0bdcc34eb44198ab23ea400e9205b639d9d993",
+      "path": "archives/recovery-20261028/A11-DELEGATED-A4-RUNTIME-NONAUTHOR-20261030.json",
+      "blob": "58cc5c1ed50d2e0a9137dc80a29a998c1428a77f",
+      "sha256_utf8": "d86d03376f4e5c839e94ee6a461210f3fe102937c633c658ad23121cefc0b87d",
+      "reviewer": "/root/a11_data_reviewer",
+      "verdict": "TRUSTED_FIXED_OLD_CGROUP_PATH_ABSENCE_VERIFIED_EXTERNAL_LIFECYCLE_BLOCKER_RESTORE_NOT_ACCEPTED"
+    },
+    "architecture_todo": [
+      {
+        "id": "ARCH-1-AUTHORITATIVE-MANAGER-CONTRACT",
+        "requirement": "Provide a documented supported lifecycle/resource ownership mechanism for the actual platform manager that preserves exact existing original project512/sharedDATA64 memory.max, swap0 and kernel oom.group1 after every project/control process exits. Logical serviceactive or configuredMemoryMax alone is insufficient; no guessed unsupported property."
+      },
+      {
+        "id": "ARCH-2-PHYSICAL-EMPTY-WITNESS",
+        "requirement": "A separately read-only witness must observe still-existing exact parent/aggregate paths with stable identity, actual limits512/64, swap0/oom1, cgroup.events populated0 and zero directPIDs after all controls/writers exited. Missing paths never become empty or restored."
+      },
+      {
+        "id": "ARCH-3-NO-HOLDER-NO-ESCAPE",
+        "requirement": "No daemon/holder/sentinel kept alive merely to retain tree, no writer moved outside target before claiming empty, no out-of-aggregate restoration helper, no perprocessRLIMIT substitute. Manager orchestration exception remains fixed pure bootstrap/finalread only; all actual control/Subject descendants counted in aggregate."
+      },
+      {
+        "id": "ARCH-4-BOUNDED-FAILURE",
+        "requirement": "Launch, stop/kill/reap/restoration/record/finalread use one original monotonic bounded budget; missing/late/OOM/unknown terminal fails, no newalwaysgrace or swallowed legacyfailure."
+      },
+      {
+        "id": "ARCH-5-SEPARATE-PURE-CONTROL-REVIEW",
+        "requirement": "Any materially different supported mechanism requires a new minimal <=8 administrative package and complete nonauthor exactSHA/blob/mode/bytes review; first validation pureCONTROL no token/network/codec/Subject. No project migration or original resource authorization follows from this stage."
+      }
+    ],
+    "next_action": "Review a documented manager/resource lifecycle contract meeting ARCH-1..5 before implementation. Do not repeat a3/a4, generator, raw export verification or route A/B. Preserve physical absence only for a4; a3 remains path-not-read. Identity/Page/automations frozen; independent authorized work may be separately assigned."
+  },
+  "administrative_closeout": {
+    "at": "2026-10-29T17:23:42.565Z",
+    "interrupted_attempt_not_claimed_persisted": true,
+    "no_new_jobs": true,
+    "scope": "a4 evidence bookkeeping and lease release only",
+    "next_action": "Review a documented manager/resource lifecycle contract meeting ARCH-1..5 before implementation. Do not repeat a3/a4, generator, raw export verification or route A/B. Preserve physical absence only for a4; a3 remains path-not-read. Identity/Page/automations frozen; independent authorized work may be separately assigned."
   }
 }
