@@ -31,10 +31,10 @@ jobs:
               while True:
                   b=incoming.read(65536)
                   if not b:break
-                  total+=len(b);assert total<=79598
+                  total+=len(b);assert total<=79617
                   digest.update(b);out.write(b)
               out.flush();os.fsync(out.fileno())
-          assert total==79598 and digest.hexdigest()=="b00ab6f63ae9231c169cf4132ef92b18331cc3b89070002cee1291c76a6b6a66"
+          assert total==79617 and digest.hexdigest()=="303f75f521291fb5e57912b8a28ba25e8b3649f46ac65b0297cdcb3ebace1815"
           os.chmod(path,0o600)
           print("ADMIN_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)
           PY

@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
-  "author": "/root/persistence_review",
+  "author": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d",
   "base": "823744db378f508a1996f8c23faf1b42f115ad33",
   "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a6",
   "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a6",
@@ -795,7 +795,7 @@
   "revision": {
     "id": "A6",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_REDIRECT_CANDIDATE_NOT_REVIEWED_NOT_RUN",
+    "status": "AUTHOR_A6_PREPARED_UNREVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -894,13 +894,13 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 79598,
-    "sha256": "b00ab6f63ae9231c169cf4132ef92b18331cc3b89070002cee1291c76a6b6a66"
+    "bytes": 79617,
+    "sha256": "303f75f521291fb5e57912b8a28ba25e8b3649f46ac65b0297cdcb3ebace1815"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4017,
-    "sha256": "f3e348a9d84b7b93d59aac15e3644ffbadb9bfd1ff2a5bf933748b6a0ccff783"
+    "sha256": "25756cf70470e2eb3ed49b9e0979c66e5b15db766b528c46d278d2d35fe157ac"
   },
   "author_readiness": "A6_PREPARED_UNREVIEWED_NOT_RUN",
   "review_required": "Non-author exact full3file review required. Author has not executed guard contract checks or project. No dispatch or adoption authorized by this author report.",
