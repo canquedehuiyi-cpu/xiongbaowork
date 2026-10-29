@@ -1,0 +1,90 @@
+name: Cloud resource scheduling probe
+on:
+  push:
+    branches: [codex/cloud-exec-probe-run-20261029-a1]
+permissions:
+  contents: read
+concurrency:
+  group: source-recovery-bytes
+  cancel-in-progress: false
+jobs:
+  resource-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify bounded cloud parent and descendant gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-exec-probe-run-20261029-a1"
+          test "$GITHUB_EVENT_NAME" = "push"
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          parent = Path("/sys/fs/cgroup/xiongbaowork.slice")
+          unit = "xiongbaowork-cloud-probe"
+          def run(args, seconds=10, **kw):
+              return subprocess.run(args, timeout=seconds, check=True, **kw)
+          def gate():
+              return {n: (parent/n).read_text().strip() for n in ["memory.max", "memory.swap.max", "memory.oom.group"]}
+          child = r'''
+          import json, subprocess, sys
+          from pathlib import Path
+          line = Path("/proc/self/cgroup").read_text().strip()
+          assert line.startswith("0::/") and "\n" not in line
+          cg = Path("/sys/fs/cgroup") / line[3:].lstrip("/")
+          assert cg.parent == Path("/sys/fs/cgroup/xiongbaowork.slice")
+          expected = {"memory.max":"67108864", "memory.swap.max":"0", "memory.oom.group":"1"}
+          actual = {n:(cg/n).read_text().strip() for n in expected}
+          assert actual == expected, actual
+          upper = {n:(cg.parent/n).read_text().strip() for n in expected}
+          assert upper == {"memory.max":"536870912", "memory.swap.max":"0", "memory.oom.group":"1"}, upper
+          descendant = subprocess.run([sys.executable, "-I", "-B", "-c", "from pathlib import Path; print(Path('/proc/self/cgroup').read_text().strip())"], check=True, capture_output=True, text=True, timeout=5)
+          assert descendant.stdout.strip() == line
+          print("CLOUD_PROBE_DATA " + json.dumps({"cgroup":line,"data":actual,"project":upper,"descendant_cgroup":descendant.stdout.strip(),"descendant_exit":descendant.returncode,"subject_acquired":False,"subject_executed":False,"dependencies_installed":False,"secrets_read":False}), flush=True)
+          '''
+          try:
+              path = Path("/run/systemd/system/xiongbaowork.slice")
+              with path.open("x") as out:
+                  out.write("[Unit]\nDescription=Bounded cloud scheduling probe\n[Slice]\nMemoryMax=512M\nMemorySwapMax=0\n")
+              run(["systemctl","daemon-reload"])
+              run(["systemctl","start","xiongbaowork.slice"])
+              (parent/"memory.oom.group").write_text("1")
+              assert gate() == {"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}
+              print("CLOUD_PROBE_PARENT " + json.dumps(gate()), flush=True)
+              result = run(["systemd-run","--unit="+unit,"--wait","--pipe","--slice=xiongbaowork.slice","--property=Type=exec","--property=MemoryMax=64M","--property=MemorySwapMax=0","--property=OOMPolicy=kill","--property=KillMode=control-group","--property=RuntimeMaxSec=30","--property=TimeoutStartSec=10","--property=TimeoutStopSec=5","--property=SendSIGKILL=yes","/usr/bin/python3","-I","-B","-"], seconds=60, input=child, text=True)
+              print("CLOUD_PROBE_SERVICE " + json.dumps({"exit":result.returncode,"subject_executed":False}), flush=True)
+          finally:
+              if parent.exists():
+                  (parent/"memory.max").write_text("536870912")
+                  (parent/"memory.swap.max").write_text("0")
+                  (parent/"memory.oom.group").write_text("1")
+                  owned=parent/(unit+".service")
+                  if owned.exists() and (owned/"cgroup.kill").exists():
+                      (owned/"cgroup.kill").write_text("1")
+                  subprocess.run(["systemctl","stop",unit+".service"], timeout=10, check=False)
+                  assert gate() == {"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}
+                  events = dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())
+                  assert events["populated"] == "0", events
+                  print("CLOUD_PROBE_FINAL " + json.dumps({"restored":gate(),"project_populated":events["populated"],"subject_executed":False}), flush=True)
+          PY
+      - name: Always verify final project limits
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          assert p.is_dir(), "project slice not established"
+          (p/"memory.max").write_text("536870912")
+          (p/"memory.swap.max").write_text("0")
+          (p/"memory.oom.group").write_text("1")
+          gates={n:(p/n).read_text().strip() for n in ["memory.max","memory.swap.max","memory.oom.group"]}
+          assert gates=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}
+          events=dict(line.split() for line in (p/"cgroup.events").read_text().splitlines())
+          assert events["populated"]=="0", events
+          print("CLOUD_PROBE_TERMINAL " + json.dumps({"limits":gates,"populated":events["populated"],"subject_executed":False}), flush=True)
+          PY
