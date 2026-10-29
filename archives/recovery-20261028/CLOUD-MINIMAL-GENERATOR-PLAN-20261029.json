@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "/root/persistence_review",
   "base": "823744db378f508a1996f8c23faf1b42f115ad33",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a4",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a4",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a5",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a5",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A4",
+    "id": "A5",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_NARROW_MODE_ADAPTER_NOT_REVIEWED_NOT_RUN",
+    "status": "AUTHOR_REDIRECT_CANDIDATE_NOT_REVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -836,18 +836,71 @@
         "bytes": 46145,
         "sha256": "48265e559414be5b6ab09a3d85ab614929bd121a041f9251122203b9bf85a68b"
       }
-    }
+    },
+    "a4": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+    "change_scope": "Only archive downloader redirect guard plus administrative plan/workflow identities; original lock URLs/SRI/17nodes/Source/FULL50/480-120-120 and resource boundaries unchanged."
+  },
+  "redirect_policy": {
+    "basis": {
+      "run": 40848414444,
+      "job": 123361532231,
+      "head_sha": "b2a95ba0b346b70834b30edf07855d668c0c7dc7",
+      "conclusion": "success",
+      "ref": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40848414444/job/123361532231",
+      "http_status": 302,
+      "observed_original_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+      "observed_location": {
+        "followed": false,
+        "fragment_present": false,
+        "hostname": "cdn.npmmirror.com",
+        "original_chars": 82,
+        "original_sha256": "305d8e623931fc51f4da4278776d94fe7d5af1189e4bf4d9d09fcd1d781c4982",
+        "path": "/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+        "port": null,
+        "query_present": false,
+        "scheme": "https",
+        "value": "https://cdn.npmmirror.com/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz"
+      },
+      "archive_body_reads": 0,
+      "followed_location": false
+    },
+    "initial_request": "Always original exact lock URL over HTTPS; no CDN substitution in lock or first request.",
+    "direct_registry_200_allowed": true,
+    "redirect_statuses": [
+      301,
+      302,
+      303,
+      307,
+      308
+    ],
+    "max_followed_hops": 1,
+    "exact_target_host": "cdn.npmmirror.com",
+    "allowed_target_port": "absent or443 only",
+    "target_path_derivation": "/packages/ + quote(pinned_package_name,safe='/') + '/' + quote(pinned_version,safe='') + '/' + quote(basename+'-'+version+'.tgz',safe='')",
+    "forbidden": [
+      "second redirect",
+      "other host",
+      "HTTP downgrade",
+      "userinfo",
+      "query including empty delimiter",
+      "fragment including empty delimiter",
+      "other port",
+      "unknown package path"
+    ],
+    "safe_rejection_log": "Reason + bounded hostname/path/port and whole-URL SHA256; no raw target URL, userinfo, query or fragment values.",
+    "evidence_limit": "Only brocli first-hop302 and exact target were observed. Remaining16 package target paths and other standard redirect statuses are candidate constraints, not runtime facts; mismatch rejects and preserves failure.",
+    "sri": "Original SHA512 SRI is still mandatory before any extraction."
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 67069,
-    "sha256": "80a7cb626ed026ae2a3c6a676651f1d7861882543f0a36f965d623326194a570"
+    "bytes": 74421,
+    "sha256": "4e9f2b815c449c1cd48a15fc606b669065749fe1db83327c82938a633229fa06"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4017,
-    "sha256": "1315617c12fc80ee4023d967cc29b803d86902eea6e0496bd7e8a63512aae839"
+    "sha256": "87f377f56fc4d1f37345f34927a4576a1180e949358683c7266af92da4c9aadb"
   },
-  "author_readiness": "A4_PREPARED_FOR_NEW_NONAUTHOR_REVIEW_NO_RUN",
-  "review_required": "Root/delivery must independently review exact A4. A3 real failure retained; generator never reached. New final commit has no CI-skip annotation so same SHA may later be pushed to approved run-a4 by coordinator."
+  "author_readiness": "A5_PREPARED_FOR_NEW_NONAUTHOR_REVIEW_NO_RUN",
+  "review_required": "Root/delivery must independently review exact A5 redirect code against actual header evidence before coordinator may push the same SHA to run-a5; no unreviewed retry or changed lock/provider/network."
 }
