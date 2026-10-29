@@ -434,7 +434,7 @@
     "lease_path": "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json",
     "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "run_id": "bounded-probe-development-20261029T0804Z",
-    "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+    "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
     "page": {
       "url": "https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f",
       "evidence": "Human supplied; not independently inspected"
@@ -504,9 +504,9 @@
       }
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
-    "lease_expires_at": "2026-10-29T08:46:28.635Z",
-    "next_action": "NEXT BOUNDED PASS: verify current Page/controller/worker authority if hosted; read latest canonical head+lease and queued/in_progress. Only released/expired+idle permits expected-head CAS new unique owner/run/epoch. Then re-read exact A4 candidate c6f51d2673e608895ab826ed7437dbef9dab0340 + review45629eb4bcae774f405f6b3ac300f9c3d4d4f11f, verify three file identities/tree/modes/HEAD no-skip and unique run-a4 absence. Legal lease owner may create ONLY codex/cloud-minimal-generator-run-20261029-a4 at exact candidate once, using normal GitHub create_branch. If ref/run already exists, inspect and reuse it, never repeat. Capture terminal stage/log/output evidence; do not repeat failed e4cdae or probe. Full generated DDL needs separate reconciliation/review before Source adoption. End checkpoint and release own lease.",
-    "lease_state": "released",
+    "lease_expires_at": "2026-10-29T09:27:06.433Z",
+    "next_action": "After final latest-head/lease/idle/ref check, create unique run-a4 at exact reviewed c6f51d2673e608895ab826ed7437dbef9dab0340 once; reuse if present. Capture terminal result, checkpoint and release.",
+    "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
   "cloud_push_probe_a2": {
@@ -568,10 +568,10 @@
     "verdict": "STATIC_CLOSURE_CONFIRMED_WITH_SCHEMA_COVERAGE_CORRECTION_REQUIRED"
   },
   "cloud_work_queue": {
-    "resource_owner": null,
+    "resource_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "previous_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "previous_epoch": "2026-10-29T08:04:59.948Z:972136c2",
-    "lease_state": "released",
+    "lease_state": "held",
     "active_job": null,
     "next_candidate": {
       "sha": "c6f51d2673e608895ab826ed7437dbef9dab0340",
@@ -617,7 +617,8 @@
       "failed_generator_head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
       "route_old_head": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106"
     },
-    "next_action": "NEXT BOUNDED PASS: verify current Page/controller/worker authority if hosted; read latest canonical head+lease and queued/in_progress. Only released/expired+idle permits expected-head CAS new unique owner/run/epoch. Then re-read exact A4 candidate c6f51d2673e608895ab826ed7437dbef9dab0340 + review45629eb4bcae774f405f6b3ac300f9c3d4d4f11f, verify three file identities/tree/modes/HEAD no-skip and unique run-a4 absence. Legal lease owner may create ONLY codex/cloud-minimal-generator-run-20261029-a4 at exact candidate once, using normal GitHub create_branch. If ref/run already exists, inspect and reuse it, never repeat. Capture terminal stage/log/output evidence; do not repeat failed e4cdae or probe. Full generated DDL needs separate reconciliation/review before Source adoption. End checkpoint and release own lease."
+    "next_action": "NEXT BOUNDED PASS: verify current Page/controller/worker authority if hosted; read latest canonical head+lease and queued/in_progress. Only released/expired+idle permits expected-head CAS new unique owner/run/epoch. Then re-read exact A4 candidate c6f51d2673e608895ab826ed7437dbef9dab0340 + review45629eb4bcae774f405f6b3ac300f9c3d4d4f11f, verify three file identities/tree/modes/HEAD no-skip and unique run-a4 absence. Legal lease owner may create ONLY codex/cloud-minimal-generator-run-20261029-a4 at exact candidate once, using normal GitHub create_branch. If ref/run already exists, inspect and reuse it, never repeat. Capture terminal stage/log/output evidence; do not repeat failed e4cdae or probe. Full generated DDL needs separate reconciliation/review before Source adoption. End checkpoint and release own lease.",
+    "epoch": "2026-10-29T08:57:06.433Z:c6f51d26"
   },
   "restart_ack_audit": {
     "commit": "684c9253d5a9bb54d431bffe7a148d3dfbd1a466",
