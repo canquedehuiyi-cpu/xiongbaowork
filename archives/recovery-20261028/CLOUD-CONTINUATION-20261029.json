@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:52:55.581Z",
+  "checkpoint_update_at": "2026-10-29T16:59:09.916Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4120,7 +4120,8 @@
       "/root/a11_data_reviewer"
     ],
     "sequential_package_review": true,
-    "source_adoptions": 0
+    "source_adoptions": 0,
+    "stage": "QUEUE_IDLE_EPOCH_RELEASE_FOR_SEPARATE_CAS_SUCCESSOR"
   },
   "cloud_a11_offline_data_preparation": {
     "candidate": "d8769361ffb91d0cd3fa71f01c645d1515ab2043",
@@ -4339,5 +4340,31 @@
     "project_dispatch_approved": false,
     "original_final_oomgroup0_blocking": "UNRESOLVED",
     "source_adopted": false
+  },
+  "cloud_a11_delegated_prototype": {
+    "candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
+    "status": "AUTHOR_PREPARED_EXACT_NONAUTHOR_REVIEW_ACTUALLY_STARTED_NOT_APPROVED",
+    "prepare_branch": "codex/a11-data-verify-prep-20261030",
+    "execution_branch": "codex/a11-data-verify-run-20261030-a3",
+    "files": [
+      {
+        "path": ".github/workflows/a11-offline-data-verify.yml",
+        "blob": "7bce867d878465f6fa863d6468db8e2dfd8fc9f6",
+        "sha256": "2c7288d20b4e61607414cd9fbc886f83287a616447483c6f336b010fa289de64"
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+        "blob": "616c0a8bf02f3bafb1fc9137e511120bd8f71129",
+        "sha256": "77687c7cee228481e9cb60eee3acf2ce8bd970dc69811fc1331fc8f2f9c58a23"
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+        "blob": "515d47483c7f3839d6dc0614a2311e6a97815e42",
+        "sha256": "b0b573f91747b09034b994d66874d7253a037bf52fc615cb300178a6559a6258"
+      }
+    ],
+    "Source_adopted": false,
+    "original_managed_slice_gate": "UNRESOLVED_NOT_OVERRIDDEN",
+    "review_activation_correction": "Earlier ordinary send to completed reviewer did not start a3 review; explicit followup now started. No approval inferred."
   }
 }

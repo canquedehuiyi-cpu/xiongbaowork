@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
   "run_id": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
   "acquired_at": "2026-10-29T16:19:08.289Z",
-  "renewed_at": "2026-10-29T16:52:55.581Z",
-  "expires_at": "2026-10-29T17:04:08.289Z",
+  "renewed_at": "2026-10-29T16:59:09.916Z",
+  "expires_at": "2026-10-29T16:59:09.916Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "c48d77d85386ffac616e016f50c5fac0e2b8416e",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T16:19:08.289Z"
   },
-  "next_action": "Complete sequential exact static reviews of route failfast-only then A11 delegated control prototype. Only A11 pure control may one-shot after fresh idle gates; no A/B rerun.",
+  "next_action": "Separately reacquire unique corrected-executor epoch by fresh exact ref/lease/queue CAS; finish exact a3 nonauthor review and at most one pure control dispatch. No project/Source execution.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -38,7 +38,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T16:14:13.867Z"
+    "observed_at": "2026-10-29T16:59:09.916Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
@@ -46,7 +46,7 @@
     "takeover_basis": "Explicit human reassignment; old epoch UTC expired; actual queued/in_progress both zero"
   },
   "predecessor_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
-  "released_at": "2026-10-29T16:14:13.867Z",
+  "released_at": "2026-10-29T16:59:09.916Z",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
