@@ -1,0 +1,22 @@
+{
+  "schema": "bounded-validation-failure-v1",
+  "ticket": "APPROVAL-LOCAL-COMPOSITION-20261029",
+  "candidate": "ada34a2cb51d2ccfcd88f66ce0112d5a4c14f18e",
+  "run_id": 40830150466,
+  "job_id": 123302243880,
+  "source_data": {
+    "files": 2065,
+    "bytes": 50175181,
+    "result": "PASS"
+  },
+  "failed_phase": "LOCK_INPUT_GUARD_BEFORE_BUN_INSTALL",
+  "cause": "Root workflow generation used broad 2064-to-2065 text replacement and accidentally altered a substring of the expected bun.lock SHA256; exact guard rejected before installation",
+  "lock_input_changed": false,
+  "bun_install_started": false,
+  "tests": "NOT_RUN",
+  "lint": "NOT_RUN",
+  "server_types": "NOT_RUN",
+  "correction": "Regenerate from frozen accepted workflow; replace standalone file-count tokens only and assert exact original lock SHA256",
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
