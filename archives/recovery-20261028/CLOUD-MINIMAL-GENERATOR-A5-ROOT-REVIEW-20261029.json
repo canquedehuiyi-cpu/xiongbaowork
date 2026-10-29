@@ -1,0 +1,98 @@
+{
+  "schema": "xiongbaowork-minimal-generator-independent-review/5",
+  "reviewer": "/root/delivery_review",
+  "author": "/root/persistence_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+  "parent": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+  "tree": "e7edc50ca6b060163cce5c20988a3870a9712e25",
+  "message_has_skip": false,
+  "verdict": "ADMIN_GENERATOR_A5_DIAGNOSTIC_APPROVED_FOR_LEGAL_COORDINATOR_SINGLE_DISPATCH",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "blob": "60f786f8d34cfd0fe2e566e05878103e832bfb06",
+      "bytes": 4017,
+      "sha256": "87f377f56fc4d1f37345f34927a4576a1180e949358683c7266af92da4c9aadb",
+      "review": "Full exact retrieval, entire new downloader and exact diff reviewed; inherited blocks byte-compared with approved A4."
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "blob": "2b0d60756dda282013ee0e9349ec97a26f01ae2e",
+      "bytes": 74421,
+      "sha256": "4e9f2b815c449c1cd48a15fc606b669065749fe1db83327c82938a633229fa06",
+      "review": "Full exact retrieval, entire new downloader and exact diff reviewed; inherited blocks byte-compared with approved A4."
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "blob": "1363ba04e2a247a340f737800c5e43c219b5f39d",
+      "bytes": 32444,
+      "sha256": "0cb0b3217e588bb0903a475fa91202d123ce496eaf06994082d7b5478e584a21",
+      "review": "Full exact retrieval, entire new downloader and exact diff reviewed; inherited blocks byte-compared with approved A4."
+    }
+  ],
+  "redirect_review": [
+    "Each call uniquely matches original locked URL and SRI to exactly1of17 nodes; first request always original HTTPS registryURL.",
+    "Expected CDNpath derived from current lockedname/version/basename; scopedname uses percentencoded@ and exact slash structure, matching actualbrocli observation.",
+    "CustomHTTPRedirectHandler validates rawLocation before super normalization and revalidates normalizednewurl inredirect_request before a follow can occur.",
+    "Pre-follow requires0previous hops,req.full_url exactoriginal,standard allowedredirectstatus,exactly1Location and remainingdeadline.",
+    "Target max2048,allASCIIcontrols/space refused,HTTPS only,netloc exactcdn.npmmirror.com orcdn.npmmirror.com:443,portabsent/443,no userinfo/query/fragment including empty delimiters,pathexactderived.",
+    "Handler setsfollowed1/acceptedtarget before returning newrequest; any secondredirect/nonoriginalsource refuses before nextfollow.",
+    "Finalresponse must be200 and exact originalURL fordirectresponse,or exact acceptedtarget withonehop; redirectedfinaltarget validatedagain before readingbody.",
+    "32MiBdownload cap,originalSHA512SRI mandatory beforefetchreturns; extract_archivecalledonlyafter successfulSRI. Redirectpermitted logexplicitlySRIverifiedfalse.",
+    "Rejectedtargets loggedasboundedhostname/path/scheme/port+wholeURLhash,notrawuserinfo/query/fragment values.",
+    "DefaultHTTPS validation retained,noidentity/credential/networkconfigurationchange,noalternateprovider."
+  ],
+  "evidence_basis": {
+    "run": 40848414444,
+    "job": 123361532231,
+    "head": "b2a95ba0b346b70834b30edf07855d668c0c7dc7",
+    "reviewer_independently_read_real_header_logs": true,
+    "observed_only": "brocli originalURL firsthop302 to exacthttpscdnpath,queryfalse/fragmentfalse,notfollowed/body0",
+    "remaining16paths": "Candidateconstraints derivedfrompin,not runtimeobservations; mismatchmustfail."
+  },
+  "unchanged_exact_comparisons": {
+    "source_verifier_string": true,
+    "resource_helpers_and_copy_before_downloader": true,
+    "all_extract_dependencies_generate_export_admin_main_after_downloader": true,
+    "core_plan_exceptbranchrevision": true,
+    "embedded_standalonefields": true,
+    "unique_url_sri_all17": true
+  },
+  "inherited_controls": [
+    "Canonicalmanifest2065files/50175181B withmodes/FD/bytehash; originalmodeadapteronly100644/0o644→0644 unchanged.",
+    "Privatecopy+unadoptedseedoverlay/FULL50/original0080baseline99tables; no recoverychainstitch/fakeDATABASE_URL/PGmigrate.",
+    "Exactoriginal17lockURLs/SRI/metadata/placements,privatecache/copyfile,safetar,nohooks/links/sharedwritabledeps.",
+    "Rootactivationonlysets/checksresourcegates thenirreversiblerunnerUID/GIDdrop; noSubjectroot.",
+    "Parent512MiB/swap0/group1,DATA64MiB,generate512MiB; sharedpreparation480/generate120/export120,cleanupreserve8,actualremaining>=0,lateactivationdeadline-8.",
+    "Ownedcgroupkill/boundedstop/reap,singlecleanup,finallyandworkflowalwaysrestoration512/swap0/group1/populated0.",
+    "ActualCLIandfullsafeactualoutputcapture retained; structurefindingsdonotsuppressSQL/snapshot/journal; noauto-adoption.",
+    "Uniquea5runbranch/prepnonmatching,contentsread,singleubuntu15min,globalsource-recovery-bytes/cancelfalse;HEADnoskip."
+  ],
+  "approval_scope": "Static constrained downloader candidate within previously reviewed diagnostic only; not successful download/SRI/package metadata/native/generator/migration or Source adoption. Headerbrocli evidence does not substitute17closure verification.",
+  "dispatch_conditions": [
+    "Root must read thisexactGitHubreport and independently verify latestcanonicallegalowner/run/epochlease and idle projectqueue.",
+    "Oneunique run-a5 at exactly2e1e493f2983fcecc27393a993ccc95448cbff9b usingnormalGitHubtools;no unchangedA4retry.",
+    "Existingfreeallocationonly;noWindows/defaultbranch/deployment/paidprovider/identityorpolicybypass.",
+    "Captureactualperpackage permitted/rejectedredirect,SRI,metadata/native/CLI/outputandrestoration evidence independently;failuresmustretainNOTRUN/NONE whereappropriate.",
+    "GeneratedSQL/snapshot/journal stillrequirecompleteconsistency review and separate<=8Source nonauthorreview beforecanonicaladoption."
+  ],
+  "reviewer_actions": {
+    "project_executed": false,
+    "resource_job_started": false,
+    "dispatch": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "full77_18_7_acceptance": false
+  }
+}
