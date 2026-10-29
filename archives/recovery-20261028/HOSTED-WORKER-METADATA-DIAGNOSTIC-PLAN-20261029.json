@@ -1,0 +1,226 @@
+{
+  "schema": "xiongbaowork-own-invocation-metadata-diagnostic-preparation-v1",
+  "date": "2026-10-29",
+  "status": "PREPARED_ONLY_ROOT_SPECIFIC_CONFIG_REVIEW_BEFORE_DIAGNOSTIC_ENABLE",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "administrative_branch": "codex/cloud-worker-identity-repair-20261029",
+  "administrative_parent": "bfb33b8c4430d3dd8a653d5b04760c523f450850",
+  "human_authorization": "Explicit reversible metadata-only diagnosis exception from Root's latest direct human authorization. This current human administrative preparation is not a scheduled invocation or identity proof.",
+  "prior_audit_scope_correction": {
+    "prior_commit": "bfb33b8c4430d3dd8a653d5b04760c523f450850",
+    "prior_path": "archives/recovery-20261028/HOSTED-WORKER-IDENTITY-CAPABILITY-20261029.json",
+    "prior_blob": "f41378f6dee3eead6cecf6576a394f686684b121",
+    "prior_preserved": true,
+    "clarification": "The prior native Automations/Page schema audit cannot exclude metadata interfaces of other execution tools. This follow-up explicitly checks current executor/catalog documentation; it does not infer all platform metadata lacks binding.",
+    "root_reported_lead": "A different runtime's official node_repl schema reportedly exposes nodeRepl.requestMeta. That is a valid path to inspect where actually documented and available, not a schema to invent in this runtime."
+  },
+  "actual_catalog_evidence": {
+    "tool_count": 501,
+    "searches": [
+      {
+        "scope": "ALL_TOOLS name+description",
+        "terms": "node_repl | requestMeta | request.meta | execution.context | caller.context | current.session | invocation.metadata | nodeRepl",
+        "matching_tools": []
+      },
+      {
+        "scope": "ALL_TOOLS tool names",
+        "terms": "tool_search | search_tools | discover_tools | request_meta | requestmeta | caller | invocation | node.*repl | javascript.*repl",
+        "matching_tools": []
+      },
+      {
+        "scope": "ALL_TOOLS description",
+        "terms": "requestMeta | nodeRepl | current caller/invocation/run context",
+        "matching_tools": []
+      }
+    ],
+    "documented_top_level_interfaces": [
+      {
+        "name": "functions.exec",
+        "input": "Raw JavaScript source; optional first-line @exec pragma.",
+        "documented_runtime": "Fresh V8 isolate; raw JavaScript, no Node, no filesystem or direct network/console. Tools and documented text/image/audio/store/load helpers are available.",
+        "own_request_metadata_interface": "No requestMeta/current invocation identity accessor is exposed by its current documented interface.",
+        "action": "Used for permitted tool orchestration/preparation memory only; no global/env/process probing."
+      },
+      {
+        "name": "mcp__cua_repl.js",
+        "input_schema": {
+          "code": "string required",
+          "timeout_ms": "integer optional",
+          "title": "string optional"
+        },
+        "documented_role": "UI automation through cua API; first invocation must initialize/select supported surfaces. Documentation lists nodeRepl.write and emitImage helpers, not requestMeta.",
+        "own_request_metadata_interface": "requestMeta is not documented here; this is not the missing node_repl tool.",
+        "action": "NOT_INITIALIZED_OR_CALLED: no browser/Windows/CUA session probed for metadata."
+      }
+    ],
+    "node_repl_schema": "NOT_EXPOSED_IN_THIS_CURRENT_CATALOG",
+    "requestMeta_access_performed": false,
+    "requestMeta_top_level_keys": null,
+    "key_evidence_status": "NOT_READ_INTERFACE_NOT_EXPOSED; null is not an observed empty object/empty key list.",
+    "other_documented_current_caller_tools_found": [],
+    "scope_limit": "This is evidence about the present normal human context only. Actual scheduled invocation may have a different documented executor/catalog. No conclusion about its actual requestMeta keys/values is asserted."
+  },
+  "current_native_configuration": {
+    "page_id": "page_7812bfd830a08191ab1fb84da54f173f",
+    "controller_automation_id": "Automation_a9042438d098819180d8686afa9cd66e",
+    "controller_enabled": true,
+    "worker_id": "6ae30014bbac8191baa1a3497f062b7d",
+    "worker_is_enabled": false,
+    "worker_default_timezone": "Asia/Singapore",
+    "worker_schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+    "worker_timing_mode": "exact_schedule",
+    "worker_title": "熊宝云端开发续跑",
+    "worker_attachment": [
+      {
+        "automation_id": "6ae30014bbac8191baa1a3497f062b7d",
+        "automation_role": "task",
+        "controller_automation_id": "Automation_a9042438d098819180d8686afa9cd66e",
+        "runtime": "cloud",
+        "status": "paused"
+      }
+    ],
+    "original_prompt_matches_prior_archive": true,
+    "last_run_id": "9b9ce585-34e4-8325-a303-7c94de189882",
+    "last_run_interpretation": "Historical record retained as history only, not current caller binding or a metadata diagnostic result.",
+    "is_self_owned_automation_field": "ABSENT",
+    "configuration_changes_this_turn": 0
+  },
+  "original_development_prompt_archive": {
+    "prompt": "你是人类明确授权的熊宝数字员工云端开发续跑工作者，只有一次有界职责：从GitHub持久检查点接续一个可执行开发步骤，并保存真实结果，以便用户Windows关机后继续推进完整77故事、18原交付包、7门。仅用已有免费额度，不购买、不付费API/provider探测，源码/patch/archive/JSON/deps/tests/artifacts全部仅云端。不能使用Windows、本机CLI/浏览器/登录态、localhost MCP或本机定时器。\n关联Page：https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f ，page_id=page_7812bfd830a08191ab1fb84da54f173f。使用[@Pages](plugin://pages@openai-curated-remote)工具。唯一controller_automation_id=Automation_a9042438d098819180d8686afa9cd66e。\n开始前先get_page_auto_update和list_page_automations，核对你的host-supplied automation_id确实以task身份挂在此Page的这个controller之下，controller仍为当前且is_enabled=true；任一无法核实、被替换/停用/不可读时停止，不能自建/重挂/启用计划。读取完整Page及native Agent Instructions。禁止创建、修改或管理任何其他automation；controller职责只是状态维护，不能把它当Source独审或运行证明。\n唯一仓库canquedehuiyi-cpu/xiongbaowork，canonical=codex/cloud-repairs-recovery-20261028。先读最新archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json及其五件权威输入，保留所有77/18/7原文与历史。交接基线正式Source28为668dd2238ff112bcff38ad2d0456dccd116874ed、2065files/50175181B，28修复覆盖数不等18原包完成数；旧CPU绿不冒真实PG/生产。\n协作互斥：当前一轮主协调conversation6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072可能正在工作。每次先读canonical的archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json与相关Actions queued/in_progress一次；租约记录缺失/不可读/epoch不明时不写canonical、不创建执行分支、不启动项目，仅可只读分析或在你明确独占的准备分支保存未采用候选。已有owner有效或任何项目资源作业排队/运行时，不抢占，只按已记录run/job接收终态结果或安静退出。只有旧lease明确释放/过期且无项目运行，才能expected-SHA CAS取得唯一owner/epoch；CAS冲突原文重读、不force。UTC lease最多45min，真实checkpoint或15min续期；每个Source采用/执行分支/项目启动前再次核owner+epoch+最新SHA，不持有立即停。结束前保存next_action/当前作业身份、释放自己的lease，不能清别人的lease。该行政租约不是Root生产release，绝不能开AP门。\n实际项目运行只走已经独审并实际验证资源门的免费GitHub Actions工作流：同concurrency source-recovery-bytes/cancel-in-progress=false，单job串行；父聚合512MiB/swap0及所有后代、DATA/copy64MiB，禁止用perprocessRLIMIT或云端父8GiB冒聚合门。当前容器cgroup只读/systemd未运行时，不能直接跑Subject。已具名2GiB类型/测试、原app frontendbuild4GiB例外仅原步骤、有限时且复512；不外扩Docker/apt/native/PG。每包≤8Source、非作者独审、上包审后下包，完整blob/bytes/SHA/mode及readback/CAS；并行只允许不重叠Source准备和只读独审，所有资源作业串行。不能冒作者自审、不能拆包规避。\n优先任务按GitHub next_action推进：先打通已独审专用push分支的正常调度/512+64资源probe，取得真实run/job/log/exit；无需manual_dispatch工具，不改默认分支，不改旧route手动触发来绕门，不猜URL/API/新令牌/网络/身份。接着精确原锁最小Drizzle依赖闭包及正确schema覆盖，learning.ts缺失先核证，生成一致SQL/snapshot/journal，不重复已两次480秒下载超时的同安装链、不假URL或手写metadata冒generator。随后真实PG审批持久化适配器/capture+plan+ledger/ACK未知、重启和断线恢复，逐阶段证据不相互顶替；PG仍pending就推进无依赖Source/CPU部分。最后原工作流/镜像8GET/设备/模型计费/干净客户部署，全部77/18/7保留。\nROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING不变；不造receipt/审计/生产凭据，不降低authority/catalog/FORCE RLS、不保留已失效授权，不部署、不改默认分支、不复活旧Gitee/support/OpenCode/本机自动任务，不create_goal替换原目标，不擅自complete。结果已持久或ACK未知不重放tool/prepare；全字段与真实事务/权限验证缺失时unknown/blocked。\n完成一次有界推进即保存GitHub checkpoint、证据与next_action并退出，不循环等待/健康探测。已有项目run尚未终态时记录原ID，下一次复用，不重复创建。遇同阻塞无外部变化时不重跑同链、不制造行政进展；仍可推进确实独立的准备/审查。只在真实新进展/失败/阻塞或必要人类操作时简洁通知，无变化安静。仅更新此Page你负责的“最新真实状态”部分，改前重读当前controller与block hash、保留其余内容，确认保存/全文回读；你不能改worker/控制器规则与计划。\n\n本任务由人类任务上下文通过原生hosted Automations设置，并关联到上述现有controller；这是已授权续跑职责，不是控制器创建新计划的指令。原Source独审报告7ef4fcac96e6b76a8c84f873854d1cc5d905fd2a保留，A仅SOURCE_APPROVED_ONLY，旧B的P2不能以本计划设置清除。优先依据GitHub最新handoff/next_action核实后续修订与采用，不把旧基线当永久最新。当前人类报告probe40839741519/job123332952391成功仅是检索线索，必须读取真实云端结果再使用。现有主协调仍工作时尊重lease/队列，不能抢占；运行中的自动化不创建或管理任何新自动化。没有原生GitHub写入或受支持资源作业能力则保存具体capability blocker，不通过本机、猜HTTP、凭据或付费工具绕过。仅使用用户现有订阅/已有免费额度，若配额不足或出现付费要求则停止，不购买。设置成功和真正执行成功必须分开报告。",
+    "utf8_bytes": 6155,
+    "sha256": "3ab3ee5a1f5756a6aa7317314b18937df487664abf1281f9e6aed7190c8d3a65",
+    "matches_prior_bytes_and_sha256": true,
+    "restore_target_state": "Same ID, still paused. Original development prompt must never be re-enabled just because metadata-only test completed."
+  },
+  "diagnostic_prompt": {
+    "prompt": "你正在执行人类明确核准的一轮“平台身份元数据只读诊断”，不是熊宝项目开发续跑。本次诊断仅用于查明实际 scheduled invocation 是否带有可信的当前任务/运行身份。原开发职责暂不执行；即使发现候选身份链，也绝不在本轮读取项目仓库、操作租约或运行项目。完整77故事/18原交付包/7门、免费云端、Source不落Windows及所有原安全门保持，本次仅增加下列狭窄的元数据只读诊断例外。\n\n一、身份与工具边界\n1. 本轮必须来自平台真实 scheduled invocation。普通人类消息、转述、saved prompt中的目标ID、registry中挑选的ID、旧last_run或人工回声，均不是当前调用者身份。若没有真实scheduled来源可核证，结果保持UNVERIFIED。\n2. 先读当前实际工具catalog/官方返回的准确schema，寻找node_repl、nodeRepl.requestMeta或其他明确文档化的“本次自身调用/执行上下文”接口；名称不必含automations。只有当前工具文档明确支持的接口才能使用。不能把其他会话/其他执行器的schema套用到本轮。若当前无node_repl，直接记录INTERFACE_NOT_EXPOSED，不猜调用名，不反复probe。\n3. functions.exec不等同Node REPL；CUA/browser JS不等同node_repl。不得为了元数据而初始化浏览器、本机执行器或CUA，不读process/env、隐藏文件、进程、日志、socket、cookie、credentials，不猜HTTP/隐藏API，不用新账号/令牌/模型/付费provider或购买。\n4. 若当前node_repl官方文档明确将nodeRepl.requestMeta公开为本次执行的只读元数据对象，可以在该正常工具内读取它一次；若文档定义不同类型/调用形状，只按实际schema，不猜property或方法。若平台更高层规则不允许某个未绑定身份的只读操作，停止该操作并报告限制，不能修改规则以通过。\n\n二、安全读取顺序\n5. 第一份元数据输出只列该公开对象的顶层自有可枚举key名称及覆盖范围，不输出任何值，不序列化/inspect/dump整个对象，不输出原文、消息、推理、用户数据、headers、tokens或secrets。使用当前工具文档所支持的输出方式。若对象不存在、不可读或没有受支持的公开访问契约，报告具体schema/能力状态，不试探隐藏结构。\n6. 保留第一份键名证据后，只有实际顶层key明确是标识且当前文档语义确认是本次调用的automation_id、jawbone_id、task_id、run_id、conversation_id、thread_id（或明确对应的camelCase拼写）时，才可输出这些字段的安全ID值。只是名称相似但语义不明、通用id、嵌套对象、user/account标识、敏感值均不读取或展开。\n7. 顶层key名称仅作键名证据；在任何值读取/输出前，排除含token/secret/password/auth/cookie/credential/user/account含义的字段。允许输出的值只应为有界的标识符标量：长度不超过160的UUID/十六进制/平台文档明确的ID形式；非标量、URL、邮件、JWT、自由文本、原文或疑似凭据不输出，只标REDACTED_OR_UNSUPPORTED。不要调用未由当前官方schema明确支持的getter或函数猜测隐藏字段；不遍历原型、不递归元数据。无法确认安全就不输出值。\n8. 最多一次受支持的own metadata读取和一组键名/安全ID摘要。没有外部变化不重试相同probe。来自host-supplied可信当前自动化runtime context的真实字段也可作为独立候选来源，但必须标清实际来源；来自本saved prompt/普通user消息的ID只能是配置目标，不能冒caller。\n\n三、允许的关联只读检查\n9. 配置目标仅供比较，绝非当前caller声明：\npage_id=page_7812bfd830a08191ab1fb84da54f173f\n预期worker=6ae30014bbac8191baa1a3497f062b7d\n预期controller=Automation_a9042438d098819180d8686afa9cd66e\nPage URL：https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f\n使用[@Pages](plugin://pages@openai-curated-remote)原生工具。\n10. 本诊断只允许get_page_auto_update、list_page_automations、read_page（本Page）与原生automations.peek只读，以及上文文档明确的本次own metadata读取。若更高层身份规则在缺ID时禁止读Page，遵守它，不读Page，只回报已允许取得的元数据证据/能力限制。不能查找或遍历任何其他私密会话。\n11. 可对该配置目标做一次peek，以记录其状态及结果指针，但必须标“查询目标而非caller”。若已从可信当前上下文取得语义明确的实际task ID，可与Page registry的task/controller/当前enabled状态比较；task_id若是执行器任务而非automation ID，不能擅自映射成jawbone_id。native last_run/latest_result只是记录：只有额外真实current-run来源才能关联，旧last_run或registry自己挑ID单独不足。is_self_owned_automation若出现，按实际schema报告其语义和是否有当前run链，不能擅自升级为当前调用证明。\n12. 若只取得conversation/thread ID，或只有任务所属关系而无受支持的currenttask/currentrun绑定，必须保持UNVERIFIED。即使task/run ID看似匹配，也只标CANDIDATE_BINDING_FOR_ROOT_REVIEW，由Root核对来源、当前调用语义和精确匹配；本轮不自行宣布开发身份恢复。\n\n四、绝对禁止的副作用\n13. 本轮禁止所有项目仓库读取（包括GitHub源码、handoff、JSON、归档、依赖、patch、tests、artifacts），禁止Source/canonical/lease写，禁止项目job/执行分支/测试/SQL/parser/依赖安装/构建/部署/PG/provider/API调用；不能读写Windows或依赖本机登录态/localhost。\n14. 禁止任何automation创建、更新、启停、重挂、run_now、改schedule/时区/模型或管理其他任务；不能自行暂停或恢复自己。禁止Page/repo写入、评论、发消息给其他会话或任何外部发布。唯一报告目的地是本轮平台当前私有云端运行结果；不要把元数据写到Page或GitHub。Root在本轮外负责暂停/还原配置。\n15. 原门全部保留：每包≤8Source、非作者独审、expected-SHA CAS/租约与资源作业串行、父512MiB/swap0、DATA/copy64MiB、仅原具名2GiB类型/测试和原appbuild4GiB阶段例外；本轮严格不启动任何Subject，无例外可借用。ROOT_RELEASE=null、ready=false、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、PG_PENDING保持。不得伪造receipt/审计/PG/COMMIT/ACK；结果持久或ACK未知不重放prepare/tool，不降低authority/catalog/FORCE RLS、不保留失效授权。不create_goal替代目标、不擅自complete、不恢复OpenCode或本机任务。\n\n五、私有报告与退出\n16. 用简洁结构报告：本轮是否有可信scheduled来源；实际工具名称及所见schema依据；metadata接口可用/未暴露/不可读；顶层key名称（没有读取则填NOT_READ，不能伪报空数组）；仅获准的安全ID及其来源；Page/registry/peek只读对照（未执行就写未执行）；结论UNVERIFIED或CANDIDATE_BINDING_FOR_ROOT_REVIEW；全部副作用计数为0。\n17. 平台completed、取到conversation ID、原生peek的历史记录都不单独算身份修复通过。完成一次有界诊断立即退出，不等待下一小时、不循环健康探测、不继续项目工作。Root核准诊断结论并明确恢复开发配置前，开发worker始终不能被视为已恢复。\n",
+    "utf8_bytes": 7462,
+    "sha256": "fcfc7006eee2186a5dfb810ce87f59d9167207e1be6888a536eff8cc0b67b496",
+    "phase": "PRIVATE_RESULT_ONLY_METADATA_ONLY_NO_PROJECT_OR_AUTOMATION_MUTATIONS",
+    "only_allowed_reads": [
+      "Actual catalog/current tool official schema",
+      "Documented own requestMeta or equivalent own invocation context",
+      "Specified Page get_page_auto_update/list_page_automations/read_page if higher platform authority permits",
+      "One native peek target lookup, explicitly not caller identity"
+    ],
+    "key_then_value_rule": "First own top-level enumerable keys only; then only actual documented non-sensitive top-level automation/jawbone/task/run/conversation/thread identifier scalars. No nested values, full dumps, headers, user content, credentials or arbitrary private conversation lookup.",
+    "identity_outcome": "UNVERIFIED or CANDIDATE_BINDING_FOR_ROOT_REVIEW only; no immediate project work even if a candidate matches."
+  },
+  "reviewable_proposed_native_calls": {
+    "currently_executed": false,
+    "phase1_apply_after_Root_reviews_this_exact_configuration": {
+      "tool": "mcp__codex_apps__automations_update",
+      "arguments": {
+        "jawbone_id": "6ae30014bbac8191baa1a3497f062b7d",
+        "prompt": "你正在执行人类明确核准的一轮“平台身份元数据只读诊断”，不是熊宝项目开发续跑。本次诊断仅用于查明实际 scheduled invocation 是否带有可信的当前任务/运行身份。原开发职责暂不执行；即使发现候选身份链，也绝不在本轮读取项目仓库、操作租约或运行项目。完整77故事/18原交付包/7门、免费云端、Source不落Windows及所有原安全门保持，本次仅增加下列狭窄的元数据只读诊断例外。\n\n一、身份与工具边界\n1. 本轮必须来自平台真实 scheduled invocation。普通人类消息、转述、saved prompt中的目标ID、registry中挑选的ID、旧last_run或人工回声，均不是当前调用者身份。若没有真实scheduled来源可核证，结果保持UNVERIFIED。\n2. 先读当前实际工具catalog/官方返回的准确schema，寻找node_repl、nodeRepl.requestMeta或其他明确文档化的“本次自身调用/执行上下文”接口；名称不必含automations。只有当前工具文档明确支持的接口才能使用。不能把其他会话/其他执行器的schema套用到本轮。若当前无node_repl，直接记录INTERFACE_NOT_EXPOSED，不猜调用名，不反复probe。\n3. functions.exec不等同Node REPL；CUA/browser JS不等同node_repl。不得为了元数据而初始化浏览器、本机执行器或CUA，不读process/env、隐藏文件、进程、日志、socket、cookie、credentials，不猜HTTP/隐藏API，不用新账号/令牌/模型/付费provider或购买。\n4. 若当前node_repl官方文档明确将nodeRepl.requestMeta公开为本次执行的只读元数据对象，可以在该正常工具内读取它一次；若文档定义不同类型/调用形状，只按实际schema，不猜property或方法。若平台更高层规则不允许某个未绑定身份的只读操作，停止该操作并报告限制，不能修改规则以通过。\n\n二、安全读取顺序\n5. 第一份元数据输出只列该公开对象的顶层自有可枚举key名称及覆盖范围，不输出任何值，不序列化/inspect/dump整个对象，不输出原文、消息、推理、用户数据、headers、tokens或secrets。使用当前工具文档所支持的输出方式。若对象不存在、不可读或没有受支持的公开访问契约，报告具体schema/能力状态，不试探隐藏结构。\n6. 保留第一份键名证据后，只有实际顶层key明确是标识且当前文档语义确认是本次调用的automation_id、jawbone_id、task_id、run_id、conversation_id、thread_id（或明确对应的camelCase拼写）时，才可输出这些字段的安全ID值。只是名称相似但语义不明、通用id、嵌套对象、user/account标识、敏感值均不读取或展开。\n7. 顶层key名称仅作键名证据；在任何值读取/输出前，排除含token/secret/password/auth/cookie/credential/user/account含义的字段。允许输出的值只应为有界的标识符标量：长度不超过160的UUID/十六进制/平台文档明确的ID形式；非标量、URL、邮件、JWT、自由文本、原文或疑似凭据不输出，只标REDACTED_OR_UNSUPPORTED。不要调用未由当前官方schema明确支持的getter或函数猜测隐藏字段；不遍历原型、不递归元数据。无法确认安全就不输出值。\n8. 最多一次受支持的own metadata读取和一组键名/安全ID摘要。没有外部变化不重试相同probe。来自host-supplied可信当前自动化runtime context的真实字段也可作为独立候选来源，但必须标清实际来源；来自本saved prompt/普通user消息的ID只能是配置目标，不能冒caller。\n\n三、允许的关联只读检查\n9. 配置目标仅供比较，绝非当前caller声明：\npage_id=page_7812bfd830a08191ab1fb84da54f173f\n预期worker=6ae30014bbac8191baa1a3497f062b7d\n预期controller=Automation_a9042438d098819180d8686afa9cd66e\nPage URL：https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f\n使用[@Pages](plugin://pages@openai-curated-remote)原生工具。\n10. 本诊断只允许get_page_auto_update、list_page_automations、read_page（本Page）与原生automations.peek只读，以及上文文档明确的本次own metadata读取。若更高层身份规则在缺ID时禁止读Page，遵守它，不读Page，只回报已允许取得的元数据证据/能力限制。不能查找或遍历任何其他私密会话。\n11. 可对该配置目标做一次peek，以记录其状态及结果指针，但必须标“查询目标而非caller”。若已从可信当前上下文取得语义明确的实际task ID，可与Page registry的task/controller/当前enabled状态比较；task_id若是执行器任务而非automation ID，不能擅自映射成jawbone_id。native last_run/latest_result只是记录：只有额外真实current-run来源才能关联，旧last_run或registry自己挑ID单独不足。is_self_owned_automation若出现，按实际schema报告其语义和是否有当前run链，不能擅自升级为当前调用证明。\n12. 若只取得conversation/thread ID，或只有任务所属关系而无受支持的currenttask/currentrun绑定，必须保持UNVERIFIED。即使task/run ID看似匹配，也只标CANDIDATE_BINDING_FOR_ROOT_REVIEW，由Root核对来源、当前调用语义和精确匹配；本轮不自行宣布开发身份恢复。\n\n四、绝对禁止的副作用\n13. 本轮禁止所有项目仓库读取（包括GitHub源码、handoff、JSON、归档、依赖、patch、tests、artifacts），禁止Source/canonical/lease写，禁止项目job/执行分支/测试/SQL/parser/依赖安装/构建/部署/PG/provider/API调用；不能读写Windows或依赖本机登录态/localhost。\n14. 禁止任何automation创建、更新、启停、重挂、run_now、改schedule/时区/模型或管理其他任务；不能自行暂停或恢复自己。禁止Page/repo写入、评论、发消息给其他会话或任何外部发布。唯一报告目的地是本轮平台当前私有云端运行结果；不要把元数据写到Page或GitHub。Root在本轮外负责暂停/还原配置。\n15. 原门全部保留：每包≤8Source、非作者独审、expected-SHA CAS/租约与资源作业串行、父512MiB/swap0、DATA/copy64MiB、仅原具名2GiB类型/测试和原appbuild4GiB阶段例外；本轮严格不启动任何Subject，无例外可借用。ROOT_RELEASE=null、ready=false、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、PG_PENDING保持。不得伪造receipt/审计/PG/COMMIT/ACK；结果持久或ACK未知不重放prepare/tool，不降低authority/catalog/FORCE RLS、不保留失效授权。不create_goal替代目标、不擅自complete、不恢复OpenCode或本机任务。\n\n五、私有报告与退出\n16. 用简洁结构报告：本轮是否有可信scheduled来源；实际工具名称及所见schema依据；metadata接口可用/未暴露/不可读；顶层key名称（没有读取则填NOT_READ，不能伪报空数组）；仅获准的安全ID及其来源；Page/registry/peek只读对照（未执行就写未执行）；结论UNVERIFIED或CANDIDATE_BINDING_FOR_ROOT_REVIEW；全部副作用计数为0。\n17. 平台completed、取到conversation ID、原生peek的历史记录都不单独算身份修复通过。完成一次有界诊断立即退出，不等待下一小时、不循环健康探测、不继续项目工作。Root核准诊断结论并明确恢复开发配置前，开发worker始终不能被视为已恢复。\n",
+        "is_enabled": false
+      }
+    },
+    "phase1_omitted_fields_preserve": [
+      "title",
+      "schedule",
+      "default_timezone",
+      "dtstart_offset_json",
+      "triggers"
+    ],
+    "unsupported_fields_not_sent": [
+      "standalone",
+      "context_mode",
+      "automation_id_binding",
+      "runtime_identity"
+    ],
+    "phase2_diagnostic_only_enable_after_Root_specific_approval_and_readback": {
+      "tool": "mcp__codex_apps__automations_update",
+      "arguments": {
+        "jawbone_id": "6ae30014bbac8191baa1a3497f062b7d",
+        "is_enabled": true
+      },
+      "authority": "Only the bounded readonly metadata diagnosis exception, NOT enabling development without identity."
+    },
+    "phase3_operator_pause_after_one_real_terminal": {
+      "tool": "mcp__codex_apps__automations_update",
+      "arguments": {
+        "jawbone_id": "6ae30014bbac8191baa1a3497f062b7d",
+        "is_enabled": false
+      },
+      "owner": "Normal human-authorized administrator outside the diagnostic worker; diagnostic must not manage its own schedule."
+    },
+    "phase4_restore_original_prompt_while_paused": {
+      "tool": "mcp__codex_apps__automations_update",
+      "arguments": {
+        "jawbone_id": "6ae30014bbac8191baa1a3497f062b7d",
+        "prompt": "你是人类明确授权的熊宝数字员工云端开发续跑工作者，只有一次有界职责：从GitHub持久检查点接续一个可执行开发步骤，并保存真实结果，以便用户Windows关机后继续推进完整77故事、18原交付包、7门。仅用已有免费额度，不购买、不付费API/provider探测，源码/patch/archive/JSON/deps/tests/artifacts全部仅云端。不能使用Windows、本机CLI/浏览器/登录态、localhost MCP或本机定时器。\n关联Page：https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f ，page_id=page_7812bfd830a08191ab1fb84da54f173f。使用[@Pages](plugin://pages@openai-curated-remote)工具。唯一controller_automation_id=Automation_a9042438d098819180d8686afa9cd66e。\n开始前先get_page_auto_update和list_page_automations，核对你的host-supplied automation_id确实以task身份挂在此Page的这个controller之下，controller仍为当前且is_enabled=true；任一无法核实、被替换/停用/不可读时停止，不能自建/重挂/启用计划。读取完整Page及native Agent Instructions。禁止创建、修改或管理任何其他automation；controller职责只是状态维护，不能把它当Source独审或运行证明。\n唯一仓库canquedehuiyi-cpu/xiongbaowork，canonical=codex/cloud-repairs-recovery-20261028。先读最新archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json及其五件权威输入，保留所有77/18/7原文与历史。交接基线正式Source28为668dd2238ff112bcff38ad2d0456dccd116874ed、2065files/50175181B，28修复覆盖数不等18原包完成数；旧CPU绿不冒真实PG/生产。\n协作互斥：当前一轮主协调conversation6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072可能正在工作。每次先读canonical的archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json与相关Actions queued/in_progress一次；租约记录缺失/不可读/epoch不明时不写canonical、不创建执行分支、不启动项目，仅可只读分析或在你明确独占的准备分支保存未采用候选。已有owner有效或任何项目资源作业排队/运行时，不抢占，只按已记录run/job接收终态结果或安静退出。只有旧lease明确释放/过期且无项目运行，才能expected-SHA CAS取得唯一owner/epoch；CAS冲突原文重读、不force。UTC lease最多45min，真实checkpoint或15min续期；每个Source采用/执行分支/项目启动前再次核owner+epoch+最新SHA，不持有立即停。结束前保存next_action/当前作业身份、释放自己的lease，不能清别人的lease。该行政租约不是Root生产release，绝不能开AP门。\n实际项目运行只走已经独审并实际验证资源门的免费GitHub Actions工作流：同concurrency source-recovery-bytes/cancel-in-progress=false，单job串行；父聚合512MiB/swap0及所有后代、DATA/copy64MiB，禁止用perprocessRLIMIT或云端父8GiB冒聚合门。当前容器cgroup只读/systemd未运行时，不能直接跑Subject。已具名2GiB类型/测试、原app frontendbuild4GiB例外仅原步骤、有限时且复512；不外扩Docker/apt/native/PG。每包≤8Source、非作者独审、上包审后下包，完整blob/bytes/SHA/mode及readback/CAS；并行只允许不重叠Source准备和只读独审，所有资源作业串行。不能冒作者自审、不能拆包规避。\n优先任务按GitHub next_action推进：先打通已独审专用push分支的正常调度/512+64资源probe，取得真实run/job/log/exit；无需manual_dispatch工具，不改默认分支，不改旧route手动触发来绕门，不猜URL/API/新令牌/网络/身份。接着精确原锁最小Drizzle依赖闭包及正确schema覆盖，learning.ts缺失先核证，生成一致SQL/snapshot/journal，不重复已两次480秒下载超时的同安装链、不假URL或手写metadata冒generator。随后真实PG审批持久化适配器/capture+plan+ledger/ACK未知、重启和断线恢复，逐阶段证据不相互顶替；PG仍pending就推进无依赖Source/CPU部分。最后原工作流/镜像8GET/设备/模型计费/干净客户部署，全部77/18/7保留。\nROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING不变；不造receipt/审计/生产凭据，不降低authority/catalog/FORCE RLS、不保留已失效授权，不部署、不改默认分支、不复活旧Gitee/support/OpenCode/本机自动任务，不create_goal替换原目标，不擅自complete。结果已持久或ACK未知不重放tool/prepare；全字段与真实事务/权限验证缺失时unknown/blocked。\n完成一次有界推进即保存GitHub checkpoint、证据与next_action并退出，不循环等待/健康探测。已有项目run尚未终态时记录原ID，下一次复用，不重复创建。遇同阻塞无外部变化时不重跑同链、不制造行政进展；仍可推进确实独立的准备/审查。只在真实新进展/失败/阻塞或必要人类操作时简洁通知，无变化安静。仅更新此Page你负责的“最新真实状态”部分，改前重读当前controller与block hash、保留其余内容，确认保存/全文回读；你不能改worker/控制器规则与计划。\n\n本任务由人类任务上下文通过原生hosted Automations设置，并关联到上述现有controller；这是已授权续跑职责，不是控制器创建新计划的指令。原Source独审报告7ef4fcac96e6b76a8c84f873854d1cc5d905fd2a保留，A仅SOURCE_APPROVED_ONLY，旧B的P2不能以本计划设置清除。优先依据GitHub最新handoff/next_action核实后续修订与采用，不把旧基线当永久最新。当前人类报告probe40839741519/job123332952391成功仅是检索线索，必须读取真实云端结果再使用。现有主协调仍工作时尊重lease/队列，不能抢占；运行中的自动化不创建或管理任何新自动化。没有原生GitHub写入或受支持资源作业能力则保存具体capability blocker，不通过本机、猜HTTP、凭据或付费工具绕过。仅使用用户现有订阅/已有免费额度，若配额不足或出现付费要求则停止，不购买。设置成功和真正执行成功必须分开报告。",
+        "is_enabled": false
+      },
+      "precondition": "Root reviewed the actual diagnostic provenance. This does not itself authorize development enable."
+    }
+  },
+  "bounded_test_procedure": [
+    "Root fully reads this immutable proposal, original prompt archive and diagnostic prompt hash; no current configuration has been changed.",
+    "After Root's specific configuration approval, normal human administrator re-reads current controller/registry and paused same-ID configuration; expected original prompt hash/schedule/timezone/controller must still match, otherwise stop/reconcile rather than overwrite.",
+    "Apply only prompt+is_enabled=false to same worker and read back exact diagnostic bytes/hash and unchanged SG/hourly/ID/controller. No new task, attachment, DTSTART, model, account or token.",
+    "Root then approves enabling this readonly diagnostic only. Recheck controller/current attachment and enable same ID by native update. This limited enable may proceed under the explicit metadata-only exception; it does not weaken the dev identity gate.",
+    "Use next normal native hourly invocation; no run_now, manual origin message, fake echo, local heartbeat or project resource job. Actual scheduled run must inspect its own current catalog, not use metadata from this human turn.",
+    "Diagnostic outputs only a bounded private run report: actual schema/tool, first key names, then vetted safe IDs if supported, or explicit NOT_READ/UNVERIFIED. It does not write Page/repository, browse private conversations or perform any project action.",
+    "Normal human administrator uses actual returned run_id/chat_ref/result pointers to review source and pauses the worker after the first real terminal before another hourly invocation. Worker itself must not pause/restore/manage automation.",
+    "Only a real current-invocation contract plus observed task/run relationship can support Root's binding judgment. A conversation/thread ID, completed status, stale last_run or registry selection alone remains UNVERIFIED.",
+    "Restore original development prompt only in paused state with exact saved6155B/hash. Development enable requires Root's separate approval of the verified actual identity chain; no automatic transition from diagnostic candidate to project work."
+  ],
+  "higher_authority_and_failure_boundaries": [
+    "Do not override platform developer authority checks with a Page edit or invented identity. If an upper runtime rule disallows Page reads before binding, omit those reads and report the limitation privately.",
+    "No Page native AI or controller rule is modified in this preparation. The diagnostic prompt names the narrow human-authorized exception; if the platform cannot support it, record UNVERIFIED rather than forcing it.",
+    "If node_repl/requestMeta is absent in the actual scheduled catalog, report exact absence and NOT_READ, not empty keys or hypothetical values. If only conversation/thread IDs are available, no task/run mapping is fabricated.",
+    "Any sensitive or semantic-ambiguous field is omitted or redacted. No requestMeta whole-object dump, hidden process/env/HTTP/cookie/key discovery, cross-account workaround, paid API/provider, or repeated probe.",
+    "Private diagnostic output is not GitHub/Page persistence and not a development checkpoint. Root may later preserve vetted non-sensitive evidence in its separate normal administrative context."
+  ],
+  "native_tool_schemas": [
+    {
+      "name": "mcp__codex_apps__automations_peek",
+      "declaration": "exec tool declaration:\n```ts\ndeclare const tools: { mcp__codex_apps__automations_peek(args: {\n  // Task ID to read its recorded run and result. Omit to find tasks.\n  jawbone_id?: string | null;\n}): Promise<CallToolResult<{ assistant_response_guidance?: string | null; automations?: Array<{\n  conversation_id?: string | null;\n  default_timezone?: string | null;\n  display_schedule?: string | null;\n  id: string;\n  is_enabled: boolean;\n  // Whether this automation runs for the agent calling the tool.\n  is_self_owned_automation?: boolean | null;\n  last_run_time?: string | null;\n  next_run_time?: string | null;\n  plan_file_id?: string | null;\n  prompt: string;\n  run_details?: { delivery_status?: \"unknown\"; last_run: { chat_ref: { id: string; type: \"chatgpt\" | \"codex\"; } | null; completed_at: string | null; id: string; recorded_status: \"in_progress\" | \"completed\" | \"failed\" | \"no_update\"; scheduled_for: string; started_at: string; } | null; latest_result: { chat_ref: { id: string; type: \"chatgpt\" | \"codex\"; } | null; completed_at: string | null; content_text: string; content_truncated: boolean; created_at: string; is_failure_message: boolean; requires_user_action: boolean; run_id: string; scheduled_for: string; } | null; } | null;\n  schedule: string;\n  team_id?: string | null;\n  thread_id?: string | null;\n  timing_mode?: \"exact_schedule\" | \"flexible_schedule\" | \"condition_watch\" | null;\n  title: string;\n  updated_at: string;\n}> | null; completed_count?: number | null; cursor?: string | null; display_to_user?: boolean | null; error_code?: \"too_many_active_automations\" | \"too_many_active_goals\" | \"automation_schedule_not_available\" | null; error_data?: { current_count: number; plan_limit: number; } | { allowed: Array<string>; constraint: \"frequency\" | \"timing_mode\"; requested: string; } | null; jawbone_id?: string | null; message: string; paused_count?: number | null; status?: \"ERROR\" | null; user_message?: string | null; }>>; };\n```"
+    },
+    {
+      "name": "mcp__codex_apps__automations_update",
+      "declaration": "exec tool declaration:\n```ts\ndeclare const tools: { mcp__codex_apps__automations_update(args: { default_timezone?: string | null; dtstart_offset_json?: string | null; is_enabled?: boolean | null; jawbone_id: string; prompt?: string | null; schedule?: string | null; title?: string | null; triggers?: Array<{ connector_type: \"slack\"; id?: string | null; params: { author_names?: Array<string> | null; author_user_ids?: Array<string> | null; channel_ids: Array<string>; channel_names?: Array<string> | null; include_thread_replies?: boolean; }; webhook_name: \"message\"; } | { connector_type: \"microsoft_teams\"; id?: string | null; params: {\n  author_names?: Array<string> | null;\n  author_user_ids?: Array<string> | null;\n  channel_ids: Array<string>;\n  channel_names?: Array<string> | null;\n  // Map channel IDs to the team IDs returned by Microsoft Teams discovery. Required for channels outside the original installation team.\n  channel_team_ids?: { [key: string]: string; };\n  include_thread_replies?: boolean;\n}; webhook_name: \"message\"; } | { connector_type: \"linear\"; id?: string | null; params: { enable_updates?: boolean; label_match?: string | null; project?: string | null; project_name?: string | null; team: string; team_name?: string | null; title_match?: string | null; }; webhook_name: \"issue\"; } | { connector_type: \"gmail\"; id?: string | null; params: {\n  // Optional regex to match the sender\n  from_match?: string | null;\n  // Optional regex to match the subject\n  subject_match?: string | null;\n}; webhook_name: \"message\"; } | { connector_type: \"github\"; id?: string | null; params: {\n  // GitHub username of the pull request author to monitor.\n  author_login?: string | null;\n  // Include new PR conversation comments and inline review comments.\n  enable_comments?: boolean;\n  enable_commit_updates?: boolean;\n  enable_reviews?: boolean;\n  label_match?: string | null;\n  only_on_merge?: boolean;\n  pull_request_number?: number | null;\n  repository: string;\n  title_match?: string | null;\n}; webhook_name: \"pull_request\"; } | { connector_id: string; event: string; id?: string | null; params: { [key: string]: unknown; }; }> | null; }): Promise<CallToolResult<{ assistant_response_guidance?: string | null; automation?: {\n  conversation_id?: string | null;\n  default_timezone?: string | null;\n  display_schedule?: string | null;\n  id: string;\n  is_enabled: boolean;\n  // Whether this automation runs for the agent calling the tool.\n  is_self_owned_automation?: boolean | null;\n  last_run_time?: string | null;\n  next_run_time?: string | null;\n  plan_file_id?: string | null;\n  prompt: string;\n  run_details?: { delivery_status?: \"unknown\"; last_run: { chat_ref: { id: string; type: \"chatgpt\" | \"codex\"; } | null; completed_at: string | null; id: string; recorded_status: \"in_progress\" | \"completed\" | \"failed\" | \"no_update\"; scheduled_for: string; started_at: string; } | null; latest_result: { chat_ref: { id: string; type: \"chatgpt\" | \"codex\"; } | null; completed_at: string | null; content_text: string; content_truncated: boolean; created_at: string; is_failure_message: boolean; requires_user_action: boolean; run_id: string; scheduled_for: string; } | null; } | null;\n  schedule: string;\n  team_id?: string | null;\n  thread_id?: string | null;\n  timing_mode?: \"exact_schedule\" | \"flexible_schedule\" | \"condition_watch\" | null;\n  title: string;\n  updated_at: string;\n} | null; automation_id?: string | null; display_to_user?: boolean | null; error_code?: \"too_many_active_automations\" | \"too_many_active_goals\" | \"automation_schedule_not_available\" | null; error_data?: { current_count: number; plan_limit: number; } | { allowed: Array<string>; constraint: \"frequency\" | \"timing_mode\"; requested: string; } | null; jawbone_id?: string | null; message: string; status?: \"ERROR\" | null; success?: boolean | null; user_message?: string | null; }>>; };\n```"
+    }
+  ],
+  "preserved_safety": {
+    "original_scope": "77stories/18originalpackages/7gates",
+    "source_max_per_package": 8,
+    "nonauthor_review_required": true,
+    "canonical_expected_sha_cas": true,
+    "lease_and_queue_serial": true,
+    "project_aggregate_bytes": 536870912,
+    "data_copy_bytes": 67108864,
+    "swap": 0,
+    "exceptions": "Only original named2GiB types/tests and original appbuild4GiB; diagnostic uses none.",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "free_only": true,
+    "windows_payload_writes": 0,
+    "Source_or_project_execution_allowed_in_diagnostic": false
+  },
+  "actions_this_turn": {
+    "metadata_object_reads": 0,
+    "current_human_identity_claims": 0,
+    "automation_create": 0,
+    "automation_update": 0,
+    "automation_enable": 0,
+    "automation_run_now": 0,
+    "Page_writes": 0,
+    "project_repo_reads": 0,
+    "administrative_evidence_reads_and_writes_only": true,
+    "Source_writes": 0,
+    "canonical_writes": 0,
+    "lease_writes": 0,
+    "project_resource_jobs": 0,
+    "route_changes": 0,
+    "generator_changes": 0,
+    "local_executor_or_browser_calls": 0,
+    "paid_calls": 0
+  },
+  "next_action": "Root reviews this exact proposal/full diagnostic prompt, then decides whether to apply paused readonly configuration and enable the one bounded normal scheduled metadata test. Old worker remains paused until that explicit configuration review. No new permissions/account/token/model/purchase requested."
+}
