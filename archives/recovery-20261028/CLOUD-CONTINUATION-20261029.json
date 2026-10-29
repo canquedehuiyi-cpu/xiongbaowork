@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T17:01:57.125Z",
+  "checkpoint_update_at": "2026-10-29T17:04:57.848Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4372,5 +4372,52 @@
       "blob": "2fd511f7a4be4401b44a550e7a0c49c55687db9f",
       "finding": "Owned0700 directory traverse after irreversible UIDdrop; author minimal rootowned0755/read-only controls successor pending"
     }
+  },
+  "cloud_a11_delegated_successor": {
+    "candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
+    "status": "NONAUTHOR_PURE_CONTROL_PROTOTYPE_APPROVED_NOT_RUN",
+    "review_commit": "c60ae032234e468518b42de2f115fa078e6410cc",
+    "review_path": "archives/recovery-20261028/A11-DELEGATED-8A08-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "84c1dac46195dd9b72eb46f86e5fc9c80704f489",
+    "files": [
+      {
+        "path": ".github/workflows/a11-offline-data-verify.yml",
+        "mode": "100644",
+        "blob": "e0081534b58d8cf4fd09808ef4bbc4da1bad0054",
+        "bytes": 5369,
+        "computed_bytes": 5369,
+        "sha256": "cfa92bc7296201a6405f36459757061c8c01cb1bd2767cc4c28858e623b23eae",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+        "mode": "100644",
+        "blob": "a4ca639f6706744477ecf79bf58a2d6917cff231",
+        "bytes": 18029,
+        "computed_bytes": 18029,
+        "sha256": "faa5b8f05b950b97fd5320456ba1cfd46bb0d923c0c1f77efe67d3708abcf312",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+        "mode": "100644",
+        "blob": "5492977fb83daece41b2ae1ce178743e509b15d0",
+        "bytes": 8101,
+        "computed_bytes": 8101,
+        "sha256": "01e230415b25869f7decd828cac0e81c6c7bba2df4583c2bfb6903a544f22121",
+        "full_read": true
+      }
+    ],
+    "execution_branch": "codex/a11-data-verify-run-20261030-a3",
+    "Source_adopted": false,
+    "legacy_gate_not_replaced": true
+  },
+  "current_cloud_coordinator": {
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+    "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
+    "acquisition_commit": "e3880111fd9f299cd426c9e7dfea071531371508",
+    "state": "held",
+    "expires_at": "2026-10-29T17:45:04.986Z",
+    "authority": "Explicit normal human executor delegation and fresh lease CAS; not hosted caller binding."
   }
 }
