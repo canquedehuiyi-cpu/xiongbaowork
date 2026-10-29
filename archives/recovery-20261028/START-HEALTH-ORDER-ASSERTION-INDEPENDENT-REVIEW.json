@@ -1,0 +1,46 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "base": "9012793c25b5d9dbdb00ba623462e91245087439",
+  "candidate": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+  "files": [
+    {
+      "path": "openbot/scripts/start-restart-guard.test.ts",
+      "before": {
+        "path": "openbot/scripts/start-restart-guard.test.ts",
+        "bytes": 16362,
+        "sha256": "d6eb88ce4c163b6b8da3055b9b1bbfc26e46777caf873c736cd9381890a0e2ce",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/scripts/start-restart-guard.test.ts",
+        "bytes": 16362,
+        "sha256": "cf57fb0ac7b43cf9700fc4f7778344e193e17ec0f503794a6f2648fe758436a0",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "git_trees_untruncated": true,
+  "full_read_and_closed_diff": true,
+  "before_blob": "5d2638a1fafdc3c571910d4661aab51810b29e9a",
+  "after_blob": "e58a150e2ded7bcb7acf0f9fd71569febb5e25b4",
+  "unique_literal_change": "L225 old sentence occurs once; full replacement reconstructs after exactly",
+  "producer": {
+    "path": "openbot/scripts/start.sh",
+    "blob": "f150267342af5d32a7b5a29be26c4d8266ab8072",
+    "unchanged": true,
+    "output_order": "mode, then optional valid licence, then Bot names"
+  },
+  "unchanged": "Same strict toContain, exit/stderr checks, all other11cases and fake docker/pkill/curl/Bun/python scaffolding byte-for-byte; all other Source/package/lock/PG/approval/strictCI files unchanged",
+  "candidate_card": {
+    "bytes": 1831,
+    "sha256": "a83f481031596f3701f0c8b171ba2331cb9a90259f177ac69af5ff766a0e6a5b"
+  },
+  "project_execution": false,
+  "windows_source_writes": 0,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

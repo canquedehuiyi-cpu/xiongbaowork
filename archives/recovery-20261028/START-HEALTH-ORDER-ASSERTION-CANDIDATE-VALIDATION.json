@@ -1,0 +1,127 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40791104860,
+  "job": 123176261175,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "e8d397aed5bde580b01f33a104402a2f21331a0f",
+    "head": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 1,
+    "completed_files": 1,
+    "results": [
+      {
+        "path": "scripts/start-restart-guard.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": null,
+  "tests": {
+    "pass": 12,
+    "fail": 0,
+    "expects": 57
+  },
+  "lint": {
+    "exit_code": 0,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 512.8M (swap: 0B)",
+    "Memory peak: 126M (swap: 0B)",
+    "Memory peak: 354.7M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Only exact existing startup health fixture literal reordered. Original12case scripts/start-restart-guard and exact original pinned lint, no production/PG/approval changes.",
+  "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e"
+}

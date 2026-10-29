@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "07942d953a304bd250648eb008a5ec0593eb2e29",
-  "basis": "Immutable V57 plus23 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
+  "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+  "basis": "Immutable V57 plus24 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -451,6 +451,22 @@
       "candidate_source_commit": "07942d953a304bd250648eb008a5ec0593eb2e29",
       "source_content_adopted_unchanged": true,
       "run": 40789153738
+    },
+    {
+      "ticket": "START-HEALTH-ORDER-ASSERTION-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/START-HEALTH-ORDER-ASSERTION-ADOPTED.json",
+        "bytes": 2339,
+        "sha256": "32f640255b8df00fd5a49aa1e5f71f47a11ae97706c4e8cd8a0a911c8c8877fa",
+        "formal_adoption": true,
+        "ticket": "START-HEALTH-ORDER-ASSERTION-20261029",
+        "source_paths": [
+          "openbot/scripts/start-restart-guard.test.ts"
+        ]
+      },
+      "candidate_source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+      "source_content_adopted_unchanged": true,
+      "run": 40791104860
     }
   ],
   "file_count": 2060,
@@ -6887,7 +6903,7 @@
     {
       "path": "openbot/scripts/start-restart-guard.test.ts",
       "bytes": 16362,
-      "sha256": "d6eb88ce4c163b6b8da3055b9b1bbfc26e46777caf873c736cd9381890a0e2ce",
+      "sha256": "cf57fb0ac7b43cf9700fc4f7778344e193e17ec0f503794a6f2648fe758436a0",
       "mode": "0o644"
     },
     {
@@ -12883,8 +12899,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "c102389bc4119d2f57452961cf3718e29d9a49c7",
-    "head": "07942d953a304bd250648eb008a5ec0593eb2e29",
+    "git_tree": "e8d397aed5bde580b01f33a104402a2f21331a0f",
+    "head": "4874f5300ea683a2217c121c34ecb486bec0a30e",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12909,7 +12925,8 @@
       "RUNNER-PROBE-FRAME-REF-20261029",
       "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
       "SERVER-CI-TEST-MANIFEST-20261029",
-      "WORKSPACE-RUNNER-ASSERTION-20261029"
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",

@@ -1,3 +1,15 @@
+## Source24 启动摘要断言修复，2026-10-29
+
+START-HEALTH-ORDER-ASSERTION-20261029候选4874f5300ea683a2217c121c34ecb486bec0a30e已同一非作者独审SOURCE_APPROVED_ONLY/findings=[]。唯一Source改动是原test的一个完整toContain期待句顺序：mode test · licence valid · Bots: analyst，与未改producer一致。生产start.sh、全部fake脚手架和其他11case完全保留。24为独审源码修复覆盖包数，与原18交付包单独计；2060文件/50032071字节。
+
+候选run40791104860/job123176261175核完整Source大小/SHA/mode/FD稳定，原12case全部通过、57expects，原exactBiome2.5.10 lint exit0。自动peaks64M/64M/512.8M/126M/354.7M保原值。先前27文件批次run40789730098整体468pass/5fail，原失败不抹；这一case已独立修复，另1loader角色writer配置/数据库边界失败及3agent-bot未装独立锁依赖失败原记录仍保。原177文件批次及13approval_recovery_blocked失败也保留。
+
+25个原offline agent-computer mock合同及原agent-bot无key启动拒绝正在run40791381738验证。依赖安装只用现有agent-bot package/bun.lock，完整冻结、禁所有生命周期脚本、私有cache/copyfile和512MiB安装门；复制模块仍64MiB，并核8个root/agent原package-lock输入不变。没有新增依赖/改锁或开启live浏览器、真实模型、PG、Docker容器。
+
+原PG_PENDING/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/ROOT_RELEASE=null/ready=false、原strictCI冻结基线03df9efa缺失、真实用户设备/Windows/生产验收等门及所有历史审计均保留。完整77故事/18交付包/7最终门仍NOT_DELIVERED。全程Source/JSON/archive/deps/tests仅云端，Windows Source写0、付费provider调用0、没有生产部署/PR/默认分支或旧自动化恢复。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## Source23 工作区断言修复，2026-10-29
 
 WORKSPACE-RUNNER-ASSERTION-20261029候选07942d953a304bd250648eb008a5ec0593eb2e29通过同一非作者独审SOURCE_APPROVED_ONLY/findings=[]，仅测试标题和严格四workspace数组两处字面修改。生产rootpackage/runnerpackage/lock/dev/build/start、原其他3case、逐目录和包名断言全部未改。当前2060文件/50032071字节；23为独审源码修复覆盖数，原18交付包另行验收。
