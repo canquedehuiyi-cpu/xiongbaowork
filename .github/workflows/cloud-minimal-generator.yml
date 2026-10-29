@@ -1,0 +1,72 @@
+name: Exact minimal full50 Drizzle generator diagnostic
+on:
+  push:
+    branches: [codex/cloud-minimal-generator-run-20261029-a6]
+permissions:
+  contents: read
+concurrency:
+  group: source-recovery-bytes
+  cancel-in-progress: false
+jobs:
+  source-generator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify administrative controller then run bounded serial stages
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-minimal-generator-run-20261029-a6"
+          test "$GITHUB_EVENT_NAME" = "push"
+          /usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'
+          import hashlib,os,sys,urllib.request
+          from pathlib import Path
+          target=sys.argv[1];base=Path(sys.argv[2]).resolve()
+          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
+          path=base/"minimal-generator-controller.py"
+          url="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py"
+          digest=hashlib.sha256();total=0
+          with urllib.request.urlopen(url,timeout=30) as incoming,path.open("xb") as out:
+              while True:
+                  b=incoming.read(65536)
+                  if not b:break
+                  total+=len(b);assert total<=79598
+                  digest.update(b);out.write(b)
+              out.flush();os.fsync(out.fileno())
+          assert total==79598 and digest.hexdigest()=="b00ab6f63ae9231c169cf4132ef92b18331cc3b89070002cee1291c76a6b6a66"
+          os.chmod(path,0o600)
+          print("ADMIN_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)
+          PY
+          sudo /usr/bin/python3 -I -B "$RUNNER_TEMP/minimal-generator-controller.py" admin "$RUNNER_TEMP" "$GITHUB_SHA" "$(id -u)" "$(id -g)"
+      - name: Always kill only owned descendant groups and restore project gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json,subprocess,time
+          from pathlib import Path
+          parent=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          units=("xb-min-source","xb-min-copy","xb-min-deps","xb-min-generate","xb-min-export")
+          cleanup_deadline=time.monotonic()+10
+          for unit in units:
+              cg=parent/(unit+".service")
+              if not cg.exists():continue
+              populated=dict(line.split() for line in (cg/"cgroup.events").read_text().splitlines())["populated"]
+              if populated=="0":continue
+              if (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")
+              remaining=cleanup_deadline-time.monotonic()-2
+              if remaining>0:
+                  try:subprocess.run(["systemctl","stop",unit+".service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                  except subprocess.TimeoutExpired:
+                      if cg.exists() and (cg/"cgroup.kill").exists():(cg/"cgroup.kill").write_text("1")
+          assert parent.exists(),"project resource parent was not established; no execution success"
+          for name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:
+              (parent/name).write_text(value)
+          actual={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}
+          assert actual=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}
+          events=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())
+          assert events["populated"]=="0"
+          print("GENERATOR_ALWAYS_RESTORED "+json.dumps({"limits":actual,"populated":events["populated"],"Source_adopted":False,"ROOT_RELEASE":None,"ready":False,"PG":"PG_PENDING"}),flush=True)
+          PY
