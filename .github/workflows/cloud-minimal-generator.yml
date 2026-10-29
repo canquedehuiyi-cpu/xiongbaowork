@@ -1,7 +1,7 @@
 name: Exact minimal full50 Drizzle generator diagnostic
 on:
   push:
-    branches: [codex/cloud-minimal-generator-run-20261029-a10]
+    branches: [codex/cloud-minimal-generator-run-20261029-a11]
 permissions:
   contents: read
 concurrency:
@@ -17,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/cloud-minimal-generator-run-20261029-a10"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-minimal-generator-run-20261029-a11"
           test "$GITHUB_EVENT_NAME" = "push"
           /usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'
           import hashlib,os,sys,urllib.request
@@ -31,10 +31,10 @@ jobs:
               while True:
                   b=incoming.read(65536)
                   if not b:break
-                  total+=len(b);assert total<=89362
+                  total+=len(b);assert total<=90984
                   digest.update(b);out.write(b)
               out.flush();os.fsync(out.fileno())
-          assert total==89362 and digest.hexdigest()=="85c3b522cb1a6c1b35815e1121a14e105acfb6a5b89bf193987a8c0dd94cc4bc"
+          assert total==90984 and digest.hexdigest()=="b9294c2c04b5f9830b489e3e4c9f759138ae56b5ba0cfc7f155d1c45368903e6"
           os.chmod(path,0o600)
           print("ADMIN_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)
           PY

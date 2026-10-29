@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "cloud-agent:/root/a7_prepare",
   "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a10",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a10",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a11",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a11",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -12,11 +12,11 @@
     "bytes": 50175181
   },
   "overlay": {
-    "ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+    "ref": "95ebc15ba4c6f53ead7a1a659565a1cdfbecf549",
     "path": "openbot/server/src/db/schema/approvals.ts",
-    "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
-    "bytes": 13092,
-    "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+    "blob": "178dd18f90315ed952c2b7e8bac6246453ae49dc",
+    "bytes": 13100,
+    "sha256": "f86495a58bd580d633b0a3a3f0e61138ecd91cec133aef4e9e3851e4d2d47c12",
     "formal_adoption": false
   },
   "schema_paths": [
@@ -89,8 +89,8 @@
     },
     {
       "path": "openbot/server/src/db/schema/approvals.ts",
-      "bytes": 13092,
-      "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2"
+      "bytes": 13100,
+      "blob": "178dd18f90315ed952c2b7e8bac6246453ae49dc"
     },
     {
       "path": "openbot/server/src/db/schema/automation-foundations.ts",
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A10",
+    "id": "A11",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_A10_PREPARED_UNREVIEWED_NOT_RUN",
+    "status": "AUTHOR_A11_PREPARED_UNREVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -838,13 +838,14 @@
       }
     },
     "a4": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-    "change_scope": "Only diagnostic CJS out uses precise path relative to existing generator cwd, resolving to identical controlled private-drizzle; all schema50 paths remain absolute. Retain same original0080 copied chain, all17/ORM/TSX guards, resources/identity/deadlines/cleanup and full export fail-closed shape.",
+    "change_scope": "Only diagnostic overlay to initially independently reviewed two SQL zero fence default schema successor95ebc15b, exact ref/blob/bytes/hash and schema_modules identity. All formal2065 Source baseline, original17nodes/guards/FULL50/relativeout/native/resource/identity/deadline/cleanup implementation unchanged. No full schema/migration approval or adoption.",
     "a5": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
     "a6": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
     "a7": "f689c5b3c89c66a52fe883681c1256a520fc0c1a",
     "a7_pin_finding": "A7 workflow stale80700/5a770146 pin did not equal actual80775/4fbbc391 controller. Prior author pin-match assertion retracted. A8 constructs both workflow byte constants/hash from final controller raw bytes, then independently parses and asserts them again after GitHub full readback.",
     "a8": "560f711ba995dc06d0eaa38955505670bbd964d4",
-    "a9": "d074c1cd37056b0fd77db837455dd07f983f11e8"
+    "a9": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+    "a10": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f"
   },
   "redirect_policy": {
     "basis": {
@@ -899,15 +900,15 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 89362,
-    "sha256": "85c3b522cb1a6c1b35815e1121a14e105acfb6a5b89bf193987a8c0dd94cc4bc"
+    "bytes": 90984,
+    "sha256": "b9294c2c04b5f9830b489e3e4c9f759138ae56b5ba0cfc7f155d1c45368903e6"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4019,
-    "sha256": "9f844ca9b00a4fbbc2f381f4fe0d66dccceb6871e66b4ba28e62efd7718ad80a"
+    "sha256": "059f7d3906068983015909ac45423f779aa5989cb7c27e151f3b63f835173dfe"
   },
-  "author_readiness": "A10_PREPARED_UNREVIEWED_NOT_RUN",
+  "author_readiness": "A11_PREPARED_UNREVIEWED_NOT_RUN",
   "review_required": "Non-author exact full3file review required. Author has not executed guard contract checks or project. No dispatch or adoption authorized by this author report.",
   "orm_metadata_compatibility": {
     "evidence_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478",
@@ -1012,5 +1013,39 @@
     "constraints": "os.path.relpath from exact safe generator cwd; relative not absolute; strict resolve equality with controlled out, out.parent==base; all schema inputs remain absolute50. Original Source config untouched.",
     "resource_stage_added": false,
     "actual_generation_proven": false
+  },
+  "serializable_default_overlay": {
+    "cause_audit": {
+      "commit": "4e66c225a8beff9d7e2c8679aba0859d135d0676",
+      "path": "archives/recovery-20261028/CLOUD-FULL50-BIGINT-SERIALIZATION-AUDIT-20261029.json",
+      "blob": "4c05579cc24faff4556b94b11fa2775aaa13b994",
+      "bytes": 26339,
+      "sha256": "424aa47f97e7e50c9b98df8af7f06b2801ca648d56c4ee67dcb1a5a7926dcf69"
+    },
+    "initial_non_author_review": {
+      "reviewer": "Root",
+      "path": "archives/recovery-20261028/CLOUD-SEED-SERIALIZABLE-DEFAULTS-INITIAL-REVIEW-20261029.json",
+      "subject_sha": "95ebc15ba4c6f53ead7a1a659565a1cdfbecf549",
+      "scope": "INITIAL_ONE_SOURCE_APPROVED_FOR_DIAGNOSTIC_OVERLAY_ONLY; NOT_FULL_SCHEMA_MIGRATION_PACKAGE; NOT_ADOPTED",
+      "commit_identity": "Root persisting exact report; coordinator must supply/verify exact report SHA before dispatch"
+    },
+    "overlay_source_changes": 1,
+    "exact_change": "Only two approval_continuations/approval_continuation_steps fence default(0n) to default(sql`0`); bigint mode/notNull/checks/RLS/permissions unchanged.",
+    "formal_source": {
+      "files": 2065,
+      "bytes": 50175181,
+      "changed": false
+    },
+    "private_copy": {
+      "files": 2065,
+      "bytes": 50177761,
+      "calculation": {
+        "baseline_bytes": 50175181,
+        "old_approvals_bytes": 10520,
+        "new_approvals_bytes": 13100
+      },
+      "diagnostic_only": true
+    },
+    "migration_output": "Real generator must produce complete SQL/snapshot/journal; old handseedSQL never counts as real full output. Full generated DDL versus original/recovery chain and <=8Source full-package independent review remain pending."
   }
 }
