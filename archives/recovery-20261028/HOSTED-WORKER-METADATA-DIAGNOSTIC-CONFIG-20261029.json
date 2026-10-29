@@ -1,0 +1,74 @@
+{
+  "schema": "hosted-worker-metadata-diagnostic-configuration/v1",
+  "date": "2026-10-29",
+  "status": "CONFIGURED_METADATA_ONLY_AWAITING_SCHEDULED_RESULT",
+  "identity": "UNVERIFIED",
+  "approval": {
+    "plan_commit": "a3caafa0f876c361ae83de8fa7dda9849d789572",
+    "source_thread": "01a14d78-6858-78a0-a8b1-dd635e59a70f",
+    "human_approved_phase1_and_phase2": true
+  },
+  "page_id": "page_7812bfd830a08191ab1fb84da54f173f",
+  "controller_id": "Automation_a9042438d098819180d8686afa9cd66e",
+  "worker_id": "6ae30014bbac8191baa1a3497f062b7d",
+  "preflight": {
+    "original_prompt_sha256": "3ab3ee5a1f5756a6aa7317314b18937df487664abf1281f9e6aed7190c8d3a65",
+    "original_prompt_utf8_bytes": 6155,
+    "paused": true,
+    "controller_current_enabled": true,
+    "attachment_matched": true
+  },
+  "phase1": {
+    "success": true,
+    "paused_readback": true,
+    "prompt_exact": true,
+    "prompt_sha256": "9f53e99f7c9a9fa0e07a386ef9b5e1a35b1042082ec11964482f3b29e55cc5ff",
+    "prompt_utf8_bytes": 9300
+  },
+  "phase2": {
+    "success": true,
+    "enabled_readback": true,
+    "prompt_sha256": "9f53e99f7c9a9fa0e07a386ef9b5e1a35b1042082ec11964482f3b29e55cc5ff",
+    "updated_at": "2026-10-29T15:18:21.271869+00:00",
+    "registry_active_same_controller": true
+  },
+  "preserved": {
+    "schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+    "timezone": "Asia/Singapore",
+    "timing_mode": "exact_schedule",
+    "title": "熊宝云端开发续跑",
+    "origin_conversation_unchanged": true,
+    "controller_runtime": "cloud",
+    "worker_runtime": "cloud"
+  },
+  "schedule_evidence": {
+    "native_next_run_time": null,
+    "rule_next_slot_after_configuration": "2026-10-29T15:19:26Z",
+    "rule_slot_is_not_native_next_run_confirmation": true,
+    "no_run_now": true,
+    "no_origin_message": true,
+    "no_reschedule": true
+  },
+  "baseline_run": {
+    "id": "9b9ce585-34e4-8325-a303-7c94de189882",
+    "recorded_status": "completed",
+    "scheduled_for": "2026-10-29T13:19:26Z",
+    "started_at": "2026-10-29T13:24:16.353301Z",
+    "completed_at": "2026-10-29T13:25:29.079419Z",
+    "chat_ref": {
+      "type": "chatgpt",
+      "id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988"
+    }
+  },
+  "side_effects": {
+    "project_source_reads": 0,
+    "project_writes": 0,
+    "canonical_writes": 0,
+    "lease_operations": 0,
+    "project_jobs": 0,
+    "page_edits": 0,
+    "automation_creates": 0,
+    "automation_updates": 2
+  },
+  "next_action": "Observe first NEW native scheduled terminal; external administrator pauses same worker, then restores exact original 6155B development prompt while paused and verifies hash/schedule/attachment. Never treat native completed alone as identity recovery. If no supported task/run binding, retain UNVERIFIED."
+}
