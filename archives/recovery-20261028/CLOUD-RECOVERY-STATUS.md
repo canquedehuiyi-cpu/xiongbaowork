@@ -8,7 +8,7 @@
 
 R1候选99989c6a未采用：80测试虽通过，原lint因type-only导入警告退出1，且独审发现P1“abandon已结算后旧resume仍可执行”。完整失败/拒绝证据保留APPROVAL-FRESH-PRODUCER-R1-REJECTED.json，R2修复不抹历史。CPU helper的seed、CAS、absence/intent/receipt与ACK模型不当真实持久数据库或Root release证明。
 
-Mastra Source26采用e08a5035a73c1bb9baed0887d9c4b320d9d5f125：独立包精确冻结core1.64.0/openai3.0.99/anthropic3.0.111/CLI1.27.3及兼容deployer/server1.64.0、loggers1.3.1。完整439包/711依赖边/56peer独审闭合。run40817450733/job123261761883独立冻结安装通过、原34测试/0fail/70expects、实际CLI版本输出1.27.3；原lint另run40817923786通过。私有缓存/copyfile/no lifecycle，DATA64复制31680常规文件核验无hardlink或越界link，根workspaces和锁不变。此前CLI1.35配deployer1.80的准备锁被拒绝未采用。此证据不冒dev/build/生产提供商成功。
+Mastra Source26采用e08a5035a73c1bb9baed0887d9c4b320d9d5f125：独立包精确冻结core1.64.0/openai3.0.99/anthropic3.0.111/CLI1.27.3及兼容deployer/server1.64.0、loggers1.3.1。完整439包/711依赖边/56peer独审闭合。run40817450733/job123261761883独立冻结安装通过、原34测试/0fail/70expects、实际CLI版本输出1.27.3；原lint另run40817923786通过。私有缓存/copyfile/no lifecycle，DATA64复制并审计原/目标两树合计31680个常规文件，无hardlink或越界link，根workspaces和锁不变。此前CLI1.35配deployer1.80的准备锁被拒绝未采用。此证据不冒dev/build/生产提供商成功。
 
 启动边界Source25采用840b4221：原失败边界修复并独审，run40804154815/job123218968503相关47/0/246expects及原lint通过；仅自有loopback拒绝和缺配置边界，不能冒PG17或生产启动成功。
 
