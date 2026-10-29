@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "AUTHOR_ACTIVATION_FIX_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_MODE_ENCODING_FIX_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
@@ -137,8 +137,8 @@
     "storage": "Own ephemeral cloud control directory and bounded GitHub joblog; Root may archive verified candidate via connector only; no Windows download"
   },
   "runtime_control_helper": {
-    "bytes": 20026,
-    "sha256": "8ed6c8d336159765add174f6541c4c1a370ac43f9517cc361861c741830bcb0c",
+    "bytes": 20451,
+    "sha256": "1232c499068b810ff0c74d9d68dd09f6bf86edf6b041dc510b04e4b01798762f",
     "role": "Unprivileged immutable Subject helper. Legacy privileged launch removed; all original Source capture/reset/A-B candidate checks retained."
   },
   "stop_conditions": [
@@ -199,7 +199,7 @@
       "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
     }
   },
-  "preparation_base_commit": "092e47957ce1608e37cc40a116162c90255c7555",
+  "preparation_base_commit": "41dd55287dbc7dca61c70303199a6cad11860a0a",
   "author_role": "AUTHOR_OF_ACTIVATION_SUCCESSOR_NOT_INDEPENDENT_REVIEWER",
   "review_disagreement": {
     "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
@@ -233,8 +233,8 @@
     "scope": "Exactly two administrative files from092e on exclusive new preparation branch. No canonical/lease/Source/job/automation changes.",
     "status": "PREPARED_UNREVIEWED_NOT_RUN",
     "workflow": {
-      "bytes": 138502,
-      "sha256": "c35d7ccc65eafb152363f36c9fcfa970212a867b5f54988f117d4d2901ae436e",
+      "bytes": 139433,
+      "sha256": "b3ccb1dd15ec0262081a8aa068d9825ffb2fc442ee6444f65d8c6d6284a32652",
       "push_only_exact_branch": "codex/route-cloud-activation-run-20261029-a1",
       "run_branch_created": false,
       "concurrency": "source-recovery-bytes",
@@ -246,13 +246,11 @@
       "unchanged_from_092e": true
     },
     "subject_helper": {
-      "bytes": 20026,
-      "sha256": "8ed6c8d336159765add174f6541c4c1a370ac43f9517cc361861c741830bcb0c",
-      "delta": "Add actual parent memory.oom.group1 assertion to common gate; both prepare and lifecycle literals equal."
+      "bytes": 20451,
+      "sha256": "1232c499068b810ff0c74d9d68dd09f6bf86edf6b041dc510b04e4b01798762f",
+      "delta": "Actual stable metadata includes mode_bits=stat.S_IMODE. Snapshot accepts only manifest100644/0o644 and maps either to0o644 integer; bytes/SHA compared unchanged. Both full Subject literals synchronized."
     },
     "prelude_activation_barrier": {
-      "bytes": 2124,
-      "sha256": "739f048d069d174e348456a261f3dcdfaa46b4a7d918628e666081c268378e79",
       "copies": 6,
       "roles": [
         "source",
@@ -262,7 +260,23 @@
         "brand",
         "brand-capture"
       ],
-      "details": "Root code reads only fixed proc/cgroup administrative data. Verify actual own unit and role-specific64/512MiB cap, childswap0/oom1 and parent512/swap0; write512/swap0/oom1 using O_NOFOLLOW/O_NONBLOCK; verify; reset oom_score_adj0; clear groups and irreversibly drop all UID/GID values; independently re-read actual cgroup/gates/OOM/groups as nonroot; only then exec original Subject command without reading its stdin/path content as root."
+      "source_literal_with_terminal_LF": {
+        "bytes": 2124,
+        "sha256": "739f048d069d174e348456a261f3dcdfaa46b4a7d918628e666081c268378e79",
+        "representation": "Author construction source string with one terminal LF. This is NOT the exact shell-c value."
+      },
+      "executed_shell_c_value": {
+        "bytes": 2123,
+        "sha256": "a5aa649866e4454c630593284e3f37be95605b5d0827c0887481430e36c13e12",
+        "representation": "Exact value inside shell single quotes after YAML block indentation removal; no terminal LF. Expected runtime code identity, NOT evidence it executed."
+      },
+      "runtime_pin": {
+        "bytes": 2123,
+        "sha256": "a5aa649866e4454c630593284e3f37be95605b5d0827c0887481430e36c13e12",
+        "status": "EXPECTED_EXECUTED_VALUE_IDENTITY_NOT_RUN_NOT_RUNTIME_ATTESTATION"
+      },
+      "details": "Root code reads only fixed proc/cgroup administrative data. Verify actual own unit and role-specific64/512MiB cap, childswap0/oom1 and parent512/swap0; write512/swap0/oom1 using O_NOFOLLOW/O_NONBLOCK; verify; reset oom_score_adj0; clear groups and irreversibly drop all UID/GID values; independently re-read actual cgroup/gates/OOM/groups as nonroot; only then exec original Subject command without reading its stdin/path content as root.",
+      "finding_id": "ROUTE-P3-BARRIER-IDENTITY-TERMINAL-LF"
     },
     "project_execution": false,
     "workflow_dispatched": false,
@@ -324,14 +338,14 @@
     "proof_scope": "Requires a new complete exact workflow/plan implementation and separate non-author static review before leaseowner may consider serial execution; no execution authority supplied here.",
     "external_dependency_blocker": false
   },
-  "unresolved_reason": "Exact successor has no independent review or runtime proof. Prior activation finding is addressed by author proposal only.",
+  "unresolved_reason": "Successor repairs identified mode representation and exact barrier-value documentation by author proposal only. Independent exact review and actual execution remain absent.",
   "next_action": {
     "owner": "Main coordinator",
-    "action": "Arrange different nonauthor exact full-workflow/plan review including all six activation gates and unchanged encoded lifecycle. Author must not self-approve. Only legitimate coordinator after approval, lease/epoch/head/idle queue checks may create reserved exact run branch once; do not runoldbf/092.",
+    "action": "Review this exact successor as a nonauthor: two synchronized Subject literals, strict two-mode mapping/actualS_IMODE, six activation barriers with executed-value hash2123B/a5aa6498, unchanged administrative lifecycle and push guard. No old41dd/092/bf execution. Only legitimate coordinator after approval/lease/queue/dedup may create reserved run branch.",
     "dispatch": false,
     "automatic_retry": false,
     "run_branch": "codex/route-cloud-activation-run-20261029-a1",
-    "current_task_terminal": "PREPARED_UNREVIEWED_NOT_RUN",
+    "current_task_terminal": "MODE_FIX_PREPARED_UNREVIEWED_NOT_RUN",
     "external_permission_needed": false
   },
   "pure_administrative_helper": {
@@ -357,6 +371,15 @@
       "finding": "ROUTE-P2-PRELUDE-PARENT-OOM-ACTIVATION-GATE",
       "reviewer_then": "/root/route_review",
       "current_role": "Same agent now authorized successor AUTHOR and must not self-review."
+    },
+    {
+      "commit": "41dd55287dbc7dca61c70303199a6cad11860a0a",
+      "workflow_blob": "c315e6ebc308aac288e8960574c22e418bbab707",
+      "workflow_sha256": "c35d7ccc65eafb152363f36c9fcfa970212a867b5f54988f117d4d2901ae436e",
+      "plan_blob": "ff49cf337c4a016c8a4c6d2069e4b02265164f5a",
+      "plan_sha256": "36478b64fb08a0ff139a63fd91b1c175dc7715becabf4bc0e9f93e10f22fd6a8",
+      "status": "NOT_EXECUTED_BLOCKED_BY_NONAUTHOR_MODE_REVIEW",
+      "finding": "snapshot compared octal S_IMODE string0o644 directly with71 manifest Gitmode100644 entries; barrier source-LF identity was not actual shell-c value"
     }
   ],
   "unproven_items": [
@@ -520,5 +543,28 @@
     ],
     "inherited_lifecycle": "Administrative helper literal remains byte-identical f11740c2...; shared270/300, fallback,16+16 controls,32MiB DATA subject, originalbuild4GiB aggregate, stop/empty/restore/final witnesses unchanged.",
     "scheduling": "Old092 manual-only/nondefault and skip-ci state remains historical non-dispatchable. Successor has exact supported push filter and no skip directive in intended commit; prep branch not trigger. Only legitimate coordinator after exact new independent approval may create reserved run branch once."
+  },
+  "mode_encoding_finding_response": {
+    "status": "AUTHOR_IMPLEMENTED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+    "observed": "Frozen manifest has71 modes100644 and1994 modes0o644. Old snapshot compared observed0o644 to either raw string and falsely classified71 nonleaf Source files as changed.",
+    "accepted_manifest_literals": [
+      "100644",
+      "0o644"
+    ],
+    "normalized_permission_integer": 420,
+    "observed_permission_integer": "stat.S_IMODE(st.st_mode), retained as mode_bits in stable metadata",
+    "comparison": "bytes/SHA unchanged; permission comparison uses mode_bits integer versus strict two-member mapping to0o644.",
+    "rejected": "Any other manifest mode, including755/executable forms; no arbitrary octal parse, stripping, chmod, utime or fallback.",
+    "initial_source_gate": "Also restrict initial verifier expected_mode to the same exact two literals and actualS_IMODE0o644 instead of generic octal parser.",
+    "lifecycle_admin": "Original28968B/f11740c2 literal is unchanged.",
+    "id": "ROUTE-P1-SNAPSHOT-MODE-REPRESENTATION-ALLOWLIST-FAILURE",
+    "preserved": [
+      "bytes/SHA unchanged",
+      "O_NOFOLLOW FD/named before/after",
+      "regular file and nlink1",
+      "path no-symlink/within-root",
+      "singleleaf tracked change allowlist",
+      "no timestamp/chmod repair"
+    ]
   }
 }
