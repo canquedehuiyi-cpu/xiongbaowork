@@ -1,65 +1,38 @@
 {
-  "schema": "xiongbaowork-next-bounded-pass-v1",
-  "created_at": "2026-10-29T08:46:28.635Z",
-  "lease_state": "released",
-  "next_action": "NEXT BOUNDED PASS: verify current Page/controller/worker authority if hosted; read latest canonical head+lease and queued/in_progress. Only released/expired+idle permits expected-head CAS new unique owner/run/epoch. Then re-read exact A4 candidate c6f51d2673e608895ab826ed7437dbef9dab0340 + review45629eb4bcae774f405f6b3ac300f9c3d4d4f11f, verify three file identities/tree/modes/HEAD no-skip and unique run-a4 absence. Legal lease owner may create ONLY codex/cloud-minimal-generator-run-20261029-a4 at exact candidate once, using normal GitHub create_branch. If ref/run already exists, inspect and reuse it, never repeat. Capture terminal stage/log/output evidence; do not repeat failed e4cdae or probe. Full generated DDL needs separate reconciliation/review before Source adoption. End checkpoint and release own lease.",
-  "candidate": {
-    "sha": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-    "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
-    "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a4",
-    "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
-    "run": null,
-    "job": null,
-    "status": "STATIC_REVIEWED_NOT_RUN_NOT_ADOPTED",
-    "review": {
-      "commit": "45629eb4bcae774f405f6b3ac300f9c3d4d4f11f",
-      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-ROOT-REVIEW-20261029.json",
-      "blob": "c18d9b6cc6821f5a18b037d28b34dcdbcd2e0006",
-      "verdict": "ADMIN_DIAGNOSTIC_A4_APPROVED_FOR_LEGAL_COORDINATOR_SINGLE_DISPATCH"
-    },
-    "files": [
-      {
-        "path": ".github/workflows/cloud-minimal-generator.yml",
-        "blob": "4b83da36edcf823cb8d55ba3f08bb5367ab7f604",
-        "bytes": 4017,
-        "sha256": "1315617c12fc80ee4023d967cc29b803d86902eea6e0496bd7e8a63512aae839",
-        "review": "Full exact retrieval, complete delta review, exact byte comparisons of inherited implementation blocks."
-      },
-      {
-        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-        "blob": "b340530976f84d1be480572bf4e6c3841cd0247f",
-        "bytes": 67069,
-        "sha256": "80a7cb626ed026ae2a3c6a676651f1d7861882543f0a36f965d623326194a570",
-        "review": "Full exact retrieval, complete delta review, exact byte comparisons of inherited implementation blocks."
-      },
-      {
-        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
-        "blob": "4c12aa7516f3837785c8fe8b3ab695079b6ce58c",
-        "bytes": 29937,
-        "sha256": "0f85be9443864959b70db855cd8986345f5adc54098ba36f6ca69d4ae816e7a4",
-        "review": "Full exact retrieval, complete delta review, exact byte comparisons of inherited implementation blocks."
-      }
-    ]
-  },
-  "required_authority": "Page/controller/worker then canonical lease+idle queue and normal GitHub exact identities",
-  "last_actual_result": {
-    "run": 40843372223,
-    "job": 123344875216,
-    "status": "FAIL_COPY_MODE_REPRESENTATION",
-    "source_verification": "PASS2065/50175181 underDATA64",
-    "deps": "NOT_RUN",
+  "schema": "xiongbaowork-next-bounded-pass-v2",
+  "recorded_at": "2026-10-29T09:45:04.133Z",
+  "state": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
+  "purpose": "Obtain actual SRI-authenticated drizzle-orm0.45.2 public package metadata and exact lock comparison; do not weaken peerDependencies validation or rerun Source+17 chain.",
+  "preparation_branch": "codex/cloud-orm-metadata-prep-20261029-a1",
+  "preparation_base": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+  "candidate_sha": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
+  "review_sha": null,
+  "execution_branch": "codex/cloud-orm-metadata-run-20261029-a1",
+  "paths": [
+    ".github/workflows/cloud-orm-metadata.yml",
+    "archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py",
+    "archives/recovery-20261028/CLOUD-ORM-METADATA-PLAN-20261029.json"
+  ],
+  "author_status": "Candidate is now committed to exclusive preparation branch and files retrieved by exact SHA; no independent implementation review has approved it.",
+  "dispatch_allowed": false,
+  "required_next": "Read latest canonical head/lease and Actions queue. Acquire new unique owner/run/epoch by expected-head CAS only if released/expired+idle. Read preparation branch actual latest commit/diff/three full files; if still base or absent, no candidate. Obtain non-author exact SHA/blob/bytes/SHA/mode/full review before any execution branch. Then legal coordinator may single-dispatch only reviewed one-package metadata DATA64/parent512/swap0/nohooks/noinstall/nonnative/noSource job. If ref/run exists reuse it, never repeat. Capture actual fields and raw JSON identities/differences; only then propose precise metadata validation repair. Persist and release.",
+  "old_runs_no_repeat": [
+    40845991318,
+    40850003450
+  ],
+  "last_actual": {
+    "run": 40850003450,
+    "job": 123366832250,
+    "overall": "failure",
+    "sri_archives": 11,
+    "prepared_packages": 10,
+    "failed_field": "drizzle-orm.peerDependencies",
+    "actual_values": "UNKNOWN_NOT_LOGGED",
+    "native": "NOT_RUN",
     "generator": "NOT_RUN",
-    "metadata": "NONE",
-    "restored": "512MiB/swap0/oomgroup1/populated0"
+    "metadata": "NONE"
   },
-  "scheduler_status": "SCHEDULE_ENABLED_UNATTENDED_INDEPENDENCE_NOT_YET_VERIFIED",
-  "route_status": "UNRESOLVED_REVIEW_DISAGREEMENT_NEW_REVISION_REVIEW_REQUIRED",
-  "scope_unchanged": {
-    "stories": 77,
-    "packages": 18,
-    "gates": 7
-  },
-  "production_gates": {
+  "gates": {
     "ROOT_RELEASE": null,
     "ready": false,
     "AP_DISABLED": true,
@@ -68,5 +41,26 @@
     "PG": "PG_PENDING",
     "full_ci": "NOT_RUN",
     "commercial": "NOT_DELIVERED"
-  }
+  },
+  "candidate_tree": "398724616dda35c8ed4f47b5f86eb0fe16a7ae00",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-orm-metadata.yml",
+      "blob": "e6f9af0095b0f938b6adf133c267c31a724db940",
+      "bytes": 3844,
+      "sha256": "8c73c3580260658f8a21e3ddc9699e259063fe2ae2513209ceaf09b987958d50"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py",
+      "blob": "6df31b07543cdc15fdb6a4d8162eed4b44f94699",
+      "bytes": 25893,
+      "sha256": "457c5697da9f723b7061b4d7296b3b39121f4590d670c60369124f04b1ba76cb"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-PLAN-20261029.json",
+      "blob": "7ba75adb79ecdd63d21b0869d7f6fb8102627901",
+      "bytes": 7814,
+      "sha256": "5f79a10a6770656f87e5872e239650a617da33fae795a1a53fcd0f5f78087969"
+    }
+  ]
 }

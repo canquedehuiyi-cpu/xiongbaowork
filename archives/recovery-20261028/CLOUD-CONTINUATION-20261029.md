@@ -54,3 +54,19 @@ Windows/localhost/本机heartbeat/WB/Qoder均不作为依赖；OpenCode继续暂
 旧route bf0ef002的7ef4fcac P2报告与9d80392d正面静态报告均保留，当前为未解决审查分歧/新修订待独审，旧bf不调度。外部作者会话6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9只在codex/route-tree-deadline-fix-20261029准备两行政文件，不可自审/资源/Source/canonical写。
 
 后续生成全量SQL/snapshot/journal后，先逐DDL对照原0080与独立recovery0107；不拼接假metadata，不以seed-only SQL配全snapshot。完整seed包合法采用后，再对新父重审事务原语并做实际CPU/原server类型检查；外层commit/ACK/readback按684c9253审计缺口推进，缺物理事务终止witness时unknown，绝不NULL→重放。77/18/7、全部原史、ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING继续保留。正式Source本轮0采用、默认分支/部署/付费0变更。
+
+
+## 直接云端续接本轮最终交接（2026-10-29T09:41:13.734Z UTC）
+
+本轮为人类直接续接原durable执行器，不是scheduled worker独立性证明。新epoch已正常CAS取得并于本检查点释放，资源队列空；所有实际日志/结果已保存GitHub。
+
+- A4 run40845991318/job123353492043：Source2065/50175181、mode修正、private copy/seed overlay/FULL50 PASS；第一归档因未记录实际host的终态hostnameguard失败，SRI/生成器未达。
+- Header run40848414444/job123361532231：一次原锁brocli URL GET，302 Location为https://cdn.npmmirror.com/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz；未跟随、body0、未安装，资源恢复PASS。仅首跳证据，不是依赖通过。
+- A5 run40850003450/job123366832250：Source/copy/FULL50 PASS；受限单跳与原锁SRI使11归档通过SRI、10包准备完成，随后drizzle-orm0.45.2 peerDependencies精确字典比较拒绝。实际差异未日志化，不可猜、不跳过。native/CLI NOT_RUN，metadata NONE。final/always恢复512MiB/swap0/group1/populated0；系统自动峰值source64.1M/copy64M/deps64.5M原样保留，不能冒历史从未超过名义64MiB。独审52ca6ab691f97203e68a371aedf74f1e937b22e1已读回。
+
+下一步仅单ORM包metadata取证。准备分支codex/cloud-orm-metadata-prep-20261029-a1已在A5 base2e1e493f创建，但本检查点新候选尚未commit，状态PREPARING_UNREVIEWED_NOT_READY，不得调度。作者/root/persistence_review只可完成该独占准备分支。三文件为.github/workflows/cloud-orm-metadata.yml、archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py、CLOUD-ORM-METADATA-PLAN-20261029.json。后继必须先读真实最新分支/完整diff，取得新确切非作者审查，再由合法新lease owner核空队列后单次执行。取证仅原ORM锁URL/SRI、已审单跳/安全tarJSON公共字段，DATA64/父512/swap0，无Source clone/安装/hooks/native；不复跑旧Source+17链。明确完整next_action见CLOUD-NEXT-BOUNDED-PASS-20261029.json。
+
+Source0采用、默认分支/部署/付费/Windows落盘0变更。原77/18/7、Root/PG/authority/catalog/FORCE RLS门及旧route两份审查分歧保持。托管worker仍SCHEDULE_ENABLED_UNATTENDED_INDEPENDENCE_NOT_YET_VERIFIED；不向origin人工发消息、不改DTSTART、不循环探测。
+
+
+补充实际归档状态（2026-10-29T09:45:04.134Z UTC）：单ORM metadata候选现已保存exact c5add4355c3b7e7ee3a263ff058fd8a307995137/tree398724616dda35c8ed4f47b5f86eb0fe16a7ae00，三文件已按exact SHA取回核身份，但仍AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED，不能调度。上一检查点“未commit”保留为当时观察，当前以此确切候选为准。主资源epoch到期后释放写入被守卫拒绝、未更新canonical；确认expired+idle后CAS取得短行政epoch 2026-10-29T09:43:24.320Z:admin-close-c5add435，只归档并释放，不运行项目。后继先完整非作者审此exact三件，再依法取得租约后决定单次metadata取证。
