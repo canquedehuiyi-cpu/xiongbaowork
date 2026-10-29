@@ -7,17 +7,17 @@
   "run_id": "bounded-generator-a4-2026-10-29T08:57:06.433Z",
   "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
   "acquired_at": "2026-10-29T08:57:06.433Z",
-  "renewed_at": "2026-10-29T08:59:03.077Z",
-  "expires_at": "2026-10-29T09:29:03.077Z",
+  "renewed_at": "2026-10-29T09:02:30.018Z",
+  "expires_at": "2026-10-29T09:32:30.018Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "ceb8bb9f6e19bbe0df4c2f3cc35192db95881376",
+  "expected_parent": "fe4c838c302dd5899c8ae63e8d41b8b957fc77c2",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Read existing run40845991318/job123353492043 terminal and logs; do not dispatch again. Separate Source/deps/generator/output/restoration results; checkpoint and release own lease.",
+  "next_action": "No unchanged rerun. Prepare reviewed bounded no-follow header-only diagnostic of exact first locked URL, preserve URL/SRI, do not follow unknown Location/read tarball body; decide narrow redirect handling only from actual evidence.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -27,15 +27,7 @@
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
-  "active_job": {
-    "run": 40845991318,
-    "job": 123353492043,
-    "head": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-    "status": "in_progress",
-    "observed_at": "2026-10-29T08:59:03.077Z",
-    "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
-    "repeat_prohibited": true
-  },
+  "active_job": null,
   "queue_at_release": {
     "queued": [],
     "in_progress": [],

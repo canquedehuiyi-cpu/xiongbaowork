@@ -504,8 +504,8 @@
       }
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
-    "lease_expires_at": "2026-10-29T09:29:03.077Z",
-    "next_action": "Read existing run40845991318/job123353492043 terminal and logs; do not dispatch again. Separate Source/deps/generator/output/restoration results; checkpoint and release own lease.",
+    "lease_expires_at": "2026-10-29T09:32:30.018Z",
+    "next_action": "No unchanged rerun. Prepare reviewed bounded no-follow header-only diagnostic of exact first locked URL, preserve URL/SRI, do not follow unknown Location/read tarball body; decide narrow redirect handling only from actual evidence.",
     "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
@@ -572,15 +572,7 @@
     "previous_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "previous_epoch": "2026-10-29T08:04:59.948Z:972136c2",
     "lease_state": "held",
-    "active_job": {
-      "run": 40845991318,
-      "job": 123353492043,
-      "head": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-      "status": "in_progress",
-      "observed_at": "2026-10-29T08:59:03.077Z",
-      "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
-      "repeat_prohibited": true
-    },
+    "active_job": null,
     "next_candidate": {
       "sha": "c6f51d2673e608895ab826ed7437dbef9dab0340",
       "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
@@ -626,7 +618,12 @@
       "route_old_head": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106"
     },
     "next_action": "Read existing run40845991318/job123353492043 terminal and logs; do not dispatch again. Separate Source/deps/generator/output/restoration results; checkpoint and release own lease.",
-    "epoch": "2026-10-29T08:57:06.433Z:c6f51d26"
+    "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
+    "preparation": {
+      "agent": "/root/persistence_review",
+      "status": "LOCK_URL_HEADER_DIAGNOSTIC_PREPARING_NO_SUBJECT_NO_DISPATCH",
+      "branch": "codex/cloud-lock-redirect-prep-20261029-a1"
+    }
   },
   "restart_ack_audit": {
     "commit": "684c9253d5a9bb54d431bffe7a148d3dfbd1a466",
@@ -963,7 +960,7 @@
     "execution_branch": "codex/cloud-minimal-generator-run-20261029-a4",
     "run": 40845991318,
     "job": 123353492043,
-    "status": "ACTUAL_RUN_IN_PROGRESS_NO_SUCCESS_CLAIM",
+    "status": "ACTUAL_JOB_FAILED_REDIRECT_HOST_GUARD",
     "review": {
       "commit": "45629eb4bcae774f405f6b3ac300f9c3d4d4f11f",
       "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-ROOT-REVIEW-20261029.json",
@@ -1055,5 +1052,307 @@
     "route": "UNRESOLVED_REVIEW_DISAGREEMENT_NEW_REVISION_REVIEW_REQUIRED_NO_OLD_DISPATCH",
     "scheduler": "SCHEDULE_ENABLED_UNATTENDED_INDEPENDENCE_NOT_YET_VERIFIED",
     "lease": "RELEASED"
+  },
+  "cloud_generator_a4_result": {
+    "schema": "xiongbaowork-generator-a4-actual-result-v1",
+    "head": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+    "run": 40845991318,
+    "job": 123353492043,
+    "status": "completed",
+    "conclusion": "failure",
+    "source": {
+      "status": "PASS",
+      "files": 2065,
+      "bytes": 50175181
+    },
+    "copy": {
+      "status": "PASS",
+      "private_overlay_bytes": 50177753,
+      "formal_adoption": false,
+      "full50_prepared": true,
+      "original0080_tables": 99,
+      "recovery_stitched": false
+    },
+    "deps": {
+      "status": "FAIL_FIRST_ARCHIVE_FINAL_HOST_GUARD",
+      "location": "fetch_archive line155",
+      "observed": "incoming.geturl().hostname differed from registry.npmmirror.com",
+      "actual_destination": "NOT_LOGGED_UNKNOWN_DO_NOT_GUESS",
+      "integrity": "NOT_VERIFIED",
+      "package_installation": "NOT_REACHED"
+    },
+    "generator": "NOT_RUN",
+    "metadata": "NONE",
+    "sql_execution": "NOT_RUN",
+    "source_adopted": false,
+    "events": [
+      {
+        "time": "2026-10-29T08:58:20.5498064Z",
+        "name": "SUBJECT_RUNNER_RESOURCE",
+        "value": {
+          "canonical_source_base": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "cgroup": "0::/xiongbaowork.slice/xb-min-source.service",
+          "gid": 1001,
+          "overlay_formally_adopted": false,
+          "own": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+          "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+          "uid": 1001
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:46.6062612Z",
+        "name": "SOURCE_RECOVERY_RESULT",
+        "value": {
+          "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+          "aggregate_memory_limit": 67108864,
+          "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "commercial_acceptance": "NOT_DELIVERED",
+          "fd_named_stability_verified": true,
+          "file_modes_verified": true,
+          "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+          "git_tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
+          "head": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+          "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+          "overlay_tickets": [],
+          "postgres17": "PG_PENDING",
+          "project_tests": "NOT_RUN",
+          "project_upper_bound": 536870912,
+          "source_mismatches": 0,
+          "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+          "swap_limit": 0,
+          "verified_source_bytes": 50175181,
+          "verified_source_files": 2065,
+          "windows_source_files_written": 0
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:46.6804904Z",
+        "name": "SERVICE_CLEANUP_ONCE",
+        "value": {
+          "deadline_remaining": 453.76678884999995,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-source"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:46.6806253Z",
+        "name": "STAGE_TERMINAL",
+        "value": {
+          "deadline_remaining": 453.766598543,
+          "exit": 0,
+          "stage": "source"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:46.7814608Z",
+        "name": "SUBJECT_RUNNER_RESOURCE",
+        "value": {
+          "canonical_source_base": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "cgroup": "0::/xiongbaowork.slice/xb-min-copy.service",
+          "gid": 1001,
+          "overlay_formally_adopted": false,
+          "own": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+          "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+          "uid": 1001
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:47.0959086Z",
+        "name": "SOURCE_RECHECK",
+        "value": {
+          "bytes": 50175181,
+          "files": 2065,
+          "formal_adoption": false,
+          "overlay": false
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:49.0938694Z",
+        "name": "DIAGNOSTIC_ONLY_SCHEMA_OVERLAY",
+        "value": {
+          "adopted": false,
+          "after": {
+            "bytes": 13092,
+            "mode": "0o644",
+            "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1"
+          },
+          "before": {
+            "bytes": 10520,
+            "mode": "0o644",
+            "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7"
+          },
+          "path": "openbot/server/src/db/schema/approvals.ts",
+          "reference": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:49.5902296Z",
+        "name": "SOURCE_RECHECK",
+        "value": {
+          "bytes": 50177753,
+          "files": 2065,
+          "formal_adoption": false,
+          "overlay": true
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:49.8196747Z",
+        "name": "OFFLINE_FULL50_PREPARED",
+        "value": {
+          "complete_source_copy": 2065,
+          "credentials": false,
+          "learning_removed_with0078_evidence": true,
+          "original_drizzle_tables": 99,
+          "recovery_stitched": false,
+          "runtime_helpers": [
+            "json.ts",
+            "tenant.ts"
+          ],
+          "schema_files": 50
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:49.8668186Z",
+        "name": "SERVICE_CLEANUP_ONCE",
+        "value": {
+          "deadline_remaining": 450.580338952,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-copy"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:49.8669810Z",
+        "name": "STAGE_TERMINAL",
+        "value": {
+          "deadline_remaining": 450.58020527099995,
+          "exit": 0,
+          "stage": "copy"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:49.9620603Z",
+        "name": "SUBJECT_RUNNER_RESOURCE",
+        "value": {
+          "canonical_source_base": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "cgroup": "0::/xiongbaowork.slice/xb-min-deps.service",
+          "gid": 1001,
+          "overlay_formally_adopted": false,
+          "own": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+          "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+          "uid": 1001
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:52.8487574Z",
+        "name": "SERVICE_CLEANUP_ONCE",
+        "value": {
+          "deadline_remaining": 447.598498573,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-deps"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:52.8490510Z",
+        "name": "STAGE_TERMINAL",
+        "value": {
+          "deadline_remaining": 447.59836039699996,
+          "exit": 1,
+          "stage": "deps"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:52.8493283Z",
+        "name": "PROJECT_LIMIT_RESTORED",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "0"
+        }
+      },
+      {
+        "time": "2026-10-29T08:58:52.9810437Z",
+        "name": "GENERATOR_ALWAYS_RESTORED",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "Source_adopted": false,
+          "ROOT_RELEASE": null,
+          "ready": false,
+          "PG": "PG_PENDING"
+        }
+      }
+    ],
+    "restored": {
+      "parent": 536870912,
+      "data": 67108864,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "raw_log": {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-123353492043.log",
+      "bytes": 48150,
+      "sha256": "104372c63f5886498553892d088ef7380d4d66a4cc2c6a4eff616457922dd73d"
+    },
+    "next": "No unchanged rerun. Prepare reviewed bounded no-follow header-only diagnostic of exact first locked URL, preserve URL/SRI, do not follow unknown Location/read tarball body; decide narrow redirect handling only from actual evidence.",
+    "gates": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "full_ci": "NOT_RUN",
+      "commercial": "NOT_DELIVERED"
+    }
   }
 }
