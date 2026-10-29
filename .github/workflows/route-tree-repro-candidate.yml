@@ -12,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Block unresolved absolute deadline controller preparation
+        id: route_deadline_preparation
+        run: |
+          echo 'ROUTE_REPRO_PREPARATION {"status":"PREPARATION_BLOCKED","deadline_repair":"P2_UNRESOLVED","review_disagreement":"UNRESOLVED","restore_proof":"UNKNOWN_NOT_RUN","project_executed":false,"source_adopted":false,"workflow_execution_permitted":false}'
+          echo 'No project step may start. The inherited controller lacks a lifetime absolute-deadline supervisor and bounded proven restoration. See ROUTE-TREE-REPRO-PLAN.json.'
+          exit 78
       - name: Establish project aggregate memory slice
         run: |
           set -euo pipefail
@@ -497,7 +503,7 @@ jobs:
               out.write(raw)
               out.flush()
               os.fsync(out.fileno())
-          assert sys.argv[4]=="refs/heads/codex/route-tree-repro-plan-20261029"
+          assert sys.argv[4]=="refs/heads/codex/route-tree-deadline-fix-20261029"
           os.environ["GITHUB_SHA"]=sys.argv[1]
           os.environ["GITHUB_RUN_ID"]=sys.argv[2]
           os.environ["GITHUB_RUN_ATTEMPT"]=sys.argv[3]
@@ -623,7 +629,7 @@ jobs:
             /usr/bin/python3 -I -B "$RUNNER_TEMP/route-tree-repro-control/guard.py" snapshot b
       - name: Always restore512MiB and report complete versus incomplete without adoption
         id: route_final
-        if: always()
+        if: ${{ always() && steps.route_deadline_preparation.outcome == 'success' }}
         run: |
           set -euo pipefail
           if test -d /sys/fs/cgroup/xiongbaowork.slice; then

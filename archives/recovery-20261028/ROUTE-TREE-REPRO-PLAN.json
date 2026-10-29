@@ -1,12 +1,12 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "PREPARED_P2_REVISED_NOT_DISPATCHED_REVIEW_REQUIRED",
+  "status": "PREPARATION_BLOCKED_P2_UNRESOLVED_REVIEW_DISAGREEMENT_NO_DISPATCH",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
   "source_bytes": 50175181,
-  "branch": "codex/route-tree-repro-plan-20261029",
-  "trigger": "workflow_dispatch only; no push/pull_request/schedule/workflow_run; Root serial dispatch after seed diagnostic",
+  "branch": "codex/route-tree-deadline-fix-20261029",
+  "trigger": "workflow_dispatch only retained; NOT DISPATCHABLE. First administrative step emits PREPARATION_BLOCKED and exits78; all project steps are unreachable, including the inherited always restoration.",
   "concurrency": {
     "group": "source-recovery-bytes",
     "cancel_in_progress": false,
@@ -59,7 +59,8 @@
       "scripts/generate-app-config.ts"
     ],
     "tenant_package_dir": "../examples/qoderwake",
-    "limit": 536870912
+    "limit": 536870912,
+    "execution_permitted": false
   },
   "build": {
     "cwd": "openbot/app",
@@ -79,25 +80,14 @@
     "no_third_iteration": true,
     "original_bun_build_script_pass_claim": false,
     "absolute_deadline_enforcement": {
-      "single_budget_json_outer_deadline": true,
-      "recompute_after_parent_raise_before_start": true,
-      "controller_limit": 67108864,
-      "controller_counts_inside_aggregate_build_limit": true,
-      "shared_hard_stop_reserve_seconds": 5,
-      "relative_runtime_deduct_seconds": 1,
-      "activation_wait_in_absolute_timeout": true,
-      "KillMode": "control-group",
-      "KillSignal": "SIGKILL",
-      "FinalKillSignal": "SIGKILL",
-      "SendSIGKILL": true,
-      "TimeoutStartSec": 1,
-      "TimeoutStopSec": 1,
-      "TimeoutStartFailureMode": "kill",
-      "TimeoutStopFailureMode": "kill",
-      "absolute_timeout_action": "direct cgroup.kill of own named build unit, immediate parent memory.max=512MiB/swap0 before bounded D-Bus cleanup",
-      "late_start_protection": "Cancel owned pending unit; any delayed activation still has aggregate512MiB and build gate rejects",
-      "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
-    }
+      "status": "UNRESOLVED_NOT_IMPLEMENTED_BY_THIS_BLOCKED_PREPARATION",
+      "shared_inner_seconds": 270,
+      "shared_absolute_outer_seconds": 300,
+      "old_configuration_is_not_proof": true,
+      "legacy_controller_present_but_unreachable": true,
+      "execution_permitted": false
+    },
+    "execution_permitted": false
   },
   "resources": {
     "ordinary_project_and_descendants": 536870912,
@@ -164,12 +154,185 @@
   "p2_history": {
     "prior_commit": "95af0749f0996ea78adf27fcf4070a309edbec99",
     "finding": "Relative RuntimeMaxSec plus default stop grace did not prove absolute300s cap",
-    "revision": "Explicit hard kill and absolute launch/activation/run/stop wait; no dispatch yet",
+    "revision": "This preparation blocks execution; it does not implement or establish the required deadline restoration repair.",
     "official_sources": [
       "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
       "https://www.freedesktop.org/software/systemd/man/255/systemd.kill.html",
       "https://freedesktop.org/software/systemd/man/latest/systemd-run.html",
       "https://docs.kernel.org/admin-guide/cgroup-v2.html"
-    ]
+    ],
+    "status": "OPEN_REVIEW_DISAGREEMENT_NEW_REVISION_REQUIRES_EXACT_SHA_NON_AUTHOR_REVIEW",
+    "legacy_bf0ef_configuration": {
+      "single_budget_json_outer_deadline": true,
+      "recompute_after_parent_raise_before_start": true,
+      "controller_limit": 67108864,
+      "controller_counts_inside_aggregate_build_limit": true,
+      "shared_hard_stop_reserve_seconds": 5,
+      "relative_runtime_deduct_seconds": 1,
+      "activation_wait_in_absolute_timeout": true,
+      "KillMode": "control-group",
+      "KillSignal": "SIGKILL",
+      "FinalKillSignal": "SIGKILL",
+      "SendSIGKILL": true,
+      "TimeoutStartSec": 1,
+      "TimeoutStopSec": 1,
+      "TimeoutStartFailureMode": "kill",
+      "TimeoutStopFailureMode": "kill",
+      "absolute_timeout_action": "direct cgroup.kill of own named build unit, immediate parent memory.max=512MiB/swap0 before bounded D-Bus cleanup",
+      "late_start_protection": "Cancel owned pending unit; any delayed activation still has aggregate512MiB and build gate rejects",
+      "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
+    }
+  },
+  "preparation_base_commit": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+  "author_role": "AUTHOR_OF_THIS_BLOCKED_ADMINISTRATIVE_PREPARATION_ONLY_NOT_NON_AUTHOR_APPROVAL",
+  "review_disagreement": {
+    "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+    "historical_reports": [
+      {
+        "commit": "7ef4fcac96e6b76a8c84f873854d1cc5d905fd2a",
+        "path": "archives/recovery-20261028/CLOUD-DELIVERY-REVIEW-20261029.json",
+        "blob": "98af8b58e9dcf65957c1ee17ce6b94dac2b420ac",
+        "bytes": 25222,
+        "sha256": "507c3dc41c5c257c6f529c80f094543276a5a23ad02879149850b587516364b0",
+        "verdict": "FINDING_P2_PLAN_NOT_APPROVED",
+        "finding_id": "DELIVERY-B-P2-ABSOLUTE-RESTORE-UNBOUNDED"
+      },
+      {
+        "commit": "9d80392d8b39ccbbd89338f026eeb8986ff6c8aa",
+        "path": "archives/recovery-20261028/CLOUD-DELIVERY-ROOT-REVIEW-20261029.json",
+        "blob": "a4127db3940595bc566e1c23f5f1f96a7d9f4e91",
+        "bytes": 6656,
+        "sha256": "066e7d394fbeaac103a052cbccfc385cc125929dcee724a15f152c4f8bd4424e",
+        "verdict": "ADMIN_PLAN_APPROVED_FOR_BOUNDED_DISPATCH_ONLY",
+        "findings": []
+      }
+    ],
+    "both_reports_retained_unchanged": true,
+    "current_state": "UNRESOLVED_REVIEW_DISAGREEMENT_NEW_REVISION_PENDING_NON_AUTHOR_REVIEW",
+    "old_candidate_dispatch": false,
+    "neither_report_overrides_the_other": true,
+    "new_source_or_runtime_evidence": false
+  },
+  "author_preparation": {
+    "scope": "Exactly two original administrative files; no generator workflow, Source, canonical, lease, other branches or schedules modified.",
+    "input_files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "commit": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+        "blob": "25f78982c6346bb60f509f1b4b6159c2d60a7352",
+        "bytes": 77303,
+        "sha256": "d96e898daa363a4448c6a69fc1cb98e72a303574347cfdfc78d50603f1dd1865"
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "commit": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+        "blob": "ff7e08385743e23e1a8effaff88c85113ed95b52",
+        "bytes": 6840,
+        "sha256": "c3de9d277161a40d207b86572b899388cfe55147d5d25ccc325e6a5b0f8c2344"
+      }
+    ],
+    "old_helper": {
+      "bytes": 23322,
+      "sha256": "4e8419af0012e9528c1a0e689ea91254db1fcded17bb9d3016ffcb446717bf8b",
+      "full_literal_read": true,
+      "unchanged": true,
+      "executed": false
+    },
+    "specific_delta": [
+      "Inserted an unconditional administrative guard before every project resource/setup step; emits PREPARATION_BLOCKED/P2_UNRESOLVED/restore UNKNOWN_NOT_RUN and exits78, never a success receipt.",
+      "Changed legacy final always condition to require that exact guard outcome==success; unconditional guard failure therefore cannot enter old unbounded outer restoration.",
+      "Bound dormant prepare GITHUB_REF identity to the new exclusive preparation branch. Original first-four step bodies, all Source/provenance/resource/FD/candidate gates and legacy helper bytes remain unchanged.",
+      "Plan records both historical reviews and exact remaining code defects; does not assert repaired deadline, timely stop or actual restore."
+    ],
+    "not_a_deadline_fix": true,
+    "workflow_execution_permitted": false,
+    "source_identity": {
+      "source_tree": "60a844d75dd2d9fa3e88517f947d1c0fa0c98cbd",
+      "base_tree": "7761ca4b7181c19d009598a081bcda1ac161c41a",
+      "count": 2065,
+      "bytes": 50175181,
+      "mismatches": 0,
+      "truncated": false
+    },
+    "proof_level": "Read-only full GitHub UTF8 originals, immutable review records and complete Git-tree blob/mode comparison only. No YAML/Python/Subject parser, project, dependency, build, test or workflow executed.",
+    "push_trigger_preflight": {
+      "root_workflow_inventory_at_base": [
+        "ci.yml",
+        "route-tree-repro-candidate.yml",
+        "source-recovery-verify.yml"
+      ],
+      "ci_push_branches": [
+        "main"
+      ],
+      "other_two": "workflow_dispatch only",
+      "new_branch": "codex/route-tree-deadline-fix-20261029",
+      "matches_push_trigger": false
+    },
+    "old_independent_persistence_report": "8d517ba6ce2a1fb1a23eb2b03c22a712b17779c2 preserved unchanged"
+  },
+  "p2_response": [
+    {
+      "id": "P2-direct-restore",
+      "code": "bf0ef decoded guard.py launch/direct_restore lines187-197",
+      "observed": "Path.write_text lowers parent memory.max synchronously; only after both writes/readbacks is within_absolute_outer_deadline logged. No supervisor bounds this syscall; an after-the-fact boolean is not enforcement.",
+      "root_report_statement": "Finally directly restores parent before bounded D-Bus cleanup.",
+      "response": "The restore operation exists as Root observed; its duration is unbounded as external P2 observed. Presence does not establish deadline. No conflicting historical report is deleted.",
+      "status": "OPEN_UNREACHABLE_IN_THIS_PREPARATION"
+    },
+    {
+      "id": "P2-outer-shell",
+      "code": "bf0ef workflow lines548,597,630; EXIT traps and always final",
+      "observed": "All three systemctl set-property restoration paths lack timeout tied to shared immutable deadline. Root controller unit at558/607 has no lifetime watchdog. GitHub timeout20min is not300s.",
+      "response": "First guard exit78 plus guarded final condition prevents every one of these legacy execution paths in this preparation; no claim their underlying defect is repaired.",
+      "status": "OPEN_UNREACHABLE_IN_THIS_PREPARATION"
+    },
+    {
+      "id": "P2-shared-lifecycle",
+      "code": "bf0ef workflow buildA535/captureA566/reset575/buildB584/captureB615/final624; helper budget146-159",
+      "observed": "A stores monotonic inner270/outer300, B reuses it, but Actions scheduler gaps and later final step have no one surviving shared-deadline supervisor. runtime/stop limits of a child do not supervise parent restoration.",
+      "response": "Need one supervised A/capture/reset/B/final lifecycle; a new relative timeout per step or five-second reserve is insufficient.",
+      "status": "OPEN"
+    },
+    {
+      "id": "P2-empty-proof",
+      "code": "bf0ef decoded guard.py lines182-186,237-247",
+      "observed": "cgroup.kill only signals descendants; systemctl stop --no-block check=False and killed client do not establish stop completion or cgroup.events populated0. No post-stop empty proof precedes success or restoring512.",
+      "response": "Future repair must prove no late activation, actual owned-unit empty/populated0 and observed512/swap0 before each DATA phase, all within the same remaining budget. Unknown/error cannot become a restore witness.",
+      "status": "OPEN"
+    },
+    {
+      "id": "P2-supervisor-survival",
+      "code": "bf0ef workflow parent memory.oom.group=1; root controller64/build4G both children of xiongbaowork.slice",
+      "observed": "Controller and build are within the same aggregate; aggregate OOM/group kill can remove the in-slice restoring controller. A GitHub later always step is not independent recovery within the shared deadline.",
+      "response": "Need a defined surviving restoration owner without moving project work outside aggregate, removing oom.group or enlarging authorization. This preparation neither changes those protections nor claims that owner exists.",
+      "status": "OPEN_ARCHITECTURE"
+    },
+    {
+      "id": "P2-grace-accounting",
+      "code": "bf0ef decoded helper build timeout SIGTERM wait5 then SIGKILL wait5 then additional wait",
+      "observed": "Repeated fixed grace allocations are not a proof every wait stays within one shared outer300. launch may interrupt first, but the parent restore remains unbounded.",
+      "response": "Every future wait/stop/kill/final restore must consume max(0,absolute_deadline-monotonic_now); zero remaining immediately yields failure/unknown, never a new grace period.",
+      "status": "OPEN"
+    }
+  ],
+  "required_replacement_control_contract": {
+    "status": "DESIGN_REQUIREMENTS_ONLY_NOT_IMPLEMENTED_NOT_APPROVED",
+    "clock": "One immutable t0=time.monotonic immediately before starting original app buildA lifecycle, inner=t0+270, outer=t0+300; never recreated forB, cleanup or final.",
+    "lifetime": "One living supervising control owner spans all startup/A/restore/DATA/reset/B/restore/DATA/final. Actions scheduling gaps must not be used as the deadline supervisor.",
+    "management_operations": "Bound every launch/stop/kill/reap/readback call with remaining monotonic budget and account for all management descendants. No unbounded systemctl or synchronous reclaim outside supervision.",
+    "restore": "Use supported nonblocking memory.max write semantics to avoid synchronous reclaim; O_NONBLOCK alone is not workload-empty or deadline proof. Verify actual parent memory.max=536870912 and swap.max=0 before DATA.",
+    "empty": "Cancel and observe owned activation/stop completion; prove actual owned build units empty and cgroup.events populated0 or a separately justified never-created state. Sending a kill or observing client exit is not sufficient.",
+    "failure": "On missing restore witness, populated state, expired budget, killed supervisor or unknown kernel/systemd completion: terminal FAILED/UNKNOWN, no B, DATA success, candidate adoption or automatic rerun. Do not manufacture a restore receipt.",
+    "resource": "Retain aggregate512/swap0 and DATA64; only original app Node/Vite build4GiB stage. Controller counts inside aggregate. Do not remove oom.group, exempt controller/daemon by declaration, or widen Docker/native2GiB4GiB scope.",
+    "proof_scope": "Requires a new complete exact workflow/plan implementation and separate non-author static review before leaseowner may consider serial execution; no execution authority supplied here."
+  },
+  "unresolved_reason": "The inherited per-step controller does not establish a surviving, bounded restoration owner across kernel cgroup lowering, aggregate OOM and Actions scheduling gaps. This bounded preparation has not implemented the required replacement lifecycle; it therefore explicitly blocks rather than claims closure. Lack of runtime execution alone is not the reason for the static finding.",
+  "next_action": {
+    "owner": "Main coordinator conversation6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
+    "action": "Keep oldbf0ef undispatched and both review histories visible. Assign a new bounded implementation ticket for the required single-lifecycle restoration owner under unchanged resource boundaries; then arrange a different non-author reviewer against the exact new SHA. This preparation is not runnable and must not be treated as a repaired candidate.",
+    "current_task_terminal": "BOUNDED_PREPARATION_SAVED_BLOCKED_EXIT",
+    "dispatch": false,
+    "automatic_retry": false,
+    "generator_files_or_queue_changes": false
   }
 }
