@@ -1,12 +1,12 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "AUTHOR_SYSTEMD_COMPATIBILITY_SUCCESSOR_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_BOOTSTRAP_PARENT_GATE_SUCCESSOR_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
   "source_bytes": 50175181,
   "branch": "codex/route-systemd-compat-prep-20261030",
-  "trigger": "Exact on:push branch filter codex/route-systemd-compat-run-20261030-a1 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
+  "trigger": "Exact on:push branch filter codex/route-systemd-compat-run-20261030-a2 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
   "concurrency": {
     "group": "source-recovery-bytes",
     "cancel_in_progress": false,
@@ -82,7 +82,7 @@
     "original_bun_build_script_pass_claim": false,
     "absolute_deadline_enforcement": {
       "status": "IMPLEMENTED_AUTHOR_PROPOSAL_NOT_REVIEWED_OR_RUN",
-      "clock": "Root-owned immutable t0 before lifecycle/control activation, conservatively earlier than original buildA; inner=t0+270, outer=t0+300; A/capture/reset/B/final all share it.",
+      "clock": "Root-owned immutable t0 before bootstrap parent observation/config/control activation, conservatively earlier than original buildA; inner=t0+270, outer=t0+300. No renewed gate/cleanup budget.",
       "supervisor": "One in-slice16MiB root controller across all eight Subject stages; separate16MiB root fallback lives independently and watches pinned supervisor PID/starttime and same270 cutoff.",
       "root_recovery": "Every actual cgroup limit lowering/stop/kill/readback/record is in a COW operation child with its own session; parent uses waitpid WNOHANG, nonblocking pipe, monotonic remaining and hard SIGKILL; O_NONBLOCK memory.max write avoids synchronous reclaim.",
       "normal_cleanup": "Revoke root-owned epoch permit, owned cgroup.kill, bounded synchronous systemctl stop + ActiveState/Job/LoadState + actual populated0/absent-after-stop, launcher reap; one successful cleanup receipt is not repeated.",
@@ -200,7 +200,7 @@
       "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
     }
   },
-  "preparation_base_commit": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+  "preparation_base_commit": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
   "author_role": "AUTHOR_OF_ACTIVATION_SUCCESSOR_NOT_INDEPENDENT_REVIEWER",
   "review_disagreement": {
     "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
@@ -234,18 +234,18 @@
     "scope": "Exactly two administrative paths changed from e35d230b systemd compatibility successor on exclusive prep branch; no canonical/lease/Source/jobs/automation changes.",
     "status": "SYSTEMD_COMPATIBILITY_PREPARED_UNREVIEWED_NOT_RUN",
     "workflow": {
-      "bytes": 139463,
-      "sha256": "9d15e5c789b9dac413f4d7efee5e1925a54f371f7c389714f5fde8b19c4dafe5",
-      "push_only_exact_branch": "codex/route-systemd-compat-run-20261030-a1",
+      "bytes": 142765,
+      "sha256": "adf53698354c007d8496b8e5bbc0b920467e759ef01560ee52e19f8e84010220",
+      "push_only_exact_branch": "codex/route-systemd-compat-run-20261030-a2",
       "run_branch_created": false,
       "concurrency": "source-recovery-bytes",
       "cancel_in_progress": false
     },
     "administrative_lifecycle_helper": {
-      "bytes": 29180,
-      "sha256": "8949bc43243c17332a63ae7a86e97cfeff1965bca6e04378cdb75a6dc86be5f7",
+      "bytes": 32311,
+      "sha256": "1c14a1877281fe8a6e2c411a40e52679147c227a214ce2804f5e590b880b46ac",
       "unchanged_from_092e": false,
-      "change": "Systemd compatibility only: remove unsupported transient property at2 sites; root_gate binds own child then sets/reads kernel memory.oom.group1. Same lifecycle/deadlines."
+      "change": "Previous compatibility fix retained; conservative clock+bootstrap parent observation/conditional oom repair and explicit early unknown evidence."
     },
     "subject_helper": {
       "bytes": 20451,
@@ -330,7 +330,7 @@
   ],
   "required_replacement_control_contract": {
     "status": "AUTHOR_IMPLEMENTED_AS_PROPOSED_ABOVE_EXACT_NONAUTHOR_REVIEW_REQUIRED",
-    "clock": "One immutable t0=time.monotonic immediately before starting original app buildA lifecycle, inner=t0+270, outer=t0+300; never recreated forB, cleanup or final.",
+    "clock": "Root-owned immutable t0 before bootstrap parent observation/config/control activation, conservatively earlier than original buildA; inner=t0+270, outer=t0+300. No renewed gate/cleanup budget.",
     "lifetime": "One living supervising control owner spans all startup/A/restore/DATA/reset/B/restore/DATA/final. Actions scheduling gaps must not be used as the deadline supervisor.",
     "management_operations": "Bound every launch/stop/kill/reap/readback call with remaining monotonic budget and account for all management descendants. No unbounded systemctl or synchronous reclaim outside supervision.",
     "restore": "Use supported nonblocking memory.max write semantics to avoid synchronous reclaim; O_NONBLOCK alone is not workload-empty or deadline proof. Verify actual parent memory.max=536870912 and swap.max=0 before DATA.",
@@ -340,19 +340,19 @@
     "proof_scope": "Requires a new complete exact workflow/plan implementation and separate non-author static review before leaseowner may consider serial execution; no execution authority supplied here.",
     "external_dependency_blocker": false
   },
-  "unresolved_reason": "Actual e35d systemd compatibility failure retained; this successor is an author proposal pending exact nonauthor review and real runtime evidence.",
+  "unresolved_reason": "A1 actual bootstrap parentlimits assertion failed with actual key unknown. New minimal parentgate successor awaits exact independent review and actual runtime; no restore success inferred.",
   "next_action": {
     "owner": "Main coordinator",
-    "action": "Independent nonauthor must full-read exact two-file systemd compatibility successor; no e35d unchanged retry. Review own-child kernel group1 before admin work, all six unchanged Subject barriers and unchanged lifecycle. Only leaseowner after approval/fresh idlequeue/dedup may create reserved run branch once.",
+    "action": "Exact nonauthor full review of this two-file parentgate successor: conditional actual512/swap0/pop0 then onlyoom1 repair, earlyfailunknown and readonlyalways. Preserve old a1 failure; no unchangedretry. Only leaseowner after fresh idlequeue/dedup may once create reserveda2 push branch.",
     "dispatch": false,
     "automatic_retry": false,
-    "run_branch": "codex/route-systemd-compat-run-20261030-a1",
-    "current_task_terminal": "SYSTEMD_COMPATIBILITY_PREPARED_UNREVIEWED_NOT_RUN",
+    "run_branch": "codex/route-systemd-compat-run-20261030-a2",
+    "current_task_terminal": "BOOTSTRAP_PARENT_GATE_PREPARED_UNREVIEWED_NOT_RUN",
     "external_permission_needed": false
   },
   "pure_administrative_helper": {
-    "bytes": 29180,
-    "sha256": "8949bc43243c17332a63ae7a86e97cfeff1965bca6e04378cdb75a6dc86be5f7",
+    "bytes": 32311,
+    "sha256": "1c14a1877281fe8a6e2c411a40e52679147c227a214ce2804f5e590b880b46ac",
     "role": "Root-owned controller, fallback, activation gate and launcher/witness. No root Subject repo/payload/log reads."
   },
   "preparation_history": [
@@ -395,7 +395,8 @@
     "No new official nonauthor verdict exists for this exact implementation; both priorbf0ef historical verdicts stay preserved without resolving conflict by overwrite.",
     "Complete privileged success evidence transport cap7800B is unrun; overflow fails instead of truncating or claiming restored. Kernel/runtime pathological failure may prevent saving a complete receipt; absence is UNKNOWN.",
     "Six new prelude barriers and exact push entry have not run. No runtime gate/parent-oom recovery evidence is transferred from prior probes.",
-    "This compatibility successor has not executed. OOMPolicy=kill childgroup1 relies on actual kernel readback and fails closed; protected continue controls explicitly set/read own bound childgroup1. No runtime result is inferred from A11."
+    "This compatibility successor has not executed. OOMPolicy=kill childgroup1 relies on actual kernel readback and fails closed; protected continue controls explicitly set/read own bound childgroup1. No runtime result is inferred from A11.",
+    "Bootstrap parent normalization successor not executed. Earlier full limits mismatch did not log which key; no claim that oom.group0 was observed. Other than exact512/swap0/pop0/oom0-or1, fail without writes. Earlyrecord absence or deadline expiry stays UNKNOWN."
   ],
   "author_draft_history": [
     {
@@ -623,5 +624,49 @@
     "independent_review": "PENDING_EXACT_SUCCESSOR",
     "runtime_evidence": "NOT_RUN",
     "source_adopted": false
+  },
+  "bootstrap_parent_gate_successor": {
+    "parent": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+    "actual_failure": {
+      "run": 40911192453,
+      "job": 123579294835,
+      "full_log_chars": 304958,
+      "full_log_sha256": "327f5358e7be8c5c3c958556baa4dd3672c9e7901bdcbc7c78cb53f8437ab136",
+      "error": "bootstrap admin.py line366 parent limits assertion failed",
+      "actual_failing_key": "UNKNOWN_NOT_LOGGED",
+      "six_prelude_barriers": "ACTUAL_SUCCESS",
+      "source": "2065 files/50175181B verified",
+      "runtime_install_prepare_brand": "ACTUAL_SUCCESS",
+      "config_created": false,
+      "build_A_B": "NOT_RUN",
+      "always": "FAILED_OR_UNKNOWN / FileNotFoundError config.json / restore_proven=false"
+    },
+    "changes": [
+      "Observe complete actual parent max/swap/oom/populated using supervised pure administrative operation before controls or Subject; print actual-before marker.",
+      "Require actual parent512MiB/swap0, oom.group in exact0/1 and populated0 before any write. Other values return rejected/no-write and save actual fields, fail unknown.",
+      "Only then fixed_write actual parent memory.oom.group1 and full limits+populated readback; no memory.max or swap writes, no late restore claim.",
+      "Immutable lifecycle t0 moved conservatively before this administrative bootstrap observation, so gate/repair/config share same270/300; no second deadline.",
+      "Early precontrol failure is saved root-owned bootstrap.failure.json if same deadline remains, emitted as FAILED_OR_UNKNOWN/restore_proven=false. Always reads it and actual current parent limits but never repairs/creates config or suppresses failure.",
+      "Fresh exactpushfiltera2 only; no execution branch created."
+    ],
+    "admin": {
+      "bytes": 32311,
+      "sha256": "1c14a1877281fe8a6e2c411a40e52679147c227a214ce2804f5e590b880b46ac"
+    },
+    "workflow": {
+      "bytes": 142765,
+      "sha256": "adf53698354c007d8496b8e5bbc0b920467e759ef01560ee52e19f8e84010220"
+    },
+    "unchanged": [
+      "six full activation barrier bodies",
+      "Subject20451B/1232c499... byte-identical in both copies",
+      "supervisor/fallback controlled lifetimes",
+      "same270/300 deadlines; t0 earlier only",
+      "DATA16+16+32 aggregate64 and512/swap0; originalbuild4GiB only",
+      "all2065Source blob/mode and rawleaf gates"
+    ],
+    "runtime_validation": "NOT_RUN",
+    "independent_review": "PENDING_EXACT_SUCCESSOR",
+    "new_execution_branch": "codex/route-systemd-compat-run-20261030-a2"
   }
 }
