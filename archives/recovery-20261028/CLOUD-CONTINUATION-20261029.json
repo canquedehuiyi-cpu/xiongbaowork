@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:28:24.918Z",
+  "checkpoint_update_at": "2026-10-29T16:29:22.761Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4110,5 +4110,19 @@
     ],
     "sequential_package_review": true,
     "source_adoptions": 0
+  },
+  "cloud_a11_offline_data_preparation": {
+    "candidate": "d8769361ffb91d0cd3fa71f01c645d1515ab2043",
+    "status": "BLOCKED_STATIC_AGGREGATE64_GAP_NOT_DISPATCHED",
+    "review_commit": "33619a9e61c7d1ffd8b8b5552d3d531dce58e0ae",
+    "review_path": "archives/recovery-20261028/A11-DATA-D876-NONAUTHOR-REVIEW-20261030.json",
+    "finding": "A11-DATA-P2-MANAGEMENT-OUTSIDE-AGGREGATE64",
+    "next_action": "Author successor must include actual control/management+codec in aggregate64, full exact nonauthor re-review before any job.",
+    "prior_payload_persistence_rejected": {
+      "action": "create_commit embedding four compressed exports",
+      "reason": "Automatic review rejected sensitive egress/unverified repository trust",
+      "no_commit_or_branch_update": true,
+      "safer_alternative": "Runtime-only fixed original joblogs read; identities-only repo plan and bounded summaries"
+    }
   }
 }

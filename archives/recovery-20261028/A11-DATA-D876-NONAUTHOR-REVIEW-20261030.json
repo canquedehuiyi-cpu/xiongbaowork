@@ -1,0 +1,121 @@
+{
+  "schema": "a11-data-offline-independent-admin-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "candidate": "d8769361ffb91d0cd3fa71f01c645d1515ab2043",
+  "tree": "d03506e5ef1d57164230a6c8d3cbb8d26373b861",
+  "parent": "c48d77d85386ffac616e016f50c5fac0e2b8416e",
+  "verdict": "FINDING_BLOCKED_NOT_APPROVED_FOR_DISPATCH",
+  "findings": [
+    {
+      "id": "A11-DATA-P2-MANAGEMENT-OUTSIDE-AGGREGATE64",
+      "severity": "P2",
+      "blocking": true,
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "lines": [
+        220,
+        230,
+        275,
+        285,
+        289,
+        291,
+        292,
+        304
+      ],
+      "actual_path": "workflow execs admin directly as root outside xiongbaowork.slice; admin command(systemctl) and systemd-run client inherit that outer cgroup; only unit xb-a11-data-...service has MemoryMax67108864. No actual cgroup membership or aggregate budget covers DATA management controller/children together with codec service.",
+      "requirement": "This DATA-only job must keep DATA and actual management descendants within aggregate64MiB/swap0, with controls counted inside budget. Normal Actions may retain fixed pure bootstrap/final read-only witness boundary; no perprocess cap or host memory substituted for aggregate.",
+      "repair": "Prepare a successor with shared DATA64 cgroup for bounded administrative control/management plus decoder, reserve explicit control headroom and verify actual child/parent limits before any DATA access; retain OOMPolicy/kernel oom.group activation, UID drop, cleanup/empty/final independent witnesses and no raw payload writes.",
+      "not_runtime_finding": true
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/a11-offline-data-verify.yml",
+      "blob": "bd0be929c17f2453e0f55d26a7c259e306e5ca34",
+      "mode": "100644",
+      "bytes": 3386,
+      "sha256": "c753dd6c3ca815722c9e691e5dfc29e63994fc13f66afb44c853e357d6137aa7",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "blob": "b544ec6c3c4b551a8d0986086e8736d49ce87d21",
+      "mode": "100644",
+      "bytes": 19934,
+      "sha256": "43be7d741d67756bb04110e28cfc74304112bd78dc899002c21844b89d9eb966",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+      "blob": "1bcf8a4e5f222d12533fb395c5583eebdac43bb8",
+      "mode": "100644",
+      "bytes": 5226,
+      "sha256": "4230852838939b42b64829e03659070eb147d9c939fdce324cc78a5754e3a8cf",
+      "full_read": true
+    }
+  ],
+  "scope_check": {
+    "compare_only_three_added_admin_paths": true,
+    "source_changes": 0,
+    "canonical_lease_jobs_changes": 0,
+    "no_ci_skip_in_head": true
+  },
+  "statically_checked": {
+    "fixed_origin_run": 40902334215,
+    "fixed_origin_job": 123547693853,
+    "plan_identities_match_transport_report": true,
+    "exact_push_repository_ref_event_guard": true,
+    "contents_read_actions_read_only": true,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "bootstrap_pins_exact_controller_hash": true,
+    "plan_hash_pinned": true,
+    "api_request_fixed_same_repo_job": true,
+    "normal_302_received_from_GitHub_TLS": true,
+    "storage_host_suffix_allowlist": [
+      ".blob.core.windows.net",
+      ".githubusercontent.com"
+    ],
+    "no_authorization_on_storage_request": true,
+    "token_never_literal_argv_or_output": true,
+    "log_read_cap": 1048576,
+    "exact_marker_counts": [
+      4,
+      5,
+      4
+    ],
+    "header_end_equal_pinned_plan": true,
+    "chunk_indexes_ordered": true,
+    "strict_base64_and_roundtrip": true,
+    "compressed_length_hash_exact": true,
+    "bounded_raw_deflate_output": "expected_size+1",
+    "single_member_no_unused_unconsumed": true,
+    "CRC32_ISIZE_rawSHA_checked_in_candidate": true,
+    "JSON_duplicate_nonfinite_surrogate_depth_node_bounds": true,
+    "raw_SQL_log_never_executed": true,
+    "raw_exports_never_persisted": true,
+    "child64_and_parent512_actual_gates": true,
+    "OOMPolicy_kill_and_parent_kernel_oomgroup_repair": true,
+    "irreversible_UID_GID_groups_drop": true,
+    "finally_owned_unit_stop_show_empty_restore": true,
+    "always_readonly_current_limits_populated0_and_root_terminal": true,
+    "missing_terminal_fails": true
+  },
+  "evidence_level": {
+    "project_or_codec_execution": false,
+    "YAML_Python_parser_compile_tests": false,
+    "static_read_and_data_digest_only": true,
+    "runtime_DATA_PASS": false
+  },
+  "prior_statement_correction": "Reviewer initial message 'no blocking' was preliminary and explicitly withdrawn before any formal approval. Full management path inspection found this blocking aggregate64 gap; Root agreed to preserve finding and request successor.",
+  "next_action": "Author prepares new immutable successor; different nonauthor re-reads all changed/full files and exact SHA before coordinator considers dispatch. Do not run d876 unchanged.",
+  "preserved": {
+    "scope": "77/18/7",
+    "PG": "PG_PENDING",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true
+  }
+}
