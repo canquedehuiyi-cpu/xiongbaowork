@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:14:13.867Z",
+  "checkpoint_update_at": "2026-10-29T16:23:12.781Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4033,5 +4033,55 @@
     },
     "a11_raw_validation": "PENDING_DATA_CODEC_AND_REAL64MiB_AGGREGATE_ENVIRONMENT",
     "next_action": "Route administrative systemd compatibility successor plus independent review; separately prepare reviewed DATA-only offline gzip verification without rerunning generator. No Source adoption."
+  },
+  "cloud_route_systemd_compat": {
+    "candidate": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+    "status": "NONAUTHOR_ADMIN_APPROVED_NOT_YET_RUN",
+    "review_commit": "ac08d39f843de796ba7b62ac3330ac3381c9cee6",
+    "review_path": "archives/recovery-20261028/CLOUD-ROUTE-SYSTEMD-COMPAT-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "a4472258e24ce0d4e6a92aa42ea374f4e6c25d1a",
+    "dispatch_branch": "codex/route-systemd-compat-run-20261030-a1",
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "mode": "100644",
+        "blob": "fccd7b2ed81f599b1006b97b7c3c1d5acb624841",
+        "bytes": 139463,
+        "sha256": "9d15e5c789b9dac413f4d7efee5e1925a54f371f7c389714f5fde8b19c4dafe5",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "mode": "100644",
+        "blob": "a110c0057fe47101c872075e8b35ed52b228659c",
+        "bytes": 38066,
+        "sha256": "e6dc6a8ace19cfb908eedbd8b9095906d487137c0ec6df74171ff3f1bc68dcfa",
+        "full_read": true
+      }
+    ]
+  },
+  "cloud_takeover_round2": {
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+    "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
+    "owner_label_correction": {
+      "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+      "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+      "error": "Previous administrative owner label incorrectly used old worker origin conversation ID. It was not the actual delegated executor identity.",
+      "actual_executor_id": "01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+      "human_cloud_conversation": "6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9",
+      "authority": "Explicit Root human delegation; identifiers are assignment records, not independently observed hosted caller proof.",
+      "historical_epoch_preserved": true,
+      "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
+    },
+    "parallel_authors": [
+      "/root/route_systemd_author",
+      "/root/a11_data_author"
+    ],
+    "distinct_nonauthor_reviewers": [
+      "/root/route_compat_reviewer",
+      "/root/a11_data_reviewer"
+    ],
+    "sequential_package_review": true,
+    "source_adoptions": 0
   }
 }
