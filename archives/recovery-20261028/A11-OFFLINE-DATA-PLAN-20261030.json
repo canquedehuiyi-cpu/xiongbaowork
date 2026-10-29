@@ -1,120 +1,103 @@
 {
-  "schema": "xiongbaowork-a11-teardown-only-plan-v2",
+  "schema": "xiongbaowork-a11-delegated-control-prototype-v3",
   "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
   "author": "/root/a11_data_author",
-  "parent_candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
+  "parent_candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
   "prepare_branch": "codex/a11-data-verify-prep-20261030",
-  "only_run_branch": "codex/a11-data-verify-run-20261030-a2",
-  "scope": "Three original administrative files only; no Source/canonical/lease/job/Page/automation mutation by author.",
-  "purpose": "Obtain missing real post-admin-teardown kernel and systemd unit evidence. No token, original-log fetch, gzip/CRC/JSON codec or generator rerun. No claim to repair an unobserved field.",
-  "actual_prior": {
-    "run": 40912579798,
-    "job": 123584189279,
-    "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
-    "overall": "failure",
-    "raw_verification": "Four A11_DATA_FILE_VERIFIED and FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED actually succeeded",
-    "raw_scope": "Strict base64, exact compressed/raw lengths and SHA256, single gzip member/trailing rejection, CRC/ISIZE, bounded safe JSON for snapshot/journal; SQL/log bytes only",
-    "snapshot_json_nodes": 17279,
-    "journal_json_nodes": 496,
-    "journal_entries": 82,
-    "admin_terminal": "DATA_VERIFIED with child empty and actual project512/shared64/swap0/oom1 while admin alive; restore_proven=false/PENDING_EXTERNAL",
-    "always_failure": "line338 combined limits assert failed before actual values were printed; exact changed level/key and any cgroup replacement are UNKNOWN",
-    "source_adopted": false
+  "only_run_branch": "codex/a11-data-verify-run-20261030-a3",
+  "purpose": "No-Subject delegated owned-subtree control lifecycle prototype, NOT an original managed-slice restoration fix and NOT permission to migrate project execution.",
+  "actual_history": {
+    "raw_run": 40912579798,
+    "raw_job": 123584189279,
+    "raw_status": "FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED_ACTUALLY_PASSED; overall restoration remained UNKNOWN",
+    "teardown_run": 40914666271,
+    "teardown_job": 123591585627,
+    "teardown_candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+    "actual": "same shared dev30/ino6792 exists/active/StopWhenUnneeded=no; admin afterrestore64/swap0/oom1, external sameinode64/swap0/oom0/pop0. Project dev30/ino6730 retained512/swap0/oom1/pop0. Both old services inactive/noJob/absent. Only shared_limits check false.",
+    "actor": "The process that wrote oom.group is NOT identified by these observations; do not claim slice replacement or a proved manager code path.",
+    "old_failures_retained": true
   },
-  "resources": {
-    "project_parent": 536870912,
-    "shared_aggregate": 67108864,
-    "admin_and_all_management_descendants": 16777216,
-    "unprivileged_control_child_and_descendants": 50331648,
-    "swap": 0,
-    "ordinary_only": true,
-    "clock": "One t0 captured in fixed bootstrap before admin service start; inner=t0+120, outer=t0+150; child/stop/readback/restore/record share these immutable deadlines; no new restore budget in always.",
-    "bootstrap": "Only fixed administrative controller integrity+immutable copy, slice establishment, fixed admin launch/wait; no plan/log/gzip/Subject/token reads.",
-    "outside_witness": "Read-only kernel and systemctl show observations after admin service exit, always emit actual values before computing verdict; no stop/kill/restore or fresh cleanup grace. All management and restoration remain inside admin16/shared64."
+  "structure": {
+    "original_project_slice": {
+      "cap": 536870912,
+      "swap": 0,
+      "gate_preserved": true
+    },
+    "original_shared_slice": {
+      "cap": 67108864,
+      "swap": 0,
+      "gate_preserved": true
+    },
+    "systemd_owned_service": {
+      "Delegate": "yes",
+      "MemoryMax": 67108864,
+      "MemorySwapMax": 0,
+      "OOMPolicy": "kill",
+      "Type": "oneshot",
+      "RemainAfterExit": "yes",
+      "resource_attributes": "Read only after actual ControlGroup and user.delegate=xattr1 verification."
+    },
+    "owned_subtree": {
+      "target": {
+        "cap": 67108864,
+        "swap": 0,
+        "oom_group": 1
+      },
+      "admin": {
+        "cap": 16777216,
+        "swap": 0,
+        "oom_group": 1
+      },
+      "noop": {
+        "cap": 50331648,
+        "swap": 0,
+        "oom_group": 1
+      }
+    },
+    "aggregate": "Service64 constrains initial controller, every management subprocess and fork, bootstrap leaf, target/admin16 and noop48. These are nested caps, never additive grants. Initial memory charges remain within the same service64 even when cgroup migration leaves earlier page charges at an ancestor.",
+    "no_internal_process_sequence": "Verify root64+actualDelegate; create bootstrap leaf and move own PID into it; independently read own /proc/cgroup and root cgroup.procs empty; only then enable +memory at delegated root. Create empty owned target64; enable its memory controller while it has no direct PIDs; create admin16/noop48; move own PID to admin and verify before any further child.",
+    "cleanup": "Only direct own fork PID migrates to noop48, verified through /proc/PID/cgroup before permit then irreversible UID/GID/groups drop. Reap within same deadline; cgroup.kill and rmdir only own empty noop. Empty bootstrap removed. Root writer remains in target/admin16 through final owned target restoration; target/admin retained for independent pop0 proof after process exits.",
+    "empty_evidence": "External witness must see entire systemd service root, owned target, retained admin, original shared and original project populated0, with no direct PIDs; subgroup empty never replaces whole-parent empty.",
+    "service_lifecycle": "Typeoneshot start job waits until admin exits; RemainAfterExit preserves active(exited) logical unit with no process. No --wait/--pipe because those wait for deactivation. Final witness requires MainPID0/ControlPID0/noJob/ExecMainStatus0/active(exited), actual same root+target dev/ino, and all empty. No daemon or holder process survives."
   },
-  "observations": {
-    "phases": [
-      "before child launch under admin",
-      "after child stop/noJob before restore",
-      "after restoration while admin remains active",
-      "external always after admin exit"
-    ],
-    "cgroups": [
-      "project512",
-      "shared64",
-      "admin16",
-      "child48"
-    ],
-    "fields": [
-      "exists",
-      "stat dev/ino as decimal strings",
-      "memory.max",
-      "memory.swap.max",
-      "memory.oom.group",
-      "cgroup.events populated"
-    ],
-    "systemd_units": [
-      "project slice",
-      "shared slice",
-      "exact owned admin service",
-      "exact owned child service"
-    ],
-    "unit_fields": [
-      "ActiveState",
-      "LoadState",
-      "Job",
-      "ControlGroup",
-      "StopWhenUnneeded",
-      "MemoryMax",
-      "MemorySwapMax"
-    ],
-    "errors": "Missing/inaccessible cgroups, timeouts or missing terminal are explicit evidence values, never silently omitted or read as zero."
+  "deadlines": {
+    "t0": "Captured before starting delegated oneshot service",
+    "inner_seconds": 120,
+    "outer_seconds": 150,
+    "oneshot_hard_bound": "Documented TimeoutStartSec=floor(original outer remaining-2) plus TimeoutStopSec1/SIGKILL and fixed-bootstrap subprocess wait using original remaining; RuntimeMaxSec is not used as a oneshot-start bound.",
+    "same_budget": "All init, fork permit, child reap, owned cleanup/restoration/record and external completion checks consume original t0+120/+150; no new restore or grace in always."
   },
-  "official_documentation": [
+  "authority": {
+    "kernel_write_boundary": "Only descendants created below verified delegated service, plus documented delegated root cgroup.subtree_control/cgroup.procs interfaces. Never create manual cgroups directly below a managed slice; never change managed-root memory/swap/oom attributes.",
+    "outer_bootstrap": "Only immutable controller verification/copy, standard fixed512/64 slice configuration and delegated service launch/start-job wait; no raw DATA, Subject, token or network other than fetching this administrative controller.",
+    "outside_witness": "Read-only original slices, actual service properties and owned metadata/terminal; no stop/kill/restore.",
+    "xattr_absent_or_unsupported": "FAILED_OR_UNKNOWN, no invented fallback"
+  },
+  "official_contracts": [
     {
-      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.unit.html",
-      "section": "StopWhenUnneeded",
-      "observed_contract": "The common option stops unused units when true; documented generic default is false. Actual deployed unit values and lifecycle were not observed in the failed run."
+      "url": "https://systemd.io/CGROUP_DELEGATION/",
+      "contract": "Delegate applies only to service/scope; manager owns unit attributes, delegate owns descendants. Do not hand-create under managed slices. Move process into a leaf before enabling domain controllers."
     },
     {
-      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.slice.html",
-      "observed_contract": "Slices hierarchically constrain all processes in contained units; common Unit settings are supported. This does not prove why prior teardown changed a field."
-    }
-  ],
-  "hypotheses": [
-    {
-      "name": "slice stop or cgroup replacement after last service exit",
-      "status": "UNPROVEN_NOT_ASSUMED",
-      "differentiating_evidence": "before/after existence, dev/ino, unit active/load/job and ControlGroup"
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+      "contract": "cgroup.procs moves own forked processes; descendants remain constrained by ancestor limits. No internal PIDs when distributing domain controllers; empty leaf directories may be removed."
     },
     {
-      "name": "in-place kernel field reset by manager",
-      "status": "UNPROVEN_NOT_ASSUMED",
-      "differentiating_evidence": "same observed cgroup identity with actual changed field"
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
+      "contract": "RemainAfterExit keeps service logically active after all processes exit. Typeoneshot startup waits for command completion; bounded TimeoutStartSec is used here."
+    },
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd-run.html",
+      "contract": "Normal invocation waits for start-job completion; --wait/--pipe wait for service termination and are deliberately not used with retained active(exited) service."
     }
   ],
-  "changes": {
-    "no_stopwhenunneeded_override": true,
-    "no_new_systemd_property": true,
-    "removed": [
-      "Actions:read permission",
-      "default token handling",
-      "original job API/storage requests",
-      "plan/log download",
-      "gzip/raw/JSON codec"
-    ],
-    "retained": [
-      "shared64 aggregate",
-      "admin16+child48 descendants",
-      "project512/swap0",
-      "root activation parent oom.group repair+readback",
-      "irreversible UID/GID+groups drop",
-      "owned stop/kill/noJob/empty",
-      "same absolute cleanup deadline",
-      "complete pre-assert final observations"
-    ]
-  },
-  "acceptance": "CONTROL_TEARDOWN_WITNESS_MATCHED only if actual two-level limits, both aggregate pop0, owned service empty/noJob, active slices and original deadline all match; otherwise FAILED_OR_UNKNOWN. Neither outcome reclaims or invalidates prior real raw verification, Source approval, PG or migration semantics.",
+  "verdict_boundary": "Prototype own target64/0/1/pop0 can pass separately. Original project512/0/1 and original shared64/0/1 plus both pop0 remain mandatory legacy gates; any original0 field is LEGACY_NOT_RESTORED_OR_UNKNOWN and overall FAILED_OR_UNKNOWN, even if prototype succeeds.",
+  "no_token": true,
+  "no_original_log_fetch": true,
+  "no_codec": true,
+  "no_source_or_sdk_or_sql_or_dependencies_or_tests": true,
+  "no_project_execution": true,
+  "no_automatic_adoption": true,
   "gates": {
     "scope": "77/18/7",
     "ROOT_RELEASE": null,
@@ -124,8 +107,6 @@
     "migrationNOT_WIRED": true,
     "PG": "PG_PENDING"
   },
-  "next_action": "Non-author full exact SHA review of all3 files. Only sole valid leaseowner after empty queue/dedup may create reserved a2 push branch once. If failure, use actual emitted fields before proposing bounded restore changes; no unchanged retry/no resource expansion.",
-  "execution_branch_created": false,
-  "project_execution": false,
-  "source_adopted": false
+  "next_action": "Complete exact3-file nonauthor review. Sole valid leaseowner may, after original expiry/epoch rules and idle queue/dedup, dispatch a3 once. Keep raw verification success and original restoration failure separate; any project-controller migration needs its own review.",
+  "execution_branch_created": false
 }

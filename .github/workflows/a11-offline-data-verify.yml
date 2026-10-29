@@ -1,8 +1,8 @@
-name: A11 bounded teardown-only control diagnostic
+name: A11 delegated owned subtree control prototype
 on:
   push:
     branches:
-      - codex/a11-data-verify-run-20261030-a2
+      - codex/a11-data-verify-run-20261030-a3
 permissions:
   contents: read
 concurrency:
@@ -10,17 +10,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   data-only:
-    if: github.repository == 'canquedehuiyi-cpu/xiongbaowork' && github.ref == 'refs/heads/codex/a11-data-verify-run-20261030-a2' && github.event_name == 'push'
+    if: github.repository == 'canquedehuiyi-cpu/xiongbaowork' && github.ref == 'refs/heads/codex/a11-data-verify-run-20261030-a3' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify administrative controller and run teardown-only control
         env:
-          EXPECTED_CONTROLLER_SHA256: 3000046e0e37bad7f4f865210860e65f21815710aaef2268e3b51c74b876e5d9
+          EXPECTED_CONTROLLER_SHA256: 77687c7cee228481e9cb60eee3acf2ce8bd970dc69811fc1331fc8f2f9c58a23
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/a11-data-verify-run-20261030-a2"
+          test "$GITHUB_REF" = "refs/heads/codex/a11-data-verify-run-20261030-a3"
           test "$GITHUB_EVENT_NAME" = "push"
           controller="$RUNNER_TEMP/a11-offline-data-controller.py"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 20 --max-filesize 32768 \
@@ -38,7 +38,7 @@ jobs:
               after=os.fstat(fd)
               assert (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)
           finally:os.close(fd)
-          assert hashlib.sha256(raw).hexdigest()=="3000046e0e37bad7f4f865210860e65f21815710aaef2268e3b51c74b876e5d9"
+          assert hashlib.sha256(raw).hexdigest()=="77687c7cee228481e9cb60eee3acf2ce8bd970dc69811fc1331fc8f2f9c58a23"
           directory=Path("/run")/("xb-a11-code-"+runid+"-"+attempt)
           directory.mkdir(mode=0o755)
           path=directory/"controller.py"
@@ -55,14 +55,18 @@ jobs:
           shared=project/"xiongbaowork-data.slice"
           keys=("memory.max","memory.swap.max","memory.oom.group")
           for cg,cap in ((project,"536870912"),(shared,"67108864")):
-              (cg/"memory.oom.group").write_text("1")
-              assert {k:(cg/k).read_text().strip() for k in keys}==dict(zip(keys,(cap,"0","1")))
-          adminunit="xb-a11-admin-"+runid+"-"+attempt+".service"
+              actual={k:(cg/k).read_text().strip() for k in keys}
+              assert actual["memory.max"]==cap and actual["memory.swap.max"]=="0"
+              # Original oom.group is observed, never overwritten from bootstrap.
+              print("A11_DELEGATED_BOOTSTRAP_ORIGINAL "+str({"path":str(cg),"limits":actual}),flush=True)
+          adminunit="xb-a11-delegated-"+runid+"-"+attempt+".service"
           started=time.monotonic();outer=started+150
-          args=["systemd-run","--wait","--pipe","--unit="+adminunit,"--slice=xiongbaowork-data.slice",
-                "--property=Type=exec","--property=MemoryMax=16777216",
+          args=["systemd-run","--unit="+adminunit,"--slice=xiongbaowork-data.slice",
+                "--property=Type=oneshot","--property=RemainAfterExit=yes","--property=Delegate=yes",
+                "--property=MemoryMax=67108864",
                 "--property=MemorySwapMax=0","--property=OOMPolicy=kill","--property=KillMode=control-group",
-                "--property=RuntimeMaxSec="+str(max(1,math.floor(outer-time.monotonic()-1))),"--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
+                "--property=TimeoutStartSec="+str(max(1,math.floor(outer-time.monotonic()-2))),"--property=TimeoutStopSec=1",
+                "--property=StandardOutput=null","--property=StandardError=null",
                 "--property=SendSIGKILL=yes","--property=KillSignal=SIGKILL","--property=FinalKillSignal=SIGKILL",
                 "/usr/bin/python3","-I","-B",str(path),"admin",base,runid,attempt,uid,gid,str(started)]
           completed=subprocess.run(args,stdin=subprocess.DEVNULL,timeout=max(0.01,outer-time.monotonic()+1),
@@ -77,6 +81,6 @@ jobs:
           if test -f "$script"; then
             sudo /usr/bin/python3 -I -B "$script" witness "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           else
-            echo 'A11_TEARDOWN_ALWAYS_UNKNOWN {"status":"SETUP_FAILED_OR_UNKNOWN","restore_proven":false,"source_adopted":false}'
+            echo 'A11_DELEGATED_ALWAYS_UNKNOWN {"status":"SETUP_FAILED_OR_UNKNOWN","restore_proven":false,"source_adopted":false}'
             exit 1
           fi
