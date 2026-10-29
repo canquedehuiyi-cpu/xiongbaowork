@@ -1,0 +1,78 @@
+{
+  "schema": "xiongbaowork-a7-nonauthor-blocker-v1",
+  "reviewer": "/root/a6_review",
+  "candidate": "f689c5b3c89c66a52fe883681c1256a520fc0c1a",
+  "verdict": "NOT_APPROVED_FOR_DISPATCH",
+  "coordinator_corroborated": true,
+  "findings": [
+    {
+      "id": "A7-P1-BOOTSTRAP-PIN-STALE",
+      "actual_controller_bytes": 80775,
+      "actual_controller_sha256": "4fbbc39171102e1c45790dc876956c8220630101739aaef0c0f0d08c9024cb98",
+      "workflow_download_max": 80700,
+      "workflow_final_bytes": 80775,
+      "workflow_stale_sha256": "5a77014611458942a6cdeee59f96a38f540fa271fa7bb78ca2f0c42327ead352",
+      "consequence": "Bootstrap deterministically rejects before controller execution",
+      "author_acknowledgement": "Author retracted incorrect pin-matches claim; final evidence-label edit failed to update workflow limits/hash",
+      "required": "Recompute final controller exact bytes/hash, construct workflow assertions consistently, then final workflowhash in plan; full readback independent review of exact successor"
+    }
+  ],
+  "execution": false,
+  "Source_adoption": false,
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "blob": "487ca9812339bb662c8dfc43841da37204c77835",
+      "mode": "100644",
+      "bytes": 4017,
+      "sha256": "e253de4d860b52c4a9c46951f31a116ae132822f6ae5cfa23fe3c9f95516b136"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "blob": "f39619b0911ca0238e4e21779651c410c2ca73d6",
+      "mode": "100644",
+      "bytes": 80775,
+      "sha256": "4fbbc39171102e1c45790dc876956c8220630101739aaef0c0f0d08c9024cb98"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "blob": "faeebea7fec7839467246ffcd95306aad8162f5c",
+      "mode": "100644",
+      "bytes": 34376,
+      "sha256": "410fd5ad4ea9c8447a7e0ab8e95fbb27aeb069185b3cda5c90c5ca66264bf710"
+    }
+  ],
+  "tree": "c85d744eb5f4309304971b14d3caa7ef02917512",
+  "parent": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+  "a6_finding_resolution": {
+    "status": "RESOLVED_STATICALLY",
+    "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "fetch_diff_PLAN_result_same": true,
+    "exact_three_file_guard": true,
+    "actual_full_tree_diff_exactly_three": true,
+    "all_other_blob_type_mode_paths_equal": true,
+    "manifest_and2065_unchanged": true,
+    "historical_canonical_base_retained": true,
+    "formal_source_retained": true
+  },
+  "unchanged_controls": {
+    "controller_body_def_meta_through_main_byte_identical_A6": true,
+    "plan_core_deep_equal": [
+      "source",
+      "overlay",
+      "schema_paths",
+      "schema_modules",
+      "nodes",
+      "edges",
+      "limits",
+      "baseline",
+      "learning",
+      "gates",
+      "redirect_policy",
+      "orm_metadata_compatibility"
+    ],
+    "plan_embedded_external_equal": true,
+    "workflow_singlejob_contentsread_free_concurrency_unchanged": true,
+    "head_skip": false
+  }
+}
