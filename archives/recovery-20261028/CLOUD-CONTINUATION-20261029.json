@@ -385,5 +385,67 @@
     "completion": "NOT_COMPLETE_NO_UNATTENDED_GUARANTEE",
     "review_acceptance_path": "archives/recovery-20261028/CLOUD-REVIEW-ACCEPTANCE-20261029.json",
     "next_required_capability": "A supported cloud workflow_dispatch connector entrypoint for exact reviewed bf0ef002, or a managed Linux executor with enforceable delegated cgroup and network readiness. No password/token or Windows prerequisite."
+  },
+  "cloud_push_probe": {
+    "candidate": "972136c289d9aef76f49f2fce19584191d448a02",
+    "workflow": ".github/workflows/cloud-exec-probe.yml",
+    "review": {
+      "commit": "3b677f4d199f2250bd390738470293d4ea294568",
+      "blob": "d45ff66aa5d8a309da1ecbbd8799c909353a2f85",
+      "verdict": "ADMIN_RESOURCE_PROBE_APPROVED_FOR_ROOT_SINGLE_DISPATCH"
+    },
+    "preparation_branch": "codex/cloud-exec-probe-prep-20261029-a1",
+    "execution_branch": "codex/cloud-exec-probe-run-20261029-a1",
+    "run": 40839182119,
+    "job": 123331130080,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "failure",
+    "host": "GitHub-hosted Azure Ubuntu26.04.1",
+    "scheduling": "PROVED_PUSH_RUN_CREATED_AND_EXECUTED",
+    "resource_validation": "FAILED_PARENT_OOM_GROUP_RESET_AFTER_SERVICE_ACTIVATION",
+    "facts": [
+      "2026-10-29T08:01:18.3300659Z CLOUD_PROBE_PARENT {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}",
+      "2026-10-29T08:01:18.4421215Z AssertionError: {'memory.max': '536870912', 'memory.swap.max': '0', 'memory.oom.group': '0'}",
+      "2026-10-29T08:01:18.4601346Z Main processes terminated with: code=exited, status=1/FAILURE",
+      "2026-10-29T08:01:18.5005965Z CLOUD_PROBE_FINAL {\"restored\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project_populated\": \"0\", \"subject_executed\": false}",
+      "2026-10-29T08:01:18.5777350Z ##[error]Process completed with exit code 1.",
+      "2026-10-29T08:01:18.6261905Z CLOUD_PROBE_TERMINAL {\"limits\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"populated\": \"0\", \"subject_executed\": false}"
+    ],
+    "raw_log": "archives/recovery-20261028/CLOUD-EXEC-PROBE-A1-123331130080.log",
+    "subject_acquired": false,
+    "subject_executed": false,
+    "dependencies_installed": false,
+    "final_restoration": {
+      "memory_max": 536870912,
+      "swap_max": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "next": "Stop this SHA; preserve failure. Non-author RCA and exact reviewed activation-gate fix required before any further dispatch. No unchanged retry.",
+    "full_execution_blocker_cleared": false
+  },
+  "cloud_coordination": {
+    "lease_path": "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json",
+    "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+    "run_id": "bounded-probe-development-20261029T0804Z",
+    "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+    "page": {
+      "url": "https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f",
+      "evidence": "Human supplied; not independently inspected"
+    },
+    "controller": {
+      "id": "Automation_a9042438d098819180d8686afa9cd66e",
+      "runtime": "cloud",
+      "is_enabled": true,
+      "cadence_minutes": 60,
+      "evidence": "Human supplied configuration"
+    },
+    "worker": {
+      "id": null,
+      "cadence_minutes": 30,
+      "status": "AWAITING_HUMAN_REPORTED_ID"
+    },
+    "local_heartbeat": "PAUSED_NO_DEPENDENCY"
   }
 }

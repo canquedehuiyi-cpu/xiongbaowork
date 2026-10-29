@@ -1,0 +1,30 @@
+{
+  "schema": "xiongbaowork-cloud-coordinator-lease-v1",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "canonical_branch": "codex/cloud-repairs-recovery-20261028",
+  "state": "held",
+  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "run_id": "bounded-probe-development-20261029T0804Z",
+  "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+  "acquired_at": "2026-10-29T08:04:59.948Z",
+  "renewed_at": "2026-10-29T08:04:59.948Z",
+  "expires_at": "2026-10-29T08:34:59.948Z",
+  "max_lease_seconds": 2700,
+  "renew_interval_seconds": 900,
+  "expected_parent": "1e606f7c6d18277c348d15cc87750abdb2fd3e3f",
+  "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
+  "queue_at_acquisition": {
+    "queued": [],
+    "in_progress": []
+  },
+  "next_action": "Read A2 non-author exact review; recheck lease epoch/head and queue, dispatch corrected resource-only probe once. Preserve A1 failure. Then prepare exact17 dependencies and all50 schema generator diagnosis.",
+  "protocol": {
+    "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
+    "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
+    "renew": "Current matching owner/run/epoch only, before expiry, every real checkpoint and no later than15min. CAS from current head. expires <=45min from renewal. Never renew after losing epoch or expiration; successor rules apply.",
+    "pre_mutation": "Before Source adoption, new execution branch, project job or canonical mutation, re-read exact head and held/unexpired owner/run/epoch. Only this owner serially schedules resources; if mismatch, stop.",
+    "release": "Before ending bounded round, CAS state released with released_at and expires_at equal UTC now, active jobs accurately recorded and clear next_action. Do not release while concealing queued/running work.",
+    "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
+    "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
+  }
+}
