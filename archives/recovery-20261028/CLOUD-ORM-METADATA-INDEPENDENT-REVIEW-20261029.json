@@ -1,0 +1,49 @@
+{
+  "schema": "xiongbaowork-orm-metadata-independent-review-v1",
+  "candidate": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
+  "candidate_tree": "398724616dda35c8ed4f47b5f86eb0fe16a7ae00",
+  "author": "/root/persistence_review",
+  "reviewer": "cloud-delivery-worker-nonauthor",
+  "reviewer_authored_candidate": false,
+  "verdict": "ADMIN_METADATA_PLAN_APPROVED_FOR_LEGAL_COORDINATOR_SINGLE_DISPATCH_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/cloud-orm-metadata.yml",
+      "blob": "e6f9af0095b0f938b6adf133c267c31a724db940",
+      "bytes": 3844,
+      "sha256": "8c73c3580260658f8a21e3ddc9699e259063fe2ae2513209ceaf09b987958d50"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-CONTROLLER-20261029.py",
+      "blob": "6df31b07543cdc15fdb6a4d8162eed4b44f94699",
+      "bytes": 25893,
+      "sha256": "457c5697da9f723b7061b4d7296b3b39121f4590d670c60369124f04b1ba76cb"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-PLAN-20261029.json",
+      "blob": "7ba75adb79ecdd63d21b0869d7f6fb8102627901",
+      "bytes": 7814,
+      "sha256": "5f79a10a6770656f87e5872e239650a617da33fae795a1a53fcd0f5f78087969"
+    }
+  ],
+  "full_reads": true,
+  "lock_verified": {
+    "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+    "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"
+  },
+  "checks": [
+    "Only3 added administrative files since2e1e493; actual preparation ref equalscandidate",
+    "Manual execution is one exact push branch, readonlycontents, singlejob, source-recovery-bytes/cancel-in-progress=false",
+    "Single fixed original ORM0.45.2 lockURL/SRI, exact one-hop httpsCDN packagepath, no query/userinfo/fragment/secondhop; SRI before tar scan",
+    "No Source checkout/package install/hooks/native/generator/SQL; unprivileged probe with cleanenvironment after root drops UID/GID/groups",
+    "DATA64+parent512/swap0/oomgroup1 and derived-child witness; same60s deadline with8s cleanup reserve; final andalways verify512/swap0/populated0; no4G escalation",
+    "Safe bounded streamingtar scan, single package.json <=1MiB, UTF8 roundtrip, JSONduplicatekey rejection; no archive member extraction to filesystem",
+    "RawpackageJSON and rawallowedfieldspan bytes/SHA, actualfields, original lockcorresponding metadata with optional-only derivation labelled and exactdifferences; mismatches are evidence not permission to weaken checks"
+  ],
+  "limitations": [
+    "Static administrative-plan review only, not actualresource/restoration proof",
+    "OriginalA5 failure retained; originalSource28/77/18/7/PG_PENDING retained",
+    "May dispatch once only after coordinator lease+queue+exactref checks; no Source adoption or gate clearance"
+  ]
+}
