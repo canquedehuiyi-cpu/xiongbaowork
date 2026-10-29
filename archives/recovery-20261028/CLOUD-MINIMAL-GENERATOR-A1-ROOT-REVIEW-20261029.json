@@ -1,0 +1,94 @@
+{
+  "schema": "xiongbaowork-minimal-generator-independent-review/1",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "d824f9cc45cf13bbe198bd210514121636bca501",
+  "base": "823744db378f508a1996f8c23faf1b42f115ad33",
+  "verdict": "CHANGES_REQUIRED_DO_NOT_DISPATCH",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "blob": "e292496070a9b6bff6212c277bca2ed8ea33ced3",
+      "bytes": 3667,
+      "sha256": "ad5f589c84c84b4975e11df36da707300c3a1ea2ca9f2b87493953198c990cdc",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "blob": "8f265d625f9c6aed2d8d1e9ac42bd9dbb6167d8b",
+      "bytes": 62253,
+      "sha256": "08dcaa2759b716b40051cecc316260d28cf857975f17f5e09aa5847e55a645a2",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "blob": "32a64dc4360b40f3a8a7f6304380b73ce57cf3ee",
+      "bytes": 27981,
+      "sha256": "33213da586398c9316bdc993429d1fe8f427cda99e64f7d221eb44a9ed5ede4d",
+      "full_read": true
+    }
+  ],
+  "findings": [
+    {
+      "id": "DELIVERY-GEN-A1-P2-DEADLINE",
+      "severity": "blocking",
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "lines": [
+        342,
+        370,
+        373,
+        377,
+        380
+      ],
+      "problem": "run waits to deadline-3, but timeout branch can consume kill_owned stop3s plus proc.wait1s, followed by finally repeating kill_owned stop3s. Therefore cleanup can finish around deadline+4s; assertion deadline+1 is post-facto rejection, not an absolute bound including kill grace. Global final cleanup also performs serial3s stop calls for every owned unit.",
+      "requested_fix": "Use one shared absolute cleanup deadline/reserve; one bounded owned cgroup kill/stop/reap pass, with every subprocess wait limited to remaining reserve. Do not repeat full3s stop in except and finally. Include restore/empty-group checks inside the absolute stage bound, no allowed deadline+1 extension. Keep existing480/120/120 limits and no resource/time enlargement.",
+      "run_status": "NOT_RUN"
+    },
+    {
+      "id": "DELIVERY-GEN-A1-P2-EXPORT",
+      "severity": "blocking",
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "lines": [
+        275,
+        289,
+        291,
+        295,
+        298,
+        300
+      ],
+      "problem": "export_data performs snapshot/journal structure assertions, including hardcoded156tables, before constructing/exporting any generated output. A real successful CLI producing a different pending-DDL extent or invalid chain triggers assertion and suppresses capture of actual SQL/snapshot/journal, defeating diagnostic output preservation.",
+      "requested_fix": "Separate bounded safe file capture from metadata acceptance. Record structural findings/incomplete status without throwing before capture, then export every safe actual added/changed generated file plus generator log, and return failure after terminal evidence if acceptance checks fail. Never label malformed/full-DDL mismatch as complete or adopt it.",
+      "run_status": "NOT_RUN"
+    }
+  ],
+  "positive_checks": [
+    "Compare from base shows exactly3 administrative additions, no Subject Source changes.",
+    "Workflow exact unique run-a1 push branch differs from non-triggering prep-a1; contentsread, one ubuntu-latest15minute job, global source-recovery-bytes/cancel-in-progressfalse.",
+    "Workflow pins controller62253B/SHA256 before executing administrative controller.",
+    "Embedded plan semantic fields match standalone plan exactly; standalone adds identities/readiness/review instruction.",
+    "Privileged service activation wrapper repairs and verifies parent oom.group1 with512MiB/swap0, verifies own64MiB or512MiB/swap0/oomgroup1, clears supplementary groups and irrevocably sets UID/GID before controller Subject stage exec.",
+    "Source stage fetches normal GitHub, verifies exact manifest456310B/SHA256,2065files/50175181B/modes/FD-named stability and administrative changed-path allowlist.",
+    "Private full Source copy plus exact b7205b9d approvals diagnostic overlay, not formal adoption; canonical originals rechecked.",
+    "FULL50 schema config points to private copied original drizzle baseline0080/99tables and81journal entries; no recovery-chain stitch or DATABASE_URL.",
+    "17package nodes compare exact original bun.lock tuple, original npmmirror HTTPS URL and SHA512 integrity; no resolver reinstall, lifecycle hook or optional DB peers.",
+    "Streaming tar extraction rejects absolute/traversal/link/sparse/special/duplicate paths, uses bounded sizes/counts and private regular copies; no hardlink/symlink sharing.",
+    "Native esbuild versions and actual JS transforms are checked; nested dependency resolution tested before real pinned Drizzle CLI invocation.",
+    "Generator uses actual CLI, output directory, stdinDEVNULL and unchanged Source; no PG execution/fake URL/verifier/receipt/release.",
+    "All ordinary stages remain project512MiB/swap0; DATA acquisition/copy/deps/export64MiB; generate512MiB; no2/4GiB expansion.",
+    "Owned cgroup cleanup, restore and populated0 checks are present, but deadline accounting needs finding1 repair.",
+    "Output gzip/base64 headers/chunks with complete per-file hash identities are implemented, subject to finding2 capture ordering repair."
+  ],
+  "scope_limits": [
+    "Static implementation review only; no package archives downloaded or code executed by reviewer.",
+    "Closed dependency/schema feasibility evidence from prior review is not approval of this controller.",
+    "New exact3-file revision requires independent reread before Root lease/queue check and dispatch.",
+    "Original77/18/7 remains unaccepted; ROOT_RELEASEnull/readyfalse/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING retained."
+  ],
+  "reviewer_actions": {
+    "canonical_written": false,
+    "project_executed": false,
+    "execution_branch_created": false,
+    "dispatch": false
+  }
+}
