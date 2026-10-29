@@ -1,0 +1,240 @@
+{
+  "schema": "xiongbaowork-cloud-continuation-v1",
+  "created_at": "2026-10-29T07:36:00Z",
+  "human_authorization": "User will shut down Windows; move all development to independent cloud execution. Explicitly accepted ChatGPT Work cloud takeover. Continue complete original77stories/18packages/7gates; Source never Windows; only free allocation; no paid provider/API probes.",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "canonical_branch": "codex/cloud-repairs-recovery-20261028",
+  "parent_canonical_head": "5c7ef397598edec073cc491972376f75d326a8bb",
+  "adopted_source": {
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "approved_repair_overlays": 28,
+    "original_delivery_packages": 18,
+    "files": 2065,
+    "bytes": 50175181,
+    "manifest": {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "bytes": 456310,
+      "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff"
+    },
+    "validation": {
+      "candidate_sha": "d139f73ad599c344184d3023a80beeeafa2e6297",
+      "run_id": 40830714143,
+      "job_id": 123304042601,
+      "focused": {
+        "pass": 32,
+        "fail": 0,
+        "skip": 0,
+        "expects": 98
+      },
+      "original_biome_lint_exit": 0,
+      "original_full_server_typecheck_exit": 0,
+      "typecheck_memory_bytes": 2147483648,
+      "restored_parent_bytes": 536870912,
+      "swap_bytes": 0
+    },
+    "historical_scoped_evidence": {
+      "source27_offline_files": 178,
+      "pass": 2396,
+      "fail": 0,
+      "skip": 0,
+      "expects": 6673,
+      "current_source28_full_rerun": false
+    },
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "required_inputs": [
+    "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+    "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+    "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+    "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+    "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md"
+  ],
+  "control_documents_verified_at_parent": {
+    "scope": {
+      "bytes": 286013,
+      "sha256": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146"
+    },
+    "gate": {
+      "bytes": 45225,
+      "sha256": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac"
+    },
+    "ledger": {
+      "bytes": 479194,
+      "sha256": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5"
+    },
+    "status": {
+      "bytes": 66979,
+      "sha256": "478c295fa0a41eade2a5af73746b24653027f293ac46bbd458dcbd8ba0abefce"
+    }
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "execution_boundaries": {
+    "source": "Cloud tools/GitHub/hosted Linux only. No Windows project files, archives, JSON, patches, deps, tests. Local exception was collaboration-tool/config/admin only and is not a main project exception.",
+    "cloud_executor": "Must verify hosted execution; NEVER use local executor, Windows app/localhost board, existing desktop sign-in or desktop CLI as dependency. Cloud task orchestration does not prove cloud tool execution.",
+    "runtime": "One project resource job at a time, all descendants aggregate512MiB/swap0; DATA/copy64MiB. GHA concurrency source-recovery-bytes/cancel-in-progress:false. No separate container/job to bypass aggregate.",
+    "authorized_exceptions": "Full frozen deps install512MiB, private cache/copyfile/no lifecycle scripts; original full server/app/worker typechecks, specified full frontend and original lineage tests2GiB/swap0/300s then restore512MiB; original app production frontend build4GiB only, shared270s inner/300s outer then restore512MiB. Other builds, Docker/apt/native desktop are NOT covered.",
+    "source_packages": "Each repair <=8 Source files; non-author independent review; serial adoption only after review; exact Git tree/blob/bytes/SHA/mode and full readback, expected-SHA CAS canonical update, no force/default branch writes.",
+    "forbidden": "No paid provider/API probe, deployment, production/customer credentials, fake PG16/PGlite/mock proof, fixed-pass Root verifier, lowering RLS/authority/catalog or preserving invalid release, fake receipt/audit, credential/profile/network bypass. No mounts/shared writable deps/hardlinks/resource sampling/benchmarks. Do not recreate goal or claim complete."
+  },
+  "candidates": [
+    {
+      "id": "seed-schema",
+      "branch": "codex/ap-seed-schema-proposal-20261029",
+      "head": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "files": [
+        "openbot/server/src/db/schema/approvals.ts",
+        "openbot/server/drizzle/0081_approval_fresh_seeds.sql",
+        "openbot/server/tests/approval-fresh-seed.test.ts"
+      ],
+      "status": "THREE_SOURCE_APPROVED_ONLY_NOT_ADOPTED",
+      "missing": [
+        "real consistent0081snapshot",
+        "journal",
+        "full generated delta closure",
+        "cloud tests",
+        "full five-file non-author final review"
+      ],
+      "facts": "9seed columns/6-column parent FK+UNIQUE, nullable durable result_disposition; explicit ENABLE+FORCE RLS, zero policies and REVOKE ALL FROM app/PUBLIC. No writer/producer/index changes. CR-comment oracle P2 fixed with actual CR GRANT/POLICY negatives, history preserved.",
+      "identities": {
+        "schema": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
+        "sql": "07e6b4173fad075b76c3cbdf32637ed07e1a8f36",
+        "test": "813f4143d64f374eb95441b25b5dad4da0798501"
+      }
+    },
+    {
+      "id": "pg-result-primitive",
+      "branch": "codex/ap-pg-result-primitive-20261029",
+      "head": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "parent": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "files": [
+        "openbot/server/src/approvals/pg-fresh-result.ts",
+        "openbot/server/tests/approval-pg-fresh-result.test.ts"
+      ],
+      "status": "UNREVIEWED_UNRUN_NOT_ADOPTED",
+      "facts": "Real Drizzle transaction type; snapshot before await; parent FOR UPDATE then seed FOR SHARE; full6identity+8seed bindings/CAS expectedstatus+resultSQLNULL+dispositionNULL; final sameUPDATE completed+clock_timestamp. Only written_in_transaction/not_written_in_transaction, throws DB errors. Outer real authorization/required audit/COMMIT/ACK not supplied. No Port/Root verifier/index/receipt.",
+      "identities": {
+        "module": {
+          "blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39",
+          "bytes": 7576,
+          "sha256": "b6578d8066d3340e5de7577373bc4076ef4fc3648fef5aed8eb737994c998f0a"
+        },
+        "test": {
+          "blob": "48806bc3125be84ad79a481d50c9abc7cde85f0f",
+          "bytes": 14100,
+          "sha256": "34c9c0316f26a9e2387150c492dcb33556d023047651d007fa769f19d9d5b5da"
+        }
+      }
+    },
+    {
+      "id": "volume-version-guard",
+      "branch": "codex/pg-volume-version-guard-20261029",
+      "head": "7f931f69dde33703c667a3d3833e9da26915b3a0",
+      "parent": "5c7ef397598edec073cc491972376f75d326a8bb",
+      "files": [
+        "openbot/docker/s6/scripts/postgres-init.sh",
+        "openbot/docker/s6/s6-rc.d/postgres/run",
+        "openbot/docker/s6/scripts/postgres-volume-version-guard.ts",
+        "openbot/server/tests/pg-volume-version-guard.test.ts"
+      ],
+      "status": "UNREVIEWED_UNRUN_NOT_ADOPTED",
+      "facts": "Existing-volume version refuse before password/mkdir/chmod/URL/DB startup; Bun readonly regular/no-symlink/nlink1/O_NOFOLLOW/FDnamed exact16LF; newempty onlyinit allowed. Keeps currentPG16fixed paths; NOT PG17 upgrade. 27CPU cases only written, fake commands not actualPG.",
+      "blobs": [
+        "b2580901cab9bd15ca312ccb873f5eedb80d7541",
+        "c9b2f7512f375251373335624591e7a8900242db",
+        "a0aa17a011f2edbfc1eddc4830979c5d35dca61e",
+        "f0d778fead2ea00592ba797078ef3bd6d692652c"
+      ]
+    },
+    {
+      "id": "route-tree-repro-plan",
+      "branch": "codex/route-tree-repro-plan-20261029",
+      "head": "95af0749f0996ea78adf27fcf4070a309edbec99",
+      "files": [
+        ".github/workflows/route-tree-repro-candidate.yml",
+        "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json"
+      ],
+      "status": "PLAN_FIX_REQUIRED_NOT_DISPATCHED",
+      "facts": "Only two administrative files, all2065 Source blobs unchanged. Manual only, concurrency same. Real Node/Vite buildA/B shared270inner300outer, 4GiB buildonly, DATA64 before/after/fullSource excepttarget; nofakehistoricalmode. P2: RuntimeMaxSec alone excludes stopgrace and relative budget calculated before launch. Author preparing absolute deadline+bounded control-groupkill fix; verify branch latest and independently re-review new full SHA before any execution. Do not dispatch95af."
+    }
+  ],
+  "migration_diagnostic": {
+    "original_config": "openbot/server/drizzle.config.ts requires DATABASE_URL; remains unchanged. Original db:generate NOT_RUN. Official offline generate config only28 exactschema files+dialect/private copieddrizzle output; no URL/PG/migrate.",
+    "baseline_snapshot": "0080 snapshot299339B,99tables,id9830a73c-12c1-4c08-89a9-894184de1449,prevId1fa3d60b-41d7-4eb9-9f4b-fae4b93a1f18; approval_requests uniqueConstraints empty; continuations/steps/APX/domains absent fromsnapshot. This alone doesn't prove missing throughout all81SQL.",
+    "attempts": [
+      {
+        "sha": "c157dcd3046229e4aef46c2df251428c0fafe0d3",
+        "run": 40833358607,
+        "job": 123312375051,
+        "stage": "full dependency download",
+        "exit": 124,
+        "seconds": 480,
+        "generator": "NOT_RUN",
+        "metadata": "NONE"
+      },
+      {
+        "sha": "6d2ffd777cbfa18d495ef9a0abb35b54ef996286",
+        "run": 40835280584,
+        "job": 123318495974,
+        "stage": "source control receipt bytes guard",
+        "exit": 1,
+        "cause": "Root updated diagnostic receipt but not embedded bytes/hash/ticket specification; stopped before install; fixed exact metadata in548de959, no relaxed guard"
+      },
+      {
+        "sha": "548de959f08527d2e74db19482e34d9faa1145a0",
+        "run": 40835481411,
+        "job": 123319135038,
+        "stage": "filtered server dependency download",
+        "exit": 124,
+        "seconds": 480,
+        "source_verified_files": 2065,
+        "source_verified_bytes": 50177753,
+        "frozen_inputs_unchanged": true,
+        "generator": "NOT_RUN",
+        "metadata": "NONE",
+        "resource": "512MiB/swap0; peak511.5MiB; no hooks",
+        "note": "Filtered diagnostic not full dependencies; inherited mirror lock URLs. Do not repeat same install chain without meaningful new plan."
+      }
+    ],
+    "next": "Develop bounded minimal generator dependency preparation using exact original pinned lock/integrity (kit0.31.10/orm0.45.2), private cache/copyfile/nohooks and unchanged Source. Do not change identity/network/credentials, widen time or resource bounds, fakeDATABASE_URL, or handwrite snapshot claiming generator proof. Real generation may expose many pending schema changes; reconcile fullSQL/snapshot/journal, never adopt handSQL paired to unrelated generated fullsnapshot."
+  },
+  "external_collaboration": {
+    "OpenCode": "HUMAN_PAUSED; never restart/change model/quota retry until direct resume.",
+    "WorkBuddy": "Latest contract report ead73ef0-1350-4796-95ff-b40ff7e564d2 received; needs conservative lost/unknown corrections. Native app/local board not available when Windows off; cloud reviewers take responsibility, do not impersonate client.",
+    "Qoder": "Prior Source claims based on WebFetch paraphrase were false, formally retracted8f6ad3f1…; keep real index blobf53d3f69 queue release10s+max attempts abandon. Latest39802ca9… is DESIGN ONLY, not Source proof. Cloud takeover doesn't keep native models alive.",
+    "board": "127.0.0.1:4317 is local, not cloud. No tokens/transports migrated. Do not use it as cloud dependency.",
+    "ack_policy": "Never result equality alone→committed or NULL→safe replay. New txn must prove originaltxn ended, real authority, tenant scope, parent/seed/fullidentity/result/disposition/legalstatus/final requiredatomiccompletion+audit. Missing/invisible/uncertain→unknown orblocked; noautomatictool/prepare replay. CPU fakes only contract evidence."
+  },
+  "image_and_native_gaps": {
+    "pg_version": "Dockerfile/s6/migrate/smoke hardcode16; composepg17 doesn't prove monolithic imagePG17.",
+    "docker_resources": "No evidence daemon/BuildKit/containers same aggregate. Do NOT execute Docker/buildx/apt using4GiBfrontendexception.",
+    "eight_gets": [
+      "/api/tasks",
+      "/api/models",
+      "/api/quota",
+      "/api/devices",
+      "/api/waker-groups",
+      "/api/group-pipelines/templates",
+      "/api/personas",
+      "/api/agents/general-assistant/autonomous"
+    ],
+    "other_assertions": "capabilities200,API/missing404,HTML+mainJS200/branding. Formal index starts ROLE_WRITER DB lifecycle/RLS beforelisten; mockhealth isn't sameprocessproof.",
+    "native": "Actual nested openbot/.github/workflows/desktop.yml is mac/windows/linux Tauri build+artifacts, not active rootworkflow; resources uncontained, no new native exception. No publish-release workflow (pushesoldcopilotkitGHCR/tags/releases)."
+  },
+  "cloud_ownership": {
+    "coordinator": "Only cloud coordinator may update canonical, queue resource jobs, integrate approved packages, reconcile full original77/18/7.",
+    "review_persistence": "Cloud independent reviewer owns seed3 initial/full5metadata+pg-result2Source audit; no Subject execution or canonical writes.",
+    "review_delivery": "Cloud independent reviewer owns volume4Source+route administrative budget review/8GET/native gap; no execution/canonical writes.",
+    "coordination": "Use GitHub cloud checkpoints/review records, not localhost. Each reviewer may save own administrative review branch; coordinator waits exact SHA non-author verdict. No two writers samefile. If creatingmorecloudsubagents, disjoint ownership and read-onlyreviews do not authorizeextraresourcejobs.",
+    "continuity": "Cloud creation/queued status isn't executionproof. First cloud worker must confirm cloud tool execution/access. If no execution/connector capability, record exact blocker without paid workaround; do not falsely claim migration or complete."
+  }
+}
