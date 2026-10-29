@@ -1,0 +1,176 @@
+{
+  "schema": "a11-delegated-a3-independent-admin-review/v2",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
+  "parent": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
+  "tree": "8757211b59435c16be9eef6effe21c7b3908b0b0",
+  "verdict": "ADMIN_PURE_CONTROL_DELEGATED_PROTOTYPE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/a11-offline-data-verify.yml",
+      "mode": "100644",
+      "blob": "e0081534b58d8cf4fd09808ef4bbc4da1bad0054",
+      "bytes": 5369,
+      "computed_bytes": 5369,
+      "sha256": "cfa92bc7296201a6405f36459757061c8c01cb1bd2767cc4c28858e623b23eae",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "mode": "100644",
+      "blob": "a4ca639f6706744477ecf79bf58a2d6917cff231",
+      "bytes": 18029,
+      "computed_bytes": 18029,
+      "sha256": "faa5b8f05b950b97fd5320456ba1cfd46bb0d923c0c1f77efe67d3708abcf312",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+      "mode": "100644",
+      "blob": "5492977fb83daece41b2ae1ce178743e509b15d0",
+      "bytes": 8101,
+      "computed_bytes": 8101,
+      "sha256": "01e230415b25869f7decd828cac0e81c6c7bba2df4583c2bfb6903a544f22121",
+      "full_read": true
+    }
+  ],
+  "finding_closure": [
+    {
+      "id": "A11-A3-P2-OWNED-CGROUP-TRAVERSAL-AFTER-DROP",
+      "prior_candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
+      "prior_review_commit": "44d76b2c9b530c67b931f950bffd2b0c6cfb8027",
+      "status": "RESOLVED_STATICALLY_NOT_RUNTIME_PROVEN",
+      "actual_delta": "Owned target/admin/noop dirs0755 UID0 exactmode, controls UID0 no022, snapshot actual uid/gid/mode; managed root traversal/no-write gate; irreversible drop and postdrop3-level resource readback retained."
+    }
+  ],
+  "scope": {
+    "only_three_admin_modified": true,
+    "Source_changes": 0,
+    "no_canonical_lease_jobs_Page_automation_changes": true,
+    "no_token_original_log_network_codec_Subject_in_controller": true,
+    "no_original_managed_slice_oom_write": true,
+    "bootstrap_admin_code_fetch_only": true,
+    "prototype_not_project_migration_authority": true
+  },
+  "static_review": {
+    "authority": {
+      "actual_service_Delegate_yes": true,
+      "actual_ControlGroup_exact_and_own_proc_membership": true,
+      "actual_user_delegate_xattr_byte1": true,
+      "xattr_absent_fail_no_fallback": true,
+      "service_delegation_not_slice": true,
+      "managed_service_root_resource_attributes_readonly": true,
+      "only_owned_descendants_and_documented_root_procs_subtreecontrol_written": true
+    },
+    "structure": {
+      "service64_covers_initial_controller_management_fork_descendants": true,
+      "root_process_moves_bootstrap_before_memory_subtree_enable": true,
+      "root_direct_procs_empty_verified": true,
+      "target_empty_before_memory_subtree_enable": true,
+      "target64_admin16_noop48_nested_caps_not_additive": true,
+      "child_fork_moved_proc_verified_before_epoch_permit": true,
+      "child_irreversible_UID_GID_groups_drop_postdrop_limits": true,
+      "writer_stays_target_admin_during_final_restore": true,
+      "no_unprivileged_control_write": true
+    },
+    "lifecycle": {
+      "Type": "oneshot",
+      "RemainAfterExit": true,
+      "normal_systemd_run_waits_startjob": true,
+      "no_wait_pipe_deactivation_wait": true,
+      "explicit_TimeoutStartSec_from_original_remaining": true,
+      "no_ineffective_oneshot_RuntimeMaxSec": true,
+      "inner": 120,
+      "outer": 150,
+      "t0_before_start": true,
+      "owned_kill_reap_empty_remove_restore_records_same_deadline": true,
+      "only_own_fork_and_empty_owned_groups_removed": true,
+      "no_daemon_or_holder": true,
+      "final_requires_active_exited_MainPID0_ControlPID0_noJob_ExecMainStatus0": true
+    },
+    "witness": {
+      "root_target_admin_actual_pop0_zero_direct_PIDs": true,
+      "same_root_target_devino": true,
+      "root_target64_admin16_actual_limits": true,
+      "noop_bootstrap_removed": true,
+      "readonly_preassert_actual_output": true,
+      "original_deadline_completion_mandatory": true,
+      "legacy_project512_0_1_shared64_0_1_bothpop0_independent": true,
+      "legacy_failure_forces_overall_FAILED_OR_UNKNOWN": true,
+      "prototype_success_not_legacy_restore": true
+    }
+  },
+  "official_contracts_verified": [
+    {
+      "url": "https://systemd.io/CGROUP_DELEGATION/",
+      "basis": "Delegation only service/scope; manager owns unit attributes, delegate owns descendants; user.delegate xattr1; leaf before memory subtree."
+    },
+    {
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+      "basis": "Inclusive descendant resource hierarchy and no internal process domain control; migration retains ancestor cap."
+    },
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
+      "basis": "oneshot start completion follows main exit; RemainAfterExit logical active; TimeoutStartSec bounds startup, RuntimeMaxSec not oneshot."
+    },
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd-run.html",
+      "basis": "Normal invocation waits startjob; --wait/--pipe wait deactivation and are absent."
+    }
+  ],
+  "evidence_level": {
+    "fullfile_read_independent_UTF8bytes_SHA256_blob_mode_compare": true,
+    "project_control_codec_execution": false,
+    "YAML_Python_parser_compile_tests": false,
+    "DATA_PASS": false,
+    "old_slice_restoration": false,
+    "Source_migration_PG_approval": false
+  },
+  "runtime_unproven": [
+    "Actual runner Delegate/xattr/controller availability and kernel permissions; absent/unsupported fails no fallback.",
+    "Actual admin16 headroom/fork/noop48/root64 aggregate/owned permissions and postdropreadback.",
+    "Deployed oneshot startjob completion/active(exited)/zeroPIDs; actual sameidentity retained subgroups/pop0.",
+    "Legacy managed slice gates unchanged; failure remains explicit regardless prototype."
+  ],
+  "history": {
+    "d876_aggregate_finding": "33619a9e61c7d1ffd8b8b5552d3d531dce58e0ae",
+    "raw6733_identity_verified_overall_unknown": "bd35da76ba9472a214dec6ab6067e9cd2461e65b",
+    "a2_sameinode_oom0_exactrun_only": "d562f75b8110fa3e1160494185f088542661650b",
+    "d068_permission_finding": "44d76b2c9b530c67b931f950bffd2b0c6cfb8027"
+  },
+  "dispatch": {
+    "max": 1,
+    "branch": "codex/a11-data-verify-run-20261030-a3",
+    "event": "push",
+    "exact_repo_ref_event_guard": true,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "requires": [
+      "Persist exact report",
+      "Current valid corrected executor owner/epoch lease",
+      "Fresh idle queue",
+      "Ref/run dedup reuse existing run",
+      "Exact unchanged candidate"
+    ],
+    "forbidden": [
+      "Project/Subject migration",
+      "DATA codec rerun",
+      "Raw exports persistence",
+      "Legacy gate removal or repair-by-label",
+      "Resource enlargement",
+      "Unchanged retry"
+    ]
+  },
+  "next_action": "Coordinator may consider one exact pureCONTROL a3 prototype push. Read full actual delegate/unit/owned root/target/admin/legacy snapshots and all booleans. Original gates remain independent; any future project-controller migration requires separate reviewed package.",
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  }
+}
