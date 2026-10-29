@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "AUTHOR_TERMINAL_FAILFAST_PREPARED_PENDING_NONAUTHOR_REVIEW_NOT_FINAL_GATE_FIX",
+  "status": "STATIC_FAILFAST_REPAIR_ONLY_NOT_PROJECT_DISPATCHABLE",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
@@ -232,7 +232,7 @@
   },
   "author_preparation": {
     "scope": "Exactly two administrative files from576d on exclusive terminal-failfast prep branch. No canonical/lease/Source/jobs/Page/automation changes.",
-    "status": "AUTHOR_TERMINAL_FAILFAST_PREPARED_PENDING_NONAUTHOR_REVIEW_NOT_FINAL_GATE_FIX",
+    "status": "STATIC_FAILFAST_REPAIR_ONLY_NOT_PROJECT_DISPATCHABLE",
     "workflow": {
       "bytes": 145312,
       "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439",
@@ -726,6 +726,8 @@
     "execution_branch_created": false,
     "execution_authorized_by_this_plan": false,
     "independent_review": "PENDING_EXACT_CANDIDATE",
-    "runtime": "NOT_RUN"
+    "runtime": "NOT_RUN",
+    "status": "STATIC_FAILFAST_REPAIR_ONLY_NOT_PROJECT_DISPATCHABLE",
+    "prior_dispatch_approval_not_reused": true
   }
 }
