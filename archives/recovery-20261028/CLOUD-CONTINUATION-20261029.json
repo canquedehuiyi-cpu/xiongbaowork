@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T17:07:55.562Z",
+  "checkpoint_update_at": "2026-10-29T17:13:28.082Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4418,6 +4418,12 @@
       "conclusion": "failure",
       "missing_witness": "External unit ControlGroup was empty. Current witness only resolves cgroup from that property, so root/target/admin null means NOT_READ_PATH_UNRESOLVED, not proved absent/pruned/populated0.",
       "overall": "FAILED_OR_UNKNOWN_NOT_ACCEPTED"
+    },
+    "runtime_nonauthor": {
+      "commit": "56a0ecab246500f37ca6ed33cdfa1c2c8b8cf949",
+      "path": "archives/recovery-20261028/A11-DELEGATED-8A08-RUNTIME-NONAUTHOR-20261030.json",
+      "blob": "495a7b63069e69dccabe77f25f1ff57bf65f512e",
+      "root_null_is_not_absence": true
     }
   },
   "current_cloud_coordinator": {
@@ -4427,5 +4433,44 @@
     "state": "held",
     "expires_at": "2026-10-29T17:45:04.986Z",
     "authority": "Explicit normal human executor delegation and fresh lease CAS; not hosted caller binding."
+  },
+  "cloud_a11_delegated_fixedpath": {
+    "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+    "status": "NONAUTHOR_PURE_CONTROL_FIXED_PATH_EVIDENCE_APPROVED_NOT_RUN",
+    "review_commit": "9deaf7fa5e6dc0c8b011d9d709c0339400dc16d5",
+    "review_path": "archives/recovery-20261028/A11-DELEGATED-A4-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "562c3965c848fe7c1b3094354fe3cc576c67d0a5",
+    "files": [
+      {
+        "path": ".github/workflows/a11-offline-data-verify.yml",
+        "mode": "100644",
+        "blob": "e15175b65f412b7fff872af98b270f138c24129b",
+        "bytes": 5378,
+        "computed_bytes": 5378,
+        "sha256": "269f88eb3cb0d22f55e310f446f57f5ecef09339f957b5caa4042a08871b9af8",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+        "mode": "100644",
+        "blob": "6d1bafa73a42ee105c282e77d9dede2d7ee508fa",
+        "bytes": 20519,
+        "computed_bytes": 20519,
+        "sha256": "ffb8820e4fd1d5581ea4aec9b252559b5c808e31420bd229a90ca68a4cdc2ca7",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+        "mode": "100644",
+        "blob": "9c7ad2b83a98c41ffdfd7f90c514ef93172de147",
+        "bytes": 12525,
+        "computed_bytes": 12525,
+        "sha256": "d967347d2a7d4b9f20305d7a8fe31281668a4f9cc069a4fcfe9389555c042b0e",
+        "full_read": true
+      }
+    ],
+    "execution_branch": "codex/a11-data-verify-run-20261030-a4",
+    "legacy_gate_not_replaced": true,
+    "Source_adopted": false
   }
 }

@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
   "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
   "acquired_at": "2026-10-29T17:00:04.986Z",
-  "renewed_at": "2026-10-29T17:07:55.562Z",
+  "renewed_at": "2026-10-29T17:13:28.082Z",
   "expires_at": "2026-10-29T17:45:04.986Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T17:00:04.986Z"
   },
-  "next_action": "Author minimal readonly witness successor validates recorded rootowned terminal root_cgroup against fixed exact run/parent path, probes that same prior path independently even if ControlGroup empty, records actual exists/devino/limits/pop0 before judging. New exact nonauthor review and purecontrol branch; never same a3 retry. Do not claim physical pruning or external impossibility from null fields.",
+  "next_action": "Once pureCONTROL fixedpath evidence a4 after fresh unique lease/idlequeue/exactref-rundedup; never project/codec/rerunoldcandidate.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
