@@ -1,0 +1,723 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40793547635,
+  "job": 123184357410,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "86cb69b9e8c2b0c7958221f15cebe6888671992c",
+    "head": "8b43317ba6d7343dcb154e820ca036e205601d73",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "8b43317ba6d7343dcb154e820ca036e205601d73",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": {
+    "pass": 342,
+    "fail": 2,
+    "skip": 7,
+    "expects": 1420
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 510M (swap: 0B)",
+    "Memory peak: 6.7M (swap: 0B)",
+    "Memory peak: 240.6M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 6.5M (swap: 0B)",
+    "Memory peak: 184.9M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 253.1M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Existing protocol, instruction/history, supervisor pure functions, own temporary Git desktop-version fixtures, metadata and offline adapter contracts. Not nativePG, real providers, actual user device, production image or complete77/18/7.",
+  "plan": {
+    "schema": "xiongbaowork-remaining-protocol-test-plan/1",
+    "source_commit": "20515cbf3fc4136759c647f11e9f507daf3972b3",
+    "selection": [
+      {
+        "path": "agent-bot/tests/history.test.ts",
+        "bytes": 11811,
+        "sha256": "efa8a55d5f14de9b375ecda0c3158805dd55a130e72f5d3d07ae50200909424e",
+        "flags": []
+      },
+      {
+        "path": "agent-langgraph/tests/deltas.test.ts",
+        "bytes": 2443,
+        "sha256": "7b0e463aa692f75941ab2680518016859b9798dbc6809f107795caeacec59d79",
+        "flags": []
+      },
+      {
+        "path": "agent-langgraph/tests/google-oauth-proxy.test.ts",
+        "bytes": 3873,
+        "sha256": "2f68e072e3af3c87331cf7642aedd4dd78388ee6953b14c67ae968962322189f",
+        "flags": []
+      },
+      {
+        "path": "agent-langgraph/tests/history.test.ts",
+        "bytes": 12712,
+        "sha256": "49bc729d9e5d5077dcca5841118edacbe2d32408b4ce2efaa3bf0aa5e7c2d364",
+        "flags": []
+      },
+      {
+        "path": "agent-langgraph/tests/model-options.test.ts",
+        "bytes": 1860,
+        "sha256": "9ba5b51b622fbd66ddb185633da9b22cb6c54fd7145298de44378146ce5d083c",
+        "flags": []
+      },
+      {
+        "path": "agent-langgraph/tests/stream.test.ts",
+        "bytes": 8373,
+        "sha256": "79c7c8cec55c8e017524874091611d4a13d573ea8b659558ef5342c718b85001",
+        "flags": []
+      },
+      {
+        "path": "agent-langgraph/tests/tool-answer.test.ts",
+        "bytes": 2403,
+        "sha256": "9c4d8c7d11e87af0cc4bb77694ac10989468664ba13e28a090d865e9875de19d",
+        "flags": []
+      },
+      {
+        "path": "desktop/scripts/desktop-version.test.ts",
+        "bytes": 6776,
+        "sha256": "d4edf58599a8d0551fb14458c5e48d4ce273e11723c90db4ec4340958775c996",
+        "flags": []
+      },
+      {
+        "path": "desktop/src/telemetry.test.ts",
+        "bytes": 2273,
+        "sha256": "94590b5ca230aee311bff12fce27593c8e65b5fd629794ed762c809b31120c8a",
+        "flags": []
+      },
+      {
+        "path": "supervisor/tests/authorisation.test.ts",
+        "bytes": 1121,
+        "sha256": "72fa4c8cb646709bf60eff74570db796e3ad3a28257a765fc1d97e351c6c389c",
+        "flags": []
+      },
+      {
+        "path": "supervisor/tests/computer-memory-bytes.test.ts",
+        "bytes": 1100,
+        "sha256": "9c239db15184b65318d6816d64987e232bba9eb9dd0c6c6ca7b7c466b2fb5c88",
+        "flags": []
+      },
+      {
+        "path": "supervisor/tests/environment-hardening.test.ts",
+        "bytes": 1411,
+        "sha256": "30be64af28c039b27926602cc44dd8bfa2ae2992f6fa85eaddba0367548c77be",
+        "flags": []
+      },
+      {
+        "path": "supervisor/tests/environment.test.ts",
+        "bytes": 802,
+        "sha256": "2a5e493704e7b49abf84d92f12f2bf5963feac21e5f618c347a38f519e77cc35",
+        "flags": []
+      },
+      {
+        "path": "supervisor/tests/listen-port.test.ts",
+        "bytes": 1211,
+        "sha256": "a5c908c4630486231d5bc727723a164140a4b0610654d319e3c59f625a6e7fcb",
+        "flags": []
+      },
+      {
+        "path": "supervisor/tests/names.test.ts",
+        "bytes": 3737,
+        "sha256": "3fc6b075f6c2817d5b6c0f142e4c73e98a9dc868757ad869309505d384d27fe5",
+        "flags": []
+      },
+      {
+        "path": "server/tests/composio-adapter.test.ts",
+        "bytes": 341453,
+        "sha256": "dc1866b773a4f88ae0fddefd047b9038f7e5e1c4b7067965df336fa764561e9f",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/profile-launch-options.test.ts",
+        "bytes": 2539,
+        "sha256": "c7f4c98b3e99dc9cce188f16adc133e441ef4223e30436749e6a9dc503b014d7",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/session-cookies.test.ts",
+        "bytes": 6118,
+        "sha256": "e02a4f97dacd3b1bc49158107e863d162d79f62021cf9d478a9bbe02af332b9a",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/sign-in.test.ts",
+        "bytes": 6866,
+        "sha256": "2d5d5c965fb04cc403b3e3f8defd8fca9dbb382890847404aa61514bd309d8cb",
+        "flags": []
+      },
+      {
+        "path": "agent-mastra/src/mastra/index.test.ts",
+        "bytes": 16723,
+        "sha256": "b1f6ebb01742c4a749a46df2935324c94b5ad8552d9ec8960add8b973035b78d",
+        "flags": []
+      }
+    ],
+    "standalone_full_frozen_inputs": {
+      "agent_langgraph": [
+        {
+          "relative": "bun.lock",
+          "identity": {
+            "path": "openbot/agent-langgraph/bun.lock",
+            "bytes": 9495,
+            "sha256": "6944d96feaea519eeab72e684eecb0790e9830d36b0bec4444cc5352594ae14f",
+            "mode": "0o644"
+          }
+        },
+        {
+          "relative": "package.json",
+          "identity": {
+            "path": "openbot/agent-langgraph/package.json",
+            "bytes": 462,
+            "sha256": "6ab00e35de8944063b7f72443d657cce6f28154005b040567d0e62699edd6a9d",
+            "mode": "0o644"
+          }
+        }
+      ],
+      "agent_computer": [
+        {
+          "relative": "bun.lock",
+          "identity": {
+            "path": "openbot/agent-computer/bun.lock",
+            "bytes": 14792,
+            "sha256": "4fcea0c095a3bbb7f97b7a50dc12fe607d3ac0cad9f978c452eb30df0d913fc1",
+            "mode": "0o644"
+          }
+        },
+        {
+          "relative": "package.json",
+          "identity": {
+            "path": "openbot/agent-computer/package.json",
+            "bytes": 376,
+            "sha256": "125178cc2bd920cd6b992c1356f03190fff6e9f8e264a7831dfc969c6117f3a2",
+            "mode": "0o644"
+          }
+        }
+      ]
+    },
+    "install_policy": "Full existing declared locks only, no new versions/lock changes, ignore all lifecycle scripts, private cache/copyfile; install512MiB and module copy64MiB; no browser downloads.",
+    "mastra_policy": "No own standalone lock exists, so no Mastra install or fresh resolution is attempted. Its unit module uses only SDKs already resolved in frozen root lock; production standalone Mastra deployment remains unverified.",
+    "composio_adapter_exception": "File's LIVE marker is explanatory text. fakeVendor defaults refuse, class prototypes restored, global fetch recorder rejects; telemetry and version checks disabled. Actual Composio live file not run.",
+    "mixed_browser_tests": "Run only original ungated parsing/cookie cases; no OPENBOT_COMPUTER_BROWSER/live flags set. Retain/report skips; never call these a real-browser pass.",
+    "scope": "Existing protocol, instruction/history, supervisor pure functions, own temporary Git desktop-version fixtures, metadata and offline adapter contracts. Not nativePG, real providers, actual user device, production image or complete77/18/7.",
+    "resources": {
+      "project_and_all_descendants": 536870912,
+      "swap": 0,
+      "data_copy": 67108864,
+      "install": 536870912,
+      "uses2GiB": false
+    },
+    "windows_source_writes": 0,
+    "source_changes": 0,
+    "paid_provider_calls": 0,
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "first_attempt": {
+      "run": 40792836035,
+      "workflow_commit": "89df451ebd488f817144e69d9cca16588bfcdba7",
+      "conclusion": "failure",
+      "jobs": 0,
+      "subject_tests_run": 0,
+      "dependency_installs": 0,
+      "root_control_error": "Duplicate standalone_agent_bot_install step IDs from template reuse; no Subject test or Source defect established.",
+      "check_annotations": "Not retrieved; one unsupported/empty connector response produced JSON parse error; not an authentication diagnosis."
+    },
+    "r2_control_fix": "Only unique LangGraph/computer installer IDs plus new branch routing. Same original test selection/assertions/Source SDK inputs/resource gates; first result retained."
+  },
+  "source_commit": "20515cbf3fc4136759c647f11e9f507daf3972b3",
+  "protocol": {
+    "exit_code": 1,
+    "expected_files": 20,
+    "completed_files": 20,
+    "files": [
+      {
+        "path": "agent-bot/tests/history.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 22
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-langgraph/tests/deltas.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 9
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-langgraph/tests/google-oauth-proxy.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-langgraph/tests/history.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 38
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-langgraph/tests/model-options.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 21
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-langgraph/tests/stream.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 27
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-langgraph/tests/tool-answer.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 11
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "desktop/scripts/desktop-version.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 22,
+          "fail": 0,
+          "skip": 0,
+          "expects": 62
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "desktop/src/telemetry.test.ts",
+        "exit_code": 1,
+        "counts": {
+          "pass": 0,
+          "fail": 1,
+          "skip": 0,
+          "expects": 0
+        },
+        "summary_present": true,
+        "valid_pass": false,
+        "error_summary": [
+          "1"
+        ]
+      },
+      {
+        "path": "supervisor/tests/authorisation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 11
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "supervisor/tests/computer-memory-bytes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "supervisor/tests/environment-hardening.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "supervisor/tests/environment.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 2
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "supervisor/tests/listen-port.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "supervisor/tests/names.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 30
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/composio-adapter.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 233,
+          "fail": 0,
+          "skip": 0,
+          "expects": 1128
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/profile-launch-options.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 19
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/session-cookies.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 2,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/sign-in.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 5,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-mastra/src/mastra/index.test.ts",
+        "exit_code": 1,
+        "counts": {
+          "pass": 0,
+          "fail": 1,
+          "skip": 0,
+          "expects": 0
+        },
+        "summary_present": true,
+        "valid_pass": false,
+        "error_summary": [
+          "1"
+        ]
+      }
+    ],
+    "totals": {
+      "pass": 342,
+      "fail": 2,
+      "skip": 7,
+      "expects": 1420
+    },
+    "batch_timeout": 600,
+    "per_file_timeout": 60,
+    "per_test_timeout_ms": 5000,
+    "runtime": "Bun1.3.14",
+    "original_preloads": "UNCHANGED_TWO",
+    "original_strict_ci": "NOT_RUN",
+    "original400_floor": "UNCHANGED_NOT_USED_AS_A_SUBSTITUTE",
+    "postgres17": "PG_PENDING",
+    "real_provider": "NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_langgraph_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "8b43317ba6d7343dcb154e820ca036e205601d73",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 10695,
+      "symlinks": 3,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_langgraph_module_copy": {
+    "regular_files": 10695,
+    "symlinks": 3,
+    "hardlink_files": 0,
+    "all8_source_package_lock_inputs_unchanged": true,
+    "backend": "copyfile",
+    "copy_limit": 67108864,
+    "node_modules_only": true,
+    "no_source_edits": true
+  },
+  "agent_computer_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "8b43317ba6d7343dcb154e820ca036e205601d73",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 2706,
+      "symlinks": 6,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_computer_module_copy": {
+    "regular_files": 2706,
+    "symlinks": 6,
+    "hardlink_files": 0,
+    "all8_source_package_lock_inputs_unchanged": true,
+    "backend": "copyfile",
+    "copy_limit": 67108864,
+    "node_modules_only": true,
+    "no_source_edits": true
+  },
+  "failure_logs": [
+    {
+      "path": "desktop/src/telemetry.test.ts",
+      "lines": 15,
+      "tail100": [
+        "bun test v1.3.14 (0d9b296a)",
+        "",
+        "",
+        "desktop/src/telemetry.test.ts:",
+        "",
+        "# Unhandled error between tests",
+        "-------------------------------",
+        "error: Cannot find module '@tauri-apps/api/core' from '/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/desktop/src/telemetry.ts'",
+        "-------------------------------",
+        "",
+        "",
+        " 0 pass",
+        " 1 fail",
+        " 1 error",
+        "Ran 1 test across 1 file. [204.00ms]"
+      ],
+      "failure_headers": []
+    },
+    {
+      "path": "agent-mastra/src/mastra/index.test.ts",
+      "lines": 15,
+      "tail100": [
+        "bun test v1.3.14 (0d9b296a)",
+        "",
+        "",
+        "agent-mastra/src/mastra/index.test.ts:",
+        "",
+        "# Unhandled error between tests",
+        "-------------------------------",
+        "error: Cannot find module '@mastra/core/agent' from '/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/agent-mastra/src/mastra/index.ts'",
+        "-------------------------------",
+        "",
+        "",
+        " 0 pass",
+        " 1 fail",
+        " 1 error",
+        "Ran 1 test across 1 file. [201.00ms]"
+      ],
+      "failure_headers": []
+    }
+  ],
+  "prior_controller_error": {
+    "run": 40792836035,
+    "status": "WORKFLOW_REJECTED_DUPLICATE_STEP_ID",
+    "jobs": 0,
+    "project_execution": "NOT_STARTED",
+    "root_error_preserved": true,
+    "corrected_by_run": 40793547635
+  },
+  "later_desktop_dependency_resolution": {
+    "run": 40794975287,
+    "job": 123189125522,
+    "telemetry_tests": {
+      "pass": 5,
+      "fail": 0,
+      "expects": 14
+    },
+    "original_desktop_typecheck": 0,
+    "does_not_rewrite_original_failed_protocol_run": true
+  },
+  "remaining_import_failure": {
+    "path": "agent-mastra/src/mastra/index.test.ts",
+    "missing": "@mastra/core/agent",
+    "original_own_lock": "ABSENT_FROM_COMPLETE_CURRENT_SOURCE_MANIFEST",
+    "unfrozen_wildcard_resolution": "NOT_PERFORMED",
+    "test_assertions_registered": "NOT_PROVED"
+  }
+}

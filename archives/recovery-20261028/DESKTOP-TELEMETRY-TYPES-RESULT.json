@@ -1,0 +1,217 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40794975287,
+  "job": 123189125522,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "df51c89122a17b4cf3261f01405da9bb1ff58ae6",
+    "head": "c8248d243b15b7666957bb1e7c0f29de2b88ac19",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "c8248d243b15b7666957bb1e7c0f29de2b88ac19",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": null,
+  "tests": {
+    "pass": 5,
+    "fail": 0,
+    "skip": 0,
+    "expects": 14,
+    "test_files": 1
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 511.9M (swap: 0B)",
+    "Memory peak: 7.2M (swap: 0B)",
+    "Memory peak: 316.1M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 315.4M (swap: 0B)",
+    "Memory peak: 17.5M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Install full existing desktop lock privately then original telemetry unit and full original desktop tsc. Separately run original app Bun/Vite build script content after original generator configured for existing qoderwake tenant. No database/server/model/provider/native Tauri/Windows deployment.",
+  "plan": {
+    "schema": "xiongbaowork-desktop-and-frontend-plan/1",
+    "source_commit": "20515cbf3fc4136759c647f11e9f507daf3972b3",
+    "desktop_original_lock_inputs": [
+      {
+        "relative": "bun.lock",
+        "identity": {
+          "path": "openbot/desktop/bun.lock",
+          "bytes": 38019,
+          "sha256": "e203b6184e804d403131a7a770a95fde8b87a618a07e017958c0e3a7222b9d27",
+          "mode": "0o644"
+        }
+      },
+      {
+        "relative": "package.json",
+        "identity": {
+          "path": "openbot/desktop/package.json",
+          "bytes": 670,
+          "sha256": "c134089d9dadc580c75b71156d13c59b24696517bc492ea4788a23b336add836",
+          "mode": "0o644"
+        }
+      }
+    ],
+    "scope": "Install full existing desktop lock privately then original telemetry unit and full original desktop tsc. Separately run original app Bun/Vite build script content after original generator configured for existing qoderwake tenant. No database/server/model/provider/native Tauri/Windows deployment.",
+    "resources": {
+      "project_and_descendants": 536870912,
+      "swap": 0,
+      "data_copy": 67108864,
+      "install": 536870912,
+      "uses_prior2GiB": false,
+      "frontend_build_timeout": 300
+    },
+    "source_postbuild": "Record tracked Source byte changes rather than silently adopting generator edits; ignored appconfig/dist are cloud build artifacts.",
+    "frozen_inputs": true,
+    "lifecycle_scripts": "INSTALL_HOOKS_DISABLED_ORIGINAL_GENERATOR_EXPLICIT",
+    "privatecache": true,
+    "copyfile": true,
+    "windows_source_writes": 0,
+    "paid_provider_calls": 0,
+    "postgres17": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "source_commit": "c8248d243b15b7666957bb1e7c0f29de2b88ac19",
+  "run_overall": "FAILED_R1_FRONTEND_CONTROL_FILE_NOT_FOUND_BEFORE_BUILD",
+  "desktop_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "c8248d243b15b7666957bb1e7c0f29de2b88ac19",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 7191,
+      "symlinks": 15,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "desktop_module_copy": {
+    "regular_files": 7191,
+    "symlinks": 15,
+    "hardlink_files": 0,
+    "all8_source_package_lock_inputs_unchanged": true,
+    "backend": "copyfile",
+    "copy_limit": 67108864,
+    "node_modules_only": true,
+    "no_source_edits": true
+  },
+  "desktop_telemetry": {
+    "exit_code": 0,
+    "scope": "Original event-builder unit test only; no native Tauri or Windows",
+    "project_limit": 536870912,
+    "swap": 0
+  },
+  "desktop_typecheck": {
+    "exit_code": 0,
+    "command": "Original desktop package typecheck: tsc --noEmit",
+    "host_node": "v24.22.1",
+    "project_limit": 536870912,
+    "swap": 0,
+    "uses2GiB": false,
+    "native_client_deployment": "NOT_VERIFIED",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "telemetry_stderr": [
+    "",
+    "desktop/src/telemetry.test.ts:",
+    "(pass) harness telemetry admits catalogue enums and excludes URLs and unknown IDs [1.72ms]",
+    "(pass) openai subscription and API-key telemetry contain only closed categories [0.28ms]",
+    "(pass) anthropic subscription and API-key telemetry contain only closed categories [0.01ms]",
+    "(pass) a custom endpoint becomes a boolean without exporting its URL, model, or credentials [0.04ms]",
+    "(pass) a skipped model is explicit and unsupported providers are not exported [0.04ms]",
+    "",
+    " 5 pass",
+    " 0 fail",
+    " 14 expect() calls",
+    "Ran 5 tests across 1 file. [405.00ms]"
+  ],
+  "desktop_typecheck_stderr": [
+    "$ tsc --noEmit"
+  ],
+  "frontend_r1": {
+    "status": "ROOT_CONTROLLER_FILE_NOT_FOUND_BEFORE_BUNDLER",
+    "assumed_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+    "actual_sparse_checkout": "Git object available but not checked out",
+    "bundler_started": false,
+    "source_project_build_verdict": "NOT_RUN",
+    "correction_run": 40795427951
+  }
+}
