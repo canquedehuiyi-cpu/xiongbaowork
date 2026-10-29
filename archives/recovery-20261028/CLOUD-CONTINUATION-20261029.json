@@ -977,9 +977,8 @@
     }
   },
   "cloud_generator_next": {
-    "status": "TSX_SINGLE_PACKAGE_METADATA_PREPARATION_PENDING_NONAUTHOR_REVIEW",
-    "next_action": "Single exact original lockedtsx4.23.12 metadata evidence only,include actualbin representation; do notguess/dropcheck/generalize/fullSource17rerun. Exact successor independent review before another justified execution.",
-    "Source_adopted": false
+    "status": "A9_EXACT_TSX_BIN_GUARD_AUTHOR_PREPARING_UNREVIEWED",
+    "next_action": "Exact identity TSX bin compatibility guard only; original URL/SRI/raw1601 hash/exactstring/exactlockcommandtarget; no generalized conversion or dropped checks. Non-author review before justified next generator execution."
   },
   "latest_bounded_round": {
     "ended_at": "2026-10-29T09:45:04.134Z",
@@ -3410,7 +3409,7 @@
   "cloud_tsx_metadata": {
     "candidate": "97c63f88dfeada5f7bf3a55afecf290542657ada",
     "tree": "a7037e7d34828f42293d9aec47e5f20d1ae4890c",
-    "status": "NONAUTHOR_APPROVED_NOT_YET_DISPATCHED",
+    "status": "PASS_SINGLE_LOCKED_TSX_PUBLIC_METADATA_EVIDENCE_ONLY",
     "review_path": "archives/recovery-20261028/CLOUD-TSX-METADATA-A1-NONAUTHOR-REVIEW-20261029.json",
     "files": [
       {
@@ -3437,7 +3436,16 @@
         "sha256": "c76ae24dcfa130867db9157a45e4dc7d7392dbf2b0d67a73c3e7a1d7b08ea3ff",
         "full_read": true
       }
-    ]
+    ],
+    "result": {
+      "path": "archives/recovery-20261028/CLOUD-TSX-METADATA-A1-RESULT.json",
+      "run": 40897218451,
+      "job": 123529510039,
+      "conclusion": "success",
+      "Source_acquired": false,
+      "native": "NOT_RUN",
+      "generator": "NOT_RUN"
+    }
   },
   "local_design_contract_inputs": {
     "received_at": "2026-10-29T14:57:50.165Z",

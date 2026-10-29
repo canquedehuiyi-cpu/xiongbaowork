@@ -1,0 +1,512 @@
+{
+  "schema": "xiongbaowork-tsx-metadata-independent-execution-review-v1",
+  "reviewer": "/root/a6_review",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "97c63f88dfeada5f7bf3a55afecf290542657ada",
+  "run": 40897218451,
+  "job": 123529510039,
+  "run_attempt": 1,
+  "event": "push",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-29T15:00:49Z",
+  "updated_at": "2026-10-29T15:00:58Z",
+  "verdict": "PASS_SINGLE_LOCKED_TSX_PUBLIC_METADATA_EVIDENCE_ONLY",
+  "decoded_job_log": {
+    "full_read": true,
+    "characters": 13594,
+    "utf8_bytes": 13596,
+    "sha256": "977d2920eba85659cb8d1b557e6daa3977fe32fe4efe895da3a00c9b37bec4c6",
+    "includes_leading_UTF8_BOM": true
+  },
+  "bootstrap": {
+    "bytes": 23961,
+    "sha256": "1b62216bbbdcdd99ab7690925a8381d0987836eba5f3978ac81321209e8c709a",
+    "passed": true
+  },
+  "actual_metadata": {
+    "SRI_verified_before_tar": true,
+    "Source_acquired": false,
+    "actual_original_value_spans": {
+      "bin": {
+        "bytes": 16,
+        "encoding": "exact original UTF8 JSON value span",
+        "sha256": "a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"
+      },
+      "dependencies": {
+        "bytes": 30,
+        "encoding": "exact original UTF8 JSON value span",
+        "sha256": "e36e0a6c186514c0ca8d308b70717eb194bdf3e00d5881871c24667d5d931bdf"
+      },
+      "name": {
+        "bytes": 5,
+        "encoding": "exact original UTF8 JSON value span",
+        "sha256": "8266f2f87e1a0b7dbbb214f36a2fd77db60961ca064e7f65be262aa36df53a8d"
+      },
+      "optionalDependencies": {
+        "bytes": 30,
+        "encoding": "exact original UTF8 JSON value span",
+        "sha256": "9ad22ed265e247dc344d70a511ddfcac8084fcf294f6c3ecaf0115d82f03d497"
+      },
+      "version": {
+        "bytes": 9,
+        "encoding": "exact original UTF8 JSON value span",
+        "sha256": "feaa33c0586ee34622d8bc8a1425e423e51e55e2df4636852c701bdb8711908a"
+      }
+    },
+    "actual_public_fields": {
+      "bin": "./dist/cli.mjs",
+      "cpu": {
+        "absent": true
+      },
+      "dependencies": {
+        "esbuild": "~0.28.0"
+      },
+      "name": "tsx",
+      "optionalDependencies": {
+        "fsevents": "~2.3.3"
+      },
+      "os": {
+        "absent": true
+      },
+      "peerDependencies": {
+        "absent": true
+      },
+      "peerDependenciesMeta": {
+        "absent": true
+      },
+      "version": "4.23.12"
+    },
+    "archive_bytes": 187918,
+    "bin_representation": {
+      "actual_original_value_span": {
+        "bytes": 16,
+        "encoding": "exact original UTF8 JSON value span",
+        "sha256": "a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"
+      },
+      "actual_present": true,
+      "actual_type": "str",
+      "actual_value": "./dist/cli.mjs",
+      "lock_present": true,
+      "lock_type": "dict",
+      "lock_value": {
+        "tsx": "dist/cli.mjs"
+      },
+      "normalization_applied": false
+    },
+    "credentials_output": false,
+    "differences_do_not_authorize_dropping_checks": true,
+    "exact_declared_field_differences": [
+      {
+        "actual": "./dist/cli.mjs",
+        "kind": "value_difference",
+        "lock": {
+          "tsx": "dist/cli.mjs"
+        },
+        "path": "/bin"
+      },
+      {
+        "actual": true,
+        "kind": "actual_only",
+        "path": "/peerDependenciesMeta/absent"
+      }
+    ],
+    "generator_executed": false,
+    "lock_corresponding_fields": {
+      "bin": {
+        "tsx": "dist/cli.mjs"
+      },
+      "cpu": {
+        "absent": true
+      },
+      "dependencies": {
+        "esbuild": "~0.28.0"
+      },
+      "name": "tsx",
+      "optionalDependencies": {
+        "fsevents": "~2.3.3"
+      },
+      "os": {
+        "absent": true
+      },
+      "peerDependencies": {
+        "absent": true
+      },
+      "peerDependenciesMeta": {},
+      "version": "4.23.12"
+    },
+    "lock_field_origins": {
+      "bin": "original lock metadata field or explicit absent marker",
+      "cpu": "original lock metadata field or explicit absent marker",
+      "dependencies": "original lock metadata field or explicit absent marker",
+      "name": "derived from original locked pinned package name",
+      "optionalDependencies": "original lock metadata field or explicit absent marker",
+      "os": "original lock metadata field or explicit absent marker",
+      "peerDependencies": "original lock metadata field or explicit absent marker",
+      "peerDependenciesMeta": "derived optional-only representation from original lock optionalPeers; not a raw lock peerDependenciesMeta field",
+      "version": "derived from original locked pinned package version"
+    },
+    "name_version_match": true,
+    "native_executed": false,
+    "node": "tsx@4.23.12",
+    "original_default_empty_dictionary_comparisons": {
+      "dependencies": {
+        "differences": [],
+        "equal": true
+      },
+      "optionalDependencies": {
+        "differences": [],
+        "equal": true
+      },
+      "peerDependencies": {
+        "differences": [],
+        "equal": true
+      }
+    },
+    "original_lock_SRI": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+    "original_lock_metadata": {
+      "bin": {
+        "tsx": "dist/cli.mjs"
+      },
+      "dependencies": {
+        "esbuild": "~0.28.0"
+      },
+      "optionalDependencies": {
+        "fsevents": "~2.3.3"
+      }
+    },
+    "original_lock_url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+    "package_installed": false,
+    "package_json": {
+      "bytes": 1601,
+      "sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"
+    },
+    "safe_tar_declared_bytes": 534311,
+    "safe_tar_members": 50,
+    "scripts_output": false
+  },
+  "bin_representation": {
+    "actual_original_value_span": {
+      "bytes": 16,
+      "encoding": "exact original UTF8 JSON value span",
+      "sha256": "a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"
+    },
+    "actual_present": true,
+    "actual_type": "str",
+    "actual_value": "./dist/cli.mjs",
+    "lock_present": true,
+    "lock_type": "dict",
+    "lock_value": {
+      "tsx": "dist/cli.mjs"
+    },
+    "normalization_applied": false
+  },
+  "peer_meta_difference_interpretation": "/peerDependenciesMeta/absent comes from explicit absence serializer versus empty optionalPeers-derived map; no actualnew peer or dependency.",
+  "resource_evidence": {
+    "UID": 1001,
+    "descendant_UID": 1001,
+    "same_cgroup": "0::/xiongbaowork.slice/xb-tsx-metadata.service",
+    "own": 67108864,
+    "parent": 536870912,
+    "swap": 0,
+    "oom_group": 1,
+    "exit": 0,
+    "runtime": "1.162s",
+    "peak_verbatim": "Memory peak: 17M (swap: 0B)",
+    "controller_final": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0,
+      "remaining": 58.77616535400001
+    },
+    "always": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0,
+      "remaining": 7.999805136999999
+    }
+  },
+  "events": [
+    {
+      "event": "TSX_METADATA_RESOURCE",
+      "value": {
+        "own": {
+          "memory.max": "67108864",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "uid": 1001,
+        "descendant": {
+          "cgroup": "0::/xiongbaowork.slice/xb-tsx-metadata.service",
+          "uid": 1001,
+          "data": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          }
+        }
+      }
+    },
+    {
+      "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+      "value": {
+        "SRI_verified_before_extraction": true,
+        "bytes": 187918,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+        "original_lock_url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+        "package": "tsx@4.23.12"
+      }
+    },
+    {
+      "event": "TSX_BIN_REPRESENTATION_EVIDENCE",
+      "value": {
+        "actual_original_value_span": {
+          "bytes": 16,
+          "encoding": "exact original UTF8 JSON value span",
+          "sha256": "a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"
+        },
+        "actual_present": true,
+        "actual_type": "str",
+        "actual_value": "./dist/cli.mjs",
+        "lock_present": true,
+        "lock_type": "dict",
+        "lock_value": {
+          "tsx": "dist/cli.mjs"
+        },
+        "normalization_applied": false
+      }
+    },
+    {
+      "event": "TSX_PUBLIC_PACKAGE_METADATA_EVIDENCE",
+      "value": {
+        "SRI_verified_before_tar": true,
+        "Source_acquired": false,
+        "actual_original_value_spans": {
+          "bin": {
+            "bytes": 16,
+            "encoding": "exact original UTF8 JSON value span",
+            "sha256": "a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"
+          },
+          "dependencies": {
+            "bytes": 30,
+            "encoding": "exact original UTF8 JSON value span",
+            "sha256": "e36e0a6c186514c0ca8d308b70717eb194bdf3e00d5881871c24667d5d931bdf"
+          },
+          "name": {
+            "bytes": 5,
+            "encoding": "exact original UTF8 JSON value span",
+            "sha256": "8266f2f87e1a0b7dbbb214f36a2fd77db60961ca064e7f65be262aa36df53a8d"
+          },
+          "optionalDependencies": {
+            "bytes": 30,
+            "encoding": "exact original UTF8 JSON value span",
+            "sha256": "9ad22ed265e247dc344d70a511ddfcac8084fcf294f6c3ecaf0115d82f03d497"
+          },
+          "version": {
+            "bytes": 9,
+            "encoding": "exact original UTF8 JSON value span",
+            "sha256": "feaa33c0586ee34622d8bc8a1425e423e51e55e2df4636852c701bdb8711908a"
+          }
+        },
+        "actual_public_fields": {
+          "bin": "./dist/cli.mjs",
+          "cpu": {
+            "absent": true
+          },
+          "dependencies": {
+            "esbuild": "~0.28.0"
+          },
+          "name": "tsx",
+          "optionalDependencies": {
+            "fsevents": "~2.3.3"
+          },
+          "os": {
+            "absent": true
+          },
+          "peerDependencies": {
+            "absent": true
+          },
+          "peerDependenciesMeta": {
+            "absent": true
+          },
+          "version": "4.23.12"
+        },
+        "archive_bytes": 187918,
+        "bin_representation": {
+          "actual_original_value_span": {
+            "bytes": 16,
+            "encoding": "exact original UTF8 JSON value span",
+            "sha256": "a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"
+          },
+          "actual_present": true,
+          "actual_type": "str",
+          "actual_value": "./dist/cli.mjs",
+          "lock_present": true,
+          "lock_type": "dict",
+          "lock_value": {
+            "tsx": "dist/cli.mjs"
+          },
+          "normalization_applied": false
+        },
+        "credentials_output": false,
+        "differences_do_not_authorize_dropping_checks": true,
+        "exact_declared_field_differences": [
+          {
+            "actual": "./dist/cli.mjs",
+            "kind": "value_difference",
+            "lock": {
+              "tsx": "dist/cli.mjs"
+            },
+            "path": "/bin"
+          },
+          {
+            "actual": true,
+            "kind": "actual_only",
+            "path": "/peerDependenciesMeta/absent"
+          }
+        ],
+        "generator_executed": false,
+        "lock_corresponding_fields": {
+          "bin": {
+            "tsx": "dist/cli.mjs"
+          },
+          "cpu": {
+            "absent": true
+          },
+          "dependencies": {
+            "esbuild": "~0.28.0"
+          },
+          "name": "tsx",
+          "optionalDependencies": {
+            "fsevents": "~2.3.3"
+          },
+          "os": {
+            "absent": true
+          },
+          "peerDependencies": {
+            "absent": true
+          },
+          "peerDependenciesMeta": {},
+          "version": "4.23.12"
+        },
+        "lock_field_origins": {
+          "bin": "original lock metadata field or explicit absent marker",
+          "cpu": "original lock metadata field or explicit absent marker",
+          "dependencies": "original lock metadata field or explicit absent marker",
+          "name": "derived from original locked pinned package name",
+          "optionalDependencies": "original lock metadata field or explicit absent marker",
+          "os": "original lock metadata field or explicit absent marker",
+          "peerDependencies": "original lock metadata field or explicit absent marker",
+          "peerDependenciesMeta": "derived optional-only representation from original lock optionalPeers; not a raw lock peerDependenciesMeta field",
+          "version": "derived from original locked pinned package version"
+        },
+        "name_version_match": true,
+        "native_executed": false,
+        "node": "tsx@4.23.12",
+        "original_default_empty_dictionary_comparisons": {
+          "dependencies": {
+            "differences": [],
+            "equal": true
+          },
+          "optionalDependencies": {
+            "differences": [],
+            "equal": true
+          },
+          "peerDependencies": {
+            "differences": [],
+            "equal": true
+          }
+        },
+        "original_lock_SRI": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+        "original_lock_metadata": {
+          "bin": {
+            "tsx": "dist/cli.mjs"
+          },
+          "dependencies": {
+            "esbuild": "~0.28.0"
+          },
+          "optionalDependencies": {
+            "fsevents": "~2.3.3"
+          }
+        },
+        "original_lock_url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+        "package_installed": false,
+        "package_json": {
+          "bytes": 1601,
+          "sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"
+        },
+        "safe_tar_declared_bytes": 534311,
+        "safe_tar_members": 50,
+        "scripts_output": false
+      }
+    },
+    {
+      "event": "TSX_METADATA_PROBE_FINAL",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "deadline_remaining": 58.77616535400001,
+        "Subject_source_acquired": false,
+        "Subject_executed": false
+      }
+    },
+    {
+      "event": "TSX_METADATA_ALWAYS_FINAL",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "deadline_remaining": 7.999805136999999,
+        "Source_executed": false
+      }
+    }
+  ],
+  "scope": {
+    "filesystem_extraction": false,
+    "installed": false,
+    "hooks": false,
+    "Source_acquired": false,
+    "native": false,
+    "generator": false,
+    "scripts_output": false,
+    "credentials_output": false,
+    "metadata": "NONE",
+    "Source_adopted": false,
+    "full17_generator_success": false
+  },
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  },
+  "next_action": "Exact identity TSX bin compatibility guard only; original URL/SRI/raw1601 hash/exactstring/exactlockcommandtarget; no generalized conversion or dropped checks. Non-author review before justified next generator execution."
+}

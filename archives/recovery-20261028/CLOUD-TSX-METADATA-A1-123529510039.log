@@ -1,0 +1,101 @@
+﻿2026-10-29T15:00:53.3164579Z Current runner version: '2.338.0'
+2026-10-29T15:00:53.3183021Z ##[group]Runner Image Provisioner
+2026-10-29T15:00:53.3183801Z Hosted Compute Agent
+2026-10-29T15:00:53.3184350Z Version: 20261021.618
+2026-10-29T15:00:53.3184859Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T15:00:53.3185490Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T15:00:53.3186046Z Worker ID: {088a53dd-6db7-4008-9157-6a09257f6002}
+2026-10-29T15:00:53.3186626Z Region: westus3
+2026-10-29T15:00:53.3187087Z Cloud: Azure
+2026-10-29T15:00:53.3187523Z ##[endgroup]
+2026-10-29T15:00:53.3188613Z ##[group]Operating System
+2026-10-29T15:00:53.3189135Z Ubuntu
+2026-10-29T15:00:53.3189572Z 26.04.1
+2026-10-29T15:00:53.3189990Z LTS
+2026-10-29T15:00:53.3190414Z ##[endgroup]
+2026-10-29T15:00:53.3190874Z ##[group]Runner Image
+2026-10-29T15:00:53.3191370Z Image: ubuntu-26.04
+2026-10-29T15:00:53.3191849Z Version: 20261025.179.1
+2026-10-29T15:00:53.3192988Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T15:00:53.3194211Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T15:00:53.3195032Z ##[endgroup]
+2026-10-29T15:00:53.3195888Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T15:00:53.3197521Z Contents: read
+2026-10-29T15:00:53.3197984Z Metadata: read
+2026-10-29T15:00:53.3198439Z ##[endgroup]
+2026-10-29T15:00:53.3200012Z Secret source: Actions
+2026-10-29T15:00:53.3200753Z Cache mode: write
+2026-10-29T15:00:53.3201298Z Prepare workflow directory
+2026-10-29T15:00:53.3467983Z Prepare all required actions
+2026-10-29T15:00:53.3555338Z Complete job name: tsx-metadata
+2026-10-29T15:00:53.4311937Z ##[group]Run set -euo pipefail
+2026-10-29T15:00:53.4312828Z [36;1mset -euo pipefail[0m
+2026-10-29T15:00:53.4313743Z [36;1mtest "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"[0m
+2026-10-29T15:00:53.4314696Z [36;1mtest "$GITHUB_REF" = "refs/heads/codex/cloud-tsx-metadata-run-20261029-a1"[0m
+2026-10-29T15:00:53.4315525Z [36;1mtest "$GITHUB_EVENT_NAME" = "push"[0m
+2026-10-29T15:00:53.4316209Z [36;1m/usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'[0m
+2026-10-29T15:00:53.4316917Z [36;1mimport hashlib,os,sys,urllib.request[0m
+2026-10-29T15:00:53.4317508Z [36;1mfrom pathlib import Path[0m
+2026-10-29T15:00:53.4318178Z [36;1mtarget=sys.argv[1];base=Path(sys.argv[2]).resolve()[0m
+2026-10-29T15:00:53.4318948Z [36;1massert len(target)==40 and all(c in "0123456789abcdef" for c in target)[0m
+2026-10-29T15:00:53.4319653Z [36;1mdest=base/"tsx-metadata-controller.py"[0m
+2026-10-29T15:00:53.4320897Z [36;1murl="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-TSX-METADATA-CONTROLLER-20261029.py"[0m
+2026-10-29T15:00:53.4322042Z [36;1mdigest=hashlib.sha256();total=0[0m
+2026-10-29T15:00:53.4323134Z [36;1mwith urllib.request.urlopen(url,timeout=30) as incoming,dest.open("xb") as out:[0m
+2026-10-29T15:00:53.4323884Z [36;1m    while True:[0m
+2026-10-29T15:00:53.4324417Z [36;1m        block=incoming.read(65536)[0m
+2026-10-29T15:00:53.4324968Z [36;1m        if not block:break[0m
+2026-10-29T15:00:53.4325589Z [36;1m        total+=len(block);assert total<=23961[0m
+2026-10-29T15:00:53.4326196Z [36;1m        digest.update(block);out.write(block)[0m
+2026-10-29T15:00:53.4326775Z [36;1m    out.flush();os.fsync(out.fileno())[0m
+2026-10-29T15:00:53.4327679Z [36;1massert total==23961 and digest.hexdigest()=="1b62216bbbdcdd99ab7690925a8381d0987836eba5f3978ac81321209e8c709a"[0m
+2026-10-29T15:00:53.4328542Z [36;1mos.chmod(dest,0o600)[0m
+2026-10-29T15:00:53.4329227Z [36;1mprint("ADMIN_TSX_METADATA_IDENTITY",total,digest.hexdigest(),flush=True)[0m
+2026-10-29T15:00:53.4329915Z [36;1mPY[0m
+2026-10-29T15:00:53.4330697Z [36;1msudo /usr/bin/python3 -I -B "$RUNNER_TEMP/tsx-metadata-controller.py" "$(id -u)" "$(id -g)" "$RUNNER_TEMP"[0m
+2026-10-29T15:00:53.5063558Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T15:00:53.5064380Z ##[endgroup]
+2026-10-29T15:00:53.7634770Z ADMIN_TSX_METADATA_IDENTITY 23961 1b62216bbbdcdd99ab7690925a8381d0987836eba5f3978ac81321209e8c709a
+2026-10-29T15:00:54.0274706Z Running as unit: xb-tsx-metadata.service; invocation ID: 3b81116e376944bca99bff6face87db6
+2026-10-29T15:00:54.1257400Z TSX_METADATA_RESOURCE {"own": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "parent": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "uid": 1001, "descendant": {"cgroup": "0::/xiongbaowork.slice/xb-tsx-metadata.service", "uid": 1001, "data": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "parent": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}}}
+2026-10-29T15:00:54.7340750Z PINNED_REDIRECT_PERMITTED {"SRI_verified":false,"expected_package_path":"/packages/tsx/4.23.12/tsx-4.23.12.tgz","followed_hop_budget":1,"package":"tsx@4.23.12","source_original_lock_url":"https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz","status":302,"target":{"fragment_present":false,"hostname":"cdn.npmmirror.com","path":"/packages/tsx/4.23.12/tsx-4.23.12.tgz","path_truncated":false,"port":null,"query_present":false,"scheme":"https","url_chars":62,"url_sha256":"76f2ea275254b12e34d7a6a90ebaf79ae556695e84cbbadf0d680212b10e4947","userinfo_present":false}}
+2026-10-29T15:00:55.1739598Z PINNED_ARCHIVE_SRI_VERIFIED {"SRI_verified_before_extraction":true,"bytes":187918,"followed_hops":1,"original_lock_SRI":"sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==","original_lock_url":"https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz","package":"tsx@4.23.12"}
+2026-10-29T15:00:55.1776188Z TSX_BIN_REPRESENTATION_EVIDENCE {"actual_original_value_span":{"bytes":16,"encoding":"exact original UTF8 JSON value span","sha256":"a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"},"actual_present":true,"actual_type":"str","actual_value":"./dist/cli.mjs","lock_present":true,"lock_type":"dict","lock_value":{"tsx":"dist/cli.mjs"},"normalization_applied":false}
+2026-10-29T15:00:55.1788773Z TSX_PUBLIC_PACKAGE_METADATA_EVIDENCE {"SRI_verified_before_tar":true,"Source_acquired":false,"actual_original_value_spans":{"bin":{"bytes":16,"encoding":"exact original UTF8 JSON value span","sha256":"a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"},"dependencies":{"bytes":30,"encoding":"exact original UTF8 JSON value span","sha256":"e36e0a6c186514c0ca8d308b70717eb194bdf3e00d5881871c24667d5d931bdf"},"name":{"bytes":5,"encoding":"exact original UTF8 JSON value span","sha256":"8266f2f87e1a0b7dbbb214f36a2fd77db60961ca064e7f65be262aa36df53a8d"},"optionalDependencies":{"bytes":30,"encoding":"exact original UTF8 JSON value span","sha256":"9ad22ed265e247dc344d70a511ddfcac8084fcf294f6c3ecaf0115d82f03d497"},"version":{"bytes":9,"encoding":"exact original UTF8 JSON value span","sha256":"feaa33c0586ee34622d8bc8a1425e423e51e55e2df4636852c701bdb8711908a"}},"actual_public_fields":{"bin":"./dist/cli.mjs","cpu":{"absent":true},"dependencies":{"esbuild":"~0.28.0"},"name":"tsx","optionalDependencies":{"fsevents":"~2.3.3"},"os":{"absent":true},"peerDependencies":{"absent":true},"peerDependenciesMeta":{"absent":true},"version":"4.23.12"},"archive_bytes":187918,"bin_representation":{"actual_original_value_span":{"bytes":16,"encoding":"exact original UTF8 JSON value span","sha256":"a67cd7266ceea3bb0c3ba097d5f7fbcd73edbdf6c14a87612870f7b222f313f8"},"actual_present":true,"actual_type":"str","actual_value":"./dist/cli.mjs","lock_present":true,"lock_type":"dict","lock_value":{"tsx":"dist/cli.mjs"},"normalization_applied":false},"credentials_output":false,"differences_do_not_authorize_dropping_checks":true,"exact_declared_field_differences":[{"actual":"./dist/cli.mjs","kind":"value_difference","lock":{"tsx":"dist/cli.mjs"},"path":"/bin"},{"actual":true,"kind":"actual_only","path":"/peerDependenciesMeta/absent"}],"generator_executed":false,"lock_corresponding_fields":{"bin":{"tsx":"dist/cli.mjs"},"cpu":{"absent":true},"dependencies":{"esbuild":"~0.28.0"},"name":"tsx","optionalDependencies":{"fsevents":"~2.3.3"},"os":{"absent":true},"peerDependencies":{"absent":true},"peerDependenciesMeta":{},"version":"4.23.12"},"lock_field_origins":{"bin":"original lock metadata field or explicit absent marker","cpu":"original lock metadata field or explicit absent marker","dependencies":"original lock metadata field or explicit absent marker","name":"derived from original locked pinned package name","optionalDependencies":"original lock metadata field or explicit absent marker","os":"original lock metadata field or explicit absent marker","peerDependencies":"original lock metadata field or explicit absent marker","peerDependenciesMeta":"derived optional-only representation from original lock optionalPeers; not a raw lock peerDependenciesMeta field","version":"derived from original locked pinned package version"},"name_version_match":true,"native_executed":false,"node":"tsx@4.23.12","original_default_empty_dictionary_comparisons":{"dependencies":{"differences":[],"equal":true},"optionalDependencies":{"differences":[],"equal":true},"peerDependencies":{"differences":[],"equal":true}},"original_lock_SRI":"sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==","original_lock_metadata":{"bin":{"tsx":"dist/cli.mjs"},"dependencies":{"esbuild":"~0.28.0"},"optionalDependencies":{"fsevents":"~2.3.3"}},"original_lock_url":"https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz","package_installed":false,"package_json":{"bytes":1601,"sha256":"96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659"},"safe_tar_declared_bytes":534311,"safe_tar_members":50,"scripts_output":false}
+2026-10-29T15:00:55.1915045Z           Finished with result: success
+2026-10-29T15:00:55.1916663Z Main processes terminated with: code=exited, status=0/SUCCESS
+2026-10-29T15:00:55.1917559Z                Service runtime: 1.162s
+2026-10-29T15:00:55.1918055Z              CPU time consumed: 112ms
+2026-10-29T15:00:55.1918592Z                    Memory peak: 17M (swap: 0B)
+2026-10-29T15:00:55.2451197Z TSX_METADATA_PROBE_FINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "deadline_remaining": 58.77616535400001, "Subject_source_acquired": false, "Subject_executed": false}
+2026-10-29T15:00:55.2613575Z ##[group]Run set -euo pipefail
+2026-10-29T15:00:55.2614256Z [36;1mset -euo pipefail[0m
+2026-10-29T15:00:55.2614804Z [36;1msudo /usr/bin/python3 -I -B - <<'PY'[0m
+2026-10-29T15:00:55.2615361Z [36;1mimport json,subprocess,time[0m
+2026-10-29T15:00:55.2615869Z [36;1mfrom pathlib import Path[0m
+2026-10-29T15:00:55.2616410Z [36;1mparent=Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T15:00:55.2617131Z [36;1mowned=parent/"xb-tsx-metadata.service";deadline=time.monotonic()+8[0m
+2026-10-29T15:00:55.2617770Z [36;1mif owned.exists():[0m
+2026-10-29T15:00:55.2618480Z [36;1m    populated=dict(line.split() for line in (owned/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T15:00:55.2619219Z [36;1m    if populated!="0":[0m
+2026-10-29T15:00:55.2619800Z [36;1m        if (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T15:00:55.2620485Z [36;1m        remaining=deadline-time.monotonic()-2[0m
+2026-10-29T15:00:55.2621134Z [36;1m        if remaining>0:[0m
+2026-10-29T15:00:55.2622035Z [36;1m            try:subprocess.run(["systemctl","stop","xb-tsx-metadata.service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)[0m
+2026-10-29T15:00:55.2623106Z [36;1m            except subprocess.TimeoutExpired:[0m
+2026-10-29T15:00:55.2623830Z [36;1m                if owned.exists() and (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T15:00:55.2624538Z [36;1massert parent.exists()[0m
+2026-10-29T15:00:55.2625201Z [36;1mfor name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:[0m
+2026-10-29T15:00:55.2625925Z [36;1m    (parent/name).write_text(value)[0m
+2026-10-29T15:00:55.2626789Z [36;1mlimits={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}[0m
+2026-10-29T15:00:55.2627699Z [36;1massert limits=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T15:00:55.2628558Z [36;1mpopulated=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T15:00:55.2629258Z [36;1massert populated=="0"[0m
+2026-10-29T15:00:55.2629804Z [36;1mremaining=deadline-time.monotonic()[0m
+2026-10-29T15:00:55.2630674Z [36;1mprint("TSX_METADATA_ALWAYS_FINAL "+json.dumps({"limits":limits,"populated":populated,"deadline_remaining":remaining,"Source_executed":False}),flush=True)[0m
+2026-10-29T15:00:55.2631528Z [36;1massert remaining>=0[0m
+2026-10-29T15:00:55.2632053Z [36;1mPY[0m
+2026-10-29T15:00:55.2651393Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T15:00:55.2652012Z ##[endgroup]
+2026-10-29T15:00:55.2936978Z TSX_METADATA_ALWAYS_FINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "deadline_remaining": 7.999805136999999, "Source_executed": false}
+2026-10-29T15:00:55.3056195Z Cleaning up orphan processes
