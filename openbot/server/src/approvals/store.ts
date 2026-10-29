@@ -262,7 +262,7 @@ export function createApprovalStore(
         if (!request) throw new ApprovalNotFoundError();
         if (request.actionDigest !== digest)
           throw new ApprovalRefusedError("The approved action has changed.");
-        if (request.status !== "approved") return false;
+        if (request.status !== "approved" || request.result) return false;
         if (request.decision === "allow_always") {
           const [rule] = await tx
             .select()
@@ -275,7 +275,13 @@ export function createApprovalStore(
         const rows = await tx
           .update(approvalRequests)
           .set({ status: "consumed", consumedAt: sql`now()` })
-          .where(and(owned(owner, id), eq(approvalRequests.status, "approved")))
+          .where(
+            and(
+              owned(owner, id),
+              eq(approvalRequests.status, "approved"),
+              isNull(approvalRequests.result),
+            ),
+          )
           .returning({ id: approvalRequests.id });
         return rows.length === 1;
       });
