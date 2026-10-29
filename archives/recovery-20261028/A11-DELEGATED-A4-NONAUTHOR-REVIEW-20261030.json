@@ -1,0 +1,130 @@
+{
+  "schema": "a11-delegated-a4-independent-admin-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+  "parent": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
+  "tree": "a29c6b382c0d896a598631da49e09738765295a9",
+  "verdict": "ADMIN_PURE_CONTROL_FIXED_PATH_EVIDENCE_DIAGNOSTIC_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/a11-offline-data-verify.yml",
+      "mode": "100644",
+      "blob": "e15175b65f412b7fff872af98b270f138c24129b",
+      "bytes": 5378,
+      "computed_bytes": 5378,
+      "sha256": "269f88eb3cb0d22f55e310f446f57f5ecef09339f957b5caa4042a08871b9af8",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "mode": "100644",
+      "blob": "6d1bafa73a42ee105c282e77d9dede2d7ee508fa",
+      "bytes": 20519,
+      "computed_bytes": 20519,
+      "sha256": "ffb8820e4fd1d5581ea4aec9b252559b5c808e31420bd229a90ca68a4cdc2ca7",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+      "mode": "100644",
+      "blob": "9c7ad2b83a98c41ffdfd7f90c514ef93172de147",
+      "bytes": 12525,
+      "computed_bytes": 12525,
+      "sha256": "d967347d2a7d4b9f20305d7a8fe31281668a4f9cc069a4fcfe9389555c042b0e",
+      "full_read": true
+    }
+  ],
+  "scope": {
+    "only_three_admin_modified": true,
+    "Source_changes": 0,
+    "no_canonical_lease_jobs_Page_automation_changes": true,
+    "no_token_originallog_codec_Subject": true,
+    "no_original_managed_slice_oom_write": true,
+    "bootstrap_controller_fetch_only_network": true,
+    "prototype_not_project_migration_or_restoration_permission": true
+  },
+  "change_review": {
+    "admin_lifecycle_prefix_before_witness_byte_identical_to_8a08": true,
+    "workflow_only_title_exacta4filter_and_wholecontrollerpins_changed": true,
+    "plan_only_history_evidence_audit_and_readonly_path_contract": true
+  },
+  "trusted_terminal_review": {
+    "directory": "Exact /run/xb-a11-delegated-currentRun-currentAttempt; open O_DIRECTORY/O_NOFOLLOW; UID0 and no group/otherwrite",
+    "file": "dirfd relative open O_NOFOLLOW/O_NONBLOCK; regular UID0 exact0600 nlink1 positive<30000bytes; fullboundedread; FD before/after and named dev/ino/mode/uid/gid/nlink/size/mtime/ctime identical",
+    "terminal_is_own_root_immutable_controller_output": true,
+    "path": "Construct SHARED/current-known-unit, never use arbitrary terminal-selected path. Require terminal.root_cgroup and before.root.path equal exact known path, before.unit actualControlGroup equal knownkernelpath, priorrootdevino decimal.",
+    "branching": "Current API exactmatch uses exactfixedpath; current API empty permits evidence-only oldfixedpath probe; unexpected other nonemptyAPI not followed.",
+    "evidence_separation": "root_path_source, terminal_fd_evidence, trusted_fixed_path, APIempty and APImatches emitted independently. Fixedpath is explicitly not currentAPIbinding."
+  },
+  "gates_review": {
+    "current_api_controlgroup_identity_still_mandatory": true,
+    "missing_path_not_limits_or_pop0": true,
+    "root_target_admin_actual_cap_and_pop0_zeroPIDs_still_mandatory": true,
+    "same_root_target_devino_still_mandatory": true,
+    "Delegate_xattr_ownmembership_checks_retained": true,
+    "oneshot_RemainAfterExit_activeexited_zeroPID_noJob_success_retained": true,
+    "original_inner120_outer150_completion_retained": true,
+    "readonly_always_no_new_cleanup_restore_budget": true,
+    "original_project512_0_1_shared64_0_1_bothpop0_legacy_retained": true,
+    "prototype_success_cannot_replace_legacy_failure": true
+  },
+  "resources_retained": {
+    "service_root_and_all_init_management_fork_descendants": 67108864,
+    "owned_target": 67108864,
+    "owned_admin": 16777216,
+    "owned_noop": 50331648,
+    "swap": 0,
+    "project_parent": 536870912,
+    "nested_caps_not_additive": true,
+    "owned0755_UID0_controlnowrite_and_postdropchecks_retained": true
+  },
+  "history": {
+    "a3runtime": "56a0ecab246500f37ca6ed33cdfa1c2c8b8cf949",
+    "a3actual": "inservice delegation/root64/target64/admin16 proved, external currentControlGroupempty and snapshotsnull only; fixedoldpath not statted, physicalprune notproved.",
+    "upstream_v255": "service.c SERVICE_EXITED requestsprune; cgroup.c trim/release path observed, no keepemptyconfiguration established. Runnerbinaryversion/runtimeactor unknown; not runtimephysicaldeletionproof."
+  },
+  "evidence_level": {
+    "fullfile_independent_UTF8bytes_SHA256_blob_mode_compare": true,
+    "YAML_Python_parser_compile_tests": false,
+    "control_or_codec_or_project_execution": false,
+    "DATA_PASS": false,
+    "restoration": false,
+    "Source_migration_PG_approval": false
+  },
+  "runtime_unproven": [
+    "Actual oldfixedpath existence/missing/devino/limits/pop0 after oneshotexit; this diagnostic is specifically to obtain it.",
+    "CurrentAPIidentity and originalmanagedslice limits may still fail; no requirement is waived.",
+    "Complete bounded finalactual emission and originaldeadline; missing/overflow/late is FAILED_OR_UNKNOWN."
+  ],
+  "dispatch": {
+    "max": 1,
+    "branch": "codex/a11-data-verify-run-20261030-a4",
+    "event": "push",
+    "exact_repository_ref_event_guards": true,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "requires": [
+      "Persist exact report",
+      "Currentvalid correctedexecutor leaseowner/epoch",
+      "Fresh emptyqueue",
+      "Exact ref/rundedup reuse anyexistingrun",
+      "Exactunchangedcandidate"
+    ],
+    "no_holder_or_daemon": true,
+    "no_unchanged_retry": true,
+    "no_gate_removal": true,
+    "no_resource_expansion": true
+  },
+  "next_action": "Coordinator may consider one exact a4 pureCONTROL diagnostic. Read actual trustedfixedpath probe and rootpathsource alongside currentAPIpointer and alloriginalgates. Physicalmissing only when FileNotFound observed at trustedexactpath; absence cannot become limits/pop0. No further sameprobe without factualdifference.",
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  }
+}
