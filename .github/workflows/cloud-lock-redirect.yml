@@ -1,7 +1,7 @@
 name: Locked URL first-hop headers only
 on:
   push:
-    branches: [codex/cloud-lock-redirect-run-20261029-a1]
+    branches: [codex/cloud-lock-redirect-run-20261029-a2]
 permissions:
   contents: read
 concurrency:
@@ -17,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
-          test "$GITHUB_REF" = "refs/heads/codex/cloud-lock-redirect-run-20261029-a1"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-lock-redirect-run-20261029-a2"
           test "$GITHUB_EVENT_NAME" = "push"
           /usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'
           import hashlib,os,sys,urllib.request
@@ -31,10 +31,10 @@ jobs:
               while True:
                   block=incoming.read(65536)
                   if not block:break
-                  total+=len(block);assert total<=14337
+                  total+=len(block);assert total<=14655
                   digest.update(block);out.write(block)
               out.flush();os.fsync(out.fileno())
-          assert total==14337 and digest.hexdigest()=="51c08349b35eafaf27c7d4d1419356ff7684b4ffbbf598e92955a58f16f1610f"
+          assert total==14655 and digest.hexdigest()=="4a4d96241be77b1603fa9e9e270310a4cd44add8ad4609f473441fc6a1d3b952"
           os.chmod(dest,0o600)
           print("ADMIN_HEADER_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)
           PY

@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-lock-first-hop-header-probe-v1",
   "author": "/root/persistence_review",
   "base": "fe4c838c302dd5899c8ae63e8d41b8b957fc77c2",
-  "prepare_branch": "codex/cloud-lock-redirect-prep-20261029-a1",
-  "only_execution_branch": "codex/cloud-lock-redirect-run-20261029-a1",
+  "prepare_branch": "codex/cloud-lock-redirect-prep-20261029-a2",
+  "only_execution_branch": "codex/cloud-lock-redirect-run-20261029-a2",
   "lock": {
     "path": "openbot/bun.lock",
     "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
@@ -91,14 +91,20 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py",
-    "bytes": 14337,
-    "sha256": "51c08349b35eafaf27c7d4d1419356ff7684b4ffbbf598e92955a58f16f1610f"
+    "bytes": 14655,
+    "sha256": "4a4d96241be77b1603fa9e9e270310a4cd44add8ad4609f473441fc6a1d3b952"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-lock-redirect.yml",
     "bytes": 3895,
-    "sha256": "7d40c7027409329313fd0f73ff4362a3603de04c1e8dafc9b415750dc21213e9"
+    "sha256": "f62a80c996f926a62831858c1ad3af4d504f6aa666ea4ecaaaa578a9fb935e47"
   },
   "bootstrap": "Only this hash-pinned administrative controller is fetched from normal GitHub. No checkout/Source acquisition. The diagnostic archive endpoint receives exactly one non-following GET after runner UID drop.",
-  "review_required": true
+  "review_required": true,
+  "revision": {
+    "id": "A2",
+    "parent": "b739cbd47eaeb5f73717c80d4816239d25933d6d",
+    "fix": "Only query parameter accumulator renamed query_keys so immutable resource keys tuple is never shadowed.",
+    "status": "AUTHOR_PREPARED_NOT_REVIEWED_NOT_EXECUTED"
+  }
 }
