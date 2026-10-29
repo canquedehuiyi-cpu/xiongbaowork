@@ -1,0 +1,317 @@
+{
+  "schema": "xiongbaowork-restart-ack-readonly-design-audit-v1",
+  "reviewer": "/root/restart_ack_audit",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "canonical_administrative_base": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+  "adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+  "primitive_candidate": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+  "kind": "READ_ONLY_ARCHITECTURE_AND_GAP_AUDIT_NOT_IMPLEMENTATION_APPROVAL",
+  "method": "Normal connected GitHub fetch_file and complete recursive tree only; complete referenced strings read in orchestration. No Subject parser, module, test, SQL, dependency, shell or provider executed.",
+  "source_originals": [
+    {
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39",
+      "bytes": 7576
+    },
+    {
+      "path": "openbot/server/src/approvals/fresh-producer.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "9209b40696ddb5847967b5281192173104f3f232",
+      "bytes": 4527
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "11c60539afb0153669766bd59caff5298de0f427",
+      "bytes": 19676
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-store.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "9ebde5c64298b9f400beb0794a58d8b8487cb632",
+      "bytes": 15478
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-protocol.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "5ea8bca2a773b213d861b0529744cd19eb56125e",
+      "bytes": 11057
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-target-store.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "46a2ee890b920d51e558bcf0d7984bc36770e34b",
+      "bytes": 22423
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-target-local.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "7a7aa79782a05f70f50bac86452b3d76fd4d1350",
+      "bytes": 8943
+    },
+    {
+      "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "15fa55da767c787d8e5754bd653c1f03b145b21a",
+      "bytes": 2224
+    },
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "2365ebe562751271190713a27c4f54968f6085b8",
+      "bytes": 16446
+    },
+    {
+      "path": "openbot/server/src/approvals/service.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "c5d71f18d44f4fb95ab1ad26ce50e74817406806",
+      "bytes": 31509
+    },
+    {
+      "path": "openbot/server/src/approvals/execute.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "e07574d906a8a59923f45509502cdf557bb3b599",
+      "bytes": 7369
+    },
+    {
+      "path": "openbot/server/src/routines/run-turn.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "ff5f7932153f0efbab7b9c8c0bac72d79f179488",
+      "bytes": 39851
+    },
+    {
+      "path": "openbot/server/src/db/client.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "fbf0693879f03bed8275fd371678929a1c836d92",
+      "bytes": 14674
+    },
+    {
+      "path": "openbot/server/src/audit.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "9f006725bcb44d75a8b98e5290632bdbf11ff4bc",
+      "bytes": 43787
+    },
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+      "bytes": 10520
+    },
+    {
+      "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "94d055b9cebe809b1e5e2ba4a2d84238ac0ee878",
+      "bytes": 12894
+    },
+    {
+      "path": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "f4b7167267c32030a4043e0d8fe6815656983f3b",
+      "bytes": 3336
+    },
+    {
+      "path": "openbot/server/src/index.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "f53d3f69258a11336f1c8a42eceb7b425b6d3027",
+      "bytes": 156700
+    },
+    {
+      "path": "openbot/server/src/approvals/exact-input-json-materializer.ts",
+      "commit": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+      "blob": "6137974df0dcb2420dd9404137ae0a3468a55eb8",
+      "bytes": 11567
+    }
+  ],
+  "observed_current_boundaries": [
+    {
+      "path": "openbot/server/src/index.ts",
+      "fact": "createApprovalService is composed with only the review option; no freshProducer or continuationRecovery option is supplied. New persistent route is not enabled by existing constructor."
+    },
+    {
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "fact": "Unused candidate locks full six-identity parent FOR UPDATE then exact seed FOR SHARE, CASes SQL NULL result/disposition and expected status, writes final completion atomically if final. Return values are transaction-local only, no audit/COMMIT/session/release proof."
+    },
+    {
+      "path": "openbot/server/src/approvals/fresh-producer.ts",
+      "fact": "Coordinator verifies existing seed via supplied port, rereads context and accepts only port outcome committed before checking result equality. Equality is a postcondition check, not proof of COMMIT. Coordinator alone does not verify persisted disposition, full seed, audit or final completion after commit."
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "fact": "getRecoveryContext validates row/action/continuation identity against ambient tenant. Existing saveResult is only owner/id plus result SQL NULL; finish separately completes. These cannot substitute for the new locked atomic result+disposition+audit protocol."
+    },
+    {
+      "path": "openbot/server/src/approvals/service.ts",
+      "fact": "Resume defaults closed without recovery+fresh producer. When status consumed has no result, existing branch records an outcome-unknown answer and does not repeat original action. Persisted result is separate from continuation receipt. New code must preserve these boundaries and cannot turn unknown commit into another execute/prepare call."
+    },
+    {
+      "path": "openbot/server/src/db/client.ts",
+      "fact": "Captures tenant before Bun transaction callback and sets transaction-local GUC on the physical session. It documents callback ambient frame loss. Outer adapter must explicitly restore runAsTenant inside callback for primitives using currentTenant, and verify actual session GUC. Public Database API exposes no identified physical transaction termination witness."
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-store.ts",
+      "fact": "Existing fenced DB-clock ledger, intent, unknown state and receipt+approval finish transaction are reusable continuation components. ensureWithPreparation snapshots identity and resolves after outer transaction, but only controlled DB writes are rollback-safe. Per-invocation preparation is not proof of globally once-only callbacks. markUnknown can itself have unknown COMMIT, so cannot guarantee durable pause if database outcome is unavailable."
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-target-store.ts",
+      "fact": "Default release authority absent means disabled. Actual role/catalog/FORCE-RLS checks and independently revalidated release happen per transaction. Independent authority pool is required to avoid nested max=1 pool deadlocks. Reuse pattern, not a fixed-pass verifier or an inherited valid release."
+    },
+    {
+      "path": "openbot/server/src/approvals/continuation-protocol.ts",
+      "fact": "Coordinator requires persistent fenced stores, authoritative negative admission proof and durable intent before target call. Plain404/not_found/unknown never authorizes admission; completion also authoritative-readbacks the receipt. This controls continuation target admission, not original action result transaction settlement."
+    },
+    {
+      "path": "openbot/server/src/routines/run-turn.ts",
+      "fact": "createApprovalLocalRecoveryPort requires trusted persisted current/local_postgres/thread plan, exclusion of other branches, exact input ref and result digest. It does not provision during recovery or rebuild input from current tools/model/history."
+    },
+    {
+      "path": "openbot/server/src/audit.ts",
+      "fact": "commitOwnerAssembly demonstrates same-transaction audit and post-ACK tap emission. It is owner-assembly semantics, not existing approval-result audit authority. createAuditStore(database) as a separate transaction is not atomic with result CAS. No fabricated event/receipt should be substituted."
+    }
+  ],
+  "findings": [
+    {
+      "id": "ACK-01",
+      "severity": "PRODUCTION_BLOCKER",
+      "detail": "A successful primitive RETURNING row is before COMMIT. Only successful completion of the owning database.transaction Promise establishes observed ACK for that transaction. A throw/timeout/transport failure is unknown, not lost."
+    },
+    {
+      "id": "ACK-02",
+      "severity": "RECOVERY_BLOCKER",
+      "detail": "Current interfaces do not durably identify the original physical result-write transaction or provide trustworthy proof it has terminated. A new connection taking the same parent lock only excludes concurrent conflicting lock holders; it cannot alone prove that an old delayed/not-yet-locking transaction will never subsequently execute."
+    },
+    {
+      "id": "ACK-03",
+      "severity": "RECOVERY_BLOCKER",
+      "detail": "NULL/absent/invisible rows, seed conflict, changed status, authority refusal, connection error or matching result alone never prove safe replay or rollback. Missing authority also prevents a trustworthy observation. Preserve unknown/blocked, do not synthesize lost."
+    },
+    {
+      "id": "ACK-04",
+      "severity": "ATOMICITY_BLOCKER",
+      "detail": "Required approval-result audit vocabulary, stable operation correlation, required audit fields and final-readback contract are not supplied by candidate. Must define and review these before claiming transaction success covers audit and restart settlement."
+    },
+    {
+      "id": "ACK-05",
+      "severity": "PERSISTENCE_BLOCKER",
+      "detail": "Current consumed state is useful durable no-repeat evidence, but a process-local unknown flag cannot be the restart safety boundary. If a separate unknown write fails, retain existing consumed/intent/fence state and block further execution. Never promise a durable unknown marker when its COMMIT is unknown."
+    },
+    {
+      "id": "ACK-06",
+      "severity": "SCHEMA_ADOPTION_BLOCKER",
+      "detail": "Seed full generated schema/SQL/snapshot/journal package remains unadopted. Original/recovery migration lineages and full pending DDL must first be reconciled. Candidate primitive must be reconstructed/reviewed against the resulting canonical parent."
+    }
+  ],
+  "proposed_next_source_package": {
+    "name": "Unused store-owned result commit and readback boundary",
+    "max_source_files": 5,
+    "preconditions": [
+      "Complete seed schema/migration closure independently reviewed and adopted",
+      "Candidate primitive independently validated and adopted/reconstructed on that canonical parent",
+      "Required audit event contract and current authority facts explicitly specified"
+    ],
+    "suggested_files": [
+      {
+        "path": "openbot/server/src/approvals/pg-fresh-commit.ts",
+        "status": "PROPOSED_NEW",
+        "purpose": "Own actual Database.transaction; snapshot caller input before await; explicit tenant callback scope; no defaults for real authority/audit; call primitive inside; wait transaction resolve; keep errors unknown; never perform original tool/model/prepare."
+      },
+      {
+        "path": "openbot/server/tests/approval-pg-fresh-commit.test.ts",
+        "status": "PROPOSED_NEW",
+        "purpose": "CPU contracts for callback-return versus outer-ACK, rollback/error/unknown, mutation isolation, tenant scope, mandatory audit failure and final same-transaction writes. Clearly non-PG."
+      },
+      {
+        "path": "openbot/server/src/approvals/pg-fresh-readback.ts",
+        "status": "PROPOSED_NEW",
+        "purpose": "Unused conservative settlement reader: exact parent+seed+result+disposition+legal status+required audit/final checks under freshly authorized physical transaction. No default termination witness or release. Unknown if authoritative settlement cannot be established."
+      },
+      {
+        "path": "openbot/server/tests/approval-pg-fresh-readback.test.ts",
+        "status": "PROPOSED_NEW",
+        "purpose": "CPU rejection matrix for missing/invisible/conflicting data, stale authority, nulls, missing audit, final incomplete, unresolved original transaction and caller mutation; no fake PG proof."
+      },
+      {
+        "path": "openbot/server/src/audit.ts",
+        "status": "CONDITIONAL_MODIFY",
+        "purpose": "Only if a precisely reviewed new approval-result event vocabulary is needed. Do not relabel owner-assembly events as approval commit. Otherwise omit this modification and block audit-dependent success until a separate legitimate contract exists."
+      }
+    ],
+    "non_goals": [
+      "No index/service default production wiring",
+      "No Root release verifier or fixed-pass authority",
+      "No DB-role/RLS/policy grants",
+      "No automatic tool/action replay",
+      "No synthetic receipt or audit",
+      "No schema/migration edits hidden in this package"
+    ],
+    "status": "DESIGN_ONLY_NOT_SOURCE_APPROVED_NOT_AUTHORIZED_FOR_PRODUCTION"
+  },
+  "commit_contract_sequence": [
+    "Capture complete immutable seed/result/disposition/expectedStatus and a trusted operation identity before first await; identity/provenance must originate from durable trusted seed, not HTTP/user input.",
+    "Enter current tenant on actual transaction creation and explicitly within callback; verify actual current_setting GUC and role/catalog/FORCE RLS/current release in the same physical transaction. Missing/invalid authority disables the instance and blocks.",
+    "Lock parent then seed in the same order as candidate. Revalidate full parent six identity, action/continuation JSON, all eight supplied seed bindings, legal state/result/disposition and durable provenance.",
+    "Invoke transaction-local primitive. If it writes, insert required sanitized audit in this same transaction. For final, result/disposition/completed status/DB completion clock and audit are atomic; no continuation receipt/model run.",
+    "Do not announce committed, emit post-commit taps, publish plan/ledger or enter continuation before outer transaction resolves successfully.",
+    "After observed ACK, perform authoritative full readback with fresh current authority. Matching result alone is insufficient. Need exact seed/result/disposition, legal expected continue status or final completed fields, required audit correlation and consistency.",
+    "On any transaction/ACK/readback exception return unknown. A nonwrite observation may become only a local no-write outcome; translating it to public lost must never imply rollback of another transaction or permission for replay.",
+    "Uncertain original transaction settlement requires a real termination witness tied to the original physical transaction/operation. No such default witness exists. Until supplied and independently tested, settlement stays unknown even when a new read sees SQL NULL."
+  ],
+  "restart_and_disconnect_contract": [
+    "Before external original action starts, durable consume/admission evidence must commit; original tool/model effects never occur inside a DB rollback callback.",
+    "Restart begins from stored parent/seed/disposition/current plan/exact object/ledger/fence/intent, not memory or today's history/tool/schema reconstruction.",
+    "Consumed-without-result and dispatched/unknown continuation states never permit automatic original action repeat. User-visible unresolved state remains until authoritative reconciliation or explicit safe recovery.",
+    "Persisted pause writes may be attempted in a separate authorized transaction only after original transaction settlement is known; failure/unknown does not clear prior consumed/intent evidence and must block execution.",
+    "Continue publication must atomically/idempotently bind immutable capture or prepared object, exact plan, source binding/result digest/disposition and ledger keys. Missing capture/plan does not justify rebuilding one from today's inputs.",
+    "Fresh final disposition yields completed approval and audit without a continuation receipt; continue still requires authoritative target admission and receipt protocol.",
+    "Positive ACK recovery needs committed durable provenance/audit/final state, not mere result equality; negative/lost recovery needs original-transaction termination and trustworthy full state; all uncertainty remains unknown/blocked."
+  ],
+  "missing_real_inputs": [
+    "Real PG17 environment with legitimate release attestation and exact catalog/role/ACL/policy facts; not requested again from human by this audit.",
+    "Physical session transaction-termination witness and durable operation correlation sufficient across process restart/connection loss. Database Promise signature alone does not supply it.",
+    "Real persistent capture/template/seed producer, trusted post-cutover provenance and idempotent exact input/plan/ledger publisher.",
+    "Required approval-result audit vocabulary, payload identity/redaction rules, atomic-write and authoritative-readback specification.",
+    "Real COMMIT/ACK fault injection and concurrent/restart/RLS tests within approved resource and release boundaries; mocks cannot satisfy them."
+  ],
+  "validation_layers": {
+    "cpu_only": [
+      "actual Drizzle SQL shape",
+      "deferred outer Promise ACK ordering",
+      "no action/prepare replay on every exception",
+      "all binding mismatch/refusal cases",
+      "mandatory audit/final failure rollbacks modeled and labelled"
+    ],
+    "real_pg_pending": [
+      "PG17 GUC and tenant isolation",
+      "FORCE RLS/role/catalog/release rejection",
+      "concurrent parent/seed lock and CAS serialization",
+      "transaction rollback/commit and final audit atomicity",
+      "physical ACK loss, original transaction end, restart/no duplicate action",
+      "pool exhaustion/deadlock and independent authority readback"
+    ],
+    "gate_unchanged": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "commercial": "NOT_DELIVERED"
+    }
+  },
+  "actions": {
+    "project_execution": 0,
+    "sql_execution": 0,
+    "dependencies": 0,
+    "workflow_dispatch": 0,
+    "source_writes": 0,
+    "canonical_writes": 0,
+    "paid_provider_calls": 0,
+    "windows_or_localhost_use": false
+  },
+  "persistence": {
+    "branch": "codex/cloud-restart-ack-audit-20261029",
+    "base": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+    "path": "archives/recovery-20261028/CLOUD-RESTART-ACK-AUDIT-20261029.json",
+    "administrative_report_only": true
+  }
+}
