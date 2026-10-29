@@ -505,7 +505,7 @@
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
     "lease_expires_at": "2026-10-29T09:42:06.433Z",
-    "next_action": "Prepare independently reviewed generator A5 constrained single mirror redirect, per-node path binding, original URL/SRI/lock untouched; do not infer other16 runtime routes or SRI/generator success.",
+    "next_action": "Read existing A5 run40850003450/job123366832250 terminal/logs only; no duplicate dispatch. If lease expires, read-only until idle then lawful successor CAS. Separate SRI/metadata/native/generator/output and restore proof.",
     "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
@@ -572,7 +572,15 @@
     "previous_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "previous_epoch": "2026-10-29T08:04:59.948Z:972136c2",
     "lease_state": "held",
-    "active_job": null,
+    "active_job": {
+      "run": 40850003450,
+      "job": 123366832250,
+      "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+      "status": "in_progress",
+      "observed_at": "2026-10-29T09:30:46.487Z",
+      "execution_branch": "codex/cloud-minimal-generator-run-20261029-a5",
+      "repeat_prohibited": true
+    },
     "next_candidate": {
       "sha": "c6f51d2673e608895ab826ed7437dbef9dab0340",
       "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
@@ -617,12 +625,15 @@
       "failed_generator_head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
       "route_old_head": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106"
     },
-    "next_action": "Read existing run40845991318/job123353492043 terminal and logs; do not dispatch again. Separate Source/deps/generator/output/restoration results; checkpoint and release own lease.",
+    "next_action": "Read existing A5 run40850003450/job123366832250 terminal/logs only; no duplicate dispatch. If lease expires, read-only until idle then lawful successor CAS. Separate SRI/metadata/native/generator/output and restore proof.",
     "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
     "preparation": {
-      "agent": "/root/persistence_review",
-      "status": "GENERATOR_A5_ORIGINAL_LOCK_CONSTRAINED_REDIRECT_PREPARING_NOT_RUN",
-      "basis_run": 40848414444
+      "status": "A5_ACTUAL_RUNNING",
+      "candidate": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+      "review": {
+        "commit": "fee0103221c10d73950f3e24f86a2d135a74157e",
+        "blob": "693fc7d22a35ac7114317e91be9a3182630c40a7"
+      }
     }
   },
   "restart_ack_audit": {
@@ -1528,6 +1539,26 @@
       "PG": "PG_PENDING",
       "full_ci": "NOT_RUN",
       "commercial": "NOT_DELIVERED"
+    },
+    "execution_review": {
+      "commit": "4e9facdf6023c8810638dc1b8b0571e6dec23bee",
+      "blob": "f18493df2c2f5707414cb91e65febad1451972c2",
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-A2-EXECUTION-REVIEW-20261029.json"
     }
+  },
+  "cloud_generator_a5": {
+    "run": 40850003450,
+    "job": 123366832250,
+    "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+    "status": "in_progress",
+    "observed_at": "2026-10-29T09:30:46.487Z",
+    "execution_branch": "codex/cloud-minimal-generator-run-20261029-a5",
+    "repeat_prohibited": true,
+    "tree": "e7edc50ca6b060163cce5c20988a3870a9712e25",
+    "review": {
+      "commit": "fee0103221c10d73950f3e24f86a2d135a74157e",
+      "blob": "693fc7d22a35ac7114317e91be9a3182630c40a7"
+    },
+    "source_adopted": false
   }
 }

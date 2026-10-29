@@ -7,17 +7,17 @@
   "run_id": "bounded-generator-a4-2026-10-29T08:57:06.433Z",
   "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
   "acquired_at": "2026-10-29T08:57:06.433Z",
-  "renewed_at": "2026-10-29T09:19:55.955Z",
+  "renewed_at": "2026-10-29T09:30:46.487Z",
   "expires_at": "2026-10-29T09:42:06.433Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "ea6ec2b7c5d7c1ef3517efa13fd92c3e08b44ebd",
+  "expected_parent": "b35f9a8b1b8eefd6e0b7b555398c55504ad8f95b",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Prepare independently reviewed generator A5 constrained single mirror redirect, per-node path binding, original URL/SRI/lock untouched; do not infer other16 runtime routes or SRI/generator success.",
+  "next_action": "Read existing A5 run40850003450/job123366832250 terminal/logs only; no duplicate dispatch. If lease expires, read-only until idle then lawful successor CAS. Separate SRI/metadata/native/generator/output and restore proof.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -27,7 +27,15 @@
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
-  "active_job": null,
+  "active_job": {
+    "run": 40850003450,
+    "job": 123366832250,
+    "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+    "status": "in_progress",
+    "observed_at": "2026-10-29T09:30:46.487Z",
+    "execution_branch": "codex/cloud-minimal-generator-run-20261029-a5",
+    "repeat_prohibited": true
+  },
   "queue_at_release": {
     "queued": [],
     "in_progress": [],

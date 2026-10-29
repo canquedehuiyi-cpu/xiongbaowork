@@ -1,0 +1,15 @@
+{
+  "run": 40850003450,
+  "job": 123366832250,
+  "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+  "status": "in_progress",
+  "observed_at": "2026-10-29T09:30:46.487Z",
+  "execution_branch": "codex/cloud-minimal-generator-run-20261029-a5",
+  "repeat_prohibited": true,
+  "tree": "e7edc50ca6b060163cce5c20988a3870a9712e25",
+  "review": {
+    "commit": "fee0103221c10d73950f3e24f86a2d135a74157e",
+    "blob": "693fc7d22a35ac7114317e91be9a3182630c40a7"
+  },
+  "source_adopted": false
+}
