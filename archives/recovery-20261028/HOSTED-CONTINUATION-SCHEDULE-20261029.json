@@ -114,6 +114,28 @@
     "first_run_expected": "Verify tools/registry/GitHub, respect main's valid lease, read-only exit; do not repeat probe or start projectjob",
     "source_canonical_or_project_writes": false,
     "plans_created": 0,
-    "AgentInstructions_edited": false
+    "AgentInstructions_edited": false,
+    "final_bounded_native_peek": {
+      "wait_once_seconds": 60,
+      "repeated_wait_loop": false,
+      "schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+      "is_enabled": true,
+      "next_run_time": null,
+      "last_run_time": null,
+      "run_details": {
+        "last_run": null,
+        "latest_result": null,
+        "delivery_status": "unknown"
+      },
+      "conclusion": "NO_RECORDED_HOSTED_START_OR_RESULT_AVAILABLE; not a claim task never ran; no run success inferred"
+    },
+    "readonly_lease_observation": {
+      "blob": "b26b4ef73b9c2fab70c6b20e7555e6121514ea19",
+      "state": "held",
+      "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+      "expires_at": "2026-10-29T08:45:41.847Z",
+      "lease_modified": false
+    }
   }
 }
