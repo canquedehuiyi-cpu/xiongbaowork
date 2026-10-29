@@ -1,0 +1,72 @@
+name: Locked URL first-hop headers only
+on:
+  push:
+    branches: [codex/cloud-lock-redirect-run-20261029-a1]
+permissions:
+  contents: read
+concurrency:
+  group: source-recovery-bytes
+  cancel-in-progress: false
+jobs:
+  first-hop-header:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify administrative probe and perform one contained no-follow GET
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
+          test "$GITHUB_REF" = "refs/heads/codex/cloud-lock-redirect-run-20261029-a1"
+          test "$GITHUB_EVENT_NAME" = "push"
+          /usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'
+          import hashlib,os,sys,urllib.request
+          from pathlib import Path
+          target=sys.argv[1];base=Path(sys.argv[2]).resolve()
+          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
+          dest=base/"lock-first-hop-controller.py"
+          url="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py"
+          digest=hashlib.sha256();total=0
+          with urllib.request.urlopen(url,timeout=30) as incoming,dest.open("xb") as out:
+              while True:
+                  block=incoming.read(65536)
+                  if not block:break
+                  total+=len(block);assert total<=14337
+                  digest.update(block);out.write(block)
+              out.flush();os.fsync(out.fileno())
+          assert total==14337 and digest.hexdigest()=="51c08349b35eafaf27c7d4d1419356ff7684b4ffbbf598e92955a58f16f1610f"
+          os.chmod(dest,0o600)
+          print("ADMIN_HEADER_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)
+          PY
+          sudo /usr/bin/python3 -I -B "$RUNNER_TEMP/lock-first-hop-controller.py" "$(id -u)" "$(id -g)"
+      - name: Always verify empty owned group and restored parent gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json,subprocess,time
+          from pathlib import Path
+          parent=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          owned=parent/"xb-lock-first-hop.service"
+          deadline=time.monotonic()+8
+          if owned.exists():
+              populated=dict(line.split() for line in (owned/"cgroup.events").read_text().splitlines())["populated"]
+              if populated!="0":
+                  if (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")
+                  remaining=deadline-time.monotonic()-2
+                  if remaining>0:
+                      try:subprocess.run(["systemctl","stop","xb-lock-first-hop.service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                      except subprocess.TimeoutExpired:
+                          if owned.exists() and (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")
+          assert parent.exists(),"containment parent was not established"
+          for name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:
+              (parent/name).write_text(value)
+          limits={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}
+          assert limits=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}
+          populated=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())["populated"]
+          assert populated=="0"
+          remaining=deadline-time.monotonic()
+          print("HEADER_PROBE_ALWAYS_FINAL "+json.dumps({"limits":limits,"populated":populated,"deadline_remaining":remaining,"Subject_executed":False}),flush=True)
+          assert remaining>=0
+          PY

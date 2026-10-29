@@ -1,0 +1,104 @@
+{
+  "schema": "xiongbaowork-lock-first-hop-header-probe-v1",
+  "author": "/root/persistence_review",
+  "base": "fe4c838c302dd5899c8ae63e8d41b8b957fc77c2",
+  "prepare_branch": "codex/cloud-lock-redirect-prep-20261029-a1",
+  "only_execution_branch": "codex/cloud-lock-redirect-run-20261029-a1",
+  "lock": {
+    "path": "openbot/bun.lock",
+    "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+    "bytes": 453991,
+    "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"
+  },
+  "node": {
+    "key": "@drizzle-team/brocli",
+    "pinned": "@drizzle-team/brocli@0.10.2",
+    "url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+    "metadata": {},
+    "integrity": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==",
+    "placement": "node_modules/@drizzle-team/brocli"
+  },
+  "prior_failure": {
+    "run": 40845991318,
+    "job": 123353492043,
+    "source_files": 2065,
+    "source_bytes": 50175181,
+    "private_schema_overlay_and_full50": "PASS",
+    "failure": "fetch_archive exact hostname guard; actual hostname was not logged",
+    "package_sri_verification": "NOT_REACHED",
+    "generator": "NOT_RUN",
+    "metadata": "NONE"
+  },
+  "scope": {
+    "archive_requests": 1,
+    "method": "GET",
+    "url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+    "automatic_redirects": false,
+    "follow_location": false,
+    "archive_body_reads": 0,
+    "archive_body_saves": 0,
+    "archive_installs": 0,
+    "source_acquisition": 0,
+    "project_execution": 0,
+    "secrets_read": 0,
+    "alternate_hosts": [],
+    "fallbacks": 0,
+    "retries": 0
+  },
+  "evidence": {
+    "status": true,
+    "original_url": true,
+    "original_sri": true,
+    "location_max_chars": 2048,
+    "location_safety": "No userinfo, no control characters; absolute Location must be HTTPS. Unsafe/overlong Location is not printed; emit bounded rejection metadata plus its digest. Query/fragment values are never logged: record scheme/hostname/port/path, query key names only, fragment presence, original length/SHA256. A full URI is printed only without query and fragment. No signed query may become persistent configuration.",
+    "header_allowlist": [
+      "date",
+      "server",
+      "content-type",
+      "content-length",
+      "cache-control",
+      "via",
+      "x-cache",
+      "x-cache-hits"
+    ],
+    "header_value_max_chars": 1024,
+    "redirection_http_error": "30x is header evidence, never download success; no response body read or followed request."
+  },
+  "resources": {
+    "project_bytes": 536870912,
+    "data_bytes": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "runner_subject": true,
+    "descendant_cgroup_verification": true,
+    "root_admin_activation_repair_before_uid_drop": true,
+    "service_deadline_seconds": 40,
+    "cleanup_reserve_seconds": 8,
+    "http_timeout_seconds": 10,
+    "job_minutes": 5,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false
+  },
+  "status": "AUTHOR_PREPARED_NOT_REVIEWED_NOT_EXECUTED",
+  "next": "Root and delivery independently review exact commit; only coordinator may push this same SHA to the unique run branch. Inspect actual first-hop evidence before proposing any explicit redirect download candidate.",
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "controller_identity": {
+    "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py",
+    "bytes": 14337,
+    "sha256": "51c08349b35eafaf27c7d4d1419356ff7684b4ffbbf598e92955a58f16f1610f"
+  },
+  "workflow_identity": {
+    "path": ".github/workflows/cloud-lock-redirect.yml",
+    "bytes": 3895,
+    "sha256": "7d40c7027409329313fd0f73ff4362a3603de04c1e8dafc9b415750dc21213e9"
+  },
+  "bootstrap": "Only this hash-pinned administrative controller is fetched from normal GitHub. No checkout/Source acquisition. The diagnostic archive endpoint receives exactly one non-following GET after runner UID drop.",
+  "review_required": true
+}
