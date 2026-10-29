@@ -1,0 +1,132 @@
+{
+  "schema": "xiongbaowork-a11-offline-data-plan-v1",
+  "status": "AUTHOR_SAFER_NO_PAYLOAD_PREPARED_UNREVIEWED_NOT_EXECUTED",
+  "author": "/root/a11_data_author",
+  "administrative_base": "c48d77d85386ffac616e016f50c5fac0e2b8416e",
+  "prepare_branch": "codex/a11-data-verify-prep-20261030",
+  "only_run_branch": "codex/a11-data-verify-run-20261030-a1",
+  "origin": {
+    "run": 40902334215,
+    "job": 123547693853,
+    "head": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+    "transport_report_commit": "bd71fddfbc56a0edb2c78b10e6818abafea695ed",
+    "transport_report_blob": "55045b5fe521dac3d0351c697026e39163fdc0e8"
+  },
+  "resources": {
+    "parent": 536870912,
+    "data_aggregate": 67108864,
+    "swap": 0,
+    "ordinary_only": true,
+    "systemd_compatibility": "OOMPolicy=kill plus root activation actual child/parent kernel memory.oom.group write/readback; no unsupported MemoryOOMGroup property",
+    "inner_seconds": 120,
+    "outer_seconds": 150
+  },
+  "input_contract": "Plan stores identities only, never compressed or raw exports. DATA64 service reads exactly original job123547693853 logs via documented same-repository Actions logs endpoint using ephemeral least-privilege Actions:read GITHUB_TOKEN; validates one normal signed-storage redirect without forwarding Authorization; parses exact header/chunk/end records only in memory.",
+  "outputs": "Only bounded identity/CRC/JSON structural summaries, no raw SQL/snapshot/journal/log stored or emitted.",
+  "adoption": "NONE; DATA-only identity validation is not Source/migration/PG approval.",
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "files": [
+    {
+      "header": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 155827,
+        "exported_sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",
+        "gzip_bytes": 14698,
+        "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
+        "original_identity": {
+          "bytes": 155827,
+          "mode": "0o644",
+          "sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7"
+        },
+        "path": "generated/0081_full50_approval_seed_diagnostic.sql"
+      },
+      "end": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 155827,
+        "path": "generated/0081_full50_approval_seed_diagnostic.sql"
+      }
+    },
+    {
+      "header": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 633425,
+        "exported_sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1",
+        "gzip_bytes": 36005,
+        "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
+        "original_identity": {
+          "bytes": 633425,
+          "mode": "0o644",
+          "sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1"
+        },
+        "path": "generated/meta/0081_snapshot.json"
+      },
+      "end": {
+        "chunks": 2,
+        "complete_file": true,
+        "exported_bytes": 633425,
+        "path": "generated/meta/0081_snapshot.json"
+      }
+    },
+    {
+      "header": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 12118,
+        "exported_sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0",
+        "gzip_bytes": 2116,
+        "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
+        "original_identity": {
+          "bytes": 12118,
+          "mode": "0o644",
+          "sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0"
+        },
+        "path": "generated/meta/_journal.json"
+      },
+      "end": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 12118,
+        "path": "generated/meta/_journal.json"
+      }
+    },
+    {
+      "header": {
+        "adopted": false,
+        "complete_file": true,
+        "exported_bytes": 7289,
+        "exported_sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550",
+        "gzip_bytes": 1863,
+        "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
+        "original_identity": {
+          "bytes": 7289,
+          "mode": "0o644",
+          "sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550"
+        },
+        "path": "diagnostic/generator.log"
+      },
+      "end": {
+        "chunks": 1,
+        "complete_file": true,
+        "exported_bytes": 7289,
+        "path": "diagnostic/generator.log"
+      }
+    }
+  ],
+  "authorization": "Root explicitly approved safer runtime-only fixed-job read after automatic review rejected payload persistence; no new credentials or repo payload persistence.",
+  "prior_auto_review": {
+    "action": "create_commit of embedded compressed exports",
+    "status": "REJECTED_NO_COMMIT_NO_BRANCH_UPDATE",
+    "reason": "Persisting compressed exports in repo plan was rejected as sensitive egress. Full payload was removed, not renamed/split/encoded elsewhere."
+  }
+}
