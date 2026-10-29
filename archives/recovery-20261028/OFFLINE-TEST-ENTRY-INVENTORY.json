@@ -1,0 +1,2791 @@
+{
+  "classification": "Literal screening only, not proof of a complete import graph or PG safety; Root must select exact explicit files before execution.",
+  "execution": "NONE_DATA_ONLY_NO_IMPORTS",
+  "groups": {
+    "runner": [],
+    "scripts": [
+      {
+        "bytes": 2627,
+        "flags": [],
+        "path": "scripts/ci/server-shards.test.mjs",
+        "sha256": "e13ff005448f0483a349898ba0c6cb48ef3a18cd4369aba391508c5988eb907f"
+      },
+      {
+        "bytes": 1153,
+        "flags": [],
+        "path": "scripts/ci/test-report.test.mjs",
+        "sha256": "35689c99493a128d178e434bced055494d586286d78c082cd8a203c1b8117511"
+      },
+      {
+        "bytes": 4808,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "scripts/processes.test.ts",
+        "sha256": "b7f10845f09c010be01072a94e7f336d13cc8320a90bf78c65b72f98134bd0e3"
+      },
+      {
+        "bytes": 16362,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "scripts/start-restart-guard.test.ts",
+        "sha256": "d6eb88ce4c163b6b8da3055b9b1bbfc26e46777caf873c736cd9381890a0e2ce"
+      },
+      {
+        "bytes": 2789,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "scripts/test-ci.test.ts",
+        "sha256": "b30fc5f19d173e1179b3572d2830d9f19661c791277471331f89ca4589f41361"
+      }
+    ],
+    "server/tests": [
+      {
+        "bytes": 12914,
+        "flags": [],
+        "path": "server/tests/admin-controls-shutdown.test.ts",
+        "sha256": "b75a5b76fd63056289e5b1badbad064fdfc261d1767950c1a765e188b99454b6"
+      },
+      {
+        "bytes": 7556,
+        "flags": [],
+        "path": "server/tests/admin-people-credentials-validation.test.ts",
+        "sha256": "3dc4a21fc5cb01264f7df88349fb57c6f00aa8f2c5e49662f52ce7a0f6206673"
+      },
+      {
+        "bytes": 3336,
+        "flags": [],
+        "path": "server/tests/agent-auth-header.test.ts",
+        "sha256": "428d9d5ec95aca4a1220fe2f78edcbf59fb5d184687d71cd48c76cd5b3f01e48"
+      },
+      {
+        "bytes": 25585,
+        "flags": [],
+        "path": "server/tests/agent-callback-token.test.ts",
+        "sha256": "ae3399701dd3eaf1d479fdfaf4727c07818be01abb870df8482b20ab9d7e8b8d"
+      },
+      {
+        "bytes": 12328,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/agent-connection-live.test.ts",
+        "sha256": "49fc825edebc269a1eae0a4c3587b9db86d8c12feb11e49094010c96ee4a5c87"
+      },
+      {
+        "bytes": 28808,
+        "flags": [],
+        "path": "server/tests/agent-endpoint.test.ts",
+        "sha256": "43c8711ccccc4482a5effb34b9347d710ccaa822e1dafbc96692e76d745dc9fd"
+      },
+      {
+        "bytes": 8739,
+        "flags": [],
+        "path": "server/tests/agent-escalation.test.ts",
+        "sha256": "20909eba341887ec86872fb69c81f938debf0504ad1157127f0c9722b27db06b"
+      },
+      {
+        "bytes": 28218,
+        "flags": [],
+        "path": "server/tests/agent-handoff-delivery.test.ts",
+        "sha256": "b27b6f3c46f66be48b9fca1b2f5de8302275024869c332ba6e6cb41c5fc9e86c"
+      },
+      {
+        "bytes": 7970,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/agent-handoff-endtoend.integration.test.ts",
+        "sha256": "02c9983d353ef1ee7da1920290b39594edc8e40245ab8780a926e0666669a6b6"
+      },
+      {
+        "bytes": 5364,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/agent-handoff-runner.integration.test.ts",
+        "sha256": "5149d876ba3bcfd646dc5b50075afea8499779f144ffb7840b6de2079a975bc1"
+      },
+      {
+        "bytes": 20147,
+        "flags": [],
+        "path": "server/tests/agent-handoff-runner.test.ts",
+        "sha256": "135b2067a9d02ea306789ea3dc25b48a18e2e72af6977cc717fe2899e3fccb7b"
+      },
+      {
+        "bytes": 5125,
+        "flags": [],
+        "path": "server/tests/agent-handoff-tool.test.ts",
+        "sha256": "783439beedd92b64d96f55589f12644c020f8d732f346c54b46bcd20e0272a77"
+      },
+      {
+        "bytes": 7968,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/agent-handoff.integration.test.ts",
+        "sha256": "7f8dedbcfed89346ab344f6daf5f5120f2328dcccbb714137b0e8f14f1da0f3c"
+      },
+      {
+        "bytes": 20783,
+        "flags": [],
+        "path": "server/tests/agent-handoff.test.ts",
+        "sha256": "de131066c8390fe00b0fa02d271cad2c9e7489ac3ce3d063a884b10eb66f9fa4"
+      },
+      {
+        "bytes": 5838,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/agent-key-rotation.integration.test.ts",
+        "sha256": "6d76df7b2ba0dd5159b0b6b5189ac9380740815a25698bb51521d05ef216b5b8"
+      },
+      {
+        "bytes": 11267,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/agent-model-binding.test.ts",
+        "sha256": "0b98978c92ba301bc432e03618906e08617fc9e662c846b4cd79f8b16d5625b1"
+      },
+      {
+        "bytes": 3012,
+        "flags": [],
+        "path": "server/tests/agent-profile-policy.test.ts",
+        "sha256": "372a228733c9e21a29185171850b5350de581813f50e7fe23baa30e791ce378d"
+      },
+      {
+        "bytes": 33271,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/agent-profile-store.integration.test.ts",
+        "sha256": "825d5f8465414062ae3c8d366266da7b83a814d02492c866ad9e58e15119a4c6"
+      },
+      {
+        "bytes": 1484,
+        "flags": [],
+        "path": "server/tests/agent-registry.test.ts",
+        "sha256": "d62015153abe0f145e8ce3cb759bbad41c67b48e031966f33a6b87037321864c"
+      },
+      {
+        "bytes": 23836,
+        "flags": [],
+        "path": "server/tests/agent-routes.test.ts",
+        "sha256": "db94b42b9607ea9f996bbf17314b343a206c6e2794b78b63cbc3bf54494fe23f"
+      },
+      {
+        "bytes": 7417,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/agent-test-connection-headers.test.ts",
+        "sha256": "a58b739d2646e36be551a9d1669cdcff14936a917978ab6c6e931c294dbcc0d4"
+      },
+      {
+        "bytes": 3437,
+        "flags": [],
+        "path": "server/tests/agent-tool-call-input.test.ts",
+        "sha256": "db93654a0e1304dd065900a5994e0e297772109576e75ca0a1cecb02d3c29c6f"
+      },
+      {
+        "bytes": 21306,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approval-continuation-preparation-transaction.integration.test.ts",
+        "sha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0"
+      },
+      {
+        "bytes": 19014,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approval-continuation-store.integration.test.ts",
+        "sha256": "c975a5f38b250c182a0734ae8a20dfbda441c6b42b59cb25a6d2172eee5d469c"
+      },
+      {
+        "bytes": 15997,
+        "flags": [],
+        "path": "server/tests/approval-exact-http-owned-input.test.ts",
+        "sha256": "3d9a2c8c74f1259c9088503897367b38d8bb5b8262f3740e0c3cb6db6d21f85c"
+      },
+      {
+        "bytes": 19601,
+        "flags": [],
+        "path": "server/tests/approval-exact-input-json-materializer.test.ts",
+        "sha256": "bd49e4b4ed9f4261d7a3c65beb2e023872941a4e32e41435ed38c3238797e830"
+      },
+      {
+        "bytes": 8029,
+        "flags": [],
+        "path": "server/tests/approval-exact-input-json.test.ts",
+        "sha256": "e9221222ad33bce24dfc01055ff97ddb245cde7c8f5c10aa0c6642a0a37e8931"
+      },
+      {
+        "bytes": 13447,
+        "flags": [],
+        "path": "server/tests/approval-exact-object-crypto.test.ts",
+        "sha256": "0f0bfba9bf7907db97d43fbbda66ee2d36b26356454687294ad2be4a00042c4e"
+      },
+      {
+        "bytes": 13299,
+        "flags": [],
+        "path": "server/tests/approval-exact-object-header.test.ts",
+        "sha256": "233025a2aa0ca6ae2b78689df48588ea291c559e8bd11ba7a66b8d444f2c007a"
+      },
+      {
+        "bytes": 11179,
+        "flags": [],
+        "path": "server/tests/approval-exact-object-wire.test.ts",
+        "sha256": "c0068686f81a6a8cbf10a7321294337a4997eeeba5cfdadefca48fe7775b3629"
+      },
+      {
+        "bytes": 10173,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approval-open-transaction.integration.test.ts",
+        "sha256": "8d5d0b4b5be0746f114db4ec259a378a26ff03af1d9e0ff6639cd46751ed11c3"
+      },
+      {
+        "bytes": 3673,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approval-recovery-port.integration.test.ts",
+        "sha256": "d69b410bc0d6894ccd0725aa8802c70f4df537f206afbea2a0178013f1d8b8fd"
+      },
+      {
+        "bytes": 13015,
+        "flags": [],
+        "path": "server/tests/approval-recovery-port.test.ts",
+        "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3"
+      },
+      {
+        "bytes": 17879,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/approvals-continuation-protocol.test.ts",
+        "sha256": "284e1b225d9e89716f3951e96cc545c5158f74895a306d90fcd74e8d56e28d5a"
+      },
+      {
+        "bytes": 10525,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/approvals-continuation-recovery.test.ts",
+        "sha256": "39994f065b691ce36dfcf072fa0a545f70e850275f51b4f52f3a119651f7d166"
+      },
+      {
+        "bytes": 6966,
+        "flags": [],
+        "path": "server/tests/approvals-execute.test.ts",
+        "sha256": "2018da228a5f6cf9e08b4dfb97c0905cf6027441585a57882392e789d1f74a56"
+      },
+      {
+        "bytes": 2809,
+        "flags": [],
+        "path": "server/tests/approvals-frontend.test.ts",
+        "sha256": "f4c74115b3cbfe44f711ffcead79d414f7449015700222f7dd5b9ee1896a407e"
+      },
+      {
+        "bytes": 14804,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approvals-interactive.integration.test.ts",
+        "sha256": "847df2a55db75b00c507c796ffba8ebb75308c70795f25a1137f2e2406d0f23d"
+      },
+      {
+        "bytes": 3909,
+        "flags": [],
+        "path": "server/tests/approvals-native.test.ts",
+        "sha256": "f6347279a2dcd08633e913940d17281e6b8612a81eb5b815c9815e6155b663df"
+      },
+      {
+        "bytes": 10889,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approvals-policy.integration.test.ts",
+        "sha256": "5fafdde21d84275a5e7aa0c9d849c4a7d72de756ca2b0bf121cd4c4396da02a5"
+      },
+      {
+        "bytes": 29405,
+        "flags": [],
+        "path": "server/tests/approvals-policy.test.ts",
+        "sha256": "1fb693ed3955293cc551175c64ed2226ad44168a28bacc318afb8bd86f4154d8"
+      },
+      {
+        "bytes": 9255,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approvals-question-resume.integration.test.ts",
+        "sha256": "d314a9514624d2fb9e30fbcc0730da853372697046b113d2ec8948732d296f8d"
+      },
+      {
+        "bytes": 904,
+        "flags": [],
+        "path": "server/tests/approvals-questions.test.ts",
+        "sha256": "fab7ac1a536d63858d51f00a8081b924d83594e9ea81819f6a3244c2f671d6e8"
+      },
+      {
+        "bytes": 4956,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/approvals-store.integration.test.ts",
+        "sha256": "ca6a5d82b211e50a4bd4c939ae6004f48b5afc37768b149b08a33ae54fafc0ea"
+      },
+      {
+        "bytes": 25129,
+        "flags": [],
+        "path": "server/tests/approvals.test.ts",
+        "sha256": "b75d256b1694e33fc3d8feef54fe525919e2174b0b2fce147d9d110344ea444a"
+      },
+      {
+        "bytes": 14422,
+        "flags": [],
+        "path": "server/tests/attachment-mime.test.ts",
+        "sha256": "a7546b93699036e1210283952d5e5dac32a127c571190648ae6fa1ad1b0535bf"
+      },
+      {
+        "bytes": 35713,
+        "flags": [],
+        "path": "server/tests/attachment-parts.test.ts",
+        "sha256": "e0f8b26ea65e89313d3f3db1780bc3bd392c84a27e380523880e794f45bba6af"
+      },
+      {
+        "bytes": 142403,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/attachment-routes.test.ts",
+        "sha256": "a0a81f9245153fadc17825454926668fafa11cea2134ee2524a5fe9ad216a20a"
+      },
+      {
+        "bytes": 16519,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/attachment-store.test.ts",
+        "sha256": "72cfd769fad633dfc7097a0988b7ff8d2bd0b43c2a4b95dbbeb83198be4b4035"
+      },
+      {
+        "bytes": 21257,
+        "flags": [
+          "direct_pg",
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/attachment-sweeper.test.ts",
+        "sha256": "61c9d9e989e999e86642eaa9ca43d78f75035a4ee07cec08fe8c100c2c72160c"
+      },
+      {
+        "bytes": 5962,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/audit-cursor.integration.test.ts",
+        "sha256": "3024d3731298a2e4ab5ebabbbeb7219312a2eda997cd3c957dde86f6f83388de"
+      },
+      {
+        "bytes": 7427,
+        "flags": [],
+        "path": "server/tests/audit-cursor.test.ts",
+        "sha256": "1d1e9eb457e9ef03bc1fc971ba7d610ac9485bb3176a6569106f4e615f82d739"
+      },
+      {
+        "bytes": 9549,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/audit-initiator.integration.test.ts",
+        "sha256": "11de7d2cbee9003c0f9f606664f239a5a909772f4d5a5cf515322e5cfbd03e49"
+      },
+      {
+        "bytes": 3537,
+        "flags": [],
+        "path": "server/tests/audit-limit.test.ts",
+        "sha256": "00eabf6a80c85ff9a6f13ae616d9ea1c25fe2fdeee2bed4b1444123d8edde96b"
+      },
+      {
+        "bytes": 13101,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/audit-retention.integration.test.ts",
+        "sha256": "aef337a72e59a697028b224dbcc546f7c2b980b1d1eebedad3cfb4fd60091107"
+      },
+      {
+        "bytes": 8450,
+        "flags": [],
+        "path": "server/tests/audit.test.ts",
+        "sha256": "10b6af3bbe8cb1f089eefdb193328261b959575b73482ae0ba3b063aba0dc65a"
+      },
+      {
+        "bytes": 1932,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/auth-mobile-scheme.integration.test.ts",
+        "sha256": "3cc309ba41481b1dbcf7a0894bfde1bf4b377472ec178707e1b53f5b910b2161"
+      },
+      {
+        "bytes": 6339,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/autonomous-summary.test.ts",
+        "sha256": "e75250009e9da53b9d6bbb24b5dcd922064454c7ce60fa1e4c0ca523d6d01b52"
+      },
+      {
+        "bytes": 4740,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/ban-freezes-execution.test.ts",
+        "sha256": "63911cef0b6727efd1d093b972a6ff29ee006bbafa1a4b595391f6deed5e964a"
+      },
+      {
+        "bytes": 18280,
+        "flags": [],
+        "path": "server/tests/bot-access.test.ts",
+        "sha256": "187cca3789a580a193e23da0237c212afc1180e14e553dd881c717bff28b8eb5"
+      },
+      {
+        "bytes": 12196,
+        "flags": [],
+        "path": "server/tests/bot-lifecycle-audit.test.ts",
+        "sha256": "81a89fcac10c81a0331101dbd463bdc5fd0df210aa6a9d93bab4c3f4a5ed7ee5"
+      },
+      {
+        "bytes": 8761,
+        "flags": [],
+        "path": "server/tests/bot-lifecycle-routes.test.ts",
+        "sha256": "d1ce99bab0db0bbdfc466787fb87b5ef578782e9a25024431dcab45ee1acfa46"
+      },
+      {
+        "bytes": 2645,
+        "flags": [],
+        "path": "server/tests/bot-lifecycle-watcher.test.ts",
+        "sha256": "044f49a25cd513fc630fb36f804e4102e1d8c09e846c5cf148192f35e0f582fe"
+      },
+      {
+        "bytes": 19879,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/bot-lifecycle.integration.test.ts",
+        "sha256": "d303ca28eb9ef00be2d8abaecf613f5bcf31805f65b16bef7261e8f3ae6cd668"
+      },
+      {
+        "bytes": 19024,
+        "flags": [],
+        "path": "server/tests/builtin-routines.test.ts",
+        "sha256": "ef604366df1283da2877e634ad630141c97ea93fee4b2a96fa0fef3f89a01b78"
+      },
+      {
+        "bytes": 1891,
+        "flags": [],
+        "path": "server/tests/bunfig-preload.test.ts",
+        "sha256": "992c9b23cbe64fbe5e952c320b82b9f445d986103237a52288fb3b3727bbd48a"
+      },
+      {
+        "bytes": 2380,
+        "flags": [],
+        "path": "server/tests/channel-activity-input.test.ts",
+        "sha256": "3927f3ff07955c861bf77f6d4d0192df13c9383c4505eac005fab9ac3d8494c5"
+      },
+      {
+        "bytes": 20018,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/channel-activity.integration.test.ts",
+        "sha256": "78d7ddba6dde6583b6a0e5845e511967862ffc398672feeb1ca0b39254da81a9"
+      },
+      {
+        "bytes": 1331,
+        "flags": [],
+        "path": "server/tests/channel-cursor.test.ts",
+        "sha256": "43c966256848f9692ab37ce235d537f225885e790cfc73ec480962700a200713"
+      },
+      {
+        "bytes": 22479,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/channel-events.integration.test.ts",
+        "sha256": "a99eed83ab0f32f8ab6f322170337945c7f79d327d0634720e3e73a27327d822"
+      },
+      {
+        "bytes": 3256,
+        "flags": [],
+        "path": "server/tests/channel-one-line.test.ts",
+        "sha256": "8651693e7176e1aca54b8c2f5e20620e4cf77d7415cab9b11c372e45866f04af"
+      },
+      {
+        "bytes": 54124,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/channel-routes.test.ts",
+        "sha256": "e733b08bf95708264abd014157ac71008740466c2ee75510d92c7f9bcc577689"
+      },
+      {
+        "bytes": 18904,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/channel-summary.integration.test.ts",
+        "sha256": "bbd6002303ed51049fefa527afef09b8f5c619dd6c2d568a24807d03fe096eeb"
+      },
+      {
+        "bytes": 4408,
+        "flags": [],
+        "path": "server/tests/channel-titler.test.ts",
+        "sha256": "75b23a9a9835c067274d904b2c224ca9a6d898605f631d8e92e8a21b91af8387"
+      },
+      {
+        "bytes": 4620,
+        "flags": [],
+        "path": "server/tests/component-catalogue-entries.test.ts",
+        "sha256": "6c4a00eeaabc696c9392c36f93e811882cbea33ff4dfa89709127e9fbbd47ce1"
+      },
+      {
+        "bytes": 4012,
+        "flags": [],
+        "path": "server/tests/component-catalogue.test.ts",
+        "sha256": "fe4d36926f08a5c3acd7b594e18b823da254f7d4824e2b91b9c7a702f19babb2"
+      },
+      {
+        "bytes": 3783,
+        "flags": [],
+        "path": "server/tests/component-decision-functions.test.ts",
+        "sha256": "e78c37cda6a97b5dad674a848149b61c54c00f0cc2307c2da1681c7db830bbbe"
+      },
+      {
+        "bytes": 3364,
+        "flags": [],
+        "path": "server/tests/component-decision.test.ts",
+        "sha256": "80820f4150e0ff6252c232b20c6436c2aeaae32c57c28521b73fb19ee7c09bc7"
+      },
+      {
+        "bytes": 8170,
+        "flags": [],
+        "path": "server/tests/component-grants-skills-validation.test.ts",
+        "sha256": "99c5b54b9a38769da304b3cf3c0798066e367fbd4ffcf41e6446693af5077776"
+      },
+      {
+        "bytes": 4294,
+        "flags": [],
+        "path": "server/tests/component-grants-tenant-boundary.test.ts",
+        "sha256": "64cefcafc29d0258142aa1f75851b34a7293798f784cdf72cae5f02479960f42"
+      },
+      {
+        "bytes": 3807,
+        "flags": [],
+        "path": "server/tests/component-publication.test.ts",
+        "sha256": "47b05ebe5b9381813ec5ea9d6fbfda6c3862c9067eb46a9733346804b4aa6a9c"
+      },
+      {
+        "bytes": 15616,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/component-store.integration.test.ts",
+        "sha256": "b3e5cc50411fae40a9e486559afb1557908a96e7a2baca682ee82b81eaeb976a"
+      },
+      {
+        "bytes": 11833,
+        "flags": [],
+        "path": "server/tests/composio-access.test.ts",
+        "sha256": "b537559fc238b0bada0d91529572616faf936000909349966cb10af6760ab0b3"
+      },
+      {
+        "bytes": 341453,
+        "flags": [
+          "live_or_smoke"
+        ],
+        "path": "server/tests/composio-adapter.test.ts",
+        "sha256": "dc1866b773a4f88ae0fddefd047b9038f7e5e1c4b7067965df336fa764561e9f"
+      },
+      {
+        "bytes": 7103,
+        "flags": [],
+        "path": "server/tests/composio-broker-seam.test.ts",
+        "sha256": "00b0802f449e7584f8b326182a83819970dcb45c04c44be330cc09c795fd2173"
+      },
+      {
+        "bytes": 7139,
+        "flags": [],
+        "path": "server/tests/composio-classify.test.ts",
+        "sha256": "15804b7fe560c647412e5b172ce46498b3834cd90a94c1dd787b105b819c2ffa"
+      },
+      {
+        "bytes": 77452,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/composio-connection-kinds.test.ts",
+        "sha256": "5a73e4d102d80fe2c46a33bfec9b3767907d962b4bc189a9b8da3e83aee7ebd4"
+      },
+      {
+        "bytes": 238687,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/composio-connections.test.ts",
+        "sha256": "6981752a0c6eddbdc199b5a6b4215396506ebc3823a1bf3f779c08c0b7364622"
+      },
+      {
+        "bytes": 12986,
+        "flags": [
+          "live_or_smoke"
+        ],
+        "path": "server/tests/composio-live.test.ts",
+        "sha256": "b0d5ec70bf3e15c097a7364978d007de7cfebced8cde11c825253696e556dc10"
+      },
+      {
+        "bytes": 150959,
+        "flags": [],
+        "path": "server/tests/composio-transport.test.ts",
+        "sha256": "b89c6999f3b8c83569f0d5b47eacb914d42d735144a96c006678c77a567b65ea"
+      },
+      {
+        "bytes": 19112,
+        "flags": [],
+        "path": "server/tests/computer-client.test.ts",
+        "sha256": "c92f734b137447446fb49cac73c9914950a5a07cfafa4061fb997eb6ade98264"
+      },
+      {
+        "bytes": 9198,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/computer-culler.integration.test.ts",
+        "sha256": "202be9d9812186c286945230ef2d32ee38aa50da336be1ccf240d84eb533207a"
+      },
+      {
+        "bytes": 5307,
+        "flags": [],
+        "path": "server/tests/computer-download-routes.test.ts",
+        "sha256": "9524212463a39c1ff59a1c9a93bd74e423027f2154113e2bd86b73f2808e1382"
+      },
+      {
+        "bytes": 2890,
+        "flags": [],
+        "path": "server/tests/computer-exec-timeout.test.ts",
+        "sha256": "1405605fe546a228dee5483690f7f72bbe2072b44f3019434fe17d0b6eda9d57"
+      },
+      {
+        "bytes": 3618,
+        "flags": [],
+        "path": "server/tests/computer-fleet-route.test.ts",
+        "sha256": "8122b58d716a0f3d3ab2871dca8915f7b269470980edfb2d266ce4692f16670b"
+      },
+      {
+        "bytes": 66586,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/computer-gateway.test.ts",
+        "sha256": "da0735889d7c5ba72e842600d1f501b4f75fde88e11a86b0d0de5750d7618a71"
+      },
+      {
+        "bytes": 6078,
+        "flags": [],
+        "path": "server/tests/computer-handoff-contract.test.ts",
+        "sha256": "b24b8f2a3ff78ef7f3a1581e9ba594c0f135deba243d534ab1833b06b30132b3"
+      },
+      {
+        "bytes": 4499,
+        "flags": [],
+        "path": "server/tests/computer-human-input.test.ts",
+        "sha256": "35f624ba2deb2bb0feca772a88cc3d2b21ada816243b5cd2a1c09d094b77a1ca"
+      },
+      {
+        "bytes": 9702,
+        "flags": [],
+        "path": "server/tests/computer-page-frame-route.test.ts",
+        "sha256": "256859744ad5e645ddb7d8988e29c2e387b26f574fafe62161834d8bec93042c"
+      },
+      {
+        "bytes": 6557,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/computer-page-frame-store.integration.test.ts",
+        "sha256": "02b9fe1d8fdf6c8ec8f468f217273a9924198ad4e65cb8d2c8b9de20f1d954ea"
+      },
+      {
+        "bytes": 3730,
+        "flags": [],
+        "path": "server/tests/computer-policy-dry-run-limit.test.ts",
+        "sha256": "b64eef99896703fa03cbde3e03ed47380ab8518c9297aa9f471ff68fd936d977"
+      },
+      {
+        "bytes": 3442,
+        "flags": [],
+        "path": "server/tests/computer-policy-route.test.ts",
+        "sha256": "5ceaecfc27f108848b0431437551d188272ae6439dd81aa21dcdf1463f7d6207"
+      },
+      {
+        "bytes": 28127,
+        "flags": [],
+        "path": "server/tests/computer-policy.test.ts",
+        "sha256": "16f60fac67378cb4374c6344b17f74669a6c3bb80a120a50c8eb84fc2081f6b3"
+      },
+      {
+        "bytes": 15081,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/computer-provider.test.ts",
+        "sha256": "1c90a86f840fbc001736e72b96b9d0f593bcbd7d872e7e788fca021c49037200"
+      },
+      {
+        "bytes": 7251,
+        "flags": [],
+        "path": "server/tests/computer-routes.test.ts",
+        "sha256": "adef91d60e3f88522ce5d11531180a2b17c9c00331e0ff8963d483687b7cb478"
+      },
+      {
+        "bytes": 14896,
+        "flags": [],
+        "path": "server/tests/computer-sandbox.test.ts",
+        "sha256": "0fdd83e47bfbef5e933235887eea0bf0e89a6c423da7c64b37caa4e8d39bcb2c"
+      },
+      {
+        "bytes": 3169,
+        "flags": [],
+        "path": "server/tests/computer-scroll-delta.test.ts",
+        "sha256": "0b972a2edce2617834a6339ae1d5559659f4d70f90cd816ba441833dba9a3207"
+      },
+      {
+        "bytes": 5206,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/computer-session-guard-replicas.integration.test.ts",
+        "sha256": "c6bb44b3003ef33da23b1b6fb5132b447556264233c843a7b43e0d317045b1d1"
+      },
+      {
+        "bytes": 8225,
+        "flags": [],
+        "path": "server/tests/computer-session-guard.test.ts",
+        "sha256": "7ea7e44c4cdf3d3b538b8d63d5f6b9ac5c7419eb20ac6c6240c92872a5a41d3a"
+      },
+      {
+        "bytes": 2563,
+        "flags": [],
+        "path": "server/tests/computer-snapshot-id.test.ts",
+        "sha256": "4e5f8213fbfc0d1920308d295ac914d07a8aacc074c325d759faa0d8b84e5f0a"
+      },
+      {
+        "bytes": 5904,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/computer-snapshot-store.integration.test.ts",
+        "sha256": "733e3e9fbf3d5e11a7cd68ac34acff75cd9e8f13bbe42940a4fcf9c0957c6fb9"
+      },
+      {
+        "bytes": 8361,
+        "flags": [],
+        "path": "server/tests/computer-snapshot-store.test.ts",
+        "sha256": "6b9918410412e007532eef4cc1625525c17bfe4547059c2a8165f4635235013d"
+      },
+      {
+        "bytes": 870,
+        "flags": [],
+        "path": "server/tests/computer-stream-path.test.ts",
+        "sha256": "5b1443a68a2c7b0c9fe18d55e9acb567779d158424d6a74718f7cdf872487d0c"
+      },
+      {
+        "bytes": 11532,
+        "flags": [],
+        "path": "server/tests/computer-supervisor.test.ts",
+        "sha256": "602d37022cadd85e96a15871ffc5a220e90e5e19a281d71bc34d0b6627f30525"
+      },
+      {
+        "bytes": 9486,
+        "flags": [],
+        "path": "server/tests/computer-target.test.ts",
+        "sha256": "2a437c08073f4f09ade6d04e3a4a9e67d3ab2764e2b565e4838769fc75e890a4"
+      },
+      {
+        "bytes": 45528,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/config.test.ts",
+        "sha256": "96b2dd3ea790f5966b4667085bf33288295c1c88ab62b6d067ce1b4f79103bf7"
+      },
+      {
+        "bytes": 2547,
+        "flags": [],
+        "path": "server/tests/connector-tokens-never-reach-computer.test.ts",
+        "sha256": "4fc1c4f4355e2fbe9675d10f2c6ffadea2f9270acab50b9834a583adb3d4b9df"
+      },
+      {
+        "bytes": 5899,
+        "flags": [],
+        "path": "server/tests/content-governance.test.ts",
+        "sha256": "dab3d66cd422b5bdee35561c5fd828ef0a0c56e277b72deeea0f882591b198c1"
+      },
+      {
+        "bytes": 28577,
+        "flags": [],
+        "path": "server/tests/continuation-target-local.test.ts",
+        "sha256": "2a330c46097076ae763fe13a4364fe39a57f48bce2315f21e0c8c9a1590cae70"
+      },
+      {
+        "bytes": 16737,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/continuation-target-store.integration.test.ts",
+        "sha256": "1019b575df4b7509f0faf43ffa911b23b88118a09d1036059f5c95afc69f464a"
+      },
+      {
+        "bytes": 6081,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/control-refusal-end-to-end.test.ts",
+        "sha256": "33ac8621cb1289c2cb6198138bea641bc11cdaa39d9392aac8106e08e8d05fee"
+      },
+      {
+        "bytes": 98908,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/copilot.test.ts",
+        "sha256": "7c08c508c8fc20eada2ed920b9f66289f9b5da5ed748845b201dfbc09c1b8538"
+      },
+      {
+        "bytes": 6466,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/credential-rotation-leak.integration.test.ts",
+        "sha256": "fadbea1aa6259f38e6bfd8c665a0f6455a1d45a1fbb0b68ae9e3a11bc90f4d54"
+      },
+      {
+        "bytes": 27402,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/credentials.test.ts",
+        "sha256": "47eddd916271b50f59b25ce5c397a9dddd061efb77a982f4d2c0163e3d1fc1ba"
+      },
+      {
+        "bytes": 1976,
+        "flags": [],
+        "path": "server/tests/cull-sweep-wiring.test.ts",
+        "sha256": "9c90ede93b2a1e3354bfc81745ca3fee9d3a0b50b4641a9a34117c27708a59a8"
+      },
+      {
+        "bytes": 378,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/database.test.ts",
+        "sha256": "67c819fed78b9bc6121686eece7d20aa6487a12b1abed94d7e932d2aa7b602bf"
+      },
+      {
+        "bytes": 5582,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/db-client-address.test.ts",
+        "sha256": "4086b28c805c08003c51c13e7c25e076388fa104d843b67d83932f1a9210d078"
+      },
+      {
+        "bytes": 7836,
+        "flags": [],
+        "path": "server/tests/delivery-providers.test.ts",
+        "sha256": "ffafa9e24602208519eab0ef5d20d806f6ac4214ebbfcb0fde13963b6aaa3c33"
+      },
+      {
+        "bytes": 11841,
+        "flags": [],
+        "path": "server/tests/delivery-router.test.ts",
+        "sha256": "4df01574f625758729895c837f6d1484697e2179331bbac21ada201d144504be"
+      },
+      {
+        "bytes": 18895,
+        "flags": [],
+        "path": "server/tests/delivery-routes.test.ts",
+        "sha256": "18bc45544b5cc0be4fe3a9c25de13c7ccf3810200bae63e6be1f859b2e6c696b"
+      },
+      {
+        "bytes": 8571,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/delivery-store.integration.test.ts",
+        "sha256": "fdd27bd139b1f26a56b50a9eb8e66f7deceb8d0356d03cbe3ebbad42a39c8c79"
+      },
+      {
+        "bytes": 2399,
+        "flags": [],
+        "path": "server/tests/delivery-turn.test.ts",
+        "sha256": "7c74e35d0216962941f7b0e7e3449f10b06f5ef94033bb371d7b70d653391957"
+      },
+      {
+        "bytes": 11337,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/demonstrations-store.integration.test.ts",
+        "sha256": "fb1705965dff89d176cb615cdbba8f544f64cc5006fa01d9c95a1860575f11c9"
+      },
+      {
+        "bytes": 10814,
+        "flags": [],
+        "path": "server/tests/demonstrations.test.ts",
+        "sha256": "f7a39f78d22ecfd511caf7d915783002fc75043cd16a52c76e14afae77e08871"
+      },
+      {
+        "bytes": 4982,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/deployment-route-bot-end-to-end.test.ts",
+        "sha256": "3ad7a3a42e8b491eb3bd6e241e2c665a75df46dc9a503ddaf9a3e89afee2d294"
+      },
+      {
+        "bytes": 5899,
+        "flags": [],
+        "path": "server/tests/desktop-connection-failure.test.ts",
+        "sha256": "0e22756c5e93f3f1e4b7b9366c3c083faf70a34ad1df24735e45973db5849592"
+      },
+      {
+        "bytes": 3427,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/dev-actor.integration.test.ts",
+        "sha256": "8d0769da19f4e51fa06a64168c6ee54b89011ff5de6bacdecb43746aaa7d2984"
+      },
+      {
+        "bytes": 6278,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/device-queue.test.ts",
+        "sha256": "318bd60e016ca74d2ada09d2762d4e0863afefebd28472bcd263313bee853df3"
+      },
+      {
+        "bytes": 18465,
+        "flags": [
+          "direct_pg",
+          "integration_name",
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/device-safety.integration.test.ts",
+        "sha256": "1d5eca7f7b1f578a1dec2abd8fba754b08a3d61823fcbafcdf228c80f98b8a5e"
+      },
+      {
+        "bytes": 14309,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/devices.test.ts",
+        "sha256": "cc9c5a282335baa35791a33a411da96868a39a7e5706b5af9ef56f201e0e7ed6"
+      },
+      {
+        "bytes": 3799,
+        "flags": [],
+        "path": "server/tests/dictation-provider.test.ts",
+        "sha256": "e1fad8474e4a3e262511a0b2c6d8a247c27c093ef934b4e5aec7a5b9e95c9612"
+      },
+      {
+        "bytes": 4266,
+        "flags": [],
+        "path": "server/tests/dictation-routes.test.ts",
+        "sha256": "4274ddad39fc5b3e9f6609fa2ee26c97ed9321458fe5deb84388156296835c9f"
+      },
+      {
+        "bytes": 4218,
+        "flags": [],
+        "path": "server/tests/duplicate-run.test.ts",
+        "sha256": "a5f503ddd7febc59da39b0e7e8ac43083082f896c5abc4fcdc287bf89616e0e6"
+      },
+      {
+        "bytes": 4587,
+        "flags": [],
+        "path": "server/tests/egress-policy-on-wake.test.ts",
+        "sha256": "9fa964ba40db8dd50878dcab5b939a25fd66f8d03c6e568da372ece6f1970783"
+      },
+      {
+        "bytes": 2893,
+        "flags": [],
+        "path": "server/tests/email-domain.test.ts",
+        "sha256": "236c756ed6759464b4a4abb67f96be52bfea8b63b8d1837564e36e228c909a6a"
+      },
+      {
+        "bytes": 6772,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/email-signup.test.ts",
+        "sha256": "c071ad1695aa7afafecef9c1fc1349c354a6a04e85a90b9a21926ce677b8946f"
+      },
+      {
+        "bytes": 5383,
+        "flags": [],
+        "path": "server/tests/encrypt-sso-config.test.ts",
+        "sha256": "db9614e711adfc5131bc8f9488080d537620e9e912f88e5b814b8ca2af852587"
+      },
+      {
+        "bytes": 28268,
+        "flags": [
+          "direct_pg",
+          "integration_name",
+          "local_listener"
+        ],
+        "path": "server/tests/enterprise-controls.integration.test.ts",
+        "sha256": "aef71b5dcfc6f32c07851639364679e9c256b0cfad2c4df0cd1f3f0ef3472be0"
+      },
+      {
+        "bytes": 12279,
+        "flags": [],
+        "path": "server/tests/enterprise-controls.test.ts",
+        "sha256": "11302f6668e6e8a2b6af193500a9b7a5d3ec795bcb37f308392ec7c115cf38f8"
+      },
+      {
+        "bytes": 2089,
+        "flags": [],
+        "path": "server/tests/entra-profile.test.ts",
+        "sha256": "443abfcadf8e9fe5498d662349763b03780062b34d5155e203f0e7326e560c03"
+      },
+      {
+        "bytes": 24945,
+        "flags": [],
+        "path": "server/tests/google-drive-rest.test.ts",
+        "sha256": "b49186cbe0f3cbcf498289160b7518608f5377d14049cdf748ff9f62ef8a97ac"
+      },
+      {
+        "bytes": 9125,
+        "flags": [],
+        "path": "server/tests/google-oauth-transport.test.ts",
+        "sha256": "ec37fe0abe7b1f6aef13029eb5356b46b4db28452c21c3f21873a2f0c1a68dcc"
+      },
+      {
+        "bytes": 40736,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/group-conversations.integration.test.ts",
+        "sha256": "138f753b3ab2062bb6090891083e6484b686c8a1ea9f182a1306f1edeea29139"
+      },
+      {
+        "bytes": 2827,
+        "flags": [],
+        "path": "server/tests/group-conversations.test.ts",
+        "sha256": "d5c6c2a0817289619c75f4d71ae40ce2f90123036b3387e00be4da458ad60412"
+      },
+      {
+        "bytes": 2621,
+        "flags": [],
+        "path": "server/tests/guards.test.ts",
+        "sha256": "804a75ef309b31b309f24866b29bcd3894b09b3bbfe325e516ed4b0ec1fd04f6"
+      },
+      {
+        "bytes": 2921,
+        "flags": [],
+        "path": "server/tests/handoff-caps-defaults.test.ts",
+        "sha256": "b74cdc5f821f8ccb2d8a6ba9cd63249e2cba4e4e7e537e0fc82107707bed5b80"
+      },
+      {
+        "bytes": 8519,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/handoff-child-card.test.ts",
+        "sha256": "d7c8a4c1e5447d61e0582423ca8cbbcbf42abbfdfb2623387aaa4bb210ac2dbc"
+      },
+      {
+        "bytes": 12081,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/headless-components.integration.test.ts",
+        "sha256": "9056b38aec17e72bc84262bdc93989af1f64f6a42e329ecbc27e258f05e4a633"
+      },
+      {
+        "bytes": 8859,
+        "flags": [],
+        "path": "server/tests/headless-components.test.ts",
+        "sha256": "9a56baba7636e9937a415ef3ebb8ed0af7fa7fa9d6bf444049eea9e94cb81edf"
+      },
+      {
+        "bytes": 18167,
+        "flags": [],
+        "path": "server/tests/headless-tools.test.ts",
+        "sha256": "193a9cd6c63b70173919013613dd1269968161fcac62e3b56b342304362117d4"
+      },
+      {
+        "bytes": 8557,
+        "flags": [],
+        "path": "server/tests/health.test.ts",
+        "sha256": "f9f235a00bc669684e0fb799b9841c6aa19dd7e02da1530ba69d2ba1275f005c"
+      },
+      {
+        "bytes": 10174,
+        "flags": [],
+        "path": "server/tests/history-sanitize.test.ts",
+        "sha256": "3250bbb7616d1c497aa4622756b6213247d999c326ceb5b13aae1bdfd5f63f22"
+      },
+      {
+        "bytes": 12306,
+        "flags": [],
+        "path": "server/tests/host-access-broker.test.ts",
+        "sha256": "407e06c966dcf58366578ccaf31a6d6582b765bb2169df8cab284152b797610a"
+      },
+      {
+        "bytes": 3417,
+        "flags": [],
+        "path": "server/tests/host-access-callback-route.test.ts",
+        "sha256": "b59568b352a0fcdc5b2215908d64a19a5b82ee74a1e3f1961c50bf5592ee996d"
+      },
+      {
+        "bytes": 3822,
+        "flags": [],
+        "path": "server/tests/host-access-routes.test.ts",
+        "sha256": "6c64d24e0116ee58c435427a3312a138a2ad32aaece63d77f09b3d3b8b1b6a62"
+      },
+      {
+        "bytes": 6791,
+        "flags": [],
+        "path": "server/tests/host-access-tools.test.ts",
+        "sha256": "09b02e9dede0ac6b0eef018f588f3811b80534dab25a2ff9742b450420213ae3"
+      },
+      {
+        "bytes": 5551,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/human-input-end-to-end.test.ts",
+        "sha256": "24d74211bc69d8a468b0d22209dbb1fbba81e3d28ba89440843feecf3db35e20"
+      },
+      {
+        "bytes": 4021,
+        "flags": [],
+        "path": "server/tests/identity-provider-audit.test.ts",
+        "sha256": "526d0b97642797b6e65f78b4a8a9133295343864ccec11898f7b0eeed7dddb61"
+      },
+      {
+        "bytes": 3308,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/jsonb-encoding.integration.test.ts",
+        "sha256": "0ff4fb360f2dc450c5032809aa7169054b286eeac8d2dd56b613cc5b222a7281"
+      },
+      {
+        "bytes": 4459,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/last-sign-in-backfill.integration.test.ts",
+        "sha256": "ac8e3ba94ef1a52f59dbdbff57ed60b7483cb2506bfbbaf41123f96c619a1371"
+      },
+      {
+        "bytes": 14424,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/local-threads.test.ts",
+        "sha256": "c57e4258a8183840b6eedbf55a9922a24e4e82999a5ee9a60181d8e29b4ee4a8"
+      },
+      {
+        "bytes": 4149,
+        "flags": [],
+        "path": "server/tests/mastra-roster.test.ts",
+        "sha256": "ce83d50354f08dd7ff00871d0e173a38af2c74ca6b6f920f741e47de956ca98c"
+      },
+      {
+        "bytes": 6756,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/mcp-grant-removal.integration.test.ts",
+        "sha256": "373b8f921f6a0f31d73ded6daf601644200966674e681727273e80491c333918"
+      },
+      {
+        "bytes": 8591,
+        "flags": [],
+        "path": "server/tests/mcp-listing.test.ts",
+        "sha256": "b4b5806d921ca0c65ca5d88086ac4e6fbb922811bcab27ce83b4b2b35d446858"
+      },
+      {
+        "bytes": 7506,
+        "flags": [],
+        "path": "server/tests/mcp-protocol.test.ts",
+        "sha256": "bad19b1b4a7bfcdc32f83e3ae0f964abfbf7db057e732a372375a71ba644456b"
+      },
+      {
+        "bytes": 11237,
+        "flags": [],
+        "path": "server/tests/mcp-result.test.ts",
+        "sha256": "2d89891b070dbc8e64551a4d3a6d8d92ae062625cd3ee404af631a5c00da22e8"
+      },
+      {
+        "bytes": 4243,
+        "flags": [],
+        "path": "server/tests/memory-runtime.test.ts",
+        "sha256": "5f151b8d3754cea5508ef2c6d08ada81fe17fc5471f3d70484b65fe4d42285fd"
+      },
+      {
+        "bytes": 12370,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/memory-store.integration.test.ts",
+        "sha256": "93f8270d9e30ca55281889dab4e5855d157badd99752127938aa85ee43f3e909"
+      },
+      {
+        "bytes": 5362,
+        "flags": [],
+        "path": "server/tests/memory.test.ts",
+        "sha256": "88a3c7939d1f40f29da0fea8892182deb18e5c7bdc688f456829095638147dcf"
+      },
+      {
+        "bytes": 19886,
+        "flags": [],
+        "path": "server/tests/migration-journal.test.ts",
+        "sha256": "3c24391272dfbd4ae1c0f2f6bd5edb1ba2723919ad4311c8eb99954ec098dbbe"
+      },
+      {
+        "bytes": 932,
+        "flags": [],
+        "path": "server/tests/mobile-links.test.ts",
+        "sha256": "16987018e23c17d5c2d7af0893e622233f8bd9f435f173c51084a45b095d6840"
+      },
+      {
+        "bytes": 9992,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/model-library-routes.test.ts",
+        "sha256": "871d1b87864e167a93edee35dd11b315fdb10f67a560fa292c60becb7803ca44"
+      },
+      {
+        "bytes": 17036,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/model-providers.test.ts",
+        "sha256": "65a6676475d37011ee39c4e46350bfbdea23c9d99e39ef0f5e873ad8f6dc82fe"
+      },
+      {
+        "bytes": 2176,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/model-registry.test.ts",
+        "sha256": "3558183855602471511cb625f1640e3fdb8a4168b2d4cb60c50719813002b0e3"
+      },
+      {
+        "bytes": 2671,
+        "flags": [],
+        "path": "server/tests/oauth-refresh-redirect.test.ts",
+        "sha256": "bdd2b8bff7a8fccbcd7cebf638330e6a3f2de89d37e82f8a81aed2790a300e6e"
+      },
+      {
+        "bytes": 3502,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/offboarding-retirement.integration.test.ts",
+        "sha256": "4b3ea014df032d3d0c2703afc3e3a53dff0074ebcf0002248b498c2c2a375490"
+      },
+      {
+        "bytes": 5137,
+        "flags": [],
+        "path": "server/tests/onboarding-routes.test.ts",
+        "sha256": "84c304b9cef85fdec7daeb930f59da8e25bb70c3ddb69dd0b9f38eaa5e4872f7"
+      },
+      {
+        "bytes": 9559,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/organization-auth.test.ts",
+        "sha256": "edb3d030e0c498c125ff0285de00c0355246203a9bec7e5e1745c63d5f853d28"
+      },
+      {
+        "bytes": 4091,
+        "flags": [
+          "direct_pg",
+          "integration_name",
+          "local_listener"
+        ],
+        "path": "server/tests/organization-store.integration.test.ts",
+        "sha256": "df050a0d5c25d85f16b3a167883124fcfb361644819fac6f713a9f983b97ae65"
+      },
+      {
+        "bytes": 1571,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/otel-export-scrubbing.test.ts",
+        "sha256": "d4d53eb4a33be56407b25e4d3aa9b762dfc8d897f370032b965034c12c9b7f1b"
+      },
+      {
+        "bytes": 6080,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/otel-exporter-compat.test.ts",
+        "sha256": "835f6b26f1019fa10f539ac45aa28892116f285b032eb35bbf12239c97711b31"
+      },
+      {
+        "bytes": 4949,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/otel-sdk-lifecycle.test.ts",
+        "sha256": "43fede37a795c8153b46815771d4ac8320b88cf98ad7fd0d1f5db80a6238c8c8"
+      },
+      {
+        "bytes": 8487,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/owner-assembly-audit.test.ts",
+        "sha256": "13420b22eaf7834076204e6003af00bbd85ffcd8bcf10069f57eafd7ab438ff6"
+      },
+      {
+        "bytes": 5363,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/page-frame-retention.integration.test.ts",
+        "sha256": "202820189a0980a04904151e6258c401298742cbb88316ad6abeb8745a45e6c2"
+      },
+      {
+        "bytes": 1443,
+        "flags": [],
+        "path": "server/tests/paging.test.ts",
+        "sha256": "cfb0ada44e70a0a1e0bb973c2db2ab6c27e586c9d35fb7d90cd87ef5228a0359"
+      },
+      {
+        "bytes": 3598,
+        "flags": [],
+        "path": "server/tests/parallel-research.test.ts",
+        "sha256": "ab635665af10daa4e913c8b758a21d299e15df89804a7d452131ae24338206ba"
+      },
+      {
+        "bytes": 22930,
+        "flags": [],
+        "path": "server/tests/passwords-sign-in.test.ts",
+        "sha256": "9f962a7880366ff20ef018858cf09c66d7b7be6a5519d5d7a7bc344abae0ce18"
+      },
+      {
+        "bytes": 3662,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/passwords-store.integration.test.ts",
+        "sha256": "e02207e406634ceee3f761d47af706deaa295ac9038b83616a80724facc60825"
+      },
+      {
+        "bytes": 4052,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/people-last-sign-in.integration.test.ts",
+        "sha256": "0db915f7c174944d9b8b13511b8c7dba4bd4407bbce308b7c8fbb311bf137b6a"
+      },
+      {
+        "bytes": 7305,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/people-paging.integration.test.ts",
+        "sha256": "a62253324f319d72dc9face031c6c24e3c72f94eaf0b5b4102f0708a8b7a2015"
+      },
+      {
+        "bytes": 7734,
+        "flags": [],
+        "path": "server/tests/people-routes.test.ts",
+        "sha256": "71988b0e3b60d2bbe7fcf91bf8b39ad862752151aba8197cb04a7d4e680e7986"
+      },
+      {
+        "bytes": 9686,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/persona.test.ts",
+        "sha256": "a45604bbc145a64f51328efb3512fd8fa4bc462d66967050fd110ca2ae3d0ec2"
+      },
+      {
+        "bytes": 14253,
+        "flags": [
+          "direct_pg",
+          "local_listener"
+        ],
+        "path": "server/tests/picked-harness-auth.test.ts",
+        "sha256": "5db6a8293df7298e194670149a4db5ac4eb30b7a67b5928dc52706495f143b89"
+      },
+      {
+        "bytes": 14603,
+        "flags": [
+          "direct_pg",
+          "integration_name",
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/pipeline-control.integration.test.ts",
+        "sha256": "4816d0757d8050575b365a0ae0bf709a6b8d337e0c54eac850142a2ebce3fb37"
+      },
+      {
+        "bytes": 6728,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/pipeline-routes.test.ts",
+        "sha256": "426c733a8d437b94810a0d3bc7aa4086c557b2990330e7cd18722b1e5e5fd198"
+      },
+      {
+        "bytes": 40297,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/pipeline-run.test.ts",
+        "sha256": "bf59befbd825df99945866bd8cc1fb3872701e474a447b323da7f6eb999c9e54"
+      },
+      {
+        "bytes": 6423,
+        "flags": [],
+        "path": "server/tests/pipeline-turn-channel.test.ts",
+        "sha256": "c38cab833cae238638118873770fd6ad549906258a8095c9bad125b92d6e503f"
+      },
+      {
+        "bytes": 13105,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/plan-model.test.ts",
+        "sha256": "3374b4515b0229d80cb513172b43893782ca58f7eb4edf011ec6087d9f2f1d16"
+      },
+      {
+        "bytes": 5251,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/platform-store.test.ts",
+        "sha256": "ae98fe4e740128850c247471530ee826d0cead3a281d16b1bd8b0e03bdad073e"
+      },
+      {
+        "bytes": 3653,
+        "flags": [],
+        "path": "server/tests/plugin-call-args-validation.test.ts",
+        "sha256": "191c860802d95715cf165f01ff8e98151f2d29d83170e9f46bdc2c5e376c640c"
+      },
+      {
+        "bytes": 28223,
+        "flags": [],
+        "path": "server/tests/plugin-catalogue.test.ts",
+        "sha256": "e9e15d0f11be382a7ff4869acb67f177a01e86fe9df32ba71b9790618b221eb3"
+      },
+      {
+        "bytes": 6712,
+        "flags": [],
+        "path": "server/tests/plugin-connect-route.test.ts",
+        "sha256": "e763a5bede5866dd9ff5b98ca9300863efe722977156f807a67bd0ad1bc4c769"
+      },
+      {
+        "bytes": 11514,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-credential-binding.integration.test.ts",
+        "sha256": "d5ebebe5c6068defac4b9aa12994d398ca620d115092541d91f0ffd50ad97190"
+      },
+      {
+        "bytes": 7010,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-credential-rotation.integration.test.ts",
+        "sha256": "f26fb466db0bc6ae97588b7b7d9bef5c8f62f68261ef4a2935bf389204b6a35f"
+      },
+      {
+        "bytes": 10890,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-curated-credential.integration.test.ts",
+        "sha256": "d6e988a92032e59a058d8bf6ac749f12f7a0f6e85904b5711819989d95f72304"
+      },
+      {
+        "bytes": 17746,
+        "flags": [],
+        "path": "server/tests/plugin-grants-validation.test.ts",
+        "sha256": "47c6099a5c8becdf5a5b3ee8d99d341689be8bcc76b65bade1ef7410596de164"
+      },
+      {
+        "bytes": 2510,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-logos.integration.test.ts",
+        "sha256": "973cf82716fa5804535d7bf6e5a9f85f619dde89bd562ba291799f0ae3b0985f"
+      },
+      {
+        "bytes": 919,
+        "flags": [],
+        "path": "server/tests/plugin-mcp-authorization.test.ts",
+        "sha256": "694f6ca53679cfcec69f3b79ff363983d4e019d78e905522c81b943703838e35"
+      },
+      {
+        "bytes": 20966,
+        "flags": [],
+        "path": "server/tests/plugin-oauth-callback.test.ts",
+        "sha256": "b1f96b40cdcccfc160dccc544ac71d90f5b4d2b4e90cf48bf582a7909318fdcc"
+      },
+      {
+        "bytes": 32937,
+        "flags": [],
+        "path": "server/tests/plugin-oauth.test.ts",
+        "sha256": "d4b6c4af1e81ab0c7385ec8bbc6a3020df3fec134be6798d46f0f77f66d7da13"
+      },
+      {
+        "bytes": 11005,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-routes.integration.test.ts",
+        "sha256": "44dec99c478d091a6ab6577dc5e0f1363e59626132444c7a4717ef5f6dd855c5"
+      },
+      {
+        "bytes": 142963,
+        "flags": [],
+        "path": "server/tests/plugin-routes.test.ts",
+        "sha256": "10525dec8a96a87c13da36ebb110d45adf370e7b99e69509dcc85f3dc06f5044"
+      },
+      {
+        "bytes": 14028,
+        "flags": [],
+        "path": "server/tests/plugin-selection.test.ts",
+        "sha256": "e0e6b0de7a7a441168cc5d7640944df0d442581b34456c285dbead341d159450"
+      },
+      {
+        "bytes": 8043,
+        "flags": [],
+        "path": "server/tests/plugin-servers-validation.test.ts",
+        "sha256": "fb83c5a6fce5bfe0d8d6a58e3a1b5dfb52505f1295d51d340ea7b796a0560e1e"
+      },
+      {
+        "bytes": 1377,
+        "flags": [],
+        "path": "server/tests/plugin-share-target.test.ts",
+        "sha256": "59239d2dbebb0866b0dff63e9613b6dee2c4ba1a05e7674621df2d79460fc5b4"
+      },
+      {
+        "bytes": 320100,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-store.integration.test.ts",
+        "sha256": "d715a831fda0b30da14509b244396ee6ae61b1dd1aa422f9b4032fb3b3b15dc2"
+      },
+      {
+        "bytes": 10115,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/plugin-tenant-catalogue-row.test.ts",
+        "sha256": "ee7900092d48393526ee8f25e1668282086eb1fa845dcfea3df918c254ceb62e"
+      },
+      {
+        "bytes": 24102,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/plugin-user-credential.integration.test.ts",
+        "sha256": "722d219dd513b893e637500b5ec860f1be35cfcd012e87c87a5caf79abeb808d"
+      },
+      {
+        "bytes": 8715,
+        "flags": [],
+        "path": "server/tests/policy-dry-run.test.ts",
+        "sha256": "624aca1e113ede9ca6e86dcb515a8a46cbd680cbe833a069868c407095bd59fb"
+      },
+      {
+        "bytes": 3947,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/policy-durability.integration.test.ts",
+        "sha256": "2047a1470be38c4e1283a0a37207d14d0968d44805cd55dbd6603402458e89d4"
+      },
+      {
+        "bytes": 9759,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/policy-fanout.integration.test.ts",
+        "sha256": "ff42804d1f85985441e8dc971f79564ee4904921ba3dce3472651425740d64ff"
+      },
+      {
+        "bytes": 1989,
+        "flags": [],
+        "path": "server/tests/private-share-group.test.ts",
+        "sha256": "6e2faf0c77d85c2760b5098190ee52f06ee6a122fe47b2b51e71cd36cd01422e"
+      },
+      {
+        "bytes": 12589,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/proactive-store.integration.test.ts",
+        "sha256": "85593561718ffb4e83e91b53006205a01fce70424d2245f71d264d874c78a09f"
+      },
+      {
+        "bytes": 17369,
+        "flags": [],
+        "path": "server/tests/proactive.test.ts",
+        "sha256": "ccf1cea9ae9bffc889a22d986110266adf9225500e98c6473bff54ce140f523c"
+      },
+      {
+        "bytes": 3762,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/production-loader-boundary.test.ts",
+        "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3"
+      },
+      {
+        "bytes": 6588,
+        "flags": [],
+        "path": "server/tests/provider-error-run-error.test.ts",
+        "sha256": "dc6b1db39f2114c7f558cfb83f562773d9cc59bb9f3b9987c62522b758875555"
+      },
+      {
+        "bytes": 21169,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/provider-oauth.test.ts",
+        "sha256": "2adf35455efb1ba0ab68ff71eed6b5eaab3fdf2a0d6ebdbbe96a857544436d0c"
+      },
+      {
+        "bytes": 4422,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/qoderwake-package.test.ts",
+        "sha256": "99777307a220852b3a6df90e12fb08be6c10d56b05323451d821036826050cf1"
+      },
+      {
+        "bytes": 13518,
+        "flags": [
+          "direct_pg",
+          "integration_name",
+          "local_listener"
+        ],
+        "path": "server/tests/quota-concurrency.integration.test.ts",
+        "sha256": "fa00ae627f5bf813c57f105aa7b4f41a624cfdc0da481571e0eac3f6fbc0a1b7"
+      },
+      {
+        "bytes": 14490,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/quota.test.ts",
+        "sha256": "a150ac7c3282b2b6a641e1e11a52697efa206f66f45f912cbb0b7e2e4a27e7b6"
+      },
+      {
+        "bytes": 69816,
+        "flags": [],
+        "path": "server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+        "sha256": "00916632b07c54585015a45b7f209b8234e1a321742ec945e61edf512b0f8d47"
+      },
+      {
+        "bytes": 35487,
+        "flags": [],
+        "path": "server/tests/recovery-approval-direct-execution-domains.test.ts",
+        "sha256": "bc14b34f5022e2260fab01fd4480d2b0056b4c7cf920620c74ab1aedc11a847b"
+      },
+      {
+        "bytes": 90384,
+        "flags": [],
+        "path": "server/tests/recovery-approval-exact-input-objects.test.ts",
+        "sha256": "e319fe02133461d736bd263cee51af55121c79da0cecb5c5b0f32d2f355d0610"
+      },
+      {
+        "bytes": 40079,
+        "flags": [],
+        "path": "server/tests/recovery-automation-foundations.test.ts",
+        "sha256": "c2f14856bae4539e485b9fbbb35a3bf3fb76d144a4c5af14248db0b66cfb4a41"
+      },
+      {
+        "bytes": 49775,
+        "flags": [],
+        "path": "server/tests/recovery-automation-run-records.test.ts",
+        "sha256": "bfe47a7518eae21add3600042613a0e49a1ce82c65cf50c505c9983bbbf17427"
+      },
+      {
+        "bytes": 46916,
+        "flags": [],
+        "path": "server/tests/recovery-device-binding-leases.test.ts",
+        "sha256": "22b592e85970f65eb2b3c4df57baac71758e57ffc4bdfbab296280360abac23c"
+      },
+      {
+        "bytes": 42869,
+        "flags": [],
+        "path": "server/tests/recovery-flow-customization-foundations.test.ts",
+        "sha256": "07daf20f6316ff821305570d1af0a5ec1162f8b59d5139db1092df809f9ac44b"
+      },
+      {
+        "bytes": 40595,
+        "flags": [],
+        "path": "server/tests/recovery-flow-customization-turns.test.ts",
+        "sha256": "f5b393c892ea8b7d816b92e9fbabcd1f94351cd8a8312e95910d965395655a6d"
+      },
+      {
+        "bytes": 38478,
+        "flags": [],
+        "path": "server/tests/recovery-flow-official-bindings.test.ts",
+        "sha256": "ab96a7035cd3b29b4390f9c2c61c4d5069c5c06a9a2061694cce71a3688d0932"
+      },
+      {
+        "bytes": 50218,
+        "flags": [],
+        "path": "server/tests/recovery-flow-run-coordination.test.ts",
+        "sha256": "5d7fe43786ef00deb38533897ee3f90cc42e949dfdfe111ed9bfcf6da5bffc53"
+      },
+      {
+        "bytes": 47891,
+        "flags": [],
+        "path": "server/tests/recovery-flow-sharing-foundations.test.ts",
+        "sha256": "5e2018bcdababaacc121981b3a7157cab4fa9bf9ba1611223059e9ebe58633c9"
+      },
+      {
+        "bytes": 44771,
+        "flags": [],
+        "path": "server/tests/recovery-flow-source-foundations.test.ts",
+        "sha256": "77c5ce15fb3674e9127b013834eb84a244506e6bfb53c6462f2f92d6f64e0fe0"
+      },
+      {
+        "bytes": 54463,
+        "flags": [],
+        "path": "server/tests/recovery-flow-source-original-records.test.ts",
+        "sha256": "62ac1fea54a1b3664a16112fc46ec171f785b4ea285b5457203d75e93b400fc0"
+      },
+      {
+        "bytes": 53367,
+        "flags": [],
+        "path": "server/tests/recovery-flow-source-run-records.test.ts",
+        "sha256": "7d78535e85af2582ca64dd1d1db1bc61d008337ba14d0f7820874dc00757ce3f"
+      },
+      {
+        "bytes": 48487,
+        "flags": [],
+        "path": "server/tests/recovery-flow-source-runtime-records.test.ts",
+        "sha256": "5bf3b9d98f589b362e817d6bbfbcfe2cc0940db3093087fd00740d87de61c8c0"
+      },
+      {
+        "bytes": 36231,
+        "flags": [],
+        "path": "server/tests/recovery-group-pipeline-start-receipts.test.ts",
+        "sha256": "a0c33ad193da807c34e33a5131912beb59f7e205e2d66b534f880f2f6b81a934"
+      },
+      {
+        "bytes": 124238,
+        "flags": [],
+        "path": "server/tests/recovery-import-proactive-token-foundations.test.ts",
+        "sha256": "e456a2f60fd74bea4f732c5f2e0db1e4ad7e7abcc5a5eabadfe2f17c0dd0749f"
+      },
+      {
+        "bytes": 95182,
+        "flags": [],
+        "path": "server/tests/recovery-knowledge-foundations.test.ts",
+        "sha256": "8246be120f1ca64ec954512887140da90b785eb777082aaabbd10348ed7282cb"
+      },
+      {
+        "bytes": 130752,
+        "flags": [],
+        "path": "server/tests/recovery-knowledge-write-foundations.test.ts",
+        "sha256": "33bd5d214ab3020edc86654e71e08db75ffa38a7d9bb1c9fa0e1b6960fa43f64"
+      },
+      {
+        "bytes": 56495,
+        "flags": [],
+        "path": "server/tests/recovery-outbox-knowledge-heads.test.ts",
+        "sha256": "8dee735d62b20b0e2db3bb4ca2bf38402733f342f79ad46e752ab917148550e9"
+      },
+      {
+        "bytes": 128442,
+        "flags": [],
+        "path": "server/tests/recovery-plugin-assembly-foundations.test.ts",
+        "sha256": "795e8365ad2ac62d78f6de4973b382dd95625f3698ab62a840b3ce41ecaabfa3"
+      },
+      {
+        "bytes": 115974,
+        "flags": [],
+        "path": "server/tests/recovery-resource-project-foundations.test.ts",
+        "sha256": "d8701c36d66fd26527d24bf3c8e1bfad358b082f5074a8e7f6a31bf746293099"
+      },
+      {
+        "bytes": 44119,
+        "flags": [],
+        "path": "server/tests/recovery-role-foundations.test.ts",
+        "sha256": "58b3d1ef25d98917c08b96ecafa93430848e04deebce5d8d140dfd4f34ee8a78"
+      },
+      {
+        "bytes": 53438,
+        "flags": [],
+        "path": "server/tests/recovery-security-policy-fences.test.ts",
+        "sha256": "796725b473e465e553971b33da1f5aa83e42f5db7094400fd867a08b56987ac4"
+      },
+      {
+        "bytes": 10810,
+        "flags": [],
+        "path": "server/tests/recovery-subject-binding.test.ts",
+        "sha256": "aec7705207de643076c0c5af24be62bd3f338dabee1bd5b202a0366f98b9faa5"
+      },
+      {
+        "bytes": 38415,
+        "flags": [],
+        "path": "server/tests/recovery-task-flow-audit.test.ts",
+        "sha256": "93c08bfa1de9e49d88ef3a833a5cc713967d7d8ca4a12b9f20bc76498bc9eb82"
+      },
+      {
+        "bytes": 32319,
+        "flags": [],
+        "path": "server/tests/recovery-threads-parent-key.test.ts",
+        "sha256": "d07c0ad9ceadc3549bc081e5f80215d6414aa2df12dd01fce1a4f50522bc55b3"
+      },
+      {
+        "bytes": 4111,
+        "flags": [],
+        "path": "server/tests/remote-approval-context.test.ts",
+        "sha256": "de62fa367d2a81c7e185d104f475b6a2df7d81ee82734fb03b6dcf56b61619a7"
+      },
+      {
+        "bytes": 6593,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/remote-bot-handoff.integration.test.ts",
+        "sha256": "5c7a292de513ddde7220b757395a8ce823807c58bbab73c336e830106d714828"
+      },
+      {
+        "bytes": 2583,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/remote-coordination.integration.test.ts",
+        "sha256": "876fa5e3221055cfe346de6b1d4d95b5a089b67a4d3d3ec9922479264f35c93c"
+      },
+      {
+        "bytes": 10189,
+        "flags": [],
+        "path": "server/tests/remote-coordination.test.ts",
+        "sha256": "3ea9d9692d1c4e966a8027e455efad533d3be1dd0a1cb53141447a8df33d65f3"
+      },
+      {
+        "bytes": 9320,
+        "flags": [],
+        "path": "server/tests/responsibilities-engine.test.ts",
+        "sha256": "c4090084651c304475bdf095fc1246240736506b8473a502b8200b3dab9240ff"
+      },
+      {
+        "bytes": 2923,
+        "flags": [],
+        "path": "server/tests/responsibilities-github.test.ts",
+        "sha256": "efb62dfee4ae2deef6be4925adf27cd5f3f3c9f4720ad9808637d2e6664a1141"
+      },
+      {
+        "bytes": 6665,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/responsibilities-store.integration.test.ts",
+        "sha256": "23d56a020bf4a8cb59548cc1f2d7bb653f021450e86389a1de81d246f440f9bf"
+      },
+      {
+        "bytes": 6992,
+        "flags": [],
+        "path": "server/tests/responsibility-trigger-tools.test.ts",
+        "sha256": "c416abadf07c667071df9c57e06313c47c4627c7f838a91a0b977eba8a9040f9"
+      },
+      {
+        "bytes": 10067,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/responsibility-triggers.integration.test.ts",
+        "sha256": "a157218be6c0a80203a1cc436d1819912a247a7e38de980e04313b78e7ced8c3"
+      },
+      {
+        "bytes": 29682,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/responsibility-triggers.test.ts",
+        "sha256": "ace55e80a91a538df780cf1ae5d9c74610af6bfd9e11a0518355b304380939a4"
+      },
+      {
+        "bytes": 3102,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/rls-role.test.ts",
+        "sha256": "4139d47611cc7b701375b95061502d3cf2bc659138ce6703f3f5b118e58c667e"
+      },
+      {
+        "bytes": 11200,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/rls-write-scope.test.ts",
+        "sha256": "ad1527bfafb43abba4dbc29a817dbf8ec231840dca9d224ba39ffefebd42fd93"
+      },
+      {
+        "bytes": 16256,
+        "flags": [],
+        "path": "server/tests/role-writer-lifecycle.test.ts",
+        "sha256": "3e8dc3767e9a806c1df44183916580eed644832afab4ae64dd22e688055b3a5c"
+      },
+      {
+        "bytes": 24905,
+        "flags": [],
+        "path": "server/tests/roles.test.ts",
+        "sha256": "0edf8da700d6a733805b8c37844f861849a7cb4c96a5f5e79cdee3b009542a73"
+      },
+      {
+        "bytes": 6149,
+        "flags": [],
+        "path": "server/tests/route-ids-validation.test.ts",
+        "sha256": "cb1e420490e35b97d074969cd7abc80e0ebe70c4b7e8d4ffcf3d3f58cbc3cafc"
+      },
+      {
+        "bytes": 8693,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/routine-create.integration.test.ts",
+        "sha256": "b69db67915e708b25c6b9a2381761529590e98e646b7513baa7c63ea378f7b85"
+      },
+      {
+        "bytes": 7897,
+        "flags": [],
+        "path": "server/tests/routine-endpoint.test.ts",
+        "sha256": "f7576ccbefc0f529b26eede54c609fd9602ac99480af99ddb30896456b26ffd5"
+      },
+      {
+        "bytes": 11909,
+        "flags": [],
+        "path": "server/tests/routine-routes.test.ts",
+        "sha256": "51829a6b4c1020d218034ba8ae0c3a2349af69e02d15f86f03c662e41658fdcd"
+      },
+      {
+        "bytes": 5249,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/routine-run-now.integration.test.ts",
+        "sha256": "42a1a5215bea144f245f19f8893be7a4cdde3c80745cea03d5e75cf9373d2788"
+      },
+      {
+        "bytes": 4195,
+        "flags": [],
+        "path": "server/tests/routine-run-now.test.ts",
+        "sha256": "f018811d04c0a24f5617d4c770fc3780b420953f0307da441f9c9c3a93b58447"
+      },
+      {
+        "bytes": 32333,
+        "flags": [],
+        "path": "server/tests/routine-run-turn.test.ts",
+        "sha256": "47833ec0dd3b34bf2bab104b091369a1b315780c0dd5531878280ae2b7b68758"
+      },
+      {
+        "bytes": 15497,
+        "flags": [],
+        "path": "server/tests/routine-runner.test.ts",
+        "sha256": "85492480b84e7f8fa16936652f493573c77e464a1628d02f353e074e897b9cf0"
+      },
+      {
+        "bytes": 9522,
+        "flags": [],
+        "path": "server/tests/routine-schedule.test.ts",
+        "sha256": "83e9b91a6a75e01cf95c97e8188101f539d8c1824d8229f5d88a95875449b526"
+      },
+      {
+        "bytes": 2537,
+        "flags": [],
+        "path": "server/tests/routine-sweep-liveness.test.ts",
+        "sha256": "0a5386b624326306caaa011152376ddb267d9336b67fd69be5d63a0184ebca0e"
+      },
+      {
+        "bytes": 53214,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/routine-sweep.integration.test.ts",
+        "sha256": "fa8346160b38f57c996124bbc09283f7b1c62b35ed3035c74297c9785abff9f7"
+      },
+      {
+        "bytes": 48654,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/routines-store.integration.test.ts",
+        "sha256": "79e0e82aa0172174b3e7d7e0b617307d37fef891be2f344087718314bd49666c"
+      },
+      {
+        "bytes": 15488,
+        "flags": [],
+        "path": "server/tests/routing-classify.test.ts",
+        "sha256": "e85649f11b1207f0e323ae57bb3952b860c998cceba66c373a73a309be7350ea"
+      },
+      {
+        "bytes": 5241,
+        "flags": [],
+        "path": "server/tests/routing-limits-validation.test.ts",
+        "sha256": "7838e2f56e606888e464bdd4ab5a21a1c422532ea4bbf53086f13c4290fb1d47"
+      },
+      {
+        "bytes": 2347,
+        "flags": [],
+        "path": "server/tests/routing-model-url.test.ts",
+        "sha256": "77d1b838c85ad5f80fb609bc1d2394769bc6cf6f48b12ba975422505b1f393a1"
+      },
+      {
+        "bytes": 10091,
+        "flags": [],
+        "path": "server/tests/routing-routes.test.ts",
+        "sha256": "f6a7e887d63fb233fb35e0a63e5a159b2f896e64671c2082a37754534cd95e75"
+      },
+      {
+        "bytes": 16179,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/run-built-agent-cancellation.test.ts",
+        "sha256": "7a9a8a706dfaada3b41a3f805a51ac4b45c3feb0875bea69231cef51390311f9"
+      },
+      {
+        "bytes": 8435,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/runner-browser-probe.test.ts",
+        "sha256": "57fa34cf6b569df422b6e835e231f9b5c8a5a3997abb8804ced6706d5d22c020"
+      },
+      {
+        "bytes": 48278,
+        "flags": [],
+        "path": "server/tests/runner-browser.test.ts",
+        "sha256": "54e7b0696f89dd0e4cc710724231675ec4f0244f2b02639d9035d6baf192e2a4"
+      },
+      {
+        "bytes": 9971,
+        "flags": [],
+        "path": "server/tests/runner-channel.test.ts",
+        "sha256": "3460e270b0f7257ce00ad09360af617c80149054bfcfac8b4eb026fc03f796ca"
+      },
+      {
+        "bytes": 6637,
+        "flags": [],
+        "path": "server/tests/runner-dispatch.test.ts",
+        "sha256": "1b47c215ed148beecdbc39aab70a15acb44c8585ad9513653e712ed23c381e69"
+      },
+      {
+        "bytes": 13475,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/runtime-agents.integration.test.ts",
+        "sha256": "ebcad8a5e7d170718f38f4bdf8000649f5ad9292d2a8f32f4ed7c3a87eb98cc6"
+      },
+      {
+        "bytes": 10321,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/sandboxed-components.integration.test.ts",
+        "sha256": "00c0dcfcd8b1c24cf725c9055f38bb79f98c0a580e72b1b52d516c410a6481ac"
+      },
+      {
+        "bytes": 9292,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/sandboxed-publication.integration.test.ts",
+        "sha256": "d03337787eb650491d5488ccd52c58e0da5f3489789a1e5713d108b5cb99e62b"
+      },
+      {
+        "bytes": 2994,
+        "flags": [],
+        "path": "server/tests/sandboxed-routes.test.ts",
+        "sha256": "000d84b2af507e9cb2c76897a872c605f070f9d059e2d1b44837fbefc74913ec"
+      },
+      {
+        "bytes": 5106,
+        "flags": [],
+        "path": "server/tests/sandboxed-save-fields.test.ts",
+        "sha256": "758d070a483cce7acecde0170774d3a31b26d6fd8bf878b596867c924c9ceffc"
+      },
+      {
+        "bytes": 17763,
+        "flags": [],
+        "path": "server/tests/schema.test.ts",
+        "sha256": "96ecc28b48fe906fca0a6cb3079e69da67e0e104cfb5b55f60a0aa40245d028b"
+      },
+      {
+        "bytes": 9990,
+        "flags": [],
+        "path": "server/tests/server-readiness-gates.test.ts",
+        "sha256": "2fa4734f01a96cb5bdfba424614819aebeccba0771929d290fef27656feb5e1e"
+      },
+      {
+        "bytes": 6979,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/server-side-tools.integration.test.ts",
+        "sha256": "f858d57a6137261434deb2b5edda1aa2906e8978b76d03e5b7aa9f9457041360"
+      },
+      {
+        "bytes": 10516,
+        "flags": [],
+        "path": "server/tests/settings-instructions-routes.test.ts",
+        "sha256": "be553deb0b7a4b5455115966bc3820db65ce857defdff3d1725316e167eb37e1"
+      },
+      {
+        "bytes": 10140,
+        "flags": [
+          "direct_pg",
+          "integration_name",
+          "local_listener"
+        ],
+        "path": "server/tests/shared-computer-run.integration.test.ts",
+        "sha256": "8647f8b5f791a47ab473b45caaacce947c4e117c596783058aa016f126fb0e4d"
+      },
+      {
+        "bytes": 3234,
+        "flags": [],
+        "path": "server/tests/single-user.test.ts",
+        "sha256": "314329584a60ed765c7f12fc376addce69dec69cbe165a4859af383fd0ced72d"
+      },
+      {
+        "bytes": 10130,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/skill-ownership.integration.test.ts",
+        "sha256": "5fbb3f7ac94fcdeb1513923027dae0c9ad3535180bf9d55a9b7b2c93effb46ec"
+      },
+      {
+        "bytes": 7330,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/skill-tools.integration.test.ts",
+        "sha256": "f5ab53ba0845435ff9287944a1f247ac53d4de9a066f4c772c28cf6f1b5f25da"
+      },
+      {
+        "bytes": 7695,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/skill-uninstall-grants.integration.test.ts",
+        "sha256": "c85952e127dc4b1182ce883f83c212d2aabbf37385043e654be14b62469eccff"
+      },
+      {
+        "bytes": 7232,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/spa-business-routes.integration.test.ts",
+        "sha256": "fd9891a388b2a18b302b2137aa245b43f881d37024bf817ac8f97c5cbed49d3a"
+      },
+      {
+        "bytes": 4033,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/sso-required-sessions.integration.test.ts",
+        "sha256": "d1fee093d7a1cded64b8bbb7695a83717d62595d3bff274e7edf017eb68e8880"
+      },
+      {
+        "bytes": 11897,
+        "flags": [],
+        "path": "server/tests/stall-guard.test.ts",
+        "sha256": "9a76710d3bff38d7c475684ad83aea54107ae8b6b2038a87c27fb0f2604e83b9"
+      },
+      {
+        "bytes": 1140,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/support/database.test.ts",
+        "sha256": "a18e8cb4ad62c93b0582add765e0fc29bff605c4918e573ed6efa38e2743b234"
+      },
+      {
+        "bytes": 1996,
+        "flags": [
+          "direct_pg",
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/support/load-order.test.ts",
+        "sha256": "4f9e9b0b29ae0f81091af3163acb6aad56a069693e571beb804b28121605ed0c"
+      },
+      {
+        "bytes": 11232,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/task-card-reclaim.test.ts",
+        "sha256": "026d454b0dfe5358aa9a089c6ebaf6ab09d574e1a551f844a2209b645321a5f3"
+      },
+      {
+        "bytes": 7138,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/task-card-run-error.test.ts",
+        "sha256": "3795080f137b13f821bf8f4059b5c3b472507a310b2a6bdf5d69bbedeaf998aa"
+      },
+      {
+        "bytes": 12349,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/tasks-open-target.integration.test.ts",
+        "sha256": "39fe78100161f7121332ba39debf0b5e773276defe8779f7aab5f546b55cd06c"
+      },
+      {
+        "bytes": 4503,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tasks-projector.test.ts",
+        "sha256": "fc50b768bd61cbecfd4e6c9de0bbd29aa7183fd1061f4fb0e0ff22b210bc5ddb"
+      },
+      {
+        "bytes": 7129,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/tasks-routes-filters.integration.test.ts",
+        "sha256": "5d9d5ccd1d49b642e09f9f65d447d85e0cb94aa5dde6dedd22850e79074121d0"
+      },
+      {
+        "bytes": 11439,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/team-bots.integration.test.ts",
+        "sha256": "b521036d4647bcdb218bf57cc568871ee5c9868c4f3bbdddc28e2a50c543142d"
+      },
+      {
+        "bytes": 4707,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-cross-tenant-404.test.ts",
+        "sha256": "2b323b1d7403c083d81b5fb2d6d71056a90c5146fab6bd22e1098236220b7e73"
+      },
+      {
+        "bytes": 8052,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-cross-tenant-agents.test.ts",
+        "sha256": "11b432965dc19c2ed5741c119ea4955151c5fe803197aab9ce997b9d14955f9f"
+      },
+      {
+        "bytes": 6926,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-cross-tenant-approvals.test.ts",
+        "sha256": "ea2e4d566090884fd38ea6d5883dab334affb1022ee3650e26a6601183193f3c"
+      },
+      {
+        "bytes": 6556,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-cross-tenant-attachments.test.ts",
+        "sha256": "36dec460f5dda63281d0bb8a9c6812b3e627508dbe3d2e4e573fb99c3c5653c9"
+      },
+      {
+        "bytes": 7831,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-cross-tenant-channels.test.ts",
+        "sha256": "6b60d062b34c501b7b562b076947411b2b81650294b6827ec14e3d1c8c3f9908"
+      },
+      {
+        "bytes": 8008,
+        "flags": [],
+        "path": "server/tests/tenant-package-agent-files.test.ts",
+        "sha256": "4dcf5fbe46b02c8c74dc05c2c9bc1431902f218226a21c23920115debbaeae2a"
+      },
+      {
+        "bytes": 7078,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-package-channel-membership.test.ts",
+        "sha256": "4d458cc071534181e633f611c072e2f871eaf61c1ce9aacc52f808c3a4c69bcd"
+      },
+      {
+        "bytes": 4629,
+        "flags": [],
+        "path": "server/tests/tenant-package-duplicates.test.ts",
+        "sha256": "b340b5d903f33b053935e05e77595c9c7f91e46457b1c4d960f659c36fb5a2c7"
+      },
+      {
+        "bytes": 13861,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-package-switch-retires.test.ts",
+        "sha256": "4603abbb46fcf362fead2584da6118cd2f923ac6ed5c8ab4b8c8bcbe63ea0710"
+      },
+      {
+        "bytes": 64099,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-package.test.ts",
+        "sha256": "a2efb2ac22ef76d15bed8533677042676692d9b79bda60955587781ccf7a1311"
+      },
+      {
+        "bytes": 3939,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/tenant-rls.test.ts",
+        "sha256": "8116d64c92f9b09a629fb5b62ca89af76236d1cf803e18f1083a42c0cad37420"
+      },
+      {
+        "bytes": 1260,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/test-database-url.integration.test.ts",
+        "sha256": "9bcd803068db53df03000d843200484ce759a704b9edacac252784f62224163d"
+      },
+      {
+        "bytes": 2864,
+        "flags": [],
+        "path": "server/tests/thread-identity.test.ts",
+        "sha256": "a1bc2fc2bbbd86079ebd9552759c56a5effa2a1ad51b59d54e9465d08f745691"
+      },
+      {
+        "bytes": 4692,
+        "flags": [],
+        "path": "server/tests/thread-routes.test.ts",
+        "sha256": "35f7b8f5b7cb11ff5083e0a53ad017c78640403fd2afe46761e600ecf48a1b8c"
+      },
+      {
+        "bytes": 2347,
+        "flags": [],
+        "path": "server/tests/thread-status.test.ts",
+        "sha256": "ee023a58f990d9bbe0c5935ad657103b93b879e2281c54a145228cc1b8e09a3d"
+      },
+      {
+        "bytes": 17430,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/three-tenant-demo.integration.test.ts",
+        "sha256": "4ab40c832360791fce3b01ce452bf3310aea59ce987a6056507501c6062a9de7"
+      },
+      {
+        "bytes": 7875,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/tool-selection-environment-restoration-driver.test.ts",
+        "sha256": "0105137e6af30c81ced6954a992f5ea62c28491f8ff7281f99df47d6fe86c695"
+      },
+      {
+        "bytes": 8345,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/tool-selection-environment-restoration.test.ts",
+        "sha256": "8e52f19189c7bd9c1d7db8c927b7ff11a8bc8a64046683eb5d15333b68f423ec"
+      },
+      {
+        "bytes": 36271,
+        "flags": [
+          "integration_name"
+        ],
+        "path": "server/tests/tool-selection.integration.test.ts",
+        "sha256": "dcf5b271f15a1a61587c52fc6055b132c27600c70eb5f7ea49041ea7a335a93a"
+      },
+      {
+        "bytes": 7930,
+        "flags": [],
+        "path": "server/tests/turn-watchdog.test.ts",
+        "sha256": "8a51dd8c8f33ce7f4bee4cf3babac3dce81e80779e3c97c76b458603d9b86000"
+      },
+      {
+        "bytes": 17759,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/unattended-platform-frame.integration.test.ts",
+        "sha256": "7c480ab8c3c1ae22dfa4a65dde9fc825ecc73dd823adcd534737166b12252c2d"
+      },
+      {
+        "bytes": 19883,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/unattended-single-card.integration.test.ts",
+        "sha256": "1c3dd42f20c7953ef3b18ee28018f4e1366c32099033563f442787918b78a349"
+      },
+      {
+        "bytes": 4143,
+        "flags": [],
+        "path": "server/tests/untrusted-content.test.ts",
+        "sha256": "31141ef157494fc6213ea97e593e921197dba1e3097ee1f601da005765821d9a"
+      },
+      {
+        "bytes": 5275,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/user-instructions.integration.test.ts",
+        "sha256": "7c5ba173cbb4d2a2375616433d143868a057e6399e0c238160b3c5a3df341c17"
+      },
+      {
+        "bytes": 3854,
+        "flags": [],
+        "path": "server/tests/user-preferences-routes.test.ts",
+        "sha256": "3eeb608b3a88704118b4e38ba00addab90c3f650e8da18802d8cb66dfeaf8024"
+      },
+      {
+        "bytes": 2415,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/user-preferences.integration.test.ts",
+        "sha256": "09e2841f26b8d62dbfcf808cf3cb723d34b6ea01541f4feae4795830776ef9fa"
+      },
+      {
+        "bytes": 8508,
+        "flags": [],
+        "path": "server/tests/voice-provider.test.ts",
+        "sha256": "1eb1c5f4454d3257506007c543a3ade886d6c19c002ec59f1fff860ad117f5a2"
+      },
+      {
+        "bytes": 11523,
+        "flags": [],
+        "path": "server/tests/voice-routes.test.ts",
+        "sha256": "87a038786c52f679e9f00f4c7123f5c1ac31880f4db6a085633f2806106d74e6"
+      },
+      {
+        "bytes": 7886,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/voice-session-preview.integration.test.ts",
+        "sha256": "946ed4bda92dd9f00b8870474fc39ebfdbaddcd13034f246c677823ac7eb9732"
+      },
+      {
+        "bytes": 4969,
+        "flags": [],
+        "path": "server/tests/voice-session-routes.test.ts",
+        "sha256": "591e6e48abf06600450c3bddf8e5afe8ff6caf9124f34c7ef774d4e08ec2f701"
+      },
+      {
+        "bytes": 5703,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/voice-session-store.integration.test.ts",
+        "sha256": "7a672e2141710117ca886d615bcfb59cbdd06bd0d92124a6412493277aa40698"
+      },
+      {
+        "bytes": 3023,
+        "flags": [],
+        "path": "server/tests/voice-sessions.test.ts",
+        "sha256": "82f3f73650f1ff496dd438b9932831f85c285db9b35b13a80d1f3d47d5981ee2"
+      },
+      {
+        "bytes": 12546,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/voice-summary-model.test.ts",
+        "sha256": "d347733e70f4f3faecbd88dbb3aac4642ce77b042169dc0d8ba9b5388cb0493c"
+      },
+      {
+        "bytes": 14767,
+        "flags": [
+          "direct_pg"
+        ],
+        "path": "server/tests/waker-groups.test.ts",
+        "sha256": "49d98dfa307cc9ad6ee687814082fb407d954e6a737b4f498a119ce3a4d42743"
+      },
+      {
+        "bytes": 2227,
+        "flags": [],
+        "path": "server/tests/wakerflow-plan.test.ts",
+        "sha256": "9e63c344f359861e79c60dc69e231b77e261e18fc632901544123c9c0dc29aa9"
+      },
+      {
+        "bytes": 3492,
+        "flags": [],
+        "path": "server/tests/work-loop.test.ts",
+        "sha256": "00437a1951c5ebc9d67b3b97594a0eeaf98f70e038f3c93599e4c035dad9ebb3"
+      },
+      {
+        "bytes": 15320,
+        "flags": [
+          "direct_pg",
+          "integration_name"
+        ],
+        "path": "server/tests/work-queue.integration.test.ts",
+        "sha256": "c9b80d20c75c299ae189a7ddc511db4b6652ea86fb9c0c3036aeef3fabfebb2d"
+      }
+    ],
+    "shared": [
+      {
+        "bytes": 967,
+        "flags": [],
+        "path": "shared/agent-authorisation.test.ts",
+        "sha256": "02ada8c09e289d01f4c5779a2a2fd7d87cc435cb2f63cdcd15c25f8fb01582d4"
+      },
+      {
+        "bytes": 12665,
+        "flags": [],
+        "path": "shared/attachments.test.ts",
+        "sha256": "ec946ca6b19c4c06e5c3b1d0482f7fd7b653b1068ef2d7f179c0763188cd7747"
+      },
+      {
+        "bytes": 929,
+        "flags": [],
+        "path": "shared/bot-prompt.test.ts",
+        "sha256": "252117532b679464e1a2da8dc01f629fe6499d17152330954f24d911a3dd29c6"
+      },
+      {
+        "bytes": 1153,
+        "flags": [],
+        "path": "shared/file-download.test.ts",
+        "sha256": "a056bb683ae14c6892d3f8b77127402b54b2d9579eb8f3d1bea140d4d2737a61"
+      },
+      {
+        "bytes": 1191,
+        "flags": [],
+        "path": "shared/listen-port.test.ts",
+        "sha256": "3b441d229d03a46cbad80c8bcf63721c59777e79f0d8790d06391292209e1bbc"
+      },
+      {
+        "bytes": 13733,
+        "flags": [],
+        "path": "shared/model-providers.test.ts",
+        "sha256": "14587268ed3f26e1f56143389f6f752b3f6281b30d6ce2bcc0ff0e88153c2ff0"
+      },
+      {
+        "bytes": 1764,
+        "flags": [],
+        "path": "shared/responsibility-turn.test.ts",
+        "sha256": "9c74fe3a8f3a50d958cfc9d019ad3b88bec4f8df39194fef856dbe3357b5ac31"
+      },
+      {
+        "bytes": 1994,
+        "flags": [],
+        "path": "shared/routine-firing.test.ts",
+        "sha256": "2aa74846d57056d14a7649555acc0ce5c51b1e4f2cfbfe5b3d427075cdd3b396"
+      },
+      {
+        "bytes": 1791,
+        "flags": [],
+        "path": "shared/user-content-hardening.test.ts",
+        "sha256": "b2fa5ec328735c3143cbf13aa23b8cafd038152065df9e1f57eed6b67eb1a30f"
+      },
+      {
+        "bytes": 1111,
+        "flags": [],
+        "path": "shared/work-owner.test.ts",
+        "sha256": "9942bc9a9768d0b9f44b8029fe070f7d01fc99344dc1cb8df043134e77553ba0"
+      }
+    ],
+    "tests": [
+      {
+        "bytes": 2519,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "tests/agent-bot.test.ts",
+        "sha256": "dd4ddce04a1266f1db112a8e60083cfa777ee63a08cfa77ec641162916834e61"
+      },
+      {
+        "bytes": 3160,
+        "flags": [],
+        "path": "tests/clean-checkout.test.ts",
+        "sha256": "ecc2a89a107fba6b456dc900c7bfcc58bc691c58d7c8f60c638937b7d4dbdf40"
+      },
+      {
+        "bytes": 19056,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "tests/compose.test.ts",
+        "sha256": "ca5d6959a05108e24dc93950ac1ba31a2db6d8e1be3186da10cb7b9684c1b80a"
+      },
+      {
+        "bytes": 593,
+        "flags": [],
+        "path": "tests/fintech-package.test.ts",
+        "sha256": "43617c56443c61439620010a5e1ee53e310e33c794315a8134d7ce09dd26b96e"
+      },
+      {
+        "bytes": 27325,
+        "flags": [
+          "lineage_scoped2G"
+        ],
+        "path": "tests/recovery-lineage.test.ts",
+        "sha256": "2d7d2a39a9f56f2b6e04829d10d5269da1261796ca8fa14729f7aa59b2f9ae5f"
+      },
+      {
+        "bytes": 8708,
+        "flags": [
+          "live_or_smoke"
+        ],
+        "path": "tests/smoke/journey.test.ts",
+        "sha256": "1de6f7b98008d0eaedcf724f30d880f4aedd3617319bcd2fff485ac3c8319ea5"
+      },
+      {
+        "bytes": 2084,
+        "flags": [],
+        "path": "tests/workspace.test.ts",
+        "sha256": "bc783ee67e831015d840ade5375022f27f29da48a4a83e4005cb8fe84db30745"
+      }
+    ],
+    "worker": [
+      {
+        "bytes": 3311,
+        "flags": [],
+        "path": "worker/tests/env.test.ts",
+        "sha256": "2fb42bd98e0911f6af0dfe272eb0e22fedb05d7808850c6e29440f2a81faf806"
+      },
+      {
+        "bytes": 252,
+        "flags": [],
+        "path": "worker/tests/status.test.ts",
+        "sha256": "58ec4c0effe93037b22bff2cad8cf83aae2dc2b1c6dc74dd32e9ba86b0009af7"
+      }
+    ]
+  },
+  "limits": {
+    "data": 67108864,
+    "parent": 536870912,
+    "swap": 0
+  },
+  "schema": "xiongbaowork-test-literal-inventory/1",
+  "run": 40787742223,
+  "job": 123165079025,
+  "workflow_commit": "59a6411999a44cfeaa1ff2b169f66796b01aaaa9",
+  "scope": "Only six explicitly named directories: server/tests,shared,runner,worker,scripts,tests. Other agent packages were separately read/classified; this is not a whole-repository inventory."
+}

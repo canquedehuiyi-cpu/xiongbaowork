@@ -1,3 +1,19 @@
+## 非阻塞回归进展，2026-10-29
+
+当前Source24采用提交b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc，2060文件/50032071字节；源码修复覆盖24包与原18交付包分开。Source23严格四workspace期待与Source24严格启动摘要期待均已独审并单独测试/lint通过，生产package/lock/start.sh及审批/PG门未改。
+
+本轮已完成：
+- 177个显式新增offline文件全部实跑：2371pass/14fail/0skip/6589expects，整体FAILED原记录保留。workspace旧期待1fail已独立4/0修复；13个原审批失败仍在既有fresh-producer/continuation保护门。
+- 4个原Linux shell/workspace/egress fixture：89pass/0fail/219expects；实际自有子进程取消和临时路径隔离，不冒Windows或真实用户设备。
+- 27个原本机HTTP/LLMock/自有子进程fixture：468pass/5fail/1473expects，整体FAILED保留。启动摘要1fail已独立12/0修复；3个agent-bot缺依赖的原启动拒绝case，已完整安装其原有独立锁依赖后3/0通过。另1个production-loader case仍被ROLE_WRITER_DATABASE_URL必需保护门提前拒绝，未伪造PG角色或削弱原数据库边界期待。
+- 24个原agent-computer offline mock文件及上述agent-bot启动拒绝，合计25文件295pass/0fail/585expects。完整独立agent-bot安装按现有9012B锁执行，禁全部生命周期脚本、privatecache/copyfile；2761regular/2symlinks/hardlink0，8个root/agent原package-lock输入未变，模块复制64MiB、安装及测试512MiB/swap0。未新增依赖、改锁、装浏览器或调用真实provider。
+
+20个其他协议/历史/监管器/桌面元数据与离线adapter原测试正在最后一批验证。仅安装agent-langgraph与agent-computer已存在的完整冻结锁，资源边界不扩；Mastra没有自己的锁，因此不为它新解依赖，只使用原root冻结SDK。混合浏览器文件仅跑未设live标志的原解析case，SKIP会如实报告，不能算真实浏览器通过。Composio实际live文件不运行；adapter文件被先前literal筛选误列live，是注释中的标志，源码已核fakeVendor、恢复prototype和拒绝的fetch recorder，不实际访问vendor。
+
+所有已完成批次保存独立结果JSON和精确run/commit作用域，不相加为不重复总数，也不把旧失败改绿。原77故事/18交付包/7门、PG_PENDING/ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED、冻结strictCI基线03df9efa缺失、真实镜像/WakerFlow/设备/模型计费/客户部署和所有历史审计保持。源码、archive、JSON、deps、test产物仅云端；Windows Source写0、免费标准public Actions、付费provider0、无PR/生产部署/默认分支或自动化恢复。
+
+### 较早检查点（历史证据，当前结果以上文为准）
+
 ## Source24 启动摘要断言修复，2026-10-29
 
 START-HEALTH-ORDER-ASSERTION-20261029候选4874f5300ea683a2217c121c34ecb486bec0a30e已同一非作者独审SOURCE_APPROVED_ONLY/findings=[]。唯一Source改动是原test的一个完整toContain期待句顺序：mode test · licence valid · Bots: analyst，与未改producer一致。生产start.sh、全部fake脚手架和其他11case完全保留。24为独审源码修复覆盖包数，与原18交付包单独计；2060文件/50032071字节。

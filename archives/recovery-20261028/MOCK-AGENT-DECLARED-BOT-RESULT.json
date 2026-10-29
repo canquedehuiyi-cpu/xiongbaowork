@@ -1,0 +1,706 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40791381738,
+  "job": 123177480271,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "503b175b3768f020375c43ddd901b6ac00d2cfa3",
+    "head": "93b25cc699b839f31196bcbccb0323da0af28bf6",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "93b25cc699b839f31196bcbccb0323da0af28bf6",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": {
+    "pass": 295,
+    "fail": 0,
+    "skip": 0,
+    "expects": 585
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 63.9M (swap: 0B)",
+    "Memory peak: 512.3M (swap: 0B)",
+    "Memory peak: 7M (swap: 0B)",
+    "Memory peak: 99.6M (swap: 0B)",
+    "Memory peak: 36.4M (swap: 0B)",
+    "Memory peak: 135.2M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "24 original offline mocked agent-computer files plus3 original no-key startup refusals after installing existing standalone lock. No browser/live-screen opt-in, real model/provider, actualPG, or user device acceptance.",
+  "plan": {
+    "schema": "xiongbaowork-mock-agent-declared-bot-plan/1",
+    "source_commit": "9012793c25b5d9dbdb00ba623462e91245087439",
+    "selection": [
+      {
+        "path": "agent-computer/tests/action-barrier.test.ts",
+        "bytes": 935,
+        "sha256": "a5ac4d2fb87ad3eab59195b62966decbacb528e508ecd0a73492100eb8e4b1e9",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/aria-snapshot.test.ts",
+        "bytes": 13105,
+        "sha256": "83f2d9f95b7a6b02535a72298bcb65c03ea1cdad97c252dc9f2fd76b5f1ba7f6",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/authorisation.test.ts",
+        "bytes": 4807,
+        "sha256": "d86a6cc070255fcc2e7f8845d9c25169458e822d954725454fdaeef490397183",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/bot-id.test.ts",
+        "bytes": 2376,
+        "sha256": "85d9ac8478e04a980ad3c58a4d95a901beddb5a39e0e6b6f84452450e872c774",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/browser-eviction.test.ts",
+        "bytes": 6413,
+        "sha256": "44040ac257f6aa9cbda7b8db7c5829ae6066962314ddbc653dd7410b7e355275",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/browser-mode.test.ts",
+        "bytes": 786,
+        "sha256": "ecb81da9801a0ec31f689d390a55e17e61d06d2b5801393b59d15ea88490efe4",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/browser-runtime.test.ts",
+        "bytes": 1758,
+        "sha256": "61bd7c8a402d4bc28b0f3dc9e37a624d851cf87ba020530808d940289aa185ed",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/challenge.test.ts",
+        "bytes": 1257,
+        "sha256": "107f2a62264ce8aaaa4736c53347bab3d6eedad9a96d87ee9f07223da6ab17dc",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/control-store.test.ts",
+        "bytes": 4837,
+        "sha256": "1d445e4af6ef79274b0f46d6e9bd286bdcc76cbb216fb17969d22f309243b7e8",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/control.test.ts",
+        "bytes": 7646,
+        "sha256": "9e0eded783779eaa705b2a74c198f9489f9f5cf799d4c70f8d1b833049d97213",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/demonstration.test.ts",
+        "bytes": 1062,
+        "sha256": "d9fb2b694c722ab11209a22163ff61e6f9a6e08ab8c93a3686fc11e561aedadd",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/egress.test.ts",
+        "bytes": 5667,
+        "sha256": "5693534bef281cdf77ef337e97168127e528ad5217ed8718b92ea4f1d6218993",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/identity.test.ts",
+        "bytes": 4514,
+        "sha256": "611a22af70a5467d2c2f98ef7a16f01d1fb7d1cfa9c9eab3d76f34ece01f47fe",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/live-page.test.ts",
+        "bytes": 1277,
+        "sha256": "4f358b5ffdae1450f11c637f1c28e82499641df2f56cc52a1ca55f9375814ac1",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/local-chrome-startup.test.ts",
+        "bytes": 4354,
+        "sha256": "a62be3fb91c39c545a3a8c9da09e0823a338bf2cd9e94cdcccd46e900ad791f7",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/navigation-recovery.test.ts",
+        "bytes": 2189,
+        "sha256": "f268506ff67d6d29ee2f6a08d1656438220830d22ca17c69c0e22399b61ba80b",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/number-from-env.test.ts",
+        "bytes": 5318,
+        "sha256": "bb4a9c92d3be91d3f9e32eedda5532458f8aff82c98f7e23ad22696f3c78bf9a",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/profile-listing.test.ts",
+        "bytes": 2233,
+        "sha256": "c756a82a8508a582c8f81e2e7b2db78d4a53acfa34a18a5b1816e48130eb8972",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/request-validation.test.ts",
+        "bytes": 4615,
+        "sha256": "20b2d32ab41d9e042d41f8a96356881fd272755a11a695059948198d4ca956dc",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/runtime-hardening.test.ts",
+        "bytes": 1628,
+        "sha256": "bd55a3a98f262a9fed23bcee67f2181b0836b67db285aa91bb12aa094e00ffba",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/screencast.test.ts",
+        "bytes": 4268,
+        "sha256": "34f515e68ef93fc3cb94c07cc6ecb8a44f4429613bfb0d00b67daf291cd780f4",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/sessions.test.ts",
+        "bytes": 6998,
+        "sha256": "b2c5a5e7ea84c8f6e0f582ec0633f780d8560141adcc2de339bba2312a7f100c",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/viewer.test.ts",
+        "bytes": 19851,
+        "sha256": "2616cdcb4ce1d08f56d0516c9901a9175aad6dfeb257462688c4274a84c701d7",
+        "flags": []
+      },
+      {
+        "path": "agent-computer/tests/virtual-display.test.ts",
+        "bytes": 3819,
+        "sha256": "a14c6e1c58343204e272a31a81f48479a18b07634853d8b24baf704b4d3987b9",
+        "flags": []
+      },
+      {
+        "path": "tests/agent-bot.test.ts",
+        "bytes": 2519,
+        "sha256": "dd4ddce04a1266f1db112a8e60083cfa777ee63a08cfa77ec641162916834e61",
+        "flags": []
+      }
+    ],
+    "agent_bot_full_install": {
+      "inputs": [
+        {
+          "relative": "bun.lock",
+          "identity": {
+            "path": "openbot/agent-bot/bun.lock",
+            "bytes": 9012,
+            "sha256": "a33347e1b5248d4d80bc5b8069047d2f3b79117f8bad6b7e38ca3ffe72fddb5a",
+            "mode": "0o644"
+          }
+        },
+        {
+          "relative": "package.json",
+          "identity": {
+            "path": "openbot/agent-bot/package.json",
+            "bytes": 296,
+            "sha256": "95901afcb3dfb6a454d2bbf5fb9ec500b4e78326e807f74349e7caf5eae44cd4",
+            "mode": "0o644"
+          }
+        }
+      ],
+      "unchanged_root_and_own_inputs": 8,
+      "outside_source_standalone_install": true,
+      "full_declared_lock": true,
+      "ignore_all_lifecycle_scripts": true,
+      "private_cache": true,
+      "backend": "copyfile",
+      "install_limit": 536870912,
+      "module_copy_limit": 67108864,
+      "no_new_dependencies_or_lock_updates": true
+    },
+    "scope": "24 original offline mocked agent-computer files plus3 original no-key startup refusals after installing existing standalone lock. No browser/live-screen opt-in, real model/provider, actualPG, or user device acceptance.",
+    "resources": {
+      "project_and_descendants": 536870912,
+      "swap": 0,
+      "data": 67108864,
+      "uses2GiB": false
+    },
+    "extra_install_authorization_basis": "Existing full dependency-install512MiB exception within unchanged512MiB project gate, full declared own lock only, not new dependency additions",
+    "windows_source_writes": 0,
+    "source_changes": 0,
+    "paid_provider_calls": 0,
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "source_commit": "9012793c25b5d9dbdb00ba623462e91245087439",
+  "mock_agent": {
+    "exit_code": 0,
+    "expected_files": 25,
+    "completed_files": 25,
+    "files": [
+      {
+        "path": "agent-computer/tests/action-barrier.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/aria-snapshot.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 35,
+          "fail": 0,
+          "skip": 0,
+          "expects": 55
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/authorisation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 38
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/bot-id.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 27,
+          "fail": 0,
+          "skip": 0,
+          "expects": 30
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/browser-eviction.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 14,
+          "fail": 0,
+          "skip": 0,
+          "expects": 17
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/browser-mode.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/browser-runtime.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/challenge.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 9
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/control-store.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 30
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/control.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 12,
+          "fail": 0,
+          "skip": 0,
+          "expects": 58
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/demonstration.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/egress.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 15,
+          "fail": 0,
+          "skip": 0,
+          "expects": 25
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/identity.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 21
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/live-page.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/local-chrome-startup.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 20
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/navigation-recovery.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 13
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/number-from-env.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 28,
+          "fail": 0,
+          "skip": 0,
+          "expects": 32
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/profile-listing.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 3
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/request-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 44,
+          "fail": 0,
+          "skip": 0,
+          "expects": 69
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/runtime-hardening.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/screencast.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 27
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/sessions.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 18
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/viewer.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 31,
+          "fail": 0,
+          "skip": 0,
+          "expects": 58
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "agent-computer/tests/virtual-display.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 15
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "tests/agent-bot.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      }
+    ],
+    "totals": {
+      "pass": 295,
+      "fail": 0,
+      "skip": 0,
+      "expects": 585
+    },
+    "batch_timeout": 300,
+    "per_file_timeout": 60,
+    "per_test_timeout_ms": 5000,
+    "runtime": "Bun1.3.14",
+    "original_preloads": "UNCHANGED_TWO",
+    "original_strict_ci": "NOT_RUN",
+    "original400_floor": "UNCHANGED_NOT_USED_AS_A_SUBSTITUTE",
+    "postgres17": "PG_PENDING",
+    "real_provider": "NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_bot_install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "93b25cc699b839f31196bcbccb0323da0af28bf6",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 2761,
+      "symlinks": 2,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "agent_bot_input_copy": {
+    "inputs": [
+      {
+        "relative": "bun.lock",
+        "identity": {
+          "path": "openbot/agent-bot/bun.lock",
+          "bytes": 9012,
+          "sha256": "a33347e1b5248d4d80bc5b8069047d2f3b79117f8bad6b7e38ca3ffe72fddb5a",
+          "mode": "0o644"
+        }
+      },
+      {
+        "relative": "package.json",
+        "identity": {
+          "path": "openbot/agent-bot/package.json",
+          "bytes": 296,
+          "sha256": "95901afcb3dfb6a454d2bbf5fb9ec500b4e78326e807f74349e7caf5eae44cd4",
+          "mode": "0o644"
+        }
+      }
+    ],
+    "fd_named_stability": true,
+    "exclusive_outputs": true,
+    "root_inputs_protected": 8,
+    "DATA_limit": 67108864
+  },
+  "agent_bot_module_copy": {
+    "regular_files": 2761,
+    "symlinks": 2,
+    "hardlink_files": 0,
+    "all8_source_package_lock_inputs_unchanged": true,
+    "backend": "copyfile",
+    "copy_limit": 67108864,
+    "node_modules_only": true,
+    "no_source_edits": true
+  }
+}

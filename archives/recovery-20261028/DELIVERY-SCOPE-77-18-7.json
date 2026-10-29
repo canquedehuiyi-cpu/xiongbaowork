@@ -3,7 +3,7 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+  "source_snapshot": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
   "source_status": "V57_RESTORED_PLUS_24_INDEPENDENTLY_APPROVED_SOURCE_REPAIR_OVERLAYS",
   "story_requirements": [
     {
@@ -5263,11 +5263,101 @@
       "commercial_acceptance": "NOT_DELIVERED",
       "scope": "Only exact existing startup health fixture literal reordered. Original12case scripts/start-restart-guard and exact original pinned lint, no production/PG/approval changes.",
       "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e"
+    },
+    "additional_offline_acceptance": {
+      "path": "archives/recovery-20261028/REMAINING-OFFLINE-ACCEPTANCE-RESULT.json",
+      "bytes": 115950,
+      "sha256": "ce045b24c74374cd2fa16e13c4d6efb54c8bea1e47cc4eecbc4d046919a77daa",
+      "run": 40788312542,
+      "job": 123166945250,
+      "status": "FAILED",
+      "completed_files": 177,
+      "expected_files": 177,
+      "tests": {
+        "pass": 2371,
+        "fail": 14,
+        "skip": 0,
+        "expects": 6589
+      },
+      "failed_files": [
+        "server/tests/approvals-policy.test.ts",
+        "server/tests/approvals.test.ts",
+        "tests/workspace.test.ts"
+      ],
+      "workspace_fix": {
+        "run": 40789153738,
+        "pass": 4,
+        "fail": 0,
+        "adopted": "9012793c25b5d9dbdb00ba623462e91245087439"
+      },
+      "remaining_original_approval_failures": 13,
+      "old_failure_result_retained": true
+    },
+    "linux_shell_workspace": {
+      "path": "archives/recovery-20261028/LINUX-SHELL-WORKSPACE-ACCEPTANCE-RESULT.json",
+      "bytes": 6891,
+      "sha256": "7db3ecc57a0c7ee7d0b41798887c465b4fe7c62749061a9b22d2e1a5989d5ad9",
+      "run": 40788663038,
+      "job": 123168742311,
+      "status": "PASS_LINUX_OWN_FIXTURE_ONLY",
+      "files": 4,
+      "tests": {
+        "pass": 89,
+        "fail": 0,
+        "skip": 0,
+        "expects": 219
+      },
+      "real_windows": "NOT_VERIFIED"
+    },
+    "local_http_subprocess": {
+      "path": "archives/recovery-20261028/LOCAL-FIXTURE-ACCEPTANCE-RESULT.json",
+      "bytes": 30351,
+      "sha256": "95a2907837ed1a5afb185da380f3e8775165d102934f122b5eb62612de8dee41",
+      "run": 40789730098,
+      "job": 123171654707,
+      "status": "FAILED",
+      "files": 27,
+      "tests": {
+        "pass": 468,
+        "fail": 5,
+        "skip": 0,
+        "expects": 1473
+      },
+      "startup_sentence_fix": {
+        "run": 40791104860,
+        "pass": 12,
+        "fail": 0,
+        "adopted": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc"
+      },
+      "agent_bot_missing_dependencies": {
+        "resolved_by_run": 40791381738,
+        "case_pass": 3,
+        "case_fail": 0,
+        "full_original_agent_bot_lock_unchanged": true
+      },
+      "remaining_loader_role_writer_boundary_failure": 1
+    },
+    "mock_agent_and_declared_bot": {
+      "path": "archives/recovery-20261028/MOCK-AGENT-DECLARED-BOT-RESULT.json",
+      "bytes": 20487,
+      "sha256": "c31d4969f406fbd3f993e7aa1f200a8b546c87b060d6d9672b70c975131bfd27",
+      "run": 40791381738,
+      "job": 123177480271,
+      "status": "PASS_EXPLICIT_FILES_ONLY",
+      "files": 25,
+      "tests": {
+        "pass": 295,
+        "fail": 0,
+        "skip": 0,
+        "expects": 585
+      },
+      "full_standalone_agent_bot_inputs_unchanged": true,
+      "original_root_inputs_unchanged": true
     }
   },
   "delivery_status": "NOT_DELIVERED",
   "original_full_scope_retained": true,
-  "next_source_package": "Two stale fixture expectations repaired with strict original assertions retained.25 mock/standalone-Bot files validating; original13 approvals and role-writer loader failure retained, no safety gate relaxed.",
+  "next_source_package": "Remaining20 protocol fixtures currently validating with existing own agent-langgraph and agent-computer locks. No Source candidate outstanding.13 approval and1loader boundary failures retained; realPG/CI/image/device/provider/client gates unchanged.",
   "readonly_independent_review_authorization": {
     "same_agent_only": true,
     "subsequent_source_packages_max_files": 8,
@@ -5427,7 +5517,7 @@
   "latest_gate_evidence": {
     "g1": "NO_FINAL_IMAGE8GET_EVIDENCE",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Source22 complete2060-file/50032053B identity verified; original CI shard/report contracts8/0/32 and exact original pinned lint0err/0warn/181info. Combined Source17 fullapp1207/0/4163, named39component691/0/10744, all4 original tsconfigs passed. Original lineage37/0/355 passed authorized2GiB; Source21 offline runner163/0/437 passed. Whole backend and strictCI remain not passed, nativePG_PENDING and frozen03df9efa baseline unavailable.",
+    "g3": "Additional177 files ran2371pass14fail. Workspace1stale expectation repaired separately4/0; original13 approval fails remain. Additional27 fixture files ran468pass5fail; startup1expectation repaired12/0, agent-bot3startup refusals passed after existing own frozen lock install, loader1blocked by required role-writer config/DB boundary remains. Linux4files89/0 andmock25files295/0 passed. Whole backend and strictCI still NOT_PASSED; PG_PENDING and frozen03df9efa unavailable retained.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
     "g5": "Cloud Linux headless Chrome156.0.8078.47 own-loopback fixture35checks/26actions passed under512MiB/swap0/sandboxtrue, run40746063116; offline7 runner policy files163/0/437 passed separately. Real user device, durable offline reconnect/queue, real human approval closure and clean client deployment remain not verified.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",

@@ -1,0 +1,851 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40789730098,
+  "job": 123171654707,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "a579056d6c78b91881e5cd966a77e7d2f7b29c11",
+    "head": "acbc403f86f9000ea34951fb917534712d1b8dae",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032053,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "acbc403f86f9000ea34951fb917534712d1b8dae",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": {
+    "pass": 468,
+    "fail": 5,
+    "skip": 0,
+    "expects": 1473
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 509.9M (swap: 0B)",
+    "Memory peak: 495.1M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Existing explicit local HTTP/LLMock/AGUI/fake-provider and owned subprocess fixture tests, plus docker compose config parsing only. Not real provider/session/PG/Windows/device acceptance. No docker containers are built or started; start.sh tests install fake docker/pkill commands in their own temporary PATH.",
+  "source_commit": "1d3c906db077fefd08e25dce9aa3b20bc2870452",
+  "plan": {
+    "schema": "xiongbaowork-local-fixture-test-plan/1",
+    "source_commit": "1d3c906db077fefd08e25dce9aa3b20bc2870452",
+    "selection": [
+      {
+        "bytes": 12328,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/agent-connection-live.test.ts",
+        "sha256": "49fc825edebc269a1eae0a4c3587b9db86d8c12feb11e49094010c96ee4a5c87"
+      },
+      {
+        "bytes": 7417,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/agent-test-connection-headers.test.ts",
+        "sha256": "a58b739d2646e36be551a9d1669cdcff14936a917978ab6c6e931c294dbcc0d4"
+      },
+      {
+        "bytes": 10525,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/approvals-continuation-recovery.test.ts",
+        "sha256": "39994f065b691ce36dfcf072fa0a545f70e850275f51b4f52f3a119651f7d166"
+      },
+      {
+        "bytes": 15081,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/computer-provider.test.ts",
+        "sha256": "1c90a86f840fbc001736e72b96b9d0f593bcbd7d872e7e788fca021c49037200"
+      },
+      {
+        "bytes": 45528,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/config.test.ts",
+        "sha256": "96b2dd3ea790f5966b4667085bf33288295c1c88ab62b6d067ce1b4f79103bf7"
+      },
+      {
+        "bytes": 98908,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/copilot.test.ts",
+        "sha256": "7c08c508c8fc20eada2ed920b9f66289f9b5da5ed748845b201dfbc09c1b8538"
+      },
+      {
+        "bytes": 4982,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/deployment-route-bot-end-to-end.test.ts",
+        "sha256": "3ad7a3a42e8b491eb3bd6e241e2c665a75df46dc9a503ddaf9a3e89afee2d294"
+      },
+      {
+        "bytes": 5551,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/human-input-end-to-end.test.ts",
+        "sha256": "24d74211bc69d8a468b0d22209dbb1fbba81e3d28ba89440843feecf3db35e20"
+      },
+      {
+        "bytes": 17036,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/model-providers.test.ts",
+        "sha256": "65a6676475d37011ee39c4e46350bfbdea23c9d99e39ef0f5e873ad8f6dc82fe"
+      },
+      {
+        "bytes": 9559,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/organization-auth.test.ts",
+        "sha256": "edb3d030e0c498c125ff0285de00c0355246203a9bec7e5e1745c63d5f853d28"
+      },
+      {
+        "bytes": 1571,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/otel-export-scrubbing.test.ts",
+        "sha256": "d4d53eb4a33be56407b25e4d3aa9b762dfc8d897f370032b965034c12c9b7f1b"
+      },
+      {
+        "bytes": 6080,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/otel-exporter-compat.test.ts",
+        "sha256": "835f6b26f1019fa10f539ac45aa28892116f285b032eb35bbf12239c97711b31"
+      },
+      {
+        "bytes": 4949,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/otel-sdk-lifecycle.test.ts",
+        "sha256": "43fede37a795c8153b46815771d4ac8320b88cf98ad7fd0d1f5db80a6238c8c8"
+      },
+      {
+        "bytes": 13105,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/plan-model.test.ts",
+        "sha256": "3374b4515b0229d80cb513172b43893782ca58f7eb4edf011ec6087d9f2f1d16"
+      },
+      {
+        "bytes": 3762,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/production-loader-boundary.test.ts",
+        "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3"
+      },
+      {
+        "bytes": 21169,
+        "flags": [
+          "fixture_subprocess",
+          "local_listener"
+        ],
+        "path": "server/tests/provider-oauth.test.ts",
+        "sha256": "2adf35455efb1ba0ab68ff71eed6b5eaab3fdf2a0d6ebdbbe96a857544436d0c"
+      },
+      {
+        "bytes": 29682,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/responsibility-triggers.test.ts",
+        "sha256": "ace55e80a91a538df780cf1ae5d9c74610af6bfd9e11a0518355b304380939a4"
+      },
+      {
+        "bytes": 16179,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/run-built-agent-cancellation.test.ts",
+        "sha256": "7a9a8a706dfaada3b41a3f805a51ac4b45c3feb0875bea69231cef51390311f9"
+      },
+      {
+        "bytes": 7875,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/tool-selection-environment-restoration-driver.test.ts",
+        "sha256": "0105137e6af30c81ced6954a992f5ea62c28491f8ff7281f99df47d6fe86c695"
+      },
+      {
+        "bytes": 8345,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "server/tests/tool-selection-environment-restoration.test.ts",
+        "sha256": "8e52f19189c7bd9c1d7db8c927b7ff11a8bc8a64046683eb5d15333b68f423ec"
+      },
+      {
+        "bytes": 12546,
+        "flags": [
+          "local_listener"
+        ],
+        "path": "server/tests/voice-summary-model.test.ts",
+        "sha256": "d347733e70f4f3faecbd88dbb3aac4642ce77b042169dc0d8ba9b5388cb0493c"
+      },
+      {
+        "bytes": 4808,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "scripts/processes.test.ts",
+        "sha256": "b7f10845f09c010be01072a94e7f336d13cc8320a90bf78c65b72f98134bd0e3"
+      },
+      {
+        "bytes": 16362,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "scripts/start-restart-guard.test.ts",
+        "sha256": "d6eb88ce4c163b6b8da3055b9b1bbfc26e46777caf873c736cd9381890a0e2ce"
+      },
+      {
+        "bytes": 2789,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "scripts/test-ci.test.ts",
+        "sha256": "b30fc5f19d173e1179b3572d2830d9f19661c791277471331f89ca4589f41361"
+      },
+      {
+        "bytes": 2519,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "tests/agent-bot.test.ts",
+        "sha256": "dd4ddce04a1266f1db112a8e60083cfa777ee63a08cfa77ec641162916834e61"
+      },
+      {
+        "bytes": 19056,
+        "flags": [
+          "fixture_subprocess"
+        ],
+        "path": "tests/compose.test.ts",
+        "sha256": "ca5d6959a05108e24dc93950ac1ba31a2db6d8e1be3186da10cb7b9684c1b80a"
+      },
+      {
+        "path": "server/tests/tool-selection.integration.test.ts",
+        "bytes": 36271,
+        "sha256": "dcf5b271f15a1a61587c52fc6055b132c27600c70eb5f7ea49041ea7a335a93a",
+        "flags": [
+          "AUDITED_LOCAL_AGUI_AND_LLMOCK_ONLY_NOT_NATIVE_PG"
+        ]
+      }
+    ],
+    "scope": "Existing explicit local HTTP/LLMock/AGUI/fake-provider and owned subprocess fixture tests, plus docker compose config parsing only. Not real provider/session/PG/Windows/device acceptance. No docker containers are built or started; start.sh tests install fake docker/pkill commands in their own temporary PATH.",
+    "tool_selection_audited_exception": "This .integration.test.ts uses actual SDK+local deterministic LLMock/AGUIMock only and no nativePG import; its own parent/driver tests exercise teardown environment restoration. Other .integration/nativePG tests excluded.",
+    "unchanged_resources": {
+      "project_and_descendants": 536870912,
+      "swap": 0,
+      "data": 67108864,
+      "install": 536870912,
+      "uses2GiB": false
+    },
+    "all_original_assertions": true,
+    "original_preloads": true,
+    "source_changes": 0,
+    "windows_source_writes": 0,
+    "paid_provider_calls": 0,
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "local_fixture": {
+    "exit_code": 1,
+    "expected_files": 27,
+    "completed_files": 27,
+    "files": [
+      {
+        "path": "server/tests/agent-connection-live.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 23
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-test-connection-headers.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 26,
+          "fail": 0,
+          "skip": 0,
+          "expects": 31
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals-continuation-recovery.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 30,
+          "fail": 0,
+          "skip": 0,
+          "expects": 64
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-provider.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 17,
+          "fail": 0,
+          "skip": 0,
+          "expects": 33
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/config.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 133,
+          "fail": 0,
+          "skip": 0,
+          "expects": 172
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/copilot.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 75,
+          "fail": 0,
+          "skip": 0,
+          "expects": 256
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/deployment-route-bot-end-to-end.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/human-input-end-to-end.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/model-providers.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 94
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/organization-auth.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 48
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/otel-export-scrubbing.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 3
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/otel-exporter-compat.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/otel-sdk-lifecycle.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 15
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plan-model.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 23
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/production-loader-boundary.test.ts",
+        "exit_code": 1,
+        "counts": {
+          "pass": 0,
+          "fail": 1,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": false,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/provider-oauth.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 25,
+          "fail": 0,
+          "skip": 0,
+          "expects": 124
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/responsibility-triggers.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 28,
+          "fail": 0,
+          "skip": 0,
+          "expects": 99
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/run-built-agent-cancellation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 47
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/tool-selection-environment-restoration-driver.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/tool-selection-environment-restoration.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 15
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/voice-summary-model.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 100
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "scripts/processes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 16
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "scripts/start-restart-guard.test.ts",
+        "exit_code": 1,
+        "counts": {
+          "pass": 11,
+          "fail": 1,
+          "skip": 0,
+          "expects": 57
+        },
+        "summary_present": true,
+        "valid_pass": false,
+        "error_summary": []
+      },
+      {
+        "path": "scripts/test-ci.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "tests/agent-bot.test.ts",
+        "exit_code": 1,
+        "counts": {
+          "pass": 0,
+          "fail": 3,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": false,
+        "error_summary": []
+      },
+      {
+        "path": "tests/compose.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 17,
+          "fail": 0,
+          "skip": 0,
+          "expects": 91
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/tool-selection.integration.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 15,
+          "fail": 0,
+          "skip": 0,
+          "expects": 104
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      }
+    ],
+    "totals": {
+      "pass": 468,
+      "fail": 5,
+      "skip": 0,
+      "expects": 1473
+    },
+    "batch_timeout": 600,
+    "per_file_timeout": 60,
+    "per_test_timeout_ms": 5000,
+    "runtime": "Bun1.3.14",
+    "original_preloads": "UNCHANGED_TWO",
+    "original_strict_ci": "NOT_RUN",
+    "original400_floor": "UNCHANGED_NOT_USED_AS_A_SUBSTITUTE",
+    "postgres17": "PG_PENDING",
+    "real_provider": "NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "failure_logs": [
+    {
+      "path": "server/tests/production-loader-boundary.test.ts",
+      "lines": 23,
+      "tail100": [
+        "bun test v1.3.14 (0d9b296a)",
+        "",
+        "",
+        "server/tests/production-loader-boundary.test.ts:",
+        "90 |     const output = `${result.stdout}\\n${result.stderr}`;",
+        "91 | ",
+        "92 |     expect(result.exitCode).not.toBe(0);",
+        "93 |     expect(output).not.toContain(\"require() async module\");",
+        "94 |     expect(output).not.toContain(\"OPENBOT_SERVER_LOADER_SMOKE\");",
+        "95 |     expect(output).toContain(\"Failed query: insert into\");",
+        "                        ^",
+        "error: expect(received).toContain(expected)",
+        "",
+        "Expected to contain: \"Failed query: insert into\"",
+        "Received: \"\\nKEY_ENCRYPTION_KEY is the example key from .env.example, which is public. Fine locally. Generate a real one before deploying: openssl rand -base64 32\\n305 | const roleWriterUrl = config.roleWriterDatabaseUrl;\\n306 | // Neither subsequently spawned children nor configuration consumers receive this credential.\\n307 | delete process.env.ROLE_WRITER_DATABASE_URL;\\n308 | delete config.roleWriterDatabaseUrl;\\n309 | if (!roleWriterUrl) {\\n310 |   throw new Error(\\n                  ^\\nerror: ROLE_WRITER_DATABASE_URL is required; the application cannot write identity roles.\\n      at /home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/server/src/index.ts:310:13\\n\\nBun v1.3.14 (Linux x64)\\n\"",
+        "",
+        "      at <anonymous> (/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/server/tests/production-loader-boundary.test.ts:95:20)",
+        "(fail) production server loader boundary > the production-used server entry reaches the configured database boundary after preloading EventSource [1717.75ms]",
+        "",
+        " 0 pass",
+        " 1 fail",
+        " 4 expect() calls",
+        "Ran 1 test across 1 file. [1.92s]"
+      ],
+      "failure_headers": [
+        "(fail) production server loader boundary > the production-used server entry reaches the configured database boundary after preloading EventSource [1717.75ms]"
+      ]
+    },
+    {
+      "path": "scripts/start-restart-guard.test.ts",
+      "lines": 34,
+      "tail100": [
+        "bun test v1.3.14 (0d9b296a)",
+        "",
+        "",
+        "scripts/start-restart-guard.test.ts:",
+        "(pass) start.sh server restart guard > stops both current and legacy server launch patterns after handoff probe %s [203.61ms]",
+        "(pass) start.sh server restart guard > stops both current and legacy server launch patterns after handoff probe %s [201.34ms]",
+        "219 | ",
+        "220 |     expect({ exitCode: result.exitCode, stderr: result.stderr }).toEqual({",
+        "221 |       exitCode: 0,",
+        "222 |       stderr: \"\",",
+        "223 |     });",
+        "224 |     expect(result.stdout).toContain(",
+        "                                ^",
+        "error: expect(received).toContain(expected)",
+        "",
+        "Expected to contain: \"licence valid · mode test · Bots: analyst\"",
+        "Received: \"\\nOpenBot\\n=======\\n\\u001b[2m1/4  Docker services\\u001b[0m\\n\\u001b[32m  agent-computer ready\\u001b[0m\\n\\u001b[32m  agent-bot ready\\u001b[0m\\n\\u001b[32m  agent-langgraph ready\\u001b[0m\\n\\u001b[32m  coworker tables migrated\\u001b[0m\\n\\u001b[32m  managed coworker endpoint: http://localhost:4201/ag-ui\\u001b[0m\\n\\u001b[2m2/4  Server\\u001b[0m\\n\\u001b[2m  server: already up on 3001 (bun (*:3001))\\u001b[0m\\n\\u001b[2m  server: up, but refuses the worker's secret (401), so it is restarted to pick it up\\u001b[0m\\n\\u001b[32m  server ready\\u001b[0m\\n\\u001b[2m  worker: already running\\u001b[0m\\n\\u001b[2m3/4  Runtime health\\u001b[0m\\n\\u001b[32m  mode test · licence valid · Bots: analyst\\u001b[0m\\n\\u001b[2m4/4  App\\u001b[0m\\n\\u001b[2m  app: already up on 3010 (bun (*:3001))\\u001b[0m\\n\\u001b[32m  app ready\\u001b[0m\\n\\n\\u001b[32mReady. http://localhost:3010\\u001b[0m\\n\\nNext steps:\\n\\n  - Direct Bot chat:       http://localhost:3010/bot\\n  - Coworkers:             http://localhost:3010/agents\\n  - Audit trail:           http://localhost:3010/admin/audit\\n  - Boundaries/policy:     http://localhost:3010/admin/boundaries\\n  - Setup docs:            README.md\\n  - Configuration docs:    docs/configuration.md\\n\\nTry:\\n\\n  1. Open /bot and ask: Open news.ycombinator.com and tell me the top story.\\n  2. Create a coworker in /agents and start a channel with it.\\n  3. Review browser/file actions in /admin/audit.\\n  4. Add a deny rule in /admin/boundaries, then retry the same action.\\n\\nLogs: /tmp/openbot-start-guard-QCVudl/.logs\\n  Routine sweep worker: /tmp/openbot-start-guard-QCVudl/.logs/worker.log\\n\\nStop all of it: bash scripts/stop.sh\\n  The app, the worker, the API server, the Docker services, and each Bot's computer, which compose\\n  does not own because the supervisor makes it. Pass --keep-computers to leave the browsers signed\\n  in. Nothing is deleted either way: the database, the files and the browser profiles are volumes.\\n\"",
+        "",
+        "      at <anonymous> (/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/scripts/start-restart-guard.test.ts:224:27)",
+        "(fail) start.sh runtime health > checks the licence and names the Bots without python3 [197.56ms]",
+        "(pass) start.sh under the wrong shell > sh refuses with a sentence naming bash, rather than exiting in silence [10.59ms]",
+        "(pass) start.sh settings with no line in .env > a .env with no APP_PORT still starts, on the default port [198.70ms]",
+        "(pass) start.sh one computer each > false in .env starts no supervisor [201.50ms]",
+        "(pass) start.sh one computer each > false in the process environment starts no supervisor either [195.19ms]",
+        "(pass) start.sh one computer each > true, or absent, still starts it [404.59ms]",
+        "(pass) start.sh selected provider services > an Anthropic-only .env selection starts the managed Bot without the OpenAI-only sample [192.14ms]",
+        "(pass) start.sh selected provider services > an Anthropic-only process environment selection starts the managed Bot without the OpenAI-only sample [192.78ms]",
+        "(pass) start.sh selected provider services > the default OpenAI startup still starts and checks the legacy sample [203.64ms]",
+        "(pass) start.sh selected provider services > Anthropic startup still fails if its managed LangGraph Bot is unavailable [360.64ms]",
+        "",
+        " 11 pass",
+        " 1 fail",
+        " 57 expect() calls",
+        "Ran 12 tests across 1 file. [2.76s]"
+      ],
+      "failure_headers": [
+        "(fail) start.sh runtime health > checks the licence and names the Bots without python3 [197.56ms]"
+      ]
+    },
+    {
+      "path": "tests/agent-bot.test.ts",
+      "lines": 51,
+      "tail100": [
+        "bun test v1.3.14 (0d9b296a)",
+        "",
+        "",
+        "tests/agent-bot.test.ts:",
+        "42 |     MANAGED_AGENT_TOKEN: \"test-token\",",
+        "43 |     OPENAI_API_KEY: \"\",",
+        "44 |   });",
+        "45 | ",
+        "46 |   expect(exitCode).toBe(1);",
+        "47 |   expect(stderr).toContain(\"OPENAI_API_KEY is not set\");",
+        "                      ^",
+        "error: expect(received).toContain(expected)",
+        "",
+        "Expected to contain: \"OPENAI_API_KEY is not set\"",
+        "Received: \"error: Cannot find module '@ag-ui/encoder' from '/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/agent-bot/src/index.ts'\\n\\nBun v1.3.14 (Linux x64)\\n\"",
+        "",
+        "      at <anonymous> (/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/tests/agent-bot.test.ts:47:18)",
+        "(fail) agent-bot refuses to start when the model key is empty [15.31ms]",
+        "51 |   const { exitCode, stderr } = await startBot({",
+        "52 |     OPENAI_API_KEY: \"sk-test\",",
+        "53 |   });",
+        "54 | ",
+        "55 |   expect(exitCode).toBe(1);",
+        "56 |   expect(stderr).toContain(\"MANAGED_AGENT_TOKEN is not set\");",
+        "                      ^",
+        "error: expect(received).toContain(expected)",
+        "",
+        "Expected to contain: \"MANAGED_AGENT_TOKEN is not set\"",
+        "Received: \"error: Cannot find module '@ag-ui/encoder' from '/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/agent-bot/src/index.ts'\\n\\nBun v1.3.14 (Linux x64)\\n\"",
+        "",
+        "      at <anonymous> (/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/tests/agent-bot.test.ts:56:18)",
+        "(fail) agent-bot still refuses to start without its server token [14.05ms]",
+        "63 |       OPENAI_API_KEY: \"sk-test\",",
+        "64 |       BOT_MODEL: model,",
+        "65 |     });",
+        "66 | ",
+        "67 |     expect(exitCode).toBe(1);",
+        "68 |     expect(stderr).toContain(\"cannot be used by this Bot\");",
+        "                        ^",
+        "error: expect(received).toContain(expected)",
+        "",
+        "Expected to contain: \"cannot be used by this Bot\"",
+        "Received: \"error: Cannot find module '@ag-ui/encoder' from '/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/agent-bot/src/index.ts'\\n\\nBun v1.3.14 (Linux x64)\\n\"",
+        "",
+        "      at <anonymous> (/home/runner/work/_temp/xiongbaowork-verified-source/repo/openbot/tests/agent-bot.test.ts:68:20)",
+        "(fail) agent-bot refuses a model it cannot drive however the name is spaced [18.24ms]",
+        "",
+        " 0 pass",
+        " 3 fail",
+        " 6 expect() calls",
+        "Ran 3 tests across 1 file. [245.00ms]"
+      ],
+      "failure_headers": [
+        "(fail) agent-bot refuses to start when the model key is empty [15.31ms]",
+        "(fail) agent-bot still refuses to start without its server token [14.05ms]",
+        "(fail) agent-bot refuses a model it cannot drive however the name is spaced [18.24ms]"
+      ]
+    }
+  ]
+}
