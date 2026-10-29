@@ -264,5 +264,107 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T07:45:00Z"
+  "checkpoint_update_at": "2026-10-29T07:45:00Z",
+  "cloud_takeover_observation": {
+    "coordinator": {
+      "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
+      "executor_thread": "01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "agent": "/root",
+      "host_from_handoff": "durable",
+      "cwd": "/workspace/scratch/fd91774f2a2b"
+    },
+    "canonical_parent_verified": "4e1b432e097d24381e9cc2327227d82bb58e775c",
+    "github_connector": {
+      "repository_id": 1436573095,
+      "pull": true,
+      "push": true,
+      "immutable_handoff_verified": true
+    },
+    "executor_probe": {
+      "os": "Linux",
+      "cgroup": "0::/",
+      "memory_max": "8589934592",
+      "memory_swap_max": "max",
+      "cgroup_mount": "cgroup2 ro,nosuid,nodev,noexec,relatime,nsdelegate",
+      "systemd": "NOT_RUNNING",
+      "managed_environment_status": "TOOL_NOT_EXPOSED",
+      "network_policy_file": "ABSENT",
+      "project_executed": false
+    },
+    "inputs_verified": [
+      {
+        "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+        "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+        "bytes": 286013,
+        "sha256": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146"
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+        "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+        "bytes": 45225,
+        "sha256": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac"
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+        "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+        "bytes": 479194,
+        "sha256": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5"
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+        "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+        "bytes": 456310,
+        "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632"
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md",
+        "blob": "2c576298ea45a3d21f66e67dfeb6033301a934d9",
+        "bytes": 66979,
+        "sha256": "478c295fa0a41eade2a5af73746b24653027f293ac46bbd458dcbd8ba0abefce"
+      }
+    ],
+    "full_scope": {
+      "stories": 77,
+      "packages": 18,
+      "gates": 7,
+      "manifest_files": 2065,
+      "manifest_bytes": 50175181,
+      "all_story_rows": "REQUIRES_NEW_VALIDATION"
+    },
+    "source_adopted_this_session": 0,
+    "project_resource_queue": {
+      "owner": "/root",
+      "active_job": null,
+      "status": "BLOCKED_COMPLIANT_EXECUTION_ENTRY",
+      "current_executor": "No project commands allowed: cgroup read-only8GiB/swapmax and no systemd; no containment proof",
+      "github_manual_dispatch": "No supported workflow_dispatch tool in current inventory; do not guess API or reuse credentials",
+      "next": "Minimal generator dependency/preflight reconciliation before new reviewed resource controller; do not repeat timed-out install chain"
+    },
+    "external_review": {
+      "persistence": {
+        "commit": "8d517ba6ce2a1fb1a23eb2b03c22a712b17779c2",
+        "branch": "codex/cloud-review-persistence-20261029",
+        "path": "archives/recovery-20261028/CLOUD-PERSISTENCE-REVIEW-20261029.json",
+        "blob": "cb38e9da3033a866888dc6c975542060d6ba85e9",
+        "bytes": 15902,
+        "sha256": "3335ae49c5b68770d7f56080a97e37a6c85cfe99d5bce226fd44e3c6685fe89c",
+        "verdict": "SOURCE_APPROVED_ONLY; no adoption/runtime/production approval"
+      },
+      "delivery": "NOT_YET_READ_AT_CHECKPOINT"
+    },
+    "additional_non_author_review_agents": [
+      "/root/persistence_review",
+      "/root/delivery_review"
+    ],
+    "generator_analysis": {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CLOSURE-20261029.json",
+      "candidate_lock_nodes": 17,
+      "downloaded": false,
+      "missing_schema": "openbot/server/src/db/schema/learning.ts",
+      "generator": "NOT_RUN",
+      "metadata": "NONE"
+    },
+    "local_root": "Retired by human; heartbeat PAUSED; no Gitee/support resume",
+    "completion": "NOT_COMPLETE_NO_UNATTENDED_GUARANTEE"
+  }
 }

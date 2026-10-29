@@ -1,0 +1,1060 @@
+{
+  "schema": "xiongbaowork-minimal-generator-dependency-analysis-v1",
+  "author": "/root",
+  "kind": "STATIC_LOCK_GRAPH_NOT_EXECUTED",
+  "source_sha": "548de959f08527d2e74db19482e34d9faa1145a0",
+  "lock": {
+    "path": "openbot/bun.lock",
+    "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+    "bytes": 453991,
+    "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"
+  },
+  "roots": [
+    "drizzle-kit@0.31.10",
+    "drizzle-orm@0.45.2"
+  ],
+  "platform": "linux-x64",
+  "nodes": [
+    {
+      "key": "@drizzle-team/brocli",
+      "pinned": "@drizzle-team/brocli@0.10.2",
+      "url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+      "metadata": {},
+      "integrity": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="
+    },
+    {
+      "key": "@esbuild-kit/core-utils",
+      "pinned": "@esbuild-kit/core-utils@3.3.2",
+      "url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+      "metadata": {
+        "dependencies": {
+          "esbuild": "~0.18.20",
+          "source-map-support": "^0.5.21"
+        }
+      },
+      "integrity": "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ=="
+    },
+    {
+      "key": "@esbuild-kit/core-utils/esbuild",
+      "pinned": "esbuild@0.18.20",
+      "url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+      "metadata": {
+        "optionalDependencies": {
+          "@esbuild/android-arm": "0.18.20",
+          "@esbuild/android-arm64": "0.18.20",
+          "@esbuild/android-x64": "0.18.20",
+          "@esbuild/darwin-arm64": "0.18.20",
+          "@esbuild/darwin-x64": "0.18.20",
+          "@esbuild/freebsd-arm64": "0.18.20",
+          "@esbuild/freebsd-x64": "0.18.20",
+          "@esbuild/linux-arm": "0.18.20",
+          "@esbuild/linux-arm64": "0.18.20",
+          "@esbuild/linux-ia32": "0.18.20",
+          "@esbuild/linux-loong64": "0.18.20",
+          "@esbuild/linux-mips64el": "0.18.20",
+          "@esbuild/linux-ppc64": "0.18.20",
+          "@esbuild/linux-riscv64": "0.18.20",
+          "@esbuild/linux-s390x": "0.18.20",
+          "@esbuild/linux-x64": "0.18.20",
+          "@esbuild/netbsd-x64": "0.18.20",
+          "@esbuild/openbsd-x64": "0.18.20",
+          "@esbuild/sunos-x64": "0.18.20",
+          "@esbuild/win32-arm64": "0.18.20",
+          "@esbuild/win32-ia32": "0.18.20",
+          "@esbuild/win32-x64": "0.18.20"
+        },
+        "bin": {
+          "esbuild": "bin/esbuild"
+        }
+      },
+      "integrity": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA=="
+    },
+    {
+      "key": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+      "pinned": "@esbuild/linux-x64@0.18.20",
+      "url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+      "metadata": {
+        "os": "linux",
+        "cpu": "x64"
+      },
+      "integrity": "sha512-UYqiqemphJcNsFEskc73jQ7B9jgwjWrSayxawS6UVFZGWrAAtkzjxSqnoclCXxWtfwLdzU+vTpcNYhpn43uP1w=="
+    },
+    {
+      "key": "@esbuild-kit/esm-loader",
+      "pinned": "@esbuild-kit/esm-loader@2.6.5",
+      "url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+      "metadata": {
+        "dependencies": {
+          "@esbuild-kit/core-utils": "^3.3.2",
+          "get-tsconfig": "^4.7.0"
+        }
+      },
+      "integrity": "sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA=="
+    },
+    {
+      "key": "@esbuild/linux-x64",
+      "pinned": "@esbuild/linux-x64@0.28.2",
+      "url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+      "metadata": {
+        "os": "linux",
+        "cpu": "x64"
+      },
+      "integrity": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ=="
+    },
+    {
+      "key": "buffer-from",
+      "pinned": "buffer-from@1.1.2",
+      "url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+      "metadata": {},
+      "integrity": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ=="
+    },
+    {
+      "key": "drizzle-kit",
+      "pinned": "drizzle-kit@0.31.10",
+      "url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+      "metadata": {
+        "dependencies": {
+          "@drizzle-team/brocli": "^0.10.2",
+          "@esbuild-kit/esm-loader": "^2.5.5",
+          "esbuild": "^0.25.4",
+          "tsx": "^4.21.0"
+        },
+        "bin": {
+          "drizzle-kit": "bin.cjs"
+        }
+      },
+      "integrity": "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw=="
+    },
+    {
+      "key": "drizzle-kit/esbuild",
+      "pinned": "esbuild@0.25.12",
+      "url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+      "metadata": {
+        "optionalDependencies": {
+          "@esbuild/aix-ppc64": "0.25.12",
+          "@esbuild/android-arm": "0.25.12",
+          "@esbuild/android-arm64": "0.25.12",
+          "@esbuild/android-x64": "0.25.12",
+          "@esbuild/darwin-arm64": "0.25.12",
+          "@esbuild/darwin-x64": "0.25.12",
+          "@esbuild/freebsd-arm64": "0.25.12",
+          "@esbuild/freebsd-x64": "0.25.12",
+          "@esbuild/linux-arm": "0.25.12",
+          "@esbuild/linux-arm64": "0.25.12",
+          "@esbuild/linux-ia32": "0.25.12",
+          "@esbuild/linux-loong64": "0.25.12",
+          "@esbuild/linux-mips64el": "0.25.12",
+          "@esbuild/linux-ppc64": "0.25.12",
+          "@esbuild/linux-riscv64": "0.25.12",
+          "@esbuild/linux-s390x": "0.25.12",
+          "@esbuild/linux-x64": "0.25.12",
+          "@esbuild/netbsd-arm64": "0.25.12",
+          "@esbuild/netbsd-x64": "0.25.12",
+          "@esbuild/openbsd-arm64": "0.25.12",
+          "@esbuild/openbsd-x64": "0.25.12",
+          "@esbuild/openharmony-arm64": "0.25.12",
+          "@esbuild/sunos-x64": "0.25.12",
+          "@esbuild/win32-arm64": "0.25.12",
+          "@esbuild/win32-ia32": "0.25.12",
+          "@esbuild/win32-x64": "0.25.12"
+        },
+        "bin": {
+          "esbuild": "bin/esbuild"
+        }
+      },
+      "integrity": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg=="
+    },
+    {
+      "key": "drizzle-kit/esbuild/@esbuild/linux-x64",
+      "pinned": "@esbuild/linux-x64@0.25.12",
+      "url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+      "metadata": {
+        "os": "linux",
+        "cpu": "x64"
+      },
+      "integrity": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw=="
+    },
+    {
+      "key": "drizzle-orm",
+      "pinned": "drizzle-orm@0.45.2",
+      "url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+      "metadata": {
+        "peerDependencies": {
+          "@aws-sdk/client-rds-data": ">=3",
+          "@cloudflare/workers-types": ">=4",
+          "@electric-sql/pglite": ">=0.2.0",
+          "@libsql/client": ">=0.10.0",
+          "@libsql/client-wasm": ">=0.10.0",
+          "@neondatabase/serverless": ">=0.10.0",
+          "@op-engineering/op-sqlite": ">=2",
+          "@opentelemetry/api": "^1.4.1",
+          "@planetscale/database": ">=1.13",
+          "@prisma/client": "*",
+          "@tidbcloud/serverless": "*",
+          "@types/better-sqlite3": "*",
+          "@types/pg": "*",
+          "@types/sql.js": "*",
+          "@upstash/redis": ">=1.34.7",
+          "@vercel/postgres": ">=0.8.0",
+          "@xata.io/client": "*",
+          "better-sqlite3": ">=7",
+          "bun-types": "*",
+          "expo-sqlite": ">=14.0.0",
+          "gel": ">=2",
+          "knex": "*",
+          "kysely": "*",
+          "mysql2": ">=2",
+          "pg": ">=8",
+          "postgres": ">=3",
+          "prisma": "*",
+          "sql.js": ">=1",
+          "sqlite3": ">=5"
+        },
+        "optionalPeers": [
+          "@aws-sdk/client-rds-data",
+          "@cloudflare/workers-types",
+          "@electric-sql/pglite",
+          "@libsql/client",
+          "@libsql/client-wasm",
+          "@neondatabase/serverless",
+          "@op-engineering/op-sqlite",
+          "@opentelemetry/api",
+          "@planetscale/database",
+          "@prisma/client",
+          "@tidbcloud/serverless",
+          "@types/better-sqlite3",
+          "@types/pg",
+          "@types/sql.js",
+          "@upstash/redis",
+          "@vercel/postgres",
+          "@xata.io/client",
+          "better-sqlite3",
+          "bun-types",
+          "expo-sqlite",
+          "gel",
+          "knex",
+          "kysely",
+          "mysql2",
+          "pg",
+          "postgres",
+          "prisma",
+          "sql.js",
+          "sqlite3"
+        ]
+      },
+      "integrity": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q=="
+    },
+    {
+      "key": "esbuild",
+      "pinned": "esbuild@0.28.2",
+      "url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.28.2.tgz",
+      "metadata": {
+        "optionalDependencies": {
+          "@esbuild/aix-ppc64": "0.28.2",
+          "@esbuild/android-arm": "0.28.2",
+          "@esbuild/android-arm64": "0.28.2",
+          "@esbuild/android-x64": "0.28.2",
+          "@esbuild/darwin-arm64": "0.28.2",
+          "@esbuild/darwin-x64": "0.28.2",
+          "@esbuild/freebsd-arm64": "0.28.2",
+          "@esbuild/freebsd-x64": "0.28.2",
+          "@esbuild/linux-arm": "0.28.2",
+          "@esbuild/linux-arm64": "0.28.2",
+          "@esbuild/linux-ia32": "0.28.2",
+          "@esbuild/linux-loong64": "0.28.2",
+          "@esbuild/linux-mips64el": "0.28.2",
+          "@esbuild/linux-ppc64": "0.28.2",
+          "@esbuild/linux-riscv64": "0.28.2",
+          "@esbuild/linux-s390x": "0.28.2",
+          "@esbuild/linux-x64": "0.28.2",
+          "@esbuild/netbsd-arm64": "0.28.2",
+          "@esbuild/netbsd-x64": "0.28.2",
+          "@esbuild/openbsd-arm64": "0.28.2",
+          "@esbuild/openbsd-x64": "0.28.2",
+          "@esbuild/openharmony-arm64": "0.28.2",
+          "@esbuild/sunos-x64": "0.28.2",
+          "@esbuild/win32-arm64": "0.28.2",
+          "@esbuild/win32-ia32": "0.28.2",
+          "@esbuild/win32-x64": "0.28.2"
+        },
+        "bin": {
+          "esbuild": "bin/esbuild"
+        }
+      },
+      "integrity": "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA=="
+    },
+    {
+      "key": "get-tsconfig",
+      "pinned": "get-tsconfig@4.14.3",
+      "url": "https://registry.npmmirror.com/get-tsconfig/-/get-tsconfig-4.14.3.tgz",
+      "metadata": {
+        "dependencies": {
+          "resolve-pkg-maps": "^1.0.0"
+        }
+      },
+      "integrity": "sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA=="
+    },
+    {
+      "key": "resolve-pkg-maps",
+      "pinned": "resolve-pkg-maps@1.0.0",
+      "url": "https://registry.npmmirror.com/resolve-pkg-maps/-/resolve-pkg-maps-1.0.0.tgz",
+      "metadata": {},
+      "integrity": "sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw=="
+    },
+    {
+      "key": "source-map",
+      "pinned": "source-map@0.6.1",
+      "url": "https://registry.npmmirror.com/source-map/-/source-map-0.6.1.tgz",
+      "metadata": {},
+      "integrity": "sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g=="
+    },
+    {
+      "key": "source-map-support",
+      "pinned": "source-map-support@0.5.21",
+      "url": "https://registry.npmmirror.com/source-map-support/-/source-map-support-0.5.21.tgz",
+      "metadata": {
+        "dependencies": {
+          "buffer-from": "^1.0.0",
+          "source-map": "^0.6.0"
+        }
+      },
+      "integrity": "sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w=="
+    },
+    {
+      "key": "tsx",
+      "pinned": "tsx@4.23.12",
+      "url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+      "metadata": {
+        "dependencies": {
+          "esbuild": "~0.28.0"
+        },
+        "optionalDependencies": {
+          "fsevents": "~2.3.3"
+        },
+        "bin": {
+          "tsx": "dist/cli.mjs"
+        }
+      },
+      "integrity": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q=="
+    }
+  ],
+  "edges": [
+    {
+      "from": "drizzle-kit",
+      "name": "@drizzle-team/brocli",
+      "range": "^0.10.2",
+      "to": "@drizzle-team/brocli"
+    },
+    {
+      "from": "drizzle-kit",
+      "name": "@esbuild-kit/esm-loader",
+      "range": "^2.5.5",
+      "to": "@esbuild-kit/esm-loader"
+    },
+    {
+      "from": "drizzle-kit",
+      "name": "esbuild",
+      "range": "^0.25.4",
+      "to": "drizzle-kit/esbuild"
+    },
+    {
+      "from": "drizzle-kit",
+      "name": "tsx",
+      "range": "^4.21.0",
+      "to": "tsx"
+    },
+    {
+      "from": "@esbuild-kit/esm-loader",
+      "name": "@esbuild-kit/core-utils",
+      "range": "^3.3.2",
+      "to": "@esbuild-kit/core-utils"
+    },
+    {
+      "from": "@esbuild-kit/esm-loader",
+      "name": "get-tsconfig",
+      "range": "^4.7.0",
+      "to": "get-tsconfig"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "name": "@esbuild/linux-x64",
+      "range": "0.25.12",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-x64",
+      "optional": true
+    },
+    {
+      "from": "tsx",
+      "name": "esbuild",
+      "range": "~0.28.0",
+      "to": "esbuild"
+    },
+    {
+      "from": "@esbuild-kit/core-utils",
+      "name": "esbuild",
+      "range": "~0.18.20",
+      "to": "@esbuild-kit/core-utils/esbuild"
+    },
+    {
+      "from": "@esbuild-kit/core-utils",
+      "name": "source-map-support",
+      "range": "^0.5.21",
+      "to": "source-map-support"
+    },
+    {
+      "from": "get-tsconfig",
+      "name": "resolve-pkg-maps",
+      "range": "^1.0.0",
+      "to": "resolve-pkg-maps"
+    },
+    {
+      "from": "esbuild",
+      "name": "@esbuild/linux-x64",
+      "range": "0.28.2",
+      "to": "@esbuild/linux-x64",
+      "optional": true
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "name": "@esbuild/linux-x64",
+      "range": "0.18.20",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+      "optional": true
+    },
+    {
+      "from": "source-map-support",
+      "name": "buffer-from",
+      "range": "^1.0.0",
+      "to": "buffer-from"
+    },
+    {
+      "from": "source-map-support",
+      "name": "source-map",
+      "range": "^0.6.0",
+      "to": "source-map"
+    }
+  ],
+  "skipped": [
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/aix-ppc64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/android-arm",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/android-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/android-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/darwin-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/darwin-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/freebsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/freebsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-arm",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-ia32",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-loong64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-mips64el",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-ppc64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-riscv64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/linux-s390x",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/netbsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/netbsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/openbsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/openbsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/openharmony-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/sunos-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/win32-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/win32-ia32",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "drizzle-kit/esbuild",
+      "to": "drizzle-kit/esbuild/@esbuild/win32-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "tsx",
+      "to": "fsevents",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/aix-ppc64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/android-arm",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/android-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/android-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/darwin-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/darwin-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/freebsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/freebsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-arm",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-ia32",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-loong64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-mips64el",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-ppc64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-riscv64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/linux-s390x",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/netbsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/netbsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/openbsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/openbsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/openharmony-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/sunos-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/win32-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/win32-ia32",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "esbuild",
+      "to": "@esbuild/win32-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/android-arm",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/android-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/android-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/darwin-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/darwin-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/freebsd-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/freebsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-arm",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-ia32",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-loong64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-mips64el",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-ppc64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-riscv64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-s390x",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/netbsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/openbsd-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/sunos-x64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/win32-arm64",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/win32-ia32",
+      "reason": "non-linux-x64"
+    },
+    {
+      "from": "@esbuild-kit/core-utils/esbuild",
+      "to": "@esbuild-kit/core-utils/esbuild/@esbuild/win32-x64",
+      "reason": "non-linux-x64"
+    }
+  ],
+  "schema_preflight": [
+    {
+      "path": "openbot/server/src/db/schema/core.ts",
+      "exists": true,
+      "blob": "38b94cc1b66876764af887a7c268c30d500f4c26",
+      "mode": "100644",
+      "bytes": 26447,
+      "sha256": "0091d749d70791e10c462bfc67534089bc5e88a1c93bd38dd8bb467c1d15f64a"
+    },
+    {
+      "path": "openbot/server/src/db/schema/computer.ts",
+      "exists": true,
+      "blob": "595c8df8c218668f343b86ef754d1335e2ac853e",
+      "mode": "100644",
+      "bytes": 6668,
+      "sha256": "3a3dd2755cce1d919ffe66fbe51d10a9b9b9fb2882689794bc0f95d1c8f83b98"
+    },
+    {
+      "path": "openbot/server/src/db/schema/coworker.ts",
+      "exists": true,
+      "blob": "ac64d935fc7d3add63226152360ae2aae74d8ca2",
+      "mode": "100644",
+      "bytes": 8323,
+      "sha256": "93b333947527f24ed4c7d6f2d4423fd9410b6a71fc232751c68bbde5f2aa6289"
+    },
+    {
+      "path": "openbot/server/src/db/schema/components.ts",
+      "exists": true,
+      "blob": "667bb125dcc2c2ccb7ad5fc2cddb4cb0a5619b82",
+      "mode": "100644",
+      "bytes": 4598,
+      "sha256": "639b3487ea30bf30bc2a84619ddca822d3d9f7d1af0dc93f6c2aa9aab3d546e4"
+    },
+    {
+      "path": "openbot/server/src/db/schema/plugins.ts",
+      "exists": true,
+      "blob": "5e27d88839b386af9e3ca871c9ecc23bfa6fe912",
+      "mode": "100644",
+      "bytes": 39993,
+      "sha256": "802dae12d1c5c40a52ef9208b2fef3e8851248f58cd34fce5d5e13ca38a1554d"
+    },
+    {
+      "path": "openbot/server/src/db/schema/work.ts",
+      "exists": true,
+      "blob": "e1cf394067f0e1994925e078a8aae8079f27dee1",
+      "mode": "100644",
+      "bytes": 4789,
+      "sha256": "16d19ab790b511107379a45ffcbd32eb3c76b4f000919c61ac12c3d5eda76feb"
+    },
+    {
+      "path": "openbot/server/src/db/schema/voice.ts",
+      "exists": true,
+      "blob": "6800d6ad403772f8accf378a7ec3a02df63bda71",
+      "mode": "100644",
+      "bytes": 1686,
+      "sha256": "15becb657ba57aa8bf5bed1c907288817db4d03b3c434961d08eb7f2ee654db9"
+    },
+    {
+      "path": "openbot/server/src/db/schema/learning.ts",
+      "exists": false
+    },
+    {
+      "path": "openbot/server/src/db/schema/responsibilities.ts",
+      "exists": true,
+      "blob": "59233d88d5247d75ab0c25aa3cb8368d4a815988",
+      "mode": "100644",
+      "bytes": 6378,
+      "sha256": "b02fe6cdbdcf2d4698b1c67e66a9cbf7a38724a296ab296f9a2e7f46257c69ec"
+    },
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "exists": true,
+      "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
+      "mode": "100644",
+      "bytes": 13092,
+      "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1"
+    },
+    {
+      "path": "openbot/server/src/db/schema/memory.ts",
+      "exists": true,
+      "blob": "9ef5ad6f349797a17b62a7d6d79b7a9deacc821e",
+      "mode": "100644",
+      "bytes": 3857,
+      "sha256": "349ed6ad83520d8b746f8e21a93cb0f17982eeedb2ffcd6d01f95356d08b70d5"
+    },
+    {
+      "path": "openbot/server/src/db/schema/proactive.ts",
+      "exists": true,
+      "blob": "76c9b976275224514e79eb14975a5088b297e7ee",
+      "mode": "100644",
+      "bytes": 3765,
+      "sha256": "1f6261b2813b04732fb614ef89f6f17d475d9030076822cc2635423e82f9a427"
+    },
+    {
+      "path": "openbot/server/src/db/schema/demonstrations.ts",
+      "exists": true,
+      "blob": "6d38c3af143cd7493bdae1ebab7518cac97558d2",
+      "mode": "100644",
+      "bytes": 1442,
+      "sha256": "64c4f3258a1f378a22aa73f407634bdadfd43ee3a33a666234b7790a605fe4a6"
+    },
+    {
+      "path": "openbot/server/src/db/schema/delivery.ts",
+      "exists": true,
+      "blob": "a5e6e0dfb69d7b4bd9b345bf5da41ca38fb3c1bf",
+      "mode": "100644",
+      "bytes": 4337,
+      "sha256": "0bb348981b43af9708e2163783825d28fbd0189f9e53abb1e7542370ed24c1ff"
+    },
+    {
+      "path": "openbot/server/src/db/schema/group.ts",
+      "exists": true,
+      "blob": "a1039777623174604be91312f72fdf8702dca8df",
+      "mode": "100644",
+      "bytes": 1996,
+      "sha256": "95f3702362e9321fdaf7301f42f8bceeedbd6a720dfc9fb9e219ebe8030b3533"
+    },
+    {
+      "path": "openbot/server/src/db/schema/admin.ts",
+      "exists": true,
+      "blob": "33a0585b979bd07d939be4c2bc71a5ed20939591",
+      "mode": "100644",
+      "bytes": 5688,
+      "sha256": "a1179ddf71267dbfea19bcca689ce433c6623db9d2dd8134594a91cf4faa69cd"
+    },
+    {
+      "path": "openbot/server/src/db/schema/scim.ts",
+      "exists": true,
+      "blob": "5db9efdab299e9c51f0ca024b178eb71a1c5d5b5",
+      "mode": "100644",
+      "bytes": 7405,
+      "sha256": "e5708cf826d1e434d03e0b8e5f09d84214b875078e6e4752bf20698794f784ba"
+    },
+    {
+      "path": "openbot/server/src/db/schema/lifecycle.ts",
+      "exists": true,
+      "blob": "f65b11453f14b1de3a9c08d86a0ac5e7226eaafa",
+      "mode": "100644",
+      "bytes": 2605,
+      "sha256": "f48cc43f58fdffd2b1eebadf554ee068ae81568d86cae01cae681075f2b26aa1"
+    },
+    {
+      "path": "openbot/server/src/db/schema/passwords.ts",
+      "exists": true,
+      "blob": "fd9b880d342bdc23465d006b67c8b8041ba74226",
+      "mode": "100644",
+      "bytes": 3709,
+      "sha256": "1a5d79a4fa672db39a9bcc7d5073cf0963c4d5f874dbe01b54ffdee904d8cd39"
+    },
+    {
+      "path": "openbot/server/src/db/schema/team-bots.ts",
+      "exists": true,
+      "blob": "f77e7df444f8b424c69088f61c1ef92b9a0d2a83",
+      "mode": "100644",
+      "bytes": 4098,
+      "sha256": "81f09cb34f669ca12f14c7475869c20e5fb4a2f200f82c69eb32799097a9951b"
+    },
+    {
+      "path": "openbot/server/src/db/schema/plans.ts",
+      "exists": true,
+      "blob": "2f72854f920231c81b27bf4bc2c5640214be368d",
+      "mode": "100644",
+      "bytes": 1691,
+      "sha256": "ddc75121e3130983eb4fd602ae82634686ff1e6d4661b699be60d75f002e476d"
+    },
+    {
+      "path": "openbot/server/src/db/schema/threads.ts",
+      "exists": true,
+      "blob": "4c613d8a5bc400cbde5d8789c1848d727b07c408",
+      "mode": "100644",
+      "bytes": 2571,
+      "sha256": "5f7946caab15a29f62e4fa17ff8f373b2725453ccbcff8aff9e1eb8b03a8916a"
+    },
+    {
+      "path": "openbot/server/src/db/schema/tasks.ts",
+      "exists": true,
+      "blob": "d54c14ff4630ad93c9714dbcef8d19beaefdd323",
+      "mode": "100644",
+      "bytes": 3589,
+      "sha256": "0586f6b196ca10a6dacb300e0961b43e65305c1ff4be17b12006a0aae8e7b755"
+    },
+    {
+      "path": "openbot/server/src/db/schema/model.ts",
+      "exists": true,
+      "blob": "6a168a9be775e456a443d5893d1df1789666962c",
+      "mode": "100644",
+      "bytes": 2024,
+      "sha256": "031db269b7a0747a1ebb298272346030db6ea4eea21433f621dcd3cf14da8fad"
+    },
+    {
+      "path": "openbot/server/src/db/schema/devices.ts",
+      "exists": true,
+      "blob": "f3b333abeea3edf006d9fe19f3f6fcd0f9147440",
+      "mode": "100644",
+      "bytes": 3584,
+      "sha256": "cd1de82da1de7279c5c2afc751da480e833f34de978084f37cacb8c35bf63b4c"
+    },
+    {
+      "path": "openbot/server/src/db/schema/waker-groups.ts",
+      "exists": true,
+      "blob": "4ab797c85d80ed8f87e685bfa8c8bbafd5ceac88",
+      "mode": "100644",
+      "bytes": 1983,
+      "sha256": "8dbd7d6dc33d7f0c1de2370b5c86e9863f0efa9a5e3176ac8215817ba453bedb"
+    },
+    {
+      "path": "openbot/server/src/db/schema/pipeline.ts",
+      "exists": true,
+      "blob": "66d0d6f417a78a5b384ac311c459620dd74982b3",
+      "mode": "100644",
+      "bytes": 7462,
+      "sha256": "75158ee1c51551795734fd951a9ae76f4059d9a8864799ceb39f0d7e6b7cfd83"
+    },
+    {
+      "path": "openbot/server/src/db/schema/wakerflows.ts",
+      "exists": true,
+      "blob": "2b2d4efd53f6979cc17916d9eb0c0650df4f828c",
+      "mode": "100644",
+      "bytes": 2706,
+      "sha256": "40e74432740329cb378928912a9ec7d35b8bf4ce1208df631269915bd921f52d"
+    }
+  ],
+  "findings": [
+    {
+      "id": "GEN-SCHEMA-MISSING-LEARNING",
+      "severity": "BLOCKING_GENERATION",
+      "path": "openbot/server/src/db/schema/learning.ts",
+      "evidence": "Absent in recursive Git tree and contents API404. Both original drizzle.config.ts and offline diagnostic 28-path config reference it. DATA preparation requires all28 is_file, so will fail before generator. Do not fabricate file or silently drop schema inputs."
+    }
+  ],
+  "preparation_contract": [
+    "No package-manager workspace install or dependency re-resolution; preserve original bun.lock and all package manifests byte-identical.",
+    "Fetch only exact lock node URLs with original SHA512 SRI; fail closed on mismatch or unavailable bytes. No registry substitution, credential/identity/network changes, postinstall or lifecycle hooks.",
+    "Treat17 nodes as candidate declared runtime closure, not proven sufficient. Validate package metadata name/version/dependencies/optionalDeps/bin and exact nested Node resolution; optional ORM DB-driver peers are not generation inputs unless real import graph proves required.",
+    "Private per-job cache and copyfile-only extraction; validate archive paths, no traversal/absolute names/special files, no hardlinks, no external links; audit all produced regular files and modes. No shared writable deps.",
+    "Prepare/download/copy under DATA64MiB within parent512MiB/swap0; one resource owner, no parallel install jobs. Preserve480s preparation and120s generator bounds; no increased resource or timeout allowance.",
+    "CPU generator may run only under verified aggregate512MiB/swap0 after independent controller review and schema input reconciliation, without DATABASE_URL and without DB connection.",
+    "Keep the original28 input discrepancy explicit; reconcile deleted learning path and all relevant active schemas against complete SQL/snapshot/journal before any final package adoption.",
+    "Only actual generator output may supply metadata. Compare full generated DDL to historical migrations; full snapshot must match SQL and journal. Stop on unexpected destructive changes or package exceeding8Source; split into reviewed legal packages."
+  ],
+  "execution": {
+    "tarballs_downloaded": false,
+    "package_metadata_verified": false,
+    "generator": "NOT_RUN",
+    "metadata": "NONE",
+    "tests": "NOT_RUN"
+  },
+  "blockers": [
+    "Current selected executor lacks managed environment_status/network-policy evidence; parent cgroup8GiB and swapmax, delegation not writable, so no project execution.",
+    "Current GitHub connector exposes supported GET and rerun tools but no workflow_dispatch tool. Do not guess internal endpoint, borrow credentials or rerun old timed-out install chains.",
+    "Missing learning schema input must be independently reconciled before offline preparation can succeed."
+  ],
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  }
+}

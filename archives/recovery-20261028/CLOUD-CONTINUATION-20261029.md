@@ -28,3 +28,14 @@
 Windows上的Codex子会话、WorkBuddy/Qoder和localhost协作MCP不会因写此交接而变成云端；后续由真实云端任务接管这些职责。OpenCode仍按人类要求暂停。云端不能依赖本机文件、登录态、CLI、localhost或本机定时器。仅允许免费额度，不创建付费provider/API工作。主源码、patch、archive、JSON、依赖、测试及产物继续仅云端。
 
 ROOT_RELEASE=null / ready=false / AP_DISABLED / NOT_SERVICE_WIRED / migrationNOT_WIRED / PG_PENDING。真实PG17、最终SHA镜像8GET、原生安装和商业验收尚未完成，不能用CPU模拟清门。
+
+
+## 云端实际接管核验（本次追加）
+
+主协调 /root 已通过正常 GitHub 连接器全文读取 immutable 8ac186e 交接及五件原件，五件 UTF-8 字节数与 SHA-256 全部匹配；完整77故事、18原包、7门及2065文件/50175181字节清单核合。已核4e1b432e为直接后继，仅行政更新。
+
+实际执行器探测为Linux，cwd /workspace/scratch/fd91774f2a2b，cgroup父8GiB/swap max、挂载只读、systemd未运行；未暴露managed environment_status，未取得合规项目运行门，不运行项目。GitHub连接器已证实仓库权限与读取，但当前无正常workflow_dispatch工具；不猜API、不借凭据、不重跑旧超时链。资源队列owner=/root，active=null。
+
+新发现：548de959的原配置及离线28路径列出已不存在的learning.ts，后续all-is-file断言必失败。最小依赖静态候选闭包17节点已保留原lock URL/SRI及三版本esbuild，不声称包下载、生成或测试完成。详见CLOUD-MINIMAL-GENERATOR-CLOSURE-20261029.json。持久化独审原件已从独占GitHub分支读取；仅Source静态批准，不采用完整迁移或生产接线。本次补充独审独立保存，不覆盖外部报告。
+
+Windows/localhost/本机heartbeat/WB/Qoder均不作为依赖；OpenCode继续暂停。ROOT_RELEASE=null、ready=false、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、PG_PENDING和NOT_DELIVERED保持。没有新Source采用或部署，不宣称完整交付或无期限无人值守。
