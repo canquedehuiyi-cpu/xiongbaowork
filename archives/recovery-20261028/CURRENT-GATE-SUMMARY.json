@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-current-delivery-gates/1",
-  "source_content_commit": "840b4221bfd6f22c34e8e55ffef0115efd075d42",
-  "source_files": 2060,
-  "source_bytes": 50033306,
-  "approved_source_repair_overlays": 25,
+  "source_content_commit": "06d3c130f66d68df5d439c461c0bd3e6bdff5807",
+  "source_files": 2064,
+  "source_bytes": 50166913,
+  "approved_source_repair_overlays": 27,
   "original_delivery_packages": 18,
   "original_stories": 77,
   "original_final_gates": 7,
@@ -359,8 +359,71 @@
         "fail": 0,
         "adopted": "9012793c25b5d9dbdb00ba623462e91245087439"
       },
-      "remaining_original_approval_failures": 13,
-      "old_failure_result_retained": true
+      "remaining_original_approval_failures": 0,
+      "old_failure_result_retained": true,
+      "approval_resolution": {
+        "path": "archives/recovery-20261028/APPROVAL-FRESH-PRODUCER-R2-VALIDATION.json",
+        "bytes": 60533,
+        "sha256": "1c910c0f149374796849a6d0a03e4cf0126365c8631e4302b381061dab97c6f9",
+        "blob": "7b1a8d5b8a17ddc1146bdd53c179ac32fdbe0023",
+        "run": 40821171620,
+        "job": 123273736309,
+        "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31",
+        "adopted_source_commit": "06d3c130f66d68df5d439c461c0bd3e6bdff5807",
+        "tests": {
+          "pass": 2396,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6673
+        },
+        "files": 178,
+        "independent_source_review": "SOURCE_APPROVED_ONLY",
+        "server_typecheck": {
+          "run": 40821232176,
+          "job": 123275152298,
+          "workflow_commit": "f87333e952d3fbf21c2b292aaff43ce028f81e05",
+          "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31",
+          "SERVER_TYPECHECK_START": {
+            "typescript": "5.9.3",
+            "host_runtime": "v24.22.1",
+            "node_path": "/usr/local/bin/node",
+            "node_old_space_mb": 1792,
+            "project": "server/tsconfig.json",
+            "declared_includes": [
+              "src",
+              "scripts",
+              "../scripts/composio-smoke.ts"
+            ],
+            "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+            "timeout_seconds": 300
+          },
+          "SERVER_TYPECHECK_RESULT": {
+            "exit_code": 0,
+            "project": "server/tsconfig.json",
+            "typescript": "5.9.3",
+            "host_runtime": "v24.22.1",
+            "node_path": "/usr/local/bin/node",
+            "node_old_space_mb": 1792,
+            "full_ci": "NOT_RUN",
+            "test_sources": "NOT_INCLUDED",
+            "postgres17": "PG_PENDING",
+            "commercial_acceptance": "NOT_DELIVERED"
+          },
+          "PROJECT_LIMIT_RESTORED": {
+            "project_memory_max": 536870912,
+            "swap": 0
+          },
+          "automatic_memory_peaks": [
+            "Memory peak: 64M (swap: 0B)",
+            "Memory peak: 64M (swap: 0B)",
+            "Memory peak: 512.5M (swap: 0B)",
+            "Memory peak: 1.8G (swap: 0B)"
+          ]
+        },
+        "production_fresh_adapter": "NOT_WIRED",
+        "PG17": "PG_PENDING",
+        "original13_failures_resolved": true
+      }
     },
     "linux_shell_workspace": {
       "path": "archives/recovery-20261028/LINUX-SHELL-WORKSPACE-ACCEPTANCE-RESULT.json",
@@ -452,7 +515,7 @@
         "pass": 5,
         "fail": 0
       },
-      "remaining_mastra_import": "RESOLVED_FOR_ORIGINAL34_BY_EXISTING_FROZEN_SDK_HOISTING; standalone frozen CLI repair pending",
+      "remaining_mastra_import": "RESOLVED_STANDALONE_OWN_FROZEN_COMPATIBLE_COHORT",
       "r1_duplicate_step_id": {
         "run": 40792836035,
         "jobs": 0,
@@ -472,6 +535,26 @@
           "expects": 70,
           "files": 1
         }
+      },
+      "mastra_standalone_resolution": {
+        "path": "archives/recovery-20261028/MASTRA-STANDALONE-FROZEN-COHORT-VALIDATION.json",
+        "bytes": 5557,
+        "sha256": "764f2364f65c67d6a45845f7b180aaee213fffe64ab754e5fadfe8230c1e7f22",
+        "blob": "947d3ede9891b213f17c029809086a7570d31b96",
+        "run": 40817450733,
+        "job": 123261761883,
+        "source_candidate": "88c15bf3adbc697161bbd6573d19567775852725",
+        "adopted_source_commit": "e08a5035a73c1bb9baed0887d9c4b320d9d5f125",
+        "tests": {
+          "pass": 34,
+          "fail": 0,
+          "expects": 70,
+          "files": 1
+        },
+        "standalone_install": "FROZEN_PASS_NO_LIFECYCLE_SCRIPTS",
+        "cli": "ACTUAL_VERSION_1.27.3_PASS_ONLY",
+        "independent_source_review": "SOURCE_APPROVED_ONLY",
+        "original_root_package_and_lock": "UNCHANGED"
       }
     },
     "desktop_telemetry_types": {
@@ -587,20 +670,19 @@
     },
     "test_file_ledger": {
       "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
-      "bytes": 395068,
-      "sha256": "75d2ca811cb0eeaa4ff459718b68148fbcdb1d428a130c3ee6884221ff579426",
-      "blob": "e8c11fd8baffcac520d015ca9bd0f55d8d2f8d10",
-      "test_files": 610,
-      "latest_named_or_historical_whole_app_evidence_paths": 469,
+      "bytes": 478729,
+      "sha256": "05d205c8e7ede4d6983df1c7a0249b4fc88edf62adef840f32eb73ec78f29b0a",
+      "blob": "1e4f388b969202cd1e30bce4fda345bf8462bfb5",
+      "test_files": 611,
+      "latest_named_or_historical_whole_app_evidence_paths": 470,
       "status_counts": {
-        "PASS_SCOPED_BATCH_ONLY": 465,
+        "PASS_SCOPED_BATCH_ONLY": 468,
         "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
         "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
         "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
-        "FAILED_SCOPED_BATCH": 2,
         "NOT_RUN_REAL_VENDOR": 1
       },
-      "whole_current_backend": "NOT_PASSED",
+      "whole_current_backend": "NOT_CLAIMED_STRICT_CI_NOT_RUN",
       "app_source17_tree_comparison": {
         "paths": 547,
         "deltas": 0,
@@ -720,14 +802,120 @@
         "expects": 70,
         "files": 1
       }
+    },
+    "source27_manifest": {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "bytes": 453068,
+      "sha256": "01e675089b7062fe4fc1bbc5396f5faea1f2546f5091d86339672a0865150760",
+      "blob": "094e2d71c48895c615b4bf51453a23096105caed",
+      "source_files": 2064,
+      "source_bytes": 50166913,
+      "candidate_source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
+      "source_validation_run": 40821171620
+    },
+    "approval_fresh_producer_R2": {
+      "path": "archives/recovery-20261028/APPROVAL-FRESH-PRODUCER-R2-VALIDATION.json",
+      "bytes": 60533,
+      "sha256": "1c910c0f149374796849a6d0a03e4cf0126365c8631e4302b381061dab97c6f9",
+      "blob": "7b1a8d5b8a17ddc1146bdd53c179ac32fdbe0023",
+      "run": 40821171620,
+      "job": 123273736309,
+      "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31",
+      "adopted_source_commit": "06d3c130f66d68df5d439c461c0bd3e6bdff5807",
+      "tests": {
+        "pass": 2396,
+        "fail": 0,
+        "skip": 0,
+        "expects": 6673
+      },
+      "files": 178,
+      "independent_source_review": "SOURCE_APPROVED_ONLY",
+      "server_typecheck": {
+        "run": 40821232176,
+        "job": 123275152298,
+        "workflow_commit": "f87333e952d3fbf21c2b292aaff43ce028f81e05",
+        "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31",
+        "SERVER_TYPECHECK_START": {
+          "typescript": "5.9.3",
+          "host_runtime": "v24.22.1",
+          "node_path": "/usr/local/bin/node",
+          "node_old_space_mb": 1792,
+          "project": "server/tsconfig.json",
+          "declared_includes": [
+            "src",
+            "scripts",
+            "../scripts/composio-smoke.ts"
+          ],
+          "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+          "timeout_seconds": 300
+        },
+        "SERVER_TYPECHECK_RESULT": {
+          "exit_code": 0,
+          "project": "server/tsconfig.json",
+          "typescript": "5.9.3",
+          "host_runtime": "v24.22.1",
+          "node_path": "/usr/local/bin/node",
+          "node_old_space_mb": 1792,
+          "full_ci": "NOT_RUN",
+          "test_sources": "NOT_INCLUDED",
+          "postgres17": "PG_PENDING",
+          "commercial_acceptance": "NOT_DELIVERED"
+        },
+        "PROJECT_LIMIT_RESTORED": {
+          "project_memory_max": 536870912,
+          "swap": 0
+        },
+        "automatic_memory_peaks": [
+          "Memory peak: 64M (swap: 0B)",
+          "Memory peak: 64M (swap: 0B)",
+          "Memory peak: 512.5M (swap: 0B)",
+          "Memory peak: 1.8G (swap: 0B)"
+        ]
+      },
+      "production_fresh_adapter": "NOT_WIRED",
+      "PG17": "PG_PENDING",
+      "original13_failures_resolved": true
+    },
+    "mastra_standalone_frozen_cohort": {
+      "path": "archives/recovery-20261028/MASTRA-STANDALONE-FROZEN-COHORT-VALIDATION.json",
+      "bytes": 5557,
+      "sha256": "764f2364f65c67d6a45845f7b180aaee213fffe64ab754e5fadfe8230c1e7f22",
+      "blob": "947d3ede9891b213f17c029809086a7570d31b96",
+      "run": 40817450733,
+      "job": 123261761883,
+      "source_candidate": "88c15bf3adbc697161bbd6573d19567775852725",
+      "adopted_source_commit": "e08a5035a73c1bb9baed0887d9c4b320d9d5f125",
+      "tests": {
+        "pass": 34,
+        "fail": 0,
+        "expects": 70,
+        "files": 1
+      },
+      "standalone_install": "FROZEN_PASS_NO_LIFECYCLE_SCRIPTS",
+      "cli": "ACTUAL_VERSION_1.27.3_PASS_ONLY",
+      "independent_source_review": "SOURCE_APPROVED_ONLY",
+      "original_root_package_and_lock": "UNCHANGED"
+    },
+    "approval_R1_rejected": {
+      "path": "archives/recovery-20261028/APPROVAL-FRESH-PRODUCER-R1-REJECTED.json",
+      "run": 40820034960,
+      "tests": {
+        "pass": 80,
+        "fail": 0,
+        "expects": 243
+      },
+      "lint_exit": 1,
+      "independent_review": "FIX_REQUIRED_P1",
+      "adopted": false,
+      "preserved": true
     }
   },
   "remaining_gate_evidence": {
     "g1": "Node24.22.1/Vite7.3.6 frontend production bundle passedrun40801046219 within directly authorized4GiB/swap0/300s, completed28.27s, parent restored512MiB before64MiB inventory.465artifacts/18896525B with individual SHA256 retained asDATA manifest; Chinese product HTML/config/entry and no baked dev-port observations passed. Files existed in transient cloud runner; no bundleZIP uploaded. This is not final same-SHA formal image8GET evidence; native server/image endpoints NOT_RUN.",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered. Latest additional frontend Node Vite production build passed40801046219 at4GiB and restored512MiB. Original Bun build command remains unpassed; tracked generated route-tree changed only in transient build and not adopted. No full test/tsc/strictCI rerun is claimed from this build. Source25 loader fixture independently reviewed/adopted840b4221, complete2060/50033306B verified0mismatch,47related tests/0fail and unchanged pinned lint passrun40804154815. Mastra original34/0/70 passrun40804522200 with existing frozen rootSDK in hoisted layout; standalone exact-lock/CLI repair pending.13 original approval failures retained.",
+    "g3": "Source27 adopted06d3c130, complete2064files/50166913B verified0mismatch at R2candidateece742d6/run40821171620;178explicit offline files2396pass0fail0skip6673expects. Includes originalapproval17/0+policy30/0+saved-recovery25/0+newfresh11/0 (83relatedcases total). Exact originalBiome2.5.10 lint0 and originalserver tsconfig0run40821232176 under already-authorized2GiB/swap0/300s then actual512MiB restore. R1 80/0+lint1/P1 and old2371/14 failures retained, not rewritten. Source25loader2cases plus26lifecycle+19readiness=47/0; Source26 own Mastra frozeninstall, original34/0 and actualCLI --version pass; rootlock/workspaces unchanged. Ledger611files retains scoped/historical versus unrun/skip evidence;178files is not strictCI or original400floor substitute. Frozen03df9efa baseline remains unavailable; nativePG17 pending. Prior originalapp1207/0/4tsconfigs andNodeVite4GiB bundle retained as historical scoped evidence; no new whole-backend/fullCI/formal-image claim.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
-    "g5": "Cloud Linux Chrome own-loopback fixture35checks/26actions passed historicallyrun40746063116; original own HTTP control/download/reset3files18/0 now passedrun40796716582 under512MiB/swap0 without Chromium. Mocked desktop UI3files144/0 is HappyDOM/Tauri fakes. Real user device, durable offline reconnect queue, fresh approval producer/exact-input and human approval closure remain NOT_VERIFIED.",
+    "g5": "Source27 trusted fresh preparation/commit/publication orchestration and real consume SQL result-null guard are independently reviewed;83related CPU cases and broader178file2396/0 pass. CPU seed/CAS/ledger/target models are not durable PG, RLS, release, issuer, commit-ACK or production approval proof. Actual fresh DB adapter, frozen producer/exact input and production wiring remain NOT_WIRED; ROOT_RELEASE=null/AP_DISABLED. Historical own-cloud Chrome35checks/26actions and own HTTP18/0 retained; real user device/offline reconnect still NOT_VERIFIED.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
     "g7": "Original full desktop tsc passed under512MiB and desktop telemetry5/0 plus3mocked UI files144/0 passed. No native Tauri binary/image or clean Windows/Linux client deployment proof."
   },

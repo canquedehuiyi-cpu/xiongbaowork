@@ -1,3 +1,21 @@
+## 三项优先修复完成云端核验，2026-10-29｜完整77/18/7仍未最终交付
+
+当前正式Source采用06d3c130f66d68df5d439c461c0bd3e6bdff5807：V57加27项独审Source修复覆盖，2064文件/50166913B，原77故事/18交付包/7门要求与状态保留。27项修复覆盖不是18个原交付包的替代计数。
+
+审批Source27的8件R2通过非作者独审后采用；候选ece742d663044ec71d357ebedbf50dd719babb31/run40821171620/job123273736309完整Source0mismatch、原177离线文件加新fresh文件共178文件2396pass/0fail/0skip/6673expects，原Biome2.5.10 lint退出0。原审批17项、策略30项、既有恢复25项、新fresh11项合83相关用例均通过，原13项失败已在该限定层修复。实际数据库consume在行锁和UPDATE CAS中同时要求result为空；fresh结果/终结意图提交携带expectedStatus，修复双向stale resume/abandon并发窗口。结果提交后重新读取context，发布间隙与未知ACK不重执行。所有旧正向expect断言保留，未预置成功result绕过路径。
+
+原server/tsconfig在相同R2 Source的workflowf87333e/run40821232176/job123275152298退出0，使用既有授权2GiB/swap0/300s，结束实际恢复512MiB；编译峰值1.8G，不扩张其他阶段。178文件测试峰值328.9M，原lint383.6M；原全CI/400floor未替代，冻结03df9efa基线仍不可得。
+
+R1候选99989c6a未采用：80测试虽通过，原lint因type-only导入警告退出1，且独审发现P1“abandon已结算后旧resume仍可执行”。完整失败/拒绝证据保留APPROVAL-FRESH-PRODUCER-R1-REJECTED.json，R2修复不抹历史。CPU helper的seed、CAS、absence/intent/receipt与ACK模型不当真实持久数据库或Root release证明。
+
+Mastra Source26采用e08a5035a73c1bb9baed0887d9c4b320d9d5f125：独立包精确冻结core1.64.0/openai3.0.99/anthropic3.0.111/CLI1.27.3及兼容deployer/server1.64.0、loggers1.3.1。完整439包/711依赖边/56peer独审闭合。run40817450733/job123261761883独立冻结安装通过、原34测试/0fail/70expects、实际CLI版本输出1.27.3；原lint另run40817923786通过。私有缓存/copyfile/no lifecycle，DATA64复制31680常规文件核验无hardlink或越界link，根workspaces和锁不变。此前CLI1.35配deployer1.80的准备锁被拒绝未采用。此证据不冒dev/build/生产提供商成功。
+
+启动边界Source25采用840b4221：原失败边界修复并独审，run40804154815/job123218968503相关47/0/246expects及原lint通过；仅自有loopback拒绝和缺配置边界，不能冒PG17或生产启动成功。
+
+本轮同时纠正Source26 expected-manifest的旧basis/physical注释滞留：当前basis明确27覆盖，physical指向R2真实2064/50166913核验，旧Source25及Source26 physical记录保入history；不改变旧证明的实际范围。最新测试清单611路径含468 scoped pass、2带原跳过的部分通过，其余真实PG/设备/提供商仍未验，跨批次用例不叠加计总。
+
+ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING/strictCI NOT_RUN/NOT_DELIVERED保留。下一步仍按完整77/18/7推进真实fresh持久化与冻结producer接线、PG17/RLS/提交ACK、formal image8GET、WakerFlow、真实设备/付费提供商和clean-client验收；不以本轮组件通过替代这些门。无Windows源码/依赖/产物落盘、无付费调用、生产部署、默认分支切换或恢复旧自动任务。
+
 ## 启动边界 Source25 已采用；Mastra SDK 原34项通过，2026-10-29
 
 Source25 独审通过后已采用为840b4221bfd6f22c34e8e55ffef0115efd075d42。完整2060 Source/50033306B在候选9d530418fdf5e6f964c89b0579461de924fb4ab9核合；run40804154815/job123218968503实际47pass/0fail/246expects，原Biome2.5.10 lint通过。2项 loader 测试使用独占 loopback TCP 拒绝/缺配置边界，不能证明PG17、writer角色或生产启动。R1 46pass/1fail与独审P2已保留。
