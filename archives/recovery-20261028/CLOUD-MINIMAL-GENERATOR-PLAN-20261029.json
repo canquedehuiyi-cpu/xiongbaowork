@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
-  "author": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d",
-  "base": "823744db378f508a1996f8c23faf1b42f115ad33",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a6",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a6",
+  "author": "cloud-agent:/root/a7_prepare",
+  "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a7",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a7",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A6",
+    "id": "A7",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_A6_PREPARED_UNREVIEWED_NOT_RUN",
+    "status": "AUTHOR_A7_PREPARED_UNREVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -838,8 +838,9 @@
       }
     },
     "a4": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-    "change_scope": "Only metadata validation for exact original ORM0.45.2 SRI and177277B/SHA9fd30c packageJSON; original lock/17nodes/source/FULL50/resources/timeouts unchanged",
-    "a5": "2e1e493f2983fcecc27393a993ccc95448cbff9b"
+    "change_scope": "Only correct candidate administrative comparison baseline to immutable A6; all outside three candidate administrative entries must remain unchanged. Formal Source28 manifest and all byte/hash/mode checks, 17 original locked nodes/URLs/SRIs, fixed ORM guard, FULL50, resources/identity/deadlines/cleanup unchanged.",
+    "a5": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+    "a6": "f97260fa06af41ea8a5e7d94420de53eee99cb49"
   },
   "redirect_policy": {
     "basis": {
@@ -894,15 +895,15 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 79617,
-    "sha256": "303f75f521291fb5e57912b8a28ba25e8b3649f46ac65b0297cdcb3ebace1815"
+    "bytes": 80775,
+    "sha256": "4fbbc39171102e1c45790dc876956c8220630101739aaef0c0f0d08c9024cb98"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
     "bytes": 4017,
-    "sha256": "25756cf70470e2eb3ed49b9e0979c66e5b15db766b528c46d278d2d35fe157ac"
+    "sha256": "e253de4d860b52c4a9c46951f31a116ae132822f6ae5cfa23fe3c9f95516b136"
   },
-  "author_readiness": "A6_PREPARED_UNREVIEWED_NOT_RUN",
+  "author_readiness": "A7_PREPARED_UNREVIEWED_NOT_RUN",
   "review_required": "Non-author exact full3file review required. Author has not executed guard contract checks or project. No dispatch or adoption authorized by this author report.",
   "orm_metadata_compatibility": {
     "evidence_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478",
@@ -921,5 +922,14 @@
       "execution": "NOT_RUN",
       "future_stage": "deps underDATA64 before downloads; synthetic identities are fixtures, not authenticated package proof"
     }
+  },
+  "candidate_tree_guard": {
+    "baseline": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "baseline_tree": "0877bb2bb252935d54e8f7d234c91c6703d600cf",
+    "historical_source_base": "823744db378f508a1996f8c23faf1b42f115ad33",
+    "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "reason": "A6 inherited twenty other administrative history paths relative to old823744db. Do not whitelist or ignore them: pin exact A6 immutable tree as candidate administrative comparison base.",
+    "runtime": "Fetch exact base and target; git diff --name-only must equal exactly workflow/controller/plan. Git diff includes content, mode, additions/deletions; every other tree entry must be identical. Independently retain original2065 Source manifest byte/hash/mode verification.",
+    "source_adoption": false
   }
 }
