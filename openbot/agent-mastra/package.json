@@ -3,9 +3,14 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@ai-sdk/anthropic": "*",
-    "@ai-sdk/openai": "*",
-    "@mastra/core": "*",
-    "mastra": "*"
+    "@ai-sdk/anthropic": "3.0.111",
+    "@ai-sdk/openai": "3.0.99",
+    "@mastra/core": "1.64.0",
+    "mastra": "1.27.3"
+  },
+  "overrides": {
+    "@mastra/deployer": "1.64.0",
+    "@mastra/server": "1.64.0",
+    "@mastra/loggers": "1.3.1"
   }
 }
