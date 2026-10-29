@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
-  "basis": "Immutable V57 plus24 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
+  "source_commit": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+  "basis": "Immutable V57 plus25 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -467,10 +467,26 @@
       "candidate_source_commit": "4874f5300ea683a2217c121c34ecb486bec0a30e",
       "source_content_adopted_unchanged": true,
       "run": 40791104860
+    },
+    {
+      "ticket": "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/PRODUCTION-LOADER-READINESS-ADOPTED.json",
+        "bytes": 2695,
+        "sha256": "ffd49c509a97e0aff29015cbea39c1f5959cbd22ef183d6af75d08085df9c36f",
+        "formal_adoption": true,
+        "ticket": "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+        "source_paths": [
+          "openbot/server/tests/production-loader-boundary.test.ts"
+        ]
+      },
+      "candidate_source_commit": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+      "source_content_adopted_unchanged": true,
+      "run": 40804154815
     }
   ],
   "file_count": 2060,
-  "source_bytes": 50032071,
+  "source_bytes": 50033306,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -11579,8 +11595,8 @@
     },
     {
       "path": "openbot/server/tests/production-loader-boundary.test.ts",
-      "bytes": 3762,
-      "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3",
+      "bytes": 4997,
+      "sha256": "1a9500d5c492842712e148d1f387521a54615d39fc33899147f1fc01c8089205",
       "mode": "0o644"
     },
     {
@@ -12899,8 +12915,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "e8d397aed5bde580b01f33a104402a2f21331a0f",
-    "head": "4874f5300ea683a2217c121c34ecb486bec0a30e",
+    "git_tree": "2c3e3b77651a8d9f01d62c6ba39cf5ca70c711e8",
+    "head": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12926,7 +12942,8 @@
       "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
       "SERVER-CI-TEST-MANIFEST-20261029",
       "WORKSPACE-RUNNER-ASSERTION-20261029",
-      "START-HEALTH-ORDER-ASSERTION-20261029"
+      "START-HEALTH-ORDER-ASSERTION-20261029",
+      "PRODUCTION-LOADER-READINESS-FIXTURE-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12934,7 +12951,7 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50032071,
+    "verified_source_bytes": 50033306,
     "verified_source_files": 2060,
     "windows_source_files_written": 0
   },

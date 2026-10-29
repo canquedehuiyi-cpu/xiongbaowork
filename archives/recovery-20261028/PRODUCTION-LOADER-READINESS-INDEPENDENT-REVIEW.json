@@ -1,0 +1,51 @@
+{
+  "schema": "xiongbaowork-readonly-independent-source-review/1",
+  "reviewer": "/root/review_approval_input_readonly",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "base": "67bd70f7d18a602c2eab3a77f95bc0d0ddf09be1",
+  "candidate": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+  "files": [
+    "openbot/server/tests/production-loader-boundary.test.ts"
+  ],
+  "before": {
+    "bytes": 3762,
+    "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3",
+    "blob": "bf80cca0eb12cff307c9bc7ce1f31c8941b5d094",
+    "mode": "100644"
+  },
+  "after": {
+    "bytes": 4997,
+    "sha256": "1a9500d5c492842712e148d1f387521a54615d39fc33899147f1fc01c8089205",
+    "blob": "1ac0eb2607fa7fd5b4b5c8463eee97d5e31a1ca2",
+    "mode": "100644"
+  },
+  "git_trees_untruncated": true,
+  "full_read_and_closed_diff": true,
+  "card": {
+    "bytes": 2191,
+    "sha256": "14c181091ce7bb33962e67db2bd3b712effbf7d0906c393a1ff7027b178d979c"
+  },
+  "preserved": [
+    "Only this test changes under openbot; production entry/index/roles/lifecycle/client/config/packages/locks/originalCI blobs unchanged",
+    "Actual startup order: missing writer config refuses before DB creation; writer lifecycle starts before APP/RLS readiness and identity bootstrap",
+    "TCP listener only accepts/counts/destroys, no PostgreSQL protocol/role/UID/readiness response",
+    "Configured case requires >0 real transport, exact public redacted lifecycle failure, no private error and no bootstrap insert",
+    "Missing config case requires exact original refusal, zero TCP connections and no bootstrap",
+    "Original async-loader/smoke shortcut negatives and5s child kill/30s default preserved"
+  ],
+  "r1": {
+    "verdict": "FIX_REQUIRED",
+    "priority": "P2",
+    "line": 102,
+    "problem": "Private component error was intentionally redacted; cloud job123216668736 confirms actual visible public AggregateError inner message.",
+    "fixed_by_r2": true,
+    "capacity_error_history_preserved": true
+  },
+  "evidence_limit": "Transport can fail on application facts before writer query; does not prove writer pool, SQL completion, role/UID or nativePG17/RLS success.",
+  "project_execution": "NONE_REVIEWER_READ_ONLY",
+  "windows_source_writes": 0,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}

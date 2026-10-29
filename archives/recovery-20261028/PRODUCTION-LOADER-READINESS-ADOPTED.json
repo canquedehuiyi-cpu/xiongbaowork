@@ -1,0 +1,60 @@
+{
+  "schema": "xiongbaowork-adopted-source-overlay/1",
+  "ticket": "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+  "formal_adoption": true,
+  "status": "SOURCE_APPROVED_WITH_EXACT_CANDIDATE_VALIDATION",
+  "base_commit": "67bd70f7d18a602c2eab3a77f95bc0d0ddf09be1",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/server/tests/production-loader-boundary.test.ts",
+      "before": {
+        "path": "openbot/server/tests/production-loader-boundary.test.ts",
+        "bytes": 3762,
+        "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/tests/production-loader-boundary.test.ts",
+        "bytes": 4997,
+        "sha256": "1a9500d5c492842712e148d1f387521a54615d39fc33899147f1fc01c8089205",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Only update original loader refusal fixture to current earlier lifecycle readiness boundary. Own TCP listener accepts and destroys; application fact query can connect before writer fact query, so it proves transport attempt not writer identity/PG readiness. Require >0 transport plus exact PUBLIC redacted lifecycle failure and absence of private component error. Missing writer config requires original exact refusal and zero connections. Both forbid identity bootstrap insert and async loader/smoke shortcuts. Production index, role writer and lifecycle unchanged.",
+  "trigger": {
+    "run": 40789730098,
+    "job": 123171654707,
+    "old_pass": 0,
+    "old_fail": 1
+  },
+  "projected_source_files": 2060,
+  "projected_source_bytes": 50033306,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "r1": {
+    "candidate": "6a56695aead431a3fc62196edeb4a272e3af5c87",
+    "run": 40803437877,
+    "job": 123216668736,
+    "pass": 46,
+    "fail": 1,
+    "lint_exit": 0,
+    "review_finding": "Private component error is intentionally redacted by unchanged startup lifecycle; R2 requires actual visible public error and no private error leakage.",
+    "old_failed_evidence_retained": true
+  },
+  "candidate_source_commit": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+  "review": {
+    "path": "archives/recovery-20261028/PRODUCTION-LOADER-READINESS-INDEPENDENT-REVIEW.json",
+    "reviewer": "/root/review_approval_input_readonly",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": []
+  },
+  "runtime": {
+    "path": "archives/recovery-20261028/PRODUCTION-LOADER-READINESS-CANDIDATE-VALIDATION.json",
+    "run": 40804154815,
+    "job": 123218968503
+  },
+  "source_content_adopted_unchanged": true
+}
