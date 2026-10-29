@@ -74,7 +74,7 @@
     },
     "updated_at": "2026-10-29T08:17:27.423219+00:00"
   },
-  "run_status": "FIRST_PASS_COMPLETED_NATIVE_RESULT_CONFIRMED_PROJECT_ACCEPTANCE_UNCHANGED",
+  "run_status": "CURRENT_SAVED_PROMPT_PASS_READ_ONLY_YIELDED_VALID_LEASE;_PRIOR_PLATFORM_ECHO_NOT_INDEPENDENCE_PROOF",
   "planned_first_occurrence": {
     "from_saved_dtstart": "2026-10-29T08:19:26Z",
     "asia_singapore": "2026-10-29 16:19:26 +08:00",
@@ -213,5 +213,140 @@
     "project_jobs_started": 0,
     "source_canonical_or_lease_writes": 0,
     "next_action": "End this acceptance round. Leave existing controller/worker unchanged; main owns generator diagnostic and resource queue. Subsequent maintenance uses current controller, not another local probe."
-  }
+  },
+  "first_run_independence_qualification": {
+    "source": "Live Page native Agent Instructions and Root-maintained latest state read in this pass",
+    "instruction_hash": "12ccb5f32f9d57a1360b1747b648b5d9fcc6c7661444356c9ae3e35a2cc241e5",
+    "prior_run_id": "c4016dcf-263c-8328-bcd9-2a0d4cf4a836",
+    "prior_native_completed_result_association_retained": true,
+    "qualification": "Root's normal read_thread investigation recorded in live Page identifies old chat_ref/content_text as creator administrative conversation and manually triggered readonly reply. Old native completion is not proof of independently executed saved-prompt developer work. Neither infer scheduler never ran nor overwrite historical observations.",
+    "unattended_development_acceptance": "NOT_ESTABLISHED_BY_FIRST_RUN"
+  },
+  "bounded_worker_passes": [
+    {
+      "run_id": "2631f41b-75ac-8333-8b5d-0bbfdb034bf5",
+      "scheduled_for": "2026-10-29T09:19:26Z",
+      "started_at": "2026-10-29T09:21:12.483985Z",
+      "native_status_at_read": "in_progress",
+      "host_context": "Explicit developer-supplied scheduled-automation runtime context with saved worker prompt; not a user-directed schedule-edit task",
+      "authority": {
+        "worker_id": "6ae30014bbac8191baa1a3497f062b7d",
+        "controller": "Automation_a9042438d098819180d8686afa9cd66e",
+        "controller_enabled": true,
+        "task_attached": true,
+        "runtime": "cloud",
+        "worker_enabled": true
+      },
+      "canonical_head_read": "b35f9a8b1b8eefd6e0b7b555398c55504ad8f95b",
+      "handoff": {
+        "blob": "814aafce90abea0da39f6b0524a2d5e148c14d3f",
+        "full_content_received": true
+      },
+      "required_inputs": [
+        {
+          "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+          "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+          "bytes": 286013,
+          "full_content_received": true
+        },
+        {
+          "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+          "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+          "bytes": 45225,
+          "full_content_received": true
+        },
+        {
+          "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+          "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+          "bytes": 479194,
+          "full_content_received": true
+        },
+        {
+          "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+          "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+          "bytes": 456310,
+          "full_content_received": true
+        },
+        {
+          "path": "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md",
+          "blob": "2c576298ea45a3d21f66e67dfeb6033301a934d9",
+          "bytes": 66979,
+          "full_content_received": true
+        }
+      ],
+      "scope": {
+        "original_stories": 77,
+        "original_packages": 18,
+        "final_gates": 7,
+        "source_files": 2065,
+        "source_bytes": 50175181,
+        "source_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "scope_not_replaced_by_summary": true
+      },
+      "lease": {
+        "schema": "xiongbaowork-cloud-coordinator-lease-v1",
+        "repository": "canquedehuiyi-cpu/xiongbaowork",
+        "canonical_branch": "codex/cloud-repairs-recovery-20261028",
+        "state": "held",
+        "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+        "run_id": "bounded-generator-a4-2026-10-29T08:57:06.433Z",
+        "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
+        "acquired_at": "2026-10-29T08:57:06.433Z",
+        "renewed_at": "2026-10-29T09:19:55.955Z",
+        "expires_at": "2026-10-29T09:42:06.433Z",
+        "max_lease_seconds": 2700,
+        "renew_interval_seconds": 900,
+        "expected_parent": "ea6ec2b7c5d7c1ef3517efa13fd92c3e08b44ebd",
+        "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
+        "queue_at_acquisition": {
+          "queued": [],
+          "in_progress": []
+        },
+        "next_action": "Prepare independently reviewed generator A5 constrained single mirror redirect, per-node path binding, original URL/SRI/lock untouched; do not infer other16 runtime routes or SRI/generator success.",
+        "protocol": {
+          "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
+          "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
+          "renew": "Current matching owner/run/epoch only, before expiry, every real checkpoint and no later than15min. Retain original acquired_at for this epoch, set renewed_at to actual UTC CAS preparation time. expires_at <= min(acquired_at+45min, renewed_at+45min). No indefinite rolling epoch. Before45min limit, continue only by queue-idle release and separate CAS acquisition with new unique epoch. Never renew after losing epoch or expiration; successor rules apply.",
+          "pre_mutation": "Before Source adoption, new execution branch, project job or canonical mutation, re-read exact head and held/unexpired owner/run/epoch. Only this owner serially schedules resources; if mismatch, stop. For push jobs also verify the exact reviewed trigger branch and HEAD commit message has no CI-skip directive; preparation branches rely on exact filters, not skip tags.",
+          "release": "Before ending bounded round, CAS state released with released_at and expires_at equal UTC now, active jobs accurately recorded and clear next_action. Do not release while concealing queued/running work.",
+          "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
+          "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
+        },
+        "active_job": null,
+        "queue_at_release": {
+          "queued": [],
+          "in_progress": [],
+          "observed_at": "2026-10-29T08:46:28.635Z"
+        },
+        "blob": "84f0c1910199108305dd767a4ad35d29c5e2fe7b"
+      },
+      "queue": {
+        "queued": [],
+        "in_progress": [],
+        "one_read_each": true
+      },
+      "decision": "READ_ONLY_YIELD_TO_VALID_OTHER_OWNER",
+      "rationale": "At host runtime09:21UTC the held lease expires09:42:06UTC and owner/epoch belongs to main, even though no resourcejob is active. Do not acquire or release another owner's lease or duplicate A5 preparation.",
+      "observed_next_action": "Prepare independently reviewed generator A5 constrained single mirror redirect, per-node path binding, original URL/SRI/lock untouched; do not infer other16 runtime routes or SRI/generator success.",
+      "executed_actions": "Actual native Page/registry/GitHub connector reads; only exclusive administrative evidence update and requested Page status. No Subject/source/tests/install/PG/SQL/Docker/Windows/browser/CLI, no new plan or projectrun.",
+      "resource_jobs_started": 0,
+      "project_source_writes": 0,
+      "canonical_writes": 0,
+      "lease_writes": 0,
+      "plans_changed": 0,
+      "paid_calls": 0,
+      "gates": {
+        "ROOT_RELEASE": null,
+        "ready": false,
+        "AP_DISABLED": true,
+        "NOT_SERVICE_WIRED": true,
+        "migrationNOT_WIRED": true,
+        "PG": "PG_PENDING",
+        "full_ci": "NOT_RUN",
+        "commercial": "NOT_DELIVERED"
+      },
+      "next_action": "Existing main continues generatorA5 with required independent review and serial queue. At a later ordinary pass, reread head/lease/queue; only legally released/expired and idle conditions permit CAS acquisition. This pass exits without waiting.",
+      "completion_claim": "These records attest actual read-only pass behavior; native terminal/result of this current pass is not available while it runs. Do not equate the old latest_result with currentrun."
+    }
+  ]
 }
