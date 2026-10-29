@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:48:29.832Z",
+  "checkpoint_update_at": "2026-10-29T16:50:24.433Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4247,6 +4247,12 @@
         },
         "restoration": "FAILED_OR_UNKNOWN_NOT_ACCEPTED"
       }
+    },
+    "runtime_nonauthor": {
+      "commit": "67e016a842360f5a4118b564e6100d6a90982546",
+      "path": "archives/recovery-20261028/CLOUD-ROUTE-A2-RUNTIME-NONAUTHOR-REVIEW-20261030.json",
+      "blob": "f2ecafa778116633603f04ec284db43d83b274fb",
+      "verdict": "FINDING_FINAL_PARENT_OOM_GROUP_NOT_RESTORED_OVERALL_FAILED_OR_UNKNOWN"
     }
   },
   "cloud_a11_teardown_diagnostic": {
@@ -4291,6 +4297,18 @@
       "conclusion": "failure",
       "evidence_conclusion": "SAME_SHARED_CGROUP_IDENTITY_OOMGROUP1_DURING_ADMIN_TO0_AFTER_ADMIN_EXIT",
       "overall_acceptance": "FAILED_OR_UNKNOWN_NOT_RESTORED"
+    },
+    "runtime_nonauthor": {
+      "commit": "d562f75b8110fa3e1160494185f088542661650b",
+      "path": "archives/recovery-20261028/A11-TEARDOWN-A2-RUNTIME-NONAUTHOR-20261030.json",
+      "blob": "a28d9ee1dc58d1d00979b1b3e083fc909b3ae3e7",
+      "shared_same_inode_oom1_to0": true,
+      "original_restore": "NOT_ACCEPTED"
     }
+  },
+  "next_control_preparation": {
+    "route": "STATIC_FAILFAST_ONLY_NO_PROJECT_DISPATCH; same absolute budget and original finaloom1 gate retained",
+    "a11": "Supported Delegate-owned-subtree noSubject/noToken/noCodec control prototype, all descendants aggregate64, RemainAfterExit/zeroPID/empty kernel proof; original managedslice gate remains separately failed until actually repaired/reviewed",
+    "not_new_environment_or_goal": true
   }
 }
