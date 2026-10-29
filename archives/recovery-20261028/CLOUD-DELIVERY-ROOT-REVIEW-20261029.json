@@ -1,0 +1,121 @@
+{
+  "schema": "xiongbaowork-cloud-delivery-independent-review/1",
+  "reviewer": "/root/delivery_review",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "non_author": true,
+  "project_executed": false,
+  "canonical_written": false,
+  "volume_review": {
+    "commit": "7f931f69dde33703c667a3d3833e9da26915b3a0",
+    "parent": "5c7ef397598edec073cc491972376f75d326a8bb",
+    "verdict": "SOURCE_APPROVED_ONLY_PENDING_BOUNDED_CPU_VALIDATION",
+    "findings": [],
+    "source_count": 4,
+    "files": [
+      {
+        "path": "openbot/docker/s6/scripts/postgres-init.sh",
+        "blob": "b2580901cab9bd15ca312ccb873f5eedb80d7541",
+        "bytes": 5546,
+        "sha256": "0969f9dc9e1bae8311c05a17cbcebfb95018589ea5297b92bea49298a5fb8c54"
+      },
+      {
+        "path": "openbot/docker/s6/s6-rc.d/postgres/run",
+        "blob": "c9b2f7512f375251373335624591e7a8900242db",
+        "bytes": 687,
+        "sha256": "363f35df666a2a877d0949232ff544631a03ee644853d1166fb9f1b333980044"
+      },
+      {
+        "path": "openbot/docker/s6/scripts/postgres-volume-version-guard.ts",
+        "blob": "a0aa17a011f2edbfc1eddc4830979c5d35dca61e",
+        "bytes": 5281,
+        "sha256": "80f68e305c1c694b7a97378119fb34f968348be3b66446818fb2a563ee6150aa"
+      },
+      {
+        "path": "openbot/server/tests/pg-volume-version-guard.test.ts",
+        "blob": "f0d778fead2ea00592ba797078ef3bd6d692652c",
+        "bytes": 7211,
+        "sha256": "5a9e878d14b9fc6e742035d27d20bf66ce9e1d91656a13c79e967845f8ab011f"
+      }
+    ],
+    "verified_by_reading": [
+      "Init guard executes before directory creation, ownership, password generation, chmod and environment URL writes.",
+      "Start guard executes before postgres launch and never initializes a volume.",
+      "Binary path remains fixed to PostgreSQL16; a different path or invalid phase refuses.",
+      "Existing PG_VERSION must be a regular single-link non-symlink file containing exactly 16 LF.",
+      "O_RDONLY/O_NOFOLLOW/O_NONBLOCK, FD versus named metadata and data-directory stability checks are present.",
+      "Missing PG_VERSION accepts only init with an empty or absent data directory and no preserved owner/app credentials.",
+      "27 defined CPU cases cover accepted PG16/new-volume boundaries and 12 refusal cases through each shell entrypoint.",
+      "Dockerfile copies docker/s6 wholesale, so the new helper is included by the existing COPY rule."
+    ],
+    "limitations": [
+      "No CPU cases were executed by this reviewer.",
+      "No actual PostgreSQL binary, PG17 upgrade, migration, s6 startup or Docker image was executed.",
+      "No adversarial concurrent filesystem replacement guarantee is established after guard return.",
+      "Hardlink rejection exists in code but the current test file does not explicitly create a hardlink fixture.",
+      "Tree modes require coordinator verification before adoption."
+    ]
+  },
+  "route_review": {
+    "commit": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+    "base": "5c7ef397598edec073cc491972376f75d326a8bb",
+    "verdict": "ADMIN_PLAN_APPROVED_FOR_BOUNDED_DISPATCH_ONLY",
+    "findings": [],
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "blob": "25f78982c6346bb60f509f1b4b6159c2d60a7352",
+        "bytes": 77303,
+        "sha256": "d96e898daa363a4448c6a69fc1cb98e72a303574347cfdfc78d50603f1dd1865"
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "blob": "ff7e08385743e23e1a8effaff88c85113ed95b52",
+        "bytes": 6840,
+        "sha256": "c3de9d277161a40d207b86572b899388cfe55147d5d25ccc325e6a5b0f8c2344"
+      }
+    ],
+    "decoded_runtime_helper": {
+      "bytes": 23322,
+      "sha256": "4e8419af0012e9528c1a0e689ea91254db1fcded17bb9d3016ffcb446717bf8b",
+      "fully_read": true
+    },
+    "verified_by_reading": [
+      "Manual workflow_dispatch only; contents read; one job without matrix.",
+      "Concurrency source-recovery-bytes with cancel-in-progress false.",
+      "GitHub comparison from base reports exactly the two administrative additions and no Source changes.",
+      "First four steps body is exactly 42135 UTF-8 bytes and byte-identical to base source-recovery-verify.yml blob37f9b77df6146f2f4812a30a58072dfa75b444d1.",
+      "A creates one monotonic budget with inner270s and outer300s; B reuses it.",
+      "Launch recomputes remaining budget after raising the aggregate gate, deducts one second from relative runtime and waits against the same absolute deadline including activation and stop.",
+      "Owned build unit uses KillMode control-group and SIGKILL with explicit start/stop failure kill behavior.",
+      "Finally writes owned unit cgroup.kill, directly restores parent512MiB/swap0 before bounded D-Bus cleanup, and marks an expired outer budget incomplete.",
+      "Five-second hard-stop reserve is excluded from Node runtime; min(inner_deadline, outer_deadline minus reserve) controls launch wait.",
+      "Shell EXIT traps and the always final step separately restore and assert512MiB/swap0.",
+      "Only Node/Vite frontend A/B uses the4GiB aggregate exception; DATA controllers are64MiB within that aggregate; other preparation remains512MiB.",
+      "A and B begin from verified before leaf bytes; postchecks audit all2065 manifest paths and modes and restrict tracked differences to the route leaf.",
+      "No automatic adoption, commit, push or release; passing proof-b is required for a complete reproduction record."
+    ],
+    "dispatch_conditions": [
+      "Coordinator owns the serial resource queue and confirms no other project resource job is active.",
+      "Use only a normal supported workflow entrypoint and this exact reviewed commit; old95af is not approved.",
+      "Record actual resource gates, absolute deadline and512MiB restoration outputs.",
+      "Any failure or exhausted budget remains incomplete; do not add a third iteration.",
+      "Any resulting Source leaf requires full readback and a separate non-author Source review before adoption."
+    ],
+    "limitations": [
+      "Administrative review is not execution proof.",
+      "Original Bun frontend build script is not exercised by this Node/Vite diagnostic.",
+      "No current route leaf is adopted by this verdict.",
+      "No full image, PG17,8GET or native installation proof is supplied.",
+      "Tree modes require coordinator verification."
+    ]
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}
