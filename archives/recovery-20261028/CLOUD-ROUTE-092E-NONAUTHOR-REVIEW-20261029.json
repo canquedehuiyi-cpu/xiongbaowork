@@ -1,0 +1,146 @@
+{
+  "schema": "xiongbaowork-route-exact-nonauthor-review/1",
+  "reviewer": "/root/route_review",
+  "review_type": "NONAUTHOR_READ_ONLY_STATIC",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "092e47957ce1608e37cc40a116162c90255c7555",
+  "tree": "3ee3dc70f647b9a3f23e5e513bbbc62646f76058",
+  "parent": "ea0ceeb1fde805a7c7c421613da261e711c69a4d",
+  "verdict": "FINDING_P2_NOT_APPROVED_FOR_EXECUTION",
+  "dispatch_allowed": false,
+  "files": [
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "blob": "32579a9d76981bbfcd25435b85a2e1c7be158c82",
+      "mode": "100644",
+      "bytes": 120950,
+      "sha256": "96d8dd8c4f7c190ac9394dc0838aa0c7f1fbbf33500a19e3f40a08c88747cef1"
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "blob": "f6a3f685f7b7a889ba31cf6588bf96ef377c6140",
+      "mode": "100644",
+      "bytes": 25112,
+      "sha256": "f988e5514d806eb00f430a9bb67ceb98dfd2ab73b121e3ed83f5ec06989ca1fd"
+    }
+  ],
+  "literal_helpers": [
+    {
+      "name": "administrative",
+      "bytes": 28968,
+      "sha256": "f11740c2121bb37010dd69c29e96e2dc9a3290511cb74ac29cb74fabee3eeb90"
+    },
+    {
+      "name": "subject",
+      "bytes": 19955,
+      "sha256": "10930971cfd1e45855d49d2ad6255c3b33d37745cf5d46a4ff1b24e850aa8d33",
+      "prepare_raw_literal_equals_lifecycle_subject_literal": true
+    }
+  ],
+  "integrity_method": {
+    "full_files": "Immutable GitHub UTF8 full reads; literal strings decoded only as JSON data",
+    "tree": "recursive truncated=false; blob/mode/bytes matched",
+    "sha256": "Pure JavaScript, abc selfcheck",
+    "subject_execution": false,
+    "python_ast_or_compilation": false,
+    "local_files_written": false
+  },
+  "findings": [
+    {
+      "id": "ROUTE-P2-PRELUDE-PARENT-OOM-ACTIVATION-GATE",
+      "priority": "P2",
+      "blocking": true,
+      "locations": [
+        "workflow18-35 initial parent",
+        "40-58 Source activation",
+        "257-271 runtime download",
+        "350-367 install",
+        "483-505 helper preparation",
+        "511-530 brand generation"
+      ],
+      "observed": "Parent oom.group set1 only before transient activations. Prelude services lack privileged post-activation repair before Subject. Assertions omit parentoom.group or check child only. New lifecycle root_gate repair occurs too late.",
+      "actual_prior_runtime_evidence": {
+        "run": 40839182119,
+        "job": 123331130080,
+        "log_read_in_this_review": true,
+        "before": "parent512/swap0/oom.group1",
+        "after": "AssertionError parent512/swap0/oom.group0",
+        "final": "restored512/swap0/oom.group1 populated0 subject_executedfalse"
+      },
+      "impact": "Complete candidate can access Source/prepare dependencies without proving current aggregate oom.group1. Inherited byte-identical steps are not exempt.",
+      "required_change": "Existing exclusive author must add reviewed privileged activation barrier to EVERY pre-lifecycle project service. After activation and before Subject access/execution, assert actual exact child/parent identity,memory,swap0,parentoom1, then irreversible drop. Subject independently checks actual parent gate. Preserve aggregate512/DATA64/install512. Return exact two-file successor for independent review."
+    }
+  ],
+  "lifecycle_static_observations": [
+    {
+      "item": "Shared lifetime",
+      "result": "IMPLEMENTED_IN_TEXT",
+      "evidence": "One supervisor budget-a/build-a/snapshot-a/reset-before/budget-b/build-b/snapshot-b/finish; one immutable monotonic t0 inner270 outer300."
+    },
+    {
+      "item": "Independent fallback",
+      "result": "IMPLEMENTED_IN_TEXT",
+      "evidence": "Protected control service waits supervisor PID/starttime/terminal/abort/shared inner cutoff, latches abort before revoking permits, retains originalouter."
+    },
+    {
+      "item": "Privilege/Subject boundary",
+      "result": "IMPLEMENTED_IN_LIFECYCLE_TEXT",
+      "evidence": "Root administrative paths config/permits/cgroups/terminal only; not parse Subject repo/proofs/log/payload. Wrapper resets oom_score_adj0,clearsgroups,sets real/effective/saved runnerUID/GID then exec."
+    },
+    {
+      "item": "Resource accounting",
+      "result": "IMPLEMENTED_IN_LIFECYCLE_TEXT",
+      "evidence": "16MiB supervisor+16MiB fallback+32MiB DATA=64MiB. Build4261412864+controls33554432=4294967296. Only originalbuild-a/build-b can raiseparent4GiB; ordinary512."
+    },
+    {
+      "item": "Stop physical witnesses",
+      "result": "IMPLEMENTED_TEXT_NOT_RUNTIME",
+      "evidence": "Revokepermit,cgroup.kill,waitstop,ActiveState/Job/LoadState and actualpop0 or justifiedabsence,reaplauncher,restoreobservation. Distinct final both controls exited,parentpop0,actual512/swap0/oom1 before300. Kill/receiptalone insufficient."
+    },
+    {
+      "item": "Deadline accounting",
+      "result": "IMPLEMENTED_TEXT_NOT_RUNTIME",
+      "evidence": "Management COW children originalremaining,nonblockingpipe/waitpid,hardkill,O_NONBLOCKcgroupwrites. Normalcleanupouter-6 fallbackouter-5. Always reads existing terminal/gates,no newrestorebudget."
+    }
+  ],
+  "scheduling_blockers": {
+    "workflow_trigger": "workflow_dispatch only",
+    "default_branch_changed": false,
+    "manual_nondefault": "NOT_ESTABLISHED",
+    "commit_message": "[skip ci] Prepare route shared deadline supervisor, independent fallback and full restore evidence",
+    "push_execution": "NOT_AUTHORIZED",
+    "required_push": "New normalpush filter successor,no skip,allcontrols preserved,newexactSHA independentreview"
+  },
+  "history_preserved": {
+    "old_candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+    "negative_review": "7ef4fcac96e6b76a8c84f873854d1cc5d905fd2a",
+    "positive_review": "9d80392d8b39ccbbd89338f026eeb8986ff6c8aa",
+    "neither_overrides_other": true,
+    "old_dispatch": false,
+    "blocked_preparation": "ea0ceeb1fde805a7c7c421613da261e711c69a4d"
+  },
+  "runtime_limitations": [
+    "No candidateexecution",
+    "16MiBcontrol/32MiBDATA headroom unproven; no enlargement",
+    "Actual systemd/O_NONBLOCK/OOM/termination/300s/evidence transport require future exact reviewed execution",
+    "Historicalprobe does not prove routecleanup",
+    "NoPG17/Bun/fullimage/Sourceadoption/production/fullscopeacceptance"
+  ],
+  "actions_by_reviewer": {
+    "reads_only": true,
+    "Source_writes": 0,
+    "canonical_writes": 0,
+    "branch_writes": 0,
+    "dispatches": 0,
+    "executions": 0,
+    "Windows_writes": 0,
+    "paid_calls": 0
+  },
+  "next_action": "Save report under coordinator lease; return finding to existing exclusive route author. Do not execute092e/oldbf. Exact successor independent review required.",
+  "ROOT_RELEASE": null,
+  "ready": false,
+  "PG": "PG_PENDING",
+  "AP_DISABLED": true,
+  "NOT_SERVICE_WIRED": true,
+  "migrationNOT_WIRED": true
+}

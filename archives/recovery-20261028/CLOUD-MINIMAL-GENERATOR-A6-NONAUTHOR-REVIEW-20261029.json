@@ -1,0 +1,321 @@
+{
+  "schema": "xiongbaowork-independent-a6-review-v1",
+  "reviewer": "/root/a6_review",
+  "review_kind": "NON_AUTHOR_READ_ONLY_STATIC_REVIEW",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+  "tree": "0877bb2bb252935d54e8f7d234c91c6703d600cf",
+  "parent": "e2449ff39cb2d9f86d4caf062b35905fda243bd2",
+  "author_declared": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d",
+  "verdict": "NOT_APPROVED_FOR_DISPATCH",
+  "review_method": "Full normal GitHub connector file/tree/commit/original lock/run/decoded log reads. Embedded code read as text; no execution/AST/local files/writes.",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "mode": "100644",
+      "blob": "43656e7f84cb64b305f6dd5f35d4ddc3bf199bf2",
+      "bytes": 4017,
+      "sha256": "25756cf70470e2eb3ed49b9e0979c66e5b15db766b528c46d278d2d35fe157ac",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "mode": "100644",
+      "blob": "0bb05f47a78fe7229bb7e3f25ce068f5f1746e58",
+      "bytes": 79617,
+      "sha256": "303f75f521291fb5e57912b8a28ba25e8b3649f46ac65b0297cdcb3ebace1815",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "mode": "100644",
+      "blob": "a9acbb7a5b3f33e3966c2a54d116b4e56197804f",
+      "bytes": 33364,
+      "sha256": "e845f3cd869d2d633ac2abcfefcf85d496ded88571c719e6cdeb30eb17fbe971",
+      "full_read": true
+    }
+  ],
+  "identity_checks": {
+    "tree_recursive_truncated": false,
+    "workflow_controller_pin_matches": true,
+    "external_embedded_plan_fields_equal": true,
+    "head_message": "Bind A6 candidate to actual author and unreviewed status",
+    "head_has_skip": false
+  },
+  "original_lock": {
+    "path": "openbot/bun.lock",
+    "blob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+    "mode": "100644",
+    "bytes": 453991,
+    "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670",
+    "full_read": true,
+    "all_17_original_tuples_equal": true,
+    "edges": 15,
+    "schema_paths": 50
+  },
+  "metadata_evidence": {
+    "run": 40857520611,
+    "job": 123392107062,
+    "head": "c5add4355c3b7e7ee3a263ff058fd8a307995137",
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "decoded_log_bytes": 17073,
+    "decoded_log_sha256": "16f1191194168ba4abab10565ab94e462fbf3a77d2631bf50d4a1c18417d9683",
+    "package_json": {
+      "bytes": 177277,
+      "sha256": "9fd30ce718965c19178ac6936462b77017f1fffe56865124d0cfe55850de09ff"
+    },
+    "exact_difference": {
+      "kind": "lock_only",
+      "path": "/peerDependencies/prisma",
+      "lock": "*"
+    },
+    "actual_prisma_optional_marker": true,
+    "sri_verified_before_tar": true,
+    "archive_bytes": 1223890,
+    "source_acquired": false,
+    "installed": false,
+    "native_executed": false,
+    "generator_executed": false,
+    "actual_uid": 1001,
+    "parent": 536870912,
+    "data": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "final_and_always_populated": 0
+  },
+  "static_checks": {
+    "sole_prisma": {
+      "result": "PASS_STATIC",
+      "strict_default": "dependencies/optionalDependencies/peerDependencies exact",
+      "exception_requires": [
+        "Only peerDependencies differ",
+        "Exact drizzle-orm key/pin0.45.2/original URL/SRI",
+        "Actual name/version and authenticated rawpackageJSON bytes/hash",
+        "Only lock prisma=* absent actual; all remaining peers/ranges equal",
+        "unique optionalPeers containingprisma equals complete lock peers",
+        "actual peerDependenciesMeta equals all original optional peers mapped optional:true"
+      ],
+      "package_lock_mutation": false,
+      "generalized": false
+    },
+    "contract_definitions": {
+      "positive": 2,
+      "negative": 14,
+      "negative_names": [
+        "other_node",
+        "other_pin",
+        "other_url",
+        "other_sri",
+        "other_json_hash",
+        "other_json_size",
+        "different_version",
+        "missing_other_peer",
+        "different_peer_range",
+        "new_actual_peer",
+        "lost_optional_marker",
+        "changed_optional_marker",
+        "different_dependencies",
+        "different_optional_dependencies"
+      ],
+      "before_downloads": true,
+      "executed": false,
+      "authentication_proof": false
+    },
+    "inherited_controls": {
+      "original17_tuples": true,
+      "original_url_sri": true,
+      "single_constrained_cdn_redirect": true,
+      "sri_before_extract": true,
+      "private_cache_copyfile_no_links_nohooks": true,
+      "safe_tar": true,
+      "other_metadata_strict": true,
+      "resolution15": true,
+      "esbuild_versions": [
+        "0.18.20",
+        "0.25.12",
+        "0.28.2"
+      ],
+      "native_before_generator": true,
+      "FULL50": true,
+      "no_learning_fabrication": true,
+      "seed_overlay_not_adopted": true,
+      "original0080_not_replaced": true,
+      "outputs_export_before_structure_failure": true,
+      "full_DDL_review_still_required": true
+    },
+    "resources": {
+      "push_branch": "codex/cloud-minimal-generator-run-20261029-a6",
+      "contents": "read",
+      "runner": "ubuntu-latest",
+      "jobs": 1,
+      "concurrency": "source-recovery-bytes",
+      "cancel_in_progress": false,
+      "timeout_minutes": 15,
+      "parent": 536870912,
+      "data": 67108864,
+      "swap": 0,
+      "admin_root_only": true,
+      "activation_parent_oom_group_repair": true,
+      "irreversible_drop": true,
+      "actual_child_parent_gate": true,
+      "prep_shared_seconds": 480,
+      "generation_seconds": 120,
+      "export_seconds": 120,
+      "cleanup_reserve": 8,
+      "single_idempotent_cleanup": true,
+      "bounded_cgroupkill_stop_wait": true,
+      "late_launch_rejected": true,
+      "final_and_always_assertions": true,
+      "runtime_proof": false
+    }
+  },
+  "findings": [
+    {
+      "id": "A6-P1-SOURCE-BASELINE-DIFF-ASSERTION-FALSE",
+      "severity": "P1",
+      "category": "Deterministic fail-closed implementation defect",
+      "location": "controller line6 embedded SOURCE_SCRIPT after candidate/base fetch",
+      "assertion": "git diff --name-only 823744db378f508a1996f8c23faf1b42f115ad33 target equals exactly workflow/controller/plan",
+      "actual_comparison": {
+        "base": "823744db378f508a1996f8c23faf1b42f115ad33",
+        "head": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "files": [
+          {
+            "path": ".github/workflows/cloud-minimal-generator.yml",
+            "blob": "43656e7f84cb64b305f6dd5f35d4ddc3bf199bf2",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+            "blob": "27822286e2c3a3639296770e77671a69dec508f2",
+            "status": "modified"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.md",
+            "blob": "9e4939f6d46f5783923e33244f162db2c1ac8804",
+            "status": "modified"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json",
+            "blob": "b952b2b4043f5741e88cbd7de93e71b0ff0eb85d",
+            "status": "modified"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-EXEC-PROBE-A2-123332952391.log",
+            "blob": "158d44ad7f84fe1be271aa9ec905ba9fd61d9487",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-EXEC-PROBE-A2-RESULT.json",
+            "blob": "7147653f5f6ee6f9a77ce9ded61714585db55730",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-A2-123361532231.log",
+            "blob": "900f4a20d9179b34f1d71848b54401ec77dcdcc7",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-A2-RESULT.json",
+            "blob": "1494909b097ba65758f9bcc439ce5da53f3ba733",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-123344875216.log",
+            "blob": "fd2b517e253c0081cb6efd99d697b97540eda53a",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-DISPATCH.json",
+            "blob": "29fb5b4fa003baac997febd9fe0803f65f7d40b6",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-RESULT.json",
+            "blob": "0008b5e22bbf3f668383a973d101d764f48b7f7e",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-123353492043.log",
+            "blob": "8e9578089d1757239b5ac8c52391603cb2290012",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-DISPATCH.json",
+            "blob": "09a7ddfde978c058680bbd51303617da4f5ebb9f",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A4-RESULT.json",
+            "blob": "3e64fc2f3e2fbb9f5a710f86cda489eca825c715",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A5-123366832250.log",
+            "blob": "e25472ce1ae783f8445355490d92081e5ed86bfb",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A5-DISPATCH.json",
+            "blob": "3a5b7e17640938e0d4177bdf14886e4bc8576e24",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A5-RESULT.json",
+            "blob": "759cfe844bdd9a8b6a4542a650b390f6f80d07c5",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+            "blob": "0bb05f47a78fe7229bb7e3f25ce068f5f1746e58",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+            "blob": "a9acbb7a5b3f33e3966c2a54d116b4e56197804f",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-NEXT-BOUNDED-PASS-20261029.json",
+            "blob": "d08f471b338bb556a2e807b81740c9c36d68747b",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-123392107062.log",
+            "blob": "5161deb82af7f29daf5bac63baa25d68a2db987d",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-ORM-METADATA-RESULT-20261029.json",
+            "blob": "b75c1cb98486e5e9c062a4d7f81148f127d77a12",
+            "status": "added"
+          },
+          {
+            "path": "archives/recovery-20261028/CLOUD-ROUTE-REVIEW-CONFLICT-20261029.json",
+            "blob": "2f2f34658223c500ba6968ab8cca951cc00a386f",
+            "status": "added"
+          }
+        ]
+      },
+      "consequence": "Fails before manifest acquisition,2065 materialization,deps,native,generator; do not consume a known-failing job.",
+      "required_fix": "Pin verified immutable administrative comparison baseline with actual exact three-path diff; retain separate original Source manifest and2065 verification. Or explicitly pin/review full inherited administrative delta. No deletion/wildcard scopeguard. Update bytes/hashes/pins/plan and independently review exact successor."
+    }
+  ],
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  },
+  "next_action": "Do not create A6 run branch at f972. Prepare narrow correction and independently review exact successor."
+}

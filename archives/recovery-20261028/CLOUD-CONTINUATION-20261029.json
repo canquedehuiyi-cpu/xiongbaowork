@@ -3363,5 +3363,33 @@
       "full_ci": "NOT_RUN",
       "commercial": "NOT_DELIVERED"
     }
+  },
+  "human_coordinator_review_round": {
+    "observed_at": "2026-10-29T14:45:53.943Z",
+    "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+    "epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review",
+    "authorization": "Normal human delegation, not automation identity",
+    "a6": {
+      "candidate": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+      "status": "NOT_APPROVED_FOR_DISPATCH",
+      "report": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A6-NONAUTHOR-REVIEW-20261029.json",
+      "finding": "A6-P1-SOURCE-BASELINE-DIFF-ASSERTION-FALSE"
+    },
+    "route": {
+      "candidate": "092e47957ce1608e37cc40a116162c90255c7555",
+      "status": "FINDING_P2_NOT_APPROVED_FOR_EXECUTION",
+      "report": "archives/recovery-20261028/CLOUD-ROUTE-092E-NONAUTHOR-REVIEW-20261029.json",
+      "finding": "ROUTE-P2-PRELUDE-PARENT-OOM-ACTIVATION-GATE",
+      "external_author_ownership_preserved": true
+    },
+    "worker_identity": {
+      "status": "PAUSED_IDENTITY_BINDING_BLOCKED",
+      "evidence": "archives/recovery-20261028/CLOUD-WORKER-IDENTITY-OBSERVATION-20261029.json",
+      "configuration_changed_by_this_round": false,
+      "admin_owner": "Existing human-designated persistence/admin conversation; no duplicate configuration changes"
+    },
+    "Source_adopted": false,
+    "project_jobs_started": 0,
+    "next_action": "A6 and092e independent reviews reject dispatch. A7 administrative baseline repair author preparing; exact successor independent review required. Route prelude activation finding must be repaired by existing external author. Worker paused identity binding remains separately owned admin blocker."
   }
 }
