@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
   "run_id": "2026-10-29T14:42:16.560Z:human-a6-route-review",
   "epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review",
   "acquired_at": "2026-10-29T14:42:16.560Z",
   "renewed_at": "2026-10-29T15:10:53.239Z",
-  "expires_at": "2026-10-29T15:27:16.560Z",
+  "expires_at": "2026-10-29T15:11:58.700Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "842623fc39bf85d620e70182b7b63d72f5f64a94",
@@ -17,7 +17,7 @@
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Narrow privateconfig outputpath correction,relativefromactualcwd mustresolve exactcontrolledprivate-drizzle. Preserve50schema/originalchain. Exactsuccessorindependentreview beforeonejustifiedrun.",
+  "next_action": "A10 privatepath correction authorpreparing; requires exact independentreview then fresh successorlease/idlequeue before execution. Oldepoch ends explicitly; no renewable beyond45min.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -31,11 +31,13 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T10:27:04.392Z"
+    "observed_at": "2026-10-29T15:11:58.700Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
     "expires_at": "2026-10-29T09:42:06.433Z",
     "takeover_basis": "Confirmed expired and queued/in_progress empty"
-  }
+  },
+  "released_at": "2026-10-29T15:11:58.700Z",
+  "released_by": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094"
 }
