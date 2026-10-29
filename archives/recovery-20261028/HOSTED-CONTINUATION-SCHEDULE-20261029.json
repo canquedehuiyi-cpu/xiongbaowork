@@ -53,7 +53,7 @@
     "configuration": {
       "title": "熊宝云端开发续跑",
       "prompt": "你是人类明确授权的熊宝数字员工云端开发续跑工作者，只有一次有界职责：从GitHub持久检查点接续一个可执行开发步骤，并保存真实结果，以便用户Windows关机后继续推进完整77故事、18原交付包、7门。仅用已有免费额度，不购买、不付费API/provider探测，源码/patch/archive/JSON/deps/tests/artifacts全部仅云端。不能使用Windows、本机CLI/浏览器/登录态、localhost MCP或本机定时器。\n关联Page：https://chatgpt.com/space/page_7812bfd830a08191ab1fb84da54f173f ，page_id=page_7812bfd830a08191ab1fb84da54f173f。使用[@Pages](plugin://pages@openai-curated-remote)工具。唯一controller_automation_id=Automation_a9042438d098819180d8686afa9cd66e。\n开始前先get_page_auto_update和list_page_automations，核对你的host-supplied automation_id确实以task身份挂在此Page的这个controller之下，controller仍为当前且is_enabled=true；任一无法核实、被替换/停用/不可读时停止，不能自建/重挂/启用计划。读取完整Page及native Agent Instructions。禁止创建、修改或管理任何其他automation；controller职责只是状态维护，不能把它当Source独审或运行证明。\n唯一仓库canquedehuiyi-cpu/xiongbaowork，canonical=codex/cloud-repairs-recovery-20261028。先读最新archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json及其五件权威输入，保留所有77/18/7原文与历史。交接基线正式Source28为668dd2238ff112bcff38ad2d0456dccd116874ed、2065files/50175181B，28修复覆盖数不等18原包完成数；旧CPU绿不冒真实PG/生产。\n协作互斥：当前一轮主协调conversation6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072可能正在工作。每次先读canonical的archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json与相关Actions queued/in_progress一次；租约记录缺失/不可读/epoch不明时不写canonical、不创建执行分支、不启动项目，仅可只读分析或在你明确独占的准备分支保存未采用候选。已有owner有效或任何项目资源作业排队/运行时，不抢占，只按已记录run/job接收终态结果或安静退出。只有旧lease明确释放/过期且无项目运行，才能expected-SHA CAS取得唯一owner/epoch；CAS冲突原文重读、不force。UTC lease最多45min，真实checkpoint或15min续期；每个Source采用/执行分支/项目启动前再次核owner+epoch+最新SHA，不持有立即停。结束前保存next_action/当前作业身份、释放自己的lease，不能清别人的lease。该行政租约不是Root生产release，绝不能开AP门。\n实际项目运行只走已经独审并实际验证资源门的免费GitHub Actions工作流：同concurrency source-recovery-bytes/cancel-in-progress=false，单job串行；父聚合512MiB/swap0及所有后代、DATA/copy64MiB，禁止用perprocessRLIMIT或云端父8GiB冒聚合门。当前容器cgroup只读/systemd未运行时，不能直接跑Subject。已具名2GiB类型/测试、原app frontendbuild4GiB例外仅原步骤、有限时且复512；不外扩Docker/apt/native/PG。每包≤8Source、非作者独审、上包审后下包，完整blob/bytes/SHA/mode及readback/CAS；并行只允许不重叠Source准备和只读独审，所有资源作业串行。不能冒作者自审、不能拆包规避。\n优先任务按GitHub next_action推进：先打通已独审专用push分支的正常调度/512+64资源probe，取得真实run/job/log/exit；无需manual_dispatch工具，不改默认分支，不改旧route手动触发来绕门，不猜URL/API/新令牌/网络/身份。接着精确原锁最小Drizzle依赖闭包及正确schema覆盖，learning.ts缺失先核证，生成一致SQL/snapshot/journal，不重复已两次480秒下载超时的同安装链、不假URL或手写metadata冒generator。随后真实PG审批持久化适配器/capture+plan+ledger/ACK未知、重启和断线恢复，逐阶段证据不相互顶替；PG仍pending就推进无依赖Source/CPU部分。最后原工作流/镜像8GET/设备/模型计费/干净客户部署，全部77/18/7保留。\nROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING不变；不造receipt/审计/生产凭据，不降低authority/catalog/FORCE RLS、不保留已失效授权，不部署、不改默认分支、不复活旧Gitee/support/OpenCode/本机自动任务，不create_goal替换原目标，不擅自complete。结果已持久或ACK未知不重放tool/prepare；全字段与真实事务/权限验证缺失时unknown/blocked。\n完成一次有界推进即保存GitHub checkpoint、证据与next_action并退出，不循环等待/健康探测。已有项目run尚未终态时记录原ID，下一次复用，不重复创建。遇同阻塞无外部变化时不重跑同链、不制造行政进展；仍可推进确实独立的准备/审查。只在真实新进展/失败/阻塞或必要人类操作时简洁通知，无变化安静。仅更新此Page你负责的“最新真实状态”部分，改前重读当前controller与block hash、保留其余内容，确认保存/全文回读；你不能改worker/控制器规则与计划。\n\n本任务由人类任务上下文通过原生hosted Automations设置，并关联到上述现有controller；这是已授权续跑职责，不是控制器创建新计划的指令。原Source独审报告7ef4fcac96e6b76a8c84f873854d1cc5d905fd2a保留，A仅SOURCE_APPROVED_ONLY，旧B的P2不能以本计划设置清除。优先依据GitHub最新handoff/next_action核实后续修订与采用，不把旧基线当永久最新。当前人类报告probe40839741519/job123332952391成功仅是检索线索，必须读取真实云端结果再使用。现有主协调仍工作时尊重lease/队列，不能抢占；运行中的自动化不创建或管理任何新自动化。没有原生GitHub写入或受支持资源作业能力则保存具体capability blocker，不通过本机、猜HTTP、凭据或付费工具绕过。仅使用用户现有订阅/已有免费额度，若配额不足或出现付费要求则停止，不购买。设置成功和真正执行成功必须分开报告。",
-      "schedule": "BEGIN:VEVENT\nDTSTART:20261029T091308Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+      "schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
       "default_timezone": "Asia/Singapore",
       "is_enabled": true,
       "runs_as_account_user_id": "user-D2A70Yn5xolUPzldoJNhQurF",
@@ -62,7 +62,7 @@
   },
   "readback": {
     "prompt_exact_match": true,
-    "schedule": "BEGIN:VEVENT\nDTSTART:20261029T091308Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+    "schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
     "default_timezone": "Asia/Singapore",
     "is_enabled": true,
     "next_run_time": null,
@@ -72,16 +72,48 @@
       "latest_result": null,
       "delivery_status": "unknown"
     },
-    "updated_at": "2026-10-29T08:13:43.402822+00:00"
+    "updated_at": "2026-10-29T08:17:27.423219+00:00"
   },
   "run_status": "CONFIGURED_ENABLED_CLOUD_FIRST_REAL_RUN_NOT_YET_VERIFIED",
   "planned_first_occurrence": {
-    "from_saved_dtstart": "2026-10-29T09:13:08Z",
-    "asia_singapore": "2026-10-29 17:13:08 +08:00",
-    "qualification": "Saved schedule DTSTART only; backend next_run_time returned null, not a confirmed next-run booking or real execution."
+    "from_saved_dtstart": "2026-10-29T08:19:26Z",
+    "asia_singapore": "2026-10-29 16:19:26 +08:00",
+    "qualification": "Saved updated schedule only; next_run_time null and real execution unverified."
   },
   "first_run_acceptance": "Future native peek must expose actual last_run/run_id and result before claiming hosted continuation successfully ran. Null history is not proof it never ran. First worker must separately prove required Page/GitHub tools and lease authority.",
   "lease_and_resource_guards": "Full saved prompt preserves45min UTC owner/epochCAS lease; no抢占validowner/queued/in_progress; before writes/run recheckepoch+head; singlejob source-recovery-bytes/cancel-in-progress=false;512MiB aggregate/swap0/DATA64; named2GiB checks and frontend4GiB only; <=8Source+non-author review; per-step checkpoint/next_action/release-own-lease.",
   "cost_and_production": "Only existing account subscription/free allocation. No purchases, paid provider/API probes, default-branch changes, deployment, fake receipts or Rootrelease. Stop on quota/payment/access blockers. Full77/18/7 and ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING preserved.",
-  "writes_in_this_turn": "Only this exclusive administrative delivery branch and requested hosted scheduling/Page state; no project Source/canonical/lease writes."
+  "writes_in_this_turn": "Only this exclusive administrative delivery branch and requested hosted scheduling/Page state; no project Source/canonical/lease writes.",
+  "near_start_revision": {
+    "authorization": "Human requested only existing worker first occurrence at currentUTC+2min, hourly thereafter; no new plan",
+    "standard_update_arguments": {
+      "jawbone_id": "6ae30014bbac8191baa1a3497f062b7d",
+      "schedule": "BEGIN:VEVENT\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+      "dtstart_offset_json": "{\"minutes\":2}",
+      "default_timezone": "Asia/Singapore"
+    },
+    "previous_schedule": "BEGIN:VEVENT\nDTSTART:20261029T091308Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+    "updated_schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+    "updated_at": "2026-10-29T08:17:27.423219+00:00",
+    "prompt_unchanged": true,
+    "title_unchanged": true,
+    "enabled_unchanged": true,
+    "registry_runtime": "cloud",
+    "registry_controller_unchanged": true,
+    "registry_schedule_matches_peek": true,
+    "scheduled_first_utc": "2026-10-29T08:19:26Z",
+    "scheduled_first_asia_singapore": "2026-10-29 16:19:26 +08:00",
+    "next_run_time": null,
+    "last_run_time": null,
+    "run_details": {
+      "last_run": null,
+      "latest_result": null,
+      "delivery_status": "unknown"
+    },
+    "verification_status": "CONFIGURATION_UPDATED_REAL_HOSTED_RUN_NOT_YET_VERIFIED",
+    "first_run_expected": "Verify tools/registry/GitHub, respect main's valid lease, read-only exit; do not repeat probe or start projectjob",
+    "source_canonical_or_project_writes": false,
+    "plans_created": 0,
+    "AgentInstructions_edited": false
+  }
 }
