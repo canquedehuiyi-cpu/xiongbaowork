@@ -505,7 +505,7 @@
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
     "lease_expires_at": "2026-10-29T09:42:06.433Z",
-    "next_action": "Read saved exact header A2 independent report, recheck lease/head/idle and unique ref, then one no-follow/no-body GET of original locked brocli URL only; no Subject/dependency rerun.",
+    "next_action": "Prepare independently reviewed generator A5 constrained single mirror redirect, per-node path binding, original URL/SRI/lock untouched; do not infer other16 runtime routes or SRI/generator success.",
     "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
@@ -621,8 +621,8 @@
     "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
     "preparation": {
       "agent": "/root/persistence_review",
-      "status": "LOCK_URL_HEADER_DIAGNOSTIC_PREPARING_NO_SUBJECT_NO_DISPATCH",
-      "branch": "codex/cloud-lock-redirect-prep-20261029-a1"
+      "status": "GENERATOR_A5_ORIGINAL_LOCK_CONSTRAINED_REDIRECT_PREPARING_NOT_RUN",
+      "basis_run": 40848414444
     }
   },
   "restart_ack_audit": {
@@ -1363,13 +1363,171 @@
   "cloud_lock_header_candidate": {
     "sha": "b2a95ba0b346b70834b30edf07855d668c0c7dc7",
     "tree": "12f683a9c2615ecf5c3cfd36a7d7e54b1ae17a55",
-    "status": "NON_AUTHOR_CONCLUSION_RECEIVED_AWAITING_EXACT_SAVED_REPORT_NOT_DISPATCHED",
+    "status": "ACTUAL_FIRST_HOP_HEADER_SUCCESS_ONLY",
     "execution_branch": "codex/cloud-lock-redirect-run-20261029-a2",
     "prior_unrun": {
       "sha": "b739cbd47eaeb5f73717c80d4816239d25933d6d",
       "review": "803cda027e982a89e42b35d8c10aee2fc7fdfef6",
       "verdict": "CHANGES_REQUIRED_QUERY_LIST_SHADOWED_RESOURCE_KEYS"
     },
-    "scope": "one original fixed URL GET only, no redirect/body/Subject/install/retry"
+    "scope": "one original fixed URL GET only, no redirect/body/Subject/install/retry",
+    "run": 40848414444,
+    "job": 123361532231
+  },
+  "cloud_lock_header_result": {
+    "schema": "xiongbaowork-lock-first-hop-actual-result-v1",
+    "candidate": "b2a95ba0b346b70834b30edf07855d668c0c7dc7",
+    "run": 40848414444,
+    "job": 123361532231,
+    "status": "completed",
+    "conclusion": "success",
+    "review": {
+      "commit": "c9bf77d2617d516ceba3ffe05ef5101576d06b03",
+      "blob": "207be564d29c8e44bf965e9b7883068e4ffec953"
+    },
+    "events": [
+      {
+        "at": "2026-10-29T09:17:05.3421067Z",
+        "event": "HEADER_PROBE_RESOURCE",
+        "value": {
+          "own": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "parent": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "uid": 1001,
+          "descendant": {
+            "cgroup": "0::/xiongbaowork.slice/xb-lock-first-hop.service",
+            "uid": 1001,
+            "data": {
+              "memory.max": "67108864",
+              "memory.swap.max": "0",
+              "memory.oom.group": "1"
+            },
+            "parent": {
+              "memory.max": "536870912",
+              "memory.swap.max": "0",
+              "memory.oom.group": "1"
+            }
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:17:05.6980187Z",
+        "event": "LOCK_FIRST_HOP_HEADER_EVIDENCE",
+        "value": {
+          "archive_body_reads": 0,
+          "archive_body_saved": false,
+          "automatic_redirects": false,
+          "download_success": false,
+          "first_hop_only": true,
+          "followed_location": false,
+          "headers": {
+            "content-length": [
+              "98"
+            ],
+            "content-type": [
+              "text/html; charset=utf-8"
+            ],
+            "date": [
+              "Thu, 29 Oct 2026 09:17:05 GMT"
+            ],
+            "server": [
+              "Tengine"
+            ],
+            "via": [
+              "us37.l1, ens-cache22.us37, l2us5.l2, ens-cache33.l2us5, registry.npmmirror.com-06, ens-cache33.l2us5[216,216,302-0,M], ens-cache2.l2us5[217,0], ens-cache22.us37[217,217,302-0,M], ens-cache20.us37[219,0]"
+            ],
+            "x-cache": [
+              "MISS TCP_MISS dirn:-2:-2"
+            ]
+          },
+          "http_status": 302,
+          "location": {
+            "followed": false,
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "original_chars": 82,
+            "original_sha256": "305d8e623931fc51f4da4278776d94fe7d5af1189e4bf4d9d09fcd1d781c4982",
+            "path": "/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "value": "https://cdn.npmmirror.com/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz"
+          },
+          "location_header_count": 1,
+          "original_lock_sri": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==",
+          "original_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+          "package_installed": false,
+          "pinned": "@drizzle-team/brocli@0.10.2",
+          "project_source_acquired": false,
+          "request_count": 1,
+          "response_kind": "HTTP_ERROR_HEADER_EVIDENCE",
+          "response_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz"
+        }
+      },
+      {
+        "at": "2026-10-29T09:17:05.7442132Z",
+        "event": "HEADER_PROBE_FINAL",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "deadline_remaining": 39.527582585000005,
+          "Subject_source_acquired": false,
+          "Subject_executed": false
+        }
+      },
+      {
+        "at": "2026-10-29T09:17:05.7849224Z",
+        "event": "HEADER_PROBE_ALWAYS_FINAL",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "deadline_remaining": 7.999823165999999,
+          "Subject_executed": false
+        }
+      }
+    ],
+    "raw_log": {
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-A2-123361532231.log",
+      "bytes": 10116,
+      "sha256": "07b8ff7288b8ece58947f3110eb19f600bdb589a05f283f2418df16e1e9c0521"
+    },
+    "acceptance": "ONE_ORIGINAL_URL_NOFOLLOW_HEADER_CAPTURE_ONLY",
+    "archive_body_reads": 0,
+    "archive_installed": false,
+    "source_acquired": false,
+    "generator": "NOT_RUN",
+    "metadata": "NONE",
+    "observed_redirect": {
+      "status": 302,
+      "from": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+      "to": "https://cdn.npmmirror.com/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+      "followed": false
+    },
+    "next": "Prepare independently reviewed generator A5 constrained single mirror redirect, per-node path binding, original URL/SRI/lock untouched; do not infer other16 runtime routes or SRI/generator success.",
+    "gates": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "full_ci": "NOT_RUN",
+      "commercial": "NOT_DELIVERED"
+    }
   }
 }

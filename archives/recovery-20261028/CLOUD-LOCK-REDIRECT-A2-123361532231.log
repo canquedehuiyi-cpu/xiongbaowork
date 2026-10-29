@@ -1,0 +1,99 @@
+﻿2026-10-29T09:17:04.6692755Z Current runner version: '2.338.0'
+2026-10-29T09:17:04.6709054Z ##[group]Runner Image Provisioner
+2026-10-29T09:17:04.6709560Z Hosted Compute Agent
+2026-10-29T09:17:04.6709965Z Version: 20261021.618
+2026-10-29T09:17:04.6710383Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T09:17:04.6711037Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T09:17:04.6711436Z Worker ID: {1bf7b517-d41c-4193-8100-434cf8d0fd12}
+2026-10-29T09:17:04.6711830Z Region: centralus
+2026-10-29T09:17:04.6712178Z Cloud: Azure
+2026-10-29T09:17:04.6712517Z ##[endgroup]
+2026-10-29T09:17:04.6713265Z ##[group]Operating System
+2026-10-29T09:17:04.6713656Z Ubuntu
+2026-10-29T09:17:04.6713953Z 26.04.1
+2026-10-29T09:17:04.6714266Z LTS
+2026-10-29T09:17:04.6714600Z ##[endgroup]
+2026-10-29T09:17:04.6714928Z ##[group]Runner Image
+2026-10-29T09:17:04.6715299Z Image: ubuntu-26.04
+2026-10-29T09:17:04.6715623Z Version: 20261025.179.1
+2026-10-29T09:17:04.6716393Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T09:17:04.6717204Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T09:17:04.6717772Z ##[endgroup]
+2026-10-29T09:17:04.6718376Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T09:17:04.6719533Z Contents: read
+2026-10-29T09:17:04.6719858Z Metadata: read
+2026-10-29T09:17:04.6720212Z ##[endgroup]
+2026-10-29T09:17:04.6721711Z Secret source: Actions
+2026-10-29T09:17:04.6722333Z Cache mode: write
+2026-10-29T09:17:04.6722733Z Prepare workflow directory
+2026-10-29T09:17:04.6922611Z Prepare all required actions
+2026-10-29T09:17:04.7015891Z Complete job name: first-hop-header
+2026-10-29T09:17:04.7778017Z ##[group]Run set -euo pipefail
+2026-10-29T09:17:04.7778807Z [36;1mset -euo pipefail[0m
+2026-10-29T09:17:04.7779570Z [36;1mtest "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"[0m
+2026-10-29T09:17:04.7780793Z [36;1mtest "$GITHUB_REF" = "refs/heads/codex/cloud-lock-redirect-run-20261029-a2"[0m
+2026-10-29T09:17:04.7781709Z [36;1mtest "$GITHUB_EVENT_NAME" = "push"[0m
+2026-10-29T09:17:04.7782461Z [36;1m/usr/bin/python3 -I -B - "$GITHUB_SHA" "$RUNNER_TEMP" <<'PY'[0m
+2026-10-29T09:17:04.7783240Z [36;1mimport hashlib,os,sys,urllib.request[0m
+2026-10-29T09:17:04.7783847Z [36;1mfrom pathlib import Path[0m
+2026-10-29T09:17:04.7784550Z [36;1mtarget=sys.argv[1];base=Path(sys.argv[2]).resolve()[0m
+2026-10-29T09:17:04.7785384Z [36;1massert len(target)==40 and all(c in "0123456789abcdef" for c in target)[0m
+2026-10-29T09:17:04.7786156Z [36;1mdest=base/"lock-first-hop-controller.py"[0m
+2026-10-29T09:17:04.7787602Z [36;1murl="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/"+target+"/archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py"[0m
+2026-10-29T09:17:04.7788864Z [36;1mdigest=hashlib.sha256();total=0[0m
+2026-10-29T09:17:04.7789733Z [36;1mwith urllib.request.urlopen(url,timeout=30) as incoming,dest.open("xb") as out:[0m
+2026-10-29T09:17:04.7790750Z [36;1m    while True:[0m
+2026-10-29T09:17:04.7791282Z [36;1m        block=incoming.read(65536)[0m
+2026-10-29T09:17:04.7791856Z [36;1m        if not block:break[0m
+2026-10-29T09:17:04.7792535Z [36;1m        total+=len(block);assert total<=14655[0m
+2026-10-29T09:17:04.7793197Z [36;1m        digest.update(block);out.write(block)[0m
+2026-10-29T09:17:04.7793905Z [36;1m    out.flush();os.fsync(out.fileno())[0m
+2026-10-29T09:17:04.7794922Z [36;1massert total==14655 and digest.hexdigest()=="4a4d96241be77b1603fa9e9e270310a4cd44add8ad4609f473441fc6a1d3b952"[0m
+2026-10-29T09:17:04.7795933Z [36;1mos.chmod(dest,0o600)[0m
+2026-10-29T09:17:04.7796710Z [36;1mprint("ADMIN_HEADER_CONTROLLER_IDENTITY",total,digest.hexdigest(),flush=True)[0m
+2026-10-29T09:17:04.7797535Z [36;1mPY[0m
+2026-10-29T09:17:04.7798268Z [36;1msudo /usr/bin/python3 -I -B "$RUNNER_TEMP/lock-first-hop-controller.py" "$(id -u)" "$(id -g)"[0m
+2026-10-29T09:17:04.8155870Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T09:17:04.8156520Z ##[endgroup]
+2026-10-29T09:17:05.0199617Z ADMIN_HEADER_CONTROLLER_IDENTITY 14655 4a4d96241be77b1603fa9e9e270310a4cd44add8ad4609f473441fc6a1d3b952
+2026-10-29T09:17:05.2754352Z Running as unit: xb-lock-first-hop.service
+2026-10-29T09:17:05.3421067Z HEADER_PROBE_RESOURCE {"own": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "parent": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "uid": 1001, "descendant": {"cgroup": "0::/xiongbaowork.slice/xb-lock-first-hop.service", "uid": 1001, "data": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "parent": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}}}
+2026-10-29T09:17:05.6980187Z LOCK_FIRST_HOP_HEADER_EVIDENCE {"archive_body_reads":0,"archive_body_saved":false,"automatic_redirects":false,"download_success":false,"first_hop_only":true,"followed_location":false,"headers":{"content-length":["98"],"content-type":["text/html; charset=utf-8"],"date":["Thu, 29 Oct 2026 09:17:05 GMT"],"server":["Tengine"],"via":["us37.l1, ens-cache22.us37, l2us5.l2, ens-cache33.l2us5, registry.npmmirror.com-06, ens-cache33.l2us5[216,216,302-0,M], ens-cache2.l2us5[217,0], ens-cache22.us37[217,217,302-0,M], ens-cache20.us37[219,0]"],"x-cache":["MISS TCP_MISS dirn:-2:-2"]},"http_status":302,"location":{"followed":false,"fragment_present":false,"hostname":"cdn.npmmirror.com","original_chars":82,"original_sha256":"305d8e623931fc51f4da4278776d94fe7d5af1189e4bf4d9d09fcd1d781c4982","path":"/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz","port":null,"query_present":false,"scheme":"https","value":"https://cdn.npmmirror.com/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz"},"location_header_count":1,"original_lock_sri":"sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==","original_url":"https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz","package_installed":false,"pinned":"@drizzle-team/brocli@0.10.2","project_source_acquired":false,"request_count":1,"response_kind":"HTTP_ERROR_HEADER_EVIDENCE","response_url":"https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz"}
+2026-10-29T09:17:05.7080797Z           Finished with result: success
+2026-10-29T09:17:05.7081832Z Main processes terminated with: code=exited, status=0/SUCCESS
+2026-10-29T09:17:05.7082685Z                Service runtime: 428ms
+2026-10-29T09:17:05.7083453Z              CPU time consumed: 75ms
+2026-10-29T09:17:05.7084121Z                    Memory peak: 15.8M (swap: 0B)
+2026-10-29T09:17:05.7442132Z HEADER_PROBE_FINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "deadline_remaining": 39.527582585000005, "Subject_source_acquired": false, "Subject_executed": false}
+2026-10-29T09:17:05.7571068Z ##[group]Run set -euo pipefail
+2026-10-29T09:17:05.7571458Z [36;1mset -euo pipefail[0m
+2026-10-29T09:17:05.7571787Z [36;1msudo /usr/bin/python3 -I -B - <<'PY'[0m
+2026-10-29T09:17:05.7572147Z [36;1mimport json,subprocess,time[0m
+2026-10-29T09:17:05.7572486Z [36;1mfrom pathlib import Path[0m
+2026-10-29T09:17:05.7572849Z [36;1mparent=Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T09:17:05.7573261Z [36;1mowned=parent/"xb-lock-first-hop.service"[0m
+2026-10-29T09:17:05.7573629Z [36;1mdeadline=time.monotonic()+8[0m
+2026-10-29T09:17:05.7573959Z [36;1mif owned.exists():[0m
+2026-10-29T09:17:05.7574468Z [36;1m    populated=dict(line.split() for line in (owned/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T09:17:05.7575007Z [36;1m    if populated!="0":[0m
+2026-10-29T09:17:05.7575423Z [36;1m        if (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T09:17:05.7575930Z [36;1m        remaining=deadline-time.monotonic()-2[0m
+2026-10-29T09:17:05.7576297Z [36;1m        if remaining>0:[0m
+2026-10-29T09:17:05.7576999Z [36;1m            try:subprocess.run(["systemctl","stop","xb-lock-first-hop.service"],timeout=min(2,remaining),check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)[0m
+2026-10-29T09:17:05.7577871Z [36;1m            except subprocess.TimeoutExpired:[0m
+2026-10-29T09:17:05.7578408Z [36;1m                if owned.exists() and (owned/"cgroup.kill").exists():(owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T09:17:05.7579005Z [36;1massert parent.exists(),"containment parent was not established"[0m
+2026-10-29T09:17:05.7579597Z [36;1mfor name,value in [("memory.max","536870912"),("memory.swap.max","0"),("memory.oom.group","1")]:[0m
+2026-10-29T09:17:05.7580116Z [36;1m    (parent/name).write_text(value)[0m
+2026-10-29T09:17:05.7580809Z [36;1mlimits={name:(parent/name).read_text().strip() for name in ("memory.max","memory.swap.max","memory.oom.group")}[0m
+2026-10-29T09:17:05.7581510Z [36;1massert limits=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T09:17:05.7582209Z [36;1mpopulated=dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())["populated"][0m
+2026-10-29T09:17:05.7582772Z [36;1massert populated=="0"[0m
+2026-10-29T09:17:05.7583100Z [36;1mremaining=deadline-time.monotonic()[0m
+2026-10-29T09:17:05.7583824Z [36;1mprint("HEADER_PROBE_ALWAYS_FINAL "+json.dumps({"limits":limits,"populated":populated,"deadline_remaining":remaining,"Subject_executed":False}),flush=True)[0m
+2026-10-29T09:17:05.7584527Z [36;1massert remaining>=0[0m
+2026-10-29T09:17:05.7584812Z [36;1mPY[0m
+2026-10-29T09:17:05.7608887Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T09:17:05.7609276Z ##[endgroup]
+2026-10-29T09:17:05.7849224Z HEADER_PROBE_ALWAYS_FINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "deadline_remaining": 7.999823165999999, "Subject_executed": false}
+2026-10-29T09:17:05.7938065Z Cleaning up orphan processes
