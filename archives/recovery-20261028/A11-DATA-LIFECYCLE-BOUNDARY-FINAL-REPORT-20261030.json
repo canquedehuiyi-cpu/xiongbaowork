@@ -1,0 +1,373 @@
+{
+  "schema": "xiongbaowork-a11-resource-lifecycle-final-boundary-report-v1",
+  "date": "2026-10-30",
+  "status": "RAW_BYTES_VERIFIED_RESOURCE_LIFECYCLE_NOT_ACCEPTED_STOP_SAME_PROTOTYPE",
+  "author": "/root/a11_data_author",
+  "branch": "codex/a11-data-verify-prep-20261030",
+  "administrative_parent": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+  "scope": "One administrative report only; original three prototype files unchanged. No Source/canonical/lease/job/Page/automation changes.",
+  "evidence_layers": {
+    "native": {
+      "run": 40919415179,
+      "job": 123608267218,
+      "head_sha": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+      "status": "completed",
+      "conclusion": "failure",
+      "log_characters": 21992,
+      "log_sha256_utf8": "4ef372d4554abe55b14686cd7a82de458b607555b6fd9e8e71919bb466b7e2ed",
+      "complete_connector_logs_read": true
+    },
+    "root_control_terminal": {
+      "delegation_verified": true,
+      "error": null,
+      "elapsed": 0.07476083999999972,
+      "before": {
+        "root": {
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service",
+          "exists": true,
+          "dev": "30",
+          "ino": "6854",
+          "uid": 0,
+          "mode": "0o755",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "1",
+          "procs": []
+        },
+        "target": {
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service/target",
+          "exists": true,
+          "dev": "30",
+          "ino": "6955",
+          "uid": 0,
+          "mode": "0o755",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "1",
+          "procs": []
+        },
+        "admin": {
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service/target/admin",
+          "exists": true,
+          "dev": "30",
+          "ino": "6994",
+          "uid": 0,
+          "mode": "0o755",
+          "limits": {
+            "memory.max": "16777216",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "1",
+          "procs": [
+            "2112"
+          ]
+        }
+      },
+      "after": {
+        "root": {
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service",
+          "exists": true,
+          "dev": "30",
+          "ino": "6854",
+          "uid": 0,
+          "mode": "0o755",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "1",
+          "procs": []
+        },
+        "target": {
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service/target",
+          "exists": true,
+          "dev": "30",
+          "ino": "6955",
+          "uid": 0,
+          "mode": "0o755",
+          "limits": {
+            "memory.max": "67108864",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "1",
+          "procs": []
+        },
+        "admin": {
+          "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service/target/admin",
+          "exists": true,
+          "dev": "30",
+          "ino": "6994",
+          "uid": 0,
+          "mode": "0o755",
+          "limits": {
+            "memory.max": "16777216",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "1",
+          "procs": [
+            "2112"
+          ]
+        }
+      },
+      "boundary": "These actual root64/target64/admin16 gates are while root writer is still alive/populated. They do not prove final empty-group resource persistence."
+    },
+    "independent_final_observation": {
+      "terminal_fd_evidence": {
+        "bytes": 9018,
+        "dev": "29",
+        "dir_mode": "0o755",
+        "dir_uid": 0,
+        "fd_named_stable": true,
+        "file_mode": "0o600",
+        "file_uid": 0,
+        "ino": "1965",
+        "nlink": 1
+      },
+      "trusted_fixed_path": true,
+      "root_path_source": "TRUSTED_ROOT_TERMINAL_PRIOR_FIXED_PATH_ONLY",
+      "current_api_pointer_empty": true,
+      "unit": {
+        "exit": 0,
+        "properties": {
+          "ActiveState": "active",
+          "ControlGroup": "",
+          "ControlPID": "0",
+          "Delegate": "yes",
+          "ExecMainCode": "1",
+          "ExecMainStatus": "0",
+          "Job": "",
+          "LoadState": "loaded",
+          "MainPID": "0",
+          "MemoryMax": "67108864",
+          "MemorySwapMax": "0",
+          "RemainAfterExit": "yes",
+          "SubState": "exited"
+        }
+      },
+      "physical_root": {
+        "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service",
+        "exists": false,
+        "limits": {},
+        "stat_error": "FileNotFoundError"
+      },
+      "physical_target": {
+        "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service/target",
+        "exists": false,
+        "limits": {},
+        "stat_error": "FileNotFoundError"
+      },
+      "physical_admin": {
+        "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40919415179-1.service/target/admin",
+        "exists": false,
+        "limits": {},
+        "stat_error": "FileNotFoundError"
+      },
+      "legacy_project": {
+        "path": "/sys/fs/cgroup/xiongbaowork.slice",
+        "exists": true,
+        "dev": "30",
+        "ino": "6730",
+        "uid": 0,
+        "mode": "0o755",
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "0",
+          "memory.swap.max": "0"
+        },
+        "populated": "0",
+        "procs": []
+      },
+      "legacy_shared": {
+        "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+        "exists": true,
+        "dev": "30",
+        "ino": "6792",
+        "uid": 0,
+        "mode": "0o755",
+        "limits": {
+          "memory.max": "67108864",
+          "memory.oom.group": "0",
+          "memory.swap.max": "0"
+        },
+        "populated": "0",
+        "procs": []
+      }
+    },
+    "actual_verdict": {
+      "current_api_pointer_empty": true,
+      "fixed_path_probe_is_not_current_api_binding": true,
+      "legacy_checks": {
+        "project_limits": false,
+        "project_pop0": true,
+        "shared_limits": false,
+        "shared_pop0": true
+      },
+      "legacy_gate": "NOT_RESTORED_OR_UNKNOWN",
+      "overall": "FAILED_OR_UNKNOWN",
+      "prior_raw_job": 123584189279,
+      "prior_raw_run": 40912579798,
+      "prototype_checks": {
+        "admin_cap16": false,
+        "admin_pop0": false,
+        "bootstrap_removed": true,
+        "current_api_controlgroup_identity": false,
+        "delegate": true,
+        "no_service_pid_or_job": true,
+        "noop_removed": true,
+        "remain_after_exit": true,
+        "root_cap64": false,
+        "same_original_budget": true,
+        "same_root_identity": false,
+        "same_target_identity": false,
+        "service_active_exited": true,
+        "service_success": true,
+        "target_cap64": false,
+        "target_pop0": false,
+        "terminal": true,
+        "trusted_fixed_path_record": true,
+        "whole_service_root_pop0": false
+      },
+      "prototype_is_project_migration_permission": false,
+      "prototype_status": "FAILED_OR_UNKNOWN",
+      "raw_validation_repeated": false,
+      "restore_proven": false,
+      "root_path_source": "TRUSTED_ROOT_TERMINAL_PRIOR_FIXED_PATH_ONLY",
+      "source_adopted": false
+    }
+  },
+  "proved": [
+    {
+      "item": "A11 four original raw exports",
+      "evidence": "Prior real run40912579798/job123584189279 verified strict compressed/raw hashes+lengths, gzipCRC/ISIZE/single-member/trailing rejection, bounded duplicate-free/finite/depth/node-limited snapshot+journal JSON; SQL/log bytes only.",
+      "boundary": "No Source/migration/PG adoption; no raw codec was repeated in a2/a3/a4."
+    },
+    {
+      "item": "a2 same-group field mismatch",
+      "evidence": "run40914666271/job123591585627: same shared dev30/ino6792 active/no-rebuild evidence; oom.group1 in admin then0 externally; project512/0/1/pop0; actor unknown."
+    },
+    {
+      "item": "a3 API pointer evidence gap",
+      "evidence": "run40917993155/job123603242608 had current ControlGroup empty; witness root/target/admin null because it did not probe old path.",
+      "boundary": "Do NOT retrospectively call that physical disappearance."
+    },
+    {
+      "item": "a4 first direct physical absence",
+      "evidence": "run40919415179/job123608267218: root-owned mode0600/nlink1/stableFD+named terminal validated, exact prior root path+before ControlGroup verified, direct stat of root/target/admin returned FileNotFoundError.",
+      "boundary": "This establishes missing paths at that observation, not the deleting actor or path existence at every prior/later instant."
+    },
+    {
+      "item": "Logical service state survives",
+      "evidence": "a4 current unit active/exited, Delegateyes/RemainAfterExityes/MainPID0/ControlPID0/Jobempty/ExecMainStatus0 while currentControlGroupempty.",
+      "boundary": "Logical active(exited) does not establish readable retained cgroup limits."
+    }
+  ],
+  "not_proved": [
+    "Final stable root/target/admin64/0/1 or16/0/1 populated0; missing paths provide no limits proof.",
+    "Restoration of original project/shared oom.group1; a4 both physically readable but actual0 despite512/64 andswap0/pop0.",
+    "Exact runner systemd binary/source revision, syscall/pruning trace or actor that removed paths/wrote oom.group.",
+    "A supported configuration retaining an empty delegated cgroup tree after all controlled processes exit.",
+    "Any universal impossibility across other documented lifecycle/resource-owner models.",
+    "Project controller migration, route resource approval, Source adoption, full CI, PG17 persistence or77/18/7 delivery."
+  ],
+  "bounded_official_contract_audit": {
+    "sources": [
+      {
+        "url": "https://github.com/systemd/systemd/blob/v255/src/core/service.c",
+        "ref": "v255",
+        "blob": "b9eb40c5559c1c17928bb50eb17207b8ddec1d63",
+        "sha256": "63f6d0b5aa92b7fa4338616aaa5203c73dd0578e10365f8dbbf3bd95aa58705e",
+        "relevant_lines": "1263-1266",
+        "result": "Examined SERVICE_EXITED path requests unit_prune_cgroup unless manager reloading."
+      },
+      {
+        "url": "https://github.com/systemd/systemd/blob/v255/src/core/cgroup.c",
+        "ref": "v255",
+        "blob": "61ac4df1a65ce421cdc919a0f6805f7eac036dc6",
+        "sha256": "ac2af6fb199b8e831c93654e4c2ba2c5d39c788508ad3eaff2c2230ccd7cc344",
+        "relevant_lines": "3100-3163",
+        "result": "Examined prune path attempts trim and releases mapping for recursively empty cgroup; no Delegate/RemainAfterExit exception was found in that path."
+      },
+      {
+        "url": "https://systemd.io/CGROUP_DELEGATION/",
+        "result": "Service/scope delegation owns descendants, not managed-unit attributes; delegation on slice is unsupported."
+      },
+      {
+        "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
+        "result": "RemainAfterExit defines logical active state after process exit, not an established empty-cgroup retention guarantee."
+      }
+    ],
+    "conclusion": "Supporting source evidence is consistent with empty-tree cleanup and missing API mapping, but is NOT proof of actual runner actor/version. No supported empty-tree-retention switch was established by these bounded reads. Do not guess another property or repeat this same prototype."
+  },
+  "next_resource_lifecycle_contract_required": {
+    "deliverable": "Before another resource job, Root assigns a separate exact architecture-contract review, retaining current failed histories and resource gates.",
+    "mandatory_sections": [
+      {
+        "name": "Ownership and supported interfaces",
+        "requirement": "Name the real manager/delegation boundary and documented owner of every cgroup attribute. No manual child under a nondelegated managed slice; no unsupported property. Bind current runtime capability/version to any relied-on lifecycle contract."
+      },
+      {
+        "name": "Resource accounting for whole lifecycle",
+        "requirement": "Prove aggregate512/swap0 andDATA64 including controller, management children, finalizer and all descendants from admission through final exit; no per-process substitute or outside escape. Named exceptions remain unchanged and are not used here."
+      },
+      {
+        "name": "Last writer and terminal readback",
+        "requirement": "Specify where the last restoration writer runs within the aggregate, how it exits without invalidating/removing the resource-bearing evidence node, and how an independent read-only witness sees actual caps/swap/oom1 and whole-parentpop0 after all processes exit. If the supported manager cannot retain that node, propose a different fully reviewed evidence/lifecycle model rather than treating absence as caps1."
+      },
+      {
+        "name": "One immutable clock and failure states",
+        "requirement": "All control/stop/reap/restore/record actions use original monotonic remainder. Always gains no write/grace/cleanup budget. Missing/late/partial witness is FAILED_OR_UNKNOWN and cannot silently pass."
+      },
+      {
+        "name": "Identity and cleanup",
+        "requirement": "Exact owned paths, stable FD/named/devino, root privilege boundaries, irreversible child drop, actual noPID/noJob and complete owned-group cleanup evidence. No live holder merely to preserve a cgroup when populated0 is required."
+      },
+      {
+        "name": "Acceptance separation",
+        "requirement": "Old managed-slice gates and any new prototype gates remain separately visible. New internal success cannot override old restoration failure or authorize project migration. Non-author exact≤8 administrative package review before any single leaseowner idle-queue dispatch."
+      }
+    ],
+    "concrete_next_action": "Root persists this phase checkpoint and releases/rotates lease under original protocol; stop a3/a4 resource probes. Prepare and non-author review the architecture contract above before another resource-lifecycle implementation. Independently unblocked Source/static review may continue in separate mutually exclusive packages; raw A11 artifacts remain byte-verified only, migration semantics/Source adoption/PG remain pending.",
+    "external_dependency_status": "No additional human permission is requested. The unresolved dependency is an actually documented and reviewable resource-owner/terminal-witness lifecycle, not a claim that the whole project must stop."
+  },
+  "forbidden_workarounds": [
+    "holder withpopulated1 presented as empty",
+    "missing/absent cgroup presented as observed limits1",
+    "unbounded/outside-aggregate finalizer or restoring writer",
+    "always writes/new grace or stale receipt replay",
+    "new environment/account/model/token/paid provider",
+    "unchanged prototype retry or generator rerun"
+  ],
+  "preserved": {
+    "scope": "77/18/7",
+    "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "Source_files": 2065,
+    "Source_bytes": 50175181,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "worker": "paused/UNVERIFIED"
+  },
+  "actions_this_round": {
+    "logs_read": 1,
+    "native_run_metadata_read": 1,
+    "native_jobs_read": 1,
+    "resource_jobs_started": 0,
+    "prototype_code_changes": 0,
+    "source_changes": 0,
+    "canonical_changes": 0,
+    "lease_changes": 0
+  }
+}
