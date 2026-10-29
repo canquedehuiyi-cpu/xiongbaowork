@@ -102,6 +102,7 @@ export const approvalRequests = pgTable(
       .default("pending"),
     decision: text("decision").$type<ApprovalDecision>(),
     result: jsonb("result").$type<{ content: string; error?: string }>(),
+    resultDisposition: text("result_disposition").$type<"continue" | "final">(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -111,6 +112,14 @@ export const approvalRequests = pgTable(
   },
   (table) => [
     unique("approval_requests_id_tenant_owner_unique").on(table.id, table.tenantId, table.ownerUserId),
+    unique("approval_requests_fresh_seed_identity_uq").on(
+      table.id,
+      table.tenantId,
+      table.ownerUserId,
+      table.runId,
+      table.toolCallId,
+      table.actionDigest,
+    ),
     uniqueIndex("approval_requests_action_idx").on(
       table.ownerUserId,
       table.runId,
@@ -124,6 +133,14 @@ export const approvalRequests = pgTable(
     check(
       "approval_decision_check",
       sql`${table.decision} IN ('allow_once', 'allow_always', 'deny', 'handled')`,
+    ),
+    check(
+      "approval_result_disposition_check",
+      sql`${table.resultDisposition} IN ('continue', 'final')`,
+    ),
+    check(
+      "approval_result_disposition_result_pair_check",
+      sql`${table.resultDisposition} IS NULL OR ${table.result} IS NOT NULL`,
     ),
   ],
 );
@@ -274,5 +291,61 @@ export const approvalContinuationSteps = pgTable(
       sql`${table.state} in ('reserved','running','unknown','completed')`,
     ),
     check("approval_continuation_steps_fence_check", sql`${table.fence} >= 0`),
+  ],
+).enableRLS();
+
+/**
+ * Closed fresh-producer foundation. One immutable seed per approval, bound to
+ * the full persisted action identity. No producer or owner-scoped writer is
+ * wired here. Migration 0081 forces RLS, installs no policies, and revokes the
+ * application role's inherited default privileges.
+ */
+export const approvalFreshSeeds = pgTable(
+  "approval_fresh_seeds",
+  {
+    approvalId: text("approval_id").notNull(),
+    tenantId: tenantId(),
+    ownerUserId: text("owner_user_id").notNull(),
+    runId: text("run_id").notNull(),
+    toolCallId: text("tool_call_id").notNull(),
+    actionDigest: text("action_digest").notNull(),
+    templateDigest: text("template_digest").notNull(),
+    producerProofId: text("producer_proof_id").notNull(),
+    preparedAt: timestamp("prepared_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "approval_fresh_seeds_pkey",
+      columns: [table.approvalId],
+    }),
+    foreignKey({
+      name: "approval_fresh_seeds_parent_fk",
+      columns: [
+        table.approvalId,
+        table.tenantId,
+        table.ownerUserId,
+        table.runId,
+        table.toolCallId,
+        table.actionDigest,
+      ],
+      foreignColumns: [
+        approvalRequests.id,
+        approvalRequests.tenantId,
+        approvalRequests.ownerUserId,
+        approvalRequests.runId,
+        approvalRequests.toolCallId,
+        approvalRequests.actionDigest,
+      ],
+    }).onDelete("no action").onUpdate("no action"),
+    check(
+      "approval_fresh_seeds_template_sha_check",
+      sql`${table.templateDigest} ~ '^[a-f0-9]{64}$'`,
+    ),
+    check(
+      "approval_fresh_seeds_nonblank_check",
+      sql`length(btrim(${table.approvalId})) > 0 AND length(btrim(${table.tenantId})) > 0 AND length(btrim(${table.ownerUserId})) > 0 AND length(btrim(${table.runId})) > 0 AND length(btrim(${table.toolCallId})) > 0 AND length(btrim(${table.actionDigest})) > 0 AND length(btrim(${table.producerProofId})) > 0`,
+    ),
   ],
 ).enableRLS();
