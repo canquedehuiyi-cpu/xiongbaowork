@@ -1,0 +1,31 @@
+{
+  "schema": "xiongbaowork-mastra-existing-root-sdk-validation/1",
+  "source_commit": "67bd70f7d18a602c2eab3a77f95bc0d0ddf09be1",
+  "source_files": 2060,
+  "source_bytes": 50032071,
+  "source_changes": 0,
+  "root_lock": {
+    "bytes": 453991,
+    "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"
+  },
+  "sdk_versions": {
+    "@mastra/core": "1.64.0",
+    "@ai-sdk/openai": "3.0.99",
+    "@ai-sdk/anthropic": "3.0.111"
+  },
+  "installation": "Exact original root frozen graph, --ignore-scripts --backend copyfile --linker hoisted in exclusive own cloud job/private cache; six original package/lock inputs must remain unchanged",
+  "purpose": "Determine whether missing Mastra imports are workspace isolation rather than absent frozen SDK versions. This does not adopt a production dependency fix or resolve the standalone wildcard CLI.",
+  "test_scope": "Only original Mastra test file; real SDK requests are redirected by its existing tests to owned loopback fake provider. No real key/provider calls, no database.",
+  "official_cli_metadata": "Single bounded public registry metadata read only; no CLI package installed",
+  "resources": {
+    "aggregate": 536870912,
+    "swap": 0,
+    "data": 67108864,
+    "install": 536870912,
+    "uses2GiB_or4GiB": false
+  },
+  "windows_source_writes": 0,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
