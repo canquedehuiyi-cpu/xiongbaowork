@@ -1,8 +1,8 @@
 {
   "schema": "xiongbaowork-explicit-test-file-evidence-ledger/1",
-  "source_content_commit": "06d3c130f66d68df5d439c461c0bd3e6bdff5807",
-  "source_files": 2064,
-  "source_bytes": 50166913,
+  "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+  "source_files": 2065,
+  "source_bytes": 50175181,
   "test_file_rule": "Current expected manifest paths ending .test or .spec with TS JS TSX JSX MJS CJS variants; this is file inventory, not original77-story acceptance count.",
   "test_file_count": 611,
   "status_counts": {
@@ -5419,24 +5419,24 @@
     },
     {
       "path": "openbot/server/tests/approval-recovery-port.test.ts",
-      "bytes": 13015,
-      "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
+      "bytes": 19059,
+      "sha256": "1690b01daf482fce6a338bccc470f5e377c8f2f54ff24ce9c12928ac02380ffa",
       "mode": "0o644",
       "status": "PASS_SCOPED_BATCH_ONLY",
       "latest_evidence": {
-        "run": 40821171620,
-        "job": 123273736309,
-        "kind": "explicit_remaining_offline178_R2",
+        "run": 40830714143,
+        "job": 123304042601,
+        "kind": "approval_local_composition_focused_R2",
         "exit_code": 0,
         "counts": {
-          "pass": 25,
+          "pass": 32,
           "fail": 0,
           "skip": 0,
-          "expects": 55
+          "expects": 98
         },
         "valid_pass": true,
         "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS",
-        "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31"
+        "source_candidate": "d139f73ad599c344184d3023a80beeeafa2e6297"
       },
       "prior_evidence": [
         {
@@ -5452,6 +5452,21 @@
           },
           "valid_pass": true,
           "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS"
+        },
+        {
+          "run": 40821171620,
+          "job": 123273736309,
+          "kind": "explicit_remaining_offline178_R2",
+          "exit_code": 0,
+          "counts": {
+            "pass": 25,
+            "fail": 0,
+            "skip": 0,
+            "expects": 55
+          },
+          "valid_pass": true,
+          "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS",
+          "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31"
         }
       ],
       "literal_inventory_flags": []

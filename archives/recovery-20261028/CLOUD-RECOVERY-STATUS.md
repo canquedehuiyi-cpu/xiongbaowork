@@ -1,3 +1,17 @@
+# Source28 checkpoint — 2026-10-29
+
+Canonical Source adoption: `668dd2238ff112bcff38ad2d0456dccd116874ed`; exact validated candidate `d139f73ad599c344184d3023a80beeeafa2e6297`.
+2065 Source files / 50,175,181 bytes,28 approved repair overlays. Original77 stories /18 delivery packages /7 final gate requirements and statuses retained.
+
+- Added internal fail-closed local recovery composition and7 focused boundary cases; production index unchanged, persistent writer/release remain unwired.
+- Cloud run40830714143/job123304042601: source DATA64MiB verified0mismatch; frozen installation512MiB/private-cache/copyfile/hooks-disabled;32 focused tests0fail0skip98expects; originalBiome2.5.10 lint0; full original server tsconfig0 under the previously authorized2GiB compile-only exception, actual512MiB/swap0 restore.
+- Source27 historical178-file2396/0 result retained; no new whole178-file/fullCI/formal-image/PG proof is inferred.
+- R1 guard rejection preserved: Root broad file-count replacement changed an expected lock-hash substring; exact check rejected before Bun install. R2 corrected only workflow metadata, both Source blobs unchanged.
+- PG_PENDING / ROOT_RELEASE=null / ready=false / AP_DISABLED / NOT_SERVICE_WIRED / migrationNOT_WIRED / NOT_DELIVERED retained. No paid provider call or deployment.
+- User paused OpenCode; its configuration/records retained and queued work cancelled. Codex plus WorkBuddy/Qoder continue via bounded owned tasks; a queued task is not a running model.
+
+Previous checkpoints (historical text retained):
+
 ## 三项优先修复完成云端核验，2026-10-29｜完整77/18/7仍未最终交付
 
 当前正式Source采用06d3c130f66d68df5d439c461c0bd3e6bdff5807：V57加27项独审Source修复覆盖，2064文件/50166913B，原77故事/18交付包/7门要求与状态保留。27项修复覆盖不是18个原交付包的替代计数。

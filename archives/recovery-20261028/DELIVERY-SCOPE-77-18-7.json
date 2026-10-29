@@ -3,8 +3,8 @@
   "stories": 77,
   "packages": 18,
   "gates": 7,
-  "source_snapshot": "06d3c130f66d68df5d439c461c0bd3e6bdff5807",
-  "source_status": "V57_RESTORED_PLUS_27_INDEPENDENTLY_APPROVED_SOURCE_REPAIR_OVERLAYS",
+  "source_snapshot": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+  "source_status": "V57_RESTORED_PLUS_28_INDEPENDENTLY_APPROVED_SOURCE_REPAIR_OVERLAYS",
   "story_requirements": [
     {
       "id": "A1",
@@ -758,8 +758,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "68f688116f4cc38ac572afd821a28b7be5b6d23c",
-    "head": "ece742d663044ec71d357ebedbf50dd719babb31",
+    "git_tree": "0faf16c15fee8e95285f57700a4bceb5dc23cb1a",
+    "head": "d139f73ad599c344184d3023a80beeeafa2e6297",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -788,7 +788,8 @@
       "START-HEALTH-ORDER-ASSERTION-20261029",
       "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
       "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
-      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029"
+      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029",
+      "APPROVAL-LOCAL-COMPOSITION-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -796,8 +797,8 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50166913,
-    "verified_source_files": 2064,
+    "verified_source_bytes": 50175181,
+    "verified_source_files": 2065,
     "windows_source_files_written": 0
   },
   "paid_provider_requests": 0,
@@ -8250,9 +8251,9 @@
   "latest_gate_evidence": {
     "g1": "Node24.22.1/Vite7.3.6 frontend production bundle passedrun40801046219 within directly authorized4GiB/swap0/300s, completed28.27s, parent restored512MiB before64MiB inventory.465artifacts/18896525B with individual SHA256 retained asDATA manifest; Chinese product HTML/config/entry and no baked dev-port observations passed. Files existed in transient cloud runner; no bundleZIP uploaded. This is not final same-SHA formal image8GET evidence; native server/image endpoints NOT_RUN.",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered. Latest additional frontend Node Vite production build passed40801046219 at4GiB and restored512MiB. Original Bun build command remains unpassed; tracked generated route-tree changed only in transient build and not adopted. No full test/tsc/strictCI rerun is claimed from this build.",
+    "g3": "Source27 adopted06d3c130, complete2064files/50166913B verified0mismatch at R2candidateece742d6/run40821171620;178explicit offline files2396pass0fail0skip6673expects. Includes originalapproval17/0+policy30/0+saved-recovery25/0+newfresh11/0 (83relatedcases total). Exact originalBiome2.5.10 lint0 and originalserver tsconfig0run40821232176 under already-authorized2GiB/swap0/300s then actual512MiB restore. R1 80/0+lint1/P1 and old2371/14 failures retained, not rewritten. Source25loader2cases plus26lifecycle+19readiness=47/0; Source26 own Mastra frozeninstall, original34/0 and actualCLI --version pass; rootlock/workspaces unchanged. Ledger611files retains scoped/historical versus unrun/skip evidence;178files is not strictCI or original400floor substitute. Frozen03df9efa baseline remains unavailable; nativePG17 pending. Prior originalapp1207/0/4tsconfigs andNodeVite4GiB bundle retained as historical scoped evidence; no new whole-backend/fullCI/formal-image claim. Source28 adopted668dd223:2065files/50175181B verified0mismatch on d139f73a/run40830714143; focused saved-recovery/composition32pass0fail0skip98expects, originalBiome lint0 and full originalserver tsconfig0. No broader178-file rerun or fullCI is claimed for Source28; Source27 offline2396/0 remains scoped historical evidence. The2GiB server-only compile restored512MiB/swap0.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
-    "g5": "Cloud Linux Chrome own-loopback fixture35checks/26actions passed historicallyrun40746063116; original own HTTP control/download/reset3files18/0 now passedrun40796716582 under512MiB/swap0 without Chromium. Mocked desktop UI3files144/0 is HappyDOM/Tauri fakes. Real user device, durable offline reconnect queue, fresh approval producer/exact-input and human approval closure remain NOT_VERIFIED.",
+    "g5": "Source27 trusted fresh preparation/commit/publication orchestration and real consume SQL result-null guard are independently reviewed;83related CPU cases and broader178file2396/0 pass. CPU seed/CAS/ledger/target models are not durable PG, RLS, release, issuer, commit-ACK or production approval proof. Actual fresh DB adapter, frozen producer/exact input and production wiring remain NOT_WIRED; ROOT_RELEASE=null/AP_DISABLED. Historical own-cloud Chrome35checks/26actions and own HTTP18/0 retained; real user device/offline reconnect still NOT_VERIFIED. Source28 internal local-recovery composition refuses missing release/authority, same pool and invalid lease/worker before SQL/input/runner; existing Root/catalog/RLS/ticket/fence gates retained. Production index and fresh persistent writer remain unwired;32focused CPU cases do not attest physical pool independence or durable approval.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",
     "g7": "Original full desktop tsc passed under512MiB and desktop telemetry5/0 plus3mocked UI files144/0 passed. No native Tauri binary/image or clean Windows/Linux client deployment proof."
   },
@@ -8308,5 +8309,25 @@
     "run": 40821171620,
     "job": 123273736309,
     "adopted_source_commit": "06d3c130f66d68df5d439c461c0bd3e6bdff5807"
+  },
+  "source28_validation": {
+    "adoption": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "candidate": "d139f73ad599c344184d3023a80beeeafa2e6297",
+    "run": 40830714143,
+    "job": 123304042601,
+    "source_files": 2065,
+    "source_bytes": 50175181,
+    "focused_test_counts": {
+      "pass": 32,
+      "fail": 0,
+      "skip": 0,
+      "expects": 98
+    },
+    "original_lint": 0,
+    "original_server_types": 0,
+    "project_limit_restored": 536870912,
+    "full_ci": "NOT_RUN",
+    "PG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
   }
 }
