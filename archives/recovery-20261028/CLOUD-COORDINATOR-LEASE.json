@@ -2,22 +2,22 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d",
-  "run_id": "60a020e9-e1fc-8323-a2af-45516ed6b64b",
-  "epoch": "2026-10-29T11:23:54.976Z:60a020e9-e1fc-8323-a2af-45516ed6b64b",
-  "acquired_at": "2026-10-29T11:23:54.976Z",
-  "renewed_at": "2026-10-29T11:27:11.520Z",
-  "expires_at": "2026-10-29T11:27:11.520Z",
+  "state": "held",
+  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "run_id": "2026-10-29T14:42:16.560Z:human-a6-route-review",
+  "epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review",
+  "acquired_at": "2026-10-29T14:42:16.560Z",
+  "renewed_at": "2026-10-29T14:42:16.560Z",
+  "expires_at": "2026-10-29T15:27:16.560Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "2e06e7d2ecccfa57522d80e75caddede3479a478",
+  "expected_parent": "842623fc39bf85d620e70182b7b63d72f5f64a94",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "A different author-independent reviewer must fully review exact f97260fa06af41ea8a5e7d94420de53eee99cb49 three files/byte hashes/modes, including 16 defined guard cases and all inherited gates. This worker authored A6 and cannot approve its own candidate in a later pass. Only after that review may a valid coordinator lease+idlequeue dispatch a single new A6 run; never rerunA5 unchanged or adopt source.",
+  "next_action": "Obtain independent exact A6 and route reviews; only approved A6 may dispatch once after ref/queue/epoch recheck. Hosted worker identity binding remains blocked and delegated to separate admin context.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -37,7 +37,5 @@
     "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
     "expires_at": "2026-10-29T09:42:06.433Z",
     "takeover_basis": "Confirmed expired and queued/in_progress empty"
-  },
-  "released_at": "2026-10-29T11:27:11.520Z",
-  "released_by": "cloud-hosted-worker:6ae30014bbac8191baa1a3497f062b7d"
+  }
 }
