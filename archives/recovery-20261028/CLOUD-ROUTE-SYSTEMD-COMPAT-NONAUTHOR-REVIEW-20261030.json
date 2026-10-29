@@ -1,0 +1,100 @@
+{
+  "schema": "route-systemd-compat-independent-review/v1",
+  "reviewer": "/root/route_compat_reviewer",
+  "author": "/root/route_systemd_author",
+  "candidate": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+  "tree": "2191f5c0676ce2b03118c0fc543e0b83ad44dbf2",
+  "parent": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+  "verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "project_execution": false,
+  "source_approval": false,
+  "scope": "77/18/7 retained",
+  "files": [
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "mode": "100644",
+      "blob": "fccd7b2ed81f599b1006b97b7c3c1d5acb624841",
+      "bytes": 139463,
+      "sha256": "9d15e5c789b9dac413f4d7efee5e1925a54f371f7c389714f5fde8b19c4dafe5",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "mode": "100644",
+      "blob": "a110c0057fe47101c872075e8b35ed52b228659c",
+      "bytes": 38066,
+      "sha256": "e6dc6a8ace19cfb908eedbd8b9095906d487137c0ec6df74171ff3f1bc68dcfa",
+      "full_read": true
+    }
+  ],
+  "actual_failure_preserved": {
+    "run": 40909348331,
+    "job": 123572739303,
+    "error": "Unknown assignment: MemoryOOMGroup=yes",
+    "Source": "NOT_RUN",
+    "install": "NOT_RUN",
+    "build_A_B": "NOT_RUN",
+    "restore": "UNKNOWN_NOT_PROVEN"
+  },
+  "reference_read": {
+    "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+    "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+    "blob": "60353703fd08235815157a03c010f7f6246df461",
+    "full_read": true,
+    "pattern": "OOMPolicy=kill, actual child group1 readback, kernel parent group1 repair before drop; not runtime approval transfer"
+  },
+  "static_checks": {
+    "delta_exact": true,
+    "workflow_only_delta": "6 shell property removals, 2 admin literal property removals, bound own control cgroup kernel group1 write/readback, admin hash pin and exact new push filter/guard",
+    "admin_expected_delta_exact": true,
+    "workflow_expected_delta_exact": true,
+    "unsupported_transient_MemoryOOMGroup_arguments": 0,
+    "subject_helper_unchanged": true,
+    "six_barrier_bodies_unchanged": true,
+    "admin_helper": {
+      "bytes": 29180,
+      "sha256": "8949bc43243c17332a63ae7a86e97cfeff1965bca6e04378cdb75a6dc86be5f7"
+    },
+    "own_control_gate": "Exact PARENT/stem-role.service check precedes O_NOFOLLOW/O_NONBLOCK write of own memory.oom.group1; full memory/swap/oom limits readback; OOMPolicycontinue/-1000 retained.",
+    "subject_gate": "OOMPolicykill retained; existing child caps/swap0/group1 assertions and parent repair/readback before groups/UID/GID drop unchanged.",
+    "deadline": "No deadline/control-flow delta: t0+270/t0+300; supervisor+independentfallback; peroperation remaining; normal294/fallback295; outer final and always unchanged.",
+    "resources": "512 parent/swap0; control16+16 DATA32=64MiB; originalbuild only4GiB; no new exception.",
+    "cleanup": "Owned groups sync stop/show+empty, actual limits, full parentpopulated0 after controls exit; missing/late witness FAILED_OR_UNKNOWN, no fresh always budget.",
+    "scope_diff": {
+      "compare_total_commits": 1,
+      "compare_files": 2,
+      "only_two_admin_files": true,
+      "recursive_tree_truncated": false,
+      "Source2065_blobs_modes_unchanged_from_e35d": true
+    }
+  },
+  "dispatch": {
+    "max": 1,
+    "event": "push",
+    "branch": "codex/route-systemd-compat-run-20261030-a1",
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "preconditions": [
+      "Persist this exact nonauthor report",
+      "Valid fresh lease owner/epoch/head",
+      "Actual idle queue and no generator",
+      "Exact ref/run dedup",
+      "Create only exact candidate SHA; no implementation changes under this review"
+    ]
+  },
+  "unproven": [
+    "New systemd compatibility candidate has not run; actual OOMPolicy and explicit kernel gates must be witnessed.",
+    "16MiB protected controls and32MiB DATA headroom remain runtime-unproven; failures cannot expand resources.",
+    "No Source adoption, frontend/fullCI/PG/Rootrelease/commercial acceptance supplied."
+  ],
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "next_action": "Leaseowner may consider one exact legal push dispatch after fresh gates; receive actual terminal, never retry unchanged after failure. This reviewer does not dispatch."
+}
