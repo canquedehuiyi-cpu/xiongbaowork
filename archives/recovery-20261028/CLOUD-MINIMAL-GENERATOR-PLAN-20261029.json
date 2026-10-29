@@ -2,8 +2,8 @@
   "schema": "xiongbaowork-minimal-generator-author-plan-v1",
   "author": "cloud-agent:/root/a7_prepare",
   "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
-  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a9",
-  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a9",
+  "prepare_branch": "codex/cloud-minimal-generator-prep-20261029-a10",
+  "only_run_branch": "codex/cloud-minimal-generator-run-20261029-a10",
   "source": {
     "manifest_path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
     "manifest_bytes": 456310,
@@ -793,9 +793,9 @@
     "PG": "PG_PENDING"
   },
   "revision": {
-    "id": "A9",
+    "id": "A10",
     "a1": "d824f9cc45cf13bbe198bd210514121636bca501",
-    "status": "AUTHOR_A9_PREPARED_UNREVIEWED_NOT_RUN",
+    "status": "AUTHOR_A10_PREPARED_UNREVIEWED_NOT_RUN",
     "cleanup_reserve_seconds": 8,
     "cleanup": "One idempotent cleanup per activated service, shared absolute deadline; bounded stop/wait remaining; no fresh finally deadline.",
     "structure": "Findings do not block export of real generated files.",
@@ -838,12 +838,13 @@
       }
     },
     "a4": "c6f51d2673e608895ab826ed7437dbef9dab0340",
-    "change_scope": "Only fixed TSX4.23.12 original URL/SRI/name/version/raw packageJSON identity-bound observed bin string representation; all other packages retain original strict dictionary comparison. No lock/package edits. Existing ORM guard/17nodes/FULL50/resources/identity/deadlines/cleanup unchanged.",
+    "change_scope": "Only diagnostic CJS out uses precise path relative to existing generator cwd, resolving to identical controlled private-drizzle; all schema50 paths remain absolute. Retain same original0080 copied chain, all17/ORM/TSX guards, resources/identity/deadlines/cleanup and full export fail-closed shape.",
     "a5": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
     "a6": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
     "a7": "f689c5b3c89c66a52fe883681c1256a520fc0c1a",
     "a7_pin_finding": "A7 workflow stale80700/5a770146 pin did not equal actual80775/4fbbc391 controller. Prior author pin-match assertion retracted. A8 constructs both workflow byte constants/hash from final controller raw bytes, then independently parses and asserts them again after GitHub full readback.",
-    "a8": "560f711ba995dc06d0eaa38955505670bbd964d4"
+    "a8": "560f711ba995dc06d0eaa38955505670bbd964d4",
+    "a9": "d074c1cd37056b0fd77db837455dd07f983f11e8"
   },
   "redirect_policy": {
     "basis": {
@@ -898,15 +899,15 @@
   },
   "controller_identity": {
     "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-    "bytes": 85866,
-    "sha256": "159d8497f122117372e2e522119846e3dfddae6790f00835a5eb90182557ca9d"
+    "bytes": 89362,
+    "sha256": "85c3b522cb1a6c1b35815e1121a14e105acfb6a5b89bf193987a8c0dd94cc4bc"
   },
   "workflow_identity": {
     "path": ".github/workflows/cloud-minimal-generator.yml",
-    "bytes": 4017,
-    "sha256": "5585fd484741cd4d1de85c88fc400facd42b20423d7d36f686c573f63e167c42"
+    "bytes": 4019,
+    "sha256": "9f844ca9b00a4fbbc2f381f4fe0d66dccceb6871e66b4ba28e62efd7718ad80a"
   },
-  "author_readiness": "A9_PREPARED_UNREVIEWED_NOT_RUN",
+  "author_readiness": "A10_PREPARED_UNREVIEWED_NOT_RUN",
   "review_required": "Non-author exact full3file review required. Author has not executed guard contract checks or project. No dispatch or adoption authorized by this author report.",
   "orm_metadata_compatibility": {
     "evidence_commit": "2e06e7d2ecccfa57522d80e75caddede3479a478",
@@ -960,5 +961,56 @@
     },
     "mutates_package_or_lock": false,
     "derived_absent_peer_meta": "Metadata diagnostic absent versus derived empty object is representation only; existing peer validation unchanged."
+  },
+  "relative_output_fix": {
+    "prior_run": 40898247886,
+    "prior_job": 123533162634,
+    "actual_cli_exit": 0,
+    "actual_generated_added": [],
+    "actual_generated_changed": [],
+    "actual_generated_removed": [],
+    "result": "GENERATOR_OUTPUT_SHAPE_INCOMPLETE; internal error printed despite exit0",
+    "decoded_generator_log": {
+      "bytes": 1196,
+      "sha256": "56bda287017f3dcb05db756b436294a741cc14d8eb651bbf8c1df59fd583ed1b",
+      "gzip": {
+        "bytes": 526,
+        "sha256": "a5bdb8b654af3f83e9f94d747d2daf7c488651efc683a27e02d3c10083cd9943"
+      },
+      "crc32_verified": true,
+      "error_path": ".//home/runner/work/_temp/private-drizzle/meta/0000_snapshot.json"
+    },
+    "upstream_tag": "drizzle-kit@0.31.10",
+    "upstream_commit": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+    "upstream_references": [
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "path": "drizzle-kit/package.json",
+        "blob": "8a2625b0ff5cc3c2c847515fdeed7e6b1c5e7a31",
+        "bytes": 3683,
+        "sha256": "c258e6134d938d6d718448274fd3e89ed9c05aeca7bb6bc7df22c89d943615c8"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "path": "drizzle-kit/src/utils.ts",
+        "blob": "bcea01c249f078e8acab380c57179f40b95f9e55",
+        "bytes": 9372,
+        "sha256": "14c5dbc0b07c9570c24ca9388262fed0f3f2a0689567754a87f6b4034249a3a6"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "path": "drizzle-kit/src/cli/commands/migrate.ts",
+        "blob": "8c62a5edb22df5ba5216da5f8b381a354a3e40e3",
+        "bytes": 35380,
+        "sha256": "c453653a3939827c6a71b991ae5b0db04a70b6d17cdd7798e5c51a7e89770b56"
+      }
+    ],
+    "source_evidence": "Tagged package.json version0.31.10; prepareOutFolder joins(out,'meta') and snapshot paths; validateWithReport reads './'+snapshot; prepareAndMigratePg catches and console.error without rethrow. Runtime bundled bin.cjs stack confirms same failing path; upstream references not runtime binary digest proof.",
+    "cwd": "<RUNNER_TEMP>/private-stage/openbot/server",
+    "relative_out": "../../../private-drizzle",
+    "resolved_out": "<RUNNER_TEMP>/private-drizzle",
+    "constraints": "os.path.relpath from exact safe generator cwd; relative not absolute; strict resolve equality with controlled out, out.parent==base; all schema inputs remain absolute50. Original Source config untouched.",
+    "resource_stage_added": false,
+    "actual_generation_proven": false
   }
 }
