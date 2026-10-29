@@ -350,7 +350,24 @@
         "sha256": "3335ae49c5b68770d7f56080a97e37a6c85cfe99d5bce226fd44e3c6685fe89c",
         "verdict": "SOURCE_APPROVED_ONLY; no adoption/runtime/production approval"
       },
-      "delivery": "NOT_YET_READ_AT_CHECKPOINT"
+      "delivery": {
+        "commit": "9d80392d8b39ccbbd89338f026eeb8986ff6c8aa",
+        "path": "archives/recovery-20261028/CLOUD-DELIVERY-ROOT-REVIEW-20261029.json",
+        "blob": "a4127db3940595bc566e1c23f5f1f96a7d9f4e91",
+        "bytes": 6656,
+        "sha256": "066e7d394fbeaac103a052cbccfc385cc125929dcee724a15f152c4f8bd4424e",
+        "verdicts": {
+          "volume": "SOURCE_APPROVED_ONLY_PENDING_BOUNDED_CPU_VALIDATION",
+          "route": "ADMIN_PLAN_APPROVED_FOR_BOUNDED_DISPATCH_ONLY"
+        }
+      },
+      "supplemental_persistence": {
+        "commit": "e289c6db4aa3cd46b73ace59fb0d19c43d87c62d",
+        "path": "archives/recovery-20261028/CLOUD-PERSISTENCE-REVIEW-20261029.json",
+        "blob": "c9c1796210b09fa06536941a38cf1afa06b18104",
+        "bytes": 9076,
+        "sha256": "5ad0c8b7dbe7c4f4cd4bc875316328823b51b1c13d9daab85f487ff428df6780"
+      }
     },
     "additional_non_author_review_agents": [
       "/root/persistence_review",
@@ -365,6 +382,8 @@
       "metadata": "NONE"
     },
     "local_root": "Retired by human; heartbeat PAUSED; no Gitee/support resume",
-    "completion": "NOT_COMPLETE_NO_UNATTENDED_GUARANTEE"
+    "completion": "NOT_COMPLETE_NO_UNATTENDED_GUARANTEE",
+    "review_acceptance_path": "archives/recovery-20261028/CLOUD-REVIEW-ACCEPTANCE-20261029.json",
+    "next_required_capability": "A supported cloud workflow_dispatch connector entrypoint for exact reviewed bf0ef002, or a managed Linux executor with enforceable delegated cgroup and network readiness. No password/token or Windows prerequisite."
   }
 }

@@ -1,0 +1,137 @@
+{
+  "schema": "xiongbaowork-cloud-review-acceptance-v1",
+  "coordinator": "/root",
+  "canonical_parent": "63dc2ff9f6f408b6f8a7ffc55ffe408da4089fa9",
+  "reports": {
+    "persistence": {
+      "commit": "8d517ba6ce2a1fb1a23eb2b03c22a712b17779c2",
+      "branch": "codex/cloud-review-persistence-20261029",
+      "path": "archives/recovery-20261028/CLOUD-PERSISTENCE-REVIEW-20261029.json",
+      "blob": "cb38e9da3033a866888dc6c975542060d6ba85e9",
+      "bytes": 15902,
+      "sha256": "3335ae49c5b68770d7f56080a97e37a6c85cfe99d5bce226fd44e3c6685fe89c",
+      "verdict": "SOURCE_APPROVED_ONLY; no adoption/runtime/production approval"
+    },
+    "delivery": {
+      "commit": "9d80392d8b39ccbbd89338f026eeb8986ff6c8aa",
+      "path": "archives/recovery-20261028/CLOUD-DELIVERY-ROOT-REVIEW-20261029.json",
+      "blob": "a4127db3940595bc566e1c23f5f1f96a7d9f4e91",
+      "bytes": 6656,
+      "sha256": "066e7d394fbeaac103a052cbccfc385cc125929dcee724a15f152c4f8bd4424e",
+      "verdicts": {
+        "volume": "SOURCE_APPROVED_ONLY_PENDING_BOUNDED_CPU_VALIDATION",
+        "route": "ADMIN_PLAN_APPROVED_FOR_BOUNDED_DISPATCH_ONLY"
+      }
+    },
+    "supplemental_persistence": {
+      "commit": "e289c6db4aa3cd46b73ace59fb0d19c43d87c62d",
+      "path": "archives/recovery-20261028/CLOUD-PERSISTENCE-REVIEW-20261029.json",
+      "blob": "c9c1796210b09fa06536941a38cf1afa06b18104",
+      "bytes": 9076,
+      "sha256": "5ad0c8b7dbe7c4f4cd4bc875316328823b51b1c13d9daab85f487ff428df6780"
+    }
+  },
+  "reviewed_candidates": [
+    {
+      "sha": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+      "status": "STATIC_THREE_SOURCE_ONLY_FULL_MIGRATION_BLOCKED"
+    },
+    {
+      "sha": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "status": "STATIC_TWO_SOURCE_ONLY_PENDING_NEW_PARENT_REVIEW_AND_VALIDATION"
+    },
+    {
+      "sha": "7f931f69dde33703c667a3d3833e9da26915b3a0",
+      "status": "SOURCE_APPROVED_ONLY_PENDING_BOUNDED_CPU_VALIDATION"
+    },
+    {
+      "sha": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+      "status": "ADMIN_PLAN_APPROVED_FOR_BOUNDED_DISPATCH_ONLY"
+    }
+  ],
+  "tree_checks": [
+    {
+      "path": "openbot/docker/s6/scripts/postgres-init.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b2580901cab9bd15ca312ccb873f5eedb80d7541",
+      "size": 5546,
+      "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/blobs/b2580901cab9bd15ca312ccb873f5eedb80d7541",
+      "candidate": "7f931f69dde33703c667a3d3833e9da26915b3a0"
+    },
+    {
+      "path": "openbot/docker/s6/s6-rc.d/postgres/run",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c9b2f7512f375251373335624591e7a8900242db",
+      "size": 687,
+      "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/blobs/c9b2f7512f375251373335624591e7a8900242db",
+      "candidate": "7f931f69dde33703c667a3d3833e9da26915b3a0"
+    },
+    {
+      "path": "openbot/docker/s6/scripts/postgres-volume-version-guard.ts",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a0aa17a011f2edbfc1eddc4830979c5d35dca61e",
+      "size": 5281,
+      "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/blobs/a0aa17a011f2edbfc1eddc4830979c5d35dca61e",
+      "candidate": "7f931f69dde33703c667a3d3833e9da26915b3a0"
+    },
+    {
+      "path": "openbot/server/tests/pg-volume-version-guard.test.ts",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f0d778fead2ea00592ba797078ef3bd6d692652c",
+      "size": 7211,
+      "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/blobs/f0d778fead2ea00592ba797078ef3bd6d692652c",
+      "candidate": "7f931f69dde33703c667a3d3833e9da26915b3a0"
+    },
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "25f78982c6346bb60f509f1b4b6159c2d60a7352",
+      "size": 77303,
+      "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/blobs/25f78982c6346bb60f509f1b4b6159c2d60a7352",
+      "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106"
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ff7e08385743e23e1a8effaff88c85113ed95b52",
+      "size": 6840,
+      "url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/git/blobs/ff7e08385743e23e1a8effaff88c85113ed95b52",
+      "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106"
+    }
+  ],
+  "actions": {
+    "source_adopted": 0,
+    "project_executed": 0,
+    "workflow_dispatched": 0,
+    "deployments": 0,
+    "paid_calls": 0,
+    "canonical_admin_checkpoint": "63dc2ff9f6f408b6f8a7ffc55ffe408da4089fa9"
+  },
+  "queue": {
+    "owner": "/root",
+    "active": null,
+    "blocked": "COMPLIANT_CLOUD_RUNTIME_OR_SUPPORTED_MANUAL_DISPATCH_UNAVAILABLE",
+    "not_retried": [
+      40833358607,
+      40835481411
+    ],
+    "missing_schema": "learning.ts",
+    "next": "A supported cloud workflow_dispatch connector entrypoint for exact reviewed bf0ef002, or a managed Linux executor with enforceable delegated cgroup and network readiness. No password/token or Windows prerequisite."
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  }
+}
