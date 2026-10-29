@@ -1,12 +1,12 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "AUTHOR_BOOTSTRAP_PARENT_GATE_SUCCESSOR_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_TERMINAL_FAILFAST_PREPARED_PENDING_NONAUTHOR_REVIEW_NOT_FINAL_GATE_FIX",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
   "source_bytes": 50175181,
-  "branch": "codex/route-systemd-compat-prep-20261030",
-  "trigger": "Exact on:push branch filter codex/route-systemd-compat-run-20261030-a2 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
+  "branch": "codex/route-terminal-failfast-prep-20261030",
+  "trigger": "Exact on:push branch filter codex/route-terminal-failfast-run-20261030-a3 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
   "concurrency": {
     "group": "source-recovery-bytes",
     "cancel_in_progress": false,
@@ -200,7 +200,7 @@
       "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
     }
   },
-  "preparation_base_commit": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+  "preparation_base_commit": "576d176424df248222299db2c49d0fa545c90579",
   "author_role": "AUTHOR_OF_ACTIVATION_SUCCESSOR_NOT_INDEPENDENT_REVIEWER",
   "review_disagreement": {
     "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
@@ -231,21 +231,21 @@
     "new_source_or_runtime_evidence": false
   },
   "author_preparation": {
-    "scope": "Exactly two administrative paths changed from e35d230b systemd compatibility successor on exclusive prep branch; no canonical/lease/Source/jobs/automation changes.",
-    "status": "SYSTEMD_COMPATIBILITY_PREPARED_UNREVIEWED_NOT_RUN",
+    "scope": "Exactly two administrative files from576d on exclusive terminal-failfast prep branch. No canonical/lease/Source/jobs/Page/automation changes.",
+    "status": "AUTHOR_TERMINAL_FAILFAST_PREPARED_PENDING_NONAUTHOR_REVIEW_NOT_FINAL_GATE_FIX",
     "workflow": {
-      "bytes": 142765,
-      "sha256": "adf53698354c007d8496b8e5bbc0b920467e759ef01560ee52e19f8e84010220",
-      "push_only_exact_branch": "codex/route-systemd-compat-run-20261030-a2",
+      "bytes": 145312,
+      "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439",
+      "push_only_exact_branch": "codex/route-terminal-failfast-run-20261030-a3",
       "run_branch_created": false,
       "concurrency": "source-recovery-bytes",
       "cancel_in_progress": false
     },
     "administrative_lifecycle_helper": {
-      "bytes": 32311,
-      "sha256": "1c14a1877281fe8a6e2c411a40e52679147c227a214ce2804f5e590b880b46ac",
+      "bytes": 34728,
+      "sha256": "cb98e499f6eaca20fdaa7e801d25e5d90439a0edc1c77c2e1f331665282e5594",
       "unchanged_from_092e": false,
-      "change": "Previous compatibility fix retained; conservative clock+bootstrap parent observation/conditional oom repair and explicit early unknown evidence."
+      "change": "Terminal error path only: supervised actual no-recovery-actor observation then immediate FAILED_OR_UNKNOWN; no successful gate repair."
     },
     "subject_helper": {
       "bytes": 20451,
@@ -340,19 +340,19 @@
     "proof_scope": "Requires a new complete exact workflow/plan implementation and separate non-author static review before leaseowner may consider serial execution; no execution authority supplied here.",
     "external_dependency_blocker": false
   },
-  "unresolved_reason": "A1 actual bootstrap parentlimits assertion failed with actual key unknown. New minimal parentgate successor awaits exact independent review and actual runtime; no restore success inferred.",
+  "unresolved_reason": "Final actual oom.group0 remains unresolved. This successor only fails promptly after actual no-recovery-actor proof and preserves UNKNOWN. It does not make route dispatchable.",
   "next_action": {
     "owner": "Main coordinator",
-    "action": "Exact nonauthor full review of this two-file parentgate successor: conditional actual512/swap0/pop0 then onlyoom1 repair, earlyfailunknown and readonlyalways. Preserve old a1 failure; no unchangedretry. Only leaseowner after fresh idlequeue/dedup may once create reserveda2 push branch.",
+    "action": "Non-author full review exact two-file failfast successor. Save as reviewable administrative failure-path repair only; do not rerun A/B or create its reserved execution branch for this change. Final oom.group lifecycle remains blocked pending separately reviewed supported pure-control structure.",
     "dispatch": false,
     "automatic_retry": false,
-    "run_branch": "codex/route-systemd-compat-run-20261030-a2",
-    "current_task_terminal": "BOOTSTRAP_PARENT_GATE_PREPARED_UNREVIEWED_NOT_RUN",
+    "run_branch": "codex/route-terminal-failfast-run-20261030-a3",
+    "current_task_terminal": "FAILFAST_PREPARED_UNREVIEWED_NOT_FINAL_GATE_FIX",
     "external_permission_needed": false
   },
   "pure_administrative_helper": {
-    "bytes": 32311,
-    "sha256": "1c14a1877281fe8a6e2c411a40e52679147c227a214ce2804f5e590b880b46ac",
+    "bytes": 34728,
+    "sha256": "cb98e499f6eaca20fdaa7e801d25e5d90439a0edc1c77c2e1f331665282e5594",
     "role": "Root-owned controller, fallback, activation gate and launcher/witness. No root Subject repo/payload/log reads."
   },
   "preparation_history": [
@@ -396,7 +396,8 @@
     "Complete privileged success evidence transport cap7800B is unrun; overflow fails instead of truncating or claiming restored. Kernel/runtime pathological failure may prevent saving a complete receipt; absence is UNKNOWN.",
     "Six new prelude barriers and exact push entry have not run. No runtime gate/parent-oom recovery evidence is transferred from prior probes.",
     "This compatibility successor has not executed. OOMPolicy=kill childgroup1 relies on actual kernel readback and fails closed; protected continue controls explicitly set/read own bound childgroup1. No runtime result is inferred from A11.",
-    "Bootstrap parent normalization successor not executed. Earlier full limits mismatch did not log which key; no claim that oom.group0 was observed. Other than exact512/swap0/pop0/oom0-or1, fail without writes. Earlyrecord absence or deadline expiry stays UNKNOWN."
+    "Bootstrap parent normalization successor not executed. Earlier full limits mismatch did not log which key; no claim that oom.group0 was observed. Other than exact512/swap0/pop0/oom0-or1, fail without writes. Earlyrecord absence or deadline expiry stays UNKNOWN.",
+    "Terminal failfast successor not executed. No current finalgate solution or resource execution approval. Historical A2 two builds/leaf remain unadopted evidence only."
   ],
   "author_draft_history": [
     {
@@ -668,5 +669,63 @@
     "runtime_validation": "NOT_RUN",
     "independent_review": "PENDING_EXACT_SUCCESSOR",
     "new_execution_branch": "codex/route-systemd-compat-run-20261030-a2"
+  },
+  "terminal_failfast_successor": {
+    "parent": "576d176424df248222299db2c49d0fa545c90579",
+    "purpose": "Only stop useless error-handler waiting after every possible recovery actor is conclusively terminal. NOT final oom.group gate repair, NOT permission to rerun A/B.",
+    "actual_A2": {
+      "run": 40912983831,
+      "job": 123585627390,
+      "full_log_chars": 358625,
+      "full_log_sha256": "079c661f1ffe757135ecdbac2e14e1e5c279929ea6fdc81eedadd5de5d1c1334",
+      "build_A_exit": 0,
+      "build_B_exit": 0,
+      "two_fresh_before_identical": true,
+      "all_postchecks_Source": 2065,
+      "only_changed_source": "openbot/app/src/routeTree.gen.ts",
+      "leaf": {
+        "bytes": 49276,
+        "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+        "git_blob_sha1": "50399b63fa0119c9439866e7250049378af617e3"
+      },
+      "outer_at_seconds": 73.19262979499999,
+      "controls_exit": {
+        "fallback": 0,
+        "supervisor": 0
+      },
+      "actual_final": {
+        "parent_populated0": true,
+        "memory.max": "536870912",
+        "memory.swap.max": "0",
+        "memory.oom.group": "0"
+      },
+      "stage_and_control_prior_restore_oom1": true,
+      "final_restore": "FAILED_OR_UNKNOWN",
+      "overall": "failure",
+      "errorhandler_wait_until_original300": true,
+      "source_adopted": false
+    },
+    "change": "Within existing same-outer supervised observe_failure, independently read both exact control unit LoadState/ActiveState/Job, actual control cgroup emptiness, all ownedSubject groups and whole parent populated0. Only if all clients exited, both units inactive/failed/no pendingJob, all groups empty/absent and wholeparentempty, record full terminal observation then break to existing FAILED_OR_UNKNOWN emission/save and raise. No restoration write added.",
+    "retained": [
+      "Original outer300/inner270/t0 unchanged",
+      "Final successful terminal still requires physical512/swap0/oom1+wholeparentpopulated0",
+      "always byte-identical pure readback",
+      "No outsideparent writes/restore",
+      "No Subject/source/build changes",
+      "Any unreadable/active/pending group remains in original bounded recovery path"
+    ],
+    "workflow": {
+      "bytes": 145312,
+      "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439"
+    },
+    "admin": {
+      "bytes": 34728,
+      "sha256": "cb98e499f6eaca20fdaa7e801d25e5d90439a0edc1c77c2e1f331665282e5594"
+    },
+    "reserved_execution_branch": "codex/route-terminal-failfast-run-20261030-a3",
+    "execution_branch_created": false,
+    "execution_authorized_by_this_plan": false,
+    "independent_review": "PENDING_EXACT_CANDIDATE",
+    "runtime": "NOT_RUN"
   }
 }
