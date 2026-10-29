@@ -1,0 +1,146 @@
+{
+  "schema": "xiongbaowork-cloud-probe-a2-execution-independent-review/1",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "workflow_sha": "c2c199a6d1c740438433d3355c598bffbb5320a2",
+  "run": 40839741519,
+  "job": 123332952391,
+  "source": "normal GitHub connector fetch_workflow_job_logs and fetch_workflow_job_steps",
+  "verdict": "PASS_BOUNDED_RESOURCE_PROBE_ONLY",
+  "findings": [],
+  "decoded_log": {
+    "bytes": 12331,
+    "sha256": "5167ddc7a3496b221043b92d43f2cff773ee9c2673b2a693533a8c6db5dc1d75"
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-29T08:06:10.7128607Z",
+      "name": "CLOUD_PROBE_PARENT",
+      "value": {
+        "memory.max": "536870912",
+        "memory.swap.max": "0",
+        "memory.oom.group": "1"
+      }
+    },
+    {
+      "timestamp": "2026-10-29T08:06:10.7597713Z",
+      "name": "CLOUD_PROBE_DATA",
+      "value": {
+        "cgroup": "0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service",
+        "data": {
+          "memory.max": "67108864",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "project": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "activation_before": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "0"
+        },
+        "activation_admin_fix": "parent oom.group1 before descendant; probe only",
+        "descendant_evidence": {
+          "cgroup": "0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service",
+          "data": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "project": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          }
+        },
+        "descendant_exit": 0,
+        "subject_acquired": false,
+        "subject_executed": false,
+        "dependencies_installed": false,
+        "secrets_read": false
+      }
+    },
+    {
+      "timestamp": "2026-10-29T08:06:10.7747680Z",
+      "name": "CLOUD_PROBE_SERVICE",
+      "value": {
+        "exit": 0,
+        "subject_executed": false
+      }
+    },
+    {
+      "timestamp": "2026-10-29T08:06:10.7791648Z",
+      "name": "CLOUD_PROBE_FINAL",
+      "value": {
+        "restored": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "project_populated": "0",
+        "subject_executed": false
+      }
+    },
+    {
+      "timestamp": "2026-10-29T08:06:10.8184759Z",
+      "name": "CLOUD_PROBE_TERMINAL",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "subject_executed": false
+      }
+    }
+  ],
+  "steps": "All four returned step conclusions success",
+  "observed_runner": {
+    "hosted": true,
+    "cloud": "Azure",
+    "region": "centralus",
+    "os": "Ubuntu26.04.1",
+    "image": "ubuntu-26.04",
+    "runner_version": "2.338.0"
+  },
+  "observed_service": {
+    "runtime": "47ms",
+    "memory_peak": "11.2M",
+    "swap": "0B",
+    "status": "0/SUCCESS"
+  },
+  "lease_read": {
+    "canonical_checkpoint": "dbbf14cf9b0267491deac4f0b9c0ae2480ca5540",
+    "path": "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json",
+    "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+    "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+    "reviewer_authority": "read and own independent review branch only; no scheduling or canonical mutation"
+  },
+  "conclusions": [
+    "Hosted execution and bounded DATA service plus actual derived descendant were proved for this resource-only probe.",
+    "Activation-before parent oom.group0 is explicitly retained; root-admin fixed it to1 before descendant.",
+    "DATA actual64MiB/swap0/oomgroup1 and aggregate parent512MiB/swap0/oomgroup1 were independently asserted by descendant.",
+    "Service exit0; final and always limits correct and populated0.",
+    "A1 failure retained independently; A2 success does not replace it."
+  ],
+  "limitations": [
+    "No Subject acquired/executed and no dependencies installed.",
+    "Does not prove current2065Source verification, generator, types/tests, PG17/migration/8GET/native or commercial acceptance.",
+    "Future Subject launcher must bootstrap resource gates as privileged admin after activation, assert gates, then drop to runner identity before Subject; independently review exact new controller.",
+    "No dispatch authority transferred to reviewer."
+  ],
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}
