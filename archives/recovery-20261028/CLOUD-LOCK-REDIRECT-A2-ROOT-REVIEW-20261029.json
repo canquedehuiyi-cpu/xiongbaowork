@@ -1,0 +1,81 @@
+{
+  "schema": "xiongbaowork-lock-redirect-independent-review/2",
+  "reviewer": "/root/delivery_review",
+  "author": "/root/persistence_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "b2a95ba0b346b70834b30edf07855d668c0c7dc7",
+  "parent": "b739cbd47eaeb5f73717c80d4816239d25933d6d",
+  "tree": "12f683a9c2615ecf5c3cfd36a7d7e54b1ae17a55",
+  "message": "Keep resource gate keys immutable while redacting first-hop query metadata",
+  "message_has_skip": false,
+  "verdict": "ADMIN_FIRST_HOP_ONLY_APPROVED_FOR_COORDINATOR_SINGLE_GET_AFTER_LEASE_IDLE",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/cloud-lock-redirect.yml",
+      "blob": "33e32f36bf91ff66083533d00a09dc5f5c5bad50",
+      "bytes": 3895,
+      "sha256": "f62a80c996f926a62831858c1ad3af4d504f6aa666ea4ecaaaa578a9fb935e47",
+      "read": "Full exact file retrieved; embedded PROBE decoded and compared to fully read A1; changed lines reviewed."
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py",
+      "blob": "2565f6b6d7e4106c0810ad542b24be3f799f23fb",
+      "bytes": 14655,
+      "sha256": "4a4d96241be77b1603fa9e9e270310a4cd44add8ad4609f473441fc6a1d3b952",
+      "read": "Full exact file retrieved; embedded PROBE decoded and compared to fully read A1; changed lines reviewed."
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-PLAN-20261029.json",
+      "blob": "921953daaf5f144d1efae35724a8430e6d5d4f2f",
+      "bytes": 4410,
+      "sha256": "be6e519b0e521b57bfda52ad1742c291aef63605265c8d1e40499aaa71eb383d",
+      "read": "Full exact file retrieved; embedded PROBE decoded and compared to fully read A1; changed lines reviewed."
+    }
+  ],
+  "resolved_finding": {
+    "id": "HEADER-A1-P2-RESOURCE-KEY-SHADOW",
+    "status": "RESOLVED",
+    "evidence": "Decoded PROBE operational delta is exactly4 query accumulator references changed keys toquery_keys. Resource keys tuple remains memory.max/memory.swap.max/memory.oom.group throughout. URL data no longer used as local resource filenames."
+  },
+  "unchanged_comparisons": {
+    "root_admin_controller_suffix_exact": true,
+    "core_plan_except_branches_exact": true,
+    "embedded_standalone_fields_match": true
+  },
+  "retained_controls": [
+    "Exactly one original lockedbrocli HTTPS endpoint GET after irreversible runnerUID/GIDdrop; NoRedirect returnsNone, no retry/fallback/Locationfollow.",
+    "Noarchivebody.read,save,install,Subjectacquisition/execution,secrets,unknownendpoint request or provider.",
+    "ResponseURL exactoriginal guard and defaultTLSvalidation;HTTPError30x headers only,downloadsuccessfalse.",
+    "Location<=2048,controls/userinfo/nonHTTPSrefusal;queryvaluesandfragmentnotlogged,querykeynamesbounded,selectedheaderallowlist<=1024x8;unsafevaluesdigestonly.",
+    "Parent512MiB/swap0/oomgroup1 plusDATA64MiB gate,activationrepairbeforeUID/GIDdrop;actualderivedrunnerprocessindependentlyassertsparentandowncgroupgates.",
+    "40sabsolute service deadline,8scleanupreserve,HTTPtimeout<=10;rootwrapperandprobestartdeadline-8;ownedcgroupkill/boundedstop/reap;actualcleanupremaining>=0.",
+    "Workflowalwaysassertsemptyparentand512MiB/swap0/oomgroup1 within its own8sadministrativecleanup.",
+    "Uniquerun-a2 pushfilter/prepnonmatching,contentsread,singleubuntu5min,source-recovery-bytes/cancelfalse.",
+    "Workflowhashpins14655Bcontroller;GitAPIconfirms exactparent/tree and messagewithoutskip."
+  ],
+  "approval_scope": "Static single first-hop header diagnostic only. Not permission to follow Location, download any archive, broaden host allowlist, install17packages, rerunfailedgeneratorchain, adoptSource or clear deliverygates.",
+  "dispatch_conditions": [
+    "Root must first read exactreport; legalcanonicalleaseowner/run/epoch and idleprojectqueue reread immediately before singleunique run-a2push.",
+    "Use exactb2a95ba0b346b70834b30edf07855d668c0c7dc7;A1notexecuted/retried.",
+    "Existingfreeallocationonly;normalGitHubtools;noWindows/defaultbranch/deploy/identity/networkbypass.",
+    "Requireactualrun/head/job/logs,status/Locationevidenceandresourcefinalrecords;staticapprovalisnotexecution.",
+    "Anyproposedredirectdownloadchange requires newexactcandidateandnon-authorreview based on actualsafeheader evidence.",
+    "OriginalA4failure/SRI-notreached/generatorNOTRUN/metadataNONE unchanged."
+  ],
+  "reviewer_actions": {
+    "dispatch": false,
+    "executed": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}
