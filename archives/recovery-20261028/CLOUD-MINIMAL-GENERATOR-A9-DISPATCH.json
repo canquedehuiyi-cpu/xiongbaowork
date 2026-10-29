@@ -1,0 +1,27 @@
+{
+  "schema": "xiongbaowork-a9-exact-dispatch-v1",
+  "at": "2026-10-29T15:06:45.260Z",
+  "candidate": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+  "tree": "b1e97c65a6d75d046aa4d41b3d1987f7ede1a4ef",
+  "branch": "codex/cloud-minimal-generator-run-20261029-a9",
+  "run": 40898247886,
+  "job": 123533162634,
+  "event": "push",
+  "status": "in_progress",
+  "conclusion": null,
+  "review_commit": "106b22baebbe594a794471b701403545bb706f7f",
+  "review_blob": "0318352796922b537542857dacafc7990b1b9d88",
+  "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "epoch": "2026-10-29T14:42:16.560Z:human-a6-route-review",
+  "dispatch_count": 1,
+  "preflight": {
+    "validlease": true,
+    "freshhead": true,
+    "idlequeue": true,
+    "ref404": true,
+    "headruns0": true,
+    "exactreviewedSHA": true
+  },
+  "Source_adopted": false,
+  "next_action": "Read same run/job terminal log; no newjob orref. Preserve actualdeps/native/generator/output/final gates."
+}

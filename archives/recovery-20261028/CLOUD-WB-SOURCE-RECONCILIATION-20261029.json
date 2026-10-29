@@ -1,0 +1,128 @@
+{
+  "schema": "xiongbaowork-wb-six-input-claim-review/1",
+  "reviewer": "/root/route_review",
+  "kind": "NONAUTHOR_READ_ONLY_SOURCE_AND_AUDIT_RECONCILIATION",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "canonical_frozen_head": "842623fc39bf85d620e70182b7b63d72f5f64a94",
+  "primitive_candidate": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+  "verdict": "BOUNDARIES_CONFIRMED_IMPLEMENTATION_AND_REAL_PG_PROOF_STILL_PENDING",
+  "attribution": "Independently reviewed Source propositions; WB latest verbatim M1/A5/M3 supplied separately by coordinator after main review; no adoption by quotation.",
+  "inputs": [
+    {
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39",
+      "mode": "100644",
+      "bytes": 7576,
+      "sha256": "b6578d8066d3340e5de7577373bc4076ef4fc3648fef5aed8eb737994c998f0a"
+    },
+    {
+      "path": "openbot/server/tests/approval-pg-fresh-result.test.ts",
+      "commit": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "blob": "48806bc3125be84ad79a481d50c9abc7cde85f0f",
+      "mode": "100644",
+      "bytes": 14100,
+      "sha256": "34c9c0316f26a9e2387150c492dcb33556d023047651d007fa769f19d9d5b5da"
+    },
+    {
+      "path": "openbot/server/src/approvals/fresh-producer.ts",
+      "commit": "842623fc39bf85d620e70182b7b63d72f5f64a94",
+      "blob": "9209b40696ddb5847967b5281192173104f3f232",
+      "mode": "100644",
+      "bytes": 4527,
+      "sha256": "f67303d3258807ceb9bd02f10db9b1dc593b0fb3c84b50ad636f2ae53e1976e4"
+    },
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "commit": "842623fc39bf85d620e70182b7b63d72f5f64a94",
+      "blob": "2365ebe562751271190713a27c4f54968f6085b8",
+      "mode": "100644",
+      "bytes": 16446,
+      "sha256": "28e35e512a3f6f17ba9fd798804039640638707268a9eb06d76e0f435693b23b"
+    },
+    {
+      "path": "openbot/server/src/db/client.ts",
+      "commit": "842623fc39bf85d620e70182b7b63d72f5f64a94",
+      "blob": "fbf0693879f03bed8275fd371678929a1c836d92",
+      "mode": "100644",
+      "bytes": 14674,
+      "sha256": "1844135d201deb8f96b5228694a83e1f5c3ef2203cea251157f77f14e9341985"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-RESTART-ACK-AUDIT-20261029.json",
+      "commit": "684c9253d5a9bb54d431bffe7a148d3dfbd1a466",
+      "blob": "4f21677cd9e7afe34c021fec7c53bea5c237471c",
+      "mode": "100644",
+      "bytes": 19644,
+      "sha256": "0ffd276a44a918125bdf92869ee81ce748059588a386ffdf4d2f43ffe7899de0"
+    }
+  ],
+  "integrity": {
+    "full_immutable_reads": true,
+    "recursive_truncated": false,
+    "bytes_sha256_computed": true,
+    "noAST_execution": true,
+    "primitive_absentcanonical": true,
+    "terminology": "FiveSource+oneadministrativeaudit,not sixadoptedSource"
+  },
+  "propositions": [
+    {
+      "id": "CALLBACK_VS_PHYSICAL_END",
+      "status": "SOURCE_SUPPORTED_BOUNDARY",
+      "conclusion": "Callback return/rejection or mocked Promise is not physical owning transaction COMMIT/ACK/end. Primitive onlytransactionlocal; client exposes no durable originalsession/attempt termination witness."
+    },
+    {
+      "id": "NEW_LOCK_NULL_NEGATIVE",
+      "status": "SOURCE_AND_AUDIT_SUPPORTED_REQUIREMENT_NOT_IMPLEMENTED",
+      "conclusion": "Newparentlock,SQLNULL,absent/invisible,status/conflict cannot alone lost/rollback/safereplay; oldtxn maynotyet holdlock. Negative settlement requires trustworthy originalattempt termination plus complete authorizedstate+durablefence/no-repeat; no replayauthorized."
+    },
+    {
+      "id": "ACKUNKNOWN_POSITIVE",
+      "status": "DESIGN_SUPPORTED_NOT_IMPLEMENTED",
+      "conclusion": "InitiallyunknownACK may becomecommitted on complete independently authorized positive durableoperationcorrelated evidence: full6parentidentity,persistedseed+producer/templatebindings,exactresult,disposition,legalstatus,finalfields whenfinal,requiredatomic auditcorrelation,current authority/catalog/FORCERLS/GUC/release. Result equality aloneinsufficient. Originaltermination negative-rule mustnot permanently block independently provenpositivecommit."
+    },
+    {
+      "id": "AUTHORITY_FAILCLOSED_READS",
+      "status": "SAFETY_WITH_DIAGNOSTIC_READ_EXCEPTION",
+      "conclusion": "Missingstaleauthority closesexecute/mutation/publish/composition,allowsnecessarysupportedauthority/catalogreads to establishfacts; nofixedpass/synthesizedrelease/unauthorizedSubjectread. Realadapter missing."
+    },
+    {
+      "id": "QUEUE10S_MAXATTEMPTS",
+      "status": "NOT_ESTABLISHED_BY_SIX_INPUTS",
+      "conclusion": "Queueimplementation notamong6. Do notfreeze lawfulrelease/attemptaccounting,do not clearconsumed/intent/fence orauthorizeactionreplay. Exactqueuesource/tests neededbeforeclaimingconcretesemantics."
+    }
+  ],
+  "implementation_findings": [
+    "Candidate captures beforeawait,fullparentseedbinding,parentthenseedlock,NULLCAS,finalcompleted+DBclock; noouterauth/audit/COMMIT/ACK/publish/production",
+    "Canonicalfresh accepts suppliedportcommitted thenequality; publishresult+finalcompleted notfullsettlementreader",
+    "Client captures tenant beforephysicaltxn andsetslocalGUC; callbackambientframemaybelost; explicitcallbacktenant+physicalGUCverificationrequired",
+    "CPUdefinitionsnotrunbyreviewerandnotPGlocks/RLS/audit/COMMIT/ACKproof"
+  ],
+  "prior_audit_preserved": true,
+  "primitive_adopted": false,
+  "implementation_package_created": false,
+  "fullseedmigration_pending": true,
+  "newcanonicalparentreview_required": true,
+  "scope": "77/18/7",
+  "actions": {
+    "readsonly": true,
+    "Sourcewrites": 0,
+    "canonicalwrites": 0,
+    "branchwrites": 0,
+    "projectSQLexecution": 0,
+    "deps": 0,
+    "dispatch": 0,
+    "Windows_localhost": false,
+    "paid": 0
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  }
+}
