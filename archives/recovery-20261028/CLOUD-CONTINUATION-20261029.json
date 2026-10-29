@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:29:22.761Z",
+  "checkpoint_update_at": "2026-10-29T16:31:43.263Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4124,5 +4124,41 @@
       "no_commit_or_branch_update": true,
       "safer_alternative": "Runtime-only fixed original joblogs read; identities-only repo plan and bounded summaries"
     }
+  },
+  "cloud_a11_offline_data_successor": {
+    "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
+    "status": "NONAUTHOR_ADMIN_APPROVED_NOT_RUN",
+    "review_commit": "7434b734bd33ea232b80ada04501641d7cb9b26a",
+    "review_path": "archives/recovery-20261028/A11-DATA-6733-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "c9ed51d4b3f47f6050d8d3aff3c726aa496d0fdc",
+    "files": [
+      {
+        "path": ".github/workflows/a11-offline-data-verify.yml",
+        "blob": "bc48f013c05436f9964bfd43f995ed6590b23295",
+        "mode": "100644",
+        "bytes": 5086,
+        "sha256": "378f737483d6ed89be6898b2a10c235c7301e81f2d0234e8655b06a299610b73",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+        "blob": "5018f8691af76a690e4d8eac18bad23a7af5897e",
+        "mode": "100644",
+        "bytes": 21916,
+        "sha256": "db31c05de7a12400228eb3b6e78dbf532c104d21b4f180ef3e4ec83128e0e6b5",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+        "blob": "8c68d2b08432472c968a474c483fed3914103462",
+        "mode": "100644",
+        "bytes": 5994,
+        "sha256": "f1cd63ee1b6280003388dc8452d919ec16399aaf32bbfb5ced70ab984b0fc9b6",
+        "full_read": true
+      }
+    ],
+    "execution_branch": "codex/a11-data-verify-run-20261030-a1",
+    "raw_DATA_validation": "PENDING_NOT_PASS",
+    "Source_adopted": false
   }
 }
