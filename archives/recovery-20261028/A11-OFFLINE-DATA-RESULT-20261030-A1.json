@@ -1,0 +1,144 @@
+{
+  "schema": "a11-offline-data-runtime-result/v1",
+  "at": "2026-10-29T16:33:59.530Z",
+  "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
+  "review_commit": "7434b734bd33ea232b80ada04501641d7cb9b26a",
+  "run": 40912579798,
+  "job": 123584189279,
+  "status": "completed",
+  "conclusion": "failure",
+  "dispatch_count": 1,
+  "dispatch_branch": "codex/a11-data-verify-run-20261030-a1",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+  "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
+  "preflight": "Matching fresh canonical lease; actual idle queue; targetref404/headruns0; exact full review persisted8f97055c",
+  "actual_byte_validation": "FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED",
+  "files": [
+    {
+      "crc32": "009c2339",
+      "gzip_bytes": 14698,
+      "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
+      "json": "NOT_APPLICABLE_BYTES_ONLY_NO_SQL_OR_LOG_EXECUTION",
+      "path": "generated/0081_full50_approval_seed_diagnostic.sql",
+      "raw_bytes": 155827,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",
+      "single_member": true,
+      "trailing_bytes": 0
+    },
+    {
+      "crc32": "64ac703f",
+      "gzip_bytes": 36005,
+      "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
+      "json": {
+        "depth_cap": 64,
+        "duplicate_keys": false,
+        "node_cap": 200000,
+        "nodes": 17279,
+        "nonfinite": false,
+        "status": "SAFE_STRUCTURE_VALIDATED",
+        "top_level_keys": [
+          "_meta",
+          "dialect",
+          "enums",
+          "id",
+          "policies",
+          "prevId",
+          "roles",
+          "schemas",
+          "sequences",
+          "tables",
+          "version",
+          "views"
+        ]
+      },
+      "path": "generated/meta/0081_snapshot.json",
+      "raw_bytes": 633425,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1",
+      "single_member": true,
+      "trailing_bytes": 0
+    },
+    {
+      "crc32": "364fa205",
+      "gzip_bytes": 2116,
+      "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
+      "json": {
+        "depth_cap": 64,
+        "duplicate_keys": false,
+        "entries": 82,
+        "node_cap": 200000,
+        "nodes": 496,
+        "nonfinite": false,
+        "status": "SAFE_STRUCTURE_VALIDATED",
+        "top_level_keys": [
+          "dialect",
+          "entries",
+          "version"
+        ]
+      },
+      "path": "generated/meta/_journal.json",
+      "raw_bytes": 12118,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0",
+      "single_member": true,
+      "trailing_bytes": 0
+    },
+    {
+      "crc32": "540b67eb",
+      "gzip_bytes": 1863,
+      "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
+      "json": "NOT_APPLICABLE_BYTES_ONLY_NO_SQL_OR_LOG_EXECUTION",
+      "path": "diagnostic/generator.log",
+      "raw_bytes": 7289,
+      "raw_saved_or_executed": false,
+      "raw_sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550",
+      "single_member": true,
+      "trailing_bytes": 0
+    }
+  ],
+  "full_data_acceptance": "NOT_ACCEPTED_FINAL_RESOURCE_RESTORATION_UNKNOWN",
+  "log": {
+    "characters": 13445,
+    "sha256_utf8": "d90dddbb50cffd3b92c57a96ef658965ece7a8fb9c985cf16f83d6db3d25771e",
+    "full_read": true,
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40912579798/job/123584189279",
+    "markers": [
+      "2026-10-29T16:32:29.9375255Z A11_DATA_PARENT_INITIAL {\"limits\":{\"memory.max\":\"67108864\",\"memory.oom.group\":\"1\",\"memory.swap.max\":\"0\"},\"populated\":\"1\"}",
+      "2026-10-29T16:32:30.4489248Z A11_DATA_VALIDATION_RESULT {\"PG\":\"PG_PENDING\",\"files\":4,\"migration_semantics\":\"NOT_REVIEWED\",\"origin_job\":123547693853,\"origin_run\":40902334215,\"raw_output_files\":0,\"resource_gate\":{\"memory.max\":\"50331648\",\"memory.oom.group\":\"1\",\"memory.swap.max\":\"0\"},\"source_adopted\":false,\"status\":\"FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED\"}",
+      "2026-10-29T16:32:30.5155595Z A11_DATA_PRIVILEGED_TERMINAL {\"absolute_seconds\":150,\"admin_limits\":{\"memory.max\":\"16777216\",\"memory.oom.group\":\"1\",\"memory.swap.max\":\"0\"},\"codec_child_empty_and_limits_restored\":true,\"data_exit\":0,\"elapsed\":0.5781184240000101,\"error\":null,\"full_parent_empty_witness\":\"PENDING_EXTERNAL_AFTER_ADMIN_EXIT\",\"limits\":{\"memory.max\":\"67108864\",\"memory.oom.group\":\"1\",\"memory.swap.max\":\"0\"},\"origin_job\":123547693853,\"origin_run\":40902334215,\"parent_populated\":\"1\",\"project_limits\":{\"memory.max\":\"536870912\",\"memory.oom.group\":\"1\",\"memory.swap.max\":\"0\"},\"restore_proven\":false,\"source_adopted\":false,\"status\":\"DATA_VERIFIED\",\"subject_populated\":null,\"unit_state\":{\"ActiveState\":\"inactive\",\"Job\":\"\",\"LoadState\":\"not-found\"}}"
+    ]
+  },
+  "failure": {
+    "stage": "always external final witness after admin exited",
+    "line": 338,
+    "assertion": "limits(PARENT)==PARENT_EXPECTED and limits(PROJECT)==PROJECT_EXPECTED",
+    "actual_fields": "NOT_LOGGED_WHICH_VALUE_UNKNOWN",
+    "restore_proven": false
+  },
+  "resource_observations": {
+    "admin_max": 16777216,
+    "codec_max": 50331648,
+    "shared_max": 67108864,
+    "project_max": 536870912,
+    "swap": 0,
+    "admin_service_peak_observed": "8.9M",
+    "codec_service_peak_observed": "15.5M",
+    "final_parent_empty_limits_witness": "MISSING_NOT_PASS"
+  },
+  "raw_output_files": 0,
+  "project_or_SQL_execution": false,
+  "source_adopted": false,
+  "migration_semantics": "NOT_REVIEWED",
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "next_action": "Preserve actual four raw identity results; author minimal final witness/teardown diagnosis and exact nonauthor review. Do not rerun generator or mark total DATA pass. In parallel approved independent routeA2 may run only after fresh queue/lease gates."
+}

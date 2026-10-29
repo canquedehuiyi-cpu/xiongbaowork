@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:31:43.263Z",
+  "checkpoint_update_at": "2026-10-29T16:33:59.530Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -3789,6 +3789,17 @@
       "raw_inflate_crc_rawsha_json": "PENDING_NOT_DATA_PASS",
       "source_adopted": false,
       "observed_at": "2026-10-29T16:11:53.219Z"
+    },
+    "raw_export_byte_verification": {
+      "evidence_run": 40912579798,
+      "evidence_job": 123584189279,
+      "files": 4,
+      "inflate_crc_rawsha": "ACTUAL_MATCH",
+      "snapshot_journal_safe_json": "ACTUAL_PASS",
+      "raw_output_files": 0,
+      "overall_job": "failure",
+      "final_resource_restoration": "UNKNOWN_NOT_PROVEN",
+      "not_Source_migration_PG_adoption": true
     }
   },
   "human_delegated_takeover": {
@@ -4127,7 +4138,7 @@
   },
   "cloud_a11_offline_data_successor": {
     "candidate": "67331334888b96d7d56fe98a897cbfa7e797fd77",
-    "status": "NONAUTHOR_ADMIN_APPROVED_NOT_RUN",
+    "status": "TERMINAL_FAILURE_FOUR_BYTE_RESULTS_VERIFIED_FINAL_RESOURCE_UNKNOWN",
     "review_commit": "7434b734bd33ea232b80ada04501641d7cb9b26a",
     "review_path": "archives/recovery-20261028/A11-DATA-6733-NONAUTHOR-REVIEW-20261030.json",
     "review_blob": "c9ed51d4b3f47f6050d8d3aff3c726aa496d0fdc",
@@ -4159,6 +4170,39 @@
     ],
     "execution_branch": "codex/a11-data-verify-run-20261030-a1",
     "raw_DATA_validation": "PENDING_NOT_PASS",
-    "Source_adopted": false
+    "Source_adopted": false,
+    "result": {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-RESULT-20261030-A1.json",
+      "run": 40912579798,
+      "job": 123584189279,
+      "actual_byte_validation": "FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED",
+      "full_data_acceptance": "NOT_ACCEPTED_FINAL_RESOURCE_RESTORATION_UNKNOWN"
+    }
+  },
+  "cloud_route_bootstrap_successor": {
+    "candidate": "576d176424df248222299db2c49d0fa545c90579",
+    "status": "NONAUTHOR_ADMIN_APPROVED_NOT_RUN",
+    "review_commit": "ada8728408ec8404131f4122f55837fce22646fc",
+    "review_path": "archives/recovery-20261028/CLOUD-ROUTE-BOOTSTRAP-GATE-NONAUTHOR-REVIEW-20261030-A2.json",
+    "review_blob": "22f0a52b2e80cb993e561c0a281e2a53f05d6874",
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "mode": "100644",
+        "blob": "44651d02ea8e4eedb6a18f8a654a0ebc1b22a9f4",
+        "bytes": 142765,
+        "sha256": "adf53698354c007d8496b8e5bbc0b920467e759ef01560ee52e19f8e84010220",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "mode": "100644",
+        "blob": "840a2374da884c4e102997537f6d2cf56c1f2b56",
+        "bytes": 40906,
+        "sha256": "e8fb23aeb397d7ade13e42af85fe9d41453fc5f2b49f56f63de643ed0ed38ba3",
+        "full_read": true
+      }
+    ],
+    "dispatch_branch": "codex/route-systemd-compat-run-20261030-a2"
   }
 }

@@ -1,0 +1,99 @@
+{
+  "schema": "route-bootstrap-parent-gate-independent-review/v1",
+  "reviewer": "/root/route_compat_reviewer",
+  "author": "/root/route_systemd_author",
+  "candidate": "576d176424df248222299db2c49d0fa545c90579",
+  "tree": "50a314d7d6422c84b14dd74ea92ba2a315c96496",
+  "parent": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+  "verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "project_execution": false,
+  "source_approval": false,
+  "review_sequence": "Formal new package review resumed only after Root reported A11 673313 package full nonauthor review complete; earlier locating reads did not constitute approval.",
+  "files": [
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "mode": "100644",
+      "blob": "44651d02ea8e4eedb6a18f8a654a0ebc1b22a9f4",
+      "bytes": 142765,
+      "sha256": "adf53698354c007d8496b8e5bbc0b920467e759ef01560ee52e19f8e84010220",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "mode": "100644",
+      "blob": "840a2374da884c4e102997537f6d2cf56c1f2b56",
+      "bytes": 40906,
+      "sha256": "e8fb23aeb397d7ade13e42af85fe9d41453fc5f2b49f56f63de643ed0ed38ba3",
+      "full_read": true
+    }
+  ],
+  "actual_history": {
+    "run": 40911192453,
+    "job": 123579294835,
+    "complete_log_characters": 304958,
+    "complete_log_sha256": "327f5358e7be8c5c3c958556baa4dd3672c9e7901bdcbc7c78cb53f8437ab136",
+    "source": "2065/50175181B verified",
+    "six_prelude_barriers": "ACTUAL_RECORDED_PASS",
+    "install_prepare_brand": "ACTUAL_RECORDED_PASS",
+    "failure": "bootstrap line366 full parent limits assertion",
+    "actual_failing_key": "UNKNOWN_NOT_LOGGED",
+    "build_A_B": "NOT_RUN",
+    "config": "NOT_CREATED",
+    "always": "FAILED_OR_UNKNOWN / FileNotFoundError / restore_proven=false",
+    "not_reinterpreted_as_restore": true
+  },
+  "static_checks": {
+    "exact_delta": {
+      "prebootstrapSame": true,
+      "controlLifecycleSame": true,
+      "mainSame": true,
+      "exactWorkflowDelta": true
+    },
+    "full_tree_truncated": false,
+    "compare_commits": 1,
+    "compare_changed_files": 2,
+    "Source_blobs_modes_unchanged": true,
+    "helper": {
+      "bytes": 32311,
+      "sha256": "1c14a1877281fe8a6e2c411a40e52679147c227a214ce2804f5e590b880b46ac"
+    },
+    "bootstrap": "The sole immutable t0 begins before own pure administrative parent observation. call_bounded supervises actual limits/pop read. Only exact512MiB/swap0/oom0or1/populated0 permits kernel oom.group1 write and full limits/populated0 recheck; unexpected caps/swap/oom/populated reject without write. No memory.max or swap repair here.",
+    "failure_evidence": "Before marker emits actual fields. Rejected observations are copied to preflight; assertion detail retains readback where available. Missing/unreadable/deadline failure remains FAILED_OR_UNKNOWN, restore_proven=false; evidence save only within original remaining deadline.",
+    "always": "Read-only failure/current limits collection; never creates config, repairs gate or suppresses exception. Bootstrap gate is explicitly NOT_FINAL_RESTORE.",
+    "deadline": "t0 advanced earlier only; inner=t0+270/outer=t0+300. All existing management calls, recovery cutoff294/295, supervisor/fallback and final physical witness unchanged.",
+    "identity": "Six activation barriers and both20451B Subject literals byte-identical. Original own cgroup, irreversible UID/GID/groups drop and oomadj0 checks retained.",
+    "resources": "512/swap0 ordinary; control16+16/DATA32 aggregate64; originalbuild4GiB only; no resource expansion.",
+    "cleanup": "Existing full controls-exit, ownstop/show/job/empty, finalparentpopulated0 and read-onlyalways success gate unchanged."
+  },
+  "dispatch": {
+    "max": 1,
+    "event": "push",
+    "branch": "codex/route-systemd-compat-run-20261030-a2",
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false,
+    "preconditions": [
+      "Save exact new independent review",
+      "Current valid owner/run/epoch and fresh head",
+      "Actual queued/in_progress empty and serial resource ownership",
+      "Exact candidate/ref/run dedup",
+      "No implementation modification covered by this verdict"
+    ]
+  },
+  "unproven": [
+    "576d has no runtime result; actual bootstrap before/after and full300s terminal witnesses must be observed.",
+    "No new actual key value is inferred for old835 bootstrap failure.",
+    "Runtime memory headroom/systemd/kernel behavior and final restore remain unproven until exact run. Any missing witness is FAILED_OR_UNKNOWN.",
+    "No Source adoption/fullCI/PG/commercial/Rootrelease supplied."
+  ],
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "next_action": "Leaseowner may consider one exact a2 push after fresh gates; receive actual terminal without unchanged retry. This reviewer neither dispatches nor changes canonical/lease."
+}
