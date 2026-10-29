@@ -1,0 +1,511 @@
+{
+  "schema": "xiongbaowork-minimal-generator-a5-actual-run-independent-review/1",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "run": 40850003450,
+  "job": 123366832250,
+  "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+  "tree": "e7edc50ca6b060163cce5c20988a3870a9712e25",
+  "retrieval": "NormalGitHub complete decoded joblogs andsteps; originalexactcontroller281-303 read; countactualevents excluding echoed shell.",
+  "verdict": "JOB_FAILED_ORM_PEER_METADATA_GUARD",
+  "source": {
+    "status": "PASS_SOURCE_BYTES_ONLY",
+    "files": 2065,
+    "bytes": 50175181,
+    "batches": 74,
+    "modes_fd_hash_verified": true
+  },
+  "private_copy": {
+    "status": "PASS_DIAGNOSTIC_ONLY",
+    "files": 2065,
+    "bytes": 50177753,
+    "FULL50_prepared": true,
+    "formal_adoption": false
+  },
+  "dependency_counts": {
+    "redirect_permitted": 11,
+    "archive_SRI_verified_before_extraction": 11,
+    "package_prepared": 10,
+    "total_planned_nodes": 17,
+    "remaining_nodes_not_reached": 6,
+    "all17closure": "NOT_VERIFIED"
+  },
+  "SRI_verified_packages": [
+    {
+      "at": "2026-10-29T09:29:52.2182804Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 76527,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==",
+      "original_lock_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+      "package": "@drizzle-team/brocli@0.10.2"
+    },
+    {
+      "at": "2026-10-29T09:29:55.5972235Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 24011,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==",
+      "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+      "package": "@esbuild-kit/core-utils@3.3.2"
+    },
+    {
+      "at": "2026-10-29T09:29:58.3381955Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 29378,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==",
+      "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+      "package": "esbuild@0.18.20"
+    },
+    {
+      "at": "2026-10-29T09:29:59.9175456Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 3923240,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-UYqiqemphJcNsFEskc73jQ7B9jgwjWrSayxawS6UVFZGWrAAtkzjxSqnoclCXxWtfwLdzU+vTpcNYhpn43uP1w==",
+      "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+      "package": "@esbuild/linux-x64@0.18.20"
+    },
+    {
+      "at": "2026-10-29T09:30:01.5474969Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 5048,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==",
+      "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+      "package": "@esbuild-kit/esm-loader@2.6.5"
+    },
+    {
+      "at": "2026-10-29T09:30:03.8698517Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 4741809,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==",
+      "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+      "package": "@esbuild/linux-x64@0.28.2"
+    },
+    {
+      "at": "2026-10-29T09:30:10.9755358Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 2313,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==",
+      "original_lock_url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+      "package": "buffer-from@1.1.2"
+    },
+    {
+      "at": "2026-10-29T09:30:12.2511964Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 1638315,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==",
+      "original_lock_url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+      "package": "drizzle-kit@0.31.10"
+    },
+    {
+      "at": "2026-10-29T09:30:15.2727953Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 30947,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==",
+      "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+      "package": "esbuild@0.25.12"
+    },
+    {
+      "at": "2026-10-29T09:30:16.9946475Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 4395720,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==",
+      "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+      "package": "@esbuild/linux-x64@0.25.12"
+    },
+    {
+      "at": "2026-10-29T09:30:19.0834118Z",
+      "SRI_verified_before_extraction": true,
+      "bytes": 1223890,
+      "followed_hops": 1,
+      "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+      "original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+      "package": "drizzle-orm@0.45.2"
+    }
+  ],
+  "prepared_packages": [
+    {
+      "at": "2026-10-29T09:29:52.2364040Z",
+      "download_bytes": 76527,
+      "extracted": {
+        "bytes": 360392,
+        "files": 8
+      },
+      "hooks": "NOT_RUN",
+      "key": "@drizzle-team/brocli",
+      "placement": "node_modules/@drizzle-team/brocli",
+      "version": "0.10.2"
+    },
+    {
+      "at": "2026-10-29T09:29:55.6054783Z",
+      "download_bytes": 24011,
+      "extracted": {
+        "bytes": 64096,
+        "files": 5
+      },
+      "hooks": "NOT_RUN",
+      "key": "@esbuild-kit/core-utils",
+      "placement": "node_modules/@esbuild-kit/core-utils",
+      "version": "3.3.2"
+    },
+    {
+      "at": "2026-10-29T09:29:58.3488781Z",
+      "download_bytes": 29378,
+      "extracted": {
+        "bytes": 131272,
+        "files": 7
+      },
+      "hooks": "NOT_RUN",
+      "key": "@esbuild-kit/core-utils/esbuild",
+      "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+      "version": "0.18.20"
+    },
+    {
+      "at": "2026-10-29T09:30:00.1072747Z",
+      "download_bytes": 3923240,
+      "extracted": {
+        "bytes": 9347542,
+        "files": 3
+      },
+      "hooks": "NOT_RUN",
+      "key": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+      "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+      "version": "0.18.20"
+    },
+    {
+      "at": "2026-10-29T09:30:01.5528168Z",
+      "download_bytes": 5048,
+      "extracted": {
+        "bytes": 13364,
+        "files": 4
+      },
+      "hooks": "NOT_RUN",
+      "key": "@esbuild-kit/esm-loader",
+      "placement": "node_modules/@esbuild-kit/esm-loader",
+      "version": "2.6.5"
+    },
+    {
+      "at": "2026-10-29T09:30:04.1191877Z",
+      "download_bytes": 4741809,
+      "extracted": {
+        "bytes": 11428465,
+        "files": 3
+      },
+      "hooks": "NOT_RUN",
+      "key": "@esbuild/linux-x64",
+      "placement": "node_modules/@esbuild/linux-x64",
+      "version": "0.28.2"
+    },
+    {
+      "at": "2026-10-29T09:30:10.9804361Z",
+      "download_bytes": 2313,
+      "extracted": {
+        "bytes": 5047,
+        "files": 4
+      },
+      "hooks": "NOT_RUN",
+      "key": "buffer-from",
+      "placement": "node_modules/buffer-from",
+      "version": "1.1.2"
+    },
+    {
+      "at": "2026-10-29T09:30:12.4661859Z",
+      "download_bytes": 1638315,
+      "extracted": {
+        "bytes": 10267084,
+        "files": 13
+      },
+      "hooks": "NOT_RUN",
+      "key": "drizzle-kit",
+      "placement": "node_modules/drizzle-kit",
+      "version": "0.31.10"
+    },
+    {
+      "at": "2026-10-29T09:30:15.2833099Z",
+      "download_bytes": 30947,
+      "extracted": {
+        "bytes": 135343,
+        "files": 7
+      },
+      "hooks": "NOT_RUN",
+      "key": "drizzle-kit/esbuild",
+      "placement": "node_modules/drizzle-kit/node_modules/esbuild",
+      "version": "0.25.12"
+    },
+    {
+      "at": "2026-10-29T09:30:17.2149739Z",
+      "download_bytes": 4395720,
+      "extracted": {
+        "bytes": 10359450,
+        "files": 3
+      },
+      "hooks": "NOT_RUN",
+      "key": "drizzle-kit/esbuild/@esbuild/linux-x64",
+      "placement": "node_modules/drizzle-kit/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+      "version": "0.25.12"
+    }
+  ],
+  "ORM_failure": {
+    "package": "drizzle-orm@0.45.2",
+    "archive_bytes": 1223890,
+    "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+    "archive_SRI": "PASS",
+    "safe_extract": "RETURNED",
+    "name_version_guard": "PASSED_BEFORE_FAILURE",
+    "location": "prepare_dependencies line295",
+    "failed_field": "peerDependencies",
+    "failed_predicate": "package.get(key,{}) == node.metadata.get(key,{})",
+    "actual_peer_dictionary": "NOT_LOGGED_UNKNOWN",
+    "expected_actual_delta": "NOT_ESTABLISHED",
+    "package_prepared_event": false,
+    "optionalPeers_metadata_check": "NOT_REACHED",
+    "scope": "Never infer peer difference values or weaken validation from this failure alone."
+  },
+  "native_esbuild_checks": "NOT_RUN",
+  "generator": "NOT_RUN",
+  "metadata": "NONE",
+  "steps": [
+    {
+      "name": "Set up job",
+      "conclusion": "success"
+    },
+    {
+      "name": "Verify administrative controller then run bounded serial stages",
+      "conclusion": "failure"
+    },
+    {
+      "name": "Always kill only owned descendant groups and restore project gate",
+      "conclusion": "success"
+    },
+    {
+      "name": "Complete job",
+      "conclusion": "success"
+    }
+  ],
+  "stage_events": [
+    {
+      "at": "2026-10-29T09:29:46.6248854Z",
+      "event": "SOURCE_BATCH_MATERIALIZATION",
+      "value": {
+        "batches": 74,
+        "max_files": 32,
+        "max_source_bytes": 2097152,
+        "fsync_after_each_batch": true,
+        "memory_limit": 67108864
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:47.3793034Z",
+      "event": "SOURCE_RECOVERY_RESULT",
+      "value": {
+        "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "aggregate_memory_limit": 67108864,
+        "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+        "git_tree": "e7edc50ca6b060163cce5c20988a3870a9712e25",
+        "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+        "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+        "overlay_tickets": [],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50175181,
+        "verified_source_files": 2065,
+        "windows_source_files_written": 0
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:47.4104998Z",
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 453.57057307499997,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-source"
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:47.4106289Z",
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 453.57043396399996,
+        "exit": 0,
+        "stage": "source"
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:47.8490645Z",
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50175181,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": false
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:50.5209590Z",
+      "event": "SOURCE_RECHECK",
+      "value": {
+        "bytes": 50177753,
+        "files": 2065,
+        "formal_adoption": false,
+        "overlay": true
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:50.7678237Z",
+      "event": "OFFLINE_FULL50_PREPARED",
+      "value": {
+        "complete_source_copy": 2065,
+        "credentials": false,
+        "learning_removed_with0078_evidence": true,
+        "original_drizzle_tables": 99,
+        "recovery_stitched": false,
+        "runtime_helpers": [
+          "json.ts",
+          "tenant.ts"
+        ],
+        "schema_files": 50
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:50.8399731Z",
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 450.14112589099994,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-copy"
+      }
+    },
+    {
+      "at": "2026-10-29T09:29:50.8402247Z",
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 450.14099737999993,
+        "exit": 0,
+        "stage": "copy"
+      }
+    },
+    {
+      "at": "2026-10-29T09:30:20.9918174Z",
+      "event": "SERVICE_CLEANUP_ONCE",
+      "value": {
+        "deadline_remaining": 419.989373936,
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "unit": "xb-min-deps"
+      }
+    },
+    {
+      "at": "2026-10-29T09:30:20.9920659Z",
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 419.98923572699994,
+        "exit": 1,
+        "stage": "deps"
+      }
+    },
+    {
+      "at": "2026-10-29T09:30:20.9922908Z",
+      "event": "PROJECT_LIMIT_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "populated": "0"
+      }
+    },
+    {
+      "at": "2026-10-29T09:30:21.1115470Z",
+      "event": "GENERATOR_ALWAYS_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "Source_adopted": false,
+        "ROOT_RELEASE": null,
+        "ready": false,
+        "PG": "PG_PENDING"
+      }
+    }
+  ],
+  "resource": {
+    "configured_parent_memory": 536870912,
+    "configured_DATA_memory": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "automatic_memory_peak_raw": {
+      "source": "64.1M (swap: 0B)",
+      "copy": "64M (swap: 0B)",
+      "deps": "64.5M (swap: 0B)"
+    },
+    "interpretation": "Preserve automatic logged peaks verbatim; do not claim historical readings never exceeded nominal labels. Report actual configured cgroup bounds separately.",
+    "final": {
+      "memory": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "always": {
+      "memory": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "cleanup_remaining_positive": true
+  },
+  "next_scope": [
+    "Do not repeat unchangedSource+17dependency chain.",
+    "Prepare bounded singleORM actualpackage.json metadata evidence using originallockedURL/SRI and reviewedexactredirectpolicy; no hooks or native/projectexecution.",
+    "New metadata diagnostic needs exact nonauthorreview and legalcoordinatorlease+idle before dispatch.",
+    "Record actual peerDependencies and peerDependenciesMeta with stable archive/packagejson identities before deciding a narrowly justified comparison change.",
+    "OriginalSource/copy/SRI/metadata/native/CLI/PGproof scopes remain separate; do not convert partialpackageSRI success into full dependency or generatorPASS."
+  ],
+  "reviewer_actions": {
+    "executed_project": false,
+    "dispatched": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "full77_18_7_acceptance": false
+  }
+}
