@@ -1,0 +1,92 @@
+{
+  "schema": "xiongbaowork-minimal-generator-independent-review/2",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "b74eb935b96cc81d450c1a41a88763adca95cf4e",
+  "parent": "d824f9cc45cf13bbe198bd210514121636bca501",
+  "verdict": "CHANGES_REQUIRED_DO_NOT_DISPATCH",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "blob": "f07db16f7f85567e0b60c6e8b3e050377d9aab8f",
+      "bytes": 4017,
+      "sha256": "d2b6b8891d616b8dd470b7640b61de08fc36d2ea3e4df3d84de88db3a4726a6b",
+      "read": "Full file fetched; new implementation blocks fully read; unchanged exact blocks compared to fully reviewed A1"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "blob": "764cb7a476641a4a1358161d71558e90b97e8e06",
+      "bytes": 65352,
+      "sha256": "f7e45b1965405c7d2ed371315cd6b23391c3a27c5aa145b3a321ba1665303358",
+      "read": "Full file fetched; new implementation blocks fully read; unchanged exact blocks compared to fully reviewed A1"
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "blob": "e999378b46ef04189e76dbd8b9b24b8669013ec4",
+      "bytes": 28520,
+      "sha256": "d0c7a7da53b6dd2eccdb7a41a434208bc96d4733a024dd4a588077ff961567a8",
+      "read": "Full file fetched; new implementation blocks fully read; unchanged exact blocks compared to fully reviewed A1"
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "DELIVERY-GEN-A1-P2-EXPORT",
+      "status": "RESOLVED",
+      "evidence": "Structure JSON/lineage/table/journal checks catch validation findings, mark metadata incomplete, then stream all safe real added/changed generated files. Oversize log prefixes explicitly incomplete with original full identity and failed outcome."
+    },
+    {
+      "id": "DELIVERY-GEN-A1-P2-DEADLINE-DUPLICATION",
+      "status": "RESOLVED",
+      "evidence": "cleanup_once/cleaned set prevents duplicated stop passes; reserve8, stop/wait bounded from same deadline; no fresh outer finally deadline."
+    }
+  ],
+  "findings": [
+    {
+      "id": "DELIVERY-GEN-A2-P2-DEADLINE-WITNESS",
+      "severity": "blocking",
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "lines": [
+        373,
+        377,
+        409
+      ],
+      "problem": "cleanup_once emits deadline_remaining but never refuses an actual late restoration/completion. A1 deadline+1 assertion was removed entirely. Even after nominal reserve accounting, a late actual cleanup can retain proc return0 and count as successful stage.",
+      "requested_fix": "After restoration and empty-group checks, record actual completion time/remaining and require completion<=same absolute deadline with no+1 grace, or propagate explicit timeout failure. No deadline enlargement."
+    },
+    {
+      "id": "DELIVERY-GEN-A2-P2-LATE-ACTIVATION",
+      "severity": "blocking",
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "lines": [
+        360,
+        365,
+        389,
+        402,
+        408
+      ],
+      "problem": "Outer wait begins cleanup at deadline-8, but privileged activation wrapper only refuses after deadline-5. If owned cgroup does not yet exist and systemctl stop times out, killing systemd-run client does not itself prove cancellation of the manager pending unit. Delayed activation during the3second gap can still pass wrapper and exec Subject after cleanup began, using original relative RuntimeMaxSec.",
+      "requested_fix": "Give wrapper and immediately-before-Subject exec/stage entry the same absolute work cutoff deadline-8 used by outer wait, or add an explicit manager cancellation/activation handshake that guarantees no Subject starts after cleanup begins. Keep cgroup kill and bounded cleanup, no resource/time expansion."
+    }
+  ],
+  "unchanged_verified": {
+    "source_script_exact_equal_to_A1": true,
+    "helpers_through_prepare_dependencies_exact_equal_to_A1": true,
+    "core_plan_equal_except_branch_and_revision": true,
+    "embedded_plan_matches_standalone": true,
+    "source_files": 2065,
+    "source_bytes": 50175181,
+    "schema_modules": 50,
+    "locked_package_nodes": 17,
+    "resource_limits": "Project512MiB/swap0,DATA64MiB,generate512MiB;480/120/120 unchanged",
+    "authority": "Root-admin resource activation only then irreversible UID/GID drop; no Subject root execution",
+    "triggers": "Only unique run-a2 push, prep does not match; contentsread, singleubuntu15min,source-recovery-bytes,cancelfalse"
+  },
+  "reviewer_actions": {
+    "project_executed": false,
+    "dispatch": false,
+    "execution_branch_created": false,
+    "canonical_written": false
+  },
+  "scope": "No candidate Source or migration adopted. ROOT_RELEASEnull/readyfalse/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING and complete77/18/7 pending."
+}
