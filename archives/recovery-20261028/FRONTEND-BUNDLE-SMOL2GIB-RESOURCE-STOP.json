@@ -1,0 +1,249 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40799381218,
+  "job": 123203539628,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "2330947f3ef96e913a5351845a6098cd8312a834",
+    "head": "53c2449c97e641e5a3994e976de6d9cdd5914b58",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "53c2449c97e641e5a3994e976de6d9cdd5914b58",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": {
+    "exit_code": 0,
+    "tenant_package": "../examples/qoderwake",
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": {
+    "pass": 0,
+    "fail": 0,
+    "expects": 0
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 512.6M (swap: 0B)",
+    "Memory peak: 26.2M (swap: 0B)",
+    "Memory peak: 86.8M (swap: 0B)",
+    "Memory peak: 1.9G (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Original Vite config under Bun smol runtime at authorized2GiB/swap0/300 cap",
+  "status": "RESOURCE_STOP_OOM_KILL_2GIB_SMOL",
+  "plan": {
+    "schema": "xiongbaowork-frontend-bundle-resource-proposal/1",
+    "status": "AUTHORIZED_EXISTING_BUILD_SCOPE_LOW_MEMORY_RUNTIME",
+    "source_base": "07f1d8ab8c102fce1afddd432e84d4e2efe836a3",
+    "source_files": 2060,
+    "source_bytes": 50032071,
+    "normal_attempt": {
+      "run": 40795427951,
+      "job": 123190636436,
+      "status": "OOM_KILL",
+      "configured_aggregate_limit": 536870912,
+      "swap": 0,
+      "actual_unit_runtime": "40.696s",
+      "automatic_memory_peak": "497.4M",
+      "bundler_started": true,
+      "final_build_result": "NOT_PRODUCED",
+      "post_build_source_verification": "UNKNOWN_UNIT_KILLED"
+    },
+    "requested_scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
+    "proposed_aggregate_limit": 2147483648,
+    "swap": 0,
+    "outer_timeout_seconds": 300,
+    "inner_timeout_seconds": 270,
+    "always_restore_aggregate_limit": 536870912,
+    "source_and_artifact_data_limit": 67108864,
+    "dependency_install_limit": 536870912,
+    "prebuild_generator_limit": 536870912,
+    "source_edits_adopted": false,
+    "paid_provider_calls": 0,
+    "cloud_only": true,
+    "windows_source_writes": 0,
+    "postgres17": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "previous2GiB_authorizations_reused": false,
+    "workflow_trigger": "ONLY_EXACT_AUTHORIZED_VALIDATION_BRANCH_PUSH",
+    "original_proposal_commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
+    "authorization": {
+      "source": "Direct human async reply",
+      "text": "允许，仅前端生产构建使用2 GiB（推荐）",
+      "question_item_id": "[\"request_user_input_async\",\"call_cf6a5f326f6b4c5ebeefca3890335e4a\",0]"
+    },
+    "additional_source_adoption": "NONE",
+    "new_resource_exception": false,
+    "prior_attempt": {
+      "run": 40798601807,
+      "job": 123200989988,
+      "status": "2GIB_OOM_KILL",
+      "restore512_verified": true,
+      "tracked_generated_delta": [
+        {
+          "path": "openbot/app/src/routeTree.gen.ts",
+          "before": {
+            "path": "openbot/app/src/routeTree.gen.ts",
+            "bytes": 48763,
+            "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae",
+            "mode": "0o644"
+          },
+          "after": {
+            "bytes": 49276,
+            "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+          }
+        }
+      ],
+      "adopted": false
+    },
+    "runtime_adjustment": {
+      "flag": "--smol",
+      "reference": "https://bun.com/docs/runtime",
+      "effect": "Lower memory use through more frequent garbage collection; potential slowdown",
+      "original_vite_config_unchanged": true,
+      "no_source_or_lock_edits": true
+    },
+    "log_capture": "Stream own non-secret frontend build progress to preserve diagnostic evidence if the controller is OOM-killed",
+    "postbuild_generated_data_evidence": {
+      "max_files": 8,
+      "max_total_source_bytes": 131072,
+      "cap": 67108864,
+      "location": "Cloud-only Actions logs",
+      "adoption": false
+    }
+  },
+  "source_commit": "53c2449c97e641e5a3994e976de6d9cdd5914b58",
+  "bundler_result": "NOT_PRODUCED",
+  "bun_child_exit_code": "UNKNOWN_CONTROLLER_OOM_KILLED",
+  "bundle_runtime": {
+    "argv": [
+      "--smol",
+      "--bun",
+      "node_modules/vite/bin/vite.js",
+      "build"
+    ],
+    "vite_configuration": "ORIGINAL_UNCHANGED",
+    "reason": "Documented Bun smol mode collects more often and grows the heap more slowly",
+    "reference": "https://bun.com/docs/runtime",
+    "aggregate_limit": 2147483648,
+    "outer_timeout": 300
+  },
+  "restore512": {
+    "parent_memory_max": 536870912,
+    "swap": 0
+  },
+  "source_after_build": {
+    "tracked_source_changes": [
+      {
+        "path": "openbot/app/src/routeTree.gen.ts",
+        "before": {
+          "path": "openbot/app/src/routeTree.gen.ts",
+          "bytes": 48763,
+          "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae",
+          "mode": "0o644"
+        },
+        "after": {
+          "bytes": 49276,
+          "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+        }
+      }
+    ],
+    "source_edits_adopted": false,
+    "data_limit": 67108864,
+    "parent_memory_limit": 536870912
+  },
+  "artifact_data": {
+    "artifacts": [],
+    "brand_observations": {},
+    "formal_image8GET": "NOT_RUN",
+    "native_pg": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "service_termination": {
+    "result": "oom-kill",
+    "controller_main_process": "code=killed,status=9/KILL",
+    "runtime": "3min22.293s",
+    "automatic_peak": "1.9G(swap0B)"
+  },
+  "generated_source_data": {
+    "path": "openbot/app/src/routeTree.gen.ts",
+    "bytes": 49276,
+    "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+    "blob": "50399b63fa0119c9439866e7250049378af617e3",
+    "data_capture": "Cloud-only Actions log",
+    "strict_base64_sha_utf8_checked_in_tool_memory": true,
+    "adopted": false
+  },
+  "bundler_progress": [
+    "FRONTEND_BUNDLE_PROGRESS vite v7.3.6 building client environment for production...",
+    "FRONTEND_BUNDLE_PROGRESS transforming..."
+  ]
+}
