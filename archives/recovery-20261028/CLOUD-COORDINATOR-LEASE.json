@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
   "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
   "acquired_at": "2026-10-29T17:00:04.986Z",
-  "renewed_at": "2026-10-29T17:00:04.986Z",
+  "renewed_at": "2026-10-29T17:01:57.125Z",
   "expires_at": "2026-10-29T17:45:04.986Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,

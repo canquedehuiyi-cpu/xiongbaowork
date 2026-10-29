@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:59:09.916Z",
+  "checkpoint_update_at": "2026-10-29T17:01:57.125Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4343,7 +4343,7 @@
   },
   "cloud_a11_delegated_prototype": {
     "candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
-    "status": "AUTHOR_PREPARED_EXACT_NONAUTHOR_REVIEW_ACTUALLY_STARTED_NOT_APPROVED",
+    "status": "D068_BLOCKED_STATIC_OWNED_DIRECTORY_POSTDROP_TRAVERSE_NOT_DISPATCHED",
     "prepare_branch": "codex/a11-data-verify-prep-20261030",
     "execution_branch": "codex/a11-data-verify-run-20261030-a3",
     "files": [
@@ -4365,6 +4365,12 @@
     ],
     "Source_adopted": false,
     "original_managed_slice_gate": "UNRESOLVED_NOT_OVERRIDDEN",
-    "review_activation_correction": "Earlier ordinary send to completed reviewer did not start a3 review; explicit followup now started. No approval inferred."
+    "review_activation_correction": "Earlier ordinary send to completed reviewer did not start a3 review; explicit followup now started. No approval inferred.",
+    "blocking_review": {
+      "commit": "44d76b2c9b530c67b931f950bffd2b0c6cfb8027",
+      "path": "archives/recovery-20261028/A11-DELEGATED-D068-NONAUTHOR-REVIEW-20261030.json",
+      "blob": "2fd511f7a4be4401b44a550e7a0c49c55687db9f",
+      "finding": "Owned0700 directory traverse after irreversible UIDdrop; author minimal rootowned0755/read-only controls successor pending"
+    }
   }
 }

@@ -1,0 +1,119 @@
+{
+  "schema": "a11-delegated-a3-independent-admin-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
+  "parent": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+  "tree": "5bda32319a7f57898e168d073c47e4caf52317d9",
+  "verdict": "FINDING_BLOCKED_NOT_APPROVED_FOR_DISPATCH",
+  "findings": [
+    {
+      "id": "A11-A3-P2-OWNED-CGROUP-TRAVERSAL-AFTER-DROP",
+      "blocking": true,
+      "severity": "P2",
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "lines": [
+        79,
+        121,
+        122,
+        123,
+        139,
+        141
+      ],
+      "code": "owned(path,cap) mkdir(mode=0o700) creates target/admin/noop root-owned. Child irrevocably drops to uid/gid then attempts limits(childcg), limits(target), limits(root).",
+      "consequence": "The code requests root-only directory traversal on target/noop then requires an unprivileged process to traverse and read below them. This deterministically fails on a normal cgroupfs honoring mkdir mode; the candidate neither verifies a different actual mode nor supplies a supported safe traversal/FD path. Do not assume cgroupfs ignores requested mode.",
+      "repair": "Minimal successor may set only owned cgroup directory traversal/read permissions0755 with root ownership and control files remaining root-writable only, independently check actual directory/control ownership/mode and retain exact postdrop gate. Do not grant unprivileged writes, chown cgroup controls, remove postdrop checks, or change managed-root attributes.",
+      "source_basis": {
+        "official_kernel": "https://github.com/torvalds/linux/blob/master/kernel/cgroup/cgroup.c",
+        "observation": "cgroup_create passes supplied mode to kernfs_create_dir_ns; no supported contract permits assuming mkdir0700 is ignored."
+      },
+      "runtime_tested": false
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/a11-offline-data-verify.yml",
+      "mode": "100644",
+      "blob": "7bce867d878465f6fa863d6468db8e2dfd8fc9f6",
+      "bytes": 5369,
+      "sha256": "2c7288d20b4e61607414cd9fbc886f83287a616447483c6f336b010fa289de64",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+      "mode": "100644",
+      "blob": "616c0a8bf02f3bafb1fc9137e511120bd8f71129",
+      "bytes": 16917,
+      "sha256": "77687c7cee228481e9cb60eee3acf2ce8bd970dc69811fc1331fc8f2f9c58a23",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/A11-OFFLINE-DATA-PLAN-20261030.json",
+      "mode": "100644",
+      "blob": "515d47483c7f3839d6dc0614a2311e6a97815e42",
+      "bytes": 7357,
+      "sha256": "b0b573f91747b09034b994d66874d7253a037bf52fc615cb300178a6559a6258",
+      "full_read": true
+    }
+  ],
+  "scope": {
+    "only_three_admin_modified": true,
+    "Source_changes": 0,
+    "no_canonical_lease_jobs_Page_automation_changes": true,
+    "no_token_original_log_network_codec_Subject_in_controller": true
+  },
+  "other_static_paths_checked": {
+    "actual_Delegate_yes_and_RemainAfterExit_yes_required": true,
+    "actual_ControlGroup_and_own_proc_membership_exact": true,
+    "user_delegate_xattr_exact_1_required": true,
+    "xattr_missing_no_fallback": true,
+    "manager_owned_unit_root_memory_swap_oom_readonly": true,
+    "only_delegated_descendants_created": true,
+    "no_internal_PIDs_before_memory_subtree_control": true,
+    "service_root64_caps_all_initial_admin_management_fork": true,
+    "target64_admin16_noop48_nested_not_additive": true,
+    "writer_stays_target_admin_through_restore": true,
+    "oneshot_normal_startjob_no_wait_pipe": true,
+    "RemainAfterExit_requires_active_exited_zero_MainPID_ControlPID_Job_and_success": true,
+    "TimeoutStartSec_used_not_ineffective_RuntimeMax_for_oneshot": true,
+    "same_original_inner120_outer150_required": true,
+    "root_target_admin_all_empty_required": true,
+    "bootstrap_noop_removed_empty_only": true,
+    "legacy_project512_shared64_oom1_pop0_independent_mandatory": true,
+    "prototype_success_cannot_replace_legacy_failure": true
+  },
+  "official_contracts_read": [
+    {
+      "url": "https://systemd.io/CGROUP_DELEGATION/",
+      "supports": "service/scope delegation, user.delegate=xattr1, delegated subtreecontrol and no internal process rule"
+    },
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
+      "supports": "oneshot startup waits main exit; RemainAfterExit logical persistence; TimeoutStartSec bounds oneshot startup, RuntimeMaxSec does not"
+    },
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd-run.html",
+      "supports": "normal waits startjob; --wait/--pipe wait deactivation and not used here"
+    },
+    {
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+      "supports": "hierarchical resource limits, process migration, no internal process domain control"
+    }
+  ],
+  "evidence_level": {
+    "fullfile_read_and_independent_bytes_SHA256_blob_mode": true,
+    "source_or_control_or_codec_execution": false,
+    "parser_compile_tests": false,
+    "DATA_PASS": false
+  },
+  "next_action": "Author repairs traversal boundary on new immutableSHA; nonauthor re-reads all3 complete files and exact identities before any coordinator dispatch. d068 must not run unchanged.",
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  }
+}
