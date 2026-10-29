@@ -1,12 +1,12 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "AUTHOR_IMPLEMENTED_SINGLE_LIFECYCLE_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_ACTIVATION_FIX_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
   "source_bytes": 50175181,
-  "branch": "codex/route-tree-deadline-fix-20261029",
-  "trigger": "workflow_dispatch only; one existing preparation branch; no push/pull_request/schedule trigger added. Author does not dispatch. Root legal lease owner only after exact successor nonauthor review.",
+  "branch": "codex/route-cloud-activation-fix-20261029",
+  "trigger": "Exact on:push branch filter codex/route-cloud-activation-run-20261029-a1 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
   "concurrency": {
     "group": "source-recovery-bytes",
     "cancel_in_progress": false,
@@ -137,8 +137,8 @@
     "storage": "Own ephemeral cloud control directory and bounded GitHub joblog; Root may archive verified candidate via connector only; no Windows download"
   },
   "runtime_control_helper": {
-    "bytes": 19955,
-    "sha256": "10930971cfd1e45855d49d2ad6255c3b33d37745cf5d46a4ff1b24e850aa8d33",
+    "bytes": 20026,
+    "sha256": "8ed6c8d336159765add174f6541c4c1a370ac43f9517cc361861c741830bcb0c",
     "role": "Unprivileged immutable Subject helper. Legacy privileged launch removed; all original Source capture/reset/A-B candidate checks retained."
   },
   "stop_conditions": [
@@ -199,8 +199,8 @@
       "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
     }
   },
-  "preparation_base_commit": "ea0ceeb1fde805a7c7c421613da261e711c69a4d",
-  "author_role": "AUTHOR_IMPLEMENTATION_NOT_INDEPENDENT_REVIEW",
+  "preparation_base_commit": "092e47957ce1608e37cc40a116162c90255c7555",
+  "author_role": "AUTHOR_OF_ACTIVATION_SUCCESSOR_NOT_INDEPENDENT_REVIEWER",
   "review_disagreement": {
     "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
     "historical_reports": [
@@ -224,68 +224,55 @@
       }
     ],
     "both_reports_retained_unchanged": true,
-    "current_state": "HISTORICAL_CONFLICT_RETAINED_NEW_IMPLEMENTATION_AWAITS_EXACT_NONAUTHOR_REVIEW",
+    "current_state": "HISTORICAL_BF_CONFLICT_AND_092_ACTIVATION_FINDING_RETAINED_NEW_SUCCESSOR_PENDING_NONAUTHOR_REVIEW",
     "old_candidate_dispatch": false,
     "neither_report_overrides_the_other": true,
     "new_source_or_runtime_evidence": false
   },
   "author_preparation": {
-    "scope": "Only same original two administrative files on exclusive branch; expectedSHA CAS fromea0ceeb1. No generator/canonical/lease/Source edits or execution.",
-    "status": "IMPLEMENTATION_PREPARED_NOT_REVIEWED_NOT_RUN",
+    "scope": "Exactly two administrative files from092e on exclusive new preparation branch. No canonical/lease/Source/job/automation changes.",
+    "status": "PREPARED_UNREVIEWED_NOT_RUN",
     "workflow": {
-      "bytes": 120950,
-      "sha256": "96d8dd8c4f7c190ac9394dc0838aa0c7f1fbbf33500a19e3f40a08c88747cef1",
-      "manual_only": true,
-      "source_recovery_bytes_concurrency": true,
+      "bytes": 138502,
+      "sha256": "c35d7ccc65eafb152363f36c9fcfa970212a867b5f54988f117d4d2901ae436e",
+      "push_only_exact_branch": "codex/route-cloud-activation-run-20261029-a1",
+      "run_branch_created": false,
+      "concurrency": "source-recovery-bytes",
       "cancel_in_progress": false
     },
-    "first_four_original_step_bodies": "BYTE_IDENTICAL_TO_bf0ef002; existing source2065/50175181 verification and frozen install remain unchanged.",
-    "subject_helper": {
-      "bytes": 19955,
-      "sha256": "10930971cfd1e45855d49d2ad6255c3b33d37745cf5d46a4ff1b24e850aa8d33",
-      "execution": "NOT_RUN"
-    },
-    "admin_helper": {
+    "administrative_lifecycle_helper": {
       "bytes": 28968,
       "sha256": "f11740c2121bb37010dd69c29e96e2dc9a3290511cb74ac29cb74fabee3eeb90",
-      "execution": "NOT_RUN"
+      "unchanged_from_092e": true
     },
-    "reference_readonly": {
-      "handoff": "Canonical CLOUD-CONTINUATION-20261029.json located actualA3 ticket/result and A4 next state; generator itself not modified.",
-      "run_candidate": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
-      "controller_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
-      "controller_blob": "1f5c787e57b797801b799a434154a925bd5f4e9b",
-      "controller_bytes": 65732,
-      "controller_sha256": "5091133aa12bff84dbc995ac05e23d4a85b98f37ee2c812a3889cc4852b70b67",
-      "review": "fa8e0ec601f72848cced073a8b13df1a28ee3c44",
-      "review_blob": "c1a27097130aea41f54074056fff6957da560b80",
-      "metadata_only_dispatch_successor": "e4cdae corresponds to same reviewed controller blob; original1469 skip-ci and dispatchfix history not reinterpreted.",
-      "actual_run": 40843372223,
-      "actual_job": 123344875216,
-      "actual_scope": "Source2065 gate and copy failure; dependencies/generator not run. Cleanup/512/swap0/oomgroup1/parentpopulated0 reported and separately reviewed. This evidence is not transferred to new route.",
-      "adapted": "cleanup-once, activation gate, irreversible UID/GID drop, finally/independent witness.",
-      "not_copied": "Generator480/120/120 budgets, always fresh10s cleanup, synchronous direct_restore, generator-only dependency scope or push execution branch."
+    "subject_helper": {
+      "bytes": 20026,
+      "sha256": "8ed6c8d336159765add174f6541c4c1a370ac43f9517cc361861c741830bcb0c",
+      "delta": "Add actual parent memory.oom.group1 assertion to common gate; both prepare and lifecycle literals equal."
     },
-    "identity_and_safety_changes": [
-      "Root-owned immutable /run helper literals pinned by SHA256; runner cannot replace code executed with privilege. Root permits/config/terminal files0600 are distinct from runner-writable Subject records.",
-      "Activation wrapper binds exact stage/epoch/named cgroup/resource limits and immutable clock, restores parentoomgroup1, then resets Subject oom_score_adj0, clears supplementary groups and irreversibly drops UID/GID before helper/Node.",
-      "Only protected administrative16MiB services use oom_score_adj-1000; their children are COW pure management operations, not privileged Subject. This protects kernel OOM selection, not arbitrary systemd kills.",
-      "All stage startup and Subject operation stops at same inner270; all stop/kill/reap/finalrestore consume same outer300 remainder. No extra5+5 Subject grace, EXIT restore or Actions-step gaps.",
-      "Full manifest is rehashed against pinned456310/SHA before each snapshot; workflow target and Source identity rechecked. Root uses no runner-writable data to attest privileged recovery.",
-      "Source payload remains complete gzip+base64 and independent of privileged restoration terminal; payload alone cannot attest complete run.",
-      "Bootstrap startup/launcher failure writes permanent root abort, wakes existing fallback and drains control clients only within original remaining deadline. Main/wrapper refuse global abort before any later Subject activation; no early job exit with silently live fallback.",
-      "Internal author consultation of first41ed draft found and corrected fallback latch-before-scan race, secondary RuntimeMax preceding recovery cutoff, and launcher-exit/service-exit confusion. This consultation is not the official independent verdict. Bootstrap error waits physical groups and a real fallback terminal before cancelling only control units; stop/show/noJob + fullparentempty required, all same deadline.",
-      "Successful outer terminal transports complete root-owned per-stage cleanup/restore records plus supervisor/fallback receipts in a bounded administrative payload; no truncation. Nonroot Subject logs actual UID/GID/OOM0/cgroup/caps before stage operations.",
-      "Immutable float clock definitions are checked by exact recomputation started+270/300, avoiding subtraction-rounding false failures without allowing deadline tolerance or added time."
-    ],
+    "prelude_activation_barrier": {
+      "bytes": 2124,
+      "sha256": "739f048d069d174e348456a261f3dcdfaa46b4a7d918628e666081c268378e79",
+      "copies": 6,
+      "roles": [
+        "source",
+        "runtime",
+        "install",
+        "prepare",
+        "brand",
+        "brand-capture"
+      ],
+      "details": "Root code reads only fixed proc/cgroup administrative data. Verify actual own unit and role-specific64/512MiB cap, childswap0/oom1 and parent512/swap0; write512/swap0/oom1 using O_NOFOLLOW/O_NONBLOCK; verify; reset oom_score_adj0; clear groups and irreversibly drop all UID/GID values; independently re-read actual cgroup/gates/OOM/groups as nonroot; only then exec original Subject command without reading its stdin/path content as root."
+    },
     "project_execution": false,
     "workflow_dispatched": false,
     "source_writes": 0,
     "canonical_writes": 0,
-    "generator_writes": 0,
     "lease_writes": 0,
+    "automation_writes": 0,
     "windows_writes": 0,
-    "paid_calls": 0
+    "paid_calls": 0,
+    "proof_level": "Author textual construction and whole-string/UTF8 digest comparisons only; no YAML/Python AST/compile/Subject/project execution. Not independent approval."
   },
   "p2_response": [
     {
@@ -337,13 +324,14 @@
     "proof_scope": "Requires a new complete exact workflow/plan implementation and separate non-author static review before leaseowner may consider serial execution; no execution authority supplied here.",
     "external_dependency_blocker": false
   },
-  "unresolved_reason": null,
+  "unresolved_reason": "Exact successor has no independent review or runtime proof. Prior activation finding is addressed by author proposal only.",
   "next_action": {
-    "owner": "Main coordinator conversation6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
-    "action": "Arrange a different nonauthor reviewer for exact new workflow+plan SHA, including lifetime/fallback, UID/OOM protections, same300deadline and accounting. Only legitimate lease owner after approval/idle queue may consider normal supported manual dispatch; author dispatch0. Preserve bothbf0ef reviews and prior exit78 snapshot; do not dispatch old paths.",
-    "current_task_terminal": "BOUNDED_AUTHOR_IMPLEMENTATION_PREPARED_NOT_RUN",
+    "owner": "Main coordinator",
+    "action": "Arrange different nonauthor exact full-workflow/plan review including all six activation gates and unchanged encoded lifecycle. Author must not self-approve. Only legitimate coordinator after approval, lease/epoch/head/idle queue checks may create reserved exact run branch once; do not runoldbf/092.",
     "dispatch": false,
     "automatic_retry": false,
+    "run_branch": "codex/route-cloud-activation-run-20261029-a1",
+    "current_task_terminal": "PREPARED_UNREVIEWED_NOT_RUN",
     "external_permission_needed": false
   },
   "pure_administrative_helper": {
@@ -359,6 +347,16 @@
       "blob": "189016716a2857d020d26ab17ef612019102793b",
       "sha256": "72ed017dcfbd78040440b01fa7ef9a19f738dc3a3ae2fbc5a3846b774c3a3da8",
       "note": "Honest safety closure only; not treated as completed implementation."
+    },
+    {
+      "commit": "092e47957ce1608e37cc40a116162c90255c7555",
+      "workflow_blob": "32579a9d76981bbfcd25435b85a2e1c7be158c82",
+      "workflow_sha256": "96d8dd8c4f7c190ac9394dc0838aa0c7f1fbbf33500a19e3f40a08c88747cef1",
+      "plan_blob": "f6a3f685f7b7a889ba31cf6588bf96ef377c6140",
+      "plan_sha256": "f988e5514d806eb00f430a9bb67ceb98dfd2ab73b121e3ed83f5ec06989ca1fd",
+      "finding": "ROUTE-P2-PRELUDE-PARENT-OOM-ACTIVATION-GATE",
+      "reviewer_then": "/root/route_review",
+      "current_role": "Same agent now authorized successor AUTHOR and must not self-review."
     }
   ],
   "unproven_items": [
@@ -370,7 +368,8 @@
     "Original first-four frozen install and brand preparation precede t0. Only actual original appbuildA/B can elevate parent4GiB; all other project phases512, DATA total64. No otherbuild/Docker/native/types exception added.",
     "Candidate payload emission is not durable artifact delivery, privileged restore, Source adoption or77/18/7 acceptance. Root must fully read actual job transport and complete receipts before adopting any future Source leaf.",
     "No new official nonauthor verdict exists for this exact implementation; both priorbf0ef historical verdicts stay preserved without resolving conflict by overwrite.",
-    "Complete privileged success evidence transport cap7800B is unrun; overflow fails instead of truncating or claiming restored. Kernel/runtime pathological failure may prevent saving a complete receipt; absence is UNKNOWN."
+    "Complete privileged success evidence transport cap7800B is unrun; overflow fails instead of truncating or claiming restored. Kernel/runtime pathological failure may prevent saving a complete receipt; absence is UNKNOWN.",
+    "Six new prelude barriers and exact push entry have not run. No runtime gate/parent-oom recovery evidence is transferred from prior probes."
   ],
   "author_draft_history": [
     {
@@ -380,5 +379,146 @@
       "note": "Superseded by final successor bytes before any branch CAS; concrete internal findings preserved above."
     }
   ],
-  "ready": false
+  "ready": false,
+  "prior_candidate_author_preparation": {
+    "commit": "092e47957ce1608e37cc40a116162c90255c7555",
+    "record": {
+      "scope": "Only same original two administrative files on exclusive branch; expectedSHA CAS fromea0ceeb1. No generator/canonical/lease/Source edits or execution.",
+      "status": "IMPLEMENTATION_PREPARED_NOT_REVIEWED_NOT_RUN",
+      "workflow": {
+        "bytes": 120950,
+        "sha256": "96d8dd8c4f7c190ac9394dc0838aa0c7f1fbbf33500a19e3f40a08c88747cef1",
+        "manual_only": true,
+        "source_recovery_bytes_concurrency": true,
+        "cancel_in_progress": false
+      },
+      "first_four_original_step_bodies": "BYTE_IDENTICAL_TO_bf0ef002; existing source2065/50175181 verification and frozen install remain unchanged.",
+      "subject_helper": {
+        "bytes": 19955,
+        "sha256": "10930971cfd1e45855d49d2ad6255c3b33d37745cf5d46a4ff1b24e850aa8d33",
+        "execution": "NOT_RUN"
+      },
+      "admin_helper": {
+        "bytes": 28968,
+        "sha256": "f11740c2121bb37010dd69c29e96e2dc9a3290511cb74ac29cb74fabee3eeb90",
+        "execution": "NOT_RUN"
+      },
+      "reference_readonly": {
+        "handoff": "Canonical CLOUD-CONTINUATION-20261029.json located actualA3 ticket/result and A4 next state; generator itself not modified.",
+        "run_candidate": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+        "controller_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+        "controller_blob": "1f5c787e57b797801b799a434154a925bd5f4e9b",
+        "controller_bytes": 65732,
+        "controller_sha256": "5091133aa12bff84dbc995ac05e23d4a85b98f37ee2c812a3889cc4852b70b67",
+        "review": "fa8e0ec601f72848cced073a8b13df1a28ee3c44",
+        "review_blob": "c1a27097130aea41f54074056fff6957da560b80",
+        "metadata_only_dispatch_successor": "e4cdae corresponds to same reviewed controller blob; original1469 skip-ci and dispatchfix history not reinterpreted.",
+        "actual_run": 40843372223,
+        "actual_job": 123344875216,
+        "actual_scope": "Source2065 gate and copy failure; dependencies/generator not run. Cleanup/512/swap0/oomgroup1/parentpopulated0 reported and separately reviewed. This evidence is not transferred to new route.",
+        "adapted": "cleanup-once, activation gate, irreversible UID/GID drop, finally/independent witness.",
+        "not_copied": "Generator480/120/120 budgets, always fresh10s cleanup, synchronous direct_restore, generator-only dependency scope or push execution branch."
+      },
+      "identity_and_safety_changes": [
+        "Root-owned immutable /run helper literals pinned by SHA256; runner cannot replace code executed with privilege. Root permits/config/terminal files0600 are distinct from runner-writable Subject records.",
+        "Activation wrapper binds exact stage/epoch/named cgroup/resource limits and immutable clock, restores parentoomgroup1, then resets Subject oom_score_adj0, clears supplementary groups and irreversibly drops UID/GID before helper/Node.",
+        "Only protected administrative16MiB services use oom_score_adj-1000; their children are COW pure management operations, not privileged Subject. This protects kernel OOM selection, not arbitrary systemd kills.",
+        "All stage startup and Subject operation stops at same inner270; all stop/kill/reap/finalrestore consume same outer300 remainder. No extra5+5 Subject grace, EXIT restore or Actions-step gaps.",
+        "Full manifest is rehashed against pinned456310/SHA before each snapshot; workflow target and Source identity rechecked. Root uses no runner-writable data to attest privileged recovery.",
+        "Source payload remains complete gzip+base64 and independent of privileged restoration terminal; payload alone cannot attest complete run.",
+        "Bootstrap startup/launcher failure writes permanent root abort, wakes existing fallback and drains control clients only within original remaining deadline. Main/wrapper refuse global abort before any later Subject activation; no early job exit with silently live fallback.",
+        "Internal author consultation of first41ed draft found and corrected fallback latch-before-scan race, secondary RuntimeMax preceding recovery cutoff, and launcher-exit/service-exit confusion. This consultation is not the official independent verdict. Bootstrap error waits physical groups and a real fallback terminal before cancelling only control units; stop/show/noJob + fullparentempty required, all same deadline.",
+        "Successful outer terminal transports complete root-owned per-stage cleanup/restore records plus supervisor/fallback receipts in a bounded administrative payload; no truncation. Nonroot Subject logs actual UID/GID/OOM0/cgroup/caps before stage operations.",
+        "Immutable float clock definitions are checked by exact recomputation started+270/300, avoiding subtraction-rounding false failures without allowing deadline tolerance or added time."
+      ],
+      "project_execution": false,
+      "workflow_dispatched": false,
+      "source_writes": 0,
+      "canonical_writes": 0,
+      "generator_writes": 0,
+      "lease_writes": 0,
+      "windows_writes": 0,
+      "paid_calls": 0
+    },
+    "note": "Historical author claims retained as history; current prelude bodies are changed and no longer byte-identical."
+  },
+  "activation_finding_response": {
+    "id": "ROUTE-P2-PRELUDE-PARENT-OOM-ACTIVATION-GATE",
+    "status": "AUTHOR_IMPLEMENTED_PENDING_NONAUTHOR_REVIEW_NOT_RUN",
+    "historical_runtime": {
+      "run": 40839182119,
+      "job": 123331130080,
+      "observed": "Initial parentoom1 became0 on service activation; prior final restoration was real but not newroute proof."
+    },
+    "six_sites": [
+      {
+        "stage": "source",
+        "child_memory_max": 67108864,
+        "parent_memory_max": 536870912,
+        "swap": 0,
+        "child_oom_group": 1,
+        "parent_oom_group": 1,
+        "root_activation_gate": "Before any original Subject command/Source reads",
+        "irreversible_runner_drop": true,
+        "nonroot_actual_gate": true
+      },
+      {
+        "stage": "runtime",
+        "child_memory_max": 67108864,
+        "parent_memory_max": 536870912,
+        "swap": 0,
+        "child_oom_group": 1,
+        "parent_oom_group": 1,
+        "root_activation_gate": "Before any original Subject command/Source reads",
+        "irreversible_runner_drop": true,
+        "nonroot_actual_gate": true
+      },
+      {
+        "stage": "install",
+        "child_memory_max": 536870912,
+        "parent_memory_max": 536870912,
+        "swap": 0,
+        "child_oom_group": 1,
+        "parent_oom_group": 1,
+        "root_activation_gate": "Before any original Subject command/Source reads",
+        "irreversible_runner_drop": true,
+        "nonroot_actual_gate": true
+      },
+      {
+        "stage": "prepare",
+        "child_memory_max": 67108864,
+        "parent_memory_max": 536870912,
+        "swap": 0,
+        "child_oom_group": 1,
+        "parent_oom_group": 1,
+        "root_activation_gate": "Before any original Subject command/Source reads",
+        "irreversible_runner_drop": true,
+        "nonroot_actual_gate": true
+      },
+      {
+        "stage": "brand",
+        "child_memory_max": 536870912,
+        "parent_memory_max": 536870912,
+        "swap": 0,
+        "child_oom_group": 1,
+        "parent_oom_group": 1,
+        "root_activation_gate": "Before any original Subject command/Source reads",
+        "irreversible_runner_drop": true,
+        "nonroot_actual_gate": true
+      },
+      {
+        "stage": "brand-capture",
+        "child_memory_max": 67108864,
+        "parent_memory_max": 536870912,
+        "swap": 0,
+        "child_oom_group": 1,
+        "parent_oom_group": 1,
+        "root_activation_gate": "Before any original Subject command/Source reads",
+        "irreversible_runner_drop": true,
+        "nonroot_actual_gate": true
+      }
+    ],
+    "inherited_lifecycle": "Administrative helper literal remains byte-identical f11740c2...; shared270/300, fallback,16+16 controls,32MiB DATA subject, originalbuild4GiB aggregate, stop/empty/restore/final witnesses unchanged.",
+    "scheduling": "Old092 manual-only/nondefault and skip-ci state remains historical non-dispatchable. Successor has exact supported push filter and no skip directive in intended commit; prep branch not trigger. Only legitimate coordinator after exact new independent approval may create reserved run branch once."
+  }
 }
