@@ -1,12 +1,12 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "AUTHOR_MODE_ENCODING_FIX_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_SYSTEMD_COMPATIBILITY_SUCCESSOR_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
   "source_bytes": 50175181,
-  "branch": "codex/route-cloud-activation-fix-20261029",
-  "trigger": "Exact on:push branch filter codex/route-cloud-activation-run-20261029-a1 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
+  "branch": "codex/route-systemd-compat-prep-20261030",
+  "trigger": "Exact on:push branch filter codex/route-systemd-compat-run-20261030-a1 plus exact repository/ref/event job guard. Preparation branch does not match. Run branch NOT_CREATED. No workflow_dispatch/pull_request/schedule trigger; no default-branch change.",
   "concurrency": {
     "group": "source-recovery-bytes",
     "cancel_in_progress": false,
@@ -35,7 +35,8 @@
     "path": ".github/workflows/source-recovery-verify.yml",
     "commit": "5c7ef397598edec073cc491972376f75d326a8bb",
     "blob": "37f9b77df6146f2f4812a30a58072dfa75b444d1",
-    "byte_identical_steps_body": true
+    "byte_identical_steps_body": false,
+    "current_successor_note": "Historical source reference retained. This successor differs by removal of unsupported transient MemoryOOMGroup=yes at relevant launch sites; Subject bodies and source/identity gates unchanged."
   },
   "original_successful_build": {
     "workflow_commit": "04ae319935fcd19eb9d3161b61bc483b1962e9f3",
@@ -199,7 +200,7 @@
       "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
     }
   },
-  "preparation_base_commit": "41dd55287dbc7dca61c70303199a6cad11860a0a",
+  "preparation_base_commit": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
   "author_role": "AUTHOR_OF_ACTIVATION_SUCCESSOR_NOT_INDEPENDENT_REVIEWER",
   "review_disagreement": {
     "candidate": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
@@ -230,20 +231,21 @@
     "new_source_or_runtime_evidence": false
   },
   "author_preparation": {
-    "scope": "Exactly two administrative files from092e on exclusive new preparation branch. No canonical/lease/Source/job/automation changes.",
-    "status": "PREPARED_UNREVIEWED_NOT_RUN",
+    "scope": "Exactly two administrative paths changed from e35d230b systemd compatibility successor on exclusive prep branch; no canonical/lease/Source/jobs/automation changes.",
+    "status": "SYSTEMD_COMPATIBILITY_PREPARED_UNREVIEWED_NOT_RUN",
     "workflow": {
-      "bytes": 139433,
-      "sha256": "b3ccb1dd15ec0262081a8aa068d9825ffb2fc442ee6444f65d8c6d6284a32652",
-      "push_only_exact_branch": "codex/route-cloud-activation-run-20261029-a1",
+      "bytes": 139463,
+      "sha256": "9d15e5c789b9dac413f4d7efee5e1925a54f371f7c389714f5fde8b19c4dafe5",
+      "push_only_exact_branch": "codex/route-systemd-compat-run-20261030-a1",
       "run_branch_created": false,
       "concurrency": "source-recovery-bytes",
       "cancel_in_progress": false
     },
     "administrative_lifecycle_helper": {
-      "bytes": 28968,
-      "sha256": "f11740c2121bb37010dd69c29e96e2dc9a3290511cb74ac29cb74fabee3eeb90",
-      "unchanged_from_092e": true
+      "bytes": 29180,
+      "sha256": "8949bc43243c17332a63ae7a86e97cfeff1965bca6e04378cdb75a6dc86be5f7",
+      "unchanged_from_092e": false,
+      "change": "Systemd compatibility only: remove unsupported transient property at2 sites; root_gate binds own child then sets/reads kernel memory.oom.group1. Same lifecycle/deadlines."
     },
     "subject_helper": {
       "bytes": 20451,
@@ -338,19 +340,19 @@
     "proof_scope": "Requires a new complete exact workflow/plan implementation and separate non-author static review before leaseowner may consider serial execution; no execution authority supplied here.",
     "external_dependency_blocker": false
   },
-  "unresolved_reason": "Successor repairs identified mode representation and exact barrier-value documentation by author proposal only. Independent exact review and actual execution remain absent.",
+  "unresolved_reason": "Actual e35d systemd compatibility failure retained; this successor is an author proposal pending exact nonauthor review and real runtime evidence.",
   "next_action": {
     "owner": "Main coordinator",
-    "action": "Review this exact successor as a nonauthor: two synchronized Subject literals, strict two-mode mapping/actualS_IMODE, six activation barriers with executed-value hash2123B/a5aa6498, unchanged administrative lifecycle and push guard. No old41dd/092/bf execution. Only legitimate coordinator after approval/lease/queue/dedup may create reserved run branch.",
+    "action": "Independent nonauthor must full-read exact two-file systemd compatibility successor; no e35d unchanged retry. Review own-child kernel group1 before admin work, all six unchanged Subject barriers and unchanged lifecycle. Only leaseowner after approval/fresh idlequeue/dedup may create reserved run branch once.",
     "dispatch": false,
     "automatic_retry": false,
-    "run_branch": "codex/route-cloud-activation-run-20261029-a1",
-    "current_task_terminal": "MODE_FIX_PREPARED_UNREVIEWED_NOT_RUN",
+    "run_branch": "codex/route-systemd-compat-run-20261030-a1",
+    "current_task_terminal": "SYSTEMD_COMPATIBILITY_PREPARED_UNREVIEWED_NOT_RUN",
     "external_permission_needed": false
   },
   "pure_administrative_helper": {
-    "bytes": 28968,
-    "sha256": "f11740c2121bb37010dd69c29e96e2dc9a3290511cb74ac29cb74fabee3eeb90",
+    "bytes": 29180,
+    "sha256": "8949bc43243c17332a63ae7a86e97cfeff1965bca6e04378cdb75a6dc86be5f7",
     "role": "Root-owned controller, fallback, activation gate and launcher/witness. No root Subject repo/payload/log reads."
   },
   "preparation_history": [
@@ -392,7 +394,8 @@
     "Candidate payload emission is not durable artifact delivery, privileged restore, Source adoption or77/18/7 acceptance. Root must fully read actual job transport and complete receipts before adopting any future Source leaf.",
     "No new official nonauthor verdict exists for this exact implementation; both priorbf0ef historical verdicts stay preserved without resolving conflict by overwrite.",
     "Complete privileged success evidence transport cap7800B is unrun; overflow fails instead of truncating or claiming restored. Kernel/runtime pathological failure may prevent saving a complete receipt; absence is UNKNOWN.",
-    "Six new prelude barriers and exact push entry have not run. No runtime gate/parent-oom recovery evidence is transferred from prior probes."
+    "Six new prelude barriers and exact push entry have not run. No runtime gate/parent-oom recovery evidence is transferred from prior probes.",
+    "This compatibility successor has not executed. OOMPolicy=kill childgroup1 relies on actual kernel readback and fails closed; protected continue controls explicitly set/read own bound childgroup1. No runtime result is inferred from A11."
   ],
   "author_draft_history": [
     {
@@ -541,8 +544,8 @@
         "nonroot_actual_gate": true
       }
     ],
-    "inherited_lifecycle": "Administrative helper literal remains byte-identical f11740c2...; shared270/300, fallback,16+16 controls,32MiB DATA subject, originalbuild4GiB aggregate, stop/empty/restore/final witnesses unchanged.",
-    "scheduling": "Old092 manual-only/nondefault and skip-ci state remains historical non-dispatchable. Successor has exact supported push filter and no skip directive in intended commit; prep branch not trigger. Only legitimate coordinator after exact new independent approval may create reserved run branch once."
+    "inherited_lifecycle": "Same270/300 lifecycle,16+16 controls,32MiB DATA, originalbuild4GiB, stop/empty/restore/final witnesses. Administrative helper current hash8949bc43... differs only for systemd property removal and bound own-child kernel oom.group1 write/read.",
+    "scheduling": "Prior e35d dispatch failed before Source activation. Current successor uses exclusive codex/route-systemd-compat-run-20261030-a1 exact push filter; no execution branch created. Exact new independent review required."
   },
   "mode_encoding_finding_response": {
     "status": "AUTHOR_IMPLEMENTED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
@@ -566,5 +569,59 @@
       "singleleaf tracked change allowlist",
       "no timestamp/chmod repair"
     ]
+  },
+  "systemd_compatibility_successor": {
+    "parent": "e35d230b4ed36c3e3a3082fea45e4f74fdbabeae",
+    "actual_failure": {
+      "run": 40909348331,
+      "job": 123572739303,
+      "error": "Unknown assignment: MemoryOOMGroup=yes",
+      "first_source_service_started": false,
+      "install": "NOT_RUN",
+      "build_A_B": "NOT_RUN",
+      "restore": "UNKNOWN_NOT_PROVEN"
+    },
+    "reference": {
+      "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+      "controller_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "blob": "60353703fd08235815157a03c010f7f6246df461",
+      "actual_run": 40902334215,
+      "job": 123547693853,
+      "observed_pattern": "OOMPolicy=kill; actual own child limits include memory.oom.group1; wrapper explicitly repairs parent memory.oom.group1 and reads back before UID/GID drop. Not a transfer of runtime approval to this route."
+    },
+    "changes": [
+      "Remove unsupported transient MemoryOOMGroup=yes at six prelude launch sites and two administrative literal launch sites. No replacement guessed systemd property.",
+      "Subject/prelude OOMPolicy=kill is retained; existing bound-own-child limits(group1) and repaired-parent limits(group1) before irreversible UID/GID drop remain unchanged.",
+      "Pure administrative protected services retain OOMPolicy=continue and OOMScoreAdjust=-1000. root_gate first proves exact own control cgroup, then O_NOFOLLOW/O_NONBLOCK fixed_write of actual child memory.oom.group1 and complete limits readback; existing parent repair remains. No Subject reads or execution before gate.",
+      "Only dispatch filter/guard changed to fresh unique reserved push branch; preparation branch never matches."
+    ],
+    "workflow": {
+      "bytes": 139463,
+      "sha256": "9d15e5c789b9dac413f4d7efee5e1925a54f371f7c389714f5fde8b19c4dafe5"
+    },
+    "admin_helper": {
+      "bytes": 29180,
+      "sha256": "8949bc43243c17332a63ae7a86e97cfeff1965bca6e04378cdb75a6dc86be5f7"
+    },
+    "subject_helper": {
+      "bytes": 20451,
+      "sha256": "1232c499068b810ff0c74d9d68dd09f6bf86edf6b041dc510b04e4b01798762f",
+      "unchanged": true
+    },
+    "unchanged_controls": [
+      "six activation barriers exact bodies unchanged",
+      "same immutable270/300 monotonic lifecycle",
+      "single protected supervisor and independent fallback",
+      "ownedgroups synchronous cleanup and final outer witness",
+      "DATA16+16+32MiB and aggregate512/swap0",
+      "only original Node/Vite build4GiB",
+      "Source2065/50175181B blobs/modes unchanged"
+    ],
+    "new_execution_branch": "codex/route-systemd-compat-run-20261030-a1",
+    "execution_branch_created": false,
+    "project_execution": false,
+    "independent_review": "PENDING_EXACT_SUCCESSOR",
+    "runtime_evidence": "NOT_RUN",
+    "source_adopted": false
   }
 }
