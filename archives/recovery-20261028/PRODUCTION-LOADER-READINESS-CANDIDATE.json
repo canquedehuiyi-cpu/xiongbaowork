@@ -1,0 +1,37 @@
+{
+  "schema": "xiongbaowork-candidate-source-overlay/1",
+  "ticket": "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+  "formal_adoption": false,
+  "status": "PENDING_NONAUTHOR_REVIEW_AND_CLOUD_VALIDATION",
+  "base_commit": "67bd70f7d18a602c2eab3a77f95bc0d0ddf09be1",
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "changes": [
+    {
+      "path": "openbot/server/tests/production-loader-boundary.test.ts",
+      "before": {
+        "path": "openbot/server/tests/production-loader-boundary.test.ts",
+        "bytes": 3762,
+        "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/tests/production-loader-boundary.test.ts",
+        "bytes": 4915,
+        "sha256": "19576bbc333bb7174427807e4697e9c9e225aba76207fd0aa44e9b851f5c320c",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "scope": "Only align the original loader refusal test with the earlier role-writer readiness boundary. Real own loopbackTCP accepts then closes without PostgreSQL protocol/role facts; require observed connection plus exact readiness failure and no identity insert. Missing-config case requires refusal and zero connections. Production index/lifecycle/roles unchanged. Not nativePG17/RLS/role-writer success evidence.",
+  "trigger": {
+    "run": 40789730098,
+    "job": 123171654707,
+    "old_pass": 0,
+    "old_fail": 1
+  },
+  "projected_source_files": 2060,
+  "projected_source_bytes": 50033224,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
