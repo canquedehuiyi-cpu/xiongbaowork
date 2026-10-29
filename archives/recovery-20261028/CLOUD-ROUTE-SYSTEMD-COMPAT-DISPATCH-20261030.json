@@ -1,0 +1,18 @@
+{
+  "schema": "route-systemd-compat-exact-dispatch/v1",
+  "at": "2026-10-29T16:24:21.409Z",
+  "candidate": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+  "branch": "codex/route-systemd-compat-run-20261030-a1",
+  "event": "push",
+  "run": 40911192453,
+  "job": 123579294835,
+  "status": "in_progress",
+  "dispatch_count": 1,
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+  "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
+  "review_commit": "ac08d39f843de796ba7b62ac3330ac3381c9cee6",
+  "canonical_review_commit": "f25ccf2ee90fac3f37eee078fe3540d57970926c",
+  "preflight": "valid matching fresh lease/head; queued0/in_progress0; ref404/headruns0",
+  "Source_adopted": false,
+  "next_action": "Read same run/job only; no second route or A11 DATA resource job until terminal. Missing final physical witness FAILED_OR_UNKNOWN."
+}
