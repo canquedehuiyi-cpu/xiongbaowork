@@ -1,0 +1,23 @@
+{
+  "schema": "xiongbaowork-diagnostic-source-overlay-v1",
+  "ticket": "APPROVAL-SEED-OFFLINE-GENERATE-DIAGNOSTIC-20261029",
+  "formal_adoption": false,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "parent_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
+  "changes": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "before": {
+        "bytes": 10520,
+        "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 13092,
+        "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "purpose": "Offline schema serialization/SQL diff diagnostic only. Not db:generate original script, no DATABASE_URL, no PG, no migration adoption, no writer."
+}

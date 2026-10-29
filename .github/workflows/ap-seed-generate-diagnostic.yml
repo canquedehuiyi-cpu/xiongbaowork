@@ -1,0 +1,593 @@
+name: Offline approval seed migration generation diagnostic
+on:
+  push:
+    branches: [codex/ap-seed-generate-diagnostic-20261029]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: source-recovery-bytes
+  cancel-in-progress: false
+jobs:
+  source-bytes:
+    name: Frozen workspace installation - lifecycle scripts disabled
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Establish project aggregate memory slice
+        run: |
+          set -euo pipefail
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          from pathlib import Path
+          unit = Path("/run/systemd/system/xiongbaowork.slice")
+          with unit.open("x") as out:
+              out.write("[Unit]\nDescription=Dedicated xiongbaowork validation\n[Slice]\nMemoryMax=512M\nMemorySwapMax=0\n")
+          PY
+          sudo systemctl daemon-reload
+          sudo systemctl start xiongbaowork.slice
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("/sys/fs/cgroup/xiongbaowork.slice")
+          (p / "memory.oom.group").write_text("1")
+          assert (p / "memory.max").read_text().strip() == "536870912"
+          assert (p / "memory.swap.max").read_text().strip() == "0"
+          assert (p / "memory.oom.group").read_text().strip() == "1"
+          print("PROJECT_PARENT_RESOURCE_GATE " + json.dumps({"aggregate_memory_max": 536870912, "swap_max": 0}))
+          PY
+      - name: Verify all 2065 source files under 64 MiB DATA cap
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
+          import base64, gzip, hashlib, io, json, os, stat, subprocess, sys, tarfile, tempfile, zipfile
+          from pathlib import Path
+          
+          target = sys.argv[1]
+          assert len(target) == 40 and all(c in "0123456789abcdef" for c in target)
+          cg_lines = Path("/proc/self/cgroup").read_text().splitlines()
+          assert len(cg_lines) == 1 and cg_lines[0].startswith("0::/")
+          cg = Path("/sys/fs/cgroup") / cg_lines[0][3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "67108864"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert (cg / "memory.oom.group").read_text().strip() == "1"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
+          print("RESOURCE_GATE " + json.dumps({"cgroup": cg_lines[0], "aggregate_memory_max": 67108864, "project_upper_bound": 536870912, "swap_max": 0}), flush=True)
+          
+          def command(args, cwd):
+              print("SOURCE_COMMAND_START " + json.dumps({"operation": args[1], "argument_count": len(args)}), flush=True)
+              completed = subprocess.run(["timeout", "--signal=TERM", "--kill-after=2s", "45s",
+                  "git", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+                  "-c", "core.deltaBaseCacheLimit=1m", "-c", "core.packedGitLimit=8m",
+                  "-c", "core.packedGitWindowSize=1m", "-c", "pack.threads=1", *args[1:]],
+                  cwd=cwd, text=True, capture_output=True,
+                  env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+              if completed.returncode:
+                  print("SOURCE_COMMAND_FAILURE " + json.dumps({"operation": args[1], "exit_code": completed.returncode,
+                      "stderr": completed.stderr[-4000:]}), flush=True)
+              completed.check_returncode()
+              print("SOURCE_COMMAND_END " + json.dumps({"operation": args[1]}), flush=True)
+              return completed.stdout.strip()
+          
+          def metadata(s):
+              return (s.st_dev, s.st_ino, s.st_size, s.st_mode, s.st_nlink, s.st_mtime_ns, s.st_ctime_ns)
+          
+          def verified_bytes(root, rel, expected_size, expected_sha, retain=False, expected_mode=None):
+              part = Path(rel)
+              assert not part.is_absolute() and ".." not in part.parts and part.parts[0] != ".git"
+              assert "\\" not in rel and "\x00" not in rel
+              path = root / part
+              for parent in [path, *path.parents]:
+                  if parent == root:
+                      break
+                  assert not parent.is_symlink()
+              assert path.resolve(strict=True).is_relative_to(root)
+              named = os.stat(path, follow_symlinks=False)
+              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1 and named.st_size == expected_size, json.dumps({"path": rel, "expected_bytes": expected_size, "actual_bytes": named.st_size, "nlink": named.st_nlink, "mode": named.st_mode})
+              if expected_mode is not None:
+                  assert stat.S_IMODE(named.st_mode) == (int(expected_mode.removeprefix("0o"), 8) & 0o7777), json.dumps({"path": rel, "expected_mode": expected_mode, "actual_mode": oct(stat.S_IMODE(named.st_mode))})
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+              try:
+                  before = os.fstat(fd)
+                  assert metadata(before) == metadata(named)
+                  digest = hashlib.sha256()
+                  data = bytearray() if retain else None
+                  count = 0
+                  while True:
+                      chunk = os.read(fd, 65536)
+                      if not chunk:
+                          break
+                      count += len(chunk)
+                      assert count <= expected_size
+                      digest.update(chunk)
+                      if retain:
+                          data.extend(chunk)
+                  assert count == expected_size and digest.hexdigest() == expected_sha, json.dumps({"path": rel, "expected_sha256": expected_sha, "actual_sha256": digest.hexdigest(), "expected_bytes": expected_size, "actual_bytes": count})
+                  assert metadata(os.fstat(fd)) == metadata(before) == metadata(os.stat(path, follow_symlinks=False))
+                  return bytes(data) if retain else count
+              finally:
+                  os.close(fd)
+          
+          work = Path.cwd() / "xiongbaowork-verified-source"
+          work.mkdir(mode=0o700)
+          root = Path(work) / "repo"
+          command(["git", "init", "--quiet", str(root)], Path(work))
+          command(["git", "remote", "add", "origin", "https://github.com/canquedehuiyi-cpu/xiongbaowork.git"], root)
+          command(["git", "config", "remote.origin.promisor", "true"], root)
+          command(["git", "config", "remote.origin.partialclonefilter", "blob:none"], root)
+          command(["git", "fetch", "--quiet", "--no-tags", "--filter=blob:none", "--depth=1", "origin", target], root)
+          control_path = "archives/recovery-20261028/V57-MANIFEST.json"
+          shown = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
+                                  "show", target + ":" + control_path], cwd=root,
+                                 check=True, capture_output=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+          assert len(shown) == 419227
+          assert hashlib.sha256(shown).hexdigest() == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
+          manifest = json.loads(shown)
+          overlay_specs = json.loads("[{\"path\":\"archives/recovery-20261028/AP-INPUT-BUN-ADOPTED.json\",\"bytes\":2726,\"sha256\":\"e3f70c824d32664eb69ec86c8cdc8b9bb2a7ee98f51fb8bf182b5fdd85fd2184\",\"formal_adoption\":true,\"ticket\":\"AP-INPUT-BUN-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/tests/approval-exact-input-json-materializer.test.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SCHEMA-RUNTIME-ADOPTED.json\",\"bytes\":4912,\"sha256\":\"e0e19145d1605dfb19201e5bd1e0b3f9856fba37f1e39a8ebfe3adcec176ffc9\",\"formal_adoption\":true,\"ticket\":\"AP-SCHEMA-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\",\"openbot/server/src/db/schema/approval-exact-input-objects.ts\",\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-approval-exact-input-objects.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/KNOWLEDGE-RESOURCE-RUNTIME-ADOPTED.json\",\"bytes\":4954,\"sha256\":\"947602e681a0ea87306aec11ef296cc961dd9ed75c323bad843a79de0f32f655\",\"formal_adoption\":true,\"ticket\":\"KNOWLEDGE-RESOURCE-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/src/db/schema/knowledge-foundations.ts\",\"openbot/server/src/db/schema/knowledge-write-foundations.ts\",\"openbot/server/src/db/schema/resource-project-foundations.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/AUTOMATION-FK-ASSERTION-ADOPTED.json\",\"bytes\":2467,\"sha256\":\"21cfd36110aed505088883686c6b793c31ec6ee08477e6c6c43bc382225125d2\",\"formal_adoption\":true,\"ticket\":\"AUTOMATION-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-automation-run-records.test.ts\"]},{\"path\":\"archives/recovery-20261028/SECURITY-FK-ASSERTION-ADOPTED.json\",\"bytes\":2496,\"sha256\":\"18a702f4acb7ec9c4089872e68d128656609ae77af652766c8ebb7f13e6ee20c\",\"formal_adoption\":true,\"ticket\":\"SECURITY-FK-ASSERTION-20261028\",\"source_paths\":[\"openbot/server/tests/recovery-security-policy-fences.test.ts\"]},{\"path\":\"archives/recovery-20261028/K106-CURRENT-ADOPTED.json\",\"bytes\":5481,\"sha256\":\"9c9f46c71a0180d273462919a1d511497d9e8ba3e65b9a9534e61185d559a899\",\"formal_adoption\":true,\"ticket\":\"K106-CURRENT-PARENT-RUNTIME-20261028\",\"source_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json\",\"openbot/server/recovery/recovery-20261018-v1/meta/_journal.json\",\"openbot/server/src/db/schema/plugin-assembly-foundations.ts\",\"openbot/server/src/db/schema/index.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\"],\"source_new_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0106_plugin_assembly_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0106_snapshot.json\",\"openbot/server/src/db/schema/plugin-assembly-foundations.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/PTX-CURRENT-ADOPTED.json\",\"bytes\":3361,\"sha256\":\"683bfbc145627766dac65fbce19f8fcca1e9e4f3a7f8182e7baa37b168b628f8\",\"ticket\":\"PTX-CURRENT-PARENT-RECOVERY-20261028\",\"formal_adoption\":true,\"source_paths\":[\"openbot/server/src/approvals/continuation-store.ts\",\"openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts\"],\"source_new_paths\":[\"openbot/server/tests/approval-continuation-preparation-transaction.integration.test.ts\"]},{\"path\":\"archives/recovery-20261028/REMAINING3-CURRENT-ADOPTED.json\",\"bytes\":5228,\"sha256\":\"319648196acda53d60ac61c69bf87a670f61ae4ad6211ccce7fd10bd84f6a59d\",\"formal_adoption\":true,\"ticket\":\"REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028\",\"source_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json\",\"openbot/server/recovery/recovery-20261018-v1/meta/_journal.json\",\"openbot/server/src/db/schema/import-proactive-token-foundations.ts\",\"openbot/server/src/db/schema/index.ts\",\"openbot/server/tests/recovery-import-proactive-token-foundations.test.ts\"],\"source_new_paths\":[\"openbot/server/recovery/recovery-20261018-v1/sql/0107_import_proactive_token_foundations_closed.sql\",\"openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json\",\"openbot/server/src/db/schema/import-proactive-token-foundations.ts\",\"openbot/server/tests/recovery-import-proactive-token-foundations.test.ts\"]},{\"path\":\"archives/recovery-20261028/SERVER-TYPE-CONTRACT-ADOPTED.json\",\"bytes\":3346,\"sha256\":\"5ab9f718b0068335f58f4f058fb3cec92c1971ec8943199c82ca3a9ea89620b2\",\"formal_adoption\":true,\"ticket\":\"SERVER-TYPE-CONTRACT-20261028\",\"source_paths\":[\"openbot/server/src/approvals/exact-http-owned-input.ts\",\"openbot/server/src/approvals/store.ts\",\"openbot/server/tests/approval-exact-http-owned-input.test.ts\"]},{\"path\":\"archives/recovery-20261028/TASKS-ATTENTION-FIXTURE-ADOPTED.json\",\"bytes\":2503,\"sha256\":\"504ea6fef90250cd97024aaf9ed0dcec1634555fb709723fdd9dd0f5bbbda9fb\",\"formal_adoption\":true,\"ticket\":\"TASKS-ATTENTION-FIXTURE-20261028\",\"source_paths\":[\"openbot/app/tests/tasks-attention-region.test.tsx\"]},{\"path\":\"archives/recovery-20261028/TASKS-READ-LINK-FIXTURES-ADOPTED.json\",\"bytes\":2613,\"sha256\":\"8124290da2f6ca89cedb4cbc99324f458533a3779d0111145925a0a17b7a26fa\",\"formal_adoption\":true,\"ticket\":\"TASKS-READ-LINK-FIXTURES-20261028\",\"source_paths\":[\"openbot/app/tests/business-read-errors.test.tsx\",\"openbot/app/tests/tasks-open-link.test.tsx\"]},{\"path\":\"archives/recovery-20261028/TASK-INFLIGHT-TYPE-GUARD-ADOPTED.json\",\"bytes\":2638,\"sha256\":\"f3777b77bd0a7ee4415afbeaf40f8e8388d2422de4d2898c95dd34a6be3bc1c3\",\"formal_adoption\":true,\"ticket\":\"TASK-INFLIGHT-TYPE-GUARD-20261028\",\"source_paths\":[\"openbot/app/tests/tasks-workbench-inflight.test.tsx\"]},{\"path\":\"archives/recovery-20261028/RUNNER-CHROMIUM-TYPE-IMPORT-ADOPTED.json\",\"bytes\":2451,\"sha256\":\"78ea2cd96a3b649bf3a220e7e20361b8a8929e0a492ef216c700efc7ba58d0f0\",\"formal_adoption\":true,\"ticket\":\"RUNNER-CHROMIUM-TYPE-IMPORT-20261028\",\"source_paths\":[\"openbot/runner/src/browser.ts\"]},{\"path\":\"archives/recovery-20261028/RECOVERY-PARSER-LINT-ADOPTED.json\",\"bytes\":5242,\"sha256\":\"ca4386f57d2e21ef76f039c1e705674f60cf9350fc5cd1a4dd8866e2eb1ca4b8\",\"formal_adoption\":true,\"ticket\":\"RECOVERY-PARSER-LINT-20261029\",\"source_paths\":[\"openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts\",\"openbot/server/tests/recovery-outbox-knowledge-heads.test.ts\",\"openbot/server/tests/recovery-resource-project-foundations.test.ts\",\"openbot/server/tests/recovery-security-policy-fences.test.ts\",\"openbot/server/tests/recovery-plugin-assembly-foundations.test.ts\",\"openbot/server/tests/recovery-knowledge-write-foundations.test.ts\",\"openbot/server/tests/recovery-import-proactive-token-foundations.test.ts\",\"openbot/server/tests/helpers/recovery-lint-source.ts\"],\"source_new_paths\":[\"openbot/server/tests/helpers/recovery-lint-source.ts\"]},{\"path\":\"archives/recovery-20261028/APPROVAL-GUARD-LINT-ADOPTED.json\",\"bytes\":3864,\"sha256\":\"e5bc51b0d1addc6ba1c6d7535bdc2a21ce4fe22454caf927dc383d9d002f2319\",\"formal_adoption\":true,\"ticket\":\"APPROVAL-GUARD-LINT-20261029\",\"source_paths\":[\"openbot/server/src/approvals/exact-input-json.ts\",\"openbot/server/src/approvals/exact-object-crypto.ts\",\"openbot/server/src/approvals/exact-object-header.ts\",\"openbot/server/src/approvals/exact-object-wire.ts\",\"openbot/server/src/approvals/exact-input-json-materializer.ts\",\"openbot/scripts/ci/runner-browser-probe.ts\"]},{\"path\":\"archives/recovery-20261028/TEST-FIXTURE-LINT-ADOPTED.json\",\"bytes\":3785,\"sha256\":\"c773b58e309f22b39478e566604e6e1902d1685f89139332bb226e14e0bf8080\",\"formal_adoption\":true,\"ticket\":\"TEST-FIXTURE-LINT-20261029\",\"source_paths\":[\"openbot/app/tests/tasks-workbench-a7-contracts.test.tsx\",\"openbot/app/tests/tasks-workbench-board-consistency.test.tsx\",\"openbot/app/tests/tasks-workbench-mutations.test.tsx\",\"openbot/server/tests/approval-exact-input-json.test.ts\",\"openbot/server/tests/recovery-approval-direct-execution-domains.test.ts\"]},{\"path\":\"archives/recovery-20261028/RUNNER-PROBE-COMPATIBILITY-ADOPTED.json\",\"bytes\":3067,\"sha256\":\"b241345105d30013525e2c0dd10fdab132e2fd753a17b48082fa5e82b5f57859\",\"formal_adoption\":true,\"ticket\":\"RUNNER-PROBE-COMPATIBILITY-20261029\",\"source_paths\":[\"openbot/scripts/ci/runner-browser-probe.ts\",\"openbot/scripts/ci/runner-browser-probe-ref.ts\",\"openbot/server/tests/runner-browser-probe.test.ts\"],\"source_new_paths\":[\"openbot/scripts/ci/runner-browser-probe-ref.ts\",\"openbot/server/tests/runner-browser-probe.test.ts\"]},{\"path\":\"archives/recovery-20261028/RUNNER-PROBE-LIFECYCLE-ADOPTED.json\",\"bytes\":3204,\"sha256\":\"878a83a720eca72f93c3d6c0d8847ced84a3724aa38e1727243e7d40204aa9f4\",\"formal_adoption\":true,\"ticket\":\"RUNNER-PROBE-LIFECYCLE-20261029\",\"source_paths\":[\"openbot/scripts/ci/runner-browser-probe.ts\",\"openbot/server/tests/runner-browser-probe.test.ts\",\"openbot/scripts/ci/runner-browser-probe-lifecycle.ts\"],\"source_new_paths\":[\"openbot/scripts/ci/runner-browser-probe-lifecycle.ts\"]},{\"path\":\"archives/recovery-20261028/RUNNER-PROBE-PENDING-ADOPTED.json\",\"bytes\":3195,\"sha256\":\"0b15bcb554fabc9c82318fa347015228e97b9bbfaa6e404a40d3237d8177c93c\",\"formal_adoption\":true,\"ticket\":\"RUNNER-PROBE-PENDING-RESULT-20261029\",\"source_paths\":[\"openbot/scripts/ci/runner-browser-probe.ts\",\"openbot/server/tests/runner-browser-probe.test.ts\",\"openbot/scripts/ci/runner-browser-probe-action.ts\"],\"source_new_paths\":[\"openbot/scripts/ci/runner-browser-probe-action.ts\"]},{\"path\":\"archives/recovery-20261028/RUNNER-PROBE-FRAME-REF-ADOPTED.json\",\"bytes\":3090,\"sha256\":\"7772374d7c918b555aa35687a1a7128a2cb2f9cc4b2e3630fa4f93d7127a2e93\",\"formal_adoption\":true,\"ticket\":\"RUNNER-PROBE-FRAME-REF-20261029\",\"source_paths\":[\"openbot/scripts/ci/runner-browser-probe-ref.ts\",\"openbot/server/tests/runner-browser-probe.test.ts\"]},{\"path\":\"archives/recovery-20261028/RUNNER-PROBE-SCROLL-OBSERVATION-ADOPTED.json\",\"bytes\":3305,\"sha256\":\"db2a19d37a2aa1b8ebb72f2f3f0432792d09bf07e80da4beb8d86169ad7077bc\",\"formal_adoption\":true,\"ticket\":\"RUNNER-PROBE-SCROLL-OBSERVATION-20261029\",\"source_paths\":[\"openbot/scripts/ci/runner-browser-probe.ts\",\"openbot/server/tests/runner-browser-probe.test.ts\",\"openbot/scripts/ci/runner-browser-probe-observe.ts\"],\"source_new_paths\":[\"openbot/scripts/ci/runner-browser-probe-observe.ts\"]},{\"path\":\"archives/recovery-20261028/SERVER-CI-TEST-MANIFEST-ADOPTED.json\",\"bytes\":2107,\"sha256\":\"8ae591cecd979fed5b3d9680e8d27a658df4fdfffbd6af5746f14dd1be696a84\",\"formal_adoption\":true,\"ticket\":\"SERVER-CI-TEST-MANIFEST-20261029\",\"source_paths\":[\"openbot/scripts/ci/server-tests.list.txt\"]},{\"path\":\"archives/recovery-20261028/WORKSPACE-RUNNER-ASSERTION-ADOPTED.json\",\"bytes\":2276,\"sha256\":\"287e60d9da1f05541a56a30192f402fb2aaaa673af37c7a4b34c1db8f256cce3\",\"formal_adoption\":true,\"ticket\":\"WORKSPACE-RUNNER-ASSERTION-20261029\",\"source_paths\":[\"openbot/tests/workspace.test.ts\"]},{\"path\":\"archives/recovery-20261028/START-HEALTH-ORDER-ASSERTION-ADOPTED.json\",\"bytes\":2339,\"sha256\":\"32f640255b8df00fd5a49aa1e5f71f47a11ae97706c4e8cd8a0a911c8c8877fa\",\"formal_adoption\":true,\"ticket\":\"START-HEALTH-ORDER-ASSERTION-20261029\",\"source_paths\":[\"openbot/scripts/start-restart-guard.test.ts\"]},{\"path\":\"archives/recovery-20261028/PRODUCTION-LOADER-READINESS-ADOPTED.json\",\"bytes\":2695,\"sha256\":\"ffd49c509a97e0aff29015cbea39c1f5959cbd22ef183d6af75d08085df9c36f\",\"formal_adoption\":true,\"ticket\":\"PRODUCTION-LOADER-READINESS-FIXTURE-20261029\",\"source_paths\":[\"openbot/server/tests/production-loader-boundary.test.ts\"]},{\"path\":\"archives/recovery-20261028/MASTRA-STANDALONE-FROZEN-COHORT-ADOPTED.json\",\"bytes\":2333,\"sha256\":\"c1dc242c230df4373e84317be482691ae4605361ac12bd2f8034bfaa39840c57\",\"formal_adoption\":true,\"ticket\":\"MASTRA-STANDALONE-FROZEN-COHORT-20261029\",\"source_paths\":[\"openbot/agent-mastra/package.json\",\"openbot/agent-mastra/bun.lock\"],\"source_new_paths\":[\"openbot/agent-mastra/bun.lock\"]},{\"path\":\"archives/recovery-20261028/APPROVAL-FRESH-PRODUCER-ADOPTED.json\",\"bytes\":6688,\"sha256\":\"99fd7ee403cdafb066eebdc5145922c9006d86a04c7e0ae20684769182d7c040\",\"formal_adoption\":true,\"ticket\":\"APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029\",\"source_paths\":[\"openbot/server/src/approvals/types.ts\",\"openbot/server/src/approvals/service.ts\",\"openbot/server/src/approvals/fresh-producer.ts\",\"openbot/server/tests/helpers/approval-producer-model.ts\",\"openbot/server/tests/approvals.test.ts\",\"openbot/server/tests/approvals-policy.test.ts\",\"openbot/server/tests/approval-fresh-producer.test.ts\",\"openbot/server/src/approvals/store.ts\"],\"source_new_paths\":[\"openbot/server/src/approvals/fresh-producer.ts\",\"openbot/server/tests/helpers/approval-producer-model.ts\",\"openbot/server/tests/approval-fresh-producer.test.ts\"]},{\"path\":\"archives/recovery-20261028/AP-LOCAL-COMPOSITION-ADOPTED.json\",\"bytes\":1941,\"sha256\":\"bdedeb90898afa8217c865e9a1221fb8455f900a3c2cad45759643a67b6d31e5\",\"formal_adoption\":true,\"ticket\":\"APPROVAL-LOCAL-COMPOSITION-20261029\",\"source_paths\":[\"openbot/server/src/approvals/local-recovery-composition.ts\",\"openbot/server/tests/approval-recovery-port.test.ts\"],\"source_new_paths\":[\"openbot/server/src/approvals/local-recovery-composition.ts\"]},{\"path\":\"archives/recovery-20261028/AP-SEED-GENERATE-DIAGNOSTIC-CANDIDATE.json\",\"bytes\":884,\"sha256\":\"d33c5807721dbc1d9ba677c7e99fb0502edd1e74355e8edce217bbdd7bf9e18c\",\"formal_adoption\":false,\"ticket\":\"APPROVAL-SEED-OFFLINE-GENERATE-DIAGNOSTIC-20261029\",\"source_paths\":[\"openbot/server/src/db/schema/approvals.ts\"]}]")
+          records = {f["path"]: f for f in manifest["files"]}
+          for specification in overlay_specs:
+              overlay_raw = subprocess.run(["git", "-c", "core.deltaBaseCacheLimit=1m", "-c", "pack.threads=1",
+                                            "show", target + ":" + specification["path"]],
+                                           cwd=root, check=True, capture_output=True,
+                                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+              assert len(overlay_raw) == specification["bytes"]
+              assert hashlib.sha256(overlay_raw).hexdigest() == specification["sha256"]
+              overlay = json.loads(overlay_raw)
+              assert overlay["base_manifest_sha256"] == "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920"
+              assert overlay["formal_adoption"] is specification["formal_adoption"]
+              assert overlay["ticket"] == specification["ticket"]
+              assert len(overlay["changes"]) == len(specification["source_paths"])
+              assert {item["path"] for item in overlay["changes"]} == set(specification["source_paths"])
+              for change in overlay["changes"]:
+                  if change["path"] in set(specification.get("source_new_paths", [])):
+                      assert change["before"] == {"absent": True}
+                      assert change["path"] not in records
+                      original = {"path": change["path"], "bytes": change["after"]["bytes"],
+                                  "sha256": change["after"]["sha256"], "mode": change["after"]["mode"]}
+                      manifest["files"].append(original)
+                      manifest["file_count"] += 1
+                      records[change["path"]] = original
+                  else:
+                      original = records[change["path"]]
+                      assert original["bytes"] == change["before"]["bytes"] and original["sha256"] == change["before"]["sha256"]
+                      assert original["mode"] == change["before"]["mode"] == change["after"]["mode"]
+                      original["bytes"] = change["after"]["bytes"]
+                      original["sha256"] = change["after"]["sha256"]
+          command(["git", "sparse-checkout", "init", "--no-cone"], root)
+          def sparse_literal(path):
+              return "/" + "".join(("\\" + c) if c in "\\*?[]!#" else c for c in path)
+          # Materialize only the small control first. Each following source batch is <=2MiB/32files.
+          patterns = "/" + control_path + "\n"
+          subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], input=patterns,
+                         cwd=root, check=True, text=True, capture_output=True)
+          command(["git", "checkout", "--quiet", "--detach", target], root)
+          tree_records = {}
+          for row in command(["git", "ls-tree", "-r", "-z", target], root).split("\x00"):
+              if not row:
+                  continue
+              metadata_part, path = row.split("\t", 1)
+              mode, kind, oid = metadata_part.split(" ")
+              assert kind == "blob" and len(oid) == 40
+              tree_records[path] = oid
+          synced_git_files = set()
+          def flush_owned_regular(path):
+              if not path.exists():
+                  return
+              named = os.stat(path, follow_symlinks=False)
+              assert stat.S_ISREG(named.st_mode) and named.st_nlink == 1
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+              try:
+                  assert metadata(os.fstat(fd)) == metadata(named)
+                  os.fsync(fd)
+              finally:
+                  os.close(fd)
+          def flush_git_transport():
+              index = root / ".git" / "index"
+              if index.exists():
+                  flush_owned_regular(index)
+              packs = root / ".git" / "objects" / "pack"
+              for item in packs.iterdir():
+                  if item.name.endswith((".pack", ".idx", ".rev")) and str(item) not in synced_git_files:
+                      flush_owned_regular(item)
+                      synced_git_files.add(str(item))
+          flush_owned_regular(root / control_path)
+          flush_git_transport()
+          batch = []
+          batch_bytes = 0
+          batch_count = 0
+          def materialize_batch(paths):
+              oids = sorted({tree_records[path] for path in paths})
+              command(["git", "fetch", "--quiet", "--no-tags", "--no-write-fetch-head",
+                       "--no-auto-maintenance", "--filter=blob:none", "origin", *oids], root)
+              flush_git_transport()
+              command(["git", "checkout", "--quiet", "--ignore-skip-worktree-bits", target, "--", *paths], root)
+              print("SOURCE_BATCH_COMPLETE " + json.dumps({"files": len(paths)}), flush=True)
+              for path in paths:
+                  flush_owned_regular(root / path)
+              flush_git_transport()
+          for item in manifest["files"]:
+              part = Path(item["path"])
+              assert not part.is_absolute() and ".." not in part.parts and part.parts[0] != ".git"
+              assert "\\" not in item["path"] and "\x00" not in item["path"]
+              if batch and (len(batch) == 32 or batch_bytes + item["bytes"] > 2097152):
+                  materialize_batch(batch)
+                  batch_count += 1
+                  batch = []
+                  batch_bytes = 0
+              assert item["bytes"] <= 2097152
+              batch.append(item["path"])
+              batch_bytes += item["bytes"]
+          if batch:
+              materialize_batch(batch)
+              batch_count += 1
+          print("SOURCE_BATCH_MATERIALIZATION " + json.dumps({"batches": batch_count, "max_files": 32,
+              "max_source_bytes": 2097152, "fsync_after_each_batch": True, "memory_limit": 67108864}), flush=True)
+          assert command(["git", "rev-parse", "HEAD"], root) == target
+          manifest_raw = verified_bytes(root, control_path, 419227,
+              "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920", True)
+          assert manifest_raw == shown
+          assert manifest["file_count"] == len(manifest["files"]) == 2065
+          assert len({f["path"] for f in manifest["files"]}) == 2065
+          total = 0
+          for item in manifest["files"]:
+              total += verified_bytes(root, item["path"], item["bytes"], item["sha256"],
+                                      expected_mode=item["mode"])
+          assert total == 50177753
+          tracked = set(command(["git", "ls-files", "-z"], root).split("\x00"))
+          assert all(f["path"] in tracked for f in manifest["files"])
+          assert not command(["git", "status", "--porcelain"], root)
+          result = {"status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS", "head": target,
+                    "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
+                    "formal_baseline": "V57 with explicit source overlays", "overlay_tickets": [x["ticket"] for x in overlay_specs], "verified_source_files": 2065, "verified_source_bytes": total,
+                    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+                    "source_mismatches": 0, "file_modes_verified": True, "fd_named_stability_verified": True,
+                    "aggregate_memory_limit": 67108864, "project_upper_bound": 536870912, "swap_limit": 0,
+                    "project_tests": "NOT_RUN", "postgres17": "PG_PENDING",
+                    "commercial_acceptance": "NOT_DELIVERED", "windows_source_files_written": 0}
+          print("SOURCE_RECOVERY_RESULT " + json.dumps(result, sort_keys=True), flush=True)
+          
+          PY
+      - name: Install pinned official runtime and copy exact input component files
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib, json, os, stat, sys, urllib.request, zipfile
+          from pathlib import Path
+          
+          base = Path.cwd()
+          cg = Path("/sys/fs/cgroup") / Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg / "memory.max").read_text().strip() == "67108864"
+          assert (cg / "memory.swap.max").read_text().strip() == "0"
+          assert cg.parent.name == "xiongbaowork.slice"
+          assert (cg.parent / "memory.max").read_text().strip() == "536870912"
+          assert (cg.parent / "memory.swap.max").read_text().strip() == "0"
+          tools = base / "xiongbaowork-bun-1.3.14"
+          tools.mkdir(mode=0o700)
+          archive = tools / "vendor.zip"
+          digest = hashlib.sha256()
+          size = 0
+          with urllib.request.urlopen("https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip", timeout=60) as incoming, archive.open("xb") as out:
+              while True:
+                  block = incoming.read(65536)
+                  if not block:
+                      break
+                  size += len(block)
+                  assert size <= 35969274
+                  digest.update(block)
+                  out.write(block)
+                  if size % 262144 < len(block):
+                      out.flush()
+                      os.fsync(out.fileno())
+              out.flush()
+              os.fsync(out.fileno())
+          assert size == 35969274 and digest.hexdigest() == "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f"
+          binary = tools / "bun"
+          binary_hash = hashlib.sha256()
+          binary_bytes = 0
+          with zipfile.ZipFile(archive) as bundle:
+              files = [i for i in bundle.infolist() if not i.is_dir()]
+              assert len(files) == 1 and files[0].filename == "bun-linux-x64/bun"
+              assert not files[0].flag_bits & 1
+              assert stat.S_ISREG(files[0].external_attr >> 16)
+              assert files[0].file_size <= 256 * 1024 * 1024
+              with bundle.open(files[0]) as incoming, binary.open("xb") as out:
+                  while True:
+                      block = incoming.read(65536)
+                      if not block:
+                          break
+                      binary_bytes += len(block)
+                      assert binary_bytes <= files[0].file_size
+                      binary_hash.update(block)
+                      out.write(block)
+                      if binary_bytes % 262144 < len(block):
+                          out.flush()
+                          os.fsync(out.fileno())
+                  out.flush()
+                  os.fsync(out.fileno())
+              assert binary_bytes == files[0].file_size
+          os.chmod(binary, 0o700)
+          
+          root = base / "xiongbaowork-verified-source" / "repo"
+          harness = base / "xiongbaowork-schema-components"
+          harness.mkdir(mode=0o700)
+          identities = []
+          for item in identities:
+              source = root / item["path"]
+              assert source.is_file() and not source.is_symlink() and source.stat().st_nlink == 1
+              target = harness / item["path"]
+              target.parent.mkdir(parents=True, exist_ok=True)
+              raw_hash = hashlib.sha256()
+              length = 0
+              with source.open("rb") as incoming, target.open("xb") as out:
+                  while True:
+                      block = incoming.read(65536)
+                      if not block:
+                          break
+                      length += len(block)
+                      raw_hash.update(block)
+                      out.write(block)
+              assert length == item["bytes"] and raw_hash.hexdigest() == item["sha256"]
+              assert target.stat().st_nlink == 1 and target.stat().st_ino != source.stat().st_ino
+          assert len(identities) == 0
+          print("RUNTIME_AND_HARNESS " + json.dumps({"bun_version": "1.3.14", "vendor_archive_bytes": size,
+              "vendor_archive_sha256": digest.hexdigest(), "binary_bytes": binary_bytes,
+              "binary_sha256": binary_hash.hexdigest(), "exact_component_files": len(identities),
+              "data_job_memory_max": 67108864, "project_parent_memory_max": 536870912, "swap_max": 0}), flush=True)
+          
+          PY
+      - name: Install frozen workspace dependencies within the human-authorized512MiB install exception
+        id: workspace_install
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - "$GITHUB_SHA" <<'PY'
+          import collections, hashlib, json, os, selectors, signal, stat, subprocess, sys, time
+          from pathlib import Path
+          base=Path.cwd()
+          target=sys.argv[1]
+          assert len(target)==40 and all(c in "0123456789abcdef" for c in target)
+          cg_line=Path("/proc/self/cgroup").read_text().strip()
+          cg=Path("/sys/fs/cgroup")/cg_line[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg/"memory.oom.group").read_text().strip()=="1"
+          assert cg.parent.name=="xiongbaowork.slice"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          print("WORKSPACE_INSTALL_RESOURCE_GATE "+json.dumps({"memory_limit":536870912,"project_memory_limit":536870912,"swap":0}),flush=True)
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          assert root.is_dir() and root.resolve().is_relative_to(base)
+          assert not (root/".env").exists() and not (root/".npmrc").exists()
+          binary=base/"xiongbaowork-bun-1.3.14"/"bun"
+          assert binary.is_file()
+          cache=base/"xiongbaowork-workspace-install-cache"
+          home=base/"xiongbaowork-workspace-install-home"
+          cache.mkdir(mode=0o700); home.mkdir(mode=0o700)
+          protected=["bun.lock","package.json","app/package.json","server/package.json","worker/package.json","runner/package.json"]
+          def seal(path):
+              s=path.lstat()
+              assert stat.S_ISREG(s.st_mode) and s.st_nlink==1
+              return {"bytes":s.st_size,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
+          before={p:seal(root/p) for p in protected}
+          assert before["bun.lock"]=={"bytes":453991,"sha256":"c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670"}
+          env={"PATH":str(binary.parent)+":/usr/bin:/bin","HOME":str(home),"CI":"true","NO_COLOR":"1",
+               "NPM_CONFIG_IGNORE_SCRIPTS":"true","GIT_TERMINAL_PROMPT":"0"}
+          assert subprocess.run([str(binary),"--version"],env=env,capture_output=True,text=True,check=True).stdout.strip()=="1.3.14"
+          args=[str(binary),"install","--frozen-lockfile","--ignore-scripts","--backend","copyfile",
+                "--cache-dir",str(cache),"--network-concurrency","4","--no-progress","--verbose"]
+          print("WORKSPACE_INSTALL_START "+json.dumps({"frozen_lockfile":True,"ignore_all_lifecycle_scripts":True,
+                "backend":"copyfile","cache":"private job directory","network_concurrency":4,"timeout_seconds":480,
+                "source_commit":target}),flush=True)
+          proc=subprocess.Popen(args,cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
+          selector=selectors.DefaultSelector()
+          selector.register(proc.stdout,selectors.EVENT_READ)
+          deadline=time.monotonic()+480
+          pending=""
+          tail=collections.deque(maxlen=40)
+          lines=0
+          timed_out=False
+          def installer_line(line):
+              global lines
+              lines+=1
+              line=line[:1600]
+              tail.append(line)
+              if lines<=80 or lines%250==0 or any(marker in line.lower() for marker in ["error:","failed","timed out","timeout","404","403"]):
+                  print("BUN_INSTALL_PROGRESS "+line,flush=True)
+          while selector.get_map():
+              remaining=deadline-time.monotonic()
+              if remaining<=0:
+                  timed_out=True
+                  os.killpg(proc.pid,signal.SIGKILL)
+                  break
+              for key,event in selector.select(min(remaining,1)):
+                  chunk=os.read(key.fd,65536)
+                  if not chunk:
+                      selector.unregister(key.fileobj)
+                      continue
+                  pending+=chunk.decode("utf8",errors="replace")
+                  while "\n" in pending:
+                      line,pending=pending.split("\n",1)
+                      installer_line(line)
+                  if len(pending)>8192:
+                      installer_line(pending[:1600]);pending=""
+              if proc.poll() is not None and not selector.get_map():
+                  break
+          if pending:
+              installer_line(pending)
+          proc.wait()
+          selector.close()
+          code=124 if timed_out else proc.returncode
+          print("BUN_INSTALL_LOG_TAIL "+json.dumps({"lines_seen":lines,"last40":list(tail)}),flush=True)
+          after={p:seal(root/p) for p in protected}
+          assert after==before,"install changed frozen package/lock inputs"
+          audit={"status":"NOT_REACHED","regular_files":0,"symlinks":0,"hardlink_files":0,"outside_private_paths":0}
+          if code==0:
+              audit["status"]="PASS"
+              modules=root/"node_modules"
+              assert modules.is_dir()
+              for current,dirs,files in os.walk(modules,followlinks=False):
+                  for name in dirs+files:
+                      item=Path(current)/name
+                      s=item.lstat()
+                      if stat.S_ISLNK(s.st_mode):
+                          audit["symlinks"]+=1
+                          resolved=item.resolve(strict=True)
+                          assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external dependency link"
+                      elif stat.S_ISREG(s.st_mode):
+                          assert s.st_nlink==1,"hardlinked dependency rejected"
+                          audit["regular_files"]+=1
+              for package in ["app","server","worker","runner"]:
+                  nested=root/package/"node_modules"
+                  if nested.exists():
+                      for current,dirs,files in os.walk(nested,followlinks=False):
+                          for name in dirs+files:
+                              item=Path(current)/name;s=item.lstat()
+                              if stat.S_ISREG(s.st_mode):
+                                  assert s.st_nlink==1,"hardlinked workspace dependency rejected"
+                              elif stat.S_ISLNK(s.st_mode):
+                                  resolved=item.resolve(strict=True)
+                                  assert resolved.is_relative_to(root) or resolved.is_relative_to(cache),"external workspace dependency link"
+          partial_inventory={}
+          for label,directory in [("private_cache",cache),("root_node_modules",root/"node_modules")]:
+              files=0; total=0
+              if directory.exists():
+                  for current,dirs,names in os.walk(directory,followlinks=False):
+                      for name in names:
+                          s=(Path(current)/name).lstat()
+                          if stat.S_ISREG(s.st_mode):
+                              files+=1;total+=s.st_size
+              partial_inventory[label]={"regular_files":files,"bytes":total}
+          print("WORKSPACE_INSTALL_FILESYSTEM_PROGRESS "+json.dumps(partial_inventory),flush=True)
+          print("WORKSPACE_INSTALL_RESULT "+json.dumps({"exit_code":code,"frozen_inputs_unchanged":True,
+                "lifecycle_scripts":"NOT_RUN","source_commit":target,"install_memory_limit":536870912,"other_data_copy_limit":67108864,"backend":"copyfile","private_cache":True,"dependency_audit":audit,
+                "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
+                "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(code)
+          
+          PY
+
+
+      - name: Prepare private migration copy under DATA64
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice --property=Type=exec --property=MemoryMax=64M --property=MemorySwapMax=0 --property=OOMPolicy=kill --uid="$(id -u)" --working-directory="$RUNNER_TEMP" /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,os,shutil,stat
+          from pathlib import Path
+          base=Path.cwd()
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          source=root/"server"/"drizzle"
+          out=base/"xiongbaowork-private-offline-drizzle"
+          out.mkdir(mode=0o700)
+          seals={}
+          for current,dirs,names in os.walk(source,followlinks=False):
+              for name in dirs:
+                  assert not (Path(current)/name).is_symlink()
+              for name in names:
+                  f=Path(current)/name
+                  s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1
+                  rel=f.relative_to(source).as_posix()
+                  data=f.read_bytes()
+                  dest=out/rel;dest.parent.mkdir(parents=True,exist_ok=True)
+                  with dest.open("xb") as h:h.write(data)
+                  seals[rel]={"bytes":len(data),"sha256":hashlib.sha256(data).hexdigest()}
+          with (base/"xiongbaowork-offline-drizzle-before.json").open("x") as h:json.dump(seals,h)
+          paths=json.loads("[\"./src/db/schema/core.ts\",\"./src/db/schema/computer.ts\",\"./src/db/schema/coworker.ts\",\"./src/db/schema/components.ts\",\"./src/db/schema/plugins.ts\",\"./src/db/schema/work.ts\",\"./src/db/schema/voice.ts\",\"./src/db/schema/learning.ts\",\"./src/db/schema/responsibilities.ts\",\"./src/db/schema/approvals.ts\",\"./src/db/schema/memory.ts\",\"./src/db/schema/proactive.ts\",\"./src/db/schema/demonstrations.ts\",\"./src/db/schema/delivery.ts\",\"./src/db/schema/group.ts\",\"./src/db/schema/admin.ts\",\"./src/db/schema/scim.ts\",\"./src/db/schema/lifecycle.ts\",\"./src/db/schema/passwords.ts\",\"./src/db/schema/team-bots.ts\",\"./src/db/schema/plans.ts\",\"./src/db/schema/threads.ts\",\"./src/db/schema/tasks.ts\",\"./src/db/schema/model.ts\",\"./src/db/schema/devices.ts\",\"./src/db/schema/waker-groups.ts\",\"./src/db/schema/pipeline.ts\",\"./src/db/schema/wakerflows.ts\"]")
+          paths=[str(root/"server"/p.removeprefix("./")) for p in paths]
+          assert len(paths)==28 and all(Path(p).is_file() for p in paths)
+          conf={"dialect":"postgresql","schema":paths,"out":str(out)}
+          with (base/"xiongbaowork-offline-drizzle.config.cjs").open("x") as h:h.write("module.exports = "+json.dumps(conf)+";\n")
+          print("OFFLINE_DRIZZLE_PREPARE "+json.dumps({"copied_files":len(seals),"schema_paths":len(paths),"database_credentials":"NOT_SUPPLIED","original_config_unchanged":True,"source_stage":"DIAGNOSTIC_CANDIDATE_ONLY","postgres17":"PG_PENDING"}),flush=True)
+          PY
+      - name: Generate offline schema diff within512MiB without database credentials
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice --property=Type=exec --property=MemoryMax=512M --property=MemorySwapMax=0 --property=OOMPolicy=kill --uid="$(id -u)" --working-directory="$RUNNER_TEMP" /usr/bin/python3 -I -B - <<'PY'
+          import json,os,shutil,subprocess
+          from pathlib import Path
+          base=Path.cwd()
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()==(cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          node=shutil.which("node");assert node
+          packages=[root/"server/node_modules/drizzle-kit",root/"node_modules/drizzle-kit"]
+          package=next(p for p in packages if (p/"package.json").is_file()).resolve()
+          assert package.is_relative_to(root)
+          metadata=json.loads((package/"package.json").read_text())
+          binary=metadata["bin"]
+          if isinstance(binary,dict):binary=binary["drizzle-kit"]
+          cli=(package/binary).resolve(strict=True);assert cli.is_relative_to(root) and cli.is_file()
+          home=base/"xiongbaowork-offline-drizzle-home";home.mkdir(mode=0o700)
+          env={"PATH":str(Path(node).parent)+":/usr/bin:/bin","HOME":str(home),"CI":"true","NO_COLOR":"1","DO_NOT_TRACK":"1"}
+          assert "DATABASE_URL" not in env
+          args=[node,"--max-old-space-size=384",str(cli),"generate","--config="+str(base/"xiongbaowork-offline-drizzle.config.cjs"),"--name=approval_fresh_seeds"]
+          try:
+              r=subprocess.run(args,cwd=root/"server",env=env,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=120)
+              code=r.returncode;output=r.stdout+r.stderr
+          except subprocess.TimeoutExpired as e:
+              code=124;output="OFFLINE_GENERATION_TIMEOUT_OR_INTERACTIVE_CHOICE"
+          with (base/"xiongbaowork-offline-drizzle.log").open("x") as h:h.write(output)
+          for line in output.splitlines()[-100:]:print("OFFLINE_DRIZZLE_LOG "+line[:3000],flush=True)
+          result={"exit_code":code,"drizzle_kit":metadata["version"],"database_credentials":"NOT_SUPPLIED","database_migration":"NOT_RUN","original_db_generate_script":"NOT_RUN","memory_limit":536870912,"swap":0,"postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}
+          with (base/"xiongbaowork-offline-drizzle-result.json").open("x") as h:json.dump(result,h)
+          print("OFFLINE_DRIZZLE_GENERATE_RESULT "+json.dumps(result),flush=True)
+          PY
+      - name: Inspect and export only private generated DATA within64MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice --property=Type=exec --property=MemoryMax=64M --property=MemorySwapMax=0 --property=OOMPolicy=kill --uid="$(id -u)" --working-directory="$RUNNER_TEMP" /usr/bin/python3 -I -B - <<'PY'
+          import base64,gzip,hashlib,json,os,stat
+          from pathlib import Path
+          base=Path.cwd()
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0"
+          out=base/"xiongbaowork-private-offline-drizzle"
+          before=json.loads((base/"xiongbaowork-offline-drizzle-before.json").read_text())
+          after={}
+          for current,dirs,names in os.walk(out,followlinks=False):
+              for name in names:
+                  f=Path(current)/name;s=f.lstat()
+                  assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and f.resolve().is_relative_to(out)
+                  b=f.read_bytes();after[f.relative_to(out).as_posix()]={"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest()}
+          removed=sorted(set(before)-set(after))
+          added=sorted(set(after)-set(before))
+          changed=sorted(p for p in before if p in after and before[p]!=after[p])
+          result=json.loads((base/"xiongbaowork-offline-drizzle-result.json").read_text())
+          print("OFFLINE_DRIZZLE_DIFF "+json.dumps({"added":added,"changed":changed,"removed":removed,"source_adopted":False,"postgres17":"PG_PENDING"}),flush=True)
+          assert not removed and set(changed)<=set(["meta/_journal.json"])
+          complete=result["exit_code"]==0 and "meta/0081_snapshot.json" in added and len([p for p in added if p.endswith(".sql")])==1
+          if complete:
+              for rel in added+changed:
+                  f=out/rel;named=f.lstat()
+                  with f.open("rb") as h:
+                      a=os.fstat(h.fileno());b=h.read();z=os.fstat(h.fileno())
+                  end=f.lstat()
+                  key=lambda s:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns,s.st_mode,s.st_nlink)
+                  assert key(named)==key(a)==key(z)==key(end)
+                  assert len(b)<=2000000 and b.decode("utf8").encode("utf8")==b
+                  packed=gzip.compress(b,mtime=0);encoded=base64.b64encode(packed).decode("ascii")
+                  assert len(encoded)<=250000
+                  item={"path":rel,"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest(),"git_blob":hashlib.sha1(("blob "+str(len(b))+"\0").encode()+b).hexdigest(),"mode":oct(stat.S_IMODE(a.st_mode)),"ino":str(a.st_ino),"mtime_ns":str(a.st_mtime_ns),"ctime_ns":str(a.st_ctime_ns),"gzip_bytes":len(packed),"gzip_sha256":hashlib.sha256(packed).hexdigest(),"base64":encoded}
+                  print("OFFLINE_DRIZZLE_DATA "+json.dumps(item,separators=(",",":")),flush=True)
+          print("OFFLINE_DRIZZLE_FINAL "+json.dumps({"complete_metadata_candidate":complete,"source_adopted":False,"original_db_generate_script":"NOT_RUN","migration_execution":"NOT_RUN","PG":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          if not complete:raise SystemExit(1)
+          PY
