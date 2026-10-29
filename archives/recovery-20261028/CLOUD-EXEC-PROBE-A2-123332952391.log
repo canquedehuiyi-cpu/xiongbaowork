@@ -1,0 +1,123 @@
+﻿2026-10-29T08:06:10.2415698Z Current runner version: '2.338.0'
+2026-10-29T08:06:10.2433379Z ##[group]Runner Image Provisioner
+2026-10-29T08:06:10.2433924Z Hosted Compute Agent
+2026-10-29T08:06:10.2434285Z Version: 20261021.618
+2026-10-29T08:06:10.2434764Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T08:06:10.2435193Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T08:06:10.2435621Z Worker ID: {426e5d84-45e1-422b-870f-260d24e8f30b}
+2026-10-29T08:06:10.2436051Z Region: centralus
+2026-10-29T08:06:10.2436420Z Cloud: Azure
+2026-10-29T08:06:10.2436786Z ##[endgroup]
+2026-10-29T08:06:10.2437567Z ##[group]Operating System
+2026-10-29T08:06:10.2437920Z Ubuntu
+2026-10-29T08:06:10.2438290Z 26.04.1
+2026-10-29T08:06:10.2438826Z LTS
+2026-10-29T08:06:10.2439239Z ##[endgroup]
+2026-10-29T08:06:10.2439576Z ##[group]Runner Image
+2026-10-29T08:06:10.2439973Z Image: ubuntu-26.04
+2026-10-29T08:06:10.2440361Z Version: 20261025.179.1
+2026-10-29T08:06:10.2441148Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T08:06:10.2442063Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T08:06:10.2442612Z ##[endgroup]
+2026-10-29T08:06:10.2443298Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T08:06:10.2444523Z Contents: read
+2026-10-29T08:06:10.2444934Z Metadata: read
+2026-10-29T08:06:10.2445273Z ##[endgroup]
+2026-10-29T08:06:10.2446597Z Secret source: Actions
+2026-10-29T08:06:10.2447196Z Cache mode: write
+2026-10-29T08:06:10.2447639Z Prepare workflow directory
+2026-10-29T08:06:10.2657374Z Prepare all required actions
+2026-10-29T08:06:10.2726527Z Complete job name: resource-probe
+2026-10-29T08:06:10.3388089Z ##[group]Run set -euo pipefail
+2026-10-29T08:06:10.3388926Z [36;1mset -euo pipefail[0m
+2026-10-29T08:06:10.3389450Z [36;1mtest "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"[0m
+2026-10-29T08:06:10.3390193Z [36;1mtest "$GITHUB_REF" = "refs/heads/codex/cloud-exec-probe-run-20261029-a2"[0m
+2026-10-29T08:06:10.3390728Z [36;1mtest "$GITHUB_EVENT_NAME" = "push"[0m
+2026-10-29T08:06:10.3391192Z [36;1msudo /usr/bin/python3 -I -B - <<'PY'[0m
+2026-10-29T08:06:10.3391691Z [36;1mimport json, os, subprocess, sys[0m
+2026-10-29T08:06:10.3392140Z [36;1mfrom pathlib import Path[0m
+2026-10-29T08:06:10.3392627Z [36;1mparent = Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T08:06:10.3393114Z [36;1munit = "xiongbaowork-cloud-probe"[0m
+2026-10-29T08:06:10.3393516Z [36;1mdef run(args, seconds=10, **kw):[0m
+2026-10-29T08:06:10.3393985Z [36;1m    return subprocess.run(args, timeout=seconds, check=True, **kw)[0m
+2026-10-29T08:06:10.3394502Z [36;1mdef gate():[0m
+2026-10-29T08:06:10.3395178Z [36;1m    return {n: (parent/n).read_text().strip() for n in ["memory.max", "memory.swap.max", "memory.oom.group"]}[0m
+2026-10-29T08:06:10.3395753Z [36;1mchild = r'''[0m
+2026-10-29T08:06:10.3396105Z [36;1mimport json, subprocess, sys[0m
+2026-10-29T08:06:10.3396539Z [36;1mfrom pathlib import Path[0m
+2026-10-29T08:06:10.3396973Z [36;1mline = Path("/proc/self/cgroup").read_text().strip()[0m
+2026-10-29T08:06:10.3397586Z [36;1massert line.startswith("0::/") and "\n" not in line[0m
+2026-10-29T08:06:10.3398065Z [36;1mcg = Path("/sys/fs/cgroup") / line[3:].lstrip("/")[0m
+2026-10-29T08:06:10.3398758Z [36;1massert cg.parent == Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T08:06:10.3399373Z [36;1mexpected = {"memory.max":"67108864", "memory.swap.max":"0", "memory.oom.group":"1"}[0m
+2026-10-29T08:06:10.3399948Z [36;1mactual = {n:(cg/n).read_text().strip() for n in expected}[0m
+2026-10-29T08:06:10.3400477Z [36;1massert actual == expected, actual[0m
+2026-10-29T08:06:10.3400984Z [36;1mactivation_before = {n:(cg.parent/n).read_text().strip() for n in expected}[0m
+2026-10-29T08:06:10.3401631Z [36;1m(cg.parent/"memory.oom.group").write_text("1")[0m
+2026-10-29T08:06:10.3402121Z [36;1mupper = {n:(cg.parent/n).read_text().strip() for n in expected}[0m
+2026-10-29T08:06:10.3402807Z [36;1massert upper == {"memory.max":"536870912", "memory.swap.max":"0", "memory.oom.group":"1"}, upper[0m
+2026-10-29T08:06:10.3404910Z [36;1mwitness = "import json; from pathlib import Path; line=Path('/proc/self/cgroup').read_text().strip(); cg=Path('/sys/fs/cgroup')/line[3:].lstrip('/'); keys=['memory.max','memory.swap.max','memory.oom.group']; own={n:(cg/n).read_text().strip() for n in keys}; upper={n:(cg.parent/n).read_text().strip() for n in keys}; assert cg.parent==Path('/sys/fs/cgroup/xiongbaowork.slice'); assert own==dict(zip(keys,['67108864','0','1'])); assert upper==dict(zip(keys,['536870912','0','1'])); print(json.dumps(dict(cgroup=line,data=own,project=upper)))"[0m
+2026-10-29T08:06:10.3406943Z [36;1mdescendant = subprocess.run([sys.executable, "-I", "-B", "-c", witness], check=True, capture_output=True, text=True, timeout=5)[0m
+2026-10-29T08:06:10.3407599Z [36;1mevidence=json.loads(descendant.stdout)[0m
+2026-10-29T08:06:10.3408122Z [36;1massert evidence == {"cgroup":line,"data":actual,"project":upper}[0m
+2026-10-29T08:06:10.3408882Z [36;1massert {n:(cg.parent/n).read_text().strip() for n in expected} == upper[0m
+2026-10-29T08:06:10.3410414Z [36;1mprint("CLOUD_PROBE_DATA " + json.dumps({"cgroup":line,"data":actual,"project":upper,"activation_before":activation_before,"activation_admin_fix":"parent oom.group1 before descendant; probe only","descendant_evidence":evidence,"descendant_exit":descendant.returncode,"subject_acquired":False,"subject_executed":False,"dependencies_installed":False,"secrets_read":False}), flush=True)[0m
+2026-10-29T08:06:10.3411809Z [36;1m'''[0m
+2026-10-29T08:06:10.3412152Z [36;1mtry:[0m
+2026-10-29T08:06:10.3412634Z [36;1m    path = Path("/run/systemd/system/xiongbaowork.slice")[0m
+2026-10-29T08:06:10.3413110Z [36;1m    with path.open("x") as out:[0m
+2026-10-29T08:06:10.3413745Z [36;1m        out.write("[Unit]\nDescription=Bounded cloud scheduling probe\n[Slice]\nMemoryMax=512M\nMemorySwapMax=0\n")[0m
+2026-10-29T08:06:10.3414386Z [36;1m    run(["systemctl","daemon-reload"])[0m
+2026-10-29T08:06:10.3414884Z [36;1m    run(["systemctl","start","xiongbaowork.slice"])[0m
+2026-10-29T08:06:10.3415360Z [36;1m    (parent/"memory.oom.group").write_text("1")[0m
+2026-10-29T08:06:10.3415981Z [36;1m    assert gate() == {"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T08:06:10.3416583Z [36;1m    print("CLOUD_PROBE_PARENT " + json.dumps(gate()), flush=True)[0m
+2026-10-29T08:06:10.3418199Z [36;1m    result = run(["systemd-run","--unit="+unit,"--wait","--pipe","--slice=xiongbaowork.slice","--property=Type=exec","--property=MemoryMax=64M","--property=MemorySwapMax=0","--property=OOMPolicy=kill","--property=KillMode=control-group","--property=RuntimeMaxSec=30","--property=TimeoutStartSec=10","--property=TimeoutStopSec=5","--property=SendSIGKILL=yes","/usr/bin/python3","-I","-B","-"], seconds=60, input=child, text=True)[0m
+2026-10-29T08:06:10.3420120Z [36;1m    print("CLOUD_PROBE_SERVICE " + json.dumps({"exit":result.returncode,"subject_executed":False}), flush=True)[0m
+2026-10-29T08:06:10.3420777Z [36;1mfinally:[0m
+2026-10-29T08:06:10.3421104Z [36;1m    if parent.exists():[0m
+2026-10-29T08:06:10.3421501Z [36;1m        (parent/"memory.max").write_text("536870912")[0m
+2026-10-29T08:06:10.3421997Z [36;1m        (parent/"memory.swap.max").write_text("0")[0m
+2026-10-29T08:06:10.3422470Z [36;1m        (parent/"memory.oom.group").write_text("1")[0m
+2026-10-29T08:06:10.3422974Z [36;1m        owned=parent/(unit+".service")[0m
+2026-10-29T08:06:10.3423429Z [36;1m        if owned.exists() and (owned/"cgroup.kill").exists():[0m
+2026-10-29T08:06:10.3423934Z [36;1m            (owned/"cgroup.kill").write_text("1")[0m
+2026-10-29T08:06:10.3424483Z [36;1m        subprocess.run(["systemctl","stop",unit+".service"], timeout=10, check=False)[0m
+2026-10-29T08:06:10.3425137Z [36;1m        assert gate() == {"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T08:06:10.3425903Z [36;1m        events = dict(line.split() for line in (parent/"cgroup.events").read_text().splitlines())[0m
+2026-10-29T08:06:10.3426582Z [36;1m        assert events["populated"] == "0", events[0m
+2026-10-29T08:06:10.3427332Z [36;1m        print("CLOUD_PROBE_FINAL " + json.dumps({"restored":gate(),"project_populated":events["populated"],"subject_executed":False}), flush=True)[0m
+2026-10-29T08:06:10.3428029Z [36;1mPY[0m
+2026-10-29T08:06:10.4061599Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:06:10.4062508Z ##[endgroup]
+2026-10-29T08:06:10.7128607Z CLOUD_PROBE_PARENT {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}
+2026-10-29T08:06:10.7150217Z Running as unit: xiongbaowork-cloud-probe.service
+2026-10-29T08:06:10.7597713Z CLOUD_PROBE_DATA {"cgroup": "0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service", "data": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "project": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "activation_before": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "0"}, "activation_admin_fix": "parent oom.group1 before descendant; probe only", "descendant_evidence": {"cgroup": "0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service", "data": {"memory.max": "67108864", "memory.swap.max": "0", "memory.oom.group": "1"}, "project": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}}, "descendant_exit": 0, "subject_acquired": false, "subject_executed": false, "dependencies_installed": false, "secrets_read": false}
+2026-10-29T08:06:10.7657770Z           Finished with result: success
+2026-10-29T08:06:10.7659398Z Main processes terminated with: code=exited, status=0/SUCCESS
+2026-10-29T08:06:10.7660418Z                Service runtime: 47ms
+2026-10-29T08:06:10.7661019Z              CPU time consumed: 43ms
+2026-10-29T08:06:10.7661493Z                    Memory peak: 11.2M (swap: 0B)
+2026-10-29T08:06:10.7747680Z CLOUD_PROBE_SERVICE {"exit": 0, "subject_executed": false}
+2026-10-29T08:06:10.7783782Z Failed to stop xiongbaowork-cloud-probe.service: Unit xiongbaowork-cloud-probe.service not loaded.
+2026-10-29T08:06:10.7791648Z CLOUD_PROBE_FINAL {"restored": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "project_populated": "0", "subject_executed": false}
+2026-10-29T08:06:10.7926246Z ##[group]Run set -euo pipefail
+2026-10-29T08:06:10.7926628Z [36;1mset -euo pipefail[0m
+2026-10-29T08:06:10.7926962Z [36;1msudo /usr/bin/python3 -I -B - <<'PY'[0m
+2026-10-29T08:06:10.7927314Z [36;1mimport json[0m
+2026-10-29T08:06:10.7927619Z [36;1mfrom pathlib import Path[0m
+2026-10-29T08:06:10.7927978Z [36;1mp=Path("/sys/fs/cgroup/xiongbaowork.slice")[0m
+2026-10-29T08:06:10.7928575Z [36;1massert p.is_dir(), "project slice not established"[0m
+2026-10-29T08:06:10.7928995Z [36;1m(p/"memory.max").write_text("536870912")[0m
+2026-10-29T08:06:10.7929368Z [36;1m(p/"memory.swap.max").write_text("0")[0m
+2026-10-29T08:06:10.7929738Z [36;1m(p/"memory.oom.group").write_text("1")[0m
+2026-10-29T08:06:10.7930280Z [36;1mgates={n:(p/n).read_text().strip() for n in ["memory.max","memory.swap.max","memory.oom.group"]}[0m
+2026-10-29T08:06:10.7930937Z [36;1massert gates=={"memory.max":"536870912","memory.swap.max":"0","memory.oom.group":"1"}[0m
+2026-10-29T08:06:10.7931600Z [36;1mevents=dict(line.split() for line in (p/"cgroup.events").read_text().splitlines())[0m
+2026-10-29T08:06:10.7932114Z [36;1massert events["populated"]=="0", events[0m
+2026-10-29T08:06:10.7932766Z [36;1mprint("CLOUD_PROBE_TERMINAL " + json.dumps({"limits":gates,"populated":events["populated"],"subject_executed":False}), flush=True)[0m
+2026-10-29T08:06:10.7933388Z [36;1mPY[0m
+2026-10-29T08:06:10.7958498Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:06:10.7958892Z ##[endgroup]
+2026-10-29T08:06:10.8184759Z CLOUD_PROBE_TERMINAL {"limits": {"memory.max": "536870912", "memory.swap.max": "0", "memory.oom.group": "1"}, "populated": "0", "subject_executed": false}
+2026-10-29T08:06:10.8284914Z Cleaning up orphan processes

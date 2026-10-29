@@ -1,0 +1,41 @@
+{
+  "schema": "xiongbaowork-cloud-resource-probe-result-v2",
+  "candidate": "c2c199a6d1c740438433d3355c598bffbb5320a2",
+  "run": 40839741519,
+  "job": 123332952391,
+  "event": "push",
+  "status": "completed",
+  "conclusion": "success",
+  "review": {
+    "commit": "8fe6dd583f1103e3fa8be9c9e50aa9da6e8945a5",
+    "blob": "702b7006ef2a0eeea5b56bdaea9ce002dae8d539"
+  },
+  "lease_at_dispatch": {
+    "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+    "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+    "canonical_head": "823744db378f508a1996f8c23faf1b42f115ad33"
+  },
+  "evidence_lines": [
+    "2026-10-29T08:06:10.7128607Z CLOUD_PROBE_PARENT {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}",
+    "2026-10-29T08:06:10.7597713Z CLOUD_PROBE_DATA {\"cgroup\": \"0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service\", \"data\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"activation_before\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"0\"}, \"activation_admin_fix\": \"parent oom.group1 before descendant; probe only\", \"descendant_evidence\": {\"cgroup\": \"0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service\", \"data\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}}, \"descendant_exit\": 0, \"subject_acquired\": false, \"subject_executed\": false, \"dependencies_installed\": false, \"secrets_read\": false}",
+    "2026-10-29T08:06:10.7747680Z CLOUD_PROBE_SERVICE {\"exit\": 0, \"subject_executed\": false}",
+    "2026-10-29T08:06:10.7791648Z CLOUD_PROBE_FINAL {\"restored\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project_populated\": \"0\", \"subject_executed\": false}",
+    "2026-10-29T08:06:10.8184759Z CLOUD_PROBE_TERMINAL {\"limits\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"populated\": \"0\", \"subject_executed\": false}"
+  ],
+  "old_failure": {
+    "run": 40839182119,
+    "retained": true,
+    "unchanged_retry": false
+  },
+  "limits": {
+    "project": 536870912,
+    "data": 67108864,
+    "swap": 0,
+    "oom_group": 1
+  },
+  "final_populated": 0,
+  "subject_acquired": false,
+  "subject_executed": false,
+  "dependencies_installed": false,
+  "boundary": "Push scheduling and resource-only admin probe accepted; Subject workflows must independently implement activation gate before dropping privilege and acquiring/executing Subject. No PG/release/CI/fullscope proof."
+}

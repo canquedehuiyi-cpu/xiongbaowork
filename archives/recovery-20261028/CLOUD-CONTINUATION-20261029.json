@@ -333,12 +333,10 @@
     },
     "source_adopted_this_session": 0,
     "project_resource_queue": {
-      "owner": "/root",
+      "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "epoch": "2026-10-29T08:04:59.948Z:972136c2",
       "active_job": null,
-      "status": "BLOCKED_COMPLIANT_EXECUTION_ENTRY",
-      "current_executor": "No project commands allowed: cgroup read-only8GiB/swapmax and no systemd; no containment proof",
-      "github_manual_dispatch": "No supported workflow_dispatch tool in current inventory; do not guess API or reuse credentials",
-      "next": "Minimal generator dependency/preflight reconciliation before new reviewed resource controller; do not repeat timed-out install chain"
+      "status": "PUSH_RESOURCE_PROBE_PASSED_SUBJECT_CONTROLLER_REVIEW_PENDING"
     },
     "external_review": {
       "persistence": {
@@ -384,7 +382,7 @@
     "local_root": "Retired by human; heartbeat PAUSED; no Gitee/support resume",
     "completion": "NOT_COMPLETE_NO_UNATTENDED_GUARANTEE",
     "review_acceptance_path": "archives/recovery-20261028/CLOUD-REVIEW-ACCEPTANCE-20261029.json",
-    "next_required_capability": "A supported cloud workflow_dispatch connector entrypoint for exact reviewed bf0ef002, or a managed Linux executor with enforceable delegated cgroup and network readiness. No password/token or Windows prerequisite."
+    "next_required_capability": "Supported exact-reviewed push branch path proved by A2; no manual_dispatch or current-container project execution needed. Require separately reviewed Subject controller and resource gates."
   },
   "cloud_push_probe": {
     "candidate": "972136c289d9aef76f49f2fce19584191d448a02",
@@ -446,6 +444,60 @@
       "cadence_minutes": 30,
       "status": "AWAITING_HUMAN_REPORTED_ID"
     },
-    "local_heartbeat": "PAUSED_NO_DEPENDENCY"
+    "local_heartbeat": "PAUSED_NO_DEPENDENCY",
+    "lease_expires_at": "2026-10-29T08:37:34.657Z",
+    "next_action": "Prepare minimal17 locked dependency/FULL50 generator controller on non-triggering branch; independently review before unique push dispatch. No Subject job started."
+  },
+  "cloud_push_probe_a2": {
+    "schema": "xiongbaowork-cloud-resource-probe-result-v2",
+    "candidate": "c2c199a6d1c740438433d3355c598bffbb5320a2",
+    "run": 40839741519,
+    "job": 123332952391,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "review": {
+      "commit": "8fe6dd583f1103e3fa8be9c9e50aa9da6e8945a5",
+      "blob": "702b7006ef2a0eeea5b56bdaea9ce002dae8d539"
+    },
+    "lease_at_dispatch": {
+      "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "epoch": "2026-10-29T08:04:59.948Z:972136c2",
+      "canonical_head": "823744db378f508a1996f8c23faf1b42f115ad33"
+    },
+    "evidence_lines": [
+      "2026-10-29T08:06:10.7128607Z CLOUD_PROBE_PARENT {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}",
+      "2026-10-29T08:06:10.7597713Z CLOUD_PROBE_DATA {\"cgroup\": \"0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service\", \"data\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"activation_before\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"0\"}, \"activation_admin_fix\": \"parent oom.group1 before descendant; probe only\", \"descendant_evidence\": {\"cgroup\": \"0::/xiongbaowork.slice/xiongbaowork-cloud-probe.service\", \"data\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}}, \"descendant_exit\": 0, \"subject_acquired\": false, \"subject_executed\": false, \"dependencies_installed\": false, \"secrets_read\": false}",
+      "2026-10-29T08:06:10.7747680Z CLOUD_PROBE_SERVICE {\"exit\": 0, \"subject_executed\": false}",
+      "2026-10-29T08:06:10.7791648Z CLOUD_PROBE_FINAL {\"restored\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project_populated\": \"0\", \"subject_executed\": false}",
+      "2026-10-29T08:06:10.8184759Z CLOUD_PROBE_TERMINAL {\"limits\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"populated\": \"0\", \"subject_executed\": false}"
+    ],
+    "old_failure": {
+      "run": 40839182119,
+      "retained": true,
+      "unchanged_retry": false
+    },
+    "limits": {
+      "project": 536870912,
+      "data": 67108864,
+      "swap": 0,
+      "oom_group": 1
+    },
+    "final_populated": 0,
+    "subject_acquired": false,
+    "subject_executed": false,
+    "dependencies_installed": false,
+    "boundary": "Push scheduling and resource-only admin probe accepted; Subject workflows must independently implement activation gate before dropping privilege and acquiring/executing Subject. No PG/release/CI/fullscope proof."
+  },
+  "generator_schema_review": {
+    "commit": "2d3bec0cfc8d95a543eace1d9cd2e90829d3e42c",
+    "path": "archives/recovery-20261028/CLOUD-GENERATOR-SCHEMA-CLOSURE-REVIEW-20261029.json",
+    "blob": "5e73be65225bfcaf30f386294fa6eab615d2a1fa",
+    "table_modules": 50,
+    "tables": 156,
+    "enums": 9,
+    "original27_tables": 102,
+    "omitted23_tables": 54,
+    "verdict": "STATIC_CLOSURE_CONFIRMED_WITH_SCHEMA_COVERAGE_CORRECTION_REQUIRED"
   }
 }

@@ -7,17 +7,17 @@
   "run_id": "bounded-probe-development-20261029T0804Z",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "acquired_at": "2026-10-29T08:04:59.948Z",
-  "renewed_at": "2026-10-29T08:04:59.948Z",
-  "expires_at": "2026-10-29T08:34:59.948Z",
+  "renewed_at": "2026-10-29T08:07:34.657Z",
+  "expires_at": "2026-10-29T08:37:34.657Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "1e606f7c6d18277c348d15cc87750abdb2fd3e3f",
+  "expected_parent": "823744db378f508a1996f8c23faf1b42f115ad33",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Read A2 non-author exact review; recheck lease epoch/head and queue, dispatch corrected resource-only probe once. Preserve A1 failure. Then prepare exact17 dependencies and all50 schema generator diagnosis.",
+  "next_action": "Prepare minimal17 locked dependency/FULL50 generator controller on non-triggering branch; independently review before unique push dispatch. No Subject job started.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
