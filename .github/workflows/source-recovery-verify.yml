@@ -1,6 +1,7 @@
-name: Accepted Source checkpoint -manual validation
+name: Original branded frontend bundler -exact sparse metadata -512MiB
 on:
-  workflow_dispatch:
+  push:
+    branches: ["codex/frontend-bundle-512-r2-20261029"]
 permissions:
   contents: read
 concurrency:
@@ -473,6 +474,104 @@ jobs:
                 "lifecycle_scripts":"NOT_RUN","source_commit":target,"install_memory_limit":536870912,"other_data_copy_limit":67108864,"backend":"copyfile","private_cache":True,"dependency_audit":audit,
                 "full_ci":"NOT_RUN","original_preload_suite":"NOT_RUN","typecheck":"NOT_RUN",
                 "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(code)
+          
+          PY
+      - name: Materialize exact current manifest from own Git objects under DATA64MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          base=Path.cwd();cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864" and (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          repo=base/"xiongbaowork-verified-source"/"repo"
+          head=subprocess.run(["git","rev-parse","HEAD"],cwd=repo,check=True,capture_output=True,text=True).stdout.strip()
+          assert len(head)==40
+          raw=subprocess.run(["git","-c","core.deltaBaseCacheLimit=1m","-c","pack.threads=1","show","HEAD:archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json"],cwd=repo,check=True,capture_output=True).stdout
+          assert len(raw)==445399 and hashlib.sha256(raw).hexdigest()=="fdd20eda65a9576e35d35bef0d9a1b4b2bd5321500f60158a9909fc4771d5843"
+          parsed=json.loads(raw);assert len(parsed["files"])==2060 and parsed["source_bytes"]==50032071
+          fd=os.open(base/"frontend-current-source-manifest.json",os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+          try:
+              at=0
+              while at<len(raw):at+=os.write(fd,raw[at:])
+          finally:os.close(fd)
+          print("FRONTEND_EXPECTED_MANIFEST_DATA "+json.dumps({"head":head,"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),"path":"own RUNNER_TEMP/frontend-current-source-manifest.json","sparse_git_object_read":True,"data_limit":67108864,"source_changes":0}),flush=True)
+          
+          PY
+      - name: Validate original branded frontend bundle under unchanged512MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --property=RuntimeMaxSec=340 \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,os,re,stat,subprocess
+          from pathlib import Path
+          base=Path.cwd();cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912" and (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912" and (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot";bun=base/"xiongbaowork-bun-1.3.14"/"bun"
+          home=base/"original-frontend-build-home";home.mkdir(mode=0o700)
+          env={"PATH":str(bun.parent)+":/usr/local/bin:/usr/bin:/bin","HOME":str(home),"NODE_ENV":"production","CI":"true","NO_COLOR":"1","TENANT_PACKAGE_DIR":"../examples/qoderwake"}
+          manifest=json.loads((base/"frontend-current-source-manifest.json").read_text())
+          assert len(manifest["files"])==2060 and manifest["source_bytes"]==50032071
+          assert json.loads((root/"app/package.json").read_text())["scripts"]["build"]=="bun --bun node_modules/vite/bin/vite.js build"
+          g=subprocess.run([str(bun),"--no-install","scripts/generate-app-config.ts"],cwd=root,env=env,capture_output=True,text=True,timeout=30)
+          print("FRONTEND_BRAND_CONFIG_RESULT "+json.dumps({"exit_code":g.returncode,"tenant_package":"../examples/qoderwake","stdout":g.stdout[-2000:],"stderr":g.stderr[-2000:]}),flush=True)
+          if g.returncode:raise SystemExit(g.returncode)
+          print("FRONTEND_BUNDLE_START "+json.dumps({"command":"Original app build script content: bun --bun node_modules/vite/bin/vite.js build","project_and_descendants":536870912,"swap":0,"timeout":300,"uses_prior2GiB_exceptions":False,"no_server_database_provider_started":True}),flush=True)
+          try:
+              r=subprocess.run([str(bun),"--bun","node_modules/vite/bin/vite.js","build"],cwd=root/"app",env=env,capture_output=True,text=True,timeout=300);code=r.returncode;out=r.stdout+"\n"+r.stderr
+          except subprocess.TimeoutExpired as e:
+              code=124;out=str(e.stdout or "")+"\n"+str(e.stderr or "")
+          lines=out.splitlines()
+          print("FRONTEND_BUNDLE_LOG "+json.dumps({"lines":len(lines),"tail100":lines[-100:]}),flush=True)
+          changes=[]
+          for x in manifest["files"]:
+              p=root.parent/x["path"]
+              st=p.lstat()
+              if not stat.S_ISREG(st.st_mode) or st.st_nlink!=1:
+                  changes.append({"path":x["path"],"kind":"mode_or_alias_changed"});continue
+              h=hashlib.sha256()
+              with p.open("rb") as f:
+                  while True:
+                      b=f.read(65536)
+                      if not b:break
+                      h.update(b)
+              if st.st_size!=x["bytes"] or h.hexdigest()!=x["sha256"]:
+                  changes.append({"path":x["path"],"before":x,"after":{"bytes":st.st_size,"sha256":h.hexdigest()}})
+          print("FRONTEND_SOURCE_AFTER_BUILD "+json.dumps({"tracked_source_changes":changes,"source_edits_adopted":False,"generated_app_config":"IGNORED_BUILD_ARTIFACT","role_pg_ci_gates_unchanged":True}),flush=True)
+          dist=root/"app/dist";artifacts=[];brand={}
+          if code==0:
+              assert dist.is_dir()
+              for p in sorted(dist.rglob("*")):
+                  if not p.is_file():continue
+                  st=p.lstat();assert stat.S_ISREG(st.st_mode) and st.st_nlink==1
+                  h=hashlib.sha256()
+                  with p.open("rb") as f:
+                      while True:
+                          b=f.read(65536)
+                          if not b:break
+                          h.update(b)
+                  artifacts.append({"path":str(p.relative_to(dist)),"bytes":st.st_size,"sha256":h.hexdigest()})
+              html=(dist/"index.html").read_text()
+              config=(root/"app/src/lib/generated/application-config.ts").read_text()
+              entries=re.findall(r'<script[^>]*src=["\']([^"\']+)',html)
+              brand={"html_contains_product":"熊宝数字员工" in html,"generated_config_contains_product":"熊宝数字员工" in config,"production_html_no_baked_dev_port":"__OPENBOT_WS_PORT__" not in html,"entry_scripts":entries}
+              for src in entries:
+                  if src.startswith("/") and src.endswith(".js"):
+                      p=dist/src.lstrip("/")
+                      if p.is_file():
+                          text=p.read_text();brand["entry_contains_product"]="熊宝数字员工" in text;brand["entry_contains_legacy_self_host_text"]="Self-host OpenBot" in text
+          print("FRONTEND_BUNDLE_RESULT "+json.dumps({"exit_code":code,"status":"PASS_BUNDLE_ONLY" if code==0 else "FAILED_OR_RESOURCE_STOP","artifacts":artifacts,"brand_observations":brand,"tracked_source_changes":changes,"project_and_all_descendants":536870912,"swap":0,"new2GiB_exception_used":False,"original_app_typecheck":"Historical Source17 pass; no new typecheck claimed in this bundler step","formal_image8GET":"NOT_RUN","postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
           
           PY
