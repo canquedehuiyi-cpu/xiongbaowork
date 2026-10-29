@@ -1,6 +1,6 @@
 {
   "schema": "xiongbaowork-route-tree-reproduction-plan/1",
-  "status": "PREPARED_NOT_DISPATCHED_NOT_EXECUTED",
+  "status": "PREPARED_P2_REVISED_NOT_DISPATCHED_REVIEW_REQUIRED",
   "administrative_base_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
   "source_content_commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
   "source_files": 2065,
@@ -77,7 +77,27 @@
     "swap": 0,
     "restore_after_each": 536870912,
     "no_third_iteration": true,
-    "original_bun_build_script_pass_claim": false
+    "original_bun_build_script_pass_claim": false,
+    "absolute_deadline_enforcement": {
+      "single_budget_json_outer_deadline": true,
+      "recompute_after_parent_raise_before_start": true,
+      "controller_limit": 67108864,
+      "controller_counts_inside_aggregate_build_limit": true,
+      "shared_hard_stop_reserve_seconds": 5,
+      "relative_runtime_deduct_seconds": 1,
+      "activation_wait_in_absolute_timeout": true,
+      "KillMode": "control-group",
+      "KillSignal": "SIGKILL",
+      "FinalKillSignal": "SIGKILL",
+      "SendSIGKILL": true,
+      "TimeoutStartSec": 1,
+      "TimeoutStopSec": 1,
+      "TimeoutStartFailureMode": "kill",
+      "TimeoutStopFailureMode": "kill",
+      "absolute_timeout_action": "direct cgroup.kill of own named build unit, immediate parent memory.max=512MiB/swap0 before bounded D-Bus cleanup",
+      "late_start_protection": "Cancel owned pending unit; any delayed activation still has aggregate512MiB and build gate rejects",
+      "runtime_validation": "NOT_EXECUTED_REVIEW_REQUIRED"
+    }
   },
   "resources": {
     "ordinary_project_and_descendants": 536870912,
@@ -112,8 +132,8 @@
     "storage": "Own ephemeral cloud control directory and bounded GitHub joblog; Root may archive verified candidate via connector only; no Windows download"
   },
   "runtime_control_helper": {
-    "bytes": 18046,
-    "sha256": "e2072399ba6f215acad996983aaebdf2f5c68e8c3ed1637653dcbf2629b33871"
+    "bytes": 23322,
+    "sha256": "4e8419af0012e9528c1a0e689ea91254db1fcded17bb9d3016ffcb446717bf8b"
   },
   "stop_conditions": [
     "Any source/manifest/runtime dependency identity mismatch",
@@ -140,5 +160,16 @@
   "production_deploys": 0,
   "paid_provider_calls": 0,
   "windows_source_writes": 0,
-  "commercial_acceptance": "NOT_DELIVERED"
+  "commercial_acceptance": "NOT_DELIVERED",
+  "p2_history": {
+    "prior_commit": "95af0749f0996ea78adf27fcf4070a309edbec99",
+    "finding": "Relative RuntimeMaxSec plus default stop grace did not prove absolute300s cap",
+    "revision": "Explicit hard kill and absolute launch/activation/run/stop wait; no dispatch yet",
+    "official_sources": [
+      "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
+      "https://www.freedesktop.org/software/systemd/man/255/systemd.kill.html",
+      "https://freedesktop.org/software/systemd/man/latest/systemd-run.html",
+      "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    ]
+  }
 }
