@@ -1,0 +1,159 @@
+{
+  "schema": "xiongbaowork-independent-source-review/1",
+  "verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "reviewer": "/root/review_approval_input_readonly",
+  "base_commit": "e08a5035a73c1bb9baed0887d9c4b320d9d5f125",
+  "candidate_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
+  "source_files": [
+    {
+      "path": "openbot/server/src/approvals/types.ts",
+      "before": {
+        "path": "openbot/server/src/approvals/types.ts",
+        "bytes": 14252,
+        "sha256": "1974d5dedb34f00c94d979b30c18e0962e648e14d28b8ff618d1fe5fb857d37c",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/types.ts",
+        "bytes": 16446,
+        "sha256": "28e35e512a3f6f17ba9fd798804039640638707268a9eb06d76e0f435693b23b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/service.ts",
+      "before": {
+        "path": "openbot/server/src/approvals/service.ts",
+        "bytes": 29420,
+        "sha256": "c04faac55fa7b47ea7e933e8a3500fa0442121a6a70ad35a2046c124004af0a1",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/service.ts",
+        "bytes": 31509,
+        "sha256": "1537e3e54fb0965aded1a258a916c5ef6203c101f25db2249eee99a956fe2b09",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/fresh-producer.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/fresh-producer.ts",
+        "bytes": 4527,
+        "sha256": "f67303d3258807ceb9bd02f10db9b1dc593b0fb3c84b50ad636f2ae53e1976e4",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+        "bytes": 10832,
+        "sha256": "1cd2b2287be451d56843a0bcda6d7b0f6551cb85c288ac524d193c6ffb42475f",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approvals.test.ts",
+      "before": {
+        "path": "openbot/server/tests/approvals.test.ts",
+        "bytes": 25129,
+        "sha256": "b75d256b1694e33fc3d8feef54fe525919e2174b0b2fce147d9d110344ea444a",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/tests/approvals.test.ts",
+        "bytes": 25120,
+        "sha256": "cd6812fe10b30ceae01aef8ce04b7d96e2858f2c4836c52e322a66172469dd0e",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approvals-policy.test.ts",
+      "before": {
+        "path": "openbot/server/tests/approvals-policy.test.ts",
+        "bytes": 29405,
+        "sha256": "1fb693ed3955293cc551175c64ed2226ad44168a28bacc318afb8bd86f4154d8",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/tests/approvals-policy.test.ts",
+        "bytes": 30708,
+        "sha256": "e58c3a442e5a71ae1e7b8745272641164275f723aed0c636b40b8c09d72a4d7b",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+        "bytes": 9554,
+        "sha256": "b3e728d5859083a16bbe7e3248d73ff22502072f20190b19a2d295dee7defa11",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/src/approvals/store.ts",
+      "before": {
+        "path": "openbot/server/src/approvals/store.ts",
+        "bytes": 19543,
+        "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
+        "mode": "0o644"
+      },
+      "after": {
+        "path": "openbot/server/src/approvals/store.ts",
+        "bytes": 19676,
+        "sha256": "7dbd504163735daaf17764fe65c98c3f26c837f58bb2bb0cad1a0aff95bc513f",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "candidate_card": {
+    "bytes": 6093,
+    "sha256": "3d8183379cfa5721efe9fc0404498d36551cde529898663e07c0c22ddeedf719"
+  },
+  "full_before_after_reads": true,
+  "complete_untruncated_trees": true,
+  "exact_eight_subject_leaves_only": true,
+  "all_literal_hunks_reconstruct_exact_after": true,
+  "R1": {
+    "verdict": "FIX_REQUIRED",
+    "finding": {
+      "priority": "P1",
+      "path": "openbot/server/src/approvals/service.ts",
+      "line": 669,
+      "related_lines": [
+        700,
+        735,
+        739,
+        744
+      ],
+      "title": "Stale resume can execute after abandon settled result while continuation pending"
+    },
+    "status": "PRESERVED_ADDRESSED_BY_R2_NOT_CLEARED_FROM_HISTORY"
+  },
+  "R2_closure": [
+    "Real consume row-lock checks result and SQL CAS requires result IS NULL",
+    "Result/disposition commit expectedStatus contract serializes against consume",
+    "Both deferred execution/abandon races and unknown target ACK regressions present",
+    "All original47expect assertions retained; existing saved-recovery file unchanged",
+    "RAM seed frozen, not durable provenance proof",
+    "Production default blocked without trusted port; no dependencies.continue fallback"
+  ],
+  "review_execution": "READ_ONLY_GITHUB_RAM_DATA_NO_PROJECT_EXECUTION_WINDOWS_WRITES_OR_NEW_AGENTS",
+  "postgres17": "PG_PENDING",
+  "production_fresh_adapter": "NOT_WIRED",
+  "ROOT_RELEASE": null,
+  "AP_DISABLED": true,
+  "commercial_acceptance": "NOT_DELIVERED"
+}

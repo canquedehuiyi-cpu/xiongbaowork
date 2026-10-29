@@ -1,0 +1,338 @@
+{
+  "source_commit": "99989c6a66c692fc9b7e6f8754eb808024971c13",
+  "run": 40820034960,
+  "job": 123270098553,
+  "tests": {
+    "pass": 80,
+    "fail": 0,
+    "expects": 243,
+    "files": 4
+  },
+  "lint_exit": 1,
+  "status": "TESTS_PASS_LINT_WARN_FIX_REQUIRED",
+  "independent_source_verdict": "FIX_REQUIRED",
+  "finding": {
+    "priority": "P1",
+    "path": "openbot/server/src/approvals/service.ts",
+    "line": 669,
+    "title": "Stale resume may execute after abandon result settled"
+  },
+  "diagnostic_run": 40820535663,
+  "diagnostic_warning": "tests/helpers/approval-producer-model.ts import type",
+  "server_typecheck": {
+    "run": 40820279732,
+    "job": 123270949021,
+    "head": "d9db5dc12bd59b4afb1b0cb3b504dca0e1012321",
+    "source_candidate": "99989c6a66c692fc9b7e6f8754eb808024971c13",
+    "project_limit": 2147483648,
+    "swap": 0,
+    "timeout": 300,
+    "SERVER_TYPECHECK_START": {
+      "typescript": "5.9.3",
+      "host_runtime": "v24.22.1",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "project": "server/tsconfig.json",
+      "declared_includes": [
+        "src",
+        "scripts",
+        "../scripts/composio-smoke.ts"
+      ],
+      "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+      "timeout_seconds": 300
+    },
+    "SERVER_TYPECHECK_RESULT": {
+      "exit_code": 0,
+      "project": "server/tsconfig.json",
+      "typescript": "5.9.3",
+      "host_runtime": "v24.22.1",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "full_ci": "NOT_RUN",
+      "test_sources": "NOT_INCLUDED",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "PROJECT_LIMIT_RESTORED": {
+      "project_memory_max": 536870912,
+      "swap": 0
+    },
+    "automatic_memory_peaks": [
+      "Memory peak: 64.2M (swap: 0B)",
+      "Memory peak: 64M (swap: 0B)",
+      "Memory peak: 512.5M (swap: 0B)",
+      "Memory peak: 1.8G (swap: 0B)"
+    ]
+  },
+  "source_adopted": false,
+  "SOURCE_RECOVERY_RESULT": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "4e0409211aa416105f677310d08717fb2682904e",
+    "head": "99989c6a66c692fc9b7e6f8754eb808024971c13",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029",
+      "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+      "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50161927,
+    "verified_source_files": 2064,
+    "windows_source_files_written": 0
+  },
+  "WORKSPACE_INSTALL_RESULT": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "99989c6a66c692fc9b7e6f8754eb808024971c13",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "COMPONENT_TEST_RESULT": {
+    "exit_code": 0,
+    "test_files": 4,
+    "completed_files": 4,
+    "results": [
+      {
+        "path": "server/tests/approvals.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approvals-policy.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-recovery-port.test.ts",
+        "exit_code": 0
+      },
+      {
+        "path": "server/tests/approval-fresh-producer.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "BIOME_LINT_RESULT": {
+    "exit_code": 1,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "candidate_card": {
+    "schema": "xiongbaowork-candidate-source-overlay/1",
+    "ticket": "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029",
+    "formal_adoption": false,
+    "base_commit": "e08a5035a73c1bb9baed0887d9c4b320d9d5f125",
+    "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "changes": [
+      {
+        "path": "openbot/server/src/approvals/types.ts",
+        "before": {
+          "path": "openbot/server/src/approvals/types.ts",
+          "bytes": 14252,
+          "sha256": "1974d5dedb34f00c94d979b30c18e0962e648e14d28b8ff618d1fe5fb857d37c",
+          "mode": "0o644"
+        },
+        "after": {
+          "path": "openbot/server/src/approvals/types.ts",
+          "bytes": 16182,
+          "sha256": "808bfe1c0418e4147d82f95afd41eba0e7ca42bcb6a0aa9775f834251631b4ce",
+          "mode": "0o644"
+        }
+      },
+      {
+        "path": "openbot/server/src/approvals/service.ts",
+        "before": {
+          "path": "openbot/server/src/approvals/service.ts",
+          "bytes": 29420,
+          "sha256": "c04faac55fa7b47ea7e933e8a3500fa0442121a6a70ad35a2046c124004af0a1",
+          "mode": "0o644"
+        },
+        "after": {
+          "path": "openbot/server/src/approvals/service.ts",
+          "bytes": 31331,
+          "sha256": "966f46551f4ce033a4d48c34fcc44c0a738681be13941f0ce5ff2e446e8a7fec",
+          "mode": "0o644"
+        }
+      },
+      {
+        "path": "openbot/server/src/approvals/fresh-producer.ts",
+        "before": {
+          "absent": true
+        },
+        "after": {
+          "path": "openbot/server/src/approvals/fresh-producer.ts",
+          "bytes": 4330,
+          "sha256": "98b21014435331ead9d7a30a24942f256618ece62cbd70216545b1874efec905",
+          "mode": "0o644"
+        }
+      },
+      {
+        "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+        "before": {
+          "absent": true
+        },
+        "after": {
+          "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+          "bytes": 10170,
+          "sha256": "af4fde85b8b66fefabd2cf30c9b057cddba91395152bbad0aaae47b04edd09a2",
+          "mode": "0o644"
+        }
+      },
+      {
+        "path": "openbot/server/tests/approvals.test.ts",
+        "before": {
+          "path": "openbot/server/tests/approvals.test.ts",
+          "bytes": 25129,
+          "sha256": "b75d256b1694e33fc3d8feef54fe525919e2174b0b2fce147d9d110344ea444a",
+          "mode": "0o644"
+        },
+        "after": {
+          "path": "openbot/server/tests/approvals.test.ts",
+          "bytes": 25106,
+          "sha256": "62143e722e5ce9afb6dd001415efa2fc46183d974e9610ae842571a48e569079",
+          "mode": "0o644"
+        }
+      },
+      {
+        "path": "openbot/server/tests/approvals-policy.test.ts",
+        "before": {
+          "path": "openbot/server/tests/approvals-policy.test.ts",
+          "bytes": 29405,
+          "sha256": "1fb693ed3955293cc551175c64ed2226ad44168a28bacc318afb8bd86f4154d8",
+          "mode": "0o644"
+        },
+        "after": {
+          "path": "openbot/server/tests/approvals-policy.test.ts",
+          "bytes": 30694,
+          "sha256": "45a5d1a1de2605f03512a7d4f2d547a94539f550b3baa204972d9b30d41ecc75",
+          "mode": "0o644"
+        }
+      },
+      {
+        "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+        "before": {
+          "absent": true
+        },
+        "after": {
+          "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+          "bytes": 6030,
+          "sha256": "7f4edfabddc0cb24646d6a5577211258c8569cd676786c3f07090705c9ccae4e",
+          "mode": "0o644"
+        }
+      }
+    ],
+    "source_new_paths": [
+      "openbot/server/src/approvals/fresh-producer.ts",
+      "openbot/server/tests/helpers/approval-producer-model.ts",
+      "openbot/server/tests/approval-fresh-producer.test.ts"
+    ],
+    "scope": "Implement trusted frozen producer prepare/verify/result-disposition commit/publish orchestration; reload committed context, preserve original13positive behavior assertions in explicit CPU model; add8fresh/state-gap regressions. No production adapter/default grant/release or PG wiring.",
+    "preserved": {
+      "original_positive_approval_cases": true,
+      "no_seeded_result_bypass": true,
+      "current_authority_validate_digest_consume_executionAuthority": true,
+      "saved_result_receipt_protocol": true,
+      "no_legacy_continue_fallback_in_production": true,
+      "default_fresh_without_port": "BLOCKED",
+      "consumed_without_result": "UNKNOWN_NOT_REPEATED",
+      "final_refusal": "NO_MODEL_CONTINUATION",
+      "cpu_model": "NOT_DURABLE_PG_CAS_RLS_COMMIT_ACK_PROOF"
+    },
+    "boundaries": {
+      "source_files_in_package": 7,
+      "project": 536870912,
+      "swap": 0,
+      "data": 67108864,
+      "ROOT_RELEASE": null,
+      "AP_DISABLED": true,
+      "postgres17": "PG_PENDING",
+      "production_fresh_adapter": "NOT_WIRED",
+      "commercial_acceptance": "NOT_DELIVERED",
+      "windows_source_writes": 0
+    }
+  },
+  "review": {
+    "verdict": "FIX_REQUIRED",
+    "findings": [
+      {
+        "priority": "P1",
+        "path": "openbot/server/src/approvals/service.ts",
+        "line": 669,
+        "related_lines": [
+          700,
+          735,
+          739,
+          744
+        ],
+        "title": "Stale resume can execute after abandon settled result while continuation pending"
+      }
+    ]
+  },
+  "superseded_by_candidate": "ece742d663044ec71d357ebedbf50dd719babb31",
+  "history_preserved": true
+}

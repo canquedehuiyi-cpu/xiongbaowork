@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
-  "basis": "Immutable V57 plus25 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
+  "source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
+  "basis": "Immutable V57 plus27 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -503,10 +503,38 @@
       "candidate_source_commit": "88c15bf3adbc697161bbd6573d19567775852725",
       "source_content_adopted_unchanged": true,
       "run": 40817450733
+    },
+    {
+      "ticket": "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/APPROVAL-FRESH-PRODUCER-ADOPTED.json",
+        "bytes": 6688,
+        "sha256": "99fd7ee403cdafb066eebdc5145922c9006d86a04c7e0ae20684769182d7c040",
+        "formal_adoption": true,
+        "ticket": "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029",
+        "source_paths": [
+          "openbot/server/src/approvals/types.ts",
+          "openbot/server/src/approvals/service.ts",
+          "openbot/server/src/approvals/fresh-producer.ts",
+          "openbot/server/tests/helpers/approval-producer-model.ts",
+          "openbot/server/tests/approvals.test.ts",
+          "openbot/server/tests/approvals-policy.test.ts",
+          "openbot/server/tests/approval-fresh-producer.test.ts",
+          "openbot/server/src/approvals/store.ts"
+        ],
+        "source_new_paths": [
+          "openbot/server/src/approvals/fresh-producer.ts",
+          "openbot/server/tests/helpers/approval-producer-model.ts",
+          "openbot/server/tests/approval-fresh-producer.test.ts"
+        ]
+      },
+      "candidate_source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
+      "source_content_adopted_unchanged": true,
+      "run": 40821171620
     }
   ],
-  "file_count": 2061,
-  "source_bytes": 50136290,
+  "file_count": 2064,
+  "source_bytes": 50166913,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -8646,20 +8674,20 @@
     },
     {
       "path": "openbot/server/src/approvals/service.ts",
-      "bytes": 29420,
-      "sha256": "c04faac55fa7b47ea7e933e8a3500fa0442121a6a70ad35a2046c124004af0a1",
+      "bytes": 31509,
+      "sha256": "1537e3e54fb0965aded1a258a916c5ef6203c101f25db2249eee99a956fe2b09",
       "mode": "0o644"
     },
     {
       "path": "openbot/server/src/approvals/store.ts",
-      "bytes": 19543,
-      "sha256": "66cd9057675e8a624da63772b10e61756189bf63f617f2a7848f31e8c1f442d5",
+      "bytes": 19676,
+      "sha256": "7dbd504163735daaf17764fe65c98c3f26c837f58bb2bb0cad1a0aff95bc513f",
       "mode": "0o644"
     },
     {
       "path": "openbot/server/src/approvals/types.ts",
-      "bytes": 14252,
-      "sha256": "1974d5dedb34f00c94d979b30c18e0962e648e14d28b8ff618d1fe5fb857d37c",
+      "bytes": 16446,
+      "sha256": "28e35e512a3f6f17ba9fd798804039640638707268a9eb06d76e0f435693b23b",
       "mode": "0o644"
     },
     {
@@ -10425,8 +10453,8 @@
     },
     {
       "path": "openbot/server/tests/approvals-policy.test.ts",
-      "bytes": 29405,
-      "sha256": "1fb693ed3955293cc551175c64ed2226ad44168a28bacc318afb8bd86f4154d8",
+      "bytes": 30708,
+      "sha256": "e58c3a442e5a71ae1e7b8745272641164275f723aed0c636b40b8c09d72a4d7b",
       "mode": "0o644"
     },
     {
@@ -10449,8 +10477,8 @@
     },
     {
       "path": "openbot/server/tests/approvals.test.ts",
-      "bytes": 25129,
-      "sha256": "b75d256b1694e33fc3d8feef54fe525919e2174b0b2fce147d9d110344ea444a",
+      "bytes": 25120,
+      "sha256": "cd6812fe10b30ceae01aef8ce04b7d96e2858f2c4836c52e322a66172469dd0e",
       "mode": "0o644"
     },
     {
@@ -12933,6 +12961,24 @@
       "bytes": 102844,
       "sha256": "1823f00ae1b55e8419f3e81dd9725baf92e8b79b2860e983b22a966472bda169",
       "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/approvals/fresh-producer.ts",
+      "bytes": 4527,
+      "sha256": "f67303d3258807ceb9bd02f10db9b1dc593b0fb3c84b50ad636f2ae53e1976e4",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/helpers/approval-producer-model.ts",
+      "bytes": 10832,
+      "sha256": "1cd2b2287be451d56843a0bcda6d7b0f6551cb85c288ac524d193c6ffb42475f",
+      "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/tests/approval-fresh-producer.test.ts",
+      "bytes": 9554,
+      "sha256": "b3e728d5859083a16bbe7e3248d73ff22502072f20190b19a2d295dee7defa11",
+      "mode": "0o644"
     }
   ],
   "physical_verification": {
@@ -12941,8 +12987,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "2c3e3b77651a8d9f01d62c6ba39cf5ca70c711e8",
-    "head": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+    "git_tree": "68f688116f4cc38ac572afd821a28b7be5b6d23c",
+    "head": "ece742d663044ec71d357ebedbf50dd719babb31",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -12969,7 +13015,9 @@
       "SERVER-CI-TEST-MANIFEST-20261029",
       "WORKSPACE-RUNNER-ASSERTION-20261029",
       "START-HEALTH-ORDER-ASSERTION-20261029",
-      "PRODUCTION-LOADER-READINESS-FIXTURE-20261029"
+      "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+      "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -12977,8 +13025,8 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50033306,
-    "verified_source_files": 2060,
+    "verified_source_bytes": 50166913,
+    "verified_source_files": 2064,
     "windows_source_files_written": 0
   },
   "commercial_acceptance": "NOT_DELIVERED",
@@ -12990,5 +13038,100 @@
     "not_native_pg_acceptance": true,
     "historical_V57_ledger_not_rewritten": true
   },
-  "source_commit_meaning": "Exact candidate Subject Source adopted unchanged; main promotion also changes administrative evidence/workflow"
+  "source_commit_meaning": "Exact candidate Subject Source adopted unchanged; main promotion also changes administrative evidence/workflow",
+  "physical_verification_history": [
+    {
+      "aggregate_memory_limit": 67108864,
+      "commercial_acceptance": "NOT_DELIVERED",
+      "fd_named_stability_verified": true,
+      "file_modes_verified": true,
+      "formal_baseline": "V57 with explicit source overlays",
+      "git_tree": "2c3e3b77651a8d9f01d62c6ba39cf5ca70c711e8",
+      "head": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+      "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+      "overlay_tickets": [
+        "AP-INPUT-BUN-20261028",
+        "AP-SCHEMA-RUNTIME-20261028",
+        "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+        "AUTOMATION-FK-ASSERTION-20261028",
+        "SECURITY-FK-ASSERTION-20261028",
+        "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+        "SERVER-TYPE-CONTRACT-20261028",
+        "TASKS-ATTENTION-FIXTURE-20261028",
+        "TASKS-READ-LINK-FIXTURES-20261028",
+        "TASK-INFLIGHT-TYPE-GUARD-20261028",
+        "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+        "RECOVERY-PARSER-LINT-20261029",
+        "APPROVAL-GUARD-LINT-20261029",
+        "TEST-FIXTURE-LINT-20261029",
+        "RUNNER-PROBE-COMPATIBILITY-20261029",
+        "RUNNER-PROBE-LIFECYCLE-20261029",
+        "RUNNER-PROBE-PENDING-RESULT-20261029",
+        "RUNNER-PROBE-FRAME-REF-20261029",
+        "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+        "SERVER-CI-TEST-MANIFEST-20261029",
+        "WORKSPACE-RUNNER-ASSERTION-20261029",
+        "START-HEALTH-ORDER-ASSERTION-20261029",
+        "PRODUCTION-LOADER-READINESS-FIXTURE-20261029"
+      ],
+      "postgres17": "PG_PENDING",
+      "project_tests": "NOT_RUN",
+      "project_upper_bound": 536870912,
+      "source_mismatches": 0,
+      "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+      "swap_limit": 0,
+      "verified_source_bytes": 50033306,
+      "verified_source_files": 2060,
+      "windows_source_files_written": 0
+    },
+    {
+      "aggregate_memory_limit": 67108864,
+      "commercial_acceptance": "NOT_DELIVERED",
+      "fd_named_stability_verified": true,
+      "file_modes_verified": true,
+      "formal_baseline": "V57 with explicit source overlays",
+      "git_tree": "fa226008e9ec39ee0893c101ac8c0b25b70153f7",
+      "head": "88c15bf3adbc697161bbd6573d19567775852725",
+      "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+      "overlay_tickets": [
+        "AP-INPUT-BUN-20261028",
+        "AP-SCHEMA-RUNTIME-20261028",
+        "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+        "AUTOMATION-FK-ASSERTION-20261028",
+        "SECURITY-FK-ASSERTION-20261028",
+        "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+        "SERVER-TYPE-CONTRACT-20261028",
+        "TASKS-ATTENTION-FIXTURE-20261028",
+        "TASKS-READ-LINK-FIXTURES-20261028",
+        "TASK-INFLIGHT-TYPE-GUARD-20261028",
+        "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+        "RECOVERY-PARSER-LINT-20261029",
+        "APPROVAL-GUARD-LINT-20261029",
+        "TEST-FIXTURE-LINT-20261029",
+        "RUNNER-PROBE-COMPATIBILITY-20261029",
+        "RUNNER-PROBE-LIFECYCLE-20261029",
+        "RUNNER-PROBE-PENDING-RESULT-20261029",
+        "RUNNER-PROBE-FRAME-REF-20261029",
+        "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+        "SERVER-CI-TEST-MANIFEST-20261029",
+        "WORKSPACE-RUNNER-ASSERTION-20261029",
+        "START-HEALTH-ORDER-ASSERTION-20261029",
+        "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+        "MASTRA-STANDALONE-FROZEN-COHORT-20261029"
+      ],
+      "postgres17": "PG_PENDING",
+      "project_tests": "NOT_RUN",
+      "project_upper_bound": 536870912,
+      "source_mismatches": 0,
+      "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+      "swap_limit": 0,
+      "verified_source_bytes": 50136290,
+      "verified_source_files": 2061,
+      "windows_source_files_written": 0
+    }
+  ]
 }

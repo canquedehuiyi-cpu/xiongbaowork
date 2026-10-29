@@ -1,0 +1,2496 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40821171620,
+  "job": 123273736309,
+  "source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "68f688116f4cc38ac572afd821a28b7be5b6d23c",
+    "head": "ece742d663044ec71d357ebedbf50dd719babb31",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029",
+      "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+      "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50166913,
+    "verified_source_files": 2064,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3870,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "remaining_offline": {
+    "exit_code": 0,
+    "expected_files": 178,
+    "completed_files": 178,
+    "files": [
+      {
+        "path": "server/tests/admin-controls-shutdown.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 15,
+          "fail": 0,
+          "skip": 0,
+          "expects": 84
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/admin-people-credentials-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 14,
+          "fail": 0,
+          "skip": 0,
+          "expects": 26
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-auth-header.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-callback-token.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 34,
+          "fail": 0,
+          "skip": 0,
+          "expects": 83
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-endpoint.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 47,
+          "fail": 0,
+          "skip": 0,
+          "expects": 97
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-escalation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 15,
+          "fail": 0,
+          "skip": 0,
+          "expects": 24
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-handoff-delivery.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 26,
+          "fail": 0,
+          "skip": 0,
+          "expects": 39
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-handoff-runner.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 25,
+          "fail": 0,
+          "skip": 0,
+          "expects": 50
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-handoff-tool.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 11
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-handoff.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 24,
+          "fail": 0,
+          "skip": 0,
+          "expects": 66
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-profile-policy.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 37
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-registry.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 2
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 49,
+          "fail": 0,
+          "skip": 0,
+          "expects": 91
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/agent-tool-call-input.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 26,
+          "fail": 0,
+          "skip": 0,
+          "expects": 27
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approval-recovery-port.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 25,
+          "fail": 0,
+          "skip": 0,
+          "expects": 55
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals-execute.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals-frontend.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 3
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals-native.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals-policy.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 30,
+          "fail": 0,
+          "skip": 0,
+          "expects": 83
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals-questions.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 3
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approvals.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 17,
+          "fail": 0,
+          "skip": 0,
+          "expects": 82
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/attachment-mime.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 29,
+          "fail": 0,
+          "skip": 0,
+          "expects": 39
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/attachment-parts.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 33,
+          "fail": 0,
+          "skip": 0,
+          "expects": 61
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/audit-cursor.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 20
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/audit-limit.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 16,
+          "fail": 0,
+          "skip": 0,
+          "expects": 25
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/audit.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 16
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/bot-access.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 31,
+          "fail": 0,
+          "skip": 0,
+          "expects": 70
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/bot-lifecycle-audit.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 23,
+          "fail": 0,
+          "skip": 0,
+          "expects": 44
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/bot-lifecycle-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 31
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/bot-lifecycle-watcher.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/builtin-routines.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 31,
+          "fail": 0,
+          "skip": 0,
+          "expects": 102
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/bunfig-preload.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/channel-activity-input.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 9
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/channel-cursor.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/channel-one-line.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 87
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/channel-titler.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-catalogue-entries.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 38
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-catalogue.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 9
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-decision-functions.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 18,
+          "fail": 0,
+          "skip": 0,
+          "expects": 34
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-decision.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-grants-skills-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 35
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-grants-tenant-boundary.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 9
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/component-publication.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 38
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/composio-access.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 19
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/composio-broker-seam.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 22
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/composio-classify.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 35
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/composio-transport.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 110,
+          "fail": 0,
+          "skip": 0,
+          "expects": 486
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-client.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 27,
+          "fail": 0,
+          "skip": 0,
+          "expects": 49
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-download-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 32
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-exec-timeout.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 12,
+          "fail": 0,
+          "skip": 0,
+          "expects": 34
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-fleet-route.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-handoff-contract.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 24
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-page-frame-route.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 19
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-policy-dry-run-limit.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 17,
+          "fail": 0,
+          "skip": 0,
+          "expects": 46
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-policy-route.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 17
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-sandbox.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 16,
+          "fail": 0,
+          "skip": 0,
+          "expects": 36
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-scroll-delta.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 14,
+          "fail": 0,
+          "skip": 0,
+          "expects": 38
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-snapshot-id.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 20
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-snapshot-store.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 19
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-stream-path.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-supervisor.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 23,
+          "fail": 0,
+          "skip": 0,
+          "expects": 24
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/computer-target.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 39,
+          "fail": 0,
+          "skip": 0,
+          "expects": 88
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/connector-tokens-never-reach-computer.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/content-governance.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 42,
+          "fail": 0,
+          "skip": 0,
+          "expects": 59
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/continuation-target-local.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 27,
+          "fail": 0,
+          "skip": 0,
+          "expects": 125
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/cull-sweep-wiring.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 2
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/delivery-providers.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 32
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/delivery-router.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 29
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/delivery-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 52
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/delivery-turn.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/demonstrations.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 12,
+          "fail": 0,
+          "skip": 0,
+          "expects": 33
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/desktop-connection-failure.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 31
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/dictation-provider.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 17
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/dictation-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 19
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/duplicate-run.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/egress-policy-on-wake.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/email-domain.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 21
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/encrypt-sso-config.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/enterprise-controls.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 27,
+          "fail": 0,
+          "skip": 0,
+          "expects": 45
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/entra-profile.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/google-drive-rest.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 27,
+          "fail": 0,
+          "skip": 0,
+          "expects": 115
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/google-oauth-transport.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 78
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/group-conversations.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 18
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/guards.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/handoff-caps-defaults.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/headless-components.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 48
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/headless-tools.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 51
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/health.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 19,
+          "fail": 0,
+          "skip": 0,
+          "expects": 34
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/history-sanitize.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 14,
+          "fail": 0,
+          "skip": 0,
+          "expects": 23
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/host-access-broker.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 40
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/host-access-callback-route.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 3
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/host-access-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 9
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/host-access-tools.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 18
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/identity-provider-audit.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/mastra-roster.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/mcp-listing.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/mcp-protocol.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 15
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/mcp-result.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 24,
+          "fail": 0,
+          "skip": 0,
+          "expects": 48
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/memory-runtime.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 14
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/memory.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 25
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/migration-journal.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "expects": 11
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/mobile-links.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/oauth-refresh-redirect.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/onboarding-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 23
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/paging.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 14,
+          "fail": 0,
+          "skip": 0,
+          "expects": 16
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/parallel-research.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 22
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/passwords-sign-in.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 17,
+          "fail": 0,
+          "skip": 0,
+          "expects": 76
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/people-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 12,
+          "fail": 0,
+          "skip": 0,
+          "expects": 20
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/pipeline-turn-channel.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 18
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-call-args-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 21
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-catalogue.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 49,
+          "fail": 0,
+          "skip": 0,
+          "expects": 180
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-connect-route.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 13
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-grants-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 37,
+          "fail": 0,
+          "skip": 0,
+          "expects": 97
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-mcp-authorization.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-oauth-callback.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 12,
+          "fail": 0,
+          "skip": 0,
+          "expects": 44
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-oauth.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 42,
+          "fail": 0,
+          "skip": 0,
+          "expects": 72
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 84,
+          "fail": 0,
+          "skip": 0,
+          "expects": 289
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-selection.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 25,
+          "fail": 0,
+          "skip": 0,
+          "expects": 72
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-servers-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 24,
+          "fail": 0,
+          "skip": 0,
+          "expects": 75
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/plugin-share-target.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/policy-dry-run.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 38
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/private-share-group.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/provider-error-run-error.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 14
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/remote-approval-context.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/remote-coordination.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 24,
+          "fail": 0,
+          "skip": 0,
+          "expects": 45
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/responsibilities-engine.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 24
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/responsibilities-github.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/responsibility-trigger-tools.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 28
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/roles.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 93,
+          "fail": 0,
+          "skip": 0,
+          "expects": 185
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/route-ids-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 19
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-endpoint.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 22
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 18,
+          "fail": 0,
+          "skip": 0,
+          "expects": 43
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-run-now.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-run-turn.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 33,
+          "fail": 0,
+          "skip": 0,
+          "expects": 95
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-runner.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 15,
+          "fail": 0,
+          "skip": 0,
+          "expects": 111
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-schedule.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 28,
+          "fail": 0,
+          "skip": 0,
+          "expects": 36
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routine-sweep-liveness.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routing-classify.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 27,
+          "fail": 0,
+          "skip": 0,
+          "expects": 49
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routing-limits-validation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 13
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routing-model-url.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 7,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/routing-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 21
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/sandboxed-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 7
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/sandboxed-save-fields.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 22,
+          "fail": 0,
+          "skip": 0,
+          "expects": 65
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/schema.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 35
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/settings-instructions-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 12,
+          "fail": 0,
+          "skip": 0,
+          "expects": 26
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/single-user.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 13
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/stall-guard.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 35
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/tenant-package-agent-files.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 15,
+          "fail": 0,
+          "skip": 0,
+          "expects": 16
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/tenant-package-duplicates.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/thread-identity.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 161
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/thread-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 14
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/thread-status.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/turn-watchdog.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 13,
+          "fail": 0,
+          "skip": 0,
+          "expects": 164
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/untrusted-content.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 16
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/user-preferences-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 23
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/voice-provider.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 57
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/voice-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 10,
+          "fail": 0,
+          "skip": 0,
+          "expects": 71
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/voice-session-routes.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 30
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/voice-sessions.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 17
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/wakerflow-plan.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/work-loop.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 10
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/agent-authorisation.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 2,
+          "fail": 0,
+          "skip": 0,
+          "expects": 5
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/attachments.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 35,
+          "fail": 0,
+          "skip": 0,
+          "expects": 74
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/bot-prompt.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 14
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/file-download.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/listen-port.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/model-providers.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 30,
+          "fail": 0,
+          "skip": 0,
+          "expects": 93
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/responsibility-turn.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 4
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/routine-firing.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "expects": 8
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/user-content-hardening.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "shared/work-owner.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "worker/tests/env.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 18,
+          "fail": 0,
+          "skip": 0,
+          "expects": 22
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "worker/tests/status.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 1
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "tests/clean-checkout.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 12
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "tests/fintech-package.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "expects": 6
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "tests/workspace.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "expects": 13
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      },
+      {
+        "path": "server/tests/approval-fresh-producer.test.ts",
+        "exit_code": 0,
+        "counts": {
+          "pass": 11,
+          "fail": 0,
+          "skip": 0,
+          "expects": 39
+        },
+        "summary_present": true,
+        "valid_pass": true,
+        "error_summary": []
+      }
+    ],
+    "totals": {
+      "pass": 2396,
+      "fail": 0,
+      "skip": 0,
+      "expects": 6673
+    },
+    "batch_timeout": 600,
+    "per_file_timeout": 60,
+    "per_test_timeout_ms": 5000,
+    "runtime": "Bun1.3.14",
+    "original_preloads": "UNCHANGED_TWO",
+    "original_strict_ci": "NOT_RUN",
+    "original400_floor": "UNCHANGED_NOT_USED_AS_A_SUBSTITUTE",
+    "postgres17": "PG_PENDING",
+    "real_provider": "NOT_RUN_EXPECTED_UNIT_FIXTURES_ONLY",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 2396,
+    "fail": 0,
+    "skip": 0,
+    "expects": 6673
+  },
+  "lint": {
+    "exit_code": 0,
+    "version": "Version: 2.5.10",
+    "arguments": [
+      "lint",
+      "--error-on-warnings",
+      "."
+    ],
+    "config": "ORIGINAL_UNCHANGED_BIOME_JSON",
+    "source_fixes": "NONE_NO_WRITE_FLAG",
+    "project_limit": 536870912,
+    "swap": 0,
+    "strict_ci": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 510.1M (swap: 0B)",
+    "Memory peak: 328.9M (swap: 0B)",
+    "Memory peak: 383.6M (swap: 0B)"
+  ],
+  "scope": "Original177 offline selection plus new fresh producer11-case file; exact original assertions/preloads and original pinned lint; no PG/provider/client/fullCI acceptance",
+  "postgres17": "PG_PENDING",
+  "ROOT_RELEASE": null,
+  "AP_DISABLED": true,
+  "production_fresh_adapter": "NOT_WIRED",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "windows_source_writes": 0,
+  "paid_provider_calls": 0,
+  "prior_R1": "FIX_REQUIRED_P1_AND_LINT_FAILURE_PRESERVED_NOT_ADOPTED",
+  "server_typecheck": {
+    "run": 40821232176,
+    "job": 123275152298,
+    "workflow_commit": "f87333e952d3fbf21c2b292aaff43ce028f81e05",
+    "source_candidate": "ece742d663044ec71d357ebedbf50dd719babb31",
+    "SERVER_TYPECHECK_START": {
+      "typescript": "5.9.3",
+      "host_runtime": "v24.22.1",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "project": "server/tsconfig.json",
+      "declared_includes": [
+        "src",
+        "scripts",
+        "../scripts/composio-smoke.ts"
+      ],
+      "test_sources": "NOT_INCLUDED_BY_ORIGINAL_SERVER_TSCONFIG",
+      "timeout_seconds": 300
+    },
+    "SERVER_TYPECHECK_RESULT": {
+      "exit_code": 0,
+      "project": "server/tsconfig.json",
+      "typescript": "5.9.3",
+      "host_runtime": "v24.22.1",
+      "node_path": "/usr/local/bin/node",
+      "node_old_space_mb": 1792,
+      "full_ci": "NOT_RUN",
+      "test_sources": "NOT_INCLUDED",
+      "postgres17": "PG_PENDING",
+      "commercial_acceptance": "NOT_DELIVERED"
+    },
+    "PROJECT_LIMIT_RESTORED": {
+      "project_memory_max": 536870912,
+      "swap": 0
+    },
+    "automatic_memory_peaks": [
+      "Memory peak: 64M (swap: 0B)",
+      "Memory peak: 64M (swap: 0B)",
+      "Memory peak: 512.5M (swap: 0B)",
+      "Memory peak: 1.8G (swap: 0B)"
+    ]
+  },
+  "exact_candidate_source_equals_typecheck_source": true,
+  "independent_source_review": "SOURCE_APPROVED_ONLY"
+}

@@ -1,3 +1,4 @@
+import { ApprovalFreshError, createApprovalFreshCoordinator } from "./fresh-producer";
 import { currentTenant } from "../tenant/context";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
@@ -12,6 +13,7 @@ import {
 } from "./policy";
 import type { ApprovalQuestions } from "./questions";
 import {
+  type ApprovalFreshProducerPort,
   type ApprovalRecoveryContext,
   type ApprovalRecoveryPort,
   type ApprovalRecoveryOutcome,
@@ -158,8 +160,21 @@ export function createApprovalService(
     /** The deployment's configured model, for auto-review and pre-approval checks. */
     review?: ReviewModel;
     continuationRecovery?: ApprovalRecoveryPort;
+    freshProducer?: ApprovalFreshProducerPort;
   } = {},
 ) {
+  const fresh = options.freshProducer
+    ? createApprovalFreshCoordinator(store, options.freshProducer)
+    : undefined;
+  async function freshOperation<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof ApprovalFreshError && error.kind === "blocked")
+        throw new ApprovalRecoveryBlockedError();
+      throw new ApprovalRecoveryUnknownError();
+    }
+  }
   async function recoverSaved(
     request: ApprovalRecord,
     owner: string,
@@ -580,12 +595,24 @@ export function createApprovalService(
         throw new ApprovalRefusedError(
           "This action is still waiting for your decision.",
         );
-      // Fresh producer/exact-input provisioning is not implemented in this
-      // package. Gate BEFORE validation, execution, refusal result writes or
-      // the retained fresh-policy branches below. Never fabricate readiness.
-      if (!request.result) throw new ApprovalRecoveryBlockedError();
-      if (!options.continuationRecovery || !store.getRecoveryContext)
+      // Default remains closed. A trusted producer must verify an EXISTING
+      // frozen seed before validation, execution or any result write.
+      if (!options.continuationRecovery || !store.getRecoveryContext ||
+          (!request.result && !fresh))
         throw new ApprovalRecoveryBlockedError();
+      const prepared = !request.result && fresh
+        ? await freshOperation(() => fresh.prepare(request, ownerUserId))
+        : undefined;
+      let executionClaimed = false;
+      const saveFresh = (
+        value: NonNullable<ApprovalRecord["result"]>,
+        disposition: "continue" | "final" = "continue",
+      ) => {
+        if (!prepared) throw new ApprovalRecoveryBlockedError();
+        return freshOperation(() => prepared.commit(
+          value, disposition, executionClaimed ? "consumed" : request.status,
+        ));
+      };
       const continuation = request.action.continuation;
       if (!continuation)
         throw new ApprovalRefusedError(
@@ -599,13 +626,14 @@ export function createApprovalService(
       if (refused) {
         // Only the process that saves the refusal ends the request.
         if (
-          !(await store.saveResult(ownerUserId, id, {
+          !(await saveFresh({
             content: refused,
             error: refused,
-          }))
+          }, "final"))
         )
           return;
-        await store.finish(ownerUserId, id);
+        if (!fresh) throw new ApprovalRecoveryBlockedError();
+        await freshOperation(() => fresh.publish(request, ownerUserId));
         return;
       }
       if (!result && request.status === "consumed") {
@@ -616,13 +644,7 @@ export function createApprovalService(
          */
         const reason =
           "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again.";
-        if (
-          !(await store.saveResult(ownerUserId, id, {
-            content: reason,
-            error: reason,
-          }))
-        )
-          return;
+        if (!(await saveFresh({ content: reason, error: reason }))) return;
         result = { content: reason, error: reason };
       } else if (!result) {
         if (request.status === "denied")
@@ -650,12 +672,13 @@ export function createApprovalService(
             if (!(await store.consume(ownerUserId, id, current.actionDigest))) {
               // Still `approved`: an "Always allow" whose rule was revoked before it ran. Anything
               // else means another replica took the request, and it continues the conversation.
-              if ((await store.get(ownerUserId, id)).status !== "approved")
-                return;
+              const latest = await store.get(ownerUserId, id);
+              if (latest.status !== "approved" || latest.result) return;
               throw new ApprovalRefusedError(
                 "The rule that allowed this was removed before it ran.",
               );
             }
+            executionClaimed = true;
           } catch (error) {
             if (!(error instanceof ApprovalRefusedError) && !isPermanent(error))
               throw error;
@@ -694,20 +717,35 @@ export function createApprovalService(
           }
         }
         // Saved by one process only: whichever saves the answer is the one that continues.
-        if (!(await store.saveResult(ownerUserId, id, result))) return;
+        if (!(await saveFresh(result))) return;
       }
-      await recoverSaved(request, ownerUserId, "resume");
+      const published = fresh
+        ? await freshOperation(() => fresh.publish(request, ownerUserId))
+        : { request, final: false };
+      if (!published.final) await recoverSaved(published.request, ownerUserId, "resume");
     },
     async abandon(
       ownerUserId: string,
       id: string,
-      _reason: string,
+      reason: string,
       _dependencies: Pick<ApprovalResumeDependencies, "continue">,
     ): Promise<void> {
       const request = await store.get(ownerUserId, id);
       if (request.status === "completed" || request.status === "pending")
         return;
-      await recoverSaved(request, ownerUserId, "abandon");
+      if (!request.result) {
+        if (!fresh || !options.continuationRecovery || !store.getRecoveryContext)
+          throw new ApprovalRecoveryBlockedError();
+        const prepared = await freshOperation(() => fresh.prepare(request, ownerUserId));
+        const content = request.status === "consumed"
+          ? "This action was started but its outcome is unknown. It was not repeated. Check whether it happened before asking the person again."
+          : `This action could not be carried out: ${reason}. It was not run by this recovery attempt.`;
+        if (!(await freshOperation(() => prepared.commit({ content, error: content })))) return;
+      }
+      const published = fresh
+        ? await freshOperation(() => fresh.publish(request, ownerUserId))
+        : { request, final: false };
+      if (!published.final) await recoverSaved(published.request, ownerUserId, "abandon");
     },
   };
 }
