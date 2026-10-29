@@ -1,0 +1,58 @@
+{
+  "schema": "xiongbaowork-frontend-bundle-4gib-resource-proposal/1",
+  "status": "PREPARED_NOT_AUTHORIZED_NOT_TRIGGERED",
+  "source_base": "78bd0092b728810767510dae059792c29c70dbe5",
+  "source_content_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
+  "source_files": 2060,
+  "source_bytes": 50032071,
+  "requested_scope": "ONLY_FRONTEND_PRODUCTION_VITE_BUILD",
+  "original_vite_configuration": "UNCHANGED",
+  "original_package_lock_inputs": "UNCHANGED",
+  "runtime": "Existing runner supported Node; exact observed runtimev24.22.1",
+  "proposed_v8_old_space_mib": 3072,
+  "proposed_project_and_all_descendants": 4294967296,
+  "swap": 0,
+  "outer_timeout_seconds": 300,
+  "inner_timeout_seconds": 270,
+  "always_restore_project_and_descendants": 536870912,
+  "other_phases": 536870912,
+  "data_source_verification_and_artifact_inventory": 67108864,
+  "prior_authorized_limit": 2147483648,
+  "prior_authorization_remains_respected": true,
+  "prior_results": [
+    {
+      "run": 40798601807,
+      "job": 123200989988,
+      "runtime": "Original Bun",
+      "result": "AGGREGATE_OOM_KILL_2GIB",
+      "restore512_verified": true
+    },
+    {
+      "run": 40799381218,
+      "job": 123203539628,
+      "runtime": "Bun --smol",
+      "result": "AGGREGATE_OOM_KILL_2GIB",
+      "restore512_verified": true
+    },
+    {
+      "run": 40800266509,
+      "job": 123206411399,
+      "runtime": "Node24.22.1 oldspace1536MiB",
+      "result": "V8_HEAP_OOM",
+      "node_child": -6,
+      "wrapper_exit": 250,
+      "restore512_verified": true
+    }
+  ],
+  "source_changes_adopted": false,
+  "generated_route_delta": "Archived as DATA not adopted; same49276B/SHA in all3 runs",
+  "workflow_trigger": "MANUAL_ONLY_DO_NOT_EXECUTE_WITHOUT_NEW_HUMAN_AUTHORIZATION",
+  "free_standard_public_actions": true,
+  "runner": "ubuntu-latest",
+  "paid_larger_runner": false,
+  "paid_provider_calls": 0,
+  "windows_source_writes": 0,
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
