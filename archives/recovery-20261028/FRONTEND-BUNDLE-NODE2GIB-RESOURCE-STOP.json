@@ -1,0 +1,314 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "run": 40800266509,
+  "job": 123206411399,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "05d0956f81b9384f1c2cdddf015fe4e6d81200b3",
+    "head": "c46407bfe0112518649d2031821e8acd62f00597",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "c46407bfe0112518649d2031821e8acd62f00597",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 127738,
+      "symlinks": 3869,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "component": null,
+  "remaining_offline": null,
+  "native_linux": null,
+  "generator": {
+    "exit_code": 0,
+    "tenant_package": "../examples/qoderwake",
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": {
+    "pass": 0,
+    "fail": 0,
+    "expects": 0
+  },
+  "lint": null,
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 511.1M (swap: 0B)",
+    "Memory peak: 25.4M (swap: 0B)",
+    "Memory peak: 89.1M (swap: 0B)",
+    "Memory peak: 1.8G (swap: 0B)",
+    "Memory peak: 64M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "scope": "Same original Vite production config under supported Node24.22.1, V8 old-space1536MiB, authorized2GiB aggregate/swap0/300s",
+  "status": "NODE_V8_HEAP_RESOURCE_STOP",
+  "plan": {
+    "schema": "xiongbaowork-frontend-bundle-resource-proposal/1",
+    "status": "AUTHORIZED_EXISTING_FRONTEND_BUILD_SCOPE_NODE_RUNTIME",
+    "source_base": "d2f0989671b091bf2bd30abf716570fe1d178378",
+    "source_files": 2060,
+    "source_bytes": 50032071,
+    "normal_attempt": {
+      "run": 40795427951,
+      "job": 123190636436,
+      "status": "OOM_KILL",
+      "configured_aggregate_limit": 536870912,
+      "swap": 0,
+      "actual_unit_runtime": "40.696s",
+      "automatic_memory_peak": "497.4M",
+      "bundler_started": true,
+      "final_build_result": "NOT_PRODUCED",
+      "post_build_source_verification": "UNKNOWN_UNIT_KILLED"
+    },
+    "requested_scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
+    "proposed_aggregate_limit": 2147483648,
+    "swap": 0,
+    "outer_timeout_seconds": 300,
+    "inner_timeout_seconds": 270,
+    "always_restore_aggregate_limit": 536870912,
+    "source_and_artifact_data_limit": 67108864,
+    "dependency_install_limit": 536870912,
+    "prebuild_generator_limit": 536870912,
+    "source_edits_adopted": false,
+    "paid_provider_calls": 0,
+    "cloud_only": true,
+    "windows_source_writes": 0,
+    "postgres17": "PG_PENDING",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "previous2GiB_authorizations_reused": false,
+    "workflow_trigger": "ONLY_EXACT_AUTHORIZED_VALIDATION_BRANCH_PUSH",
+    "original_proposal_commit": "3ab441fbe72b16ead4e3bd33e188ee9843e93c50",
+    "authorization": {
+      "source": "Direct human async reply",
+      "text": "允许，仅前端生产构建使用2 GiB（推荐）",
+      "question_item_id": "[\"request_user_input_async\",\"call_cf6a5f326f6b4c5ebeefca3890335e4a\",0]"
+    },
+    "additional_source_adoption": "NONE",
+    "new_resource_exception": false,
+    "prior_attempt": {
+      "run": 40798601807,
+      "job": 123200989988,
+      "status": "2GIB_OOM_KILL",
+      "restore512_verified": true,
+      "tracked_generated_delta": [
+        {
+          "path": "openbot/app/src/routeTree.gen.ts",
+          "before": {
+            "path": "openbot/app/src/routeTree.gen.ts",
+            "bytes": 48763,
+            "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae",
+            "mode": "0o644"
+          },
+          "after": {
+            "bytes": 49276,
+            "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+          }
+        }
+      ],
+      "adopted": false
+    },
+    "runtime_adjustment": {
+      "runtime": "Actual existing runner Node>=supported Vite version",
+      "v8_old_space_mib": 1536,
+      "aggregate_limit": 2147483648,
+      "swap": 0,
+      "inner_timeout": 270,
+      "outer_timeout": 300,
+      "original_vite_cli_and_configuration": true,
+      "source_or_lock_changes": false,
+      "original_bun_command_verdict": "OOM_512M_AND2GIB_WITH_OR_WITHOUT_SMOL; Node success if any is recorded as a distinct supported runtime",
+      "references": [
+        "https://vite.dev/guide/",
+        "https://nodejs.org/api/cli.html#--max-old-space-sizesize-in-mib"
+      ]
+    },
+    "log_capture": "Stream own non-secret frontend build progress to preserve diagnostic evidence if the controller is OOM-killed",
+    "postbuild_generated_data_evidence": {
+      "max_files": 8,
+      "max_total_source_bytes": 131072,
+      "cap": 67108864,
+      "location": "Cloud-only Actions logs",
+      "adoption": false
+    },
+    "prior_low_memory_bun": {
+      "run": 40799381218,
+      "job": 123203539628,
+      "status": "OOM_KILL_2GIB_SMOL",
+      "restore512_verified": true,
+      "generated_route_sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+      "generated_route_not_adopted": true
+    },
+    "additional_resource_scope": "NONE"
+  },
+  "source_commit": "c46407bfe0112518649d2031821e8acd62f00597",
+  "final_build_artifact": "NOT_PRODUCED",
+  "original_bun_build_verdict": "NOT_PASSED",
+  "bundle_start": {
+    "command": "Original app build script content",
+    "project_and_descendants": 2147483648,
+    "swap": 0,
+    "timeout": 300,
+    "inner_timeout": 270,
+    "scope": "ONLY_ORIGINAL_FRONTEND_BUNDLER",
+    "source_changes_adopted": false,
+    "native_pg": "PG_PENDING"
+  },
+  "runtime": {
+    "argv": [
+      "--max-old-space-size=1536",
+      "node_modules/vite/bin/vite.js",
+      "build"
+    ],
+    "runtime": "v24.22.1",
+    "runtime_path": "/usr/local/bin/node",
+    "vite_configuration": "ORIGINAL_UNCHANGED",
+    "reason": "Vite supported standard Node runtime; documented1536MiB V8 old-space leaves room within the existing2GiB aggregate cap",
+    "references": [
+      "https://vite.dev/guide/",
+      "https://nodejs.org/api/cli.html#--max-old-space-sizesize-in-mib"
+    ],
+    "aggregate_limit": 2147483648,
+    "outer_timeout": 300,
+    "original_bun_build_command_passed": false
+  },
+  "process": {
+    "exit_code": -6,
+    "status": "FAILED",
+    "project_and_descendants": 2147483648,
+    "swap": 0,
+    "inner_timeout": 270,
+    "outer_timeout": 300,
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "restore512": {
+    "parent_memory_max": 536870912,
+    "swap": 0
+  },
+  "source_after_build": {
+    "tracked_source_changes": [
+      {
+        "path": "openbot/app/src/routeTree.gen.ts",
+        "before": {
+          "path": "openbot/app/src/routeTree.gen.ts",
+          "bytes": 48763,
+          "sha256": "d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae",
+          "mode": "0o644"
+        },
+        "after": {
+          "bytes": 49276,
+          "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d"
+        }
+      }
+    ],
+    "source_edits_adopted": false,
+    "data_limit": 67108864,
+    "parent_memory_limit": 536870912
+  },
+  "artifact_data": {
+    "artifacts": [],
+    "brand_observations": {},
+    "formal_image8GET": "NOT_RUN",
+    "native_pg": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "build_log": {
+    "lines": 21,
+    "tail100": [
+      "vite v7.3.6 building client environment for production...",
+      "transforming...",
+      "",
+      "<--- Last few GCs --->",
+      "",
+      "[3459:0x2ed2e000]    22211 ms: Scavenge 1517.7 (1539.2) -> 1514.2 (1547.2) MB, pooled: 0 MB, 1.08 / 0.00 ms  (average mu = 0.330, current mu = 0.330) allocation failure; ",
+      "[3459:0x2ed2e000]    22792 ms: Mark-Compact 1522.1 (1547.5) -> 1509.8 (1547.7) MB, pooled: 0 MB, 571.14 / 0.00 ms  (average mu = 0.317, current mu = 0.304) allocation failure; scavenge might not succeed",
+      "",
+      "FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory",
+      "----- Native stack trace -----",
+      "",
+      " 1: 0x942e80  [/usr/local/bin/node]",
+      " 2: 0x75f71e node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/usr/local/bin/node]",
+      " 3: 0xc9a1e0  [/usr/local/bin/node]",
+      " 4: 0xc9a2cf  [/usr/local/bin/node]",
+      " 5: 0xf3dba5  [/usr/local/bin/node]",
+      " 6: 0xf3dbd2  [/usr/local/bin/node]",
+      " 7: 0xf3deca  [/usr/local/bin/node]",
+      " 8: 0xf4ebca  [/usr/local/bin/node]",
+      " 9: 0xf52f70  [/usr/local/bin/node]",
+      "10: 0x19f0c41  [/usr/local/bin/node]"
+    ]
+  },
+  "service_result": {
+    "result": "exit-code",
+    "python_wrapper_exit": 250,
+    "node_child_returncode": -6,
+    "node_signal": "SIGABRT",
+    "cause": "V8 JavaScript heap out of memory",
+    "runtime": "36.388s",
+    "automatic_memory_peak": "1.8G(swap0B)",
+    "aggregate_oom_kill": false
+  },
+  "generated_source_delta": {
+    "same_as_prior_bun_attempts": true,
+    "bytes": 49276,
+    "sha256": "6ed6e13fac2a2b8968ca46a87ac4ebad912c363a7ba66dfe70adc1086523ac5d",
+    "archive": "archives/recovery-20261028/ROUTE-TREE-GENERATOR-DATA-NOT-ADOPTED.json",
+    "adopted": false
+  }
+}
