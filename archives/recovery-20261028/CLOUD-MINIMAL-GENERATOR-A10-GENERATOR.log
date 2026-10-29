@@ -1,0 +1,9 @@
+Reading config file '/home/runner/work/_temp/offline.config.cjs'
+TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at diffSchemasOrTables (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:22188:27)
+    at applyPgSnapshotsDiff (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:28202:26)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async prepareAndMigratePg (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:32191:42)
+    at async Object.handler (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91988:7)
+    at async run (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91472:7)

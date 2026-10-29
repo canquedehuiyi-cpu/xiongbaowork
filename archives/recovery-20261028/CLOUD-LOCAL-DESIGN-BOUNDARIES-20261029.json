@@ -40,5 +40,13 @@
       "corrections": "K1/K4/K6/K8/K10/K14 retain behavior-basedclosedgate,necessaryreadonly,legitimatequeue,completecommitted,finalvsreceipt; no inventedrequiredconstant"
     }
   },
-  "current_coordinator_policy": "ACK unknown permits only appropriately authorized evidence recovery and existing lawful queue management; full persisted identity/result/disposition/legalstatus/final/requiredatomic audit+current realauthorization can establish committed according to actual protocol. NULL/invisible/equality/rowlock/callbackreject alone never physical end/lost/replay proof. No invented witness/receipt/audit."
+  "current_coordinator_policy": "ACK unknown permits only appropriately authorized evidence recovery and existing lawful queue management; full persisted identity/result/disposition/legalstatus/final/requiredatomic audit+current realauthorization can establish committed according to actual protocol. NULL/invisible/equality/rowlock/callbackreject alone never physical end/lost/replay proof. No invented witness/receipt/audit.",
+  "WB_short_correction": {
+    "id": "f990043b-d2b9-4040-bb65-22231e3c2831",
+    "at": "2026-10-29T15:13:22Z",
+    "classification": "UNADOPTED_DESIGN_INPUT",
+    "overstrong_claim_rejected": "Allcommitted requireindependent servertermination; M1nevercommitted",
+    "coordinator_policy": "Distinguish callbackcompletion,realdriveroutertransactionCOMMITsuccesscontract,ACKunknowncompletepositiveC-ALLdurablereadback,negativeabsence/lost/replayqualifications. No permanentban onfull-evidencecommitted orlawfulidempotentpublish."
+  },
+  "identity_admin_latest": "Humanreportsapproveda3caafa0 strict9300B metadataonlypausedsameIDpromptdiagnosis,SG/hourlynormal15:19; not independently verified here,not project/lease/jobauthority."
 }

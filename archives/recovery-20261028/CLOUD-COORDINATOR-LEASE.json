@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
   "epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
   "acquired_at": "2026-10-29T15:12:44.644Z",
-  "renewed_at": "2026-10-29T15:16:16.840Z",
+  "renewed_at": "2026-10-29T15:20:26.047Z",
   "expires_at": "2026-10-29T15:57:44.644Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T15:12:44.644Z"
   },
-  "next_action": "Read exactrun40899621474/job123538022770 terminal; do not duplicate. Preserve all actual outputs plus physical restoration.",
+  "next_action": "A10real BigIntserializationfailure:noDDL. Prepareseedapprovals twoSQLzero defaults only aftercauseevidence; initial1Source nonauthorreview before newgeneratoroverlay. Routeauthor independentlyrepairsactivationgate; nojobsuntil exactreview/ownerpreflight.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -28,12 +28,7 @@
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
-  "active_job": {
-    "candidate": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f",
-    "run": 40899621474,
-    "job": 123538022770,
-    "status": "in_progress"
-  },
+  "active_job": null,
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
