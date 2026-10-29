@@ -1,0 +1,101 @@
+{
+  "schema": "xiongbaowork-minimal-generator-independent-review/4",
+  "reviewer": "/root/delivery_review",
+  "author": "/root/persistence_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "c6f51d2673e608895ab826ed7437dbef9dab0340",
+  "parent": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+  "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
+  "message": "Normalize only the two pinned manifest mode representations for exact Source recheck",
+  "message_has_skip_directive": false,
+  "verdict": "ADMIN_DIAGNOSTIC_A4_APPROVED_FOR_LEGAL_COORDINATOR_SINGLE_DISPATCH",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "blob": "4b83da36edcf823cb8d55ba3f08bb5367ab7f604",
+      "bytes": 4017,
+      "sha256": "1315617c12fc80ee4023d967cc29b803d86902eea6e0496bd7e8a63512aae839",
+      "review": "Full exact retrieval, complete delta review, exact byte comparisons of inherited implementation blocks."
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "blob": "b340530976f84d1be480572bf4e6c3841cd0247f",
+      "bytes": 67069,
+      "sha256": "80a7cb626ed026ae2a3c6a676651f1d7861882543f0a36f965d623326194a570",
+      "review": "Full exact retrieval, complete delta review, exact byte comparisons of inherited implementation blocks."
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "blob": "4c12aa7516f3837785c8fe8b3ab695079b6ce58c",
+      "bytes": 29937,
+      "sha256": "0f85be9443864959b70db855cd8986345f5adc54098ba36f6ca69d4ae816e7a4",
+      "review": "Full exact retrieval, complete delta review, exact byte comparisons of inherited implementation blocks."
+    }
+  ],
+  "mode_adapter": {
+    "review": "Only string0o644 or100644 accepted; exact octal permission normalization to0644. Unknown strings,755 and alternate types do not fall back. No chmod-to-pass, manifest edit, or weakening of seal regular/nlink/FD/byte/hash checks.",
+    "manifest_independently_fetched_at_reviewed_sha": true,
+    "manifest": {
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+      "bytes": 456310,
+      "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "mode_counts": {
+        "100644": 71,
+        "0o644": 1994
+      }
+    },
+    "prior_real_failure": {
+      "run": 40843372223,
+      "job": 123344875216,
+      "status": "JOB_FAILED_COPY_MODE_REPRESENTATION_MISMATCH",
+      "source": "PASS2065/50175181 only",
+      "dependencies": "NOT_RUN",
+      "generator": "NOT_RUN",
+      "metadata": "NONE",
+      "preserved": true
+    }
+  },
+  "unchanged_byte_comparisons": {
+    "source_verifier_string": true,
+    "helper_functions_before_adapter": true,
+    "all_subject_and_admin_functions_after_adapter": true,
+    "embedded_core_plan_except_branch_revision": true,
+    "embedded_and_standalone_fields_match": true
+  },
+  "retained_approved_controls": [
+    "Single unique run-a4 push branch; prep-a4 does not match. Contentsread, singleubuntu15min,global source-recovery-bytes,cancel-in-progressfalse.",
+    "Parent512MiB/swap0/oomgroup1; DATA source/copy/deps/export64MiB; generate512MiB.",
+    "Activation root-admin gate before irreversible runnerUID/GID drop; no Subjectroot execution or secrets/DBenv.",
+    "Absolute480/120/120s, reserve8, single cleanup, complete descendant cgroupkill, boundedstop/reap, actualcompletionremaining>=0, wrapper/stagemain deadline-8.",
+    "Exact canonical2065Source/50175181B verification, private copy plus unadopted exactseed overlay; 17original lock/SHA512 packages and FULL50schema; no frozen whole/server install retry.",
+    "No lifecycle hooks, links/shared writabledeps,PGconnection/fakeURL/recoverychainstitch/manualmetadata.",
+    "ActualCLI and all safe actual SQL/snapshot/journal outputs exported regardless validation findings; incomplete cannot pass; logs oversize explicitincomplete.",
+    "Final/always restore512MiB/swap0/oomgroup1/populated0."
+  ],
+  "approval_scope": "Static approval only of the narrow administrative mode adapter and reviewed diagnostic controller for one later legal-coordinator run. Not execution proof, dependency/generator success, complete migration package approval, Source adoption, PG17, release or77/18/7 acceptance.",
+  "dispatch_conditions": [
+    "Current Root will not dispatch this bounded round; hosted successor must first read exact canonical head and lease.",
+    "Only a legal unexpired matching owner/run/epoch lease holder may schedule. Released/expired plus idle queue and expected-head CAS acquisition required for successor; absent/unreadable lease is readonly.",
+    "Re-read latest idle project queue and exact candidate/report identities before one unique run-a4 branch creation/push; normal supported GitHub tool only.",
+    "Do not rerun originale4cdae failed head. Preserve new actual failure/success evidence and original history.",
+    "Use existing freeallocation only; Windows/defaultbranch/deploy/paidprovider untouched.",
+    "Generated output requires fullSQL/snapshot/journal reconciliation and separate<=8Source nonauthorreview before canonicaladoption."
+  ],
+  "reviewer_actions": {
+    "executed": false,
+    "dispatch": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED",
+    "full77_18_7_acceptance": false
+  }
+}
