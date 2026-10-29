@@ -7,17 +7,17 @@
   "run_id": "bounded-probe-development-20261029T0804Z",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "acquired_at": "2026-10-29T08:04:59.948Z",
-  "renewed_at": "2026-10-29T08:15:41.846Z",
-  "expires_at": "2026-10-29T08:45:41.847Z",
+  "renewed_at": "2026-10-29T08:20:40.320Z",
+  "expires_at": "2026-10-29T08:49:59.948Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "084a720e7517c08f957799fc5e10d0e905bfe30b",
+  "expected_parent": "bd940eab42ee7eba15775ab2f64bab3c68be110d",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Root holds lease while generator author prepares exact17/FULL50 diagnostic controller, then delivery+Root review. Never create execution branch before exact review and lease/queue recheck. ACK audit parallel read-only.",
+  "next_action": "A1 generator d824f9cc is CHANGES_REQUIRED_DO_NOT_DISPATCH; author preparing A2 deadline+output-retention correction. Obtain exact A2 non-author review, then only legitimate lease owner can dispatch unique run-a2 once after idle queue check. Probe already passed; never repeat probe.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",

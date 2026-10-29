@@ -463,13 +463,31 @@
       }
     },
     "worker": {
-      "id": null,
-      "cadence_minutes": 30,
-      "status": "AWAITING_HUMAN_REPORTED_ID"
+      "id": "6ae30014bbac8191baa1a3497f062b7d",
+      "controller_id": "Automation_a9042438d098819180d8686afa9cd66e",
+      "page_id": "page_7812bfd830a08191ab1fb84da54f173f",
+      "runtime": "cloud",
+      "cadence_minutes": 60,
+      "status": "CONFIGURED_ENABLED_FIRST_RUN_NOT_VERIFIED",
+      "setup_evidence": {
+        "commit": "b6ac7e765b98590bd6386b930e288650e2c68dbe",
+        "path": "archives/recovery-20261028/HOSTED-CONTINUATION-SCHEDULE-20261029.json",
+        "blob": "658c1ac859ed73b60295dc46d2c411d9abc0cd73"
+      },
+      "native_peek": {
+        "id": "6ae30014bbac8191baa1a3497f062b7d",
+        "is_enabled": true,
+        "schedule": "BEGIN:VEVENT\nDTSTART:20261029T081926Z\nRRULE:FREQ=HOURLY;INTERVAL=1\nEND:VEVENT",
+        "timezone": "Asia/Singapore",
+        "last_run": null,
+        "latest_result": null,
+        "observed_at": "2026-10-29T08:20:11.332Z"
+      },
+      "root_did_not_create_or_update_worker": true
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
-    "lease_expires_at": "2026-10-29T08:45:41.847Z",
-    "next_action": "Root holds lease while generator author prepares exact17/FULL50 diagnostic controller, then delivery+Root review. Never create execution branch before exact review and lease/queue recheck. ACK audit parallel read-only."
+    "lease_expires_at": "2026-10-29T08:49:59.948Z",
+    "next_action": "A1 generator d824f9cc is CHANGES_REQUIRED_DO_NOT_DISPATCH; author preparing A2 deadline+output-retention correction. Obtain exact A2 non-author review, then only legitimate lease owner can dispatch unique run-a2 once after idle queue check. Probe already passed; never repeat probe."
   },
   "cloud_push_probe_a2": {
     "schema": "xiongbaowork-cloud-resource-probe-result-v2",
@@ -535,8 +553,16 @@
     "active_job": null,
     "preparation": {
       "agent": "/root/persistence_review",
-      "branch": "codex/cloud-minimal-generator-prep-20261029-a1",
-      "status": "AUTHOR_PREPARING_NOT_DISPATCHED"
+      "a1_sha": "d824f9cc45cf13bbe198bd210514121636bca501",
+      "status": "A1_BLOCKED_A2_AUTHOR_PREPARING",
+      "review": {
+        "commit": "ddf90ebfb2550924570d98333a0ce71c8b293d55",
+        "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A1-ROOT-REVIEW-20261029.json",
+        "blob": "3b5019196452f827bd6d5b8a28484791bc601723",
+        "verdict": "CHANGES_REQUIRED_DO_NOT_DISPATCH"
+      },
+      "source_changes": 0,
+      "run_dispatched": false
     },
     "independent_reviewer": "/root/delivery_review",
     "restart_ack_audit": {
