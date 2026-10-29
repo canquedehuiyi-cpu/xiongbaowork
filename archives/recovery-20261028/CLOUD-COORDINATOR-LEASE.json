@@ -7,24 +7,32 @@
   "run_id": "bounded-probe-development-20261029T0804Z",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "acquired_at": "2026-10-29T08:04:59.948Z",
-  "renewed_at": "2026-10-29T08:31:20.275Z",
+  "renewed_at": "2026-10-29T08:37:16.691Z",
   "expires_at": "2026-10-29T08:49:59.948Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "0ee28aae485a8b179f5dbde49bc73f5f95092cd7",
+  "expected_parent": "aac369c414884081b020e1f0914b30a5e0997986",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": []
   },
-  "next_action": "Root may dispatch exact approved generator1469b230 on unique run-a3 once after final head/epoch/idle check. If branch/run exists, read existing run, never repeat. Capture full result, preserve all gates, then release own lease.",
+  "next_action": "Read existing run40843372223/job123344875216 terminal/logs only; do not create/retry any execution branch. Persist exact stages and output. If lease expires, no writes until terminal+idle and lawful successor CAS; then checkpoint and release. No Source adoption.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
     "renew": "Current matching owner/run/epoch only, before expiry, every real checkpoint and no later than15min. Retain original acquired_at for this epoch, set renewed_at to actual UTC CAS preparation time. expires_at <= min(acquired_at+45min, renewed_at+45min). No indefinite rolling epoch. Before45min limit, continue only by queue-idle release and separate CAS acquisition with new unique epoch. Never renew after losing epoch or expiration; successor rules apply.",
-    "pre_mutation": "Before Source adoption, new execution branch, project job or canonical mutation, re-read exact head and held/unexpired owner/run/epoch. Only this owner serially schedules resources; if mismatch, stop.",
+    "pre_mutation": "Before Source adoption, new execution branch, project job or canonical mutation, re-read exact head and held/unexpired owner/run/epoch. Only this owner serially schedules resources; if mismatch, stop. For push jobs also verify the exact reviewed trigger branch and HEAD commit message has no CI-skip directive; preparation branches rely on exact filters, not skip tags.",
     "release": "Before ending bounded round, CAS state released with released_at and expires_at equal UTC now, active jobs accurately recorded and clear next_action. Do not release while concealing queued/running work.",
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
+  },
+  "active_job": {
+    "run": 40843372223,
+    "job": 123344875216,
+    "head": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+    "status": "in_progress",
+    "resource_group": "source-recovery-bytes",
+    "repeat_prohibited": true
   }
 }

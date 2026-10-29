@@ -1,6 +1,7 @@
 {
+  "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-DISPATCH.json",
   "schema": "xiongbaowork-cloud-generator-single-dispatch-ticket-v1",
-  "candidate": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
+  "candidate": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
   "tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
   "source_adoption": false,
   "review": {
@@ -23,7 +24,7 @@
   ],
   "execution_branch": "codex/cloud-minimal-generator-run-20261029-a3",
   "preparation_branch": "codex/cloud-minimal-generator-prep-20261029-a3",
-  "state": "REVIEWED_DISPATCH_NOT_YET_CREATED",
+  "state": "IN_PROGRESS_NO_PASS_CLAIM",
   "owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
   "epoch": "2026-10-29T08:04:59.948Z:972136c2",
   "limits": {
@@ -34,8 +35,8 @@
     "generation": 120,
     "export": 120
   },
-  "actual_run": null,
-  "actual_job": null,
+  "actual_run": 40843372223,
+  "actual_job": 123344875216,
   "resource_queue": "source-recovery-bytes",
   "cancel_in_progress": false,
   "raw_source": {
@@ -55,5 +56,13 @@
     "PG": "PG_PENDING",
     "full_ci": "NOT_RUN",
     "commercial": "NOT_DELIVERED"
+  },
+  "original_skip_candidate": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
+  "original_skip_result": "NO_RUN_COMMIT_MESSAGE_SKIP_CI",
+  "tree_unchanged": true,
+  "metadata_fix_review": {
+    "commit": "2b63a61753e04cdf7f81093e1bb80c6afeb06180",
+    "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-DISPATCHFIX-REVIEW-20261029.json",
+    "blob": "29420a80dd4398220e3e33180c71b0e8ca998bde"
   }
 }
