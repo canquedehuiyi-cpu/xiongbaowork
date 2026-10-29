@@ -1,0 +1,152 @@
+{
+  "schema": "xiongbaowork-seed-serializable-defaults-initial-nonauthor-review-v1",
+  "reviewer": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+  "author": "/root/a7_prepare",
+  "review_kind": "NONAUTHOR_INITIAL_ONE_SOURCE_STATIC_REVIEW_ONLY",
+  "candidate": "95ebc15ba4c6f53ead7a1a659565a1cdfbecf549",
+  "tree": "a9b900f5ff4ea8a968651f4724ceae590ca00fc7",
+  "parent": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+  "file": {
+    "path": "openbot/server/src/db/schema/approvals.ts",
+    "mode": "100644",
+    "blob": "178dd18f90315ed952c2b7e8bac6246453ae49dc",
+    "bytes": 13100,
+    "sha256": "f86495a58bd580d633b0a3a3f0e61138ecd91cec133aef4e9e3851e4d2d47c12"
+  },
+  "original": {
+    "bytes": 13092,
+    "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
+    "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1"
+  },
+  "verdict": "APPROVED_AS_EXACT_DIAGNOSTIC_SCHEMA_OVERLAY_ONLY_NOT_ADOPTABLE_COMPLETE_MIGRATION_PACKAGE",
+  "findings": [],
+  "method": "Full immutable original/proposed schema and complete nine official tagged serializer/ORM source reads; independentUTF8SHA256withabcselftest; exact entireoriginaltwo-stringreplace equalsproposal; normalGitHubcompareonefile2add2del; recursiveGitmode/blob/sizecheck. NoSourceexecution/AST/localfiles.",
+  "exact_change": {
+    "lines": [
+      224,
+      283
+    ],
+    "tables": [
+      "approval_continuations",
+      "approval_continuation_steps"
+    ],
+    "from": ".default(0n)",
+    "to": ".default(sql`0`)",
+    "sql_existing_import": true,
+    "other_entiretext_unchanged": true
+  },
+  "semantics": {
+    "bigint_type_mode_notnull_checks_identity_RLS_permissions_unchanged": true,
+    "numeric_zero_SQL_literal": true,
+    "ORM_SQL_default_supported": true,
+    "serializer_SQLbranch_renders_expression": true,
+    "original_omitted_insert_DEFAULT_behavior_retained_static": true,
+    "no_runtime_mutation_or_globalBigIntpatch": true
+  },
+  "supporting_audit": {
+    "commit": "4e66c225a8beff9d7e2c8679aba0859d135d0676",
+    "path": "archives/recovery-20261028/CLOUD-FULL50-BIGINT-SERIALIZATION-AUDIT-20261029.json",
+    "blob": "4c05579cc24faff4556b94b11fa2775aaa13b994",
+    "bytes": 26339,
+    "sha256": "424aa47f97e7e50c9b98df8af7f06b2801ca648d56c4ee67dcb1a5a7926dcf69"
+  },
+  "primary_source_identities": [
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "path": "drizzle-kit/src/jsonDiffer.js",
+      "blob": "da8284979a7b7fe1a0147c22b29c36e4ae5776bb",
+      "bytes": 22590,
+      "sha256": "512a0cb6b3221bb766e4ca62bb80c700d194101e5534facdbc5ea03301ebf5ec"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "path": "drizzle-kit/src/serializer/pgSerializer.ts",
+      "blob": "9633908549b4e2241493e43016741d57f7daf6d3",
+      "bytes": 69509,
+      "sha256": "66473d0592234b5021ba517ee039dfc0d424174b2280bdcfd7cf3b791e2f88f3"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "path": "drizzle-kit/src/serializer/pgSchema.ts",
+      "blob": "d7604d645cb75f87726600d3c035454cfd30ed7b",
+      "bytes": 24564,
+      "sha256": "83a6e17089d07368c9bb8069971072fc413edf26cd113486f756e4a19cb37bed"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "path": "drizzle-orm/src/column-builder.ts",
+      "blob": "1cc4c5ae1eb9a142b552e575cc797c5e813cd05e",
+      "bytes": 12660,
+      "sha256": "da5f21afc2fc5f63566036c83aa8f365c74a12686bbb52d03827090dc1769f96"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "path": "drizzle-orm/src/column.ts",
+      "blob": "1396e3a61200c042dd27407a4f5bf60d92081e5b",
+      "bytes": 5186,
+      "sha256": "d9873527983250dfd6f26b1aac0c743ff33b5e7a6e483e86797158b9a3d5778a"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "path": "drizzle-orm/src/pg-core/columns/bigint.ts",
+      "blob": "17ac0798b85fd8b7640cf56bf223491c3f40ce11",
+      "bytes": 3445,
+      "sha256": "b7fdd1e312fab4e63ae06d068ce8220a2c9f51df9a92a0863c741cc5c20c9565"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "path": "drizzle-orm/src/pg-core/utils.ts",
+      "blob": "b7547ad664d15435c33527c431bc470eec299d1f",
+      "bytes": 3536,
+      "sha256": "7737f4d765127b895887b1f38f0a1a5c64374f0dd31897fe1059d9fc7245e768"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "path": "drizzle-kit/src/serializer/utils.ts",
+      "blob": "18d5bb9ad88b271a3dfa112a6f2d8ed31fc585ac",
+      "bytes": 1374,
+      "sha256": "ad4f09f4b6628a06e56bde90aa2697ee608ce93fe76d245833dbafde5cef7b1d"
+    },
+    {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "path": "drizzle-orm/src/pg-core/dialect.ts",
+      "blob": "bd9d6a5c9520f65033640b4433f16c0c56375a38",
+      "bytes": 45286,
+      "sha256": "939d5dd337e223f3a87b6912d0bc67e2510dd165109b1b957d790c8218747bd1"
+    }
+  ],
+  "evidence_limit": "Tagged upstream source doesnotauthenticate exactinstalledbundlefilehash; actualA10log provesBigIntstringifyerror butdoesnotidentifyindividualproperty. Static53filescan isolates2literaldefault declarations. SQLzero behaviorreasoning isnotPG17execution. SnapshotmayrepresentSQLzero asstring, recovery0107numeric0; inspectactualfullDDL.",
+  "not_proven": [
+    "generatoroutput",
+    "completeSQLsnapshotjournalconsistency",
+    "originalvsrecoverychainapplication",
+    "CPUtests/fulltypes",
+    "PG17",
+    "authority/RLS/COMMIT/ACK",
+    "production"
+  ],
+  "Source_adopted": false,
+  "tests_run": false,
+  "project_run_by_reviewer": false,
+  "package_scope": "Originalseedcomplete<=8Sourcepackage remainsunadopted; this1Sourceinitialprereview doesnotreplacefullpackageindependentreview",
+  "next_action": "May prepareA11 administrative diagnostic using exactreviewedschemaoverlay and fullprivatebytes/hashupdated; A11 exact3admin independentreview BEFOREexecution. No formalSourceintegration.",
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  }
+}

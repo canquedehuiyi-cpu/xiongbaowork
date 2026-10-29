@@ -1,0 +1,648 @@
+{
+  "schema": "xiongbaowork-full50-bigint-serialization-audit-v1",
+  "author": "/root/a7_prepare",
+  "status": "READ_ONLY_STATIC_CAUSE_ANALYSIS_NOT_RUNTIME_PROPERTY_LOCALIZATION",
+  "actual_attempt": {
+    "run": 40899621474,
+    "job": 123538022770,
+    "candidate": "d153dd2b34ab63bd7027590fb8daddcfaa36ae7f",
+    "relative_out_binding_pass": true,
+    "all17prepared": true,
+    "all3native": true,
+    "cli_exit": 0,
+    "generated": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "export_verdict": "GENERATOR_OUTPUT_SHAPE_INCOMPLETE",
+    "decoded_log": {
+      "gzip": {
+        "bytes": 422,
+        "sha256": "b362be5b828e560de5b7ab59e5cb4eb67609b6721126a5bf10c7d4eef83b4863"
+      },
+      "raw": {
+        "bytes": 814,
+        "sha256": "fb1e5f7b058f473acf99d4a4e7eebc33ea82b059ede3d232dacefdd50d0a9481"
+      },
+      "crc32_isize": true,
+      "text": "Reading config file '/home/runner/work/_temp/offline.config.cjs'\nTypeError: Do not know how to serialize a BigInt\n    at JSON.stringify (<anonymous>)\n    at diffSchemasOrTables (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:22188:27)\n    at applyPgSnapshotsDiff (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:28202:26)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async prepareAndMigratePg (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:32191:42)\n    at async Object.handler (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91988:7)\n    at async run (/home/runner/work/_temp/private-stage/openbot/node_modules/drizzle-kit/bin.cjs:91472:7)\n",
+      "pure_JS_DATA_decode": true,
+      "project_execution_for_decode": false
+    }
+  },
+  "formal_source": {
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "manifest_blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+    "files": 2065,
+    "bytes": 50175181,
+    "affected_schema": {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+      "bytes": 10520,
+      "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+      "declarations": [
+        {
+          "line": 207,
+          "table": "approval_continuations",
+          "column": "fence",
+          "text": "bigint(\"fence\", { mode: \"bigint\" }).notNull().default(0n)"
+        },
+        {
+          "line": 266,
+          "table": "approval_continuation_steps",
+          "column": "fence",
+          "text": "bigint(\"fence\", { mode: \"bigint\" }).notNull().default(0n)"
+        }
+      ]
+    }
+  },
+  "diagnostic_overlay": {
+    "ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+    "path": "openbot/server/src/db/schema/approvals.ts",
+    "blob": "250dd9b5bb8fee7c18b1fc86f535fec55b236aa2",
+    "bytes": 13092,
+    "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+    "lines": [
+      224,
+      283
+    ],
+    "same_two_default_literals": true,
+    "adopted": false
+  },
+  "scan": {
+    "method": "Complete UTF8 text, no AST/evaluation; BigInt numeric literal and BigInt(...) constructor search; every53 original file raw byte/hash equals formalmanifest",
+    "table_modules": 50,
+    "helpers": [
+      "index.ts",
+      "json.ts",
+      "tenant.ts"
+    ],
+    "file_records": [
+      {
+        "path": "openbot/server/src/db/schema/admin.ts",
+        "blob": "33a0585b979bd07d939be4c2bc71a5ed20939591",
+        "bytes": 5688,
+        "sha256": "a1179ddf71267dbfea19bcca689ce433c6623db9d2dd8134594a91cf4faa69cd",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/approval-direct-execution-domains.ts",
+        "blob": "f4b7167267c32030a4043e0d8fe6815656983f3b",
+        "bytes": 3336,
+        "sha256": "e23afbf4a11cbbb965a09a992ce1ac22578b08a40ec28c9a483a4049c72ddf7c",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/approval-exact-input-objects.ts",
+        "blob": "94d055b9cebe809b1e5e2ba4a2d84238ac0ee878",
+        "bytes": 12894,
+        "sha256": "8d7489963d0de3f72be40a5a98f97500ecb58e05315bf52fc54b598d03d916fb",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/approvals.ts",
+        "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+        "bytes": 10520,
+        "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+        "matches": [
+          {
+            "line": 207,
+            "text": "    fence: bigint(\"fence\", { mode: \"bigint\" }).notNull().default(0n),"
+          },
+          {
+            "line": 266,
+            "text": "    fence: bigint(\"fence\", { mode: \"bigint\" }).notNull().default(0n),"
+          }
+        ]
+      },
+      {
+        "path": "openbot/server/src/db/schema/automation-foundations.ts",
+        "blob": "30aaa057c907399272562ecc5d2a24db2b0074bf",
+        "bytes": 1735,
+        "sha256": "ee7a5da74f2f49f69c2bc1425aca40519a116e597aa09cafd81b29997f3a58a5",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/automation-run-records.ts",
+        "blob": "befc051b34c25e703f63e15b109d6fce2995a295",
+        "bytes": 3043,
+        "sha256": "01b7f6cf19f7b22d80004a018ab59f3d2a9b31dbe77b6fdbbe94d168ed2f6140",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/components.ts",
+        "blob": "667bb125dcc2c2ccb7ad5fc2cddb4cb0a5619b82",
+        "bytes": 4598,
+        "sha256": "639b3487ea30bf30bc2a84619ddca822d3d9f7d1af0dc93f6c2aa9aab3d546e4",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/computer.ts",
+        "blob": "595c8df8c218668f343b86ef754d1335e2ac853e",
+        "bytes": 6668,
+        "sha256": "3a3dd2755cce1d919ffe66fbe51d10a9b9b9fb2882689794bc0f95d1c8f83b98",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/core.ts",
+        "blob": "38b94cc1b66876764af887a7c268c30d500f4c26",
+        "bytes": 26447,
+        "sha256": "0091d749d70791e10c462bfc67534089bc5e88a1c93bd38dd8bb467c1d15f64a",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/coworker.ts",
+        "blob": "ac64d935fc7d3add63226152360ae2aae74d8ca2",
+        "bytes": 8323,
+        "sha256": "93b333947527f24ed4c7d6f2d4423fd9410b6a71fc232751c68bbde5f2aa6289",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/delivery.ts",
+        "blob": "a5e6e0dfb69d7b4bd9b345bf5da41ca38fb3c1bf",
+        "bytes": 4337,
+        "sha256": "0bb348981b43af9708e2163783825d28fbd0189f9e53abb1e7542370ed24c1ff",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/demonstrations.ts",
+        "blob": "6d38c3af143cd7493bdae1ebab7518cac97558d2",
+        "bytes": 1442,
+        "sha256": "64c4f3258a1f378a22aa73f407634bdadfd43ee3a33a666234b7790a605fe4a6",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/device-binding-leases.ts",
+        "blob": "b5ed0f66f5bd95f8a3969c895da7847248190380",
+        "bytes": 4516,
+        "sha256": "643892e2d789a9eb229b6995db97e67e935136599514a28f9eab0b92776dbfdb",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/devices.ts",
+        "blob": "f3b333abeea3edf006d9fe19f3f6fcd0f9147440",
+        "bytes": 3584,
+        "sha256": "cd1de82da1de7279c5c2afc751da480e833f34de978084f37cacb8c35bf63b4c",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-customization-foundations.ts",
+        "blob": "400dc055c5513d59cebc0e7df2391ebb990eb06e",
+        "bytes": 4446,
+        "sha256": "59ee2058bb3394e0dd093ed6d36458d8d9f9dc2433c4be6c078455e2728ea3b8",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-customization-turns.ts",
+        "blob": "2cb8ce28c0f69fbb3d6462b698761d6d10659c16",
+        "bytes": 2785,
+        "sha256": "0e0f587aa2c42cdabc58350d0b5fc7eb581921e38dc451083d67d580d6b86d9a",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-official-bindings.ts",
+        "blob": "d43cb340cf59275ef0d7654d0ff6f161a7d102c3",
+        "bytes": 3548,
+        "sha256": "799d21ea79b4c1d37e8c8e7b5656e82a777b96e961351586ad05b97ee4635742",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-run-coordination.ts",
+        "blob": "20eb3ade1788bdee9aab7f0086604846094a8d1f",
+        "bytes": 8003,
+        "sha256": "1cb536ddf37bb64c07e237069bd213366dd546a1aad9c604cd01d1e93921c9bd",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-sharing-foundations.ts",
+        "blob": "eaa4a802dab9495cde061f69268e83a485962a85",
+        "bytes": 4682,
+        "sha256": "3095e430d7ee4d74edaed222799dd428f0663919a355d4e182dfbc2ad4b56217",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-foundations.ts",
+        "blob": "6a1f57e5ab7ef5098394ef901bbb43f7ac70fa85",
+        "bytes": 8436,
+        "sha256": "f35d08ff55f59d53ae1b762c9d02df19a3284bdb075be400fb000f731b34e94a",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-original-records.ts",
+        "blob": "f5bb0137285216ef8b75a2b78ce4e196f8cdeb65",
+        "bytes": 12222,
+        "sha256": "3c0bb97213b18b7f0e47e72a0357de378bdd8a65c30c76a6ce4a94e1cf779a19",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-run-records.ts",
+        "blob": "2ded0ffb62d4282fed03518a5ebc046044e8bb1d",
+        "bytes": 13400,
+        "sha256": "c303f37f86b54bcc1b91b273767341c09151029894848e0b408f5ba233e46443",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/flow-source-runtime-records.ts",
+        "blob": "d3a8ebc4b807ec54d4210177d649cecc009d025b",
+        "bytes": 8919,
+        "sha256": "f9bb388f21c24359ce0cd3934d48d4d0bebfce112ab69e9d8919d5a1167cd6c3",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/group-pipeline-start-receipts.ts",
+        "blob": "34983f1233a976e012361d4b7a39b13b92d83a19",
+        "bytes": 2392,
+        "sha256": "baa9a5307346baee97d0b5a3713d7e132aa0f8ea23f6a6e51c561bdf1589f545",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/group.ts",
+        "blob": "a1039777623174604be91312f72fdf8702dca8df",
+        "bytes": 1996,
+        "sha256": "95f3702362e9321fdaf7301f42f8bceeedbd6a720dfc9fb9e219ebe8030b3533",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/import-proactive-token-foundations.ts",
+        "blob": "11b84fb058d8bef880d3db508c105c7584285f03",
+        "bytes": 12135,
+        "sha256": "ce495a487ceb9cdcfef3fcbc8470d9df80123e721784ad91df9e6aac04f37fb1",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/knowledge-foundations.ts",
+        "blob": "cfd27190f54d100d85a75b321d5dd63b44133644",
+        "bytes": 11998,
+        "sha256": "ac9d69c46a922c0496d38b453d1127823118b72f0e9f0822d6143f7ae205c0da",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/knowledge-write-foundations.ts",
+        "blob": "36ffe8885a0ecbf4a3c757035af62929c1f07560",
+        "bytes": 12825,
+        "sha256": "910e5c178736d15be6f38cfd1a871f246bfe4073ec9f59d592a60cf681450be9",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/lifecycle.ts",
+        "blob": "f65b11453f14b1de3a9c08d86a0ac5e7226eaafa",
+        "bytes": 2605,
+        "sha256": "f48cc43f58fdffd2b1eebadf554ee068ae81568d86cae01cae681075f2b26aa1",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/memory.ts",
+        "blob": "9ef5ad6f349797a17b62a7d6d79b7a9deacc821e",
+        "bytes": 3857,
+        "sha256": "349ed6ad83520d8b746f8e21a93cb0f17982eeedb2ffcd6d01f95356d08b70d5",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/model.ts",
+        "blob": "6a168a9be775e456a443d5893d1df1789666962c",
+        "bytes": 2024,
+        "sha256": "031db269b7a0747a1ebb298272346030db6ea4eea21433f621dcd3cf14da8fad",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/outbox-knowledge-heads.ts",
+        "blob": "7ba19932c19644f36a81bf68f3c335cc232ac166",
+        "bytes": 5866,
+        "sha256": "b17dad4058bf5bfd080ebbd5632522579ab3d8b5e6fba56401e993d7654a5bd6",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/passwords.ts",
+        "blob": "fd9b880d342bdc23465d006b67c8b8041ba74226",
+        "bytes": 3709,
+        "sha256": "1a5d79a4fa672db39a9bcc7d5073cf0963c4d5f874dbe01b54ffdee904d8cd39",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/pipeline.ts",
+        "blob": "66d0d6f417a78a5b384ac311c459620dd74982b3",
+        "bytes": 7462,
+        "sha256": "75158ee1c51551795734fd951a9ae76f4059d9a8864799ceb39f0d7e6b7cfd83",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/plans.ts",
+        "blob": "2f72854f920231c81b27bf4bc2c5640214be368d",
+        "bytes": 1691,
+        "sha256": "ddc75121e3130983eb4fd602ae82634686ff1e6d4661b699be60d75f002e476d",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/plugin-assembly-foundations.ts",
+        "blob": "dbce0d05cdeb341ea01465b3dbe325cfbb9edc3d",
+        "bytes": 5290,
+        "sha256": "4b64d2d8cb7ac1f4e361ef3d91de64cda0180d61dce92d74c7e6c5a564d4f588",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/plugins.ts",
+        "blob": "5e27d88839b386af9e3ca871c9ecc23bfa6fe912",
+        "bytes": 39993,
+        "sha256": "802dae12d1c5c40a52ef9208b2fef3e8851248f58cd34fce5d5e13ca38a1554d",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/proactive.ts",
+        "blob": "76c9b976275224514e79eb14975a5088b297e7ee",
+        "bytes": 3765,
+        "sha256": "1f6261b2813b04732fb614ef89f6f17d475d9030076822cc2635423e82f9a427",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/resource-project-foundations.ts",
+        "blob": "f2072820bd8938a4211c939b24dcc4927dffa063",
+        "bytes": 7589,
+        "sha256": "42cea04edea132637dd377fcc50d1625bb4d4ff25a416910b247d34bb8dcc3a0",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/responsibilities.ts",
+        "blob": "59233d88d5247d75ab0c25aa3cb8368d4a815988",
+        "bytes": 6378,
+        "sha256": "b02fe6cdbdcf2d4698b1c67e66a9cbf7a38724a296ab296f9a2e7f46257c69ec",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/roles.ts",
+        "blob": "e3db171720a01d26941c25a690e011b141681aee",
+        "bytes": 5115,
+        "sha256": "6e6f37d94a160e1a40efe3756b544f930fefd0d46f6268f440ac1734e3700753",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/scim.ts",
+        "blob": "5db9efdab299e9c51f0ca024b178eb71a1c5d5b5",
+        "bytes": 7405,
+        "sha256": "e5708cf826d1e434d03e0b8e5f09d84214b875078e6e4752bf20698794f784ba",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/security-policy-fences.ts",
+        "blob": "22a1a3f0acc07c5b947866e0fb38cd6add23cacd",
+        "bytes": 6038,
+        "sha256": "e4ae1d234ef6c28bc892c2d3311b8aad72b5d63320d93424dba51706658226d1",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/tasks.ts",
+        "blob": "d54c14ff4630ad93c9714dbcef8d19beaefdd323",
+        "bytes": 3589,
+        "sha256": "0586f6b196ca10a6dacb300e0961b43e65305c1ff4be17b12006a0aae8e7b755",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/team-bots.ts",
+        "blob": "f77e7df444f8b424c69088f61c1ef92b9a0d2a83",
+        "bytes": 4098,
+        "sha256": "81f09cb34f669ca12f14c7475869c20e5fb4a2f200f82c69eb32799097a9951b",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/threads.ts",
+        "blob": "4c613d8a5bc400cbde5d8789c1848d727b07c408",
+        "bytes": 2571,
+        "sha256": "5f7946caab15a29f62e4fa17ff8f373b2725453ccbcff8aff9e1eb8b03a8916a",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/voice.ts",
+        "blob": "6800d6ad403772f8accf378a7ec3a02df63bda71",
+        "bytes": 1686,
+        "sha256": "15becb657ba57aa8bf5bed1c907288817db4d03b3c434961d08eb7f2ee654db9",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/waker-groups.ts",
+        "blob": "4ab797c85d80ed8f87e685bfa8c8bbafd5ceac88",
+        "bytes": 1983,
+        "sha256": "8dbd7d6dc33d7f0c1de2370b5c86e9863f0efa9a5e3176ac8215817ba453bedb",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/wakerflows.ts",
+        "blob": "2b2d4efd53f6979cc17916d9eb0c0650df4f828c",
+        "bytes": 2706,
+        "sha256": "40e74432740329cb378928912a9ec7d35b8bf4ce1208df631269915bd921f52d",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/work.ts",
+        "blob": "e1cf394067f0e1994925e078a8aae8079f27dee1",
+        "bytes": 4789,
+        "sha256": "16d19ab790b511107379a45ffcbd32eb3c76b4f000919c61ac12c3d5eda76feb",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/index.ts",
+        "blob": "1a7506958d0cf5cff0a1d087bdf6d2af87df9fbe",
+        "bytes": 1848,
+        "sha256": "a3268a149e2a6de7e2a8cc2879b11d34273e78dc5bf4cf496dc1733248fbc66e",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/json.ts",
+        "blob": "71c553859e46a4d971ed19809d604188ca2cd97a",
+        "bytes": 1280,
+        "sha256": "8df43c7db16ae15df7a483bdc6a4f0f0cb55cdb3afb27fbdf5fce0a299c638ce",
+        "matches": []
+      },
+      {
+        "path": "openbot/server/src/db/schema/tenant.ts",
+        "blob": "e2d79a8e609cb01fd9e42076ef77597b992f2d58",
+        "bytes": 1214,
+        "sha256": "ecc513a9fc04ded4430585004d0113454cf971935785ecef5f6148f3e772de84",
+        "matches": []
+      }
+    ],
+    "scope_limit": "Text scan plus exact serializer chain identifies two concrete declared sources; no per-property runtime serializer trace was emitted. Do not claim either is sole observed failing runtime property; unknown dynamic construction would need separate proof."
+  },
+  "serializer": {
+    "kit": {
+      "tag": "drizzle-kit@0.31.10",
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "chain": [
+        "pgSerializer.ts247-269 retains raw bigint default unless SQL/string/date/array special case; SQL defaults use sqlToStr",
+        "pgSchema.ts21 default:any optional accepts runtime bigint",
+        "jsonDiffer.js90-92 JSON.stringify(left/right) fails on bigint"
+      ]
+    },
+    "orm": {
+      "tag": "0.45.2",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "chain": [
+        "column-builder.ts default assigns this.config.default=value with hasDefault=true; signature supports SQL",
+        "column.ts constructor copies config.default unchanged",
+        "pg-core/columns/bigint.ts modebigint selects PgBigInt64; SQL type remains bigint, driver reads BigInt",
+        "pg-core/utils.ts getTableConfig returns column instances",
+        "pg-core/dialect.ts omitted insert without defaultFn/onUpdateFn emits DEFAULT, retaining DB default behavior"
+      ]
+    },
+    "identities": [
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+        "path": "drizzle-kit/src/jsonDiffer.js",
+        "blob": "da8284979a7b7fe1a0147c22b29c36e4ae5776bb",
+        "bytes": 22590,
+        "sha256": "512a0cb6b3221bb766e4ca62bb80c700d194101e5534facdbc5ea03301ebf5ec"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+        "path": "drizzle-kit/src/serializer/pgSerializer.ts",
+        "blob": "9633908549b4e2241493e43016741d57f7daf6d3",
+        "bytes": 69509,
+        "sha256": "66473d0592234b5021ba517ee039dfc0d424174b2280bdcfd7cf3b791e2f88f3"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+        "path": "drizzle-kit/src/serializer/pgSchema.ts",
+        "blob": "d7604d645cb75f87726600d3c035454cfd30ed7b",
+        "bytes": 24564,
+        "sha256": "83a6e17089d07368c9bb8069971072fc413edf26cd113486f756e4a19cb37bed"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+        "path": "drizzle-orm/src/column-builder.ts",
+        "blob": "1cc4c5ae1eb9a142b552e575cc797c5e813cd05e",
+        "bytes": 12660,
+        "sha256": "da5f21afc2fc5f63566036c83aa8f365c74a12686bbb52d03827090dc1769f96"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+        "path": "drizzle-orm/src/column.ts",
+        "blob": "1396e3a61200c042dd27407a4f5bf60d92081e5b",
+        "bytes": 5186,
+        "sha256": "d9873527983250dfd6f26b1aac0c743ff33b5e7a6e483e86797158b9a3d5778a"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+        "path": "drizzle-orm/src/pg-core/columns/bigint.ts",
+        "blob": "17ac0798b85fd8b7640cf56bf223491c3f40ce11",
+        "bytes": 3445,
+        "sha256": "b7fdd1e312fab4e63ae06d068ce8220a2c9f51df9a92a0863c741cc5c20c9565"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+        "path": "drizzle-orm/src/pg-core/utils.ts",
+        "blob": "b7547ad664d15435c33527c431bc470eec299d1f",
+        "bytes": 3536,
+        "sha256": "7737f4d765127b895887b1f38f0a1a5c64374f0dd31897fe1059d9fc7245e768"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+        "path": "drizzle-kit/src/serializer/utils.ts",
+        "blob": "18d5bb9ad88b271a3dfa112a6f2d8ed31fc585ac",
+        "bytes": 1374,
+        "sha256": "ad4f09f4b6628a06e56bde90aa2697ee608ce93fe76d245833dbafde5cef7b1d"
+      },
+      {
+        "repository": "drizzle-team/drizzle-orm",
+        "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+        "path": "drizzle-orm/src/pg-core/dialect.ts",
+        "blob": "bd9d6a5c9520f65033640b4433f16c0c56375a38",
+        "bytes": 45286,
+        "sha256": "939d5dd337e223f3a87b6912d0bc67e2510dd165109b1b957d790c8218747bd1"
+      }
+    ],
+    "evidence_limit": "Official tagged repository source refs with exact blobs/hashes. Installed archives had original SRI proof, but no per-file bundled kit/ORM serialization source export. Runtime bin.cjs stack independently confirms BigInt stringify failure; do not conflate tagged source with installed perfile hash."
+  },
+  "snapshot_comparison": [
+    {
+      "path": "openbot/server/drizzle/meta/0080_snapshot.json",
+      "blob": "de6a0b41c088c0bd46de019cb888575c95a07bb5",
+      "bytes": 299339,
+      "sha256": "0367f9b57ff86fd2dc420148f94ffea41e88c05b031bf240e6915c106dee88c5",
+      "id": "9830a73c-12c1-4c08-89a9-894184de1449",
+      "prevId": "1fa3d60b-41d7-4eb9-9f4b-fae4b93a1f18",
+      "columns": {
+        "public.approval_continuations": {
+          "table_absent": true
+        },
+        "public.approval_continuation_steps": {
+          "table_absent": true
+        },
+        "public.approval_direct_execution_domains": {
+          "table_absent": true
+        }
+      }
+    },
+    {
+      "path": "openbot/server/recovery/recovery-20261018-v1/meta/0107_snapshot.json",
+      "blob": "d3f5c2b6336cd53867d5b46feaebcc7049176c3c",
+      "bytes": 629001,
+      "sha256": "74f51de19c8e22f82f3497567b5c351864de484b8fc4f9b781b511c2b96ec747",
+      "id": "4a391a26-1651-46e0-a0a7-15a64289a6c3",
+      "prevId": "90530f50-0fa9-4dc2-9ced-7d718a08fe76",
+      "columns": {
+        "public.approval_continuations": {
+          "fence": {
+            "name": "fence",
+            "type": "bigint",
+            "primaryKey": false,
+            "notNull": true,
+            "default": 0
+          },
+          "admission_fence": {
+            "absent": true
+          }
+        },
+        "public.approval_continuation_steps": {
+          "fence": {
+            "name": "fence",
+            "type": "bigint",
+            "primaryKey": false,
+            "notNull": true,
+            "default": 0
+          },
+          "admission_fence": {
+            "absent": true
+          }
+        },
+        "public.approval_direct_execution_domains": {
+          "fence": {
+            "absent": true
+          },
+          "admission_fence": {
+            "name": "admission_fence",
+            "type": "bigint",
+            "primaryKey": false,
+            "notNull": true,
+            "default": 0
+          }
+        }
+      }
+    }
+  ],
+  "proposed_semantics": {
+    "implemented": false,
+    "proposal": "Only two .default(0n) to .default(sql`0`), retain modebigint/type/notNull/checks/RLS/permissions and all other fields",
+    "sql_already_imported": true,
+    "ORM_SQL_default_supported": true,
+    "sql_numeric_literal": "0",
+    "postgres_bigint_zero_semantics": "Constant numeric zero assigned to bigint column; type/range unchanged. This is static DDL/ORM reasoning, not PG17 execution proof.",
+    "snapshot_representation_warning": "SQL-expression serializer yields string '0'; recovery0107 fields are numeric0, original0080 tables absent. Generated diff may show representation/default differences; must inspect all actual SQL/snapshot/journal and both migration histories. Do not preedit snapshots or journal."
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "source_or_project_mutation_in_audit": false,
+  "next_action": "Non-author review any separately prepared oneSource seed schema revision before diagnostic overlay. Full <=8Source migration package and real generated fullDDL review still required; no source adoption."
+}
