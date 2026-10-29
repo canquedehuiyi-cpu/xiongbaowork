@@ -23,5 +23,22 @@
   },
   "authoritative_audit": "684c9253d5a9bb54d431bffe7a148d3dfbd1a466",
   "local_heartbeat": "Human-restored auxiliary communication only; no canonical/Source/resourcewriter and no cloud execution dependency",
-  "worker_identity_admin": "Separate existing context preparing metadata-only requestMeta diagnosis for human review; worker remains paused; no configuration changes by this coordinator"
+  "worker_identity_admin": "Separate existing context preparing metadata-only requestMeta diagnosis for human review; worker remains paused; no configuration changes by this coordinator",
+  "latest_reports": {
+    "WB": {
+      "id": "db60425c-dcdd-4628-879d-04429e550de0",
+      "at": "2026-10-29T14:53:44.812Z",
+      "claimed_six_files": "5Source+1admin audit; cloud independent revalidation assigned /root/route_review",
+      "source_evidence_unverified_by_coordinator_at_receipt": true,
+      "conflict": "M1 blanket no committed conflicts with A5/M3 complete positive readback; no permanent prohibition on recognition of actually committed full evidence"
+    },
+    "Qoder": {
+      "id": "44454acb-4694-4932-bed5-1f6ff9ae35df",
+      "at": "2026-10-29T14:59:32.872Z",
+      "Source_reads": 0,
+      "classification": "DESIGN_ONLY_NOT_INDEPENDENT_PASS",
+      "corrections": "K1/K4/K6/K8/K10/K14 retain behavior-basedclosedgate,necessaryreadonly,legitimatequeue,completecommitted,finalvsreceipt; no inventedrequiredconstant"
+    }
+  },
+  "current_coordinator_policy": "ACK unknown permits only appropriately authorized evidence recovery and existing lawful queue management; full persisted identity/result/disposition/legalstatus/final/requiredatomic audit+current realauthorization can establish committed according to actual protocol. NULL/invisible/equality/rowlock/callbackreject alone never physical end/lost/replay proof. No invented witness/receipt/audit."
 }

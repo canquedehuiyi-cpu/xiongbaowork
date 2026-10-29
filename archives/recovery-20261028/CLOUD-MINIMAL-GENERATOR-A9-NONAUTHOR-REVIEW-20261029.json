@@ -1,0 +1,189 @@
+{
+  "schema": "xiongbaowork-independent-a9-review-v1",
+  "reviewer": "/root/a6_review",
+  "review_kind": "NON_AUTHOR_READ_ONLY_STATIC_REVIEW",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+  "tree": "b1e97c65a6d75d046aa4d41b3d1987f7ede1a4ef",
+  "author": "/root/a7_prepare",
+  "verdict": "ADMIN_CANDIDATE_APPROVED_FOR_ONE_BOUNDED_PUSH_DISPATCH_ONLY",
+  "findings": [],
+  "reviewer_writes": false,
+  "execution": false,
+  "local_files": false,
+  "method": "Normal GitHub complete3files/independentUTF8SHA/embeddedSource asdata/recursivefulltrees, noAST/project",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-minimal-generator.yml",
+      "mode": "100644",
+      "blob": "e884199e0c76a5d75983a575f17e1f152755c440",
+      "bytes": 4017,
+      "sha256": "5585fd484741cd4d1de85c88fc400facd42b20423d7d36f686c573f63e167c42",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "mode": "100644",
+      "blob": "eaf4c2e9ba3c0004ac72e9107bac4fdfd962e019",
+      "bytes": 85866,
+      "sha256": "159d8497f122117372e2e522119846e3dfddae6790f00835a5eb90182557ca9d",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json",
+      "mode": "100644",
+      "blob": "7db45b01a86a032b19bf201ac7222673ba189f36",
+      "bytes": 35918,
+      "sha256": "1cdc957f7d3f1ff0012ec9aec2529412b0e1bdb4a40529db5eba525c80e77782",
+      "full_read": true
+    }
+  ],
+  "identities": {
+    "workflow_both_bytes": 85866,
+    "workflow_hash_matches_actual": true,
+    "plan_identities_match": true,
+    "embedded_core_match": true,
+    "head_skip": false
+  },
+  "scope": {
+    "base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+    "baseline_tree": "0877bb2bb252935d54e8f7d234c91c6703d600cf",
+    "truncated": false,
+    "A6_A9_changed3": true,
+    "A8_A9_changed_paths": [
+      ".github/workflows/cloud-minimal-generator.yml",
+      "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-CONTROLLER-20261029.py",
+      "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-PLAN-20261029.json"
+    ],
+    "all_other_path_blob_type_mode_equal": true,
+    "Source_changes": 0,
+    "SourceSCRIPT_equal_A8": true,
+    "KEYS_through_original_contract_equal_A8": true,
+    "generate_through_main_equal_A8": true,
+    "prep_changes": "Only new bincontract call+fixed helper+evidencelog"
+  },
+  "tsx_guard": {
+    "function": "verify_package_bin_metadata",
+    "line": 337,
+    "original_dictionary_path_preserved": true,
+    "exception_requires": [
+      "exactkeytsx",
+      "exactpin4.23.12",
+      "originalURL/SRI",
+      "actualname/version",
+      "raw1601+96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659",
+      "exactdict{tsx:dist/cli.mjs}",
+      "exactstr./dist/cli.mjs",
+      "exacttargetequality"
+    ],
+    "evidence_run": 40897218451,
+    "evidence_job": 123529510039,
+    "generic_otherpackage_string": false,
+    "other_version_target": false,
+    "package_lock_mutated": false,
+    "SRI_rawidentity_beforehelper": true,
+    "strictdeps_beforehelper": true,
+    "absentmarker_not_dependency": true
+  },
+  "bin_contract": {
+    "positive": 3,
+    "negative": 16,
+    "positive_cases": [
+      "ExactTSXstringfixture",
+      "OriginalTSXdict",
+      "Otherpackagedict"
+    ],
+    "negative_cases": [
+      "other_node",
+      "other_pin",
+      "other_url",
+      "other_sri",
+      "other_json_hash",
+      "other_json_size",
+      "different_package_name",
+      "different_package_version",
+      "lock_bin_name",
+      "lock_bin_path",
+      "lock_extra_entry",
+      "lock_bin_type",
+      "actual_type",
+      "actual_target",
+      "actual_raw_target_no_dot",
+      "actual_traversal_target"
+    ],
+    "called_before_download_DATA64": true,
+    "executed": false,
+    "fixture_not_authentication": true
+  },
+  "retained_controls": {
+    "original17nodes15edges": true,
+    "URL_SRI_strictdeps": true,
+    "ORMfixedguard2pos14neg": true,
+    "FULL50": true,
+    "Source2065fullmanifestbyteshashmodeFD": true,
+    "seed_overlay_not_adopted": true,
+    "no_learning_fabricated": true,
+    "no_recovery_stitch": true,
+    "private_cache_copyfile_nohooks_nolinks": true,
+    "all3native_nested_beforegenerator": true,
+    "export_before_structurefail": true,
+    "parent": 536870912,
+    "DATA": 67108864,
+    "swap": 0,
+    "oom_group": 1,
+    "root_admin_only": true,
+    "activation_repair_beforeirreversible_drop": true,
+    "kernel_gatechecks": true,
+    "prep480": true,
+    "generation120": true,
+    "export120": true,
+    "reserve8": true,
+    "late_refuse_RuntimeMaxreserve": true,
+    "idempotent_cgroupkill_boundedstop": true,
+    "final_always_limits_pop0": true
+  },
+  "workflow": {
+    "branch": "codex/cloud-minimal-generator-run-20261029-a9",
+    "event": "push",
+    "runner": "ubuntu-latest",
+    "contents": "read",
+    "jobs": 1,
+    "minutes": 15,
+    "concurrency": "source-recovery-bytes",
+    "cancel_in_progress": false
+  },
+  "dispatch": {
+    "exactSHA": "d074c1cd37056b0fd77db837455dd07f983f11e8",
+    "max": 1,
+    "requires": [
+      "savereport",
+      "validcurrentleasefreshhead",
+      "idlequeue",
+      "exactrefrundedup"
+    ],
+    "scope": "boundeddeps+offlinegeneratorattemptonly",
+    "not_proof": [
+      "actualbincontract",
+      "all17prepared",
+      "native",
+      "generator",
+      "fullmetadataDDL",
+      "Sourceadoption",
+      "PG/GUC/RLS/ACK/production"
+    ]
+  },
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  }
+}
