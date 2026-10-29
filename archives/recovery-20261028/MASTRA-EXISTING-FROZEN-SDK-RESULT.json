@@ -1,0 +1,173 @@
+{
+  "schema": "xiongbaowork-cloud-validation/1",
+  "status": "PASS_ORIGINAL34_WITH_EXISTING_FROZEN_SDK_HOISTED_LAYOUT_ONLY",
+  "run": 40804522200,
+  "job": 123220191536,
+  "source": {
+    "aggregate_memory_limit": 67108864,
+    "commercial_acceptance": "NOT_DELIVERED",
+    "fd_named_stability_verified": true,
+    "file_modes_verified": true,
+    "formal_baseline": "V57 with explicit source overlays",
+    "git_tree": "31a8944445fe82f3dd51a51989f30825ca976cdc",
+    "head": "9c970711b7e3b1cdc466fa3b4a9022a9cb70b84f",
+    "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+    "overlay_tickets": [
+      "AP-INPUT-BUN-20261028",
+      "AP-SCHEMA-RUNTIME-20261028",
+      "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+      "AUTOMATION-FK-ASSERTION-20261028",
+      "SECURITY-FK-ASSERTION-20261028",
+      "K106-CURRENT-PARENT-RUNTIME-20261028",
+      "PTX-CURRENT-PARENT-RECOVERY-20261028",
+      "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+      "SERVER-TYPE-CONTRACT-20261028",
+      "TASKS-ATTENTION-FIXTURE-20261028",
+      "TASKS-READ-LINK-FIXTURES-20261028",
+      "TASK-INFLIGHT-TYPE-GUARD-20261028",
+      "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+      "RECOVERY-PARSER-LINT-20261029",
+      "APPROVAL-GUARD-LINT-20261029",
+      "TEST-FIXTURE-LINT-20261029",
+      "RUNNER-PROBE-COMPATIBILITY-20261029",
+      "RUNNER-PROBE-LIFECYCLE-20261029",
+      "RUNNER-PROBE-PENDING-RESULT-20261029",
+      "RUNNER-PROBE-FRAME-REF-20261029",
+      "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+      "SERVER-CI-TEST-MANIFEST-20261029",
+      "WORKSPACE-RUNNER-ASSERTION-20261029",
+      "START-HEALTH-ORDER-ASSERTION-20261029"
+    ],
+    "postgres17": "PG_PENDING",
+    "project_tests": "NOT_RUN",
+    "project_upper_bound": 536870912,
+    "source_mismatches": 0,
+    "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+    "swap_limit": 0,
+    "verified_source_bytes": 50032071,
+    "verified_source_files": 2060,
+    "windows_source_files_written": 0
+  },
+  "install": {
+    "exit_code": 0,
+    "frozen_inputs_unchanged": true,
+    "lifecycle_scripts": "NOT_RUN",
+    "source_commit": "9c970711b7e3b1cdc466fa3b4a9022a9cb70b84f",
+    "install_memory_limit": 536870912,
+    "other_data_copy_limit": 67108864,
+    "backend": "copyfile",
+    "private_cache": true,
+    "dependency_audit": {
+      "status": "PASS",
+      "regular_files": 126881,
+      "symlinks": 71,
+      "hardlink_files": 0,
+      "outside_private_paths": 0
+    },
+    "full_ci": "NOT_RUN",
+    "original_preload_suite": "NOT_RUN",
+    "typecheck": "NOT_RUN",
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "sdk": [
+    {
+      "name": "@mastra/core",
+      "version": "1.64.0",
+      "bytes": 29296,
+      "sha256": "50878921107b5f4a460b94f245630de676f3a7543c51e34fd1f95f93098ad130",
+      "source": "Exact existing root frozen lock; hoisted layout only"
+    },
+    {
+      "name": "@ai-sdk/openai",
+      "version": "3.0.99",
+      "bytes": 2051,
+      "sha256": "578ca683c789fa9f8cf6855a414ffb0b3ca1d8b6791c7c39119de82fbde466e3",
+      "source": "Exact existing root frozen lock; hoisted layout only"
+    },
+    {
+      "name": "@ai-sdk/anthropic",
+      "version": "3.0.111",
+      "bytes": 2089,
+      "sha256": "75821c16fdaa2b18c0331be7ffe2e514e6693f0e60c87dc35c9d48ef48420e44",
+      "source": "Exact existing root frozen lock; hoisted layout only"
+    }
+  ],
+  "cli_metadata": {
+    "url": "https://registry.npmjs.org/mastra/latest",
+    "version": "1.36.0",
+    "dependencies": {
+      "execa": "^9.6.1",
+      "dotenv": "^17.4.2",
+      "semver": "^7.8.5",
+      "archiver": "^8.0.0",
+      "fs-extra": "^11.4.1",
+      "get-port": "^7.2.0",
+      "commander": "^14.0.3",
+      "local-pkg": "^1.2.1",
+      "picocolors": "^1.1.1",
+      "tinyglobby": "^0.2.17",
+      "@babel/types": "^8.0.8",
+      "posthog-node": "^5.57.1",
+      "@babel/parser": "^8.0.8",
+      "@expo/devcert": "^1.2.2",
+      "openapi-fetch": "^0.17.0",
+      "serve-handler": "^6.1.7",
+      "yocto-spinner": "^1.1.0",
+      "@clack/prompts": "^1.8.1",
+      "@mastra/loggers": "^1.3.10",
+      "@mastra/deployer": "^1.80.0",
+      "strip-json-comments": "^5.0.3"
+    },
+    "peerDependencies": {
+      "@mastra/core": ">=1.80.0-0 <2.0.0-0"
+    },
+    "engines": {
+      "node": ">=22.13.0"
+    },
+    "integrity": "sha512-mwmZT2KUgpjg+CVa0oAp/ehLiGnlZRHUYpza8m57stUyvqF69zhNDCt13SYrPZxcd7WOfCGix6ixcZNr4OqL+A==",
+    "metadata_bytes": 3825,
+    "metadata_sha256": "07f014b5248e5a0d1a93235f289e7c3d56b7617ae27206482a567c5006ac7231",
+    "installed": false
+  },
+  "component": {
+    "exit_code": 0,
+    "test_files": 1,
+    "completed_files": 1,
+    "results": [
+      {
+        "path": "agent-mastra/src/mastra/index.test.ts",
+        "exit_code": 0
+      }
+    ],
+    "scope": "Explicit named component files only with unchanged original repository preloads and full frozen dependencies",
+    "batch_timeout_seconds": 120,
+    "test_timeout_ms": 5000,
+    "original_repo_preload_suite": "EXPLICIT_NAMED_COMPONENT_FILES_ONLY",
+    "repo_preloads": "ORIGINAL_TWO_SCRIPTS_FROM_UNCHANGED_BUNFIG",
+    "postgres17": "PG_PENDING",
+    "producer_wiring": "NOT_VERIFIED",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "tests": {
+    "pass": 34,
+    "fail": 0,
+    "expects": 70,
+    "files": 1
+  },
+  "installation_layout": "Explicit --linker hoisted diagnostic, exact existing root lock unchanged",
+  "standalone_cli": "NOT_INSTALLED_NOT_LOCKED_DEPENDENCY_REPAIR_PENDING",
+  "cli_latest_incompatible_with_existing_core": true,
+  "provider_requests": "OWN_LOOPBACK_FAKE_ONLY_NO_PAID_CALLS",
+  "automatic_memory_peaks": [
+    "Memory peak: 64M (swap: 0B)",
+    "Memory peak: 63.9M (swap: 0B)",
+    "Memory peak: 512.5M (swap: 0B)",
+    "Memory peak: 11.2M (swap: 0B)",
+    "Memory peak: 436.5M (swap: 0B)"
+  ],
+  "postgres17": "PG_PENDING",
+  "strict_ci": "NOT_RUN",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "windows_source_writes": 0
+}

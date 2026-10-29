@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-current-delivery-gates/1",
-  "source_content_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
+  "source_content_commit": "840b4221bfd6f22c34e8e55ffef0115efd075d42",
   "source_files": 2060,
-  "source_bytes": 50032071,
-  "approved_source_repair_overlays": 24,
+  "source_bytes": 50033306,
+  "approved_source_repair_overlays": 25,
   "original_delivery_packages": 18,
   "original_stories": 77,
   "original_final_gates": 7,
@@ -404,7 +404,15 @@
         "case_fail": 0,
         "full_original_agent_bot_lock_unchanged": true
       },
-      "remaining_loader_role_writer_boundary_failure": 1
+      "remaining_loader_role_writer_boundary_failure": 0,
+      "loader_resolution": {
+        "run": 40804154815,
+        "job": 123218968503,
+        "adopted_commit": "840b4221bfd6f22c34e8e55ffef0115efd075d42",
+        "pass": 47,
+        "fail": 0,
+        "evidence": "Own loopback failure boundary only, not native PG"
+      }
     },
     "mock_agent": {
       "path": "archives/recovery-20261028/MOCK-AGENT-DECLARED-BOT-RESULT.json",
@@ -444,11 +452,26 @@
         "pass": 5,
         "fail": 0
       },
-      "remaining_mastra_import": "MISSING_FROZEN_STANDALONE_SDK_BASELINE",
+      "remaining_mastra_import": "RESOLVED_FOR_ORIGINAL34_BY_EXISTING_FROZEN_SDK_HOISTING; standalone frozen CLI repair pending",
       "r1_duplicate_step_id": {
         "run": 40792836035,
         "jobs": 0,
         "root_control_error_retained": true
+      },
+      "mastra_import_resolution": {
+        "path": "archives/recovery-20261028/MASTRA-EXISTING-FROZEN-SDK-RESULT.json",
+        "bytes": 5960,
+        "sha256": "cfb681763db51eb04b910d8268c498119e54a0cf650f4abeb3d51fffaf603afa",
+        "blob": "23d49bd26cede56a10c205732057a86851e8ae20",
+        "run": 40804522200,
+        "job": 123220191536,
+        "status": "PASS_ORIGINAL34_WITH_EXISTING_FROZEN_SDK_HOISTED_LAYOUT_ONLY",
+        "tests": {
+          "pass": 34,
+          "fail": 0,
+          "expects": 70,
+          "files": 1
+        }
       }
     },
     "desktop_telemetry_types": {
@@ -564,18 +587,17 @@
     },
     "test_file_ledger": {
       "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
-      "bytes": 394202,
-      "sha256": "31d497a423eabad7b2ed92beeecb639916bf05e61e232c7fcf91f8440f12ebc8",
-      "blob": "737768e1e31c073d7efc3be1492ffec49c3ae103",
+      "bytes": 395068,
+      "sha256": "75d2ca811cb0eeaa4ff459718b68148fbcdb1d428a130c3ee6884221ff579426",
+      "blob": "e8c11fd8baffcac520d015ca9bd0f55d8d2f8d10",
       "test_files": 610,
       "latest_named_or_historical_whole_app_evidence_paths": 469,
       "status_counts": {
-        "PASS_SCOPED_BATCH_ONLY": 463,
+        "PASS_SCOPED_BATCH_ONLY": 465,
         "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
         "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
-        "FAILED_SDK_IMPORT_NO_OWN_FROZEN_LOCK": 1,
         "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
-        "FAILED_SCOPED_BATCH": 3,
+        "FAILED_SCOPED_BATCH": 2,
         "NOT_RUN_REAL_VENDOR": 1
       },
       "whole_current_backend": "NOT_PASSED",
@@ -656,12 +678,54 @@
       "swap": 0,
       "timeout": 300,
       "paid_larger_runner": false
+    },
+    "source25_manifest": {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "bytes": 446107,
+      "sha256": "358a483447439f3561667dc12e4b7bc9b713d4190861d6bd3447dc5d32243be4",
+      "blob": "598c21687e312b425efb5ad2bd28d66581e1c133",
+      "source_files": 2060,
+      "source_bytes": 50033306,
+      "candidate_source_commit": "9d530418fdf5e6f964c89b0579461de924fb4ab9",
+      "source_validation_run": 40804154815
+    },
+    "production_loader_readiness": {
+      "path": "archives/recovery-20261028/PRODUCTION-LOADER-READINESS-CANDIDATE-VALIDATION.json",
+      "bytes": 4986,
+      "sha256": "4852c399be807ccb54178ef9361c7636a1176f30b276642a60484ed20a7f120a",
+      "blob": "a9d08f33634384cd1c6c0f2af02f98b2fe840cd3",
+      "run": 40804154815,
+      "job": 123218968503,
+      "adopted_commit": "840b4221bfd6f22c34e8e55ffef0115efd075d42",
+      "tests": {
+        "pass": 47,
+        "fail": 0,
+        "expects": 246
+      },
+      "independent_review": "SOURCE_APPROVED_ONLY",
+      "scope": "Own loopback refusal and missing-writer configuration only; PG17 not verified",
+      "prior_R1_failure_preserved": true
+    },
+    "mastra_existing_frozen_sdk": {
+      "path": "archives/recovery-20261028/MASTRA-EXISTING-FROZEN-SDK-RESULT.json",
+      "bytes": 5960,
+      "sha256": "cfb681763db51eb04b910d8268c498119e54a0cf650f4abeb3d51fffaf603afa",
+      "blob": "23d49bd26cede56a10c205732057a86851e8ae20",
+      "run": 40804522200,
+      "job": 123220191536,
+      "status": "PASS_ORIGINAL34_WITH_EXISTING_FROZEN_SDK_HOISTED_LAYOUT_ONLY",
+      "tests": {
+        "pass": 34,
+        "fail": 0,
+        "expects": 70,
+        "files": 1
+      }
     }
   },
   "remaining_gate_evidence": {
     "g1": "Node24.22.1/Vite7.3.6 frontend production bundle passedrun40801046219 within directly authorized4GiB/swap0/300s, completed28.27s, parent restored512MiB before64MiB inventory.465artifacts/18896525B with individual SHA256 retained asDATA manifest; Chinese product HTML/config/entry and no baked dev-port observations passed. Files existed in transient cloud runner; no bundleZIP uploaded. This is not final same-SHA formal image8GET evidence; native server/image endpoints NOT_RUN.",
     "g2": "Additional explicit7 offline runner-policy/route/refusal files passed163/0/437 at Source21, using in-memory fakes and own loopback server. Does not prove realPG tenant RLS/cross-tenant404 or full image endpoint authorization.",
-    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered. Latest additional frontend Node Vite production build passed40801046219 at4GiB and restored512MiB. Original Bun build command remains unpassed; tracked generated route-tree changed only in transient build and not adopted. No full test/tsc/strictCI rerun is claimed from this build.",
+    "g3": "Source24 complete2060 files/50032071B verified by latest cloud runs40796459661 and40796716582,0mismatch. Source23 workspace4/0 andSource24 startup12/0 independently reviewed/adopted, exact original lint passed. Additional protocol20files342pass2fail7skip: desktop import resolved later5/0+full desktop tsc0 under512MiB, Mastra import lacks frozen SDK baseline. Additional mocked desktop/server metadata/CI5files158/0 and cloud-owned HTTP3files18/0 passed. Historical app1611207/0,39components691/0,4original tsconfigs0 andlineage37/0 retained.13approval+1loader original failures retained. Current test-file ledger610paths distinguishes historical/scoped evidence and141not-run; no full current backend/strictCI pass. Original03df9efa baseline unavailable; PG_PENDING. Frontend bundler actual512MiB OOM;2GiBproposal unapproved and untriggered. Latest additional frontend Node Vite production build passed40801046219 at4GiB and restored512MiB. Original Bun build command remains unpassed; tracked generated route-tree changed only in transient build and not adopted. No full test/tsc/strictCI rerun is claimed from this build. Source25 loader fixture independently reviewed/adopted840b4221, complete2060/50033306B verified0mismatch,47related tests/0fail and unchanged pinned lint passrun40804154815. Mastra original34/0/70 passrun40804522200 with existing frozen rootSDK in hoisted layout; standalone exact-lock/CLI repair pending.13 original approval failures retained.",
     "g4": "WAKERFLOW_REAL_END_TO_END_AND_PRODUCER_WIRING_NOT_PROVED",
     "g5": "Cloud Linux Chrome own-loopback fixture35checks/26actions passed historicallyrun40746063116; original own HTTP control/download/reset3files18/0 now passedrun40796716582 under512MiB/swap0 without Chromium. Mocked desktop UI3files144/0 is HappyDOM/Tauri fakes. Real user device, durable offline reconnect queue, fresh approval producer/exact-input and human approval closure remain NOT_VERIFIED.",
     "g6": "NO_PAID_PROVIDER_CALLS_NO_REAL_BILLING_ACCEPTANCE",

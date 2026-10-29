@@ -1,3 +1,11 @@
+## 启动边界 Source25 已采用；Mastra SDK 原34项通过，2026-10-29
+
+Source25 独审通过后已采用为840b4221bfd6f22c34e8e55ffef0115efd075d42。完整2060 Source/50033306B在候选9d530418fdf5e6f964c89b0579461de924fb4ab9核合；run40804154815/job123218968503实际47pass/0fail/246expects，原Biome2.5.10 lint通过。2项 loader 测试使用独占 loopback TCP 拒绝/缺配置边界，不能证明PG17、writer角色或生产启动。R1 46pass/1fail与独审P2已保留。
+
+Mastra诊断run40804522200/job123220191536成功：原34项/0fail/70expects；现有root冻结锁core1.64.0、openai3.0.99、anthropic3.0.111在显式hoisted布局可用，6项package/lock不变，生命周期脚本未运行，copyfile私有缓存，无hardlink/越界link。测试仅自己loopback假provider。原import失败已被此限定证据纠正；独立agent的wildcard CLI仍无冻结锁，未宣称依赖修复完成。官方latestCLI1.36.0要求core>=1.80.0，不与现有core1.64.0混装。
+
+继续处理13项审批正向用例的fresh producer/provenance与exact-input/result持久编排及Mastra可重复安装。原77故事/18包/7门要求与状态逐字保留，25项Source修复覆盖数不代18交付包。ROOT_RELEASE=null、AP_DISABLED、NOT_SERVICE_WIRED、PG_PENDING、strictCI NOT_RUN、NOT_DELIVERED保持；无Windows源码落盘、付费请求、部署、默认分支变化或自动任务恢复。
+
 ## 前端生产构建已通过，2026-10-29｜保留原77/18/7及所有旧失败
 
 直接人类授权2GiB构建后，原Bun模式run40798601807/job123200989988在2GiB聚合门oom-kill；官方Bun --smol run40799381218/job123203539628也在2GiB门oom-kill。随后支持的Nodev24.22.1、V8oldspace1536MiB run40800266509/job123206411399发生真实V8heapOOM/child-6(SIGABRT)，wrapper250，非聚合OOM。这三轮均实际恢复512MiB后以64MiB进行Source/artifact DATA核验，原结果均保留；不把退出250当child250或测试断言失败。

@@ -1,17 +1,16 @@
 {
   "schema": "xiongbaowork-explicit-test-file-evidence-ledger/1",
-  "source_content_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
+  "source_content_commit": "840b4221bfd6f22c34e8e55ffef0115efd075d42",
   "source_files": 2060,
-  "source_bytes": 50032071,
+  "source_bytes": 50033306,
   "test_file_rule": "Current expected manifest paths ending .test or .spec with TS JS TSX JSX MJS CJS variants; this is file inventory, not original77-story acceptance count.",
   "test_file_count": 610,
   "status_counts": {
-    "PASS_SCOPED_BATCH_ONLY": 463,
+    "PASS_SCOPED_BATCH_ONLY": 465,
     "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
     "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
-    "FAILED_SDK_IMPORT_NO_OWN_FROZEN_LOCK": 1,
     "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
-    "FAILED_SCOPED_BATCH": 3,
+    "FAILED_SCOPED_BATCH": 2,
     "NOT_RUN_REAL_VENDOR": 1
   },
   "methodology": [
@@ -1039,22 +1038,38 @@
       "bytes": 16723,
       "sha256": "b1f6ebb01742c4a749a46df2935324c94b5ad8552d9ec8960add8b973035b78d",
       "mode": "0o644",
-      "status": "FAILED_SDK_IMPORT_NO_OWN_FROZEN_LOCK",
+      "status": "PASS_SCOPED_BATCH_ONLY",
       "latest_evidence": {
-        "run": 40793547635,
-        "job": 123184357410,
-        "kind": "protocol_fixture",
-        "exit_code": 1,
+        "run": 40804522200,
+        "job": 123220191536,
+        "kind": "existing_frozen_sdk_hoisted_diagnostic",
+        "exit_code": 0,
         "counts": {
-          "pass": 0,
-          "fail": 1,
-          "skip": 0,
-          "expects": 0
+          "pass": 34,
+          "fail": 0,
+          "expects": 70,
+          "files": 1
         },
-        "valid_pass": false,
-        "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS"
+        "valid_pass": true,
+        "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS",
+        "limitations": "NOT_INSTALLED_NOT_LOCKED_DEPENDENCY_REPAIR_PENDING"
       },
-      "prior_evidence": [],
+      "prior_evidence": [
+        {
+          "run": 40793547635,
+          "job": 123184357410,
+          "kind": "protocol_fixture",
+          "exit_code": 1,
+          "counts": {
+            "pass": 0,
+            "fail": 1,
+            "skip": 0,
+            "expects": 0
+          },
+          "valid_pass": false,
+          "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS"
+        }
+      ],
       "literal_inventory_flags": []
     },
     {
@@ -9089,25 +9104,40 @@
     },
     {
       "path": "openbot/server/tests/production-loader-boundary.test.ts",
-      "bytes": 3762,
-      "sha256": "63648300343a752f4800d2e85f05017512e6807335092bf549169a19c7f798b3",
+      "bytes": 4997,
+      "sha256": "1a9500d5c492842712e148d1f387521a54615d39fc33899147f1fc01c8089205",
       "mode": "0o644",
-      "status": "FAILED_SCOPED_BATCH",
+      "status": "PASS_SCOPED_BATCH_ONLY",
       "latest_evidence": {
-        "run": 40789730098,
-        "job": 123171654707,
-        "kind": "local_fixture",
-        "exit_code": 1,
+        "run": 40804154815,
+        "job": 123218968503,
+        "kind": "loader_readiness_own_loopback",
+        "exit_code": 0,
         "counts": {
-          "pass": 0,
-          "fail": 1,
-          "skip": 0,
-          "expects": 4
+          "pass": 2,
+          "fail": 0,
+          "skip": 0
         },
-        "valid_pass": false,
-        "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS"
+        "valid_pass": true,
+        "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_CASE_LINES",
+        "limitations": "47total includes26lifecycle+19readiness; no PG17 proof"
       },
-      "prior_evidence": [],
+      "prior_evidence": [
+        {
+          "run": 40789730098,
+          "job": 123171654707,
+          "kind": "local_fixture",
+          "exit_code": 1,
+          "counts": {
+            "pass": 0,
+            "fail": 1,
+            "skip": 0,
+            "expects": 4
+          },
+          "valid_pass": false,
+          "evidence_level": "EXPLICIT_FILE_WITH_ACTUAL_COUNTS"
+        }
+      ],
       "literal_inventory_flags": [
         "fixture_subprocess"
       ]
