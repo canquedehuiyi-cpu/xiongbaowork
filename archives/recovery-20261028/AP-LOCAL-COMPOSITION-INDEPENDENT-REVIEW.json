@@ -1,0 +1,53 @@
+{
+  "schema": "non-author-source-review-v1",
+  "ticket": "APPROVAL-LOCAL-COMPOSITION-20261029",
+  "reviewer": "/root/review_approval_input_readonly",
+  "reviewed_base": "6b123a5b99a1ecf7c4154f961a231cf4ecb21012",
+  "reviewed_candidate": "ada34a2cb51d2ccfcd88f66ce0112d5a4c14f18e",
+  "source_verdict": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 2224,
+        "sha256": "fea0eee18df6776b842e4156d081f904bfbe19eb822f3f0993b504276a66813e",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-recovery-port.test.ts",
+      "before": {
+        "bytes": 13015,
+        "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 19059,
+        "sha256": "1690b01daf482fce6a338bccc470f5e377c8f2f54ff24ce9c12928ac02380ffa",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "full_before_after_and_diff_read": true,
+  "source_blob_identity_to_validated_R2": true,
+  "source_git_blobs": [
+    {
+      "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+      "blob": "15fa55da767c787d8e5754bd653c1f03b145b21a"
+    },
+    {
+      "path": "openbot/server/tests/approval-recovery-port.test.ts",
+      "blob": "67afe489ad0a9f60de0a65cbb229365efc625a16"
+    }
+  ],
+  "boundaries": [
+    "cold composition only; no SQL/env/HTTP feature switch",
+    "existing plan/result/release/catalog/FORCE RLS/lease/fence/ticket gates preserved",
+    "object-reference inequality does not attest physical pool independence",
+    "review alone is not CPU/PG/production proof"
+  ]
+}

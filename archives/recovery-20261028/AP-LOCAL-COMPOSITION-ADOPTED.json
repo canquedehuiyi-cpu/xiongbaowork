@@ -1,0 +1,48 @@
+{
+  "schema": "xiongbaowork-approved-source-overlay-v1",
+  "ticket": "APPROVAL-LOCAL-COMPOSITION-20261029",
+  "formal_adoption": true,
+  "base_manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+  "parent_commit": "6b123a5b99a1ecf7c4154f961a231cf4ecb21012",
+  "changes": [
+    {
+      "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+      "before": {
+        "absent": true
+      },
+      "after": {
+        "bytes": 2224,
+        "sha256": "fea0eee18df6776b842e4156d081f904bfbe19eb822f3f0993b504276a66813e",
+        "mode": "0o644"
+      }
+    },
+    {
+      "path": "openbot/server/tests/approval-recovery-port.test.ts",
+      "before": {
+        "bytes": 13015,
+        "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
+        "mode": "0o644"
+      },
+      "after": {
+        "bytes": 19059,
+        "sha256": "1690b01daf482fce6a338bccc470f5e377c8f2f54ff24ce9c12928ac02380ffa",
+        "mode": "0o644"
+      }
+    }
+  ],
+  "source_only": true,
+  "postgres17": "PG_PENDING",
+  "production_wiring": "NOT_SERVICE_WIRED",
+  "commercial_acceptance": "NOT_DELIVERED",
+  "candidate_source_commit": "d139f73ad599c344184d3023a80beeeafa2e6297",
+  "independent_review": "archives/recovery-20261028/AP-LOCAL-COMPOSITION-INDEPENDENT-REVIEW.json",
+  "validation": "archives/recovery-20261028/AP-LOCAL-COMPOSITION-R2-VALIDATION.json",
+  "adoption_reason": "Internal dependency composition now refuses absent authority/release, shared pool and invalid lease/worker before constructing a lazy recovery port; dependency entry points are captured once. Production entrypoint remains unchanged.",
+  "source_content_adopted_unchanged": true,
+  "source_package_files": 2,
+  "source_file_count_after": 2065,
+  "source_bytes_after": 50175181,
+  "original77_stories_retained": true,
+  "original18_delivery_packages_retained": true,
+  "original7_gate_statuses_retained": true
+}

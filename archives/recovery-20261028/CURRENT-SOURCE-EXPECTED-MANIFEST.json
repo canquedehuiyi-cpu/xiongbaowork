@@ -1,7 +1,7 @@
 {
   "schema": "xiongbaowork-current-expected-source-manifest/1",
-  "source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
-  "basis": "Immutable V57 plus27 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
+  "source_commit": "d139f73ad599c344184d3023a80beeeafa2e6297",
+  "basis": "Immutable V57 plus28 independently approved exact Source repair overlays; original histories and PG_PENDING retained",
   "historical_v57_manifest": {
     "path": "archives/recovery-20261028/V57-MANIFEST.json",
     "bytes": 419227,
@@ -531,10 +531,30 @@
       "candidate_source_commit": "ece742d663044ec71d357ebedbf50dd719babb31",
       "source_content_adopted_unchanged": true,
       "run": 40821171620
+    },
+    {
+      "ticket": "APPROVAL-LOCAL-COMPOSITION-20261029",
+      "overlay": {
+        "path": "archives/recovery-20261028/AP-LOCAL-COMPOSITION-ADOPTED.json",
+        "bytes": 1941,
+        "sha256": "bdedeb90898afa8217c865e9a1221fb8455f900a3c2cad45759643a67b6d31e5",
+        "formal_adoption": true,
+        "ticket": "APPROVAL-LOCAL-COMPOSITION-20261029",
+        "source_paths": [
+          "openbot/server/src/approvals/local-recovery-composition.ts",
+          "openbot/server/tests/approval-recovery-port.test.ts"
+        ],
+        "source_new_paths": [
+          "openbot/server/src/approvals/local-recovery-composition.ts"
+        ]
+      },
+      "candidate_source_commit": "d139f73ad599c344184d3023a80beeeafa2e6297",
+      "source_content_adopted_unchanged": true,
+      "run": 40830714143
     }
   ],
-  "file_count": 2064,
-  "source_bytes": 50166913,
+  "file_count": 2065,
+  "source_bytes": 50175181,
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -10403,9 +10423,9 @@
     },
     {
       "path": "openbot/server/tests/approval-recovery-port.test.ts",
-      "bytes": 13015,
-      "sha256": "cb01e9a1368ee54bcecec016e7799591e82065e06f5448d0a1acaf2da9bbb9f3",
-      "blob": "59a2ac92fdc9ec9875c123e463df30c1d6b9348e",
+      "bytes": 19059,
+      "sha256": "1690b01daf482fce6a338bccc470f5e377c8f2f54ff24ce9c12928ac02380ffa",
+      "blob": "67afe489ad0a9f60de0a65cbb229365efc625a16",
       "mode": "0o644"
     },
     {
@@ -12979,6 +12999,13 @@
       "bytes": 9554,
       "sha256": "b3e728d5859083a16bbe7e3248d73ff22502072f20190b19a2d295dee7defa11",
       "mode": "0o644"
+    },
+    {
+      "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+      "bytes": 2224,
+      "sha256": "fea0eee18df6776b842e4156d081f904bfbe19eb822f3f0993b504276a66813e",
+      "mode": "0o644",
+      "blob": "15fa55da767c787d8e5754bd653c1f03b145b21a"
     }
   ],
   "physical_verification": {
@@ -12987,8 +13014,8 @@
     "fd_named_stability_verified": true,
     "file_modes_verified": true,
     "formal_baseline": "V57 with explicit source overlays",
-    "git_tree": "68f688116f4cc38ac572afd821a28b7be5b6d23c",
-    "head": "ece742d663044ec71d357ebedbf50dd719babb31",
+    "git_tree": "0faf16c15fee8e95285f57700a4bceb5dc23cb1a",
+    "head": "d139f73ad599c344184d3023a80beeeafa2e6297",
     "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
     "overlay_tickets": [
       "AP-INPUT-BUN-20261028",
@@ -13017,7 +13044,8 @@
       "START-HEALTH-ORDER-ASSERTION-20261029",
       "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
       "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
-      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029"
+      "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029",
+      "APPROVAL-LOCAL-COMPOSITION-20261029"
     ],
     "postgres17": "PG_PENDING",
     "project_tests": "NOT_RUN",
@@ -13025,9 +13053,11 @@
     "source_mismatches": 0,
     "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
     "swap_limit": 0,
-    "verified_source_bytes": 50166913,
-    "verified_source_files": 2064,
-    "windows_source_files_written": 0
+    "verified_source_bytes": 50175181,
+    "verified_source_files": 2065,
+    "windows_source_files_written": 0,
+    "run": 40830714143,
+    "job": 123304042601
   },
   "commercial_acceptance": "NOT_DELIVERED",
   "postgres17": "PG_PENDING",
@@ -13131,6 +13161,54 @@
       "swap_limit": 0,
       "verified_source_bytes": 50136290,
       "verified_source_files": 2061,
+      "windows_source_files_written": 0
+    },
+    {
+      "aggregate_memory_limit": 67108864,
+      "commercial_acceptance": "NOT_DELIVERED",
+      "fd_named_stability_verified": true,
+      "file_modes_verified": true,
+      "formal_baseline": "V57 with explicit source overlays",
+      "git_tree": "68f688116f4cc38ac572afd821a28b7be5b6d23c",
+      "head": "ece742d663044ec71d357ebedbf50dd719babb31",
+      "manifest_sha256": "81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920",
+      "overlay_tickets": [
+        "AP-INPUT-BUN-20261028",
+        "AP-SCHEMA-RUNTIME-20261028",
+        "KNOWLEDGE-RESOURCE-RUNTIME-20261028",
+        "AUTOMATION-FK-ASSERTION-20261028",
+        "SECURITY-FK-ASSERTION-20261028",
+        "K106-CURRENT-PARENT-RUNTIME-20261028",
+        "PTX-CURRENT-PARENT-RECOVERY-20261028",
+        "REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028",
+        "SERVER-TYPE-CONTRACT-20261028",
+        "TASKS-ATTENTION-FIXTURE-20261028",
+        "TASKS-READ-LINK-FIXTURES-20261028",
+        "TASK-INFLIGHT-TYPE-GUARD-20261028",
+        "RUNNER-CHROMIUM-TYPE-IMPORT-20261028",
+        "RECOVERY-PARSER-LINT-20261029",
+        "APPROVAL-GUARD-LINT-20261029",
+        "TEST-FIXTURE-LINT-20261029",
+        "RUNNER-PROBE-COMPATIBILITY-20261029",
+        "RUNNER-PROBE-LIFECYCLE-20261029",
+        "RUNNER-PROBE-PENDING-RESULT-20261029",
+        "RUNNER-PROBE-FRAME-REF-20261029",
+        "RUNNER-PROBE-SCROLL-OBSERVATION-20261029",
+        "SERVER-CI-TEST-MANIFEST-20261029",
+        "WORKSPACE-RUNNER-ASSERTION-20261029",
+        "START-HEALTH-ORDER-ASSERTION-20261029",
+        "PRODUCTION-LOADER-READINESS-FIXTURE-20261029",
+        "MASTRA-STANDALONE-FROZEN-COHORT-20261029",
+        "APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029"
+      ],
+      "postgres17": "PG_PENDING",
+      "project_tests": "NOT_RUN",
+      "project_upper_bound": 536870912,
+      "source_mismatches": 0,
+      "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+      "swap_limit": 0,
+      "verified_source_bytes": 50166913,
+      "verified_source_files": 2064,
       "windows_source_files_written": 0
     }
   ]
