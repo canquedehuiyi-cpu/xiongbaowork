@@ -1,0 +1,325 @@
+{
+  "schema": "xiongbaowork-a8-independent-execution-review-v1",
+  "reviewer": "/root/a6_review",
+  "review_kind": "NON_AUTHOR_READ_ONLY_ACTUAL_LOG_REVIEW",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "560f711ba995dc06d0eaa38955505670bbd964d4",
+  "run": 40895889335,
+  "job": 123524744262,
+  "run_attempt": 1,
+  "event": "push",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-10-29T14:52:48Z",
+  "updated_at": "2026-10-29T14:54:07Z",
+  "verdict": "JOB_FAILED_TSX_BIN_METADATA_TYPE_GUARD",
+  "decoded_job_log": {
+    "full_retrieved": true,
+    "characters": 73839,
+    "utf8_bytes": 73841,
+    "sha256": "121a72cb0351de8e2a1fcc62e01d3b06b01cbbfae90d7997651b7e801bca9a47",
+    "encoding_note": "Includes leading UTF8 BOM"
+  },
+  "bootstrap": {
+    "bytes": 81135,
+    "sha256": "c9e6abda737f18de427e1fbd1afd212fc1697d56d5c23afd8491f1d560651ada",
+    "identity_passed": true,
+    "baseline_guard_passed": true
+  },
+  "source": {
+    "exit": 0,
+    "batches": 74,
+    "files": 2065,
+    "bytes": 50175181,
+    "mismatches": 0,
+    "mode_and_FD_stability": true
+  },
+  "copy": {
+    "exit": 0,
+    "original_files": 2065,
+    "original_bytes": 50175181,
+    "private_files": 2065,
+    "private_bytes": 50177753,
+    "diagnostic_overlay": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+    "adopted": false,
+    "FULL50": true,
+    "helpers": [
+      "json.ts",
+      "tenant.ts"
+    ],
+    "original_drizzle_tables": 99,
+    "recovery_stitched": false,
+    "credentials": false,
+    "no_learning_fabricated": true
+  },
+  "dependency_stage": {
+    "exit": 1,
+    "synthetic_contract": {
+      "executed": true,
+      "positive": 2,
+      "negative": 14,
+      "synthetic_only": true,
+      "package_authentication": false
+    },
+    "SRI_verified": 17,
+    "metadata_validated": 17,
+    "prepared": 16,
+    "all17_originalURL_constrained_singlehop_SRI": true,
+    "ORM_fixed_guard": {
+      "passed": true,
+      "mode": "exact_orm0452_optional_prisma_representation",
+      "raw_bytes": 177277,
+      "raw_sha256": "9fd30ce718965c19178ac6936462b77017f1fffe56865124d0cfe55850de09ff",
+      "prepared": true,
+      "nohooks": true
+    },
+    "failed_package": {
+      "name": "tsx",
+      "version": "4.23.12",
+      "url": "https://registry.npmmirror.com/tsx/-/tsx-4.23.12.tgz",
+      "SRI": "sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==",
+      "archive_bytes": 187918,
+      "SRI_before_extract": true,
+      "name_version_pass": true,
+      "dependency_metadata": "strict_equal",
+      "package_json_bytes": 1601,
+      "package_json_sha256": "96aee9fd252d0cc31f3c01468250961f5b338c797bc208700d7db926450c7659",
+      "lock_bin": {
+        "tsx": "dist/cli.mjs"
+      },
+      "failure_function": "prepare_dependencies",
+      "failure_line": 361,
+      "assertion": "isinstance(expected_bin,dict) and isinstance(actual_bin,dict)",
+      "failure_type": "AssertionError",
+      "actual_bin_type": "NOT_LOGGED_UNKNOWN",
+      "actual_bin_value": "NOT_LOGGED_UNKNOWN",
+      "bin_target_equality_reached": false,
+      "prepared": false
+    },
+    "MINIMAL_DEPENDENCIES_READY": false
+  },
+  "resource_evidence": {
+    "UID": 1001,
+    "GID": 1001,
+    "all3services_direct_parent": "/xiongbaowork.slice",
+    "own_max": 67108864,
+    "parent_max": 536870912,
+    "swap": 0,
+    "own_parent_oom_group": 1,
+    "cleanup_once_each_stage": true,
+    "positive_remaining": true,
+    "systemd_peak_verbatim": {
+      "source": "Memory peak: 64M (swap: 0B)",
+      "copy": "Memory peak: 64M (swap: 0B)",
+      "deps": "Memory peak: 64.9M (swap: 0B)"
+    },
+    "peak_boundary": "Preserve actual64.9M; configured67108864 does not mean historicalpeak below nominal64MiB",
+    "final": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "always": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0
+    },
+    "controller_exit": 1
+  },
+  "actual_events": [
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-source.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "SOURCE_BATCH_MATERIALIZATION",
+      "value": {
+        "batches": 74,
+        "max_files": 32,
+        "max_source_bytes": 2097152,
+        "fsync_after_each_batch": true,
+        "memory_limit": 67108864
+      }
+    },
+    {
+      "event": "SOURCE_RECOVERY_RESULT",
+      "value": {
+        "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "aggregate_memory_limit": 67108864,
+        "candidate_administrative_base_sha": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+        "commercial_acceptance": "NOT_DELIVERED",
+        "fd_named_stability_verified": true,
+        "file_modes_verified": true,
+        "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+        "git_tree": "ca75a8955062a6c61cbfb462bf28e9785ddfc498",
+        "head": "560f711ba995dc06d0eaa38955505670bbd964d4",
+        "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+        "overlay_tickets": [],
+        "postgres17": "PG_PENDING",
+        "project_tests": "NOT_RUN",
+        "project_upper_bound": 536870912,
+        "source_mismatches": 0,
+        "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+        "swap_limit": 0,
+        "verified_source_bytes": 50175181,
+        "verified_source_files": 2065,
+        "windows_source_files_written": 0
+      }
+    },
+    {
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 436.287621371,
+        "exit": 0,
+        "stage": "source"
+      }
+    },
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-copy.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 430.252601875,
+        "exit": 0,
+        "stage": "copy"
+      }
+    },
+    {
+      "event": "SUBJECT_RUNNER_RESOURCE",
+      "value": {
+        "candidate_administrative_base": "f97260fa06af41ea8a5e7d94420de53eee99cb49",
+        "cgroup": "0::/xiongbaowork.slice/xb-min-deps.service",
+        "formal_adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "gid": 1001,
+        "overlay_formally_adopted": false,
+        "own": {
+          "memory.max": "67108864",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "parent": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "schema_overlay_ref": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332",
+        "schema_overlay_sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1",
+        "uid": 1001
+      }
+    },
+    {
+      "event": "METADATA_GUARD_CONTRACT_CHECKS",
+      "value": {
+        "actual_package_authentication": false,
+        "negative": 14,
+        "positive": 2,
+        "synthetic_only": true
+      }
+    },
+    {
+      "event": "STAGE_TERMINAL",
+      "value": {
+        "deadline_remaining": 410.089453926,
+        "exit": 1,
+        "stage": "deps"
+      }
+    },
+    {
+      "event": "PROJECT_LIMIT_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.oom.group": "1",
+          "memory.swap.max": "0"
+        },
+        "populated": "0"
+      }
+    },
+    {
+      "event": "GENERATOR_ALWAYS_RESTORED",
+      "value": {
+        "limits": {
+          "memory.max": "536870912",
+          "memory.swap.max": "0",
+          "memory.oom.group": "1"
+        },
+        "populated": "0",
+        "Source_adopted": false,
+        "ROOT_RELEASE": null,
+        "ready": false,
+        "PG": "PG_PENDING"
+      }
+    }
+  ],
+  "not_run": [
+    "ACTUAL_NODE",
+    "native_esbuild",
+    "nestedNodeResolution",
+    "DrizzleGenerator",
+    "OutputExport",
+    "migration",
+    "projecttests",
+    "PG17"
+  ],
+  "metadata": "NONE",
+  "generated_SQL_snapshot_journal": "NONE",
+  "formal_Source_adopted": false,
+  "preserved_gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "Source_adopted": false,
+    "paid_calls": 0,
+    "deployment": false,
+    "Windows_writes": 0,
+    "unattended_identity_verified": false
+  },
+  "next_action": "Single exact original lockedtsx4.23.12 metadata evidence only,include actualbin representation; do notguess/dropcheck/generalize/fullSource17rerun. Exact successor independent review before another justified execution."
+}
