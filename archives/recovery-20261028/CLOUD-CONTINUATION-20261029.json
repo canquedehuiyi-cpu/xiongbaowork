@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:24:21.409Z",
+  "checkpoint_update_at": "2026-10-29T16:28:24.918Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4036,7 +4036,7 @@
   },
   "cloud_route_systemd_compat": {
     "candidate": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
-    "status": "DISPATCHED_IN_PROGRESS_NOT_ACCEPTED",
+    "status": "TERMINAL_FAILURE_BOOTSTRAP_PARENT_GATE_RESTORE_UNKNOWN",
     "review_commit": "ac08d39f843de796ba7b62ac3330ac3381c9cee6",
     "review_path": "archives/recovery-20261028/CLOUD-ROUTE-SYSTEMD-COMPAT-NONAUTHOR-REVIEW-20261030.json",
     "review_blob": "a4472258e24ce0d4e6a92aa42ea374f4e6c25d1a",
@@ -4076,6 +4076,15 @@
       "preflight": "valid matching fresh lease/head; queued0/in_progress0; ref404/headruns0",
       "Source_adopted": false,
       "next_action": "Read same run/job only; no second route or A11 DATA resource job until terminal. Missing final physical witness FAILED_OR_UNKNOWN."
+    },
+    "result": {
+      "path": "archives/recovery-20261028/CLOUD-ROUTE-SYSTEMD-COMPAT-RESULT-20261030.json",
+      "run": 40911192453,
+      "job": 123579294835,
+      "status": "completed",
+      "conclusion": "failure",
+      "final_resource_restoration": "UNKNOWN_NOT_PROVEN",
+      "next_action": "Author minimal prebootstrap before/after actual parent observation; require512/swap0 before explicit oom1 repair/full readback, bounded early failure record. New exact a2 candidate and different nonauthor review; never retry835282 unchanged. Independent A11 DATA aggregate repair proceeds."
     }
   },
   "cloud_takeover_round2": {

@@ -1,0 +1,59 @@
+{
+  "schema": "route-systemd-compat-runtime-result/v1",
+  "at": "2026-10-29T16:28:24.918Z",
+  "candidate": "835282d3f1049b4b76a0e0e705813cc0d0f24b2e",
+  "run": 40911192453,
+  "job": 123579294835,
+  "status": "completed",
+  "conclusion": "failure",
+  "review_commit": "ac08d39f843de796ba7b62ac3330ac3381c9cee6",
+  "actual_log": {
+    "characters": 304958,
+    "sha256_utf8": "327f5358e7be8c5c3c958556baa4dd3672c9e7901bdcbc7c78cb53f8437ab136",
+    "full_log_read": true,
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40911192453/job/123579294835",
+    "markers": [
+      "2026-10-29T16:24:09.4199067Z ROUTE_PRELUDE_ACTIVATION_GATE {\"unit\": \"xb-route-40911192453-1-source.service\", \"cgroup\": \"0::/xiongbaowork.slice/xb-route-40911192453-1-source.service\", \"uid\": 1001, \"gid\": 1001, \"groups\": [], \"oom_score_adj\": 0, \"child\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"parent\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"subject_access_before_drop\": false}",
+      "2026-10-29T16:24:40.7068465Z SOURCE_RECOVERY_RESULT {\"aggregate_memory_limit\": 67108864, \"commercial_acceptance\": \"NOT_DELIVERED\", \"fd_named_stability_verified\": true, \"file_modes_verified\": true, \"formal_baseline\": \"V57 with explicit source overlays\", \"git_tree\": \"2191f5c0676ce2b03118c0fc543e0b83ad44dbf2\", \"head\": \"835282d3f1049b4b76a0e0e705813cc0d0f24b2e\", \"manifest_sha256\": \"81de447073617989a55883fbc9d07d02ac0f6de2f806c98f5702dd5bcdf7a920\", \"overlay_tickets\": [\"AP-INPUT-BUN-20261028\", \"AP-SCHEMA-RUNTIME-20261028\", \"KNOWLEDGE-RESOURCE-RUNTIME-20261028\", \"AUTOMATION-FK-ASSERTION-20261028\", \"SECURITY-FK-ASSERTION-20261028\", \"K106-CURRENT-PARENT-RUNTIME-20261028\", \"PTX-CURRENT-PARENT-RECOVERY-20261028\", \"REMAINING3-SNAPSHOT-RECONSTRUCTION-20261028\", \"SERVER-TYPE-CONTRACT-20261028\", \"TASKS-ATTENTION-FIXTURE-20261028\", \"TASKS-READ-LINK-FIXTURES-20261028\", \"TASK-INFLIGHT-TYPE-GUARD-20261028\", \"RUNNER-CHROMIUM-TYPE-IMPORT-20261028\", \"RECOVERY-PARSER-LINT-20261029\", \"APPROVAL-GUARD-LINT-20261029\", \"TEST-FIXTURE-LINT-20261029\", \"RUNNER-PROBE-COMPATIBILITY-20261029\", \"RUNNER-PROBE-LIFECYCLE-20261029\", \"RUNNER-PROBE-PENDING-RESULT-20261029\", \"RUNNER-PROBE-FRAME-REF-20261029\", \"RUNNER-PROBE-SCROLL-OBSERVATION-20261029\", \"SERVER-CI-TEST-MANIFEST-20261029\", \"WORKSPACE-RUNNER-ASSERTION-20261029\", \"START-HEALTH-ORDER-ASSERTION-20261029\", \"PRODUCTION-LOADER-READINESS-FIXTURE-20261029\", \"MASTRA-STANDALONE-FROZEN-COHORT-20261029\", \"APPROVAL-FRESH-PRODUCER-ORCHESTRATION-20261029\", \"APPROVAL-LOCAL-COMPOSITION-20261029\"], \"postgres17\": \"PG_PENDING\", \"project_tests\": \"NOT_RUN\", \"project_upper_bound\": 536870912, \"source_mismatches\": 0, \"status\": \"SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS\", \"swap_limit\": 0, \"verified_source_bytes\": 50175181, \"verified_source_files\": 2065, \"windows_source_files_written\": 0}",
+      "2026-10-29T16:24:40.7968012Z ROUTE_PRELUDE_ACTIVATION_GATE {\"unit\": \"xb-route-40911192453-1-runtime.service\", \"cgroup\": \"0::/xiongbaowork.slice/xb-route-40911192453-1-runtime.service\", \"uid\": 1001, \"gid\": 1001, \"groups\": [], \"oom_score_adj\": 0, \"child\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"parent\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"subject_access_before_drop\": false}",
+      "2026-10-29T16:24:41.8629399Z ROUTE_PRELUDE_ACTIVATION_GATE {\"unit\": \"xb-route-40911192453-1-install.service\", \"cgroup\": \"0::/xiongbaowork.slice/xb-route-40911192453-1-install.service\", \"uid\": 1001, \"gid\": 1001, \"groups\": [], \"oom_score_adj\": 0, \"child\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"parent\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"subject_access_before_drop\": false}",
+      "2026-10-29T16:26:50.8365937Z ROUTE_PRELUDE_ACTIVATION_GATE {\"unit\": \"xb-route-40911192453-1-prepare.service\", \"cgroup\": \"0::/xiongbaowork.slice/xb-route-40911192453-1-prepare.service\", \"uid\": 1001, \"gid\": 1001, \"groups\": [], \"oom_score_adj\": 0, \"child\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"parent\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"subject_access_before_drop\": false}",
+      "2026-10-29T16:26:51.2429852Z ROUTE_REPRO_INPUT_GATE {\"target\": \"835282d3f1049b4b76a0e0e705813cc0d0f24b2e\", \"source_content_commit\": \"668dd2238ff112bcff38ad2d0456dccd116874ed\", \"administrative_base\": \"5c7ef397598edec073cc491972376f75d326a8bb\", \"source_files\": 2065, \"source_bytes\": 50175181, \"before\": {\"mode\": \"0o644\", \"mode_bits\": 420, \"bytes\": 48763, \"dev\": \"2049\", \"ino\": \"8280510\", \"mtime_ns\": \"1793291059923192100\", \"ctime_ns\": \"1793291059923192100\", \"nlink\": 1, \"sha256\": \"d1b0932f010bf305cfee0ce030a40a21603ac3dc973672e31721f549cd672fae\", \"git_blob_sha1\": \"fb94519738b3d7eec42dab5e8c4e592232e4c5fd\"}, \"versions\": [{\"name\": \"@tanstack/router-plugin\", \"version\": \"1.168.35\", \"path\": \"openbot/node_modules/.bun/@tanstack+router-plugin@1.168.35+34674899c8769426/node_modules/@tanstack/router-plugin/package.json\"}, {\"name\": \"@tanstack/router-generator\", \"version\": \"1.167.33\", \"path\": \"openbot/node_modules/.bun/@tanstack+router-generator@1.167.33+759ce506b1ed1a42/node_modules/@tanstack/router-generator/package.json\"}, {\"name\": \"vite\", \"version\": \"7.3.6\", \"path\": \"openbot/node_modules/.bun/vite@7.3.6+1098ebf216ba9cde/node_modules/vite/package.json\"}], \"expected_manifest_sha256\": \"7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632\", \"control_helper_sha256\": \"1232c499068b810ff0c74d9d68dd09f6bf86edf6b041dc510b04e4b01798762f\", \"run_id\": \"40911192453\", \"run_attempt\": \"1\", \"source_adopted\": false}",
+      "2026-10-29T16:26:51.3271758Z ROUTE_PRELUDE_ACTIVATION_GATE {\"unit\": \"xb-route-40911192453-1-brand.service\", \"cgroup\": \"0::/xiongbaowork.slice/xb-route-40911192453-1-brand.service\", \"uid\": 1001, \"gid\": 1001, \"groups\": [], \"oom_score_adj\": 0, \"child\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"parent\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"subject_access_before_drop\": false}",
+      "2026-10-29T16:26:51.6587113Z ROUTE_PRELUDE_ACTIVATION_GATE {\"unit\": \"xb-route-40911192453-1-brand-capture.service\", \"cgroup\": \"0::/xiongbaowork.slice/xb-route-40911192453-1-brand-capture.service\", \"uid\": 1001, \"gid\": 1001, \"groups\": [], \"oom_score_adj\": 0, \"child\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"parent\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"subject_access_before_drop\": false}",
+      "2026-10-29T16:26:51.6971039Z ROUTE_REPRO_BRAND_INPUT {\"mode\": \"0o644\", \"mode_bits\": 420, \"bytes\": 280, \"dev\": \"2049\", \"ino\": \"8611023\", \"mtime_ns\": \"1793291211583285691\", \"ctime_ns\": \"1793291211583285691\", \"nlink\": 1, \"sha256\": \"f7bc82f5a8f06eac84efaf77e3a5f2ef7f166f03ec2c89b16f705ec893de7f9c\", \"git_blob_sha1\": \"56b7d14de699283448f80070a7313ecd8816b33b\"}",
+      "2026-10-29T16:26:51.9682751Z ROUTE_REPRO_ALWAYS_UNKNOWN {\"status\": \"FAILED_OR_UNKNOWN\", \"restore_proven\": false, \"error_type\": \"FileNotFoundError\", \"source_adopted\": false}"
+    ]
+  },
+  "actual_passed": [
+    "six actual prelude activation barriers: child/parent cap+swap0+oom1; irreversible uid/gid1001/groups[]/oomadj0",
+    "2065 Source files/50175181B/modes/FD-named stability",
+    "fixed runtime/input copy",
+    "frozen512MiB install",
+    "route before-input capture",
+    "brand config + brand DATA capture"
+  ],
+  "failure": {
+    "stage": "bootstrap before config.json creation and before original build A/B",
+    "line": 366,
+    "assertion": "limits(PARENT)==dict(zip(KEYS,[str(ORDINARY),\"0\",\"1\"]))",
+    "observed_fields": "NOT_LOGGED_UNKNOWN_WHICH_FIELD",
+    "always": "FAILED_OR_UNKNOWN, restore_proven=false, FileNotFoundError config.json",
+    "build_A": "NOT_RUN",
+    "build_B": "NOT_RUN",
+    "payload": "NONE"
+  },
+  "source_adopted": false,
+  "final_resource_restoration": "UNKNOWN_NOT_PROVEN",
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "next_action": "Author minimal prebootstrap before/after actual parent observation; require512/swap0 before explicit oom1 repair/full readback, bounded early failure record. New exact a2 candidate and different nonauthor review; never retry835282 unchanged. Independent A11 DATA aggregate repair proceeds."
+}
