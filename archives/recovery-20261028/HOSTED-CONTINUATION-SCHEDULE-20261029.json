@@ -74,7 +74,7 @@
     },
     "updated_at": "2026-10-29T08:17:27.423219+00:00"
   },
-  "run_status": "CONFIGURED_ENABLED_CLOUD_FIRST_REAL_RUN_NOT_YET_VERIFIED",
+  "run_status": "RECORDED_HOSTED_START_IN_PROGRESS_RESULT_PENDING",
   "planned_first_occurrence": {
     "from_saved_dtstart": "2026-10-29T08:19:26Z",
     "asia_singapore": "2026-10-29 16:19:26 +08:00",
@@ -137,5 +137,35 @@
       "expires_at": "2026-10-29T08:45:41.847Z",
       "lease_modified": false
     }
+  },
+  "first_real_run_observation": {
+    "source": "Native automations.peek, single fresh result recheck requested by Root",
+    "automation_id": "6ae30014bbac8191baa1a3497f062b7d",
+    "origin_conversation_id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+    "last_run_time": null,
+    "next_run_time": null,
+    "last_run": {
+      "id": "c4016dcf-263c-8328-bcd9-2a0d4cf4a836",
+      "recorded_status": "in_progress",
+      "scheduled_for": "2026-10-29T08:19:26Z",
+      "started_at": "2026-10-29T08:23:39.399216Z",
+      "completed_at": null,
+      "chat_ref": null
+    },
+    "latest_result": null,
+    "delivery_status": "unknown",
+    "verdict": "RECORDED_START_IN_PROGRESS_COMPLETION_UNVERIFIED",
+    "interpretation": "A real recorded run id and started_at are now available. in_progress does not establish current worker liveness, successful completion, GitHub project execution, or notification delivery. Top-level last_run_time remainsnull; use explicit run_details.",
+    "run_conversation_readback": "last_run.chat_ref=null and latest_result=null: no run-specific conversation/result pointer to follow. Top-level conversation_id identifies origin conversation; not treated as a completed run transcript.",
+    "registry_verified_before_peek": {
+      "runtime": "cloud",
+      "role": "task",
+      "controller": "Automation_a9042438d098819180d8686afa9cd66e",
+      "worker_enabled": true,
+      "controller_enabled": true
+    },
+    "page_instructions_hash": "fbcba02c5eb3184c5f2d0b09af723e222ce386ba5c10881dd18d09ef42ca06ae",
+    "actions_this_pass": "Read-only native/registry/Page/GitHub ref and queue verification plus exclusive administrative evidence writes; no plan changes, Source/canonical writes, leases acquired, resourceprobe, or projectjob. Latest direct instruction narrowed work to first-run administrative verification; honored.",
+    "next_action": "Retain current worker and main ownership. Future native recorded completion/result required before calling end-to-end continuation successful; no loop or artificial scheduler message."
   }
 }
