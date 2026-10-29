@@ -1,3 +1,4 @@
+import { createApprovalFixtureService } from "./helpers/approval-producer-model";
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import { createApprovalRoutes } from "../src/approvals/routes";
@@ -167,7 +168,7 @@ function storeFixture() {
 test("personal approval forwards the exact side effect once and continues its original AG-UI tool result after service restart", async () => {
   expect(typeof serviceModule.createApprovalService).toBe("function");
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toMatchObject({
     name: "HeadlessToolSuspension",
   });
@@ -177,7 +178,7 @@ test("personal approval forwards the exact side effect once and continues its or
     service.decide("intruder", row.id, "allow_once"),
   ).rejects.toThrow();
   await service.decide("owner", row.id, "allow_once");
-  const restarted = serviceModule.createApprovalService(store);
+  const restarted = createApprovalFixtureService(store);
   let effects = 0;
   const continued: unknown[] = [];
   const dependencies = {
@@ -202,7 +203,7 @@ test("personal approval forwards the exact side effect once and continues its or
 
 test("current authority and a changed resolved target defeat an earlier approval", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -240,7 +241,7 @@ test("current authority and a changed resolved target defeat an earlier approval
 
 test("always is scoped and revocable, while deny stays durable", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -273,7 +274,7 @@ test("always is scoped and revocable, while deny stays durable", async () => {
 
 test("computer policy runs before personal approval and simultaneous once requests forward only one real command", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   let forwards = 0;
   let denied = false;
   const gateway = createComputerGateway({
@@ -347,7 +348,7 @@ test("computer policy runs before personal approval and simultaneous once reques
 
 test("native host approval queues one operation, replays its saved result, and respects revoked grants", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   const broker = createHostAccessBroker(Date.now, {
     approvalGate: service.gate,
   });
@@ -401,7 +402,7 @@ test("native host approval queues one operation, replays its saved result, and r
 
 test("owner inbox exposes sanitized context and rejects another owner's decisions", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(
     service.gate({
       ...candidate,
@@ -448,7 +449,7 @@ test("owner inbox exposes sanitized context and rejects another owner's decision
 
 test("an approved action whose re-check refuses tells the Bot and continues the conversation", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -478,7 +479,7 @@ test("an approved action whose re-check refuses tells the Bot and continues the 
 
 test("an approved action whose target changed tells the Bot and continues the conversation", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -505,7 +506,7 @@ test("an approved action whose target changed tells the Bot and continues the co
 
 test("an always-allowed action whose rule was revoked before it ran tells the Bot and continues", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -566,7 +567,7 @@ test("an approval preview shows what will be typed, written or sent, and still h
 
 test("an approved action interrupted before its result was saved continues the conversation once, without repeating", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -601,7 +602,7 @@ test("an approved action interrupted before its result was saved continues the c
 
 test("an approved action the deployment no longer allows is not carried out, and is final", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -628,7 +629,7 @@ test("an approved action the deployment no longer allows is not carried out, and
 
 test("a permanent failure during the re-check is an answer for the Bot, not a retry", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -651,7 +652,7 @@ test("a permanent failure during the re-check is an answer for the Bot, not a re
 
 test("an approved action that ran out of tries tells the Bot once, across replicas", async () => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");
@@ -698,7 +699,7 @@ test.each([
   ],
 ])("%s is an answer for the Bot, not a retry", async (_name, failure) => {
   const store = storeFixture();
-  const service = serviceModule.createApprovalService(store);
+  const service = createApprovalFixtureService(store);
   await expect(service.gate(candidate)).rejects.toThrow();
   const [row] = await store.list("owner");
   if (!row) throw new Error("missing request");

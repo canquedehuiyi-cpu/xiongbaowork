@@ -1,3 +1,4 @@
+import { createApprovalFixtureService as createApprovalService } from "./helpers/approval-producer-model";
 import { describe, expect, test } from "bun:test";
 import {
   createCoordinationTools,
@@ -11,7 +12,6 @@ import {
   safetyRequirement,
 } from "../src/approvals/policy";
 import {
-  createApprovalService,
   HANDLED_BY_PERSON,
 } from "../src/approvals/service";
 import {
@@ -432,7 +432,7 @@ function memoryStore(options: {
       const existing = [...requests.values()].find(
         (row) => row.action.toolCallId === action.toolCallId,
       );
-      if (existing) return existing;
+      if (existing) return structuredClone(existing);
       const row: ApprovalRecord = {
         id: `request-${requests.size + 1}`,
         ownerUserId: action.actorId,
@@ -446,12 +446,20 @@ function memoryStore(options: {
         completedAt: null,
       };
       requests.set(row.id, row);
-      return row;
+      return structuredClone(row);
     },
-    get: async (_owner, id) => requests.get(id) as ApprovalRecord,
-    list: async () => [...requests.values()],
-    decide: async (_owner, id, decision) => {
-      const row = requests.get(id) as ApprovalRecord;
+    get: async (owner, id) => {
+      const row = requests.get(id);
+      if (!row || row.ownerUserId !== owner) throw new ApprovalRefusedError("Wrong owner");
+      return structuredClone(row);
+    },
+    list: async (owner) => [...requests.values()]
+      .filter((row) => row.ownerUserId === owner)
+      .map((row) => structuredClone(row)),
+    decide: async (owner, id, decision) => {
+      const row = requests.get(id);
+      if (!row || row.ownerUserId !== owner || row.status !== "pending")
+        throw new ApprovalRefusedError("Approval is unavailable");
       const handOff = row.action.policy?.behaviour === "hand_off";
       if (handOff && decision !== "handled" && decision !== "deny")
         throw new ApprovalRefusedError("handed to you");
@@ -459,11 +467,30 @@ function memoryStore(options: {
         decision,
         status: decision === "deny" ? "denied" : "approved",
       });
-      return row;
+      return structuredClone(row);
     },
-    consume: async () => true,
-    saveResult: async () => true,
-    finish: async () => undefined,
+    consume: async (owner, id, actionDigest) => {
+      const row = requests.get(id);
+      if (!row || row.ownerUserId !== owner || row.action.actionDigest !== actionDigest)
+        throw new ApprovalRefusedError("Wrong approval binding");
+      if (row.status !== "approved") return false;
+      row.status = "consumed";
+      row.consumedAt = new Date();
+      return true;
+    },
+    saveResult: async (owner, id, result) => {
+      const row = requests.get(id);
+      if (!row || row.ownerUserId !== owner) throw new ApprovalRefusedError("Wrong owner");
+      if (row.result) return false;
+      row.result = structuredClone(result);
+      return true;
+    },
+    finish: async (owner, id) => {
+      const row = requests.get(id);
+      if (!row || row.ownerUserId !== owner) throw new ApprovalRefusedError("Wrong owner");
+      row.status = "completed";
+      row.completedAt = new Date();
+    },
     rules: async () => options.rules ?? [],
     revoke: async () => undefined,
     policy: {
