@@ -221,7 +221,7 @@ export const approvalContinuations = pgTable(
     branchTargetId: text("branch_target_id").notNull(),
     origin: text("origin").$type<ContinuationRecord["origin"]>().notNull(),
     state: text("state").$type<ContinuationRecord["state"]>().notNull(),
-    fence: bigint("fence", { mode: "bigint" }).notNull().default(0n),
+    fence: bigint("fence", { mode: "bigint" }).notNull().default(sql`0`),
     claimOwner: text("claim_owner"),
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
     intentId: text("intent_id"),
@@ -280,7 +280,7 @@ export const approvalContinuationSteps = pgTable(
     state: text("state")
       .$type<"reserved" | "running" | "unknown" | "completed">()
       .notNull(),
-    fence: bigint("fence", { mode: "bigint" }).notNull().default(0n),
+    fence: bigint("fence", { mode: "bigint" }).notNull().default(sql`0`),
     receipt: jsonb("receipt").$type<ContinuationReceipt>(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
