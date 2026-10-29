@@ -1,0 +1,76 @@
+{
+  "schema": "xiongbaowork-cloud-resource-probe-independent-review/2",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "c2c199a6d1c740438433d3355c598bffbb5320a2",
+  "reviewed_file": {
+    "path": ".github/workflows/cloud-exec-probe.yml",
+    "blob": "8c79a7a97024910cfce00af7d26fe9fcf19923b5",
+    "bytes": 6419,
+    "sha256": "e27158135e5cb04095e8bd001e7683480eca1e5c1e2febf37f136c4b8f3a2fdd",
+    "full_read": true
+  },
+  "verdict": "ADMIN_RESOURCE_PROBE_A2_APPROVED_FOR_ROOT_SINGLE_DISPATCH_AFTER_VALID_LEASE",
+  "blocking_findings": [],
+  "findings": [],
+  "compared_to": {
+    "commit": "972136c289d9aef76f49f2fce19584191d448a02",
+    "files": 1,
+    "additions": 10,
+    "deletions": 5,
+    "exact_diff_read": true
+  },
+  "prior_real_failure": {
+    "run": 40839182119,
+    "job": 123331130080,
+    "independently_read_logs": true,
+    "status": "RESOURCE_ACCEPTANCE_FAILED",
+    "evidence": [
+      "Initial parent512MiB/swap0/oom.group1",
+      "Activated DATA service own gates passed; parent became512MiB/swap0/oom.group0, asserted refusal before descendant",
+      "Finally and always restored oom.group1 and populated0",
+      "No Subject acquisition/execution; no dependency install"
+    ],
+    "root_cause_scope": "Observed parent oom.group changed during service activation; systemd reapplication is consistent with timing, not traced write attribution.",
+    "history_retained": true,
+    "old_sha_not_retried": true
+  },
+  "reviewed_delta": [
+    "Push branch and exact-ref assertion both change only from run-a1 to run-a2; prep-a2 does not match trigger.",
+    "After service activation, probe root-admin records all parent gates, writes parent oom.group1, and rechecks complete parent512MiB/swap0/oom.group1 before descendant spawn.",
+    "DATA own64MiB/swap0/oom.group1 is checked before bootstrap.",
+    "Real spawned Python descendant independently reads own and parent gates, asserts64MiB/512MiB with swap0/oom.group1 and exact parent path, and returns JSON.",
+    "Caller requires exact descendant evidence equality including same cgroup, then rechecks all parent gates.",
+    "Log explicitly labels activation repair as probe-only admin work."
+  ],
+  "unchanged_checks": [
+    "Contents read; one ubuntu-latest job5minutes; global source-recovery-bytes concurrency cancel-in-progress false.",
+    "Repository/event checks, exclusive slice setup512MiB/swap0, actual oom.group1 writes/assertions.",
+    "DATA service64MiB/swap0/OOMPolicykill/KillModecontrol-group, RuntimeMax30s/start10s/stop5s inside outer60s; setup timeouts10s.",
+    "Finally and always restore and assert parent limits and populated0; owned cgroup.kill/stop bounded10s.",
+    "No Subject source/deps/secrets acquisition, Subject execution, paid provider, production/default/canonical modification."
+  ],
+  "dispatch_conditions": [
+    "Root owns sole scheduler and must establish valid human-required canonical/scheduler lease before dispatch.",
+    "Use exactly reviewed c2c199a6d1c740438433d3355c598bffbb5320a2 on unique run-a2 branch; do not rerun a1.",
+    "Confirm shared project queue idle and existing free allocation only.",
+    "Require actual CLOUD_PROBE_PARENT/DATA/SERVICE/FINAL/TERMINAL logs and successful job conclusion; static review is not execution proof.",
+    "Do not generalize this root-admin bootstrap into Subject or production workflow authority."
+  ],
+  "reviewer_actions": {
+    "project_executed": false,
+    "resource_job_started": false,
+    "execution_branch_created": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "postgres17": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}
