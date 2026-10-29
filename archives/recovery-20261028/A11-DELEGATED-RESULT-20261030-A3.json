@@ -1,0 +1,833 @@
+{
+  "schema": "a11-delegated-a3-runtime-result/v1",
+  "at": "2026-10-29T17:07:55.562Z",
+  "candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
+  "review_commit": "c60ae032234e468518b42de2f115fa078e6410cc",
+  "run": 40917993155,
+  "job": 123603242608,
+  "status": "completed",
+  "conclusion": "failure",
+  "dispatch_count": 1,
+  "branch": "codex/a11-data-verify-run-20261030-a3",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+  "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
+  "records": [
+    {
+      "type": "A11_DELEGATED_ALWAYS_ACTUAL_PRE_ASSERT",
+      "data": {
+        "actual": {
+          "admin": null,
+          "bootstrap": null,
+          "completed_monotonic": 82.751912583,
+          "legacy_project": {
+            "control_permissions": {
+              "cgroup.kill": {
+                "gid": 0,
+                "mode": "0o200",
+                "uid": 0
+              },
+              "cgroup.procs": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "cgroup.subtree_control": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "memory.max": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "memory.oom.group": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "memory.swap.max": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              }
+            },
+            "dev": "30",
+            "exists": true,
+            "gid": 0,
+            "ino": "6730",
+            "limits": {
+              "memory.max": "536870912",
+              "memory.oom.group": "0",
+              "memory.swap.max": "0"
+            },
+            "mode": "0o755",
+            "path": "/sys/fs/cgroup/xiongbaowork.slice",
+            "populated": "0",
+            "procs": [],
+            "uid": 0
+          },
+          "legacy_project_unit": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice",
+              "Delegate": "no",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "536870912",
+              "MemorySwapMax": "0",
+              "SubState": "active"
+            }
+          },
+          "legacy_shared": {
+            "control_permissions": {
+              "cgroup.kill": {
+                "gid": 0,
+                "mode": "0o200",
+                "uid": 0
+              },
+              "cgroup.procs": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "cgroup.subtree_control": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "memory.max": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "memory.oom.group": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              },
+              "memory.swap.max": {
+                "gid": 0,
+                "mode": "0o644",
+                "uid": 0
+              }
+            },
+            "dev": "30",
+            "exists": true,
+            "gid": 0,
+            "ino": "6792",
+            "limits": {
+              "memory.max": "67108864",
+              "memory.oom.group": "0",
+              "memory.swap.max": "0"
+            },
+            "mode": "0o755",
+            "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+            "populated": "0",
+            "procs": [],
+            "uid": 0
+          },
+          "legacy_shared_unit": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice",
+              "Delegate": "no",
+              "Job": "",
+              "LoadState": "loaded",
+              "MemoryMax": "67108864",
+              "MemorySwapMax": "0",
+              "SubState": "active"
+            }
+          },
+          "monotonic": 82.725448068,
+          "noop": null,
+          "root": null,
+          "target": null,
+          "unit": {
+            "exit": 0,
+            "properties": {
+              "ActiveState": "active",
+              "ControlGroup": "",
+              "ControlPID": "0",
+              "Delegate": "yes",
+              "ExecMainCode": "1",
+              "ExecMainStatus": "0",
+              "Job": "",
+              "LoadState": "loaded",
+              "MainPID": "0",
+              "MemoryMax": "67108864",
+              "MemorySwapMax": "0",
+              "RemainAfterExit": "yes",
+              "SubState": "exited"
+            }
+          }
+        },
+        "read_only_no_new_restore_budget": true,
+        "terminal": {
+          "after": {
+            "admin": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6994",
+              "limits": {
+                "memory.max": "16777216",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service/target/admin",
+              "populated": "1",
+              "procs": [
+                "2328"
+              ],
+              "uid": 0
+            },
+            "legacy_project": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6730",
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "0",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "legacy_shared": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6792",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "0",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "root": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6854",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "target": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6955",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service/target",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "unit": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "activating",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service",
+                "ControlPID": "0",
+                "Delegate": "yes",
+                "ExecMainCode": "0",
+                "ExecMainStatus": "0",
+                "Job": "1507",
+                "LoadState": "loaded",
+                "MainPID": "2328",
+                "MemoryMax": "67108864",
+                "MemorySwapMax": "0",
+                "RemainAfterExit": "yes",
+                "SubState": "start"
+              }
+            }
+          },
+          "before": {
+            "admin": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6994",
+              "limits": {
+                "memory.max": "16777216",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service/target/admin",
+              "populated": "1",
+              "procs": [
+                "2328"
+              ],
+              "uid": 0
+            },
+            "child": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "7033",
+              "limits": {
+                "memory.max": "50331648",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service/target/noop",
+              "populated": "0",
+              "procs": [],
+              "uid": 0
+            },
+            "legacy_project": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6730",
+              "limits": {
+                "memory.max": "536870912",
+                "memory.oom.group": "0",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "legacy_shared": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6792",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "0",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "root": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6854",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "root_gid": [
+              0,
+              0,
+              0
+            ],
+            "root_uid": [
+              0,
+              0,
+              0
+            ],
+            "target": {
+              "control_permissions": {
+                "cgroup.kill": {
+                  "gid": 0,
+                  "mode": "0o200",
+                  "uid": 0
+                },
+                "cgroup.procs": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "cgroup.subtree_control": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.oom.group": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                },
+                "memory.swap.max": {
+                  "gid": 0,
+                  "mode": "0o644",
+                  "uid": 0
+                }
+              },
+              "dev": "30",
+              "exists": true,
+              "gid": 0,
+              "ino": "6955",
+              "limits": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "mode": "0o755",
+              "path": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service/target",
+              "populated": "1",
+              "procs": [],
+              "uid": 0
+            },
+            "unit": {
+              "exit": 0,
+              "properties": {
+                "ActiveState": "activating",
+                "ControlGroup": "/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service",
+                "ControlPID": "0",
+                "Delegate": "yes",
+                "ExecMainCode": "0",
+                "ExecMainStatus": "0",
+                "Job": "1507",
+                "LoadState": "loaded",
+                "MainPID": "2328",
+                "MemoryMax": "67108864",
+                "MemorySwapMax": "0",
+                "RemainAfterExit": "yes",
+                "SubState": "start"
+              }
+            }
+          },
+          "delegation_verified": true,
+          "elapsed": 0.09545150499999977,
+          "error": null,
+          "inner": 202.535230979,
+          "legacy_gate": "PENDING_EXTERNAL_NOT_REPLACED",
+          "outer": 232.535230979,
+          "prior_raw_job": 123584189279,
+          "prior_raw_run": 40912579798,
+          "prototype_only": true,
+          "raw_validation_repeated": false,
+          "removed_empty_groups": [
+            "bootstrap",
+            "target/noop"
+          ],
+          "restore_proven": false,
+          "retained_for_empty_evidence": [
+            "target",
+            "target/admin"
+          ],
+          "root_cgroup": "/sys/fs/cgroup/xiongbaowork.slice/xiongbaowork-data.slice/xb-a11-delegated-40917993155-1.service",
+          "root_process_must_exit": true,
+          "source_adopted": false,
+          "started": 82.535230979,
+          "status": "DELEGATED_CONTROL_PREPARED_FOR_EXTERNAL_EMPTY_WITNESS"
+        },
+        "terminal_error": null
+      }
+    },
+    {
+      "type": "A11_DELEGATED_ALWAYS_TERMINAL",
+      "data": {
+        "legacy_checks": {
+          "project_limits": false,
+          "project_pop0": true,
+          "shared_limits": false,
+          "shared_pop0": true
+        },
+        "legacy_gate": "NOT_RESTORED_OR_UNKNOWN",
+        "overall": "FAILED_OR_UNKNOWN",
+        "prior_raw_job": 123584189279,
+        "prior_raw_run": 40912579798,
+        "prototype_checks": {
+          "admin_cap16": false,
+          "admin_pop0": false,
+          "bootstrap_removed": false,
+          "delegate": true,
+          "no_service_pid_or_job": true,
+          "noop_removed": false,
+          "remain_after_exit": true,
+          "root_cap64": false,
+          "same_original_budget": true,
+          "same_root_identity": false,
+          "same_target_identity": false,
+          "service_active_exited": true,
+          "service_success": true,
+          "target_cap64": false,
+          "target_pop0": false,
+          "terminal": true,
+          "whole_service_root_pop0": false
+        },
+        "prototype_is_project_migration_permission": false,
+        "prototype_status": "FAILED_OR_UNKNOWN",
+        "raw_validation_repeated": false,
+        "restore_proven": false,
+        "source_adopted": false
+      }
+    }
+  ],
+  "log": {
+    "characters": 20528,
+    "sha256_utf8": "20d02dd23464c2a3cafa43dfb4535b0d5ccddb993516432179401270d6eb5370",
+    "full_read": true,
+    "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40917993155/job/123603242608"
+  },
+  "actual_scoped_evidence": "Inside service actual Delegate/xattr verified, childexit0, root64/target64/admin16 swap0/oom1 and owned directory/control permissions checked, no admin error, elapsed0.095s. External unit active(exited), Delegateyes, RemainAfterExityes, MainPID0/ControlPID0/Jobempty/ExecMainStatus0.",
+  "missing_witness": "External unit ControlGroup was empty. Current witness only resolves cgroup from that property, so root/target/admin null means NOT_READ_PATH_UNRESOLVED, not proved absent/pruned/populated0.",
+  "legacy": "Original project512/shared64 max/swap correct, both oom.group0/populated0; legacy not restored.",
+  "overall": "FAILED_OR_UNKNOWN_NOT_ACCEPTED",
+  "source_adopted": false,
+  "project_migration_authorized": false,
+  "raw_validation_repeated": false,
+  "next_action": "Author minimal readonly witness successor validates recorded rootowned terminal root_cgroup against fixed exact run/parent path, probes that same prior path independently even if ControlGroup empty, records actual exists/devino/limits/pop0 before judging. New exact nonauthor review and purecontrol branch; never same a3 retry. Do not claim physical pruning or external impossibility from null fields."
+}

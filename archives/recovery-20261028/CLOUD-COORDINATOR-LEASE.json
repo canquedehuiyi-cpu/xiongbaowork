@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
   "epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
   "acquired_at": "2026-10-29T17:00:04.986Z",
-  "renewed_at": "2026-10-29T17:04:57.848Z",
+  "renewed_at": "2026-10-29T17:07:55.562Z",
   "expires_at": "2026-10-29T17:45:04.986Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-29T17:00:04.986Z"
   },
-  "next_action": "Single exact 8a08 delegated pureCONTROL prototype after fresh lease/idlequeue/ref/rundedup gates; no Subject/rawcodec/project migration.",
+  "next_action": "Author minimal readonly witness successor validates recorded rootowned terminal root_cgroup against fixed exact run/parent path, probes that same prior path independently even if ControlGroup empty, records actual exists/devino/limits/pop0 before judging. New exact nonauthor review and purecontrol branch; never same a3 retry. Do not claim physical pruning or external impossibility from null fields.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,9 +29,9 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40914666271,
-    "job": 123591585627,
-    "candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+    "run": 40917993155,
+    "job": 123603242608,
+    "candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
     "status": "completed",
     "conclusion": "failure"
   },

@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T17:04:57.848Z",
+  "checkpoint_update_at": "2026-10-29T17:07:55.562Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4375,7 +4375,7 @@
   },
   "cloud_a11_delegated_successor": {
     "candidate": "8a08616b03eeb3f8289efdebfb86afe701ab4fba",
-    "status": "NONAUTHOR_PURE_CONTROL_PROTOTYPE_APPROVED_NOT_RUN",
+    "status": "TERMINAL_FAILURE_EXTERNAL_CGROUP_METADATA_EMPTY_PRIOR_PATH_NOT_READ",
     "review_commit": "c60ae032234e468518b42de2f115fa078e6410cc",
     "review_path": "archives/recovery-20261028/A11-DELEGATED-8A08-NONAUTHOR-REVIEW-20261030.json",
     "review_blob": "84c1dac46195dd9b72eb46f86e5fc9c80704f489",
@@ -4410,7 +4410,15 @@
     ],
     "execution_branch": "codex/a11-data-verify-run-20261030-a3",
     "Source_adopted": false,
-    "legacy_gate_not_replaced": true
+    "legacy_gate_not_replaced": true,
+    "result": {
+      "path": "archives/recovery-20261028/A11-DELEGATED-RESULT-20261030-A3.json",
+      "run": 40917993155,
+      "job": 123603242608,
+      "conclusion": "failure",
+      "missing_witness": "External unit ControlGroup was empty. Current witness only resolves cgroup from that property, so root/target/admin null means NOT_READ_PATH_UNRESOLVED, not proved absent/pruned/populated0.",
+      "overall": "FAILED_OR_UNKNOWN_NOT_ACCEPTED"
+    }
   },
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
