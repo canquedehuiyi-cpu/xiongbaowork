@@ -1,0 +1,185 @@
+{
+  "schema": "xiongbaowork-remaining-protocol-test-plan/1",
+  "source_commit": "b85b7fce5fbd836efc0c9b291cb8e7f6c6b85ccc",
+  "selection": [
+    {
+      "path": "agent-bot/tests/history.test.ts",
+      "bytes": 11811,
+      "sha256": "efa8a55d5f14de9b375ecda0c3158805dd55a130e72f5d3d07ae50200909424e",
+      "flags": []
+    },
+    {
+      "path": "agent-langgraph/tests/deltas.test.ts",
+      "bytes": 2443,
+      "sha256": "7b0e463aa692f75941ab2680518016859b9798dbc6809f107795caeacec59d79",
+      "flags": []
+    },
+    {
+      "path": "agent-langgraph/tests/google-oauth-proxy.test.ts",
+      "bytes": 3873,
+      "sha256": "2f68e072e3af3c87331cf7642aedd4dd78388ee6953b14c67ae968962322189f",
+      "flags": []
+    },
+    {
+      "path": "agent-langgraph/tests/history.test.ts",
+      "bytes": 12712,
+      "sha256": "49bc729d9e5d5077dcca5841118edacbe2d32408b4ce2efaa3bf0aa5e7c2d364",
+      "flags": []
+    },
+    {
+      "path": "agent-langgraph/tests/model-options.test.ts",
+      "bytes": 1860,
+      "sha256": "9ba5b51b622fbd66ddb185633da9b22cb6c54fd7145298de44378146ce5d083c",
+      "flags": []
+    },
+    {
+      "path": "agent-langgraph/tests/stream.test.ts",
+      "bytes": 8373,
+      "sha256": "79c7c8cec55c8e017524874091611d4a13d573ea8b659558ef5342c718b85001",
+      "flags": []
+    },
+    {
+      "path": "agent-langgraph/tests/tool-answer.test.ts",
+      "bytes": 2403,
+      "sha256": "9c4d8c7d11e87af0cc4bb77694ac10989468664ba13e28a090d865e9875de19d",
+      "flags": []
+    },
+    {
+      "path": "desktop/scripts/desktop-version.test.ts",
+      "bytes": 6776,
+      "sha256": "d4edf58599a8d0551fb14458c5e48d4ce273e11723c90db4ec4340958775c996",
+      "flags": []
+    },
+    {
+      "path": "desktop/src/telemetry.test.ts",
+      "bytes": 2273,
+      "sha256": "94590b5ca230aee311bff12fce27593c8e65b5fd629794ed762c809b31120c8a",
+      "flags": []
+    },
+    {
+      "path": "supervisor/tests/authorisation.test.ts",
+      "bytes": 1121,
+      "sha256": "72fa4c8cb646709bf60eff74570db796e3ad3a28257a765fc1d97e351c6c389c",
+      "flags": []
+    },
+    {
+      "path": "supervisor/tests/computer-memory-bytes.test.ts",
+      "bytes": 1100,
+      "sha256": "9c239db15184b65318d6816d64987e232bba9eb9dd0c6c6ca7b7c466b2fb5c88",
+      "flags": []
+    },
+    {
+      "path": "supervisor/tests/environment-hardening.test.ts",
+      "bytes": 1411,
+      "sha256": "30be64af28c039b27926602cc44dd8bfa2ae2992f6fa85eaddba0367548c77be",
+      "flags": []
+    },
+    {
+      "path": "supervisor/tests/environment.test.ts",
+      "bytes": 802,
+      "sha256": "2a5e493704e7b49abf84d92f12f2bf5963feac21e5f618c347a38f519e77cc35",
+      "flags": []
+    },
+    {
+      "path": "supervisor/tests/listen-port.test.ts",
+      "bytes": 1211,
+      "sha256": "a5c908c4630486231d5bc727723a164140a4b0610654d319e3c59f625a6e7fcb",
+      "flags": []
+    },
+    {
+      "path": "supervisor/tests/names.test.ts",
+      "bytes": 3737,
+      "sha256": "3fc6b075f6c2817d5b6c0f142e4c73e98a9dc868757ad869309505d384d27fe5",
+      "flags": []
+    },
+    {
+      "path": "server/tests/composio-adapter.test.ts",
+      "bytes": 341453,
+      "sha256": "dc1866b773a4f88ae0fddefd047b9038f7e5e1c4b7067965df336fa764561e9f",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/profile-launch-options.test.ts",
+      "bytes": 2539,
+      "sha256": "c7f4c98b3e99dc9cce188f16adc133e441ef4223e30436749e6a9dc503b014d7",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/session-cookies.test.ts",
+      "bytes": 6118,
+      "sha256": "e02a4f97dacd3b1bc49158107e863d162d79f62021cf9d478a9bbe02af332b9a",
+      "flags": []
+    },
+    {
+      "path": "agent-computer/tests/sign-in.test.ts",
+      "bytes": 6866,
+      "sha256": "2d5d5c965fb04cc403b3e3f8defd8fca9dbb382890847404aa61514bd309d8cb",
+      "flags": []
+    },
+    {
+      "path": "agent-mastra/src/mastra/index.test.ts",
+      "bytes": 16723,
+      "sha256": "b1f6ebb01742c4a749a46df2935324c94b5ad8552d9ec8960add8b973035b78d",
+      "flags": []
+    }
+  ],
+  "standalone_full_frozen_inputs": {
+    "agent_langgraph": [
+      {
+        "relative": "bun.lock",
+        "identity": {
+          "path": "openbot/agent-langgraph/bun.lock",
+          "bytes": 9495,
+          "sha256": "6944d96feaea519eeab72e684eecb0790e9830d36b0bec4444cc5352594ae14f",
+          "mode": "0o644"
+        }
+      },
+      {
+        "relative": "package.json",
+        "identity": {
+          "path": "openbot/agent-langgraph/package.json",
+          "bytes": 462,
+          "sha256": "6ab00e35de8944063b7f72443d657cce6f28154005b040567d0e62699edd6a9d",
+          "mode": "0o644"
+        }
+      }
+    ],
+    "agent_computer": [
+      {
+        "relative": "bun.lock",
+        "identity": {
+          "path": "openbot/agent-computer/bun.lock",
+          "bytes": 14792,
+          "sha256": "4fcea0c095a3bbb7f97b7a50dc12fe607d3ac0cad9f978c452eb30df0d913fc1",
+          "mode": "0o644"
+        }
+      },
+      {
+        "relative": "package.json",
+        "identity": {
+          "path": "openbot/agent-computer/package.json",
+          "bytes": 376,
+          "sha256": "125178cc2bd920cd6b992c1356f03190fff6e9f8e264a7831dfc969c6117f3a2",
+          "mode": "0o644"
+        }
+      }
+    ]
+  },
+  "install_policy": "Full existing declared locks only, no new versions/lock changes, ignore all lifecycle scripts, private cache/copyfile; install512MiB and module copy64MiB; no browser downloads.",
+  "mastra_policy": "No own standalone lock exists, so no Mastra install or fresh resolution is attempted. Its unit module uses only SDKs already resolved in frozen root lock; production standalone Mastra deployment remains unverified.",
+  "composio_adapter_exception": "File's LIVE marker is explanatory text. fakeVendor defaults refuse, class prototypes restored, global fetch recorder rejects; telemetry and version checks disabled. Actual Composio live file not run.",
+  "mixed_browser_tests": "Run only original ungated parsing/cookie cases; no OPENBOT_COMPUTER_BROWSER/live flags set. Retain/report skips; never call these a real-browser pass.",
+  "scope": "Existing protocol, instruction/history, supervisor pure functions, own temporary Git desktop-version fixtures, metadata and offline adapter contracts. Not nativePG, real providers, actual user device, production image or complete77/18/7.",
+  "resources": {
+    "project_and_all_descendants": 536870912,
+    "swap": 0,
+    "data_copy": 67108864,
+    "install": 536870912,
+    "uses2GiB": false
+  },
+  "windows_source_writes": 0,
+  "source_changes": 0,
+  "paid_provider_calls": 0,
+  "postgres17": "PG_PENDING",
+  "commercial_acceptance": "NOT_DELIVERED"
+}
