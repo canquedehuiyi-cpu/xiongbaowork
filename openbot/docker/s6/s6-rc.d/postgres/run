@@ -7,7 +7,11 @@ set -eu
 if [ "${EMBEDDED_POSTGRES:-off}" != "on" ]; then
   exec /bin/true
 fi
-exec s6-setuidgid postgres /usr/lib/postgresql/16/bin/postgres \
-  -D /var/lib/postgresql/data \
+DATA=/var/lib/postgresql/data
+BIN=/usr/lib/postgresql/16/bin
+# Recheck immediately before starting PostgreSQL; this must not initialize a volume.
+/usr/local/bin/bun /etc/s6-overlay/scripts/postgres-volume-version-guard.ts "$DATA" "$BIN" start
+exec s6-setuidgid postgres "$BIN/postgres" \
+  -D "$DATA" \
   -c listen_addresses=127.0.0.1 \
   -c port=5432

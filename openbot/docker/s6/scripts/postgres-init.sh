@@ -16,6 +16,9 @@ PW_FILE=/var/lib/postgresql/pgpassword
 APP_PW_FILE=/var/lib/postgresql/pgpassword-app
 BIN=/usr/lib/postgresql/16/bin
 
+# Read-only refusal must precede mkdir, ownership, passwords and s6 URLs.
+/usr/local/bin/bun /etc/s6-overlay/scripts/postgres-volume-version-guard.ts "$DATA" "$BIN" init
+
 if [ ! -s "$DATA/PG_VERSION" ]; then
   # Created and owned here, as root, because this is the only step in a position to do it.
   #
