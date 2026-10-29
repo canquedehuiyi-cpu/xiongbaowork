@@ -1,0 +1,44 @@
+{
+  "schema": "xiongbaowork-minimal-generator-metadata-dispatch-review/1",
+  "reviewer": "/root/delivery_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "e4cdae0b32411e4592788222f0a2a6786cc7320c",
+  "parent": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
+  "tree": "2716f39bdebab52c82d971284d2e062a2473c5c8",
+  "parent_tree_same": true,
+  "evidence": "Independently fetched both normal GitHub git/commits objects and compare; ahead1/behind0/files[].",
+  "message": "Enable one independently reviewed minimal generator push dispatch",
+  "message_skip_directives": false,
+  "workflow_blob": "546ba32d41c7a585e6534fca82532228ac37e201",
+  "observed_run_ref": "1469b2305c7135ce8f77e318dac9f2bf00757df7",
+  "verdict": "METADATA_ONLY_DISPATCH_FIX_APPROVED_FOR_ROOT_SINGLE_FAST_FORWARD_AFTER_LEASE_AND_IDLE",
+  "findings": [],
+  "inherited_code_review": {
+    "commit": "fa8e0ec601f72848cced073a8b13df1a28ee3c44",
+    "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A3-ROOT-REVIEW-20261029.json",
+    "entire_git_tree_identical": true
+  },
+  "conditions": [
+    "Root only; valid latest canonical owner/run/epoch lease and idle project queue rechecked immediately before mutation.",
+    "Use normal github_update_ref for codex/cloud-minimal-generator-run-20261029-a3, expected_sha1469b2305c7135ce8f77e318dac9f2bf00757df7, sha e4cdae0b32411e4592788222f0a2a6786cc7320c, forcefalse.",
+    "Exactly one fast-forward update; no repeated same-SHA attempt and no code/resource gate changes.",
+    "A normal supported ref push is a scheduling attempt only. Confirm actual GitHub Actions run/head/trigger/job logs before claiming execution.",
+    "Preserve original1469 skip-ci/no-run history; no rerun of old install chain; generated outputs still require full migration review and separate adoption."
+  ],
+  "reviewer_actions": {
+    "dispatch": false,
+    "execution_branch_updated": false,
+    "project_executed": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}
