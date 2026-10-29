@@ -343,7 +343,36 @@
     "local_executor_calls": 0,
     "windows_browser_cli": 0,
     "hidden_http": 0,
-    "paid_api_provider": 0
+    "paid_api_provider": 0,
+    "page_latest_status_guarded_edits": 1,
+    "native_ai_edits": 0
   },
-  "route_author_draft_preserved": "092e47957ce1608e37cc40a116162c90255c7555 unchanged; this identity task does not review or approve it."
+  "route_author_draft_preserved": "092e47957ce1608e37cc40a116162c90255c7555 unchanged; this identity task does not review or approve it.",
+  "verification_after_administrative_page_update": {
+    "evidence_pre_edit_commit": "07d9309c9f75fafbfc09923798bf2a9f2c62107c",
+    "page_id": "page_7812bfd830a08191ab1fb84da54f173f",
+    "page_update": {
+      "sequence": 16,
+      "target_block_id": "53d587d7-af3c-4543-8798-9a4c25c05c00",
+      "before_hash": "5ac370548d2bbcc2fca84107aef2583390fdc0aa15e8c0d38adc1681d7d23778",
+      "after_hash": "7d2de38dbb231a672d803e0f63dd484794ebd8494fd284457732fbd151a876f6",
+      "complete_status_readback_equal": true,
+      "other_blocks_unchanged": true,
+      "native_agent_instructions_unchanged": true,
+      "native_ai_hash": "12ccb5f32f9d57a1360b1747b648b5d9fcc6c7661444356c9ae3e35a2cc241e5"
+    },
+    "registry": {
+      "worker_id": "6ae30014bbac8191baa1a3497f062b7d",
+      "worker_paused": true,
+      "status": "paused",
+      "runtime": "cloud",
+      "worker_configuration_equal": true,
+      "controller_id": "Automation_a9042438d098819180d8686afa9cd66e",
+      "controller_enabled": true,
+      "attached_workers": 1,
+      "enabled_workers": 0
+    },
+    "worker_prompt_schedule_timezone_and_id": "Exact canonical registry configuration equality before versus after; no worker peek repeated, no update/enable/create/run call.",
+    "source_scope": "GitHub comparison shows one new administrative report only; no canonical/lease/Source/route/generator write."
+  }
 }
