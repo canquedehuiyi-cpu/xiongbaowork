@@ -1,0 +1,76 @@
+{
+  "schema": "xiongbaowork-lock-redirect-independent-review/1",
+  "reviewer": "/root/delivery_review",
+  "author": "/root/persistence_review",
+  "non_author": true,
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewed_commit": "b739cbd47eaeb5f73717c80d4816239d25933d6d",
+  "tree": "4e49b0978aa946b873581f2182bf20eaa788b3cb",
+  "parent": "fe4c838c302dd5899c8ae63e8d41b8b957fc77c2",
+  "verdict": "CHANGES_REQUIRED_DO_NOT_DISPATCH",
+  "files": [
+    {
+      "path": ".github/workflows/cloud-lock-redirect.yml",
+      "blob": "1169adcf87300310e5d5129253f565c53216c32d",
+      "bytes": 3895,
+      "sha256": "7d40c7027409329313fd0f73ff4362a3603de04c1e8dafc9b415750dc21213e9",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py",
+      "blob": "7eafb59db871e0aac8a2b4b76e6dd1671647879f",
+      "bytes": 14337,
+      "sha256": "51c08349b35eafaf27c7d4d1419356ff7684b4ffbbf598e92955a58f16f1610f",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-PLAN-20261029.json",
+      "blob": "4bdb42dc5d675a2348a9474f46c9416b5a6d3c43",
+      "bytes": 4139,
+      "sha256": "5a10ca4ed8fcae30f578d5f26551266956ae05cb7fc627d9c1fc60f1f7115441",
+      "full_read": true
+    }
+  ],
+  "embedded_probe_fully_decoded_and_read": true,
+  "embedded_plan_matches_standalone": true,
+  "findings": [
+    {
+      "id": "HEADER-A1-P2-RESOURCE-KEY-SHADOW",
+      "severity": "blocking",
+      "path": "archives/recovery-20261028/CLOUD-LOCK-REDIRECT-CONTROLLER-20261029.py",
+      "location": "Decoded PROBE Location query branch and finally resource gate",
+      "problem": "Resource names tuple keys is overwritten by keys=[] and keys.append(querykey) when Location has query or fragment. Finally then iterates query keys as cgroup filenames instead of memory.max/memory.swap.max/memory.oom.group. Normal query-bearing redirect causes false resource failure; query keys containing separators could cause unintended local-path reads, contrary to the narrow header/resource-only boundary.",
+      "requested_fix": "Rename only query-key accumulator and its references to query_keys. Preserve immutable resource tuple keys; do not broaden URL/redirect/request/deadline/resource scope. Re-review exact changed3-file identities before dispatch."
+    }
+  ],
+  "positive_checks": [
+    "Normal GitHub gitcommit confirms exact parent/tree and message withoutskip; compare exactly3 administrative additions.",
+    "One original locked brocli HTTPS URL, single explicit opener.open GET, NoRedirect override returnsNone, no response.read or archive writes/followed Location request.",
+    "Response URL required identical to original;30x HTTPError is header evidence, never downloadsuccess.",
+    "Location length<=2048/control/userinfo/nonHTTPS checks; queryvalues and fragment value not logged; bounded selected headers; unsafe values only hashed.",
+    "Probe rootadmin service activation checks DATA64 and parent512/swap0/oomgroup1 then clears groups and irreversibly drops runnerUID/GID before HTTP or descendant.",
+    "Actual derived Python descendant independently checks cgroup and parent/data gates; clean env noGitHubToken/DATABASE_URL.",
+    "Service40s absolute deadline,8s cleanup reserve,HTTPtimeout<=10s; directowned cgroupkill/boundedstop/clientreap; finalremaining>=0 and always512/swap0/group1/populated0.",
+    "Unique run-a1 filter, prepnonmatching, contentsread, oneubuntu5min,globalsource-recovery-bytes/cancelfalse.",
+    "No Subject checkout/acquisition/execution, dependency install,archivebodyread/save,alternate endpointaccess,identitychange or paidprovider."
+  ],
+  "scope_limits": [
+    "Static review, no network probe executed by reviewer.",
+    "First-hop status/Location evidence cannot authorize unknown endpoint download or prove SRI/package metadata/17closure/generator success.",
+    "OriginalA4 failure history and metadataNONE/generatorNOTRUN retained."
+  ],
+  "reviewer_actions": {
+    "dispatch": false,
+    "executed": false,
+    "canonical_written": false
+  },
+  "retained_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial_acceptance": "NOT_DELIVERED"
+  }
+}
