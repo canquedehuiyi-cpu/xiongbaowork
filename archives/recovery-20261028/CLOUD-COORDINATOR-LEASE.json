@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
-  "run_id": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
-  "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
-  "acquired_at": "2026-10-29T16:10:49.878Z",
-  "renewed_at": "2026-10-29T16:14:13.867Z",
-  "expires_at": "2026-10-29T16:14:13.867Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+  "run_id": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
+  "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
+  "acquired_at": "2026-10-29T16:19:08.289Z",
+  "renewed_at": "2026-10-29T16:19:08.289Z",
+  "expires_at": "2026-10-29T17:04:08.289Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "1dfa34ab734ae362b6a9505ae7cef03bd7ce2083",
+  "expected_parent": "c48d77d85386ffac616e016f50c5fac0e2b8416e",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T16:10:49.878Z"
+    "observed_at": "2026-10-29T16:19:08.289Z"
   },
-  "next_action": "Route administrative systemd compatibility successor plus independent review; separately prepare reviewed DATA-only offline gzip verification without rerunning generator. No Source adoption.",
+  "next_action": "Two isolated authors prepare route compatibility and offline A11 DATA candidates; distinct nonauthors review exact full files. Only this leaseowner may dispatch serially after fresh gates.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -45,6 +45,16 @@
     "expires_at": "2026-10-29T15:57:44.644Z",
     "takeover_basis": "Explicit human reassignment; old epoch UTC expired; actual queued/in_progress both zero"
   },
-  "predecessor_epoch": "2026-10-29T15:12:44.644Z:human-a10-bounded-generator",
-  "released_at": "2026-10-29T16:14:13.867Z"
+  "predecessor_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+  "released_at": "2026-10-29T16:14:13.867Z",
+  "owner_label_correction": {
+    "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+    "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+    "error": "Previous administrative owner label incorrectly used old worker origin conversation ID. It was not the actual delegated executor identity.",
+    "actual_executor_id": "01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable",
+    "human_cloud_conversation": "6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9",
+    "authority": "Explicit Root human delegation; identifiers are assignment records, not independently observed hosted caller proof.",
+    "historical_epoch_preserved": true,
+    "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
+  }
 }
