@@ -505,7 +505,7 @@
     },
     "local_heartbeat": "PAUSED_NO_DEPENDENCY",
     "lease_expires_at": "2026-10-29T09:42:06.433Z",
-    "next_action": "Read existing A5 run40850003450/job123366832250 terminal/logs only; no duplicate dispatch. If lease expires, read-only until idle then lawful successor CAS. Separate SRI/metadata/native/generator/output and restore proof.",
+    "next_action": "No unchanged A5/full17 rerun and no skip/weakening peer check. Prepare/review one exact ORM0.45.2 archive SRI-authenticated metadata-only DATA64 job; compare actual public declaration fields with original lock, no install/native/Source/otherpackage requests. Unknown actual values must remain unknown until that evidence.",
     "lease_state": "held",
     "released_at": "2026-10-29T08:46:28.635Z"
   },
@@ -572,15 +572,7 @@
     "previous_owner": "cloud-root:01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
     "previous_epoch": "2026-10-29T08:04:59.948Z:972136c2",
     "lease_state": "held",
-    "active_job": {
-      "run": 40850003450,
-      "job": 123366832250,
-      "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
-      "status": "in_progress",
-      "observed_at": "2026-10-29T09:30:46.487Z",
-      "execution_branch": "codex/cloud-minimal-generator-run-20261029-a5",
-      "repeat_prohibited": true
-    },
+    "active_job": null,
     "next_candidate": {
       "sha": "c6f51d2673e608895ab826ed7437dbef9dab0340",
       "tree": "6fa46f38df9e67146fe620fdf17398fb13189af1",
@@ -628,12 +620,9 @@
     "next_action": "Read existing A5 run40850003450/job123366832250 terminal/logs only; no duplicate dispatch. If lease expires, read-only until idle then lawful successor CAS. Separate SRI/metadata/native/generator/output and restore proof.",
     "epoch": "2026-10-29T08:57:06.433Z:c6f51d26",
     "preparation": {
-      "status": "A5_ACTUAL_RUNNING",
-      "candidate": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
-      "review": {
-        "commit": "fee0103221c10d73950f3e24f86a2d135a74157e",
-        "blob": "693fc7d22a35ac7114317e91be9a3182630c40a7"
-      }
+      "agent": "/root/persistence_review",
+      "status": "SINGLE_ORM_METADATA_EVIDENCE_PREPARING_UNREVIEWED_NOT_RUN",
+      "branch": "codex/cloud-orm-metadata-prep-20261029-a1"
     }
   },
   "restart_ack_audit": {
@@ -1550,7 +1539,7 @@
     "run": 40850003450,
     "job": 123366832250,
     "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
-    "status": "in_progress",
+    "status": "COMPLETED_FAILURE_ORM_PEER_METADATA_CHECK",
     "observed_at": "2026-10-29T09:30:46.487Z",
     "execution_branch": "codex/cloud-minimal-generator-run-20261029-a5",
     "repeat_prohibited": true,
@@ -1560,5 +1549,1001 @@
       "blob": "693fc7d22a35ac7114317e91be9a3182630c40a7"
     },
     "source_adopted": false
+  },
+  "cloud_generator_a5_result": {
+    "schema": "xiongbaowork-generator-a5-actual-result-v1",
+    "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+    "run": 40850003450,
+    "job": 123366832250,
+    "status": "completed",
+    "conclusion": "failure",
+    "review": {
+      "commit": "fee0103221c10d73950f3e24f86a2d135a74157e",
+      "blob": "693fc7d22a35ac7114317e91be9a3182630c40a7"
+    },
+    "source": {
+      "status": "PASS",
+      "files": 2065,
+      "bytes": 50175181
+    },
+    "private_copy_and_full50": "PASS_DIAGNOSTIC_NOT_ADOPTED",
+    "dependency_status": "PARTIAL_FAILED_NOT_17_CLOSURE_PASS",
+    "sri_verified_archives": 11,
+    "metadata_prepared_packages": 10,
+    "sri_verified": [
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 76527,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==",
+        "original_lock_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+        "package": "@drizzle-team/brocli@0.10.2"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 24011,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+        "package": "@esbuild-kit/core-utils@3.3.2"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 29378,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==",
+        "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+        "package": "esbuild@0.18.20"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 3923240,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-UYqiqemphJcNsFEskc73jQ7B9jgwjWrSayxawS6UVFZGWrAAtkzjxSqnoclCXxWtfwLdzU+vTpcNYhpn43uP1w==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+        "package": "@esbuild/linux-x64@0.18.20"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 5048,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+        "package": "@esbuild-kit/esm-loader@2.6.5"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 4741809,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+        "package": "@esbuild/linux-x64@0.28.2"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 2313,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==",
+        "original_lock_url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+        "package": "buffer-from@1.1.2"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 1638315,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==",
+        "original_lock_url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+        "package": "drizzle-kit@0.31.10"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 30947,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==",
+        "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+        "package": "esbuild@0.25.12"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 4395720,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==",
+        "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+        "package": "@esbuild/linux-x64@0.25.12"
+      },
+      {
+        "SRI_verified_before_extraction": true,
+        "bytes": 1223890,
+        "followed_hops": 1,
+        "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+        "original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+        "package": "drizzle-orm@0.45.2"
+      }
+    ],
+    "packages_prepared": [
+      {
+        "download_bytes": 76527,
+        "extracted": {
+          "bytes": 360392,
+          "files": 8
+        },
+        "hooks": "NOT_RUN",
+        "key": "@drizzle-team/brocli",
+        "placement": "node_modules/@drizzle-team/brocli",
+        "version": "0.10.2"
+      },
+      {
+        "download_bytes": 24011,
+        "extracted": {
+          "bytes": 64096,
+          "files": 5
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/core-utils",
+        "placement": "node_modules/@esbuild-kit/core-utils",
+        "version": "3.3.2"
+      },
+      {
+        "download_bytes": 29378,
+        "extracted": {
+          "bytes": 131272,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/core-utils/esbuild",
+        "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+        "version": "0.18.20"
+      },
+      {
+        "download_bytes": 3923240,
+        "extracted": {
+          "bytes": 9347542,
+          "files": 3
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+        "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+        "version": "0.18.20"
+      },
+      {
+        "download_bytes": 5048,
+        "extracted": {
+          "bytes": 13364,
+          "files": 4
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild-kit/esm-loader",
+        "placement": "node_modules/@esbuild-kit/esm-loader",
+        "version": "2.6.5"
+      },
+      {
+        "download_bytes": 4741809,
+        "extracted": {
+          "bytes": 11428465,
+          "files": 3
+        },
+        "hooks": "NOT_RUN",
+        "key": "@esbuild/linux-x64",
+        "placement": "node_modules/@esbuild/linux-x64",
+        "version": "0.28.2"
+      },
+      {
+        "download_bytes": 2313,
+        "extracted": {
+          "bytes": 5047,
+          "files": 4
+        },
+        "hooks": "NOT_RUN",
+        "key": "buffer-from",
+        "placement": "node_modules/buffer-from",
+        "version": "1.1.2"
+      },
+      {
+        "download_bytes": 1638315,
+        "extracted": {
+          "bytes": 10267084,
+          "files": 13
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-kit",
+        "placement": "node_modules/drizzle-kit",
+        "version": "0.31.10"
+      },
+      {
+        "download_bytes": 30947,
+        "extracted": {
+          "bytes": 135343,
+          "files": 7
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-kit/esbuild",
+        "placement": "node_modules/drizzle-kit/node_modules/esbuild",
+        "version": "0.25.12"
+      },
+      {
+        "download_bytes": 4395720,
+        "extracted": {
+          "bytes": 10359450,
+          "files": 3
+        },
+        "hooks": "NOT_RUN",
+        "key": "drizzle-kit/esbuild/@esbuild/linux-x64",
+        "placement": "node_modules/drizzle-kit/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+        "version": "0.25.12"
+      }
+    ],
+    "failure": {
+      "stage": "deps",
+      "line": 295,
+      "package": "drizzle-orm@0.45.2",
+      "field": "peerDependencies",
+      "reason": "Actual SRI-authenticated package metadata did not equal lock-derived metadata",
+      "actual_field_values": "NOT_LOGGED_UNKNOWN_DO_NOT_GUESS",
+      "orm_archive_bytes": 1223890,
+      "orm_sri_verified": true,
+      "orm_name_version_assertion": "PASSED_BEFORE_FIELD_FAILURE"
+    },
+    "native_checks": "NOT_RUN",
+    "generator": "NOT_RUN",
+    "metadata": "NONE",
+    "sql_execution": "NOT_RUN",
+    "source_adopted": false,
+    "configured_limits": {
+      "data": 67108864,
+      "parent": 536870912,
+      "swap": 0
+    },
+    "automatic_service_peaks": {
+      "source": "64.1M",
+      "copy": "64M",
+      "deps": "64.5M",
+      "qualification": "Verbatim systemd automatic output retained; not a claim historical peak never exceeded nominal64MiB."
+    },
+    "final_restoration": {
+      "parent": 536870912,
+      "swap": 0,
+      "oom_group": 1,
+      "populated": 0,
+      "always": "success"
+    },
+    "events": [
+      {
+        "at": "2026-10-29T09:29:47.3793034Z",
+        "event": "SOURCE_RECOVERY_RESULT",
+        "value": {
+          "adopted_source_sha": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+          "aggregate_memory_limit": 67108864,
+          "canonical_base_sha": "823744db378f508a1996f8c23faf1b42f115ad33",
+          "commercial_acceptance": "NOT_DELIVERED",
+          "fd_named_stability_verified": true,
+          "file_modes_verified": true,
+          "formal_baseline": "Source28 canonical expected manifest; zero diagnostic overlays",
+          "git_tree": "e7edc50ca6b060163cce5c20988a3870a9712e25",
+          "head": "2e1e493f2983fcecc27393a993ccc95448cbff9b",
+          "manifest_sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+          "overlay_tickets": [],
+          "postgres17": "PG_PENDING",
+          "project_tests": "NOT_RUN",
+          "project_upper_bound": 536870912,
+          "source_mismatches": 0,
+          "status": "SOURCE_BYTES_VERIFIED_EXPLICIT_OVERLAYS",
+          "swap_limit": 0,
+          "verified_source_bytes": 50175181,
+          "verified_source_files": 2065,
+          "windows_source_files_written": 0
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:47.4104998Z",
+        "event": "SERVICE_CLEANUP_ONCE",
+        "value": {
+          "deadline_remaining": 453.57057307499997,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-source"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:47.4106289Z",
+        "event": "STAGE_TERMINAL",
+        "value": {
+          "deadline_remaining": 453.57043396399996,
+          "exit": 0,
+          "stage": "source"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:47.8490645Z",
+        "event": "SOURCE_RECHECK",
+        "value": {
+          "bytes": 50175181,
+          "files": 2065,
+          "formal_adoption": false,
+          "overlay": false
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:49.9965272Z",
+        "event": "DIAGNOSTIC_ONLY_SCHEMA_OVERLAY",
+        "value": {
+          "adopted": false,
+          "after": {
+            "bytes": 13092,
+            "mode": "0o644",
+            "sha256": "6a473546ee114bfb51364a74e92c3bbad80b67be1ff17ccc461341b8f65d48e1"
+          },
+          "before": {
+            "bytes": 10520,
+            "mode": "0o644",
+            "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7"
+          },
+          "path": "openbot/server/src/db/schema/approvals.ts",
+          "reference": "b7205b9d5a1af42d920e0775e29d5c6ec6dc7332"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:50.5209590Z",
+        "event": "SOURCE_RECHECK",
+        "value": {
+          "bytes": 50177753,
+          "files": 2065,
+          "formal_adoption": false,
+          "overlay": true
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:50.7678237Z",
+        "event": "OFFLINE_FULL50_PREPARED",
+        "value": {
+          "complete_source_copy": 2065,
+          "credentials": false,
+          "learning_removed_with0078_evidence": true,
+          "original_drizzle_tables": 99,
+          "recovery_stitched": false,
+          "runtime_helpers": [
+            "json.ts",
+            "tenant.ts"
+          ],
+          "schema_files": 50
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:50.8399731Z",
+        "event": "SERVICE_CLEANUP_ONCE",
+        "value": {
+          "deadline_remaining": 450.14112589099994,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-copy"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:50.8402247Z",
+        "event": "STAGE_TERMINAL",
+        "value": {
+          "deadline_remaining": 450.14099737999993,
+          "exit": 0,
+          "stage": "copy"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:51.7070566Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+          "followed_hop_budget": 1,
+          "package": "@drizzle-team/brocli@0.10.2",
+          "source_original_lock_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/%40drizzle-team/brocli/0.10.2/brocli-0.10.2.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 82,
+            "url_sha256": "305d8e623931fc51f4da4278776d94fe7d5af1189e4bf4d9d09fcd1d781c4982",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:52.2182804Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 76527,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==",
+          "original_lock_url": "https://registry.npmmirror.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz",
+          "package": "@drizzle-team/brocli@0.10.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:52.2364040Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 76527,
+          "extracted": {
+            "bytes": 360392,
+            "files": 8
+          },
+          "hooks": "NOT_RUN",
+          "key": "@drizzle-team/brocli",
+          "placement": "node_modules/@drizzle-team/brocli",
+          "version": "0.10.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:55.3631464Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/%40esbuild-kit/core-utils/3.3.2/core-utils-3.3.2.tgz",
+          "followed_hop_budget": 1,
+          "package": "@esbuild-kit/core-utils@3.3.2",
+          "source_original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/%40esbuild-kit/core-utils/3.3.2/core-utils-3.3.2.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 87,
+            "url_sha256": "1416d61182059df14a2c01bbf349d8b58e51e1ba953561d6f33ba0db85134783",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:55.5972235Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 24011,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==",
+          "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz",
+          "package": "@esbuild-kit/core-utils@3.3.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:55.6054783Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 24011,
+          "extracted": {
+            "bytes": 64096,
+            "files": 5
+          },
+          "hooks": "NOT_RUN",
+          "key": "@esbuild-kit/core-utils",
+          "placement": "node_modules/@esbuild-kit/core-utils",
+          "version": "3.3.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:58.1037126Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/esbuild/0.18.20/esbuild-0.18.20.tgz",
+          "followed_hop_budget": 1,
+          "package": "esbuild@0.18.20",
+          "source_original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/esbuild/0.18.20/esbuild-0.18.20.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 70,
+            "url_sha256": "6ba5ccc653bd27a42ad27a3367580534b66d93cc6f0126656702ed0521800c42",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:58.3381955Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 29378,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==",
+          "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.18.20.tgz",
+          "package": "esbuild@0.18.20"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:58.3488781Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 29378,
+          "extracted": {
+            "bytes": 131272,
+            "files": 7
+          },
+          "hooks": "NOT_RUN",
+          "key": "@esbuild-kit/core-utils/esbuild",
+          "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+          "version": "0.18.20"
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:58.7694195Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/%40esbuild/linux-x64/0.18.20/linux-x64-0.18.20.tgz",
+          "followed_hop_budget": 1,
+          "package": "@esbuild/linux-x64@0.18.20",
+          "source_original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/%40esbuild/linux-x64/0.18.20/linux-x64-0.18.20.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 85,
+            "url_sha256": "e1d2157ed955e0252b64f1f59f3cc3b70f2ad15cfe3a3e4ccb0f250a256e1f62",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:29:59.9175456Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 3923240,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-UYqiqemphJcNsFEskc73jQ7B9jgwjWrSayxawS6UVFZGWrAAtkzjxSqnoclCXxWtfwLdzU+vTpcNYhpn43uP1w==",
+          "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.18.20.tgz",
+          "package": "@esbuild/linux-x64@0.18.20"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:00.1072747Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 3923240,
+          "extracted": {
+            "bytes": 9347542,
+            "files": 3
+          },
+          "hooks": "NOT_RUN",
+          "key": "@esbuild-kit/core-utils/esbuild/@esbuild/linux-x64",
+          "placement": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+          "version": "0.18.20"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:01.3737573Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/%40esbuild-kit/esm-loader/2.6.5/esm-loader-2.6.5.tgz",
+          "followed_hop_budget": 1,
+          "package": "@esbuild-kit/esm-loader@2.6.5",
+          "source_original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/%40esbuild-kit/esm-loader/2.6.5/esm-loader-2.6.5.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 87,
+            "url_sha256": "df6da94a337eb025af1e706e7b3b8e67ab1655f272afd50a8b434d3e48e672d9",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:01.5474969Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 5048,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==",
+          "original_lock_url": "https://registry.npmmirror.com/@esbuild-kit/esm-loader/-/esm-loader-2.6.5.tgz",
+          "package": "@esbuild-kit/esm-loader@2.6.5"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:01.5528168Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 5048,
+          "extracted": {
+            "bytes": 13364,
+            "files": 4
+          },
+          "hooks": "NOT_RUN",
+          "key": "@esbuild-kit/esm-loader",
+          "placement": "node_modules/@esbuild-kit/esm-loader",
+          "version": "2.6.5"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:02.5935561Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/%40esbuild/linux-x64/0.28.2/linux-x64-0.28.2.tgz",
+          "followed_hop_budget": 1,
+          "package": "@esbuild/linux-x64@0.28.2",
+          "source_original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/%40esbuild/linux-x64/0.28.2/linux-x64-0.28.2.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 83,
+            "url_sha256": "c90c0861579428952c7e590d3dcc1455fa8222d22327f30eab5088cce709d0c9",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:03.8698517Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 4741809,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==",
+          "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+          "package": "@esbuild/linux-x64@0.28.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:04.1191877Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 4741809,
+          "extracted": {
+            "bytes": 11428465,
+            "files": 3
+          },
+          "hooks": "NOT_RUN",
+          "key": "@esbuild/linux-x64",
+          "placement": "node_modules/@esbuild/linux-x64",
+          "version": "0.28.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:10.8095667Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/buffer-from/1.1.2/buffer-from-1.1.2.tgz",
+          "followed_hop_budget": 1,
+          "package": "buffer-from@1.1.2",
+          "source_original_lock_url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/buffer-from/1.1.2/buffer-from-1.1.2.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 74,
+            "url_sha256": "a3e20dc25b26454800e48e9c55592ff6d3c90c8470afdebd4053b9d90b900cc2",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:10.9755358Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 2313,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==",
+          "original_lock_url": "https://registry.npmmirror.com/buffer-from/-/buffer-from-1.1.2.tgz",
+          "package": "buffer-from@1.1.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:10.9804361Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 2313,
+          "extracted": {
+            "bytes": 5047,
+            "files": 4
+          },
+          "hooks": "NOT_RUN",
+          "key": "buffer-from",
+          "placement": "node_modules/buffer-from",
+          "version": "1.1.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:11.5255597Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/drizzle-kit/0.31.10/drizzle-kit-0.31.10.tgz",
+          "followed_hop_budget": 1,
+          "package": "drizzle-kit@0.31.10",
+          "source_original_lock_url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/drizzle-kit/0.31.10/drizzle-kit-0.31.10.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 78,
+            "url_sha256": "fb68c080e67e8f81c7c419a779f9b86a3973f5e5ba1a7c159592550d3c359149",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:12.2511964Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 1638315,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==",
+          "original_lock_url": "https://registry.npmmirror.com/drizzle-kit/-/drizzle-kit-0.31.10.tgz",
+          "package": "drizzle-kit@0.31.10"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:12.4661859Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 1638315,
+          "extracted": {
+            "bytes": 10267084,
+            "files": 13
+          },
+          "hooks": "NOT_RUN",
+          "key": "drizzle-kit",
+          "placement": "node_modules/drizzle-kit",
+          "version": "0.31.10"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:15.0344485Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/esbuild/0.25.12/esbuild-0.25.12.tgz",
+          "followed_hop_budget": 1,
+          "package": "esbuild@0.25.12",
+          "source_original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/esbuild/0.25.12/esbuild-0.25.12.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 70,
+            "url_sha256": "ca99d61377e010c18016930ef7921430651191b171ec3d6dfeefedaaad85155f",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:15.2727953Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 30947,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==",
+          "original_lock_url": "https://registry.npmmirror.com/esbuild/-/esbuild-0.25.12.tgz",
+          "package": "esbuild@0.25.12"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:15.2833099Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 30947,
+          "extracted": {
+            "bytes": 135343,
+            "files": 7
+          },
+          "hooks": "NOT_RUN",
+          "key": "drizzle-kit/esbuild",
+          "placement": "node_modules/drizzle-kit/node_modules/esbuild",
+          "version": "0.25.12"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:15.7777622Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/%40esbuild/linux-x64/0.25.12/linux-x64-0.25.12.tgz",
+          "followed_hop_budget": 1,
+          "package": "@esbuild/linux-x64@0.25.12",
+          "source_original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/%40esbuild/linux-x64/0.25.12/linux-x64-0.25.12.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 85,
+            "url_sha256": "0565cac5027cb31929707ffcc977c93f9fde5850dbaff675aba4059abb154ce1",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:16.9946475Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 4395720,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==",
+          "original_lock_url": "https://registry.npmmirror.com/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+          "package": "@esbuild/linux-x64@0.25.12"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:17.2149739Z",
+        "event": "PINNED_PACKAGE_PREPARED",
+        "value": {
+          "download_bytes": 4395720,
+          "extracted": {
+            "bytes": 10359450,
+            "files": 3
+          },
+          "hooks": "NOT_RUN",
+          "key": "drizzle-kit/esbuild/@esbuild/linux-x64",
+          "placement": "node_modules/drizzle-kit/node_modules/esbuild/node_modules/@esbuild/linux-x64",
+          "version": "0.25.12"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:18.4480868Z",
+        "event": "PINNED_REDIRECT_PERMITTED",
+        "value": {
+          "SRI_verified": false,
+          "expected_package_path": "/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz",
+          "followed_hop_budget": 1,
+          "package": "drizzle-orm@0.45.2",
+          "source_original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+          "status": 302,
+          "target": {
+            "fragment_present": false,
+            "hostname": "cdn.npmmirror.com",
+            "path": "/packages/drizzle-orm/0.45.2/drizzle-orm-0.45.2.tgz",
+            "path_truncated": false,
+            "port": null,
+            "query_present": false,
+            "scheme": "https",
+            "url_chars": 76,
+            "url_sha256": "7d66838e2e3d6845c71d4ead978ce3617bcd3975f3339f0b66a04fa9fb14a809",
+            "userinfo_present": false
+          }
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:19.0834118Z",
+        "event": "PINNED_ARCHIVE_SRI_VERIFIED",
+        "value": {
+          "SRI_verified_before_extraction": true,
+          "bytes": 1223890,
+          "followed_hops": 1,
+          "original_lock_SRI": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+          "original_lock_url": "https://registry.npmmirror.com/drizzle-orm/-/drizzle-orm-0.45.2.tgz",
+          "package": "drizzle-orm@0.45.2"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:20.9918174Z",
+        "event": "SERVICE_CLEANUP_ONCE",
+        "value": {
+          "deadline_remaining": 419.989373936,
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "unit": "xb-min-deps"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:20.9920659Z",
+        "event": "STAGE_TERMINAL",
+        "value": {
+          "deadline_remaining": 419.98923572699994,
+          "exit": 1,
+          "stage": "deps"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:20.9922908Z",
+        "event": "PROJECT_LIMIT_RESTORED",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.oom.group": "1",
+            "memory.swap.max": "0"
+          },
+          "populated": "0"
+        }
+      },
+      {
+        "at": "2026-10-29T09:30:21.1115470Z",
+        "event": "GENERATOR_ALWAYS_RESTORED",
+        "value": {
+          "limits": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "populated": "0",
+          "Source_adopted": false,
+          "ROOT_RELEASE": null,
+          "ready": false,
+          "PG": "PG_PENDING"
+        }
+      }
+    ],
+    "raw_log": {
+      "path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A5-123366832250.log",
+      "bytes": 61793,
+      "sha256": "1fff078a9868c82b28e44c5eb9423a76336f88d421e3b86d03320cfdc5657219"
+    },
+    "next": "No unchanged A5/full17 rerun and no skip/weakening peer check. Prepare/review one exact ORM0.45.2 archive SRI-authenticated metadata-only DATA64 job; compare actual public declaration fields with original lock, no install/native/Source/otherpackage requests. Unknown actual values must remain unknown until that evidence.",
+    "gates": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG": "PG_PENDING",
+      "full_ci": "NOT_RUN",
+      "commercial": "NOT_DELIVERED"
+    }
   }
 }
