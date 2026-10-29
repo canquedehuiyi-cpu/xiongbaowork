@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Verify administrative controller and run teardown-only control
         env:
-          EXPECTED_CONTROLLER_SHA256: 77687c7cee228481e9cb60eee3acf2ce8bd970dc69811fc1331fc8f2f9c58a23
+          EXPECTED_CONTROLLER_SHA256: faa5b8f05b950b97fd5320456ba1cfd46bb0d923c0c1f77efe67d3708abcf312
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "canquedehuiyi-cpu/xiongbaowork"
@@ -38,7 +38,7 @@ jobs:
               after=os.fstat(fd)
               assert (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)
           finally:os.close(fd)
-          assert hashlib.sha256(raw).hexdigest()=="77687c7cee228481e9cb60eee3acf2ce8bd970dc69811fc1331fc8f2f9c58a23"
+          assert hashlib.sha256(raw).hexdigest()=="faa5b8f05b950b97fd5320456ba1cfd46bb0d923c0c1f77efe67d3708abcf312"
           directory=Path("/run")/("xb-a11-code-"+runid+"-"+attempt)
           directory.mkdir(mode=0o755)
           path=directory/"controller.py"

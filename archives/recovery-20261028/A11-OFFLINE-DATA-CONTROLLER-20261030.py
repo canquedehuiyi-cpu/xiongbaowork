@@ -20,12 +20,19 @@ def procs(path):return (path/"cgroup.procs").read_text().split()
 def snapshot(path):
     value={"path":str(path),"exists":False,"limits":{}}
     try:
-        info=path.stat();value.update(exists=True,dev=str(info.st_dev),ino=str(info.st_ino))
+        import stat
+        info=path.stat();value.update(exists=True,dev=str(info.st_dev),ino=str(info.st_ino),uid=info.st_uid,gid=info.st_gid,mode=oct(stat.S_IMODE(info.st_mode)))
     except BaseException as exc:
         value["stat_error"]=type(exc).__name__;return value
     for key in KEYS:
         try:value["limits"][key]=(path/key).read_text().strip()
         except BaseException as exc:value["limits"][key]={"error":type(exc).__name__}
+    value["control_permissions"]={}
+    for name in (*KEYS,"cgroup.procs","cgroup.subtree_control","cgroup.kill"):
+        try:
+            control=(path/name).stat()
+            value["control_permissions"][name]={"uid":control.st_uid,"gid":control.st_gid,"mode":oct(stat.S_IMODE(control.st_mode))}
+        except BaseException as exc:value["control_permissions"][name]={"error":type(exc).__name__}
     for key,fn in (("populated",populated),("procs",procs)):
         try:value[key]=fn(path)
         except BaseException as exc:value[key+"_error"]=type(exc).__name__
@@ -68,6 +75,8 @@ def admin(base,runid,attempt,uid,gid,started):
         assert path.parent==SHARED and path.name==unit and path.resolve(strict=True)==path
         assert Path("/proc/self/cgroup").read_text().strip()=="0::"+cg
         assert os.getxattr(path,"user.delegate",follow_symlinks=False)==b"1"
+        import stat
+        info=path.stat();assert info.st_uid==0 and stat.S_IMODE(info.st_mode)&0o005==0o005 and stat.S_IMODE(info.st_mode)&0o022==0
         assert limits(path)==CAP64
         assert limits(PROJECT)["memory.max"]=="536870912" and limits(PROJECT)["memory.swap.max"]=="0"
         assert limits(SHARED)["memory.max"]=="67108864" and limits(SHARED)["memory.swap.max"]=="0"
@@ -76,7 +85,14 @@ def admin(base,runid,attempt,uid,gid,started):
     def owned(path,cap):
         require_time()
         assert root is not None and path.is_relative_to(root) and path!=root
-        assert not path.exists();path.mkdir(mode=0o700)
+        assert not path.exists();path.mkdir(mode=0o755)
+        import stat
+        actual=path.stat();assert actual.st_uid==0 and stat.S_IMODE(actual.st_mode)==0o755
+        # Root keeps all control-file writes. Only traversal/read is available
+        # to the unprivileged noop for its independent post-drop resource gate.
+        for name in (*KEYS,"cgroup.procs","cgroup.subtree_control","cgroup.kill"):
+            control=(path/name).stat()
+            assert control.st_uid==0 and stat.S_IMODE(control.st_mode)&0o022==0
         for key,value in cap.items():fixed(path/key,value)
         assert limits(path)==cap
     def enter(path):

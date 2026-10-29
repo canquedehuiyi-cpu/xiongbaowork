@@ -2,7 +2,7 @@
   "schema": "xiongbaowork-a11-delegated-control-prototype-v3",
   "status": "AUTHOR_PREPARED_UNREVIEWED_NOT_EXECUTED",
   "author": "/root/a11_data_author",
-  "parent_candidate": "67efbfbdf473c8a33fa61a802ed6da0da4158b15",
+  "parent_candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
   "prepare_branch": "codex/a11-data-verify-prep-20261030",
   "only_run_branch": "codex/a11-data-verify-run-20261030-a3",
   "purpose": "No-Subject delegated owned-subtree control lifecycle prototype, NOT an original managed-slice restoration fix and NOT permission to migrate project execution.",
@@ -108,5 +108,12 @@
     "PG": "PG_PENDING"
   },
   "next_action": "Complete exact3-file nonauthor review. Sole valid leaseowner may, after original expiry/epoch rules and idle queue/dedup, dispatch a3 once. Keep raw verification success and original restoration failure separate; any project-controller migration needs its own review.",
-  "execution_branch_created": false
+  "execution_branch_created": false,
+  "permission_finding_response": {
+    "candidate": "d0686e6e7ed4c31545d90b82a11d0fb1ab361ca4",
+    "status": "AUTHOR_FIXED_PENDING_FULL_NONAUTHOR_REVIEW_NOT_RUN",
+    "finding": "owned target/admin/noop mode0700 prevented post-drop path traversal/readback.",
+    "fix": "owned directories now root-owned0755 with actual UID/mode assertion; all memory and cgroup control files remain root-owned with no group/other write bits; no chown/unprivileged write access. Managed delegated root actual UID/mode traversal gate added. Independent post-drop limits gate retained.",
+    "evidence": "Every directory snapshot records actual uid/gid/mode alongside dev/ino. Runtime traversal and readback remain unproven until exact reviewed execution."
+  }
 }
