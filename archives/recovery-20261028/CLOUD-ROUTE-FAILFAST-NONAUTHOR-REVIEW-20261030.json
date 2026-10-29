@@ -1,0 +1,83 @@
+{
+  "schema": "route-terminal-failfast-independent-static-review/v1",
+  "reviewer": "/root/route_compat_reviewer",
+  "author": "/root/route_systemd_author",
+  "candidate": "e6a49994deda16739c095ad214266af15c616762",
+  "tree": "9e46132080060f8047be3a17cf38fd753cb39196",
+  "base": "576d176424df248222299db2c49d0fa545c90579",
+  "verdict": "ADMIN_STATIC_FAILFAST_ONLY",
+  "project_dispatch_status": "NOT_EXECUTABLE_FOR_PROJECT_DISPATCH",
+  "project_dispatch_approved": false,
+  "project_execution": false,
+  "Source_adopted": false,
+  "new_static_findings": [],
+  "unresolved_blocking_findings": [
+    {
+      "id": "ROUTE-RUNTIME-FINAL-CONTROL-TEARDOWN-PARENT-OOM-GROUP-0",
+      "status": "UNRESOLVED",
+      "actual_run": 40912983831,
+      "actual_job": 123585627390,
+      "observed": "A/Bexit0 and identicalcandidate do not cure final parent512/swap0/oom0. Controls exit0/pop0 at73.1926s, but final gate1 absent; always0. No Source adoption.",
+      "prior_runtime_report_commit": "67e016a842360f5a4118b564e6100d6a90982546"
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/route-tree-repro-candidate.yml",
+      "mode": "100644",
+      "blob": "8e4d03d441a77c79635225b77a5c3e7fe8e460fb",
+      "bytes": 145312,
+      "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+      "mode": "100644",
+      "blob": "00144331e0ba75085703f0cb9e624241047afd73",
+      "bytes": 43877,
+      "sha256": "b2ab1dde0ec5ee261801f7f2d855d9fb568d2555b17f58e87ca78f3a4c617bb4",
+      "full_read": true
+    }
+  ],
+  "static_checks": {
+    "compare_commits": 2,
+    "compare_only_two_admin_files": true,
+    "tree_truncated": false,
+    "Source_blobs_modes_unchanged": true,
+    "exact_unchanged_checks": {
+      "preFailureSame": true,
+      "witnessMainSame": true,
+      "sixbarriers": 6,
+      "SubjectLiteralsUnchanged": true,
+      "exactWFonlyAdminPinsAndFilter": true
+    },
+    "admin_helper": {
+      "bytes": 34728,
+      "sha256": "cb98e499f6eaca20fdaa7e801d25e5d90439a0edc1c77c2e1f331665282e5594"
+    },
+    "new_failure_path": "Within same-outer call_bounded, show exactfallback/supervisor LoadState/ActiveState/Job with remaining timeout, read each actual cgroup empty/absent, assert all ownedSubject groups empty, observe wholeparentpopulated0. Only clients all exited + bothcontrolsinactive/failed/noJob/groupsempty + wholeparentempty permit failfast break.",
+    "terminal": "break proceeds to complete existing FAILED_OR_UNKNOWN with restore_provenfalse, added observation and elapsed, bounded evidence-save under same originalouter, print then raise. It is not a success path.",
+    "not_client_only": true,
+    "no_new_restore_write": true,
+    "success_final_gate_unchanged": "Existing physical512/swap0/oom1 and wholeparentpop0 after controls exit is unchanged; witness/read-onlyalways whole function unchanged.",
+    "deadline": "Original t0/270/300 and prior recovery loops unchanged, except conclusive no-recovery-actor failure exits early instead of useless wait. No new budget.",
+    "resources": "512/swap0, DATA16+16+32 aggregate64, onlyoriginalbuild4GiB all unchanged.",
+    "new_filter": "codex/route-terminal-failfast-run-20261030-a3 only reserved; must not create/dispatch under this verdict."
+  },
+  "proof_limits": [
+    "Static text/full-file identity/control-flow review only; no YAML/Python parse/compile/project execution.",
+    "New failfast behavior not run; no runtime result inferred.",
+    "Original final oom.group0 restoration blocker remains; this candidate is administrative preparation only and cannot rerun A/B.",
+    "No payload decode/rawhash, Source approval, fullCI/PG/Rootrelease/commercial acceptance."
+  ],
+  "gates": {
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING"
+  },
+  "next_action": "Save this failure-path repair as static administrative candidate. Do not create reserved a3 execution branch or run project. A separate supported strict aggregate/same-deadline final-gate design requires exact author implementation and new independent review."
+}

@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T16:50:24.433Z",
+  "checkpoint_update_at": "2026-10-29T16:52:55.581Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4310,5 +4310,34 @@
     "route": "STATIC_FAILFAST_ONLY_NO_PROJECT_DISPATCH; same absolute budget and original finaloom1 gate retained",
     "a11": "Supported Delegate-owned-subtree noSubject/noToken/noCodec control prototype, all descendants aggregate64, RemainAfterExit/zeroPID/empty kernel proof; original managedslice gate remains separately failed until actually repaired/reviewed",
     "not_new_environment_or_goal": true
+  },
+  "cloud_route_failfast_preparation": {
+    "candidate": "e6a49994deda16739c095ad214266af15c616762",
+    "prepare_branch": "codex/route-terminal-failfast-prep-20261030",
+    "status": "ADMIN_STATIC_FAILFAST_ONLY_NOT_EXECUTABLE_FOR_PROJECT_DISPATCH",
+    "review_commit": "56e4e979a2b1f3ef4efc3f26ea5c754c25ac71f3",
+    "review_path": "archives/recovery-20261028/CLOUD-ROUTE-FAILFAST-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "a630f39b2cb905a41392d6e6863f458f502aeaa9",
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "mode": "100644",
+        "blob": "8e4d03d441a77c79635225b77a5c3e7fe8e460fb",
+        "bytes": 145312,
+        "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "mode": "100644",
+        "blob": "00144331e0ba75085703f0cb9e624241047afd73",
+        "bytes": 43877,
+        "sha256": "b2ab1dde0ec5ee261801f7f2d855d9fb568d2555b17f58e87ca78f3a4c617bb4",
+        "full_read": true
+      }
+    ],
+    "project_dispatch_approved": false,
+    "original_final_oomgroup0_blocking": "UNRESOLVED",
+    "source_adopted": false
   }
 }
