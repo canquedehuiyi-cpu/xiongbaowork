@@ -158,13 +158,15 @@
     {
       "id": "route-tree-repro-plan",
       "branch": "codex/route-tree-repro-plan-20261029",
-      "head": "95af0749f0996ea78adf27fcf4070a309edbec99",
+      "head": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
       "files": [
         ".github/workflows/route-tree-repro-candidate.yml",
         "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json"
       ],
-      "status": "PLAN_FIX_REQUIRED_NOT_DISPATCHED",
-      "facts": "Only two administrative files, all2065 Source blobs unchanged. Manual only, concurrency same. Real Node/Vite buildA/B shared270inner300outer, 4GiB buildonly, DATA64 before/after/fullSource excepttarget; nofakehistoricalmode. P2: RuntimeMaxSec alone excludes stopgrace and relative budget calculated before launch. Author preparing absolute deadline+bounded control-groupkill fix; verify branch latest and independently re-review new full SHA before any execution. Do not dispatch95af."
+      "status": "P2_REVISED_REVIEW_REQUIRED_NOT_DISPATCHED",
+      "facts": "Only two administrative files, all2065 Source blobs unchanged. Manual only, concurrency same. Real Node/Vite buildA/B shared270inner300outer, 4GiB buildonly, DATA64 before/after/fullSource excepttarget; nofakehistoricalmode. P2: RuntimeMaxSec alone excludes stopgrace and relative budget calculated before launch. Author preparing absolute deadline+bounded control-groupkill fix; verify branch latest and independently re-review new full SHA before any execution. Do not dispatch95af.",
+      "prior_head": "95af0749f0996ea78adf27fcf4070a309edbec99",
+      "revision": "Absolute deadline controller+bounded stop/kill/restoration saved; two administrative files exact-readback by author. Cloud delivery reviewer must independently approve exact newSHA; old PLAN_FIX_REQUIRED preserved."
     }
   ],
   "migration_diagnostic": {
@@ -236,5 +238,31 @@
     "review_delivery": "Cloud independent reviewer owns volume4Source+route administrative budget review/8GET/native gap; no execution/canonical writes.",
     "coordination": "Use GitHub cloud checkpoints/review records, not localhost. Each reviewer may save own administrative review branch; coordinator waits exact SHA non-author verdict. No two writers samefile. If creatingmorecloudsubagents, disjoint ownership and read-onlyreviews do not authorizeextraresourcejobs.",
     "continuity": "Cloud creation/queued status isn't executionproof. First cloud worker must confirm cloud tool execution/access. If no execution/connector capability, record exact blocker without paid workaround; do not falsely claim migration or complete."
-  }
+  },
+  "cloud_sessions": {
+    "coordinator": {
+      "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
+      "title": "xiongbaowork 云端主线接管 77故事18包7门",
+      "executor_thread": "01a1869c-8c49-73cb-b4a1-c0b5b05fa094",
+      "host": "durable",
+      "cwd": "/workspace/scratch/fd91774f2a2b"
+    },
+    "persistence_review": {
+      "conversation_id": "6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9",
+      "title": "xiongbaowork 云端持久化独审",
+      "executor_thread": "01a1869b-a979-7154-a182-fd0a2bdee08f",
+      "host": "durable",
+      "cwd": "/workspace/scratch/7cb3b5961ffa"
+    },
+    "delivery_review": {
+      "conversation_id": "6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+      "title": "xiongbaowork 云端交付独审",
+      "executor_thread": "01a1869b-9de8-7356-81bc-773d072f90bb",
+      "host": "durable",
+      "cwd": "/workspace/scratch/0f3ba1b68ba6"
+    },
+    "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
+    "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
+  },
+  "checkpoint_update_at": "2026-10-29T07:45:00Z"
 }
