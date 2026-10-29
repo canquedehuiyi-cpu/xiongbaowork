@@ -39,3 +39,18 @@ ROOT_RELEASE=null / ready=false / AP_DISABLED / NOT_SERVICE_WIRED / migrationNOT
 新发现：548de959的原配置及离线28路径列出已不存在的learning.ts，后续all-is-file断言必失败。最小依赖静态候选闭包17节点已保留原lock URL/SRI及三版本esbuild，不声称包下载、生成或测试完成。详见CLOUD-MINIMAL-GENERATOR-CLOSURE-20261029.json。持久化独审原件已从独占GitHub分支读取；仅Source静态批准，不采用完整迁移或生产接线。本次补充独审独立保存，不覆盖外部报告。
 
 Windows/localhost/本机heartbeat/WB/Qoder均不作为依赖；OpenCode继续暂停。ROOT_RELEASE=null、ready=false、AP_DISABLED、NOT_SERVICE_WIRED、migrationNOT_WIRED、PG_PENDING和NOT_DELIVERED保持。没有新Source采用或部署，不宣称完整交付或无期限无人值守。
+
+
+## 本轮最终交接（2026-10-29T08:46:28.635Z，UTC）
+
+资源/调度链已真实核：probe run40839741519/job123332952391 PASS，仅资源证明。生成器诊断 run40843372223/job123344875216（head e4cdae0b）整个job FAILURE：Source阶段完整2065文件/50175181字节、74批、SHA/模式/FD全部通过；copy阶段因等价mode字符串100644/0o644未归一化拒绝，尚未复制overlay或下载依赖，generator NOT_RUN、metadata NONE。原始日志和CLOUD-MINIMAL-GENERATOR-A3-RESULT.json已保存，finally/always均恢复512MiB/swap0/oom.group1、populated0。不能把Source PASS称作完整job通过。
+
+下一候选 c6f51d2673e608895ab826ed7437dbef9dab0340，tree6fa46f38df9e67146fe620fdf17398fb13189af1，准备分支codex/cloud-minimal-generator-prep-20261029-a4。仅严格接受原manifest两种模式串并精确要求0644，其余Source/17锁依赖/FULL50/480+120+120秒门保持。非作者独审45629eb4bcae774f405f6b3ac300f9c3d4d4f11f已全文读回，静态批准后续合法协调者单次诊断；run-a4尚未创建或运行。不得重跑旧失败SHA或probe。
+
+协调租约CLOUD-COORDINATOR-LEASE.json已在本轮结束释放。继任必须先核Page/controller/worker身份，再读最新head/lease/资源队列；released或expired且队列空才可CAS新owner/run/epoch，读失败只读，冲突重读不force。每epoch最多45分钟、checkpoint或15分钟续期；新作业/Source采用前重核。精确next_action见JSON；合法接班后才可正常create_branch codex/cloud-minimal-generator-run-20261029-a4于上述exactSHA，已存在则读原run，不能重复。
+
+托管worker6ae30014bbac8191baa1a3497f062b7d，controller Automation_a9042438d098819180d8686afa9cd66e，Page page_7812bfd830a08191ab1fb84da54f173f；配置cloud/hourly/enabled。状态必须保持SCHEDULE_ENABLED_UNATTENDED_INDEPENDENCE_NOT_YET_VERIFIED：cadd5cb09ac48b81b8026455c0503bad00c45043虽记录native c4016dcf完成，但chat_ref/结果关联创建者行政会话人工followup回复，不作独立无人值守开发证明，也不反推scheduler没运行。不得人工消息污染origin、修改DTSTART或循环探测。下一无人工消息run需真实host automation context与Page/GitHub/lease只读行为才验独立性。
+
+旧route bf0ef002的7ef4fcac P2报告与9d80392d正面静态报告均保留，当前为未解决审查分歧/新修订待独审，旧bf不调度。外部作者会话6ae2f88e-e6bc-83e8-9a34-0e5d3cf682b9只在codex/route-tree-deadline-fix-20261029准备两行政文件，不可自审/资源/Source/canonical写。
+
+后续生成全量SQL/snapshot/journal后，先逐DDL对照原0080与独立recovery0107；不拼接假metadata，不以seed-only SQL配全snapshot。完整seed包合法采用后，再对新父重审事务原语并做实际CPU/原server类型检查；外层commit/ACK/readback按684c9253审计缺口推进，缺物理事务终止witness时unknown，绝不NULL→重放。77/18/7、全部原史、ROOT_RELEASE=null/ready=false/AP_DISABLED/NOT_SERVICE_WIRED/migrationNOT_WIRED/PG_PENDING继续保留。正式Source本轮0采用、默认分支/部署/付费0变更。
