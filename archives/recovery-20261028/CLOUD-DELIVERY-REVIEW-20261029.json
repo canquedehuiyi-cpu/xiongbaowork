@@ -1,0 +1,655 @@
+{
+  "schema": "xiongbaowork-cloud-delivery-independent-review/1",
+  "review_date": "2026-10-29",
+  "role": "NON_AUTHOR_INDEPENDENT_SOURCE_AND_PLAN_REVIEW_ONLY",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "administrative_base_commit": "8ac186e801aa4a2492e96c3b16ed33a2275198d8",
+  "delivery_branch": "codex/cloud-review-delivery-20261029",
+  "independence": {
+    "reviewer_authored_candidate_source": false,
+    "reviewer_authored_candidate_plan": false,
+    "subject_execution": false,
+    "source_modification": false,
+    "canonical_update": false
+  },
+  "cloud_capability_evidence": {
+    "method": "Actual successful GitHub connector GETs, not chat creation or queued worker status",
+    "tools": [
+      "mcp__codex_apps__github_fetch_file",
+      "mcp__codex_apps__github_fetch",
+      "mcp__codex_apps__github_fetch_commit",
+      "mcp__codex_apps__github_compare_commits"
+    ],
+    "fixed_handoff_read": {
+      "commit": "8ac186e801aa4a2492e96c3b16ed33a2275198d8",
+      "json_blob": "9f725de8e606c30a96fd483920f7f59c9c08c28e",
+      "markdown_blob": "09b1101684fc8199c3bf0ad0dff2f5b02bdf7377"
+    },
+    "execution_proof": "NO_PROJECT_EXECUTION_REQUESTED_OR_PERFORMED; no claim of cloud project runtime",
+    "local_executor_calls": 0,
+    "windows_browser_or_cli_calls": 0,
+    "localhost_mcp_calls": 0,
+    "project_workflow_dispatches": 0,
+    "paid_provider_calls": 0,
+    "dependency_installs": 0,
+    "project_tests_or_builds": 0,
+    "postgres_sql_or_docker_runs": 0,
+    "data_handling": "GitHub cloud connector responses and hosted functions orchestration memory only; no host shell, filesystem, Windows source/archive/JSON/deps/artifact writes",
+    "resource_jobs_started": 0,
+    "resource_exception_expansion": false
+  },
+  "required_input_integrity": [
+    {
+      "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+      "bytes": 286013,
+      "sha256": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146",
+      "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+      "full_content_received": true,
+      "integrity_matches_handoff": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+      "bytes": 45225,
+      "sha256": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac",
+      "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+      "full_content_received": true,
+      "integrity_matches_handoff": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+      "bytes": 479194,
+      "sha256": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5",
+      "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+      "full_content_received": true,
+      "integrity_matches_handoff": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "bytes": 456310,
+      "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+      "full_content_received": true,
+      "integrity_matches_handoff": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md",
+      "bytes": 66979,
+      "sha256": "478c295fa0a41eade2a5af73746b24653027f293ac46bbd458dcbd8ba0abefce",
+      "blob": "2c576298ea45a3d21f66e67dfeb6033301a934d9",
+      "full_content_received": true,
+      "integrity_matches_handoff": true
+    }
+  ],
+  "full_scope_preservation": {
+    "authoritative_complete_requirements": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json at immutable administrative_base_commit; this report does not replace it",
+    "stories": 77,
+    "original_delivery_packages": 18,
+    "final_gates": 7,
+    "story_ids": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "A5",
+      "A6",
+      "A7",
+      "A8",
+      "A9",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "H1",
+      "H2",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+      "I1",
+      "I2",
+      "I3",
+      "I4",
+      "I5",
+      "I6",
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D5",
+      "D6",
+      "D7",
+      "E1",
+      "E2",
+      "E3",
+      "E4",
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "F6",
+      "J1",
+      "J2",
+      "J3",
+      "J4",
+      "J5",
+      "J6",
+      "K1",
+      "K2",
+      "K3",
+      "K4",
+      "G1",
+      "G2",
+      "WF1",
+      "WF2",
+      "WF3",
+      "WF4",
+      "WF5",
+      "WF6",
+      "AUT1",
+      "AUT2",
+      "AUT3",
+      "AUT4",
+      "RES1",
+      "RES2",
+      "ROLE1",
+      "WF7",
+      "WF8",
+      "WF9",
+      "SEC1",
+      "WIN1",
+      "DEV1"
+    ],
+    "story_statuses_retained": true,
+    "package_coverage": [
+      {
+        "id": "D01",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D02",
+        "story_ids": [],
+        "gate_ids": [
+          1
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D03",
+        "story_ids": [
+          "J2",
+          "J3",
+          "J4"
+        ],
+        "gate_ids": [
+          2
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D04",
+        "story_ids": [
+          "J1",
+          "J5",
+          "J6",
+          "G2"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D05",
+        "story_ids": [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6",
+          "A7",
+          "A8",
+          "A9",
+          "B1",
+          "B2",
+          "B3",
+          "B4",
+          "I1",
+          "I2",
+          "I3",
+          "I4",
+          "I5",
+          "I6"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D06",
+        "story_ids": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "AUT1",
+          "AUT2",
+          "AUT3",
+          "AUT4"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D07",
+        "story_ids": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "ROLE1"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D08",
+        "story_ids": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "RES1",
+          "RES2"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D09",
+        "story_ids": [
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6",
+          "K1",
+          "K2",
+          "K3",
+          "K4"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D10",
+        "story_ids": [
+          "WF1",
+          "WF2",
+          "WF3",
+          "WF4",
+          "WF5",
+          "WF6",
+          "WF7",
+          "WF8",
+          "WF9"
+        ],
+        "gate_ids": [
+          4
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D11",
+        "story_ids": [
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "SEC1",
+          "DEV1"
+        ],
+        "gate_ids": [
+          5
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D12",
+        "story_ids": [
+          "G1"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D13",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D14",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D15",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D16",
+        "story_ids": [
+          "WIN1"
+        ],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D17",
+        "story_ids": [],
+        "gate_ids": [
+          6
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      {
+        "id": "D18",
+        "story_ids": [],
+        "gate_ids": [
+          7
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      }
+    ],
+    "final_gate_requirements": [
+      "同一最终SHA正式镜像8 GET 200且未知API404",
+      "未登录拒绝、跨租户私有资源404、无越权或拒绝后的上游调用",
+      "前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI",
+      "WakerFlow实际生成-编辑-保存-执行-中止-查收及重启恢复",
+      "用户设备浏览器真实动作及离线重连、授权审批闭环",
+      "真实模型最小授权运行与正确计费",
+      "Windows/Linux干净客户部署证据"
+    ],
+    "test_ledger": {
+      "paths": 611,
+      "status_counts": {
+        "PASS_SCOPED_BATCH_ONLY": 468,
+        "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
+        "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
+        "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
+        "NOT_RUN_REAL_VENDOR": 1
+      },
+      "methodology": [
+        "Each actual run retains its original status. Latest named-file evidence does not overwrite old failed batch records.",
+        "No cross-batch case count is summed because there are overlapping tests.",
+        "Fullapp161 remains historical run40733053569; current complete Git trees independently show app/shared/root package-lock/bunfig/Biome547 tracked paths unchanged since its Source17 tree.",
+        "Individual test source identity is current; explicit historical component runs do not constitute a whole current backend pass.",
+        "PG import markers are advisory literal screening; their absence is not proof of a safe import graph; no nativePG tests were run.",
+        "Desktop view tests use HappyDOM and mocked Tauri. Cloud-owned HTTP fixtures do not launch Chromium or prove real user-device approval.",
+        "Mixed browser files retain seven original skipped live cases.",
+        "Source27 R2 revalidated original177 offline files plus11-case fresh producer test file,178whole files2396pass0fail0skip. CPU producer/receipt ports are component models, not PG/Root/production proof. Source26 standalone Mastra lock/34case/CLI evidence supersedes earlier import-layout diagnostic; original failures retained as prior evidence."
+      ],
+      "current_source28_full_suite_rerun": false
+    },
+    "adopted_source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "approved_repair_overlays": 28,
+    "note": "28 repair overlays are not 18 original delivery packages. Source28 focused32/lint/server types are inherited scoped evidence, not independently executed here or fullCI/PG/commercial acceptance."
+  },
+  "review_A": {
+    "candidate_commit": "7f931f69dde33703c667a3d3833e9da26915b3a0",
+    "parent_commit": "5c7ef397598edec073cc491972376f75d326a8bb",
+    "tree": "b99af4da7152059bf96513bda2e3aebfacffe172",
+    "verdict": "SOURCE_APPROVED_ONLY",
+    "findings": [],
+    "changed_source_count": 4,
+    "files": [
+      {
+        "path": "openbot/docker/s6/scripts/postgres-init.sh",
+        "bytes": 5546,
+        "sha256": "0969f9dc9e1bae8311c05a17cbcebfb95018589ea5297b92bea49298a5fb8c54",
+        "blob": "b2580901cab9bd15ca312ccb873f5eedb80d7541",
+        "mode": "100644"
+      },
+      {
+        "path": "openbot/docker/s6/s6-rc.d/postgres/run",
+        "bytes": 687,
+        "sha256": "363f35df666a2a877d0949232ff544631a03ee644853d1166fb9f1b333980044",
+        "blob": "c9b2f7512f375251373335624591e7a8900242db",
+        "mode": "100644"
+      },
+      {
+        "path": "openbot/docker/s6/scripts/postgres-volume-version-guard.ts",
+        "bytes": 5281,
+        "sha256": "80f68e305c1c694b7a97378119fb34f968348be3b66446818fb2a563ee6150aa",
+        "blob": "a0aa17a011f2edbfc1eddc4830979c5d35dca61e",
+        "mode": "100644"
+      },
+      {
+        "path": "openbot/server/tests/pg-volume-version-guard.test.ts",
+        "bytes": 7211,
+        "sha256": "5a9e878d14b9fc6e742035d27d20bf66ce9e1d91656a13c79e967845f8ab011f",
+        "blob": "f0d778fead2ea00592ba797078ef3bd6d692652c",
+        "mode": "100644"
+      }
+    ],
+    "scope_evidence": "Complete untruncated Git tree plus parent compare: two existing shell leaves modified and two new leaves added, no other changed files. Existing shell modes remain100644.",
+    "checks": [
+      {
+        "check": "refusal ordering",
+        "result": "PASS_STATIC",
+        "evidence": "postgres-init.sh line21 invokes guard under set-eu before the original init branch, mkdir/chown/password generation, chmod or s6 URL writes. postgres/run line14 invokes start guard before exec PostgreSQL."
+      },
+      {
+        "check": "existing volume file identity",
+        "result": "PASS_STATIC",
+        "evidence": "Every data ancestor lstat rejects symlinks/non-directories; PG_VERSION is regular,nlink1,exact3 bytes; O_RDONLY|O_NOFOLLOW|O_NONBLOCK; named versus FD dev/ino/mode/nlink/size/mtimeNs/ctimeNs before/after and data-directory identity recheck."
+      },
+      {
+        "check": "known exact version only",
+        "result": "PASS_STATIC",
+        "evidence": "Only fixed /usr/lib/postgresql/16/bin and exact16 LF accepted. Missing/empty/CRLF/extra/unknown/PG17 header refuse for existing/start; no env version or guard path switch. EMBEDDED_POSTGRES=off skips both guard and embedded startup, not an embedded-start bypass."
+      },
+      {
+        "check": "new volume init only",
+        "result": "PASS_STATIC",
+        "evidence": "Only phase init accepts absent/empty data; nonempty without PG_VERSION or preserved pgpassword/pgpassword-app refuses. Start never initializes."
+      },
+      {
+        "check": "fixed image integration",
+        "result": "PASS_STATIC",
+        "evidence": "Unchanged openbot/Dockerfile blob7147709a08c3f2ca3a1dc386cfcd6e38f008281e copies docker/s6 to /etc/s6-overlay, includes Bun at /usr/local/bin/bun, installs PG16. Unchanged postgres-init/up blob61624548175035be5e10fbe73b5676d89292bb1e invokes init script."
+      },
+      {
+        "check": "test definitions",
+        "result": "DEFINED_NOT_RUN",
+        "evidence": "3 explicit tests plus2 entrypoints x12 refusal cases=27 definitions; disposable shell/CPU fixture command recorders, not PostgreSQL. No hardlink/race/real-PG runtime proof inferred from these definitions."
+      }
+    ],
+    "limitations": [
+      "Not adopted by this reviewer",
+      "No test execution, typecheck, realPG, SQL, migration, Docker/image or startup proof",
+      "Current fixed PG16 remains; a PG16 volume against a proposedPG17 binary path is rejected, not converted",
+      "No claim of universal race-free lifetime after read-only guard returns"
+    ],
+    "postgres17": "PG_PENDING"
+  },
+  "review_B": {
+    "candidate_commit": "bf0ef002e7b1c0d04a347aabb6cdfb7915b56106",
+    "parent_commit": "95af0749f0996ea78adf27fcf4070a309edbec99",
+    "tree": "7761ca4b7181c19d009598a081bcda1ac161c41a",
+    "verdict": "FINDING_P2_PLAN_NOT_APPROVED",
+    "approved_plan_only": false,
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "bytes": 77303,
+        "sha256": "d96e898daa363a4448c6a69fc1cb98e72a303574347cfdfc78d50603f1dd1865",
+        "blob": "25f78982c6346bb60f509f1b4b6159c2d60a7352",
+        "mode": "100644"
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "bytes": 6840,
+        "sha256": "c3de9d277161a40d207b86572b899388cfe55147d5d25ccc325e6a5b0f8c2344",
+        "blob": "ff7e08385743e23e1a8effaff88c85113ed95b52",
+        "mode": "100644"
+      }
+    ],
+    "decoded_embedded_helper": {
+      "bytes": 23322,
+      "sha256": "4e8419af0012e9528c1a0e689ea91254db1fcded17bb9d3016ffcb446717bf8b",
+      "full_static_review": true,
+      "executed": false,
+      "line_number_basis": "Decoded guard.py literal embedded at workflow line493"
+    },
+    "source_tree_proof": {
+      "source_tree": "60a844d75dd2d9fa3e88517f947d1c0fa0c98cbd",
+      "candidate_tree": "7761ca4b7181c19d009598a081bcda1ac161c41a",
+      "recursive_responses_truncated": false,
+      "manifest_paths_compared": 2065,
+      "blob_or_mode_mismatches": 0,
+      "method": "All manifest paths joined to actual full recursive Git trees; compare shows only two added administrative files since5c7ef397"
+    },
+    "first_four_steps": {
+      "base_blob": "37f9b77df6146f2f4812a30a58072dfa75b444d1",
+      "byte_identical": true,
+      "step_sha256": [
+        "a4fcc095be505628469e822a8820a2aab0609696e90646d275e3dc63bd25e358",
+        "f1827ec724c0ba07fa9b9e8a07d8b7fdad29a63bdce0c2969307a3dc72fecef7",
+        "d7cc3a03ad34341a9e5c570684b0c81f3c619b80999877a7b2a696322f6d4368",
+        "e4eb8048b4eecef1099eceb03899c8602375e07ec398000bbbfd5d0073023510"
+      ]
+    },
+    "checks": [
+      {
+        "check": "manual-only global serialization",
+        "result": "PASS_STATIC",
+        "evidence": "Only workflow_dispatch; one job/no matrix; contents:read; source-recovery-bytes/cancel-in-progress:false."
+      },
+      {
+        "check": "inner build deadline correction",
+        "result": "PASS_STATIC_SCOPED",
+        "evidence": "One monotonic budget; launch reads same absolute deadlines, recomputes after4G raise, reserves5s and deducts1s; nested systemd-run wait includes activation/run/stop; SIGKILL/control-group, Start1s/Stop1s, failuremodekill; cgroup.kill of named build unit then direct512 restore before bounded D-Bus cleanup. This improves the old relative RuntimeMaxSec defect but does not close the separate outer restoration finding below."
+      },
+      {
+        "check": "resource sizes and restore paths",
+        "result": "PASS_STATIC_CONFIGURATION_ONLY",
+        "evidence": "All project units share xiongbaowork.slice; root controller64M counts within4G parent; buildonly4G/swap0; ordinary512; source capture/reset64; finally/per-phase shell trap/always restore512 exist. No actual containment or timely-restoration execution proved."
+      },
+      {
+        "check": "full postchecks and repeatability",
+        "result": "PASS_STATIC",
+        "evidence": "After each successful build, DATA64 re-reads every2065 manifest leaf and compares bytes/SHA/mode, only routeTree may differ; git tracked diff same allowlist; brand unchanged; leaf FD/named,nlink1,O_NOFOLLOW,mode and strictUTF8; beforeB only guarded original bytes reset,no chmod/timestamp repair; two original-before witnesses and identical full A/B raw bytes/metadata."
+      },
+      {
+        "check": "complete candidate transport",
+        "result": "PASS_STATIC",
+        "evidence": "Full gzip+base64 with mtime0 and raw/gzip/base64 sizes andSHA256, raw Gitblob SHA1, payload cap250000 and rawcap131072; emits full payload, no truncation; no third iteration; failing earlier steps prevent B; proof-b absent=>INCOMPLETE. No commit/push/automatic adoption."
+      }
+    ],
+    "findings": [
+      {
+        "id": "DELIVERY-B-P2-ABSOLUTE-RESTORE-UNBOUNDED",
+        "priority": "P2",
+        "status": "OPEN",
+        "title": "The shared300s absolute outer cap still does not supervise the controller restoration and outer shell restore",
+        "locations": [
+          {
+            "path": ".github/workflows/route-tree-repro-candidate.yml",
+            "line": 493,
+            "decoded_helper_lines": "187-197,232-253"
+          },
+          {
+            "path": ".github/workflows/route-tree-repro-candidate.yml",
+            "line": 548,
+            "also_lines": [
+              558,
+              597,
+              607,
+              630
+            ]
+          }
+        ],
+        "evidence": "launch() bounds the nested systemd-run wait, but direct_restore() synchronously Path.write_text()s parent memory.max and memory.swap.max with no deadline supervisor. within_absolute_outer_deadline is only logged after those calls return. The DATA64 root controller unit itself has no RuntimeMaxSec or independent absolute watchdog. Both EXIT traps and the always step also run systemctl set-property with no timeout or remaining-deadline bound. timeout-minutes:20 is not the required shared300s cap.",
+        "failure_trace": "On timeout/stop, cgroup.kill signals the build descendants, then a synchronous lowering of memory.max can spend time reclaiming still-charged memory or be killed with the slice. A reserved5s interval cannot bound that syscall. If it stalls, code cannot reach the later expired check or bounded D-Bus cleanup. Even after a successful direct restore, a stalled outer set-property can keep the A/B stage waiting past the same deadline. Thus the nested build wait is bounded, but the claimed startup/stop/restore-inclusive outer300s is not established.",
+        "basis": "Static control-flow finding, not an executed reproduction. Linux cgroup-v2 documents synchronous reclaim/OOM behavior on memory.max unless O_NONBLOCK is used; systemd TimeoutStartSec/StopSec are service lifecycle limits, not a watchdog on the active root controller's blocking restoration.",
+        "required_change": "Provide a bounded restoration and outer-controller/launch cleanup path supervised against the same immutable absolute deadline, including timeout/failure paths. Preserve actual512MiB/swap0 restoration before DATA, all resource aggregation, original Source/first4steps and manual-only trigger. A late boolean/log or20-minute job timeout is not closure. Do not merely kill the controller while leaving an elevated parent; if bounded restore cannot be established, keep plan unapproved and do not execute.",
+        "acceptance": "Full new exact workflow/plan review must show bounded startup, build stop and actual aggregate restore with no unbounded management operation outside the same deadline; no project run authorized by this review."
+      }
+    ],
+    "old_candidate": "95af0749f0996ea78adf27fcf4070a309edbec99 remains prohibited; no approval transferred",
+    "scheduling": "PENDING: no dispatch performed or dispatch capability established; default-branch UI readiness not established. Scheduling pending is independent of the openP2 and is never plan approval.",
+    "workflow_dispatched": false,
+    "project_executed": false,
+    "source_adopted": false
+  },
+  "official_semantic_references": [
+    {
+      "url": "https://www.freedesktop.org/software/systemd/man/255/systemd.service.html",
+      "sections": [
+        "RuntimeMaxSec",
+        "TimeoutStartSec",
+        "TimeoutStopSec"
+      ],
+      "observed": "RuntimeMaxSec applies active service time, default infinity; startup and stop timeouts have separate semantics."
+    },
+    {
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+      "sections": [
+        "cgroup.kill",
+        "memory.max"
+      ],
+      "observed": "cgroup.kill signals all descendants; memory.max normal write may perform synchronous reclaim/OOM. O_NONBLOCK skips that synchronous work but is not, by itself, proof of timely workload cleanup."
+    }
+  ],
+  "remaining_delivery_gaps": {
+    "formal_same_sha_image_8GET": "PENDING: /api/tasks,/api/models,/api/quota,/api/devices,/api/waker-groups,/api/group-pipelines/templates,/api/personas,/api/agents/general-assistant/autonomous; capabilities200,unknownAPI404,HTML/mainJS200 and branding still require actual same-SHA image/process proof",
+    "postgres17": "PG_PENDING: current image installs and starts16; compose17 and CPU fixtures do not prove realPG17/RLS/roles/commitACK/migration",
+    "buildkit": "PENDING: daemon/BuildKit/containers aggregate resource evidence absent; no Docker/native exception inferred from frontend4G",
+    "native": "PENDING: nested openbot/.github/workflows/desktop.yml is not active rootworkflow and is not real clean-client install proof; no native install or publish-release authorized",
+    "strict_ci": "NOT_RUN",
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "preserved_gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "external_roles": {
+    "OpenCode": "HUMAN_PAUSED_NOT_RESTARTED",
+    "WorkBuddy": "Delivery review responsibility taken by this cloud reviewer; no native client claimed running",
+    "Qoder": "Delivery review responsibility taken by this cloud reviewer; no native client claimed running"
+  },
+  "coordinator_handoff": "A SOURCE_APPROVED_ONLY for exact7f931f69, no adoption/execution. B exactbf0ef002 FINDING_P2_PLAN_NOT_APPROVED. Coordinator owns canonical/serial resource queue; this report grants no run, PG, Docker, deployment or commercial gate clearance."
+}
