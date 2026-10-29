@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T07:45:00Z",
+  "checkpoint_update_at": "2026-10-29T16:11:53.219Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -3747,7 +3747,7 @@
         "full_read": true
       }
     ],
-    "status": "DISPATCHED_IN_PROGRESS_NOT_ACCEPTED",
+    "status": "TERMINAL_SUCCESS_DATA_TRANSPORT_CHECKED_RAW_EXPORT_PENDING",
     "review_path": "archives/recovery-20261028/CLOUD-MINIMAL-GENERATOR-A11-NONAUTHOR-REVIEW-20261029.json",
     "dispatch": {
       "schema": "xiongbaowork-a11-exact-dispatch-v1",
@@ -3769,6 +3769,33 @@
       },
       "Source_adopted": false,
       "next_action": "Read same run40902334215/job123547693853 terminal; no duplicate. Preserve outputs and actual physical restoration; route awaits idlequeue."
+    },
+    "terminal": {
+      "status": "TERMINAL_SUCCESS_DATA_TRANSPORT_CHECKED_RAW_EXPORT_PENDING",
+      "run": 40902334215,
+      "job": 123547693853,
+      "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+      "native_status": "completed",
+      "native_conclusion": "success",
+      "transport_report": {
+        "commit": "bd71fddfbc56a0edb2c78b10e6818abafea695ed",
+        "path": "archives/recovery-20261028/A11-DATA-EXPORT-TRANSPORT-REVIEW-20261029.json",
+        "blob": "55045b5fe521dac3d0351c697026e39163fdc0e8",
+        "headers": 4,
+        "chunks": 5,
+        "ends": 4,
+        "strict_base64_compressed_length_and_sha256": "ACTUALLY_CHECKED_MATCH"
+      },
+      "raw_inflate_crc_rawsha_json": "PENDING_NOT_DATA_PASS",
+      "source_adopted": false,
+      "observed_at": "2026-10-29T16:11:53.219Z"
     }
+  },
+  "human_delegated_takeover": {
+    "owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+    "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+    "acquisition_commit": "2b6cb6cf6241bd134ead23f2080fb5714407ed9b",
+    "basis": "Explicit human reassignment; expired predecessor and idle actual queue",
+    "next_action": "Verify exact e35d external review and candidate identities; one bounded route dispatch only if all preflights pass. A11 raw decode independently pending."
   }
 }

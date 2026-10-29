@@ -7,7 +7,7 @@
   "run_id": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
   "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
   "acquired_at": "2026-10-29T16:10:49.878Z",
-  "renewed_at": "2026-10-29T16:10:49.878Z",
+  "renewed_at": "2026-10-29T16:11:53.219Z",
   "expires_at": "2026-10-29T16:55:49.878Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,

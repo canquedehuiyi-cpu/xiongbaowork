@@ -1,0 +1,110 @@
+{
+  "schema": "human-delegated-takeover-checkpoint/v1",
+  "at": "2026-10-29T16:11:53.219Z",
+  "lease_owner": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
+  "epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
+  "source_baseline": {
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "approved_repair_overlays": 28,
+    "original_delivery_packages": 18,
+    "files": 2065,
+    "bytes": 50175181,
+    "manifest": {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "bytes": 456310,
+      "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff"
+    },
+    "validation": {
+      "candidate_sha": "d139f73ad599c344184d3023a80beeeafa2e6297",
+      "run_id": 40830714143,
+      "job_id": 123304042601,
+      "focused": {
+        "pass": 32,
+        "fail": 0,
+        "skip": 0,
+        "expects": 98
+      },
+      "original_biome_lint_exit": 0,
+      "original_full_server_typecheck_exit": 0,
+      "typecheck_memory_bytes": 2147483648,
+      "restored_parent_bytes": 536870912,
+      "swap_bytes": 0
+    },
+    "historical_scoped_evidence": {
+      "source27_offline_files": 178,
+      "pass": 2396,
+      "fail": 0,
+      "skip": 0,
+      "expects": 6673,
+      "current_source28_full_rerun": false
+    },
+    "commercial_acceptance": "NOT_DELIVERED"
+  },
+  "required_inputs": [
+    "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+    "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+    "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+    "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+    "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md"
+  ],
+  "required_input_blobs": [
+    {
+      "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+      "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+      "full_content_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+      "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+      "full_content_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+      "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+      "full_content_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+      "full_content_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md",
+      "blob": "2c576298ea45a3d21f66e67dfeb6033301a934d9",
+      "full_content_read": true
+    }
+  ],
+  "scope": "77/18/7 unchanged; original full inputs retained",
+  "a11": {
+    "status": "TERMINAL_SUCCESS_DATA_TRANSPORT_CHECKED_RAW_EXPORT_PENDING",
+    "run": 40902334215,
+    "job": 123547693853,
+    "candidate": "8ee9cc9ad3228b9e5ef44a2b7942b1f5ad25138e",
+    "native_status": "completed",
+    "native_conclusion": "success",
+    "transport_report": {
+      "commit": "bd71fddfbc56a0edb2c78b10e6818abafea695ed",
+      "path": "archives/recovery-20261028/A11-DATA-EXPORT-TRANSPORT-REVIEW-20261029.json",
+      "blob": "55045b5fe521dac3d0351c697026e39163fdc0e8",
+      "headers": 4,
+      "chunks": 5,
+      "ends": 4,
+      "strict_base64_compressed_length_and_sha256": "ACTUALLY_CHECKED_MATCH"
+    },
+    "raw_inflate_crc_rawsha_json": "PENDING_NOT_DATA_PASS",
+    "source_adopted": false,
+    "observed_at": "2026-10-29T16:11:53.219Z"
+  },
+  "gates": {
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "full_ci": "NOT_RUN",
+    "commercial": "NOT_DELIVERED"
+  },
+  "next_action": "Verify exact e35d external review and candidate identities; one bounded route dispatch only if all preflights pass. A11 raw decode independently pending."
+}
