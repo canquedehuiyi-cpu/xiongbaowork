@@ -21,7 +21,7 @@ const parentIdentity = [
 const read = (path: string) =>
   readFileSync(new URL(path, import.meta.url), "utf8");
 const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
-const withoutComments = (value: string) => value.replace(/--[^\n]*/g, "");
+const withoutComments = (value: string) => value.replace(/--[^\r\n]*/g, "");
 const sql = read("../drizzle/0081_approval_fresh_seeds.sql");
 const seedTable = '"public"."approval_fresh_seeds"';
 const requestTable = '"public"."approval_requests"';
@@ -81,6 +81,10 @@ describe("fresh seed closed schema proposal, no owner writer wired", () => {
       value + "\nGRANT SELECT ON approval_fresh_seeds TO openbot_app;"],
     ["extra policy", (value: string) =>
       value + "\nCREATE POLICY unsafe ON approval_fresh_seeds USING (true);"],
+    ["CR-comment SELECT grant", (value: string) =>
+      value + "\n-- guard\rGRANT SELECT ON approval_fresh_seeds TO openbot_app;"],
+    ["CR-comment policy", (value: string) =>
+      value + "\n-- guard\rCREATE POLICY unsafe ON approval_fresh_seeds USING (true);"],
     ["partial parent binding", (value: string) =>
       value.replace('FOREIGN KEY ("approval_id", "tenant_id", "owner_user_id", "run_id", "tool_call_id", "action_digest")', 'FOREIGN KEY ("approval_id")')],
     ["reverse result check", (value: string) =>
