@@ -436,3 +436,50 @@ export function validateApprovalRecoveryContext(
   )
     throw new ApprovalRefusedError("approval_recovery_binding_invalid");
 }
+
+/**
+ * Internal producer authority, never supplied by an HTTP request. An adapter must
+ * freeze and persist its producer provenance/template BEFORE an action can run.
+ * These interfaces are not PG, RLS, release or receipt proof; production has no
+ * default adapter and remains blocked until those authorities are wired.
+ */
+export type ApprovalFreshSeed = {
+  approvalId: string;
+  ownerId: string;
+  tenantId: string;
+  actionDigest: string;
+  runId: string;
+  toolCallId: string;
+  templateDigest: string;
+  producerProofId: string;
+};
+export interface ApprovalFreshProducerPort {
+  /** Load an existing immutable producer seed; never rebuild today's input. */
+  prepare(context: ApprovalRecoveryContext): Promise<ApprovalFreshSeed>;
+  /** Independently verify persisted provenance and the current release/authority. */
+  verifySeed(
+    seed: ApprovalFreshSeed,
+    context: ApprovalRecoveryContext,
+  ): Promise<boolean>;
+  /**
+   * Store-owned transaction: CAS the approval result AND immutable final/continue
+   * disposition against the verified seed. An unknown ACK never permits replay.
+   */
+  commitResult(input: {
+    seed: ApprovalFreshSeed;
+    context: ApprovalRecoveryContext;
+    result: NonNullable<ApprovalRecord["result"]>;
+    disposition: "continue" | "final";
+  }): Promise<"committed" | "lost" | "unknown">;
+  /**
+   * Recover after result commit. Read only the frozen seed/result/disposition;
+   * publish exact input + plan + ledger atomically and idempotently, with unique
+   * keys. No tool/model/network effect in that transaction. A final disposition
+   * instead commits approval completion WITHOUT a continuation receipt or model.
+   * Return continue only after COMMIT; the separate receipt protocol still owns
+   * target admission and atomic receipt + approval finish.
+   */
+  publishSaved(
+    context: ApprovalRecoveryContext,
+  ): Promise<"continue" | "final" | "blocked" | "unknown">;
+}
