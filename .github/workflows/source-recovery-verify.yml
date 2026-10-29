@@ -1,4 +1,4 @@
-name: Accepted Source checkpoint -manual validation
+name: Proposed original frontend bundle one-step2GiB manual only
 on:
   workflow_dispatch:
 permissions:
@@ -475,4 +475,141 @@ jobs:
                 "postgres17":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           raise SystemExit(code)
           
+          PY
+      - name: Materialize exact current manifest from own Git objects under DATA64MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          base=Path.cwd();cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864" and (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg.parent/"memory.max").read_text().strip()=="536870912"
+          repo=base/"xiongbaowork-verified-source"/"repo"
+          head=subprocess.run(["git","rev-parse","HEAD"],cwd=repo,check=True,capture_output=True,text=True).stdout.strip()
+          assert len(head)==40
+          raw=subprocess.run(["git","-c","core.deltaBaseCacheLimit=1m","-c","pack.threads=1","show","HEAD:archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json"],cwd=repo,check=True,capture_output=True).stdout
+          assert len(raw)==445399 and hashlib.sha256(raw).hexdigest()=="fdd20eda65a9576e35d35bef0d9a1b4b2bd5321500f60158a9909fc4771d5843"
+          parsed=json.loads(raw);assert len(parsed["files"])==2060 and parsed["source_bytes"]==50032071
+          fd=os.open(base/"frontend-current-source-manifest.json",os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+          try:
+              at=0
+              while at<len(raw):at+=os.write(fd,raw[at:])
+          finally:os.close(fd)
+          print("FRONTEND_EXPECTED_MANIFEST_DATA "+json.dumps({"head":head,"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),"path":"own RUNNER_TEMP/frontend-current-source-manifest.json","sparse_git_object_read":True,"data_limit":67108864,"source_changes":0}),flush=True)
+          
+          PY
+      - name: Generate original brand config under unchanged512MiB
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=512M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill --property=RuntimeMaxSec=40 \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          base=Path.cwd();root=base/"xiongbaowork-verified-source"/"repo"/"openbot";bun=base/"xiongbaowork-bun-1.3.14"/"bun"
+          cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="536870912" and (cg.parent/"memory.max").read_text().strip()=="536870912"
+          home=base/"original-frontend-build-home";home.mkdir(mode=0o700)
+          env={"PATH":str(bun.parent)+":/usr/local/bin:/usr/bin:/bin","HOME":str(home),"NODE_ENV":"production","CI":"true","NO_COLOR":"1","TENANT_PACKAGE_DIR":"../examples/qoderwake"}
+          r=subprocess.run([str(bun),"--no-install","scripts/generate-app-config.ts"],cwd=root,env=env,capture_output=True,text=True,timeout=30)
+          print("FRONTEND_BRAND_CONFIG_RESULT "+json.dumps({"exit_code":r.returncode,"tenant_package":"../examples/qoderwake","stdout":r.stdout[-2000:],"stderr":r.stderr[-2000:]}),flush=True)
+          raise SystemExit(r.returncode)
+          PY
+      - name: Original frontend build with proposed one-step2GiB exception
+        id: frontend_build_2g
+        run: |
+          set -euo pipefail
+          restore_project_gate() {
+            sudo systemctl set-property --runtime xiongbaowork.slice MemoryMax=512M MemorySwapMax=0
+            sudo /usr/bin/python3 -I -B - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          assert (p/"memory.max").read_text().strip()=="536870912" and (p/"memory.swap.max").read_text().strip()=="0"
+          print("FRONTEND_BUILD_RESTORE512 "+json.dumps({"parent_memory_max":536870912,"swap":0}),flush=True)
+          PY
+          }
+          trap restore_project_gate EXIT
+          sudo /usr/bin/python3 -I -B - <<'PY'
+          from pathlib import Path
+          p=Path("/sys/fs/cgroup/xiongbaowork.slice")
+          assert (p/"memory.max").read_text().strip()=="536870912" and (p/"memory.swap.max").read_text().strip()=="0"
+          assert all(not (q/"cgroup.procs").read_text().strip() for q in p.rglob("cgroup.procs") for q in [q.parent])
+          PY
+          sudo systemctl set-property --runtime xiongbaowork.slice MemoryMax=2G MemorySwapMax=0
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=2G \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill --property=RuntimeMaxSec=300 \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          base=Path.cwd();cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="2147483648" and (cg/"memory.swap.max").read_text().strip()=="0"
+          assert (cg.parent/"memory.max").read_text().strip()=="2147483648" and (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          root=base/"xiongbaowork-verified-source"/"repo"/"openbot";bun=base/"xiongbaowork-bun-1.3.14"/"bun"
+          env={"PATH":str(bun.parent)+":/usr/local/bin:/usr/bin:/bin","HOME":str(base/"original-frontend-build-home"),"NODE_ENV":"production","CI":"true","NO_COLOR":"1","TENANT_PACKAGE_DIR":"../examples/qoderwake"}
+          assert json.loads((root/"app/package.json").read_text())["scripts"]["build"]=="bun --bun node_modules/vite/bin/vite.js build"
+          print("FRONTEND_BUNDLE_START "+json.dumps({"command":"Original app build script content","project_and_descendants":2147483648,"swap":0,"timeout":300,"inner_timeout":270,"scope":"ONLY_ORIGINAL_FRONTEND_BUNDLER","source_changes_adopted":False,"native_pg":"PG_PENDING"}),flush=True)
+          try:
+              r=subprocess.run([str(bun),"--bun","node_modules/vite/bin/vite.js","build"],cwd=root/"app",env=env,capture_output=True,text=True,timeout=270);code=r.returncode;out=r.stdout+"\n"+r.stderr
+          except subprocess.TimeoutExpired as e:
+              code=124;out=str(e.stdout or "")+"\n"+str(e.stderr or "")
+          lines=out.splitlines()
+          print("FRONTEND_BUNDLE_LOG "+json.dumps({"lines":len(lines),"tail100":lines[-100:]}),flush=True)
+          print("FRONTEND_BUNDLE_PROCESS_RESULT "+json.dumps({"exit_code":code,"status":"PASS_BUNDLE_ONLY" if code==0 else "FAILED","project_and_descendants":2147483648,"swap":0,"inner_timeout":270,"outer_timeout":300,"commercial_acceptance":"NOT_DELIVERED"}),flush=True)
+          raise SystemExit(code)
+          PY
+      - name: Verify Source and inventory artifacts after resource gate restoration under DATA64MiB
+        if: always()
+        run: |
+          set -euo pipefail
+          sudo systemd-run --wait --pipe --slice=xiongbaowork.slice \
+            --property=Type=exec --property=MemoryMax=64M \
+            --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+            --uid="$(id -u)" --working-directory="$RUNNER_TEMP" \
+            /usr/bin/python3 -I -B - <<'PY'
+          import hashlib,json,re,stat
+          from pathlib import Path
+          base=Path.cwd();cg=Path("/sys/fs/cgroup")/Path("/proc/self/cgroup").read_text().strip()[3:].lstrip("/")
+          assert (cg/"memory.max").read_text().strip()=="67108864" and (cg.parent/"memory.max").read_text().strip()=="536870912"
+          assert (cg/"memory.swap.max").read_text().strip()=="0" and (cg.parent/"memory.swap.max").read_text().strip()=="0"
+          manifest_path=base/"frontend-current-source-manifest.json"
+          if not manifest_path.exists():
+              print("FRONTEND_SOURCE_AFTER_BUILD "+json.dumps({"status":"NOT_REACHED_SETUP_FAILURE","source_edits_adopted":False}),flush=True);raise SystemExit(0)
+          manifest=json.loads(manifest_path.read_text());root=base/"xiongbaowork-verified-source"/"repo"/"openbot"
+          def identity(p):
+              st=p.lstat();assert stat.S_ISREG(st.st_mode) and st.st_nlink==1
+              h=hashlib.sha256()
+              with p.open("rb") as f:
+                  while True:
+                      b=f.read(65536)
+                      if not b:break
+                      h.update(b)
+              return {"bytes":st.st_size,"sha256":h.hexdigest()}
+          changes=[]
+          for x in manifest["files"]:
+              after=identity(root.parent/x["path"])
+              if after["bytes"]!=x["bytes"] or after["sha256"]!=x["sha256"]:changes.append({"path":x["path"],"before":x,"after":after})
+          print("FRONTEND_SOURCE_AFTER_BUILD "+json.dumps({"tracked_source_changes":changes,"source_edits_adopted":False,"data_limit":67108864,"parent_memory_limit":536870912}),flush=True)
+          dist=root/"app/dist";artifacts=[];brand={}
+          if dist.is_dir():
+              for p in sorted(dist.rglob("*")):
+                  if p.is_file():artifacts.append({"path":str(p.relative_to(dist)),**identity(p)})
+              if (dist/"index.html").is_file():
+                  html=(dist/"index.html").read_text()
+                  config=(root/"app/src/lib/generated/application-config.ts").read_text()
+                  entries=re.findall(r'<script[^>]*src=["\']([^"\']+)',html)
+                  brand={"html_contains_product":"熊宝数字员工" in html,"generated_config_contains_product":"熊宝数字员工" in config,"production_html_no_baked_dev_port":"__OPENBOT_WS_PORT__" not in html,"entry_scripts":entries}
+                  for src in entries:
+                      if src.startswith("/") and src.endswith(".js") and (dist/src.lstrip("/")).is_file():
+                          text=(dist/src.lstrip("/")).read_text();brand["entry_contains_product"]="熊宝数字员工" in text;brand["entry_contains_legacy_self_host_text"]="Self-host OpenBot" in text
+          print("FRONTEND_BUNDLE_ARTIFACT_DATA "+json.dumps({"artifacts":artifacts,"brand_observations":brand,"formal_image8GET":"NOT_RUN","native_pg":"PG_PENDING","commercial_acceptance":"NOT_DELIVERED"}),flush=True)
           PY
