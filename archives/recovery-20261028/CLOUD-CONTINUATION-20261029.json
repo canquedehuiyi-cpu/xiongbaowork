@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T04:46:11.192Z",
+  "checkpoint_update_at": "2026-10-30T04:54:34.135Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,11 +4429,11 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:third96ecc-20261030",
     "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
-    "state": "held",
-    "expires_at": "2026-10-30T05:28:53.208Z",
+    "state": "released",
+    "expires_at": "2026-10-30T04:54:34.135Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
-    "released_at": "2026-10-30T04:14:21.251Z"
+    "released_at": "2026-10-30T04:54:34.135Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -4951,6 +4951,13 @@
       "single_new_human_decision": "Whether to allocate a third actual metadata-only attempt for exact96ecc; no such allocation now.",
       "prerequisites_if_later_allocated": "Confirm exact unchanged applicable review, fresh soleowner/epoch/head CAS, emptyqueue anddedup; a changedcandidate requires newfullnonauthorreview.",
       "not_requested": "No resource, environment, manager-global configuration, privilege or Source expansion."
+    },
+    "subsequent_actual_runtime": {
+      "run": 41004678906,
+      "job": 123896762774,
+      "conclusion": "failure",
+      "authority_record": "metadata_third_attempt",
+      "historical_static_preparation_not_runtime_approval": true
     }
   },
   "metadata_third_attempt": {
@@ -4961,7 +4968,7 @@
     "additional_jobs": 1,
     "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
     "accepted_at": "2026-10-30T04:43:53.208Z",
-    "status": "ACTUAL_THIRD_FINAL_JOB_IN_PROGRESS",
+    "status": "CLOSED_THIRD_FINAL_JOB_FAILURE_OWNER_USR_OOM_WINDOW_NO_VERSION_VALUES",
     "fourth_authorized": false,
     "new_jobs": 1,
     "old_runs": [
@@ -4989,10 +4996,58 @@
       "job": 123896762774,
       "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
       "attempt": 1,
-      "status": "in_progress",
-      "conclusion": null,
+      "status": "completed",
+      "conclusion": "failure",
       "created_at": "2026-10-30T04:45:43Z",
-      "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/41004678906"
+      "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/41004678906",
+      "result_path": "archives/recovery-20261028/PLATFORM-IDENTITY-96-THIRD-RESULT-20261030.json",
+      "nonauthor": {
+        "commit": "e0274530d663b355f434e5e14b143738ca848098",
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-96-RUNTIME-NONAUTHOR-20261030.json",
+        "blob": "0c4038d83f59284eb9260aa80435fcd956c2e7c5",
+        "bytes": 26189,
+        "sha256": "0e4fc8adbb8cc4eb375fff5941a76361e9265fa745e7b85287bc4eb19dcf7343",
+        "status": "FAILED_COLLECTOR_OOM_OWNER_USR_PHASE_NO_VERSION_VALUES"
+      }
+    },
+    "completed_phase_names": [
+      "root_entry",
+      "pid1_snapshot",
+      "drop",
+      "collector_entry",
+      "manager_version",
+      "disk_version"
+    ],
+    "last_unfinished_phase": {
+      "phase": "owner_usr",
+      "state": "STARTED",
+      "seq": 13,
+      "at": 23.040068797,
+      "fixed_argv": [
+        "/usr/bin/dpkg-query",
+        "-S",
+        "/usr/lib/systemd/systemd"
+      ]
+    },
+    "actual_version_values": "NOT_EXPORTED",
+    "next_decision": {
+      "status": "DESIGN_ONLY_NOT_IMPLEMENTED_NO_FOURTH_ATTEMPT",
+      "concrete_proposal": "If separately assigned static preparation, emit each completed allowlisted query's bounded complete raw result with bytes/hash and run/head/unit/phase identity immediately, before subsequent queries, preserving original final full report/UNKNOWN/resource gates. Assess a lower-footprint exact literal/same-inode owner association separately; semantic equivalence must be independently reviewed. No omission or guessed owner proof.",
+      "why": "Two version query phases completed but values were lost when collector was OOM-killed within owner_usr interval. Immediate complete result logging would retain actual evidence without claiming completion of failed later phases.",
+      "not_guaranteed": "Does not establish it fits32MiB, solve owner-phase OOM, or provide complete package/manager linkage. Specific allocator is unknown.",
+      "boundaries": "Same16+16+32/shared64/swap0/oom1/project512, same identity/env/drop/allowlists/firstt0/270300/sustainedsupervisor/fallback/cleanup/readonlyphysicalfinalACK. No code change, resource/permission/topology/environment expansion or new job now."
+    },
+    "dedup_consumed": true,
+    "closed_at": "2026-10-30T04:54:34.135Z",
+    "queue_at_closeout": {
+      "queued": 0,
+      "in_progress": 0,
+      "exact_candidate_runs": 1,
+      "run": 41004678906,
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "failure",
+      "observed_at": "2026-10-30T04:53:42.969Z"
     }
   }
 }

@@ -1,0 +1,713 @@
+{
+  "schema": "administrative-runtime-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+  "run": 41004678906,
+  "job": 123896762774,
+  "attempt": 1,
+  "status": "FAILED_COLLECTOR_OOM_OWNER_USR_PHASE_NO_VERSION_VALUES",
+  "full_log": {
+    "complete_read": true,
+    "source": "dedicated github_fetch_workflow_job_logs",
+    "chars": 87455,
+    "utf8_bytes": 87457,
+    "sha256": "e840a81c3ad24c92a25a6a047fb307adbc414501e76107919db0ad3471e37cf9"
+  },
+  "native": {
+    "status": "completed",
+    "conclusion": "failure",
+    "setup": "success",
+    "admission": "failure",
+    "always": "failure",
+    "collector_result": "oom-kill",
+    "collector_main": "code=killed,status=9/KILL",
+    "runtime": "1.539s",
+    "memory_peak": "32M",
+    "swap": "0B"
+  },
+  "phase_checks": {
+    "count": 13,
+    "contiguous": true,
+    "monotonic": true,
+    "identity": true,
+    "max_line_bytes": 287
+  },
+  "records": {
+    "PLATFORM_BOOTSTRAP_RESOURCE_GATE": [
+      {
+        "raw_bytes_with_LF": 483,
+        "raw_sha256_with_LF": "c9065162a8e9696da4c5271b6edf166000c24fc47a953b7c298b457eb28ed061",
+        "value": {
+          "shared": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "project": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "started": 22.454838295,
+          "inner": 292.454838295,
+          "outer": 322.454838295,
+          "before": {
+            "shared": {
+              "memory.max": "67108864",
+              "memory.swap.max": "0",
+              "memory.oom.group": "0"
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.swap.max": "0",
+              "memory.oom.group": "0"
+            },
+            "shared_empty": true,
+            "project_empty": true
+          }
+        }
+      }
+    ],
+    "PLATFORM_METADATA_PHASE": [
+      {
+        "raw_bytes_with_LF": 256,
+        "raw_sha256_with_LF": "d78099f43e95982cb09db473cf9b8f65aad26ea95df87ecf95d4b8c4b59740b6",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 1,
+          "phase": "root_entry",
+          "state": "STARTED",
+          "at": 23.027074622,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 257,
+        "raw_sha256_with_LF": "dbdf683b92cd7b43d71c4bdbdcd177d99dce21e210eade4c377cc829bd0d970e",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 2,
+          "phase": "root_entry",
+          "state": "FINISHED",
+          "at": 23.027891223,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 259,
+        "raw_sha256_with_LF": "960b65a2a9d61c051870b9736d288144b311a6ed79e8160eb0168760e5677cb1",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 3,
+          "phase": "pid1_snapshot",
+          "state": "STARTED",
+          "at": 23.027921169,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 260,
+        "raw_sha256_with_LF": "4e6e23c4aedd0c00d5b7341ed4e973e6ba725f4d752726d0a14ed729e717a776",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 4,
+          "phase": "pid1_snapshot",
+          "state": "FINISHED",
+          "at": 23.029533893,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 250,
+        "raw_sha256_with_LF": "5dd5a0d752152f91c8f7b0c0434191076b61d2a45a7b5c8cebf29724a661b365",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 5,
+          "phase": "drop",
+          "state": "STARTED",
+          "at": 23.029630023,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 251,
+        "raw_sha256_with_LF": "41a0779fa5d83100d44f173e8598bf11c5d4333740cab67345aacd6e9e307d49",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 6,
+          "phase": "drop",
+          "state": "FINISHED",
+          "at": 23.030099343,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 261,
+        "raw_sha256_with_LF": "4c0f3f4cf504f2b1a38874063fb0465edadc5b2d814d32941d8ca1345ed89956",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 7,
+          "phase": "collector_entry",
+          "state": "STARTED",
+          "at": 23.030128768,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 261,
+        "raw_sha256_with_LF": "afb177fae28685634942b16b957501bcbfa2b8db1519b4fa0ac63a77b1ba44a6",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 8,
+          "phase": "collector_entry",
+          "state": "FINISHED",
+          "at": 23.03057778,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 261,
+        "raw_sha256_with_LF": "915e14fd9c2f86fea085a0f3a95cb85aa6d58f8a11238269791e43787b69ffc8",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 9,
+          "phase": "manager_version",
+          "state": "STARTED",
+          "at": 23.030910654,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 263,
+        "raw_sha256_with_LF": "38e9bb9608a3a1b431f64a2f923d2bed8e1c786cc307685f4b81b7a07406e559",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 10,
+          "phase": "manager_version",
+          "state": "FINISHED",
+          "at": 23.034934341,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 259,
+        "raw_sha256_with_LF": "0e85b06718b69048059bd2ed23bfe8b3b9397a518d7a2a63a190ffc47a3bc1cc",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 11,
+          "phase": "disk_version",
+          "state": "STARTED",
+          "at": 23.035267966,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 260,
+        "raw_sha256_with_LF": "8e2d0df2a8dfe055ffcff14b0ae69f65c5f4315de452103ab723aabe938fe832",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 12,
+          "phase": "disk_version",
+          "state": "FINISHED",
+          "at": 23.039765298,
+          "metadata_only": true
+        }
+      },
+      {
+        "raw_bytes_with_LF": 256,
+        "raw_sha256_with_LF": "3a841d3f087926f01fd5675039ad0e44a61bf2c8d1fa8e27c0098aaa523ab216",
+        "value": {
+          "schema": "xb-platform-phase/v1",
+          "run": "41004678906",
+          "attempt": "1",
+          "head": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "unit": "xb-platform-41004678906-1-metadata.service",
+          "seq": 13,
+          "phase": "owner_usr",
+          "state": "STARTED",
+          "at": 23.040068797,
+          "metadata_only": true
+        }
+      }
+    ],
+    "PLATFORM_PID1_ADMITTED_METADATA": [
+      {
+        "raw_bytes_with_LF": 881,
+        "raw_sha256_with_LF": "94a262ad86006e734aa4d12a8fdbada347edbd97119ff8e929d75884c3cf538e",
+        "value": {
+          "acquisition_uid": 0,
+          "attempt": "1",
+          "captured_at": 23.029363494,
+          "epoch": "xb-platform-41004678906-1:22.454838295",
+          "head_sha": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+          "identity": {
+            "bytes": 141776,
+            "dev": "2049",
+            "fd_named_stable": true,
+            "ino": "5137",
+            "mode": "0o755",
+            "path": "/proc/1/exe",
+            "sha256": "508fa02522618fa8dca83df8ab110208853834018bc74d1c727ecb8ef866a714",
+            "status": "CAPTURED",
+            "uid": 0
+          },
+          "metadata_not_resource_restoration_proof": true,
+          "readlink": {
+            "path": "/usr/lib/systemd/systemd",
+            "status": "CAPTURED"
+          },
+          "resource_gate": {
+            "collector": {
+              "memory.max": "33554432",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            }
+          },
+          "run_id": "41004678906",
+          "schema": "xiongbaowork-fixed-pid1-metadata/v1",
+          "source": "ROOT_ADMITTED_COLLECTOR_FIXED_PROC1_EXE"
+        }
+      }
+    ],
+    "PLATFORM_PID1_ADMITTED_METADATA_IDENTITY": [
+      {
+        "raw_bytes_with_LF": 254,
+        "raw_sha256_with_LF": "31b2d7b37e19fe4858b9c2dd3f2b02f8e95396af153d17ac567774fe35e189ab",
+        "value": {
+          "bytes": 881,
+          "sha256": "94a262ad86006e734aa4d12a8fdbada347edbd97119ff8e929d75884c3cf538e",
+          "complete": true,
+          "run_id": "41004678906",
+          "attempt": "1",
+          "source": "ROOT_ADMITTED_COLLECTOR_FIXED_PROC1_EXE",
+          "metadata_not_resource_restoration_proof": true
+        }
+      }
+    ],
+    "PLATFORM_VERSION_METADATA_REPORT": [],
+    "PLATFORM_VERSION_METADATA_IDENTITY": [],
+    "PLATFORM_RESOURCE_OUTER_TERMINAL": [
+      {
+        "raw_bytes_with_LF": 2707,
+        "raw_sha256_with_LF": "fba245c4401e114868c313921417daac3578f3d7e387c1afed85d1e839442b0a",
+        "value": {
+          "actual": {
+            "collector": {
+              "cleanup": {
+                "cgroup_absent_after_stop": true,
+                "collector_populated0": false,
+                "job": "",
+                "load_state": "loaded",
+                "stop_completed": true,
+                "unit": "xb-platform-41004678906-1-metadata.service"
+              },
+              "exit": 1,
+              "restore": {
+                "absolute_deadline": 322.454838295,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 24.580579411,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "stage": "metadata",
+              "status": "FAILED_OR_UNKNOWN"
+            },
+            "controls": {
+              "fallback": {
+                "absent_after_exit": true,
+                "actual_empty": false,
+                "properties": {
+                  "ActiveState": "inactive",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "not-found"
+                },
+                "quiet": true,
+                "unit": "xb-platform-41004678906-1-fallback.service"
+              },
+              "supervisor": {
+                "absent_after_exit": true,
+                "actual_empty": false,
+                "properties": {
+                  "ActiveState": "failed",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "loaded"
+                },
+                "quiet": true,
+                "unit": "xb-platform-41004678906-1-supervisor.scope"
+              }
+            },
+            "errors": [],
+            "fallback_terminal": {
+              "collectors": {
+                "metadata": "absent"
+              },
+              "errors": [],
+              "observed_at": 24.684722721,
+              "outer": 322.454838295,
+              "parent_populated0_claim": false,
+              "restore": {
+                "absolute_deadline": 322.454838295,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 24.674656285,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "status": "COLLECTOR_EMPTY_LIMITS_OBSERVED",
+              "supervisor_death": false
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project_populated0": true,
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared_populated0": true,
+            "supervisor_terminal": {
+              "actual_parent_empty_claim": false,
+              "cleaned": [
+                "metadata"
+              ],
+              "collectors": {
+                "metadata": "absent"
+              },
+              "error": {
+                "detail": "{'stage': 'metadata', 'exit': 1}",
+                "type": "AssertionError"
+              },
+              "observed_at": 24.622728494,
+              "outer": 322.454838295,
+              "restore": {
+                "absolute_deadline": 322.454838295,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 24.612679524,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "status": "FAILED"
+            }
+          },
+          "complete_emit_requires_supervised_ack_and_step_success": true,
+          "elapsed": 296.496989079,
+          "inner": 292.454838295,
+          "observed_at": 318.951819961,
+          "outer": 322.454838295,
+          "schema": "xiongbaowork-platform-resource-terminal/v1",
+          "source_adopted": false,
+          "started": 22.454838295,
+          "status": "FAILED_OR_UNKNOWN",
+          "supervisor_scope_command_returncode": -9,
+          "version_report_is_separate_unprivileged_evidence": true
+        }
+      }
+    ],
+    "PLATFORM_RESOURCE_ALWAYS_READONLY": [
+      {
+        "raw_bytes_with_LF": 3302,
+        "raw_sha256_with_LF": "e50c736ef89215a8382c07d3422e1c786c60c23779c62176c9ab711726379de2",
+        "value": {
+          "actual": {
+            "errors": [],
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project_populated0": true,
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared_populated0": true
+          },
+          "completion_requires_supervised_ack_and_step_success": true,
+          "emission": {
+            "emission_completed_at": 318.952428847,
+            "epoch": "xb-platform-41004678906-1:22.454838295",
+            "outer": 322.454838295,
+            "status": "FAILED_OR_UNKNOWN"
+          },
+          "no_restore_or_new_grace": true,
+          "saved_terminal": {
+            "actual": {
+              "collector": {
+                "cleanup": {
+                  "cgroup_absent_after_stop": true,
+                  "collector_populated0": false,
+                  "job": "",
+                  "load_state": "loaded",
+                  "stop_completed": true,
+                  "unit": "xb-platform-41004678906-1-metadata.service"
+                },
+                "exit": 1,
+                "restore": {
+                  "absolute_deadline": 322.454838295,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 24.580579411,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "stage": "metadata",
+                "status": "FAILED_OR_UNKNOWN"
+              },
+              "controls": {
+                "fallback": {
+                  "absent_after_exit": true,
+                  "actual_empty": false,
+                  "properties": {
+                    "ActiveState": "inactive",
+                    "ControlGroup": "",
+                    "Job": "",
+                    "LoadState": "not-found"
+                  },
+                  "quiet": true,
+                  "unit": "xb-platform-41004678906-1-fallback.service"
+                },
+                "supervisor": {
+                  "absent_after_exit": true,
+                  "actual_empty": false,
+                  "properties": {
+                    "ActiveState": "failed",
+                    "ControlGroup": "",
+                    "Job": "",
+                    "LoadState": "loaded"
+                  },
+                  "quiet": true,
+                  "unit": "xb-platform-41004678906-1-supervisor.scope"
+                }
+              },
+              "errors": [],
+              "fallback_terminal": {
+                "collectors": {
+                  "metadata": "absent"
+                },
+                "errors": [],
+                "observed_at": 24.684722721,
+                "outer": 322.454838295,
+                "parent_populated0_claim": false,
+                "restore": {
+                  "absolute_deadline": 322.454838295,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 24.674656285,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "status": "COLLECTOR_EMPTY_LIMITS_OBSERVED",
+                "supervisor_death": false
+              },
+              "project": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "project_populated0": true,
+              "shared": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "shared_populated0": true,
+              "supervisor_terminal": {
+                "actual_parent_empty_claim": false,
+                "cleaned": [
+                  "metadata"
+                ],
+                "collectors": {
+                  "metadata": "absent"
+                },
+                "error": {
+                  "detail": "{'stage': 'metadata', 'exit': 1}",
+                  "type": "AssertionError"
+                },
+                "observed_at": 24.622728494,
+                "outer": 322.454838295,
+                "restore": {
+                  "absolute_deadline": 322.454838295,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 24.612679524,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "status": "FAILED"
+              }
+            },
+            "complete_emit_requires_supervised_ack_and_step_success": true,
+            "elapsed": 296.496989079,
+            "inner": 292.454838295,
+            "observed_at": 318.951819961,
+            "outer": 322.454838295,
+            "schema": "xiongbaowork-platform-resource-terminal/v1",
+            "source_adopted": false,
+            "started": 22.454838295,
+            "status": "FAILED_OR_UNKNOWN",
+            "supervisor_scope_command_returncode": -9,
+            "version_report_is_separate_unprivileged_evidence": true
+          },
+          "status": "FAILED_OR_UNKNOWN",
+          "version_report_separate": true
+        }
+      }
+    ]
+  },
+  "independent_identity_checks": {
+    "pid1_advertised_hash_length_match": true,
+    "PID1_FD_bytes": 141776,
+    "PID1_FD_SHA256": "508fa02522618fa8dca83df8ab110208853834018bc74d1c727ecb8ef866a714",
+    "PID1_path": "/usr/lib/systemd/systemd",
+    "version_report_count": 0,
+    "version_identity_count": 0
+  },
+  "phase_interpretation": [
+    "Contiguous13 records complete and bound to exactrun/head/unit. root_entry,pid1_snapshot,drop,collector_entry,manager_version,disk_version each STARTED+FINISHED.",
+    "DropFINISHED follows irreversibleUID/GID/groups change and actualpostdropgates; collectorentryFINISHED repeats own32/shared64/project512 gates. This is specific to thirdrun; do not backfill old2.",
+    "manager_version/disk_version FINISHED are emitted only after bounded_query nativeexit0 and validbounded UTF8/hash result construction. They prove those query paths completed, but phase record contains no actual versionstdout; no exactversion value may be recovered/inferred from FINISHED.",
+    "seq13 owner_usrSTARTED at23.040068797 binds command_phase fixed argv dpkg-query -S /usr/lib/systemd/systemd. STARTED emitted before trusted_tool/Popen, so cannot prove Popen reached or dpkg itself allocated/killed.",
+    "Native collectorOOM after owner_usrSTARTED narrows failure window but not allocator/PID/subphase. Noowner_usrFINISHED/UNKNOWN orfinalversionreport. Scope-9 remains separate and actorUNKNOWN."
+  ],
+  "resource_interpretation": "Finalouter+always actualproject512/shared64 swap0oom1/pop0 were read, controlsabsent_after_exit andactual_empty=false are not directownedgrouppop0. Metadataexit1/supervisorFAILED/overallFAILED_OR_UNKNOWN preserved. Parentphysical values do not make metadata/jobPASS.",
+  "exact_version_linkage": {
+    "running_manager_version": "UNKNOWN_ACTUAL_VALUE_NOT_EXPORTED",
+    "disk_version": "UNKNOWN_ACTUAL_VALUE_NOT_EXPORTED",
+    "package_version_owner": "UNKNOWN_NO_RESULT",
+    "ARCH1_to5": "NOT_PERFORMED_NO_TRUSTWORTHY_EXACT_VERSION_VALUES_AND_PACKAGE_LINK",
+    "binarySHA_alone_not_version": true,
+    "no_latest_or_other_version_lookup": true,
+    "no_oldrun_backfill": true
+  },
+  "next_decision": {
+    "scope": "Static design decision only, no implementation or fourthattempt.",
+    "recommendation": "If further static work is assigned, preserve each completed allowlisted query result immediately as bounded complete rawbytes/hash/runheadunit/phase evidence rather than retaining all actualvalues until finalreport. Within original32 unit assess Python+nativequery overlap at owner_usr; a lighter fixed exact-owner association mechanism would require separately reviewed semantic equivalence, strictliteral/sameinode binding and UNKNOWN behavior. Do not replace exactowner proof with guess or claim dpkg is proven culprit.",
+    "unchanged": "All16+16+32/shared64swap0oom1/project512, actualenv/drop/permit/selfhash/allowlists, t0/270300/sustainedfallback/cleanup/finalphysicalACK remain; no outsidewriter/resourceincrease/holder/newprivileges."
+  },
+  "allocation": {
+    "max": 3,
+    "consumed": 3,
+    "remaining": 0,
+    "fourth_authorized": false,
+    "rerun_or_variant_authorized": false
+  },
+  "reviewer_actions": {
+    "jobs": 0,
+    "reruns": 0,
+    "code_candidate_changes": 0,
+    "Source_canonical_lease_writes": 0
+  },
+  "preserved": [
+    "77/18/7",
+    "Source28",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}

@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:third96ecc-20261030",
   "run_id": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "acquired_at": "2026-10-30T04:43:53.208Z",
-  "renewed_at": "2026-10-30T04:46:11.192Z",
-  "expires_at": "2026-10-30T05:28:53.208Z",
+  "renewed_at": "2026-10-30T04:54:34.135Z",
+  "expires_at": "2026-10-30T04:54:34.135Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "996d6392d02817c577c2bb5b9ec8f11d8a71afc7",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T04:43:53.208Z"
   },
-  "next_action": "Receive existing third/final run41004678906 terminal and independent rawrecords/resources audit; exact-version contract only with reliableidentity. No fourth/rerun/variant.",
+  "next_action": "Third actualmetadata job failed collectorOOM after owner_usrSTARTED; all3/3 consumed. Complete per-query raw-result logging and lower-footprint exact-owner association are DESIGN decisions only, not implemented. No fourth job/variant/Source change; no exact-version ARCH audit absent actualvalues/package linkage.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -33,13 +33,18 @@
     "job": 123896762774,
     "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
     "attempt": 1,
-    "status": "in_progress",
-    "conclusion": null
+    "status": "completed",
+    "conclusion": "failure"
   },
   "queue_at_release": {
-    "queued": [],
-    "in_progress": [],
-    "observed_at": "2026-10-30T04:13:56.956Z"
+    "queued": 0,
+    "in_progress": 0,
+    "exact_candidate_runs": 1,
+    "run": 41004678906,
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "failure",
+    "observed_at": "2026-10-30T04:53:42.969Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -64,8 +69,8 @@
       "job": 123896762774,
       "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
       "attempt": 1,
-      "status": "in_progress",
-      "conclusion": null,
+      "status": "completed",
+      "conclusion": "failure",
       "execution_branch": "codex/platform-identity-run-20261030-static-memory-a1",
       "created_at": "2026-10-30T04:45:43Z"
     }
@@ -96,7 +101,8 @@
     "additional_jobs": 1,
     "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
     "accepted_at": "2026-10-30T04:43:53.208Z",
-    "status": "CONSUMED_BY_RUN41004678906",
+    "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  }
+  },
+  "released_at": "2026-10-30T04:54:34.135Z"
 }
