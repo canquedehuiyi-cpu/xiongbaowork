@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
-  "run_id": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-  "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-  "acquired_at": "2026-10-30T12:25:59.218Z",
-  "renewed_at": "2026-10-30T12:28:37.056Z",
-  "expires_at": "2026-10-30T12:28:37.056Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
+  "run_id": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+  "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+  "acquired_at": "2026-10-30T15:16:35.208Z",
+  "renewed_at": "2026-10-30T15:16:35.208Z",
+  "expires_at": "2026-10-30T16:01:35.208Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "23a87db608609820d7cf867a6ba67ee3bb9bedf1",
+  "expected_parent": "6f0cefeaf1b293cd81be6c52b56762d5226b1853",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T12:25:59.218Z"
+    "observed_at": "2026-10-30T15:16:35.208Z"
   },
-  "next_action": "D6 static candidate saved and exact Git correspondence independently verified. Runtime injection, SDK/type/test/PG and production remain unverified; no runtime or model-call permission; preserve Source28 and all closed gates.",
+  "next_action": "Save exact frozen A4-R3 three-file candidate; independent actual Git correspondence; record open static assertion risk, full administrative readback and queue-idle release.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Completed exact D6 static Source publication on authorized preparation branch and two-file administrative closeout only. No Source adoption/runtime/secret/model/paid/PG/deployment/fourth metadata.",
+  "scope": "Only exact authorized frozen A4-R3 three-file publication to specified nontriggering prep branch and two existing administrative files. Known static assertion risk remains open. No Source adoption/runtime/PR/CI/job/secret/model/PG/deployment/fourth metadata.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -89,8 +89,8 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "root-human-D6-seven-source-publication/call_3a74ee20/base7083/canonicaldf590/reviewb7f9cbf0",
-  "checkpoint_timing_note": "New independent epoch after df590 released lease; no old epoch reused.",
+  "current_task_dedup": "root-human-A4-R3-three-source-publication/call14fa20d7/90131/report202d8a2e/base6f0cefea",
+  "checkpoint_timing_note": "New epoch after prior D6 lease released; no old epoch reused.",
   "public_administrative_permission": {
     "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
     "question": "call_7402e4b872d949b08b1b45bb899e778d",
@@ -104,14 +104,20 @@
     "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
   },
   "current_epoch_renewal_history": {
-    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-    "last_successful_renewal_at": "2026-10-30T12:28:37.056Z",
+    "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+    "last_successful_renewal_at": "2026-10-30T15:16:35.208Z",
     "interval_exceeded": false
   },
   "predecessor_release": {
-    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
-    "released_at": "2026-10-30T12:16:49.473Z"
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
+    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
+    "released_at": "2026-10-30T12:28:37.056Z",
+    "canonical": "6f0cefeaf1b293cd81be6c52b56762d5226b1853",
+    "renewal_history": {
+      "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
+      "last_successful_renewal_at": "2026-10-30T12:28:37.056Z",
+      "interval_exceeded": false
+    }
   },
   "D6_authority_separation": {
     "source_implementation": "Root relay of human instruction: DeepSeek key 已保存，继续接入熊宝数字员工项目，先不要触发计费调用，第四次也先不执行; current delegation explicitly continues actual Git static candidate saving along the earlier authorized minimal Source scope, exact seven D6 files only.",
@@ -199,5 +205,43 @@
     ],
     "excluded": "No secrets/user data/private B,A2,B1 or review fulltext; no Source adoption/runtime/model/billing/PG/deployment/fourth metadata."
   },
-  "released_at": "2026-10-30T12:28:37.056Z"
+  "a4_r3_publication_permission": {
+    "id": "root-human-A4-R3-three-source-publication/call14fa20d7/90131/report202d8a2e/base6f0cefea",
+    "question": "call_14fa20d7277945b8b00659b2d1abeaa8",
+    "human_answer": "授权 A4-R3 三文件公开保存",
+    "root_received_at": "2026-10-30T15:13:03Z",
+    "repository": "canquedehuiyi-cpu/xiongbaowork",
+    "public": true,
+    "source_branch": "codex/task-board-a4-filter-prep-20261030",
+    "source_files": [
+      {
+        "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+        "mode": "100644",
+        "bytes": 49328,
+        "sha256": "dc52222f4d1651906eeb7cbd82b6afa90712d303b6049c910496c3a8b585f8aa",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+        "mode": "100644",
+        "bytes": 9969,
+        "sha256": "3c2ce1101e8f93c9bd196bd42089b805101ceb28d056e94ff9a32164b3946f45",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+        "mode": "100644",
+        "bytes": 30834,
+        "sha256": "0e5654bf35515c10b14ca12d43eca2e1001e17b497cd93d7168d7bbf7e1ab9ac",
+        "git_blob": null
+      }
+    ],
+    "source_bytes": 90131,
+    "administrative_paths": [
+      "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+      "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+    ],
+    "allowed_admin_content": "Retain public history; current A4 owner/task/epoch/time/parentCAS, candidate identities, review/readback/release and zero-model/zero-job metadata; short open static-risk path/hash/status.",
+    "excluded": "No secrets/user data/private B,A2,B1 or private review fulltext; no A3/future-fix bytes, PR/CI/jobs/adoption/tests/runtime/model/billing/PG/deployment/fourth metadata."
+  }
 }

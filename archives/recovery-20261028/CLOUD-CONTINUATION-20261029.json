@@ -4427,12 +4427,11 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
-    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-    "state": "released",
-    "expires_at": "2026-10-30T12:28:37.056Z",
-    "scope": "Completed exact D6 static Source publication on authorized preparation branch and two-file administrative closeout only. No Source adoption/runtime/secret/model/paid/PG/deployment/fourth metadata.",
-    "acquisition_commit": "23a87db608609820d7cf867a6ba67ee3bb9bedf1"
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
+    "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+    "state": "held",
+    "expires_at": "2026-10-30T16:01:35.208Z",
+    "scope": "Only exact authorized frozen A4-R3 three-file publication to specified nontriggering prep branch and two existing administrative files. Known static assertion risk remains open. No Source adoption/runtime/PR/CI/job/secret/model/PG/deployment/fourth metadata."
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5927,5 +5926,73 @@
       "workflow_changes": 0
     },
     "candidate_runs": 0
+  },
+  "a4_r3_publication": {
+    "authorization": {
+      "id": "root-human-A4-R3-three-source-publication/call14fa20d7/90131/report202d8a2e/base6f0cefea",
+      "question": "call_14fa20d7277945b8b00659b2d1abeaa8",
+      "human_answer": "授权 A4-R3 三文件公开保存",
+      "root_received_at": "2026-10-30T15:13:03Z",
+      "repository": "canquedehuiyi-cpu/xiongbaowork",
+      "public": true,
+      "source_branch": "codex/task-board-a4-filter-prep-20261030",
+      "source_files": [
+        {
+          "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+          "mode": "100644",
+          "bytes": 49328,
+          "sha256": "dc52222f4d1651906eeb7cbd82b6afa90712d303b6049c910496c3a8b585f8aa",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+          "mode": "100644",
+          "bytes": 9969,
+          "sha256": "3c2ce1101e8f93c9bd196bd42089b805101ceb28d056e94ff9a32164b3946f45",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+          "mode": "100644",
+          "bytes": 30834,
+          "sha256": "0e5654bf35515c10b14ca12d43eca2e1001e17b497cd93d7168d7bbf7e1ab9ac",
+          "git_blob": null
+        }
+      ],
+      "source_bytes": 90131,
+      "administrative_paths": [
+        "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+        "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+      ],
+      "allowed_admin_content": "Retain public history; current A4 owner/task/epoch/time/parentCAS, candidate identities, review/readback/release and zero-model/zero-job metadata; short open static-risk path/hash/status.",
+      "excluded": "No secrets/user data/private B,A2,B1 or private review fulltext; no A3/future-fix bytes, PR/CI/jobs/adoption/tests/runtime/model/billing/PG/deployment/fourth metadata."
+    },
+    "stage": "LEASE_ACQUISITION_STATIC_ONLY",
+    "source_baseline": "6f0cefeaf1b293cd81be6c52b56762d5226b1853",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
+    "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+    "at": "2026-10-30T15:16:35.208Z",
+    "original_private_review": {
+      "bytes": 12526,
+      "sha256": "202d8a2e3b8b9e2f826fda4e39a005a4ecab9f665c75f2e3bd42ee18387daff6",
+      "status": "SOURCE_APPROVED_ONLY_PRIVATE_STATIC_CANDIDATE_NOT_ADOPTED_NOT_RUN",
+      "historical": true,
+      "fulltext_not_public": true
+    },
+    "known_static_risk": {
+      "id": "ROOT-D05-A4A3-EXACT-QUERYERROR-LABEL",
+      "status": "STATIC_ASSERTION_RISK_NOT_EXECUTED",
+      "disposition": "OPEN_NOT_FIXED",
+      "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+      "frozen_R3_sha256": "0e5654bf35515c10b14ca12d43eca2e1001e17b497cd93d7168d7bbf7e1ab9ac",
+      "component_blob": "f33546780b455392c1457ba77a0a8564d3dcde20",
+      "component_sha256": "28155e7ceb5fdb0ab97bae37c347732d89ac3494bf2da8497562459bd5334611",
+      "summary": "Bare-label exact text assertion may not match the component's label/colon/error paragraph. No test execution or repair; save original frozen bytes only. Historical findings[] does not clear this risk."
+    },
+    "tests_defined": 34,
+    "tests_run": 0,
+    "new_jobs": 0,
+    "model_calls": 0,
+    "Source_adopted": false
   }
 }
