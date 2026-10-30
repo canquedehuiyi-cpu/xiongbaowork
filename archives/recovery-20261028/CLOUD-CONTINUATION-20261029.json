@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T01:02:19.861Z",
+  "checkpoint_update_at": "2026-10-30T01:15:44.130Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4619,6 +4619,14 @@
     "original_six_Subject_stages": "NOT_RUN_NOT_PASSED",
     "new_jobs": 0,
     "new_platform_identity": "NOT_OBTAINED",
-    "next_action": "Complete exact <=8 administrative implementation package and full different-nonauthor review; one dispatch only if initial safety gates satisfy current scope."
+    "next_action": "Complete exact <=8 administrative implementation package and full different-nonauthor review; one dispatch only if initial safety gates satisfy current scope.",
+    "author_controller_blob_checkpoint": {
+      "blob": "f730cf9e998524eee8e9aa8699a280162d17f2ec",
+      "bytes": 37102,
+      "sha256": "e070c9291b30118c5010f0ac0c2411e2cef1e4e6ec6c67926c8b96f0335e9f32",
+      "root_full_readback": true,
+      "status": "COMPLETE_CONTROLLER_OBJECT_SAVED_FULL_PACKAGE_PENDING_NOT_REVIEW_APPROVAL",
+      "observed_at": "2026-10-30T01:15:44.130Z"
+    }
   }
 }
