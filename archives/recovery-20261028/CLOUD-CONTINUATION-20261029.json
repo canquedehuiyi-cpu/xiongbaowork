@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T01:32:59.239Z",
+  "checkpoint_update_at": "2026-10-30T01:38:41.662Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4606,7 +4606,7 @@
     "next_action": "Root resolves the single version-only non-Subject admission mapping and explicitly defines whether narrow per-job temporary resource guards are within it; no global manager change. Only then prepare a separate exact <=8 administrative implementation and different nonauthor review before any future fresh-lease serial one-shot metadata job. Do not repeat old Source stages, old404/400 chain or completed jobs."
   },
   "platform_identity_metadata_implementation": {
-    "status": "EXACT_FA96_NONAUTHOR_STATIC_APPROVED_NOT_YET_DISPATCHED",
+    "status": "FA96_NATIVE_VALIDATION_FAILURE_ZERO_JOBS_STAGING_FIX_IN_PROGRESS",
     "base": "87d4651bb60b306e64ac3e3973da2584124a9de9",
     "author": "/root/a11_data_author",
     "different_reviewer": "/root/a11_data_reviewer",
@@ -4619,7 +4619,7 @@
     "original_six_Subject_stages": "NOT_RUN_NOT_PASSED",
     "new_jobs": 0,
     "new_platform_identity": "NOT_OBTAINED",
-    "next_action": "Single exact fa96 push after fresh lease/queue/ref/rundedup. Collect independent PID1 admission and unpriv version raw records with hashes, final resource witness separate; then exact-version static contract review.",
+    "next_action": "Original author splits only immutable code staging into <=21000-character run strings; preserve single persistent supervisor and same t0 deadline. Different nonauthor exact full successor review, fresh lease/queue/ref/rundedup, at most one actual collector job. No version/resource PASS.",
     "author_controller_blob_checkpoint": {
       "blob": "f730cf9e998524eee8e9aa8699a280162d17f2ec",
       "bytes": 37102,
@@ -4667,6 +4667,21 @@
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-FA96-NONAUTHOR-REVIEW-20261030.json",
       "blob": "8197e0012bb5d2c8be21381747c49365e13be348",
       "verdict": "ADMIN_STATIC_APPROVED_FOR_ONE_BOUNDED_METADATA_PUSH_ONLY"
+    },
+    "validation_failure": {
+      "run": 40986262699,
+      "candidate": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+      "branch": "codex/platform-identity-prep-20261030-a1",
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": [],
+      "created_at": "2026-10-30T01:30:34Z",
+      "updated_at": "2026-10-30T01:30:34Z",
+      "static_defect": "first steps.run literal exceeds official21000 character limit; actual native annotations unavailable, causal attribution not directly confirmed",
+      "collector_executed": false,
+      "platform_version": "NOT_OBTAINED",
+      "execution_ref": "NOT_FOUND_AT_2026-10-30T01:36Z",
+      "previous_static_approval": "Retained historically; applicability corrected by newly found workflow syntax limit"
     }
   }
 }
