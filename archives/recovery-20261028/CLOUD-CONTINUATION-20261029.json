@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-29T17:44:58.002Z",
+  "checkpoint_update_at": "2026-10-30T00:51:22.177Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,13 +4427,13 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:manager-contract-audit-20261030",
-    "epoch": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
-    "acquisition_commit": "33e41e6616eb34dbba2f3133eb414870397bf8ad",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:platform-identity-20261030",
+    "epoch": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
+    "acquisition_commit": "3bd4d3a7d2a2e98d3905ff5e9ae00f69b1f5307d",
     "state": "released",
-    "released_at": "2026-10-29T17:44:58.002Z",
-    "expires_at": "2026-10-29T17:44:58.002Z",
-    "scope": "Read-only manager lifecycle contract analysis and <=8 administrative evidence files only; no implementation/configuration/job/Source/Page/automation changes"
+    "released_at": "2026-10-30T00:51:22.177Z",
+    "expires_at": "2026-10-30T00:51:22.177Z",
+    "scope": "At most one reviewed pureCONTROL version-metadata job, shared aggregate64/swap0, original270/300 and supervisor/barrier/fallback/finalwitness constraints; no project/Source/configuration/identity/Page changes. If infeasible, concrete single-condition candidate and recommendation only."
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -4562,5 +4562,48 @@
       "would_require_separate_explicit_authorization": "Any departure from present resource/ownership/finalwitness/holder/noescape/deadline constraints, or new permissions/environment/paid service; none proposed as a solution or requested here.",
       "next_normal_step": "Separate read-only architecture review after trustworthy actual platform-version evidence is available; future execution is not implied."
     }
+  },
+  "platform_identity_metadata_unblock": {
+    "status": "PREPARED_AND_INDEPENDENTLY_REVIEWED_SINGLE_ADMISSION_MAPPING_DECISION_REQUIRED_NOT_DISPATCHABLE",
+    "candidate": {
+      "commit": "054a294da63a0b033d94271c8c4535e8ad9fde8e",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-ADMISSION-PLAN-20261030-A1.json",
+      "blob": "238ec539605952b0459507103140c869b20f8753",
+      "bytes": 14494,
+      "sha256": "fc86cbe1f205588be66903f99589c8a81aca526eccd93f6881f38788b134f9e0"
+    },
+    "nonauthor_review": {
+      "commit": "15ac305a2235910b65e74dd907378c620d83990f",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-ADMISSION-A1-NONAUTHOR-REVIEW-20261030.json",
+      "blob": "66829a39a8bddfa9ca536ee73e1106221c315f20",
+      "sha256": "b1e2daf1af0aa2d8f9367ee609cf87a8e80eff527d694108a77fc492801ba7d1",
+      "verdict": "ADMIN_STATIC_PLAN_REVIEW_ONLY_BLOCKED_NOT_DISPATCHABLE"
+    },
+    "cause": "Exact original six Subject/prelude admission roles/caps/topology and pre-t0 phase graph conflict with metadata-only/noSource/noInstall/aggregate64/single270300 scope; general safety checks can be preserved through an explicit different metadata-only admission mapping.",
+    "single_condition_for_root": {
+      "text": "允许这唯一版本metadata作业使用独立非Subject admission合同，保共享64MiB/swap0、270/300秒同一绝对预算、持续supervisor、独立fallback、cleanup、只读finalwitness、同等身份与resource checks；不要求执行六个Source/runtime/install/prepare/brand阶段或冒其通过。",
+      "current_status": "NOT_APPROVED_OR_IMPLEMENTED_BY_THIS_PLAN",
+      "not_bundled": "This one mapping decision does not authorize global manager configuration changes, new environment/account/provider, holder processes, outside-aggregate cleanup, changed final gates or actual dispatch."
+    },
+    "manager_guard_interpretation": {
+      "prohibited": "No package installation/upgrade, manager-global or OS policy configuration edit, persistent service enable, network probe or credential change.",
+      "original_route_scaffold_evidence": {
+        "workflow_lines": "21-28",
+        "actual": "Creates /run/systemd/system/xiongbaowork.slice, daemon-reload and starts the resource slice; later writes actual kernel resource controls. These are real per-job manager/resource setup actions, not version reads."
+      },
+      "interpretation_not_assumed": "This plan does NOT silently exempt temporary resource guards from the user's no-config-change restriction. If even the already-reviewed per-job transient resource guard setup is classified as prohibited manager configuration, the current no-job outcome remains required; only a separately clarified narrowly necessary temporary resource admission could permit a future job.",
+      "no_current_execution": true,
+      "no_second_hidden_change_in_mapping": true
+    },
+    "workflow_created": false,
+    "controller_created": false,
+    "execution_branch_created": false,
+    "jobs_started": 0,
+    "current_round_run": null,
+    "current_round_job": null,
+    "actual_new_version_identity": "NOT_OBTAINED_NOT_RUN",
+    "old_platform_versions": "UNKNOWN_NOT_BACKFILLED",
+    "old_resource_failures": "PRESERVED_NOT_ACCEPTED",
+    "next_action": "Root resolves the single version-only non-Subject admission mapping and explicitly defines whether narrow per-job temporary resource guards are within it; no global manager change. Only then prepare a separate exact <=8 administrative implementation and different nonauthor review before any future fresh-lease serial one-shot metadata job. Do not repeat old Source stages, old404/400 chain or completed jobs."
   }
 }

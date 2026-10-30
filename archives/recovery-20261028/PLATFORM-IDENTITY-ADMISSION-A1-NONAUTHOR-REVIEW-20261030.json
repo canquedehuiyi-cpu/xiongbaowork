@@ -1,0 +1,166 @@
+{
+  "schema": "platform-identity-metadata-admission-plan-independent-static-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "candidate": {
+    "commit": "054a294da63a0b033d94271c8c4535e8ad9fde8e",
+    "parent": "0468db7c1d3db5ac5dcfa39f805865755c6358fe",
+    "tree": "8ef4a090f2e14d1f3708ffaf8f59f44481c20129",
+    "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-ADMISSION-PLAN-20261030-A1.json",
+    "mode": "100644",
+    "blob": "238ec539605952b0459507103140c869b20f8753",
+    "bytes": 14494,
+    "sha256": "fc86cbe1f205588be66903f99589c8a81aca526eccd93f6881f38788b134f9e0",
+    "full_read": true
+  },
+  "verdict": "ADMIN_STATIC_PLAN_REVIEW_ONLY_BLOCKED_NOT_DISPATCHABLE",
+  "findings": [],
+  "scope": {
+    "one_added_nonexecutable_JSON_only": true,
+    "no_workflow_controller_or_execution_branch": true,
+    "Source_changes": 0,
+    "no_canonical_lease_jobs_Page_automation_changes": true,
+    "no_runtime_collector_or_project_execution": true
+  },
+  "independent_original_code_review": {
+    "candidate": "e6a49994deda16739c095ad214266af15c616762",
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "blob": "8e4d03d441a77c79635225b77a5c3e7fe8e460fb",
+        "bytes": 145312,
+        "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "blob": "00144331e0ba75085703f0cb9e624241047afd73",
+        "bytes": 43877,
+        "sha256": "b2ab1dde0ec5ee261801f7f2d855d9fb568d2555b17f58e87ca78f3a4c617bb4",
+        "full_read": true
+      }
+    ],
+    "conflict_confirmed_from_actual_code_not_author_claim": true,
+    "stage_paths": [
+      {
+        "role": "source",
+        "workflow_lines": "39-300",
+        "actual": "Source2065/manifest/overlays/git fetch/materialization and full byte checks",
+        "conflict": "project Source reads forbidden in metadata-only scope"
+      },
+      {
+        "role": "runtime",
+        "workflow_lines": "301-435",
+        "actual": "pinned Bun runtime download/extract and harness copying",
+        "conflict": "not installed-platform-version-only read"
+      },
+      {
+        "role": "install",
+        "workflow_lines": "436-611",
+        "actual": "frozen workspace dependency install, exact child512",
+        "conflict": "no-install and wholeCONTROL64 incompatible with unchanged direct parent512/child512 topology"
+      },
+      {
+        "role": "prepare",
+        "workflow_lines": "612-681",
+        "actual": "oneleaf Source guard/manifest/before-state initialization",
+        "conflict": "Source semantics cannot be removed then called original stage pass"
+      },
+      {
+        "role": "brand",
+        "workflow_lines": "682-747",
+        "actual": "exact child512 executing project generate-app-config.ts",
+        "conflict": "noSubject/noSource/noinstall and whole64"
+      },
+      {
+        "role": "brand-capture",
+        "workflow_lines": "748-794",
+        "actual": "captures generated Source brand identity",
+        "conflict": "not version metadata"
+      }
+    ],
+    "barrier_binding": {
+      "fixed_roles": [
+        "source",
+        "runtime",
+        "install",
+        "prepare",
+        "brand",
+        "brand-capture"
+      ],
+      "fixed_child_caps": "install/brand512, all otherprelude64",
+      "fixed_parent": "xiongbaowork.slice512",
+      "fixed_direct_unit_cgroup_topology": true,
+      "own_uid_gid_oom_resource_checks": true,
+      "command_prefix": "/usr/bin/python3 -I -B followed by original stage commands",
+      "unchanged6stage_cannot_honestly_mean_unrelatedmetadata": true
+    },
+    "clock_binding": {
+      "A_B_lifecycle_workflow_start_line": 795,
+      "six_preludes_precede_t0": true,
+      "stage_graph": [
+        "budget-a",
+        "build-a",
+        "snapshot-a",
+        "reset-before",
+        "budget-b",
+        "build-b",
+        "snapshot-b",
+        "finish"
+      ],
+      "unchanged_graph_is_Subject_not_metadata": true
+    },
+    "not_global_technical_impossibility": "Generic identity/resource/UID/oom safety primitives may be reused. Rebinding role/command/cap/stagegraph is a separate admission contract, not unchanged execution of original six Subject stages."
+  },
+  "single_condition_recommendation": {
+    "status": "STATIC_RECOMMENDATION_NOT_APPROVED_OR_IMPLEMENTED_BY_THIS_REVIEW",
+    "text": "Only this version-metadata task may use a separately reviewed non-Subject admission mapping while retaining shared64/swap0, single270/300 absolute deadline, sustained supervisor/independent fallback, cleanup, physical final read-only witness and equivalent identity/resource checks. Original six Subject stages remain NOT_RUN/NOT_PASSED.",
+    "no_safety_exemption": true,
+    "no_execution_authority": true,
+    "manager_configuration_ambiguity": "Original /run resource-slice creation/daemon-reload/start/kernel-control writes are real guard setup actions. Plan explicitly does not exempt these from no-config-change. If the current restriction includes such temporary admission setup, no-job remains mandatory until Root resolves that exact interpretation; reviewer does not enlarge permission."
+  },
+  "allowlist_review": {
+    "running_manager": "Version only from normal systemctl show; unsupportedUNKNOWN, no propertydump.",
+    "binary": "proc1exereadlink only then exact validated systemd OS binary--version and streamingSHA, root/FD/named identity; no arbitraryexec or process/env traversal.",
+    "package": "Exact owning systemd package only; full epoch/revision/sourceVersion/architecture/status metadata; not proof of patchcontents or sourcegitprovenance.",
+    "kernel": "uname s/r/v/m only, no hostname/cmdline/envdump.",
+    "osrelease": "boundeddata allowlist, no source/eval.",
+    "runnerassociation": "Native setup metadata of future exact run/job/head/attempt; no collector envprobe; newrunner versions never backfill oldjobs.",
+    "bounds": "8192stdout/2048stderr percommand, report32768, binarychunk65536, osrelease16384; overflowunsupportedtimeout UNKNOWN/fail, no truncationPASS."
+  },
+  "safety_and_history": {
+    "all_actual_control_collector_management_descendants_aggregate64_swap0_under512_required": true,
+    "no_perprocess_or8GiB_substitute": true,
+    "no2GiB4GiBinheritance": true,
+    "continuous_supervisor_fallback_and270300_required": true,
+    "allcleanup_finalrecord_samebudget_noalwaysgrace": true,
+    "old_final_oom0_absence_late_unknown_not_erased": true,
+    "versionmetadataPASS_not_resourcejobPGSource_or_scopePASS": true,
+    "Source28_and77_18_7_retained": true,
+    "route_failfast_reference_static_not_projectdispatchapproval": true,
+    "old_A11_shell120150_without_routefallback_not_dropin_solution": true,
+    "no_newmanagerproperty_or_globalconfigchange_implicitly_authorized": true
+  },
+  "evidence_level": {
+    "static_fullfile_and_independent_UTF8bytes_SHA256_blob_mode_compare": true,
+    "only_data_JSON_read_for_administrative_plan": true,
+    "YAML_Python_parser_compile_tests": false,
+    "probe_collector_codec_project_execution": false,
+    "new_platform_identity_obtained": false,
+    "implementation_or_dispatch_approval": false
+  },
+  "next_action": "Root records or resolves only the exact admission-mapping/temporary-resource-guard interpretation. Until resolved, keep BLOCKED_NOT_DISPATCHABLE and no controller/workflow/job. Any later implementation must be a separate <=8 administrative exact package and different nonauthor fullfile review, followed only by sole valid coordinator lease/queue/ref dedup. Do not ask to rerun unchanged Source stages as a workaround.",
+  "preserved": {
+    "scope": "77/18/7",
+    "Source": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "worker": "paused/UNVERIFIED"
+  }
+}
