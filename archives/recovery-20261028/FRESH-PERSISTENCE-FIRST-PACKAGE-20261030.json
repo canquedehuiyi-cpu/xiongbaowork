@@ -1,0 +1,338 @@
+{
+  "schema": "xiongbaowork-fresh-persistence-first-source-package/v1",
+  "status": "AUTHOR_STATIC_CANDIDATE_PENDING_WHOLE_PACKAGE_NONAUTHOR_REVIEW_NO_ADOPTION",
+  "dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849",
+  "author": "/root/a11_data_author",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "parent": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "prepare_branch": "codex/fresh-persistence-first-package-prep-20261030",
+  "scope": "First independent schema-consistency prerequisite: exactly two existing approval fence default declarations use SQL literal0 instead of nativeBigInt0n, plus focused offline metadata test definitions.",
+  "files": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "mode": "100644",
+      "blob": "ab91c389f7f8b380b14747803d42977b448d9a6b",
+      "bytes": 10528,
+      "sha256": "cdfeecb83257f46e9e248ecc877c769e2e747bd947d195cef47f23e240e6e4f8"
+    },
+    {
+      "path": "openbot/server/tests/approval-fence-defaults.test.ts",
+      "mode": "100644",
+      "blob": "ae0b81b08e24846b59ee3f8591442a0f70ba4a55",
+      "bytes": 3324,
+      "sha256": "d66507022b720fc7fa790ab6f5c412344af0c7245000a1e10cfc3c3ed47024df"
+    }
+  ],
+  "Source_changed": 2,
+  "administrative_files_added": 1,
+  "workflow_changes": 0,
+  "formal_source": {
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "adopted_this_package": false,
+    "schema_blob_verified_equal_current": "529995cb0d6a40137798d7df90cfd4e26fd78759"
+  },
+  "authoritative_inputs": {
+    "read_all_full_UTF8_and_independently_hashed": true,
+    "identities": [
+      {
+        "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+        "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+        "bytes": 286013,
+        "sha256": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146"
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+        "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+        "bytes": 45225,
+        "sha256": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac"
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+        "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+        "bytes": 479194,
+        "sha256": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5"
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+        "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+        "bytes": 456310,
+        "sha256": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632"
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-RECOVERY-STATUS.md",
+        "blob": "2c576298ea45a3d21f66e67dfeb6033301a934d9",
+        "bytes": 66979,
+        "sha256": "478c295fa0a41eade2a5af73746b24653027f293ac46bbd458dcbd8ba0abefce"
+      }
+    ],
+    "unchanged": true,
+    "scope_replacement": false,
+    "note": "Original complete77/18/7 details and ledger remain in these five files. This report is not a substitute or full validation of their requirements."
+  },
+  "fresh_input_findings": {
+    "canonical_schema": {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+      "bytes": 10520,
+      "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+      "existing_default_lines": [
+        207,
+        266
+      ],
+      "nativeBigInt_default_count": 2,
+      "no_fresh_seed_table_or_result_disposition": true
+    },
+    "canonical_SQL_snapshot_journal": {
+      "sql": {
+        "path": "openbot/server/drizzle/0080_wakerflow_quota_contracts.sql",
+        "blob": "42624fe5f9f3dbaa9c38bef8ed170c9c84272da4",
+        "read_full": true
+      },
+      "snapshot": {
+        "path": "openbot/server/drizzle/meta/0080_snapshot.json",
+        "blob": "de6a0b41c088c0bd46de019cb888575c95a07bb5",
+        "id": "9830a73c-12c1-4c08-89a9-894184de1449",
+        "prevId": "1fa3d60b-41d7-4eb9-9f4b-fae4b93a1f18",
+        "tables": 99,
+        "approval_continuations": "ABSENT_IN_THIS_SNAPSHOT",
+        "approval_continuation_steps": "ABSENT_IN_THIS_SNAPSHOT"
+      },
+      "journal": {
+        "path": "openbot/server/drizzle/meta/_journal.json",
+        "blob": "956003923fe45c220653c71affa6e0c56fd45d0e",
+        "entries": 81,
+        "last_tag": "0080_wakerflow_quota_contracts"
+      },
+      "limit": "No inference of absence throughout all historicalSQL; this package does not reconcile or rewrite historical snapshots/migrations."
+    },
+    "A11": {
+      "generator_run": 40902334215,
+      "generator_job": 123547693853,
+      "byte_verification_run": 40912579798,
+      "byte_verification_job": 123584189279,
+      "byte_verification_status": "FOUR_ORIGINAL_EXPORTS_BYTE_VERIFIED",
+      "byte_verification_job_conclusion": "failure",
+      "overall_acceptance": "NOT_ACCEPTED_FINAL_RESOURCE_RESTORATION_UNKNOWN",
+      "files": [
+        {
+          "path": "generated/0081_full50_approval_seed_diagnostic.sql",
+          "raw_bytes": 155827,
+          "raw_sha256": "a6f52a08d9b612493189a0dab215ab70cb6f43efc184249cb167b20976ce7cf7",
+          "gzip_bytes": 14698,
+          "gzip_sha256": "39a220285bb6ea5e45a63dfce47e4d57b07092ff70b690a007e315d076243ec9",
+          "crc32": "009c2339",
+          "json": "NOT_APPLICABLE_BYTES_ONLY_NO_SQL_OR_LOG_EXECUTION"
+        },
+        {
+          "path": "generated/meta/0081_snapshot.json",
+          "raw_bytes": 633425,
+          "raw_sha256": "dedfd90e57638dbaf00a35c81712490f4972843d2598637ef3228f375aea68d1",
+          "gzip_bytes": 36005,
+          "gzip_sha256": "24b0ff8d7289394c045461c9b79bf5343ed792dd75590b29db77de4375e05397",
+          "crc32": "64ac703f",
+          "json": {
+            "depth_cap": 64,
+            "duplicate_keys": false,
+            "node_cap": 200000,
+            "nodes": 17279,
+            "nonfinite": false,
+            "status": "SAFE_STRUCTURE_VALIDATED",
+            "top_level_keys": [
+              "_meta",
+              "dialect",
+              "enums",
+              "id",
+              "policies",
+              "prevId",
+              "roles",
+              "schemas",
+              "sequences",
+              "tables",
+              "version",
+              "views"
+            ]
+          }
+        },
+        {
+          "path": "generated/meta/_journal.json",
+          "raw_bytes": 12118,
+          "raw_sha256": "9737cfc237ef6c0640946a4a81396be45d6784142bad3f36b5a3ce330041abf0",
+          "gzip_bytes": 2116,
+          "gzip_sha256": "bad92853250fff038e0f8e09a8c0c5aaac7cf799ffdf009c2a482cbf920c4dcc",
+          "crc32": "364fa205",
+          "json": {
+            "depth_cap": 64,
+            "duplicate_keys": false,
+            "entries": 82,
+            "node_cap": 200000,
+            "nodes": 496,
+            "nonfinite": false,
+            "status": "SAFE_STRUCTURE_VALIDATED",
+            "top_level_keys": [
+              "dialect",
+              "entries",
+              "version"
+            ]
+          }
+        },
+        {
+          "path": "diagnostic/generator.log",
+          "raw_bytes": 7289,
+          "raw_sha256": "1b763a1a1d305b7330963d9fd90371618ba0c19649d8db236ac99f8074eed550",
+          "gzip_bytes": 1863,
+          "gzip_sha256": "6678619710cc821bc2ce97484cec3f9f4ef42ae5e382c40d50cf1d0b597ad11f",
+          "crc32": "540b67eb",
+          "json": "NOT_APPLICABLE_BYTES_ONLY_NO_SQL_OR_LOG_EXECUTION"
+        }
+      ],
+      "canonical_raw_export_blobs": "NOT_MATERIALIZED",
+      "this_turn_export_inflate_or_SQL_parse": false,
+      "this_turn_semantic_full_delta_review": false,
+      "migration_semantics": "PENDING_NOT_ADOPTED",
+      "scope_limit": "Read current actual identity/result/nonauthor chain records only. No codec permitted this task; do not substitute identity summaries for actual SQL/snapshot/journal semantic adoption."
+    }
+  },
+  "reason_and_delta": {
+    "before": "Two bigint(\"fence\", { mode: \"bigint\" }).notNull().default(0n)",
+    "after": "Two bigint(\"fence\", { mode: \"bigint\" }).notNull().default(sql`0`)",
+    "only_schema_mutation": "Exact two textual replacements, +8UTF8B. sql was already imported. All other schema bytes identical; driver bigint mode, NOTNULL, checks, FK/UNIQUE/indexes, tenant fields, enableRLS and policy declarations untouched.",
+    "reason": "The current formal schema still declares two native BigInt defaults. Tagged Kit serializer keeps nonSQL defaults as native values and JSON snapshot differ can stringify them; SQL defaults are compiled to text. An actual historical generator BigInt stringify failure exists, but no per-property runtime trace proves either declaration the sole observed failing property.",
+    "historical_audit": "archives/recovery-20261028/CLOUD-FULL50-BIGINT-SERIALIZATION-AUDIT-20261029.json",
+    "not_old_seed_copy": "Patch constructed from exact currentd8e/FormalSource28 schema, without b720/27a/95eb seed overlay. Does not add fresh seed/resultDisposition/status unions or any adapter."
+  },
+  "primary_API_evidence": {
+    "ORM": {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "files": [
+        {
+          "path": "drizzle-orm/src/pg-core/utils.ts",
+          "blob": "b7547ad664d15435c33527c431bc470eec299d1f",
+          "fact": "getTableConfig returns columns/checks/policies/enableRLS."
+        },
+        {
+          "path": "drizzle-orm/src/pg-core/dialect.ts",
+          "blob": "bd9d6a5c9520f65033640b4433f16c0c56375a38",
+          "fact": "PgDialect.sqlToQuery compiles SQL; omitted values without defaultFn remain DEFAULT."
+        },
+        {
+          "path": "drizzle-orm/src/pg-core/columns/bigint.ts",
+          "blob": "17ac0798b85fd8b7640cf56bf223491c3f40ce11",
+          "fact": "modebigint uses PgBigInt64, SQL bigint and BigInt(value) driver decode."
+        },
+        {
+          "path": "drizzle-orm/src/pg-core/checks.ts",
+          "blob": "43740427b8a271d59065ddb3076b5ee20fa33022",
+          "fact": "Check.value is SQL."
+        }
+      ]
+    },
+    "Kit": {
+      "repository": "drizzle-team/drizzle-orm",
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "path": "drizzle-kit/src/serializer/pgSerializer.ts",
+      "blob": "9633908549b4e2241493e43016741d57f7daf6d3",
+      "lines": "247-273",
+      "fact": "SQL default gets sqlToStr; other non-special bigint default remains raw."
+    },
+    "method": "Full connector reads, static API analysis only. Fixed official tagged source supports expected API but is not an installed per-file/runtime assertion."
+  },
+  "calls_authority_ACK_audit_boundaries": {
+    "current_reads": [
+      {
+        "path": "openbot/server/src/approvals/fresh-producer.ts",
+        "blob": "9209b40696ddb5847967b5281192173104f3f232",
+        "fact": "Port orchestration rechecks recovery context, trusts committed/lost/unknown contract and verifies saved result; no physical transaction adapter is supplied."
+      },
+      {
+        "path": "openbot/server/src/approvals/store.ts",
+        "blob": "11c60539afb0153669766bd59caff5298de0f427",
+        "fact": "Current tenant/owner-scoped recovery read. saveResult/finish remain current methods, not newly promoted fresh commit implementation."
+      },
+      {
+        "path": "openbot/server/src/approvals/types.ts",
+        "blob": "2365ebe562751271190713a27c4f54968f6085b8",
+        "fact": "Existing port contract demands seed/CAS/result+disposition and COMMIT/unknown separation; no global union change."
+      },
+      {
+        "path": "openbot/server/src/db/client.ts",
+        "fact": "Tenant captured before physical begin; own transaction session sets localtenant; this schema-only package changes none of that."
+      },
+      {
+        "path": "openbot/server/src/audit.ts",
+        "blob": "9f006725bcb44d75a8b98e5290632bdbf11ff4bc",
+        "lines": "646-653",
+        "fact": "recordAuditEvent awaits actual store.insert with redaction; no audit synthesis/success invented here."
+      }
+    ],
+    "historical_pg_fresh": {
+      "candidate": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39",
+      "full_read_this_turn": true,
+      "canonical_present": false,
+      "not_adopted": true,
+      "reason": "Imports absent seed/resultDisposition schema. Written-in-transaction primitive is not COMMIT or outer authorization/audit/ACK adapter."
+    },
+    "unchanged_rules": [
+      "No result writer/transaction/producer/Root verifier/catalog/authority bypass/publish/receipt added.",
+      "Real outer driverCOMMIT or complete positive C-ALL readback must not be universally rejected by an invented original-server-termination condition.",
+      "NULL/new row lock/callback rejection alone cannot prove lost/rollback or permit replay; unknown ACK stays UNKNOWN unless actual authorized complete evidence resolves it.",
+      "Final fresh approval completion differs from continuation receipt, and required atomic audit remains an outer-store obligation.",
+      "Existing lawful queue delay/maxattempt behavior is untouched."
+    ],
+    "next_prerequisites": "Complete actual full-delta SQL/snapshot/journal semantic chain and schema package, distinct nonauthor review and lawful validation before seed adoption; only then separately scoped physicalcommit/readback adapter with full identity/legalstatus/result+disposition/final/requiredatomic audit/currentauthority semantics."
+  },
+  "tests": {
+    "path": "openbot/server/tests/approval-fence-defaults.test.ts",
+    "status": "DEFINED_ONLY_NOT_RUN",
+    "count": 7,
+    "purpose": [
+      "For each actual table compile SQL default to literal0 with no bigint parameter and JSON-safe text metadata; old0n would fail SQL assertion.",
+      "For each table verify PgBigInt64 driver reads0 and values beyond Number precision up to signed64 max.",
+      "For each table verify nonnegative fence check and closed enableRLS/policies metadata remain; does not prove live DB enforcement.",
+      "One native0n negative control reproduces JSON.stringify failure boundary without a database."
+    ],
+    "not_done": [
+      "No parser/compile/lint/types/tests/generator/SQL/PG execution.",
+      "No full migration acceptance or claim installed tagged APIs ran. Future exact independent review must flag unsupported API/type behavior before any runtime."
+    ]
+  },
+  "migration_boundary": "No SQL/snapshot/journal edit, no newDDL adoption. Intended database default remains zero, but current schema/migration completeness remains pending. This small serializer prerequisite cannot be called a complete seed migration package.",
+  "branch_safety": {
+    "create_base": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+    "initial_exact_branch_lookup": "404",
+    "root_workflows": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "push_filter": "main"
+      },
+      {
+        "path": ".github/workflows/source-recovery-verify.yml",
+        "trigger": "workflow_dispatch only"
+      }
+    ],
+    "prepare_push_matches": false,
+    "workflow_writes": 0,
+    "execution_refs_created": 0,
+    "jobs_dispatched": 0
+  },
+  "formal_scope_preserved": {
+    "original_stories": 77,
+    "original_packages": 18,
+    "original_gates": 7,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "metadata_jobs_consumed": 3,
+    "fourth_metadata_job_authorized": false,
+    "commercial": "NOT_DELIVERED",
+    "Source_adoption": false
+  },
+  "next_action": "Different nonauthor reads exact full two Source blobs plus this administrative evidence report. Fix concrete findings on same exclusive branch using expectedSHA. No Source adoption/runtime follows from author save or static review; Root alone owns canonical/lease and any separately authorized serialized validation."
+}
