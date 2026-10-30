@@ -217,7 +217,7 @@ def run_stage(cfg,stage,cleaned):
         "--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
         "--property=TimeoutStartFailureMode=kill","--property=TimeoutStopFailureMode=kill",
         "/usr/bin/env","-i","PATH=/usr/bin:/bin","LC_ALL=C","PYTHONDONTWRITEBYTECODE=1",
-        "/usr/bin/python3","-I","-B",str(root/"collector.py"),"wrapper",str(root),stage]
+        "/usr/bin/python3","-I","-S","-B",str(root/"collector.py"),"wrapper",str(root),stage]
     process=None;code=None
     call_bounded(lambda:record(root/(stage+".started.json"),{"stage":stage,"epoch":cfg["epoch"],"inner":cutoff}),cutoff)
     try:

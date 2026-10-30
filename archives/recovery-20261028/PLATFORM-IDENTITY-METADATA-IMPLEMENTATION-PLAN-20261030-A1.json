@@ -1,11 +1,11 @@
 {
-  "schema": "xiongbaowork-platform-immediate-query-static-preparation/v1",
-  "status": "AUTHOR_ALIAS_EMISSION_FATAL_FIX_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUNTIME_AUTHORIZED",
-  "authority": "Human explicitly requested this bounded static immediate-query-result implementation. Root coordinates concrete framing and unchanged safety boundaries; no new runtime quota, resource or privilege authorization.",
+  "schema": "xiongbaowork-collector-no-site-static-implementation/v1",
+  "status": "AUTHOR_EXACT_THREE_FILE_COLLECTOR_UPPERCASE_S_PENDING_NONAUTHOR_REVIEW_NO_RUNTIME",
+  "authority": "New human explicit static implementation request through Root: exact collector-only uppercase-S three-file scope. This does not grant runtime quota, bypass mandatory site policy or prove actual compatibility.",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "administrative_parent": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
-  "canonical_observed": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
-  "dedup": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40",
+  "administrative_parent": "967660fa77c5d8ce7720051d1b3e705b9bff00b8",
+  "canonical_observed": "f8256b74",
+  "dedup": "human-collector-uppercase-S-static-implementation/plan967660fa/base5130d399/headf8256b74/20261030T0819",
   "prepare_branch": "codex/platform-identity-prep-20261030-a1",
   "reserved_filter": "codex/platform-identity-run-20261030-static-query-a1",
   "runtime_authorization": {
@@ -28,12 +28,9 @@
     "not_proven": "No actual manager/disk version values can be reconstructed from FINISHED. No owner/package/kernel/OS completion or specific OOM command/allocator proven."
   },
   "deltas": [
-    "Keep exact query order, argv, allowed reads, output caps and original result assembly. Isolate original bounded_query core as query_result, removing only old phase emission. New bounded_query emits its complete result frame outside the core error catch before original return or any next query.",
-    "One bounded complete ASCII singleline contains exact run/attempt/head/epoch/unit/phase/query/argv/outcome/exit and separate base64 stdout/stderr original bytes, bytecounts and SHA256. Canonical payload bytecount/SHA256 bind all fields. Re-encoding strict-UTF8 result text must match already assembled original bytecount/hash.",
-    "Nonzero completed exit preserves raw bytes with UNKNOWN_EXIT and capture_complete=true. Timeout/outputcap/UTF8/exception incomplete result emits explicit UNKNOWN and null byte/hash/data fields, never fake empty or a fabricated exit.",
-    "Query record write/flush and original-inner remaining checks precede FINISHED or UNKNOWN phase. Emit/hash/cap/deadline failure is outside query-result exception catch and terminates collector; no retry/double emission or next query.",
-    "Only epoch context, emitter/wrapper and necessary payload pins/carrier argv-count/filter/plan changed. Management controller changes only collector hash constant. Resource architecture, UID/env-i/permit/selfhash/admission, persistent supervisor/fallback and independent finalphysicalwitness/ACK remain unchanged.",
-    "Non-author blocking finding response: split only the alias identity catch from actual owner query. No query-emission failure can be swallowed by this catch."
+    "Controller: insert only five ASCII bytes '\"-S\",' in run_stage.args metadata collector interpreter sequence at baseline line220: /usr/bin/python3 -I -B -> /usr/bin/python3 -I -S -B. Every other controller byte remains exact5130.",
+    "Workflow: regenerate only three controller carrier literals, controller SHA256 and encoded-length39644->39652. Collector literals/hash, exact existing pushfilter, role env/budget/permissions and all other workflow content unchanged.",
+    "This plan: exact pins, actual delta and supported/general versus actual UNKNOWN compatibility matrix. No collector source changes or runtime checks."
   ],
   "admission_preserved": {
     "original_subject_stages": "NOT_RUN_NOT_CLAIMED_PASSED",
@@ -86,38 +83,39 @@
   "artifacts": {
     "controller": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-      "blob": "715dba936fcf377c1ec5ddfeebbd86be2f10ee3a",
+      "blob": "be6acaa65a09adbf916a2649f769a2eb058b03c0",
       "mode": "100644",
-      "bytes": 29732,
-      "sha256": "45d325e7b94c65a9828e5755ecabe2915ea418b60897ace639e9618c143508c6"
+      "bytes": 29737,
+      "sha256": "d55501fc7d3434c2dee9f15e6bb3f31cf647a207062aa96d6460a52678621e22"
     },
     "collector": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
       "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
       "mode": "100644",
       "bytes": 24395,
-      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e"
+      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e",
+      "byte_unchanged": true
     },
     "workflow": {
       "path": ".github/workflows/platform-identity-metadata.yml",
-      "blob": "470608b68fcb2b3f860669459fe91278399f3787",
+      "blob": "916be4aaec7d0fe3136c6757fb60315b9a1ec3d4",
       "mode": "100644",
-      "bytes": 76158,
-      "sha256": "a996bc487051670cf64e7c511b6442f385e3ff632fd87a0693f75f0175cf29e7"
+      "bytes": 76166,
+      "sha256": "96a547db28d65a6afbe3e3aae4ed91ee6970479797830c5f1d425899d2af9282"
     }
   },
   "carrier": {
     "controller_fragment_chars": [
       16000,
       16000,
-      7644
+      7652
     ],
     "collector_fragment_chars": [
       16000,
       16000,
       528
     ],
-    "total_encoded_chars": 72172,
+    "total_encoded_chars": 72180,
     "max_fragment_chars": 16000,
     "run_scalar_chars": [
       2186,
@@ -154,7 +152,7 @@
     "PG": "PG_PENDING",
     "hosted_worker": "paused/UNVERIFIED"
   },
-  "next_action": "Different nonauthor fully reads exact four-file producer candidate/pins and framing/error/deadline semantics. Only after exact implementation review, prepare separate bounded memory diagnostic outline report package distinguishing code-provable/static-candidate/future-measurement facts. No new runtime/executionbranch/canonical/lease by author; max3/3 consumed, no4.",
+  "next_action": "Different nonauthor fully reads exact three changed files against parent967 and baseline513, verifies one5-byte collector flag insertion, unchanged collector/other roles/workflowfilter and complete compatibility holds. Static review does not resolve actual UNKNOWN policy/build evidence or authorize runtime. No fourth attempt allocated.",
   "previous_candidate_evidence": {
     "run": 40999201244,
     "job": 123879381737,
@@ -219,12 +217,12 @@
     "future_verifier": "Independently parse bounded full line rejecting duplicate keys/nonfinite/truncation; verify exact envelope identity, canonicalpayloadbytehash, strictbase64 perstream and rawlength/hash before reading actualvalues. This package implements producer only, no outside parser/job."
   },
   "static_preservation_checks": {
-    "pid1_exact": true,
-    "command_phase_exact": true,
-    "binary_identity_exact": true,
-    "immutable_cap_exact": true,
-    "management_hash_only": true,
-    "collect_exact_except_alias_identity_catch_separation": true
+    "controller_only_five_byte_insertion": true,
+    "collector_byte_identical_to_5130": true,
+    "metadata_query_argv_order_and_frames_unchanged": true,
+    "all_other_role_argv_exact_5130": true,
+    "no_O_OO_or_assert_skip": true,
+    "source_changes": 0
   },
   "blocking_review_response": {
     "candidate": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
@@ -234,5 +232,268 @@
     "status": "OLD_CANDIDATE_BLOCKED_NOT_RUN_PRESERVED",
     "minimal_fix": "Identity-only catch records original UNKNOWN and continue; owner bounded_query and successful append occur after the catch. Emit failures propagate to fatal wrapper. Query order/argv and identity-failure no-query semantics unchanged.",
     "no_runtime_authority": true
+  },
+  "implementation_baseline": "5130d39915adb7a7fe492db672a07e413b72672d",
+  "plan_reference": {
+    "commit": "967660fa77c5d8ce7720051d1b3e705b9bff00b8",
+    "path": "archives/recovery-20261028/PLATFORM-IDENTITY-OWNER-MEMORY-MINIMAL-PLAN-20261030.json",
+    "blob": "8f0a03669e3159160ac6c89be6d2254d5a667385",
+    "review_commit": "df368988115d368854f581a1f0d5a56bf6206fc7",
+    "review_path": "archives/recovery-20261028/PLATFORM-IDENTITY-OWNER-MINIMAL-PLAN-NONAUTHOR-20261030.json",
+    "reference_only": "Conditional plan/review is not this candidate's implementation approval."
+  },
+  "prior_reviewed_query_delta": [
+    "Keep exact query order, argv, allowed reads, output caps and original result assembly. Isolate original bounded_query core as query_result, removing only old phase emission. New bounded_query emits its complete result frame outside the core error catch before original return or any next query.",
+    "One bounded complete ASCII singleline contains exact run/attempt/head/epoch/unit/phase/query/argv/outcome/exit and separate base64 stdout/stderr original bytes, bytecounts and SHA256. Canonical payload bytecount/SHA256 bind all fields. Re-encoding strict-UTF8 result text must match already assembled original bytecount/hash.",
+    "Nonzero completed exit preserves raw bytes with UNKNOWN_EXIT and capture_complete=true. Timeout/outputcap/UTF8/exception incomplete result emits explicit UNKNOWN and null byte/hash/data fields, never fake empty or a fabricated exit.",
+    "Query record write/flush and original-inner remaining checks precede FINISHED or UNKNOWN phase. Emit/hash/cap/deadline failure is outside query-result exception catch and terminates collector; no retry/double emission or next query.",
+    "Only epoch context, emitter/wrapper and necessary payload pins/carrier argv-count/filter/plan changed. Management controller changes only collector hash constant. Resource architecture, UID/env-i/permit/selfhash/admission, persistent supervisor/fallback and independent finalphysicalwitness/ACK remain unchanged.",
+    "Non-author blocking finding response: split only the alias identity catch from actual owner query. No query-emission failure can be swallowed by this catch."
+  ],
+  "exact_scope": {
+    "actual_commit_parent": "967660fa77c5d8ce7720051d1b3e705b9bff00b8",
+    "code_baseline": "5130d39915adb7a7fe492db672a07e413b72672d",
+    "changed_paths": [
+      ".github/workflows/platform-identity-metadata.yml",
+      "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json"
+    ],
+    "collector_path_unchanged": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+    "existing_documents": "967 owner plan and2367 memory document unchanged; parent includes them, not counted as new implementation deltas.",
+    "filter_unchanged": "codex/platform-identity-run-20261030-static-query-a1",
+    "no_execution_ref_access_or_write": true
+  },
+  "startup_compatibility": {
+    "semantics": "Only the existing collector interpreter receives -S; -I/-B/env-i remain. No -O/-OO, no imports/path/env/process/unit/native artifact/install/probe additions.",
+    "general_sources": {
+      "fixed_docs": [
+        "https://docs.python.org/3.12/using/cmdline.html",
+        "https://docs.python.org/3.12/library/site.html",
+        "https://docs.python.org/3.12/library/sys.html#sys.addaudithook"
+      ],
+      "version_contrast": [
+        "https://docs.python.org/3.14/library/sys_path_init.html",
+        "https://docs.python.org/3.14/library/site.html"
+      ],
+      "upstream_source": {
+        "repository": "python/cpython",
+        "tag": "v3.12.0",
+        "tag_object": "0fb6e700c2f94ae0717ee1be7d4e50b2dd480d14",
+        "commit": "0fb18b02c8ad56299d6a2910be0bab8ad601ef24",
+        "files": [
+          {
+            "path": "Lib/json/__init__.py",
+            "blob": "ed2c74771ea87ddc9349099c37b17d3cda213040"
+          },
+          {
+            "path": "Lib/pathlib.py",
+            "blob": "65631b70396315d9e92e8b1c6f32919c4c4954bb"
+          },
+          {
+            "path": "Lib/subprocess.py",
+            "blob": "6df5dd551ea67e9d9651f636f5a399eae9f999dd"
+          },
+          {
+            "path": "Lib/signal.py",
+            "blob": "50b215b29d2fadf6ccc38e860242d04e5d946fb5"
+          },
+          {
+            "path": "Lib/hashlib.py",
+            "blob": "1b16441cb60ba7787b62ce6784656f6b9761409f"
+          },
+          {
+            "path": "Lib/selectors.py",
+            "blob": "af6a4f94b5008ad6c466922eb323338604c453fc"
+          },
+          {
+            "path": "Lib/base64.py",
+            "blob": "e233647ee76639abc96bebe161cd9095095beda6"
+          },
+          {
+            "path": "Lib/shlex.py",
+            "blob": "f4821616b62a0fa82ef0354d4901761ab20f74cb"
+          },
+          {
+            "path": "Lib/os.py",
+            "blob": "598c9e502301f759904cdcb830232d9b3fa84041"
+          },
+          {
+            "path": "Lib/stat.py",
+            "blob": "fc024db3f4fbeeb903272363ee2bad19de0e635b"
+          },
+          {
+            "path": "Lib/json/decoder.py",
+            "blob": "c5d9ae2d0d5d040708f097fbf6450b86eef334dd"
+          },
+          {
+            "path": "Lib/json/encoder.py",
+            "blob": "45f547741885a8649d2ce4265a3e04cc87e20db7"
+          },
+          {
+            "path": "Lib/json/scanner.py",
+            "blob": "7a61cfc2d24dceb3530988884f70f51f398d5855"
+          },
+          {
+            "path": "Lib/struct.py",
+            "blob": "d6bba58863649898a3f075cdda51cade9dc07f06"
+          },
+          {
+            "path": "Lib/urllib/parse.py",
+            "blob": "c129b0d7971d71d427be6fc611b82ee62753137c"
+          },
+          {
+            "path": "Lib/locale.py",
+            "blob": "e94f0d1acbaa7d2189ee7f802db44ef80cafe568"
+          },
+          {
+            "path": "Lib/threading.py",
+            "blob": "df273870fa42733d8d93c9914cd54607df1944d4"
+          },
+          {
+            "path": "Lib/enum.py",
+            "blob": "c207dc234c0da26db6319f747fc5b63923b1ad36"
+          }
+        ],
+        "read_method": "Read-only official GitHub full files plus fixed official docs; manual supported-import examples, no parser/compile/trace. Conditional/platform/function-local and docstring references are not a runtime closure."
+      },
+      "not_runner_identity": true
+    },
+    "direct_payload_imports": [
+      "json",
+      "os",
+      "signal",
+      "stat",
+      "subprocess",
+      "sys",
+      "time",
+      "pathlib.Path",
+      "hashlib",
+      "selectors",
+      "base64",
+      "shlex"
+    ],
+    "payload_static_audit": "Only listed direct imports. No explicit site/site.main/sys.path/prefix/__import__/importlib/exec/eval use; core APIs and fixed absolute native argv remain. This does not prove vendor transitive behavior.",
+    "supported_transitive_examples": [
+      {
+        "module": "json",
+        "upstream": "Lib/json/__init__.py106-108 plus decoder/encoder/scanner",
+        "examples": "stdlib codecs/re and optional _json accelerators; no site API in examined import surface.",
+        "actual_status": "UNKNOWN_VENDOR_AND_EXTENSION_LAYOUT"
+      },
+      {
+        "module": "pathlib",
+        "upstream": "Lib/pathlib.py8-20",
+        "examples": "fnmatch/functools/io/ntpath/os/posixpath/re/sys/warnings, collections/stat/errno and urllib.parse; parse imports standard helpers including ipaddress and conditional unicodedata.",
+        "actual_status": "UNKNOWN_VENDOR_TRANSITIVE_CLOSURE"
+      },
+      {
+        "module": "subprocess",
+        "upstream": "Lib/subprocess.py43-60,POSIX102-119",
+        "examples": "locale/threading/contextlib and other stdlib; fcntl/_posixsubprocess/select/selectors on supported POSIX branches. No change to start_new_session or session kill.",
+        "actual_status": "UNKNOWN_ACTUAL_PYTHON_NATIVE_BUILD"
+      },
+      {
+        "module": "selectors",
+        "upstream": "Lib/selectors.py8-13",
+        "examples": "abc/collections/math/select/sys.",
+        "actual_status": "UNKNOWN_NATIVE_SELECT_BUILD"
+      },
+      {
+        "module": "base64",
+        "upstream": "Lib/base64.py9-11 andLib/struct.py13-15",
+        "examples": "re/struct/binascii and _struct native support.",
+        "actual_status": "UNKNOWN_NATIVE_EXTENSION_DEPLOYMENT"
+      },
+      {
+        "module": "hashlib",
+        "upstream": "Lib/hashlib.py82-123,170+",
+        "examples": "Build-conditional _hashlib/_sha2 and other stdlib algorithm backends; names are upstream examples, not a claim these exact backends are installed.",
+        "actual_status": "UNKNOWN_INSTALLED_BACKENDS_AND_LINKED_BUILD"
+      },
+      {
+        "module": "signal/os/stat/sys/time/shlex",
+        "upstream": "Lib/signal.py1-3,os.py25-64,stat.py193,shlex.py10-15;sys/time builtin interfaces",
+        "examples": "Core/builtin or stdlib/native helpers such as _signal/enum/posix/_stat/collections/io/re. No third-party dependency is declared by payload.",
+        "actual_status": "UNKNOWN_VENDOR_PATCHES_OR_REQUIRED_POLICY"
+      }
+    ],
+    "evidence_matrix": [
+      {
+        "item": "Actual interpreter version/build",
+        "status": "UNKNOWN",
+        "existing_evidence": "Fixed /usr/bin/python3 argv only.",
+        "missing_existing_artifact": "No trusted interpreter version/build/package attestation in existing evidence; documentation/source tag is not deployed identity.",
+        "effect": "Do not infer3.12 orUbuntu compatibility; unsupported flag/startup failure remains failed/UNKNOWN."
+      },
+      {
+        "item": "Vendor stdlib/transitive closure",
+        "status": "UNKNOWN",
+        "existing_evidence": "Exact24395B payload direct imports plus upstream18-file supported examples.",
+        "missing_existing_artifact": "No deployed vendor module manifest/hashes or trusted complete transitive import-policy attestation.",
+        "effect": "Cannot assert whole deployed closure site-independent; no import-path repair or site.main fallback."
+      },
+      {
+        "item": "Native extensions/backend layout",
+        "status": "UNKNOWN",
+        "existing_evidence": "General upstream build-conditional references only.",
+        "missing_existing_artifact": "No installed _posixsubprocess/select/binascii/_struct/hashlib backend build/layout attestation.",
+        "effect": "Missing backend/import errors stop; no install/provider/path changes."
+      },
+      {
+        "item": "Venv/sys.prefix",
+        "status": "UNKNOWN",
+        "existing_evidence": "Payload does not directly consume sys.prefix and fixed native command paths do not derive from it.",
+        "missing_existing_artifact": "No trusted existing interpreter/venv/path-initialization configuration artifact.",
+        "effect": "Documented3.12<=3.13 site-phase prefix behavior can differ from3.14 path initialization. Do not assume one branch or scan configs."
+      },
+      {
+        "item": "Global site/.pth/sitecustomize",
+        "status": "UNKNOWN",
+        "existing_evidence": "-I includes lower-s, not uppercase-S; general site processing exists absent-S.",
+        "missing_existing_artifact": "No existing trusted image policy/config attestation about global .pth/sitecustomize requirements or their absence.",
+        "effect": "-S disables automatic site processing; reject any environment requiring it, not silently bypass."
+      },
+      {
+        "item": "User site/usercustomize",
+        "status": "UNKNOWN_ACTUAL_ENVIRONMENT",
+        "existing_evidence": "General3.12-I/lower-s excludes user site, reducing expected user customization.",
+        "missing_existing_artifact": "Actual interpreter/vendor policy is not identified; no trusted user-site policy artifact.",
+        "effect": "Do not claim actual hooks absent or probe user files."
+      },
+      {
+        "item": "Mandatory audit/security policy",
+        "status": "UNKNOWN_EXECUTION_HOLD",
+        "existing_evidence": "Explicit resource/drop/permit gates remain, but do not prove site-installed policy dispensable.",
+        "missing_existing_artifact": "No trusted deployment owner/image policy attestation that required site-installed audit/security hooks are absent or unnecessary for this exact environment.",
+        "effect": "If policy requires site or compatibility cannot be established, hold/reject execution. No automatic relaunch without-S or bypass."
+      },
+      {
+        "item": "Native/preinitialization audit hooks",
+        "status": "UNKNOWN_ACTUAL_HOOKS",
+        "existing_evidence": "General3.12sys.addaudithook distinguishes C preinitialization hooks from Python hooks.",
+        "missing_existing_artifact": "No trusted embedding/image native-hook policy/presence attestation.",
+        "effect": "-S is not 'all auditing off'; native hooks may remain. Do not add/remove/probe hooks or claim audit compliance from code gates."
+      }
+    ],
+    "version_semantics": [
+      {
+        "family": "Documented3.12",
+        "effect": "-I implies-E/-P/lower-s; upper-S separately suppresses automatic site/path processing. Venv prefix handling in site may be affected.",
+        "runner_match": "UNKNOWN"
+      },
+      {
+        "family": "Documented3.14",
+        "effect": "Venv prefix selection moved to path initialization, so that prefix effect no longer depends on-S. Automatic site suppression remains distinct.",
+        "runner_match": "UNKNOWN"
+      },
+      {
+        "family": "Other/vendor/embedded interpreter",
+        "effect": "No exact installed evidence; do not extrapolate version/build behavior or compatibility.",
+        "runner_match": "UNKNOWN"
+      }
+    ],
+    "refusal": "Mandatory site-dependent policy/dependency, unsupported flag or failed imports => failed/UNKNOWN or pre-execution hold, with original independent cleanup if launched. No -S removal retry, site.main, new sys.path, installation, bypassed assertion or-O/-OO.",
+    "proof_level": "Static supported dependency examples and exact string/hash parity only. No actual runtime compatibility PASS, no broad scan/probe and no measured memory savings.",
+    "memory": "Optional startup savings [0,UNKNOWN]; no MiB estimate or32fit/OOM-fix claim. Core/native-query/report/frame/cgroup charges remain."
   }
 }
