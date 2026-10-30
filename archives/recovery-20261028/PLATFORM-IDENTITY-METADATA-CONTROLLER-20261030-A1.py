@@ -306,8 +306,10 @@ def run_stage(cfg,stage,cleaned):
     assert code==0,{"stage":stage,"exit":code}
 def supervisor(cfg):
     root_gate(cfg,"supervisor");root=Path(cfg["admin"])
-    start=Path("/proc/self/stat").read_text().rsplit(")",1)[1].split()[19]
-    call_bounded(lambda:record(root/"supervisor.pid.json",{"pid":os.getpid(),"starttime":start}),cfg["inner"])
+    supervisor_pid=os.getpid()
+    supervisor_start=Path("/proc/self/stat").read_text().rsplit(")",1)[1].split()[19]
+    supervisor_identity={"pid":supervisor_pid,"starttime":supervisor_start}
+    call_bounded(lambda:record(root/"supervisor.pid.json",supervisor_identity),cfg["inner"])
     cleaned=set();error=None
     try:
         while not (root/"fallback.ready.json").exists():time.sleep(min(0.01,remaining(cfg["inner"])))

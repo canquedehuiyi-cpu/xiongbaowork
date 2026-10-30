@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-platform-metadata-implementation-v1",
-  "status": "AUTHOR_RUN_SCALAR_CARRIER_FIX_PENDING_FULL_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_PARENT_PID_SNAPSHOT_FIX_NOT_DISPATCH_AUTHORIZED",
   "authority": "Root在用户已授权单次版本补证及最新查因推进要求内，明确metadata准入实现映射及逐job临时guard边界；不是人类逐字批准具体mapping/manager配置，也不是新资源授权。",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "administrative_parent": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+  "administrative_parent": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
   "canonical_observed": "87d4651bb60b306e64ac3e3973da2584124a9de9",
   "prepare_branch": "codex/platform-identity-prep-20261030-a1",
   "only_run_branch": "codex/platform-identity-run-20261030-a1",
@@ -119,18 +119,18 @@
   "artifacts": {
     "controller": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-      "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
-      "bytes": 45172,
-      "sha256": "61c36a6a0908c93c93fa3cf81a64c5905a6b3065418597457725df15fa16bfb6",
-      "usage": "Exact unchanged controller bytes are static base64 carrier fragments in the same workflow step, decoded/hashed before immutable copy; no runtime network/code download."
+      "blob": "cac4ea2124bd50c1af9cb831e4691d8068561875",
+      "bytes": 45272,
+      "sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
+      "usage": "Static workflow base64 carrier of exact successor bytes; no runtime network."
     },
     "workflow": {
       "path": ".github/workflows/platform-identity-metadata.yml",
-      "bytes": 63740,
-      "sha256": "e4677a9c0acb7a93400b1e7afb59a156ef31319396e135028389996d402a4e67"
+      "bytes": 63872,
+      "sha256": "9788008d3ffc43dad451d99bcc9e1f281d519c6beff27a7adf22c7a210a8a323"
     }
   },
-  "proof_level": "Author GitHub connector reads and pure memory code-carrier length/base64 roundtrip/hash checks only. Controller unchanged; no parser/compile/test/collector/job execution or self-review approval.",
+  "proof_level": "Read-only exact failed-run/controller review plus pure tool-memory string/carrier/hash checks and GitHub preparation persistence only; no successor execution/self-review.",
   "preserved": {
     "scope": "77/18/7",
     "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
@@ -144,7 +144,7 @@
     "PG": "PG_PENDING",
     "hosted_worker": "paused/UNVERIFIED"
   },
-  "next_action": "Different nonauthor fully reads corrected workflow and unchanged controller plus this delta; verify decoded carrier parity and every run scalar<=21000. Root checks native preparation validation state and exact candidate, then only valid leaseowner after idlequeue/dedup may consider one execution branch. No execution branch/job by author.",
+  "next_action": "Different nonauthor fully reviews this exact successor. Sole collection attempt40987759034/job123842654361 is consumed and failed without version records. Successor is NOT_DISPATCH_AUTHORIZED until additional explicit attempt allocation; no execution branch/job by author.",
   "execution_branch_created": false,
   "jobs_started": 0,
   "source_writes": 0,
@@ -220,11 +220,11 @@
         16000,
         16000,
         16000,
-        12232
+        12364
       ],
-      "encoded_chars": 60232,
-      "decoded_bytes": 45172,
-      "decoded_sha256": "61c36a6a0908c93c93fa3cf81a64c5905a6b3065418597457725df15fa16bfb6",
+      "encoded_chars": 60364,
+      "decoded_bytes": 45272,
+      "decoded_sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
       "tool_memory_roundtrip_matches_original": true,
       "first_new_run_scalar_chars": 1843,
       "second_new_run_scalar_chars": 461,
@@ -232,7 +232,20 @@
     },
     "timing": "Same t0 position before root directory/code copy/guard setup. Decode is inside original budget; sustained supervisor/fallback, entire270/300 deadline and final ACK/always supervision unchanged.",
     "security": "Carrier variables are literal administrative code, never read by collector; root env-i still clears inherited environment before Python and control roles keep explicit whitelists. No token, secret or user environment is queried.",
-    "unchanged": "Controller blob98bc2db3c7837ed57ced256c845a76c7c25a6d75 is byte-identical: all64/swap0 gates, deadline/env/PID1/alias fixes, command allowlists and receipts unchanged.",
+    "unchanged": "Carrier mechanism unchanged; controller differs only in stable parent PID/starttime snapshot.",
     "not_claimed": "This author has not run GitHub validation/collector or any project/test. Future native validation acceptance remains to be checked; preparation validation records are not metadata runs."
+  },
+  "parent_pid_snapshot_fix": {
+    "failed_candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+    "failed_run": 40987759034,
+    "failed_job": 123842654361,
+    "actual_status": "completed/failure",
+    "actual_metadata": "NO_PID1_OR_VERSION_RECORDS",
+    "actual_terminal": "supervisor AssertionError(empty detail), fallback supervisor_death=true, scope command -9, final FAILED_OR_UNKNOWN despite actual512/64swap0oom1/pop0",
+    "confirmed_code_defect": "Old controller line309 captures persistent supervisor starttime, line310 lambda evaluates os.getpid inside call_bounded fork child (lines61-66), so fallback lines329-333 watches transient helper PID with parent starttime.",
+    "attribution_limit": "No traceback/pinned PID record in exported terminal; cannot identify exact AssertionError line or prove which death branch fired. Runtime sequence is consistent with confirmed deterministic identity defect.",
+    "minimal_change": "Capture supervisor_pid, supervisor_start and identity dictionary in persistent parent before call_bounded; child only records captured immutable-in-use values. No live PID/starttime acquisition in callback.",
+    "unchanged": "All collector/deadline/env/alias/PID1/resource/cleanup/final-witness gates and architecture unchanged.",
+    "attempt_allocation": "CONSUMED; successor NOT_DISPATCH_AUTHORIZED without additional explicit attempt allocation"
   }
 }
