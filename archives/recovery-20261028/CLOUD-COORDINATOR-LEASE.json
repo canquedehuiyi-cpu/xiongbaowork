@@ -2,16 +2,16 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-source-20261030",
-  "run_id": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
-  "epoch": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
-  "acquired_at": "2026-10-30T08:53:46.209Z",
-  "renewed_at": "2026-10-30T09:16:46.342Z",
-  "expires_at": "2026-10-30T09:16:46.342Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-contract-20261030",
+  "run_id": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
+  "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
+  "acquired_at": "2026-10-30T09:30:16.387Z",
+  "renewed_at": "2026-10-30T09:30:16.387Z",
+  "expires_at": "2026-10-30T10:15:16.387Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "6bf8d3281811459a6c603c003eb9f867865d7b9e",
+  "expected_parent": "d38a68b1569823417bab686357df721b32308f29",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
@@ -61,7 +61,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "真人完整77故事/18原包/7门商业交付既有目标本轮：fresh五权威输入和完整交付路线，首个不依赖受阻runtime的<=8Source静态持久化前置候选+不同非作者全文审。Source正式采用/CPU/PG/生产验收分层；无项目/CONTROL/generator/codec/第四metadata/probe/部署/付费/新资源架构许可；922兼容UNKNOWN_HOLD与3/3耗尽保持。",
+  "scope": "Static exact audit/authority/COMMIT/ACK/C-ALL contract then independently reviewed existing A11 raw recovery decision. No Source adoption, codec/parser/SQL/project/CONTROL execution, no fourth metadata.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -93,7 +93,6 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849",
-  "released_at": "2026-10-30T09:16:46.342Z",
+  "current_task_dedup": "commercial-next-contract-and-A11-recovery-plan/head-d38a68b1/cd6-reviewed/Qoder90bc9e97",
   "checkpoint_timing_note": "This administrative closeout occurred later than the prescribed 15min renewal interval, while the original held45min epoch remained unexpired; no jobs or Source adoption occurred. Historical acquired/renewed timestamps preserved in parent."
 }
