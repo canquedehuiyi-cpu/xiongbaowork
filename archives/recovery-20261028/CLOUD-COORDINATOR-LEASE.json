@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
-  "run_id": "2026-10-30T15:16:35.208Z:A4-R3-publication",
-  "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
-  "acquired_at": "2026-10-30T15:16:35.208Z",
-  "renewed_at": "2026-10-30T15:35:27.917Z",
-  "expires_at": "2026-10-30T15:35:27.917Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
+  "run_id": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+  "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+  "acquired_at": "2026-10-30T16:34:50.707Z",
+  "renewed_at": "2026-10-30T16:34:50.707Z",
+  "expires_at": "2026-10-30T17:19:50.707Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "6f0cefeaf1b293cd81be6c52b56762d5226b1853",
+  "expected_parent": "7f5e4e78d20772df9b4abe38960a63edcf321307",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T15:16:35.208Z"
+    "observed_at": "2026-10-30T16:34:50.707Z"
   },
-  "next_action": "Root independently verify this bounded publication checkpoint. No automatic next Source change, execution or publication; known static assertion risk remains open.",
+  "next_action": "Persist only the exact authorized five-file static prep candidate, independent Git byte correspondence, return for Root verification before final two-admin closeout. No Source adoption or execution.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -58,7 +58,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Only exact authorized frozen A4-R3 three-file publication to specified nontriggering prep branch and two existing administrative files. Known static assertion risk remains open. No Source adoption/runtime/PR/CI/job/secret/model/PG/deployment/fourth metadata.",
+  "scope": "Only authorized exact A4-A3 five-file public static prep and two existing administrative paths with retained public history. First stage returns held for Root Source verification; no private reports or unrelated artifacts, no execution.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -90,8 +90,8 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "root-human-A4-R3-three-source-publication/call14fa20d7/90131/report202d8a2e/base6f0cefea",
-  "checkpoint_timing_note": "New epoch after prior D6 lease released; no old epoch reused.",
+  "current_task_dedup": "root-D05-A4A3-five-source-publication-humanapproved/109402/570ee3be/call-a0de2cbe/base7f5e4e78/20261030T1631",
+  "checkpoint_timing_note": "New epoch after actual A4 release; original A4 missed renewal history remains retained, no old epoch reused.",
   "public_administrative_permission": {
     "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
     "question": "call_7402e4b872d949b08b1b45bb899e778d",
@@ -105,22 +105,22 @@
     "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
   },
   "current_epoch_renewal_history": {
-    "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
-    "last_successful_renewal_at": "2026-10-30T15:35:27.917Z",
-    "interval_exceeded": true,
-    "prior_successful_renewal_at": "2026-10-30T15:16:35.208Z",
-    "renewal_due_at": "2026-10-30T15:31:35.208Z",
-    "note": "No successful renewal before the 15min interval; original acquisition and 45min maximum unchanged. This timestamp is the proposed closeout CAS preparation time, not proof of successful release."
+    "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+    "last_successful_renewal_at": "2026-10-30T16:34:50.707Z",
+    "interval_exceeded": false
   },
   "predecessor_release": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
-    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-    "released_at": "2026-10-30T12:28:37.056Z",
-    "canonical": "6f0cefeaf1b293cd81be6c52b56762d5226b1853",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
+    "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+    "released_at": "2026-10-30T15:35:27.917Z",
+    "canonical": "7f5e4e78d20772df9b4abe38960a63edcf321307",
     "renewal_history": {
-      "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-      "last_successful_renewal_at": "2026-10-30T12:28:37.056Z",
-      "interval_exceeded": false
+      "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+      "last_successful_renewal_at": "2026-10-30T15:35:27.917Z",
+      "interval_exceeded": true,
+      "prior_successful_renewal_at": "2026-10-30T15:16:35.208Z",
+      "renewal_due_at": "2026-10-30T15:31:35.208Z",
+      "note": "No successful renewal before the 15min interval; original acquisition and 45min maximum unchanged. This timestamp is the proposed closeout CAS preparation time, not proof of successful release."
     }
   },
   "D6_authority_separation": {
@@ -282,7 +282,6 @@
     "adopted": false,
     "runs": 0
   },
-  "released_at": "2026-10-30T15:35:27.917Z",
   "a4_r3_git_correspondence_review": {
     "status": "GIT_BYTE_CORRESPONDENCE_ONLY",
     "reviewer": "/root/a11_data_reviewer",
@@ -292,5 +291,52 @@
     "fulltext": "PRIVATE_NOT_PUBLISHED",
     "independent_full_three_text_hash_mode_blob_parent_diff_verified": true,
     "open_static_risk_not_cleared": true
+  },
+  "a4_a3_publication_permission": {
+    "id": "root-D05-A4A3-five-source-publication-humanapproved/109402/570ee3be/call-a0de2cbe/base7f5e4e78/20261030T1631",
+    "question": "call_a0de2cbee1c24d979403a85d85c8b9cd",
+    "human_answer": "授权A3组合五文件公开保存",
+    "repository": "canquedehuiyi-cpu/xiongbaowork",
+    "public": true,
+    "source_branch": "codex/task-board-a4-a3-profile-prep-20261030",
+    "source_files": [
+      {
+        "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+        "mode": "100644",
+        "bytes": 49292,
+        "sha256": "e264e4ff193fa392972aa626ea1c2d589d85c60efd100dbee3202fb0c77faa5f"
+      },
+      {
+        "path": "openbot/app/tests/tasks-attention-region.test.tsx",
+        "mode": "100644",
+        "bytes": 6986,
+        "sha256": "bbd18184b8d45508b56594a22c7f77fe214b12da612307ce9ccdc716e7a99f80"
+      },
+      {
+        "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+        "mode": "100644",
+        "bytes": 31098,
+        "sha256": "570ee3be08b66a092dc757ccabea3e20d506f58e50264721a6867707f922c099"
+      },
+      {
+        "path": "openbot/app/tests/tasks-executor-profile.test.tsx",
+        "mode": "100644",
+        "bytes": 12057,
+        "sha256": "6c4b298e57eadd40987a087975922c4043f32db31cc84bd4d285308aeaa1486a"
+      },
+      {
+        "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+        "mode": "100644",
+        "bytes": 9969,
+        "sha256": "3c2ce1101e8f93c9bd196bd42089b805101ceb28d056e94ff9a32164b3946f45"
+      }
+    ],
+    "source_bytes": 109402,
+    "administrative_paths": [
+      "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+      "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+    ],
+    "allowed_admin_content": "Preserve existing public history and append only this A3 round owner/task/epoch, real times,parent/CAS,candidate identities,review/Root verification/readback/release and zero-job metadata.",
+    "excluded": "No private CPU/P1/P2/ledger/review fulltext/B/A2/B1/raw/secrets/user data; no Source adoption,execution,model,billing,PG,deployment or fourth metadata."
   }
 }
