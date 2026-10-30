@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
   "epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
   "acquired_at": "2026-10-30T00:59:29.444Z",
-  "renewed_at": "2026-10-30T01:22:39.897Z",
+  "renewed_at": "2026-10-30T01:32:59.239Z",
   "expires_at": "2026-10-30T01:44:29.444Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T00:59:29.444Z"
   },
-  "next_action": "Author exact successor fixes final resource persistence/emission completion within original outer deadline and explicit fallback env whitelist; same different nonauthor re-review before any one-shot dispatch.",
+  "next_action": "Single exact fa96 push after fresh lease/queue/ref/rundedup. Collect independent PID1 admission and unpriv version raw records with hashes, final resource witness separate; then exact-version static contract review.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",

@@ -1,0 +1,89 @@
+{
+  "schema": "cloud-administrative-nonauthor-review/v1",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+  "parent": "c7c74bb2eb22372890f1d87e3682db1062c48d45",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "status": "ADMIN_STATIC_APPROVED_FOR_ONE_BOUNDED_METADATA_PUSH_ONLY",
+  "evidence_level": "FULL_BLOB_STATIC_ONLY_NOT_RUNTIME_OR_RESOURCE_PASS",
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "021d5fb99b09e5c1281d988e7be96d8e8a8f0276",
+      "mode": "100644",
+      "bytes": 50899,
+      "sha256": "eb7ecb1cd6f8bc7e752563ef40cc5d3f758834bc784af866e7d21080c2483538",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
+      "mode": "100644",
+      "bytes": 45172,
+      "sha256": "61c36a6a0908c93c93fa3cf81a64c5905a6b3065418597457725df15fa16bfb6",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "6a0bf7de23c6c84e733b49fcd6defeb7b573976e",
+      "mode": "100644",
+      "bytes": 14358,
+      "sha256": "dc9258471df15a0fc44d0dce08bbec7d67ce2d88556027bb6ff217bcff4e6bae",
+      "full_read": true
+    }
+  ],
+  "findings": [],
+  "scope": {
+    "compare_commits": 1,
+    "changed_files": 3,
+    "source_changes": 0,
+    "inline_controller_exact_parity": true,
+    "dispatch_authority": "Only Root valid sole leaseowner after current queue idle and dedup. Exact unchanged candidate once on codex/platform-identity-run-20261030-a1. Reviewer did not create branch or dispatch."
+  },
+  "closed_findings": [
+    {
+      "id": "P2-FINAL-RECEIPT-ABSOLUTE-DEADLINE",
+      "prior_candidate": "c7c74bb2eb22372890f1d87e3682db1062c48d45",
+      "prior_review": "a64b4cbac6a12d44ba19b18cc858c180d0be039d",
+      "closure": "Dedicated fixed resource-only COW supervises complete physical observation, <=16KiB receipt, full flush and emission marker; <=1024B ACK only. Child completion timestamp, native reap, parent remaining and always actual completion all use original outer. Late/timeout fails. No stop/restore/version operation moved outside aggregate64."
+    }
+  ],
+  "verified_paths": [
+    "Workflow exact repo/ref/push guard, fixed reserved run branch, contents-read only, source-recovery-bytes cancel-in-progress=false; no runtime code fetch.",
+    "t0 before first /run control action, inner=t0+270 outer=t0+300, cleanup outer-6/fallback outer-5; no repeated grace.",
+    "Project512/shared64 swap0 and oom1 actual readback; supervisor16/fallback16/collector32 descendants share aggregate64. Bootstrap only fixed per-job ephemeral guard setup; post-start stop/kill/revoke/restore management remains inside64.",
+    "Normal scope registers and execs supervisor; real command returncode contributes to final outcome. No service-only Type/RemainAfterExit scope properties; no outside long-lived --pipe metadata forwarder.",
+    "Fallback actual service argv starts fixed /usr/bin/env -i whitelist. Scope Popen and query processes use explicit env, collector execve clean after irreversible real/effective/saved UID/GID/groups drop and actual postdrop cgroup/limits/OOM gates.",
+    "Root-admitted PID1 metadata only fixed /proc/1/exe allowed target readlink and stable root-owned FD/named binary hash inside collector32, clock/permit/cgroup checks before and after; no version commands/CAP/ptrace/LSM/proc changes or elevation after drop.",
+    "Unprivileged collector commands allowlisted and bounded; report<=32768 emitted direct, not through management8192 pipe. Privileged PID1 record and resources remain independently sourced.",
+    "Literal /lib and /usr/lib aliases each require trusted executable and same dev/ino/bytes/SHA as verified binary before exact dpkg-S; no glob inventory or installation.",
+    "Sustained supervisor PID/starttime and independent fallback, revoke-before-stop, owned unit noJob and empty/absent-after-stop, actual project/shared full pop0 and all caps final read-only witness; missing/oom0/late keeps whole job FAILED_OR_UNKNOWN.",
+    "Original six Subject stages NOT_RUN, no Source/token/network probe/install/upgrade; existing77/18/7 and Source28 preserved."
+  ],
+  "limitations": [
+    "Static support references are not actual runner version proof. Unsupported properties/runtime admission fail closed.",
+    "New run facts cannot backfill old A11/route/a4 versions.",
+    "Root PID1 metadata may be UNKNOWN; postdrop /proc1 may independently fail permission. Root0600 record is not read by unprivileged collector; coordinator must join exact independently sourced logs.",
+    "Exact disk/package/running-manager association requires returned field review, not Ubuntu-name inference; package full/source version metadata is not vendor patch-content proof.",
+    "Final parent oom0/missing cgroups or late witness can still fail whole job. Metadata evidence may exist separately; no resource restoration guarantee or DATA/PG/Source PASS is asserted.",
+    "Printed resource statuses are provisional until supervised ACK and successful native steps; never use a partial/provisional line alone."
+  ],
+  "authority": "Root defined independent metadata admission and limited per-job temporary guard mapping within user-authorized version-evidence/cause-analysis scope; no claim of human verbatim approval of mapping/config and no new resource authorization.",
+  "execution": {
+    "reviewer_project_runs": 0,
+    "reviewer_parser_tests": 0,
+    "reviewer_workflow_runs": 0,
+    "reviewer_canonical_lease_writes": 0
+  },
+  "next_action": "Root may perform at most one exact unchanged bounded metadata push only after valid sole lease, empty queue, dedup and full candidate identity check. Read actual logs and separately classify metadata completeness versus resource terminal. No automatic retry or Source adoption.",
+  "preserved": [
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "worker paused/UNVERIFIED"
+  ]
+}
