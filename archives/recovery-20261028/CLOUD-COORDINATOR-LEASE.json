@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:root-S-admin-correction-20261030",
-  "run_id": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
-  "epoch": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
-  "acquired_at": "2026-10-30T08:37:56.068Z",
-  "renewed_at": "2026-10-30T08:39:16.320Z",
-  "expires_at": "2026-10-30T08:39:16.320Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-source-20261030",
+  "run_id": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
+  "epoch": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
+  "acquired_at": "2026-10-30T08:53:46.209Z",
+  "renewed_at": "2026-10-30T08:53:46.209Z",
+  "expires_at": "2026-10-30T09:38:46.209Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "cba4381986f980d2fbc1a5e5b8d61a95b4d6e432",
+  "expected_parent": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:37:56.068Z"
+    "observed_at": "2026-10-30T08:53:46.209Z"
   },
-  "next_action": "RootrequestedUTF8bytes6598/currentstatic-HOLDscopecorrection only; exactcandidate922/review7ccunchanged, actual3/3/no4/probe/refupdates. Returnexactreviewedhandoff/leaseblobs and releasedstate.",
+  "next_action": "Publish first auditable full77/18/7 layered roadmap checkpoint withinboundedround; authorfreshpersistencypackage and nonauthorreview inparallel. No Source adoption or runtime; preserve true3rdjobfailure, expectedheadCAS andidle release.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -46,7 +46,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
+  "predecessor_epoch": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "仅Root指定handoff+lease行政更正：核review6598UTF8B并更新当前scope为collector-S静态/UNKNOWN执行hold/newjobs0/无第四次；原不同非作者审确切两文件commit后CAS，候选/原review/Source/历史不改。无任何作业/probe/执行ref权限。",
+  "scope": "真人完整77故事/18原包/7门商业交付既有目标本轮：fresh五权威输入和完整交付路线，首个不依赖受阻runtime的<=8Source静态持久化前置候选+不同非作者全文审。Source正式采用/CPU/PG/生产验收分层；无项目/CONTROL/generator/codec/第四metadata/probe/部署/付费/新资源架构许可；922兼容UNKNOWN_HOLD与3/3耗尽保持。",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -89,5 +89,5 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "released_at": "2026-10-30T08:39:16.320Z"
+  "current_task_dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849"
 }
