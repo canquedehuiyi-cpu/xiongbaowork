@@ -1,0 +1,263 @@
+{
+  "schema": "xiongbaowork-platform-identity-admission-plan-v1",
+  "status": "BLOCKED_NOT_DISPATCHABLE_PLAN_ONLY_NOT_RUN",
+  "author": "/root/a11_data_author",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "administrative_base": "0468db7c1d3db5ac5dcfa39f805865755c6358fe",
+  "prepare_branch": "codex/platform-identity-prep-20261030-a1",
+  "reserved_future_exact_push_filter": "codex/platform-identity-run-20261030-a1",
+  "execution_branch_created": false,
+  "workflow_created": false,
+  "controller_created": false,
+  "metadata_collector_run": false,
+  "actual_new_platform_identity": "NOT_OBTAINED_NOT_RUN",
+  "scope": "One administrative JSON only. No Source/canonical/lease/jobs/Page/automation changes; no local/Windows execution or payload files.",
+  "request": "Single bounded future read-only platform-version metadata collection, not a resource repair or project job.",
+  "reference_route": {
+    "candidate": "e6a49994deda16739c095ad214266af15c616762",
+    "review_commit": "56e4e979a2b1f3ef4efc3f26ea5c754c25ac71f3",
+    "review_path": "archives/recovery-20261028/CLOUD-ROUTE-FAILFAST-NONAUTHOR-REVIEW-20261030.json",
+    "review_blob": "a630f39b2cb905a41392d6e6863f458f502aeaa9",
+    "verdict": "ADMIN_STATIC_FAILFAST_ONLY_NOT_EXECUTABLE_FOR_PROJECT_DISPATCH",
+    "project_dispatch_approved": false,
+    "files": [
+      {
+        "path": ".github/workflows/route-tree-repro-candidate.yml",
+        "mode": "100644",
+        "blob": "8e4d03d441a77c79635225b77a5c3e7fe8e460fb",
+        "bytes": 145312,
+        "sha256": "77aa76149d483da1e56593cfca7cbc23bd316b557af1f082dad57c797336d439",
+        "full_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/ROUTE-TREE-REPRO-PLAN.json",
+        "mode": "100644",
+        "blob": "00144331e0ba75085703f0cb9e624241047afd73",
+        "bytes": 43877,
+        "sha256": "b2ab1dde0ec5ee261801f7f2d855d9fb568d2555b17f58e87ca78f3a4c617bb4",
+        "full_read": true
+      }
+    ],
+    "full_files_read": true
+  },
+  "exact_stage_conflict": {
+    "kind": "STRICT_ORIGINAL_SIX_STAGE_ADMISSION_VERSUS_PURE_METADATA",
+    "not_a_claim_of_technical_impossibility": "The safety checks can be preserved under a separately reviewed metadata admission contract. It is the exact original Source/runtime/install/prepare/brand stage semantics that cannot be honestly claimed executed after deleting those operations.",
+    "workflow_evidence": [
+      {
+        "lines": "40-43 and49-51",
+        "stage": "source",
+        "actual": "Exact source service/barrier role; full2065 verification follows. This would read project Source and is forbidden in this metadata-only task."
+      },
+      {
+        "lines": "304-310 and362-367",
+        "stage": "runtime",
+        "actual": "Exact runtime service/barrier role; installs/downloads pinned Bun1.3.14 runtime archive. This is not a read-only platform version query."
+      },
+      {
+        "lines": "440-446 and483-519",
+        "stage": "install",
+        "actual": "Exact install role; child512MiB frozen dependency install, conflicting with metadata CONTROL total64 and no install."
+      },
+      {
+        "lines": "616-622",
+        "stage": "prepare",
+        "actual": "Exact prepare role for original one-leaf Source guard/manifest/before state; deleting Source work removes this stage's original semantics."
+      },
+      {
+        "lines": "686-692 and729-744",
+        "stage": "brand",
+        "actual": "Exact brand role; child512MiB runs Bun generate-app-config.ts from project, violating noSubject/noSource/total64."
+      },
+      {
+        "lines": "748-754",
+        "stage": "brand-capture",
+        "actual": "Exact brand-capture role reads original generated Source identity. It cannot be marked passed by an unrelated version command."
+      }
+    ],
+    "clock_evidence": {
+      "workflow_one_lifecycle_start_line": 795,
+      "administrative_literal_lines": "353-371",
+      "actual": "Original t0 is created in later A/B lifecycle bootstrap, cfg.inner=t0+270 and cfg.outer=t0+300; preceding six prelude stages are outside this clock. Copying unchanged route code would not give the version job one shared270/300 budget.",
+      "stage_list": "budget-a/build-a/snapshot-a/reset-before/budget-b/build-b/snapshot-b/finish; these are original Subject lifecycle operations, not version metadata."
+    },
+    "capacity_evidence": "Original prelude install and brand each use512MiB children; original A/B build4GiB exception is irrelevant and MUST NOT be inherited for metadata. Original route controller caps16+16 plus DATA32 are intended<=64 within later lifecycle, but do not by themselves prove all earlier/admin activity within one total64.",
+    "conclusion": "Do not execute original six stages, merely rename them, or label six new version commands as passing original six barriers. The exact unchanged route workflow cannot meet all current literal constraints."
+  },
+  "existing_a11_shell_not_unchanged_solution": {
+    "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
+    "path": "archives/recovery-20261028/A11-OFFLINE-DATA-CONTROLLER-20261030.py",
+    "blob": "6d1bafa73a42ee105c282e77d9dede2d7ee508fa",
+    "bytes": 20519,
+    "sha256": "ffb8820e4fd1d5581ea4aec9b252559b5c808e31420bd229a90ca68a4cdc2ca7",
+    "full_read": true,
+    "actual_code": {
+      "line62": "inner=started+120;outer=started+150",
+      "line59": "One admin entry, owned delegated noop lifecycle and read-only witness; no original route sustained supervisor+independent fallback pair or six prelude roles."
+    },
+    "runtime_history": {
+      "run": 40919415179,
+      "job": 123608267218,
+      "result": "Failure: trusted fixed earlier root path actually FileNotFoundError; legacy512/64 oom.group0/pop0; restoration not accepted."
+    },
+    "conclusion": "This shell is useful administrative reference, not a drop-in approved270/300+six-stage+final-restoration solution. No script/controller adaptation is implemented here."
+  },
+  "single_mapping_change_for_root_confirmation": {
+    "text": "允许这唯一版本metadata作业使用独立非Subject admission合同，保共享64MiB/swap0、270/300秒同一绝对预算、持续supervisor、独立fallback、cleanup、只读finalwitness、同等身份与resource checks；不要求执行六个Source/runtime/install/prepare/brand阶段或冒其通过。",
+    "current_status": "NOT_APPROVED_OR_IMPLEMENTED_BY_THIS_PLAN",
+    "not_bundled": "This one mapping decision does not authorize global manager configuration changes, new environment/account/provider, holder processes, outside-aggregate cleanup, changed final gates or actual dispatch."
+  },
+  "manager_configuration_boundary": {
+    "prohibited": "No package installation/upgrade, manager-global or OS policy configuration edit, persistent service enable, network probe or credential change.",
+    "original_route_scaffold_evidence": {
+      "workflow_lines": "21-28",
+      "actual": "Creates /run/systemd/system/xiongbaowork.slice, daemon-reload and starts the resource slice; later writes actual kernel resource controls. These are real per-job manager/resource setup actions, not version reads."
+    },
+    "interpretation_not_assumed": "This plan does NOT silently exempt temporary resource guards from the user's no-config-change restriction. If even the already-reviewed per-job transient resource guard setup is classified as prohibited manager configuration, the current no-job outcome remains required; only a separately clarified narrowly necessary temporary resource admission could permit a future job.",
+    "no_current_execution": true,
+    "no_second_hidden_change_in_mapping": true
+  },
+  "metadata_allowlist_declarative_only": {
+    "running_manager": {
+      "command": [
+        "/usr/bin/systemctl",
+        "show",
+        "--property=Version",
+        "--value"
+      ],
+      "field": "Version only",
+      "limit_bytes": 2048,
+      "unsupported": "UNKNOWN; no other properties, full dump, D-Bus guesses or hidden APIs."
+    },
+    "manager_binary": {
+      "allowed_reads": [
+        "/proc/1/exe readlink only",
+        "Corresponding exact root-owned stable systemd OS binary FD for SHA256 and package ownership metadata"
+      ],
+      "version_command": "Only normal --version on the exact validated systemd OS binary; no service start/activation or arbitrary executable from metadata.",
+      "identity": "Record actual path, regular/root ownership, FD/named dev/ino/size/mode/mtime/ctime stability, SHA256; PID1-to-disk mismatch/deleted/non-systemd target is UNKNOWN, not normalized away.",
+      "prohibited": [
+        "/proc/1/cmdline",
+        "/proc/1/environ",
+        "other process traversal",
+        "tokens or secrets"
+      ]
+    },
+    "package_identity": {
+      "commands": [
+        [
+          "/usr/bin/dpkg-query",
+          "-S",
+          "<exact validated systemd binary path>"
+        ],
+        [
+          "/usr/bin/dpkg-query",
+          "-W",
+          "-f=${binary:Package}\\t${Version}\\t${Architecture}\\t${source:Package}\\t${source:Version}\\t${db:Status-Abbrev}\\n",
+          "systemd"
+        ]
+      ],
+      "fields": [
+        "exact installed binary package name",
+        "full distribution binary package Version including epoch/revision/patch suffix",
+        "Architecture",
+        "source Package",
+        "full source Version",
+        "installed status"
+      ],
+      "bounds": "Only exact owning systemd package. Missing owner/unsupported source fields or running-manager/disk/package mismatch remains UNKNOWN; no wildcard package inventory, guessed version, download or install.",
+      "patch_identity_boundary": "Full installed/source package version and binary hash are patch identity metadata. They do not prove every vendor patch's content or source-git provenance; later official version-matched source audit must establish that separately."
+    },
+    "kernel": {
+      "commands": [
+        [
+          "/usr/bin/uname",
+          "-s"
+        ],
+        [
+          "/usr/bin/uname",
+          "-r"
+        ],
+        [
+          "/usr/bin/uname",
+          "-v"
+        ],
+        [
+          "/usr/bin/uname",
+          "-m"
+        ]
+      ],
+      "prohibited": [
+        "uname -a",
+        "hostname",
+        "kernel cmdline",
+        "environment dump",
+        "/proc/version if it would expose build user/host beyond allowed fields"
+      ]
+    },
+    "os_release": {
+      "read": "/etc/os-release bounded regular file",
+      "fields": [
+        "ID",
+        "VERSION_ID",
+        "VERSION",
+        "PRETTY_NAME",
+        "BUILD_ID"
+      ],
+      "method": "Parse data only; do not source/eval or emit unrelated fields."
+    },
+    "runner_image_provisioner": {
+      "method": "Root reads normal native GitHub job setup metadata/logs for this exact future run/job and associates OperatingSystem, RunnerVersion, RunnerImage/ImageVersion and provisioner fields if actually present.",
+      "collector_environment_reads": "NONE; no env command or environment probing, no RUNNER_NAME/user/hostname.",
+      "identity_link": "Actual future repository/headSHA/workflow/event/runID/jobID/attempt from normal native GitHub metadata, not inferred caller automation identity.",
+      "missing": "UNKNOWN, do not infer provisioner or image from an Ubuntu marketing name."
+    },
+    "association": {
+      "new_run_only": true,
+      "not_backfilled_to_old_runs": true,
+      "rule": "A future runner's actual versions identify only that run. Matching image labels alone do not prove earlier jobs' binary/package/kernel versions; preserve old versions UNKNOWN unless independently supported."
+    }
+  },
+  "future_design_declaration_not_implementation": {
+    "admission": "Only after the single mapping is explicitly resolved and exact independent review, reuse reviewed administrative guard primitives with a new metadata-only stage mapping; never reuse Source/install/brand paths.",
+    "safety_semantics": "Keep immutable controller/permit identity, actual aggregate memory/swap/oom gates, bounded privileged launch/cleanup, irreversible UID/GID/groups drop, independent post-drop readback, sustained supervisor/fallback, and complete final physical resource witness. No safety reduction is proposed.",
+    "resource": "Every actual manager/control/collector process and descendant must be inside common64MiB/swap0, under original ordinary512MiB parent. No perprocess RLIMIT or ordinary8GiB executor substitute; no2GiB/4GiB exceptions.",
+    "clock": "One monotonic t0 before first collector/control action; inner270/outer300 includes stop/kill/reap/restore/readback/record, no reset or always grace.",
+    "collector": "Fixed allowlist only, streaming binary hash without retaining binary data; bounded per-command read-only output, no package/API installation/network probe/Source reads.",
+    "output_bounds": {
+      "per_command_stdout_bytes": 8192,
+      "per_command_stderr_bytes": 2048,
+      "total_version_report_bytes": 32768,
+      "binary_hash_stream_chunk_bytes": 65536,
+      "os_release_read_bytes": 16384,
+      "policy": "Overflow/unsupported/timeout fails or UNKNOWN; never truncate to claim completeness."
+    },
+    "final_witness": "Version collection status and resource terminal status are independent. Old and new final oom0/absent/late witnesses remain FAILED_OR_UNKNOWN. A version-only success cannot close resource, project or77/18/7 gates."
+  },
+  "current_actions": {
+    "administrative_files_added": 1,
+    "new_workflow": 0,
+    "new_controller": 0,
+    "jobs_started": 0,
+    "metadata_commands_run": 0,
+    "local_or_windows_execution": 0,
+    "Source_reads_or_writes": 0,
+    "canonical_changes": 0,
+    "lease_changes": 0,
+    "paid_calls": 0
+  },
+  "preserved": {
+    "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "scope": "77/18/7",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "hosted_worker": "paused/UNVERIFIED"
+  },
+  "next_action": "Different nonauthor reviews this exact one-file plan as BLOCKED_NOT_DISPATCHABLE. Root records the explicit stage-admission mapping issue and temporary-resource-guard interpretation without hidden permission expansion. No controller implementation or execution branch until those exact constraints are resolved; then a separate exact implementation package and review would be required."
+}
