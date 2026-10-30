@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T04:44:54.499Z",
+  "checkpoint_update_at": "2026-10-30T04:46:11.192Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4961,9 +4961,9 @@
     "additional_jobs": 1,
     "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
     "accepted_at": "2026-10-30T04:43:53.208Z",
-    "status": "EXACT_UNCHANGED_ADMISSION_CONFIRMED_NOT_DISPATCHED",
+    "status": "ACTUAL_THIRD_FINAL_JOB_IN_PROGRESS",
     "fourth_authorized": false,
-    "new_jobs": 0,
+    "new_jobs": 1,
     "old_runs": [
       40987759034,
       40999201244
@@ -4981,6 +4981,18 @@
       "bytes": 4730,
       "sha256": "de9890fcc7c678dbbed3c63a4a0577f4b6d81bdfb0872d299aad9ca9dbfa9e0d",
       "status": "EXACT_STATIC_ADMISSION_APPLIES_TO_EXPLICIT_SINGLE_THIRD_ATTEMPT"
+    },
+    "total_actual_metadata_jobs": 3,
+    "remaining_jobs": 0,
+    "runtime": {
+      "run": 41004678906,
+      "job": 123896762774,
+      "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+      "attempt": 1,
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-10-30T04:45:43Z",
+      "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/41004678906"
     }
   }
 }

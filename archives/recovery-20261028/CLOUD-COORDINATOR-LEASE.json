@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "acquired_at": "2026-10-30T04:43:53.208Z",
-  "renewed_at": "2026-10-30T04:44:54.499Z",
+  "renewed_at": "2026-10-30T04:46:11.192Z",
   "expires_at": "2026-10-30T05:28:53.208Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T04:43:53.208Z"
   },
-  "next_action": "Fresh exact unchanged four-file nonauthor applicability, then once reservedbranch creation after freshhead/lease/queue/dedup. No fourth actualmetadatajob.",
+  "next_action": "Receive existing third/final run41004678906 terminal and independent rawrecords/resources audit; exact-version contract only with reliableidentity. No fourth/rerun/variant.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,11 +29,12 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40999201244,
-    "job": 123879381737,
-    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
-    "status": "completed",
-    "conclusion": "failure"
+    "run": 41004678906,
+    "job": 123896762774,
+    "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+    "attempt": 1,
+    "status": "in_progress",
+    "conclusion": null
   },
   "queue_at_release": {
     "queued": [],
@@ -57,8 +58,19 @@
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
   "scope": "Root准确转达人类questioncall_a382c905b0f14d1091ef978a4c36c2f9明确追加第三次metadata一次，仅exact96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f。总上限3、旧2、本次1、无第四/重跑/变体。全部原16+16+32/shared64/512/swap0/oom1/身份/env-i/drop/270300/fallback/physicalfinalwitness门不变。",
-  "resource_jobs_this_epoch": [],
-  "new_jobs_started": 0,
+  "resource_jobs_this_epoch": [
+    {
+      "run": 41004678906,
+      "job": 123896762774,
+      "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+      "attempt": 1,
+      "status": "in_progress",
+      "conclusion": null,
+      "execution_branch": "codex/platform-identity-run-20261030-static-memory-a1",
+      "created_at": "2026-10-30T04:45:43Z"
+    }
+  ],
+  "new_jobs_started": 1,
   "authorization_provenance": {
     "human_request": "查因解决当前停滞、取得已授权单次版本补证后继续推进",
     "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
@@ -84,7 +96,7 @@
     "additional_jobs": 1,
     "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
     "accepted_at": "2026-10-30T04:43:53.208Z",
-    "status": "EXACT_UNCHANGED_ADMISSION_CONFIRMED_NOT_DISPATCHED",
+    "status": "CONSUMED_BY_RUN41004678906",
     "fourth_authorized": false
   }
 }
