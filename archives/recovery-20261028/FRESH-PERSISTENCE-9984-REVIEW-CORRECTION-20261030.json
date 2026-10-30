@@ -1,0 +1,24 @@
+{
+  "schema": "source-review-correction/v1",
+  "candidate": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+  "reviewer": "/root/a11_data_reviewer",
+  "status": "CHANGES_REQUIRED_PRIOR_SOURCE_APPROVAL_WITHDRAWN_NOT_ADOPTABLE",
+  "prior_report": "3cad33cb483d2e6c9c75289069ad5627e4390862",
+  "finding": {
+    "id": "P2-EXISTING-AP2-REGRESSION-CONTRACT-CONFLICT",
+    "blocking": true,
+    "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+    "baseline_blob": "1f8181bebf05e0535b6e554cac4c27f251ec407a",
+    "lines": [
+      570,
+      572,
+      575,
+      853,
+      854
+    ],
+    "detail": "Existing metadata helper mapsnative0n to numeric0 but SQLdefault to renderedstring0; independentmatrix expects numeric0. Exactsourceinverse/hash assumes olddefault0n and directdefaultassert expects0n. Two-schema-default changes without synchronized precise regression maintenance deterministically conflict with these existing staticcontracts.",
+    "required_change": "Newexactpackage must include narrowlybounded oldtest maintenance: exacttwoSQLzero inverse backtoold0n beforeunchangedoldhash; metadata treatonlyapprovedfenceSQLliteral0 asnumeric0; directdefaultoracleSQL0/modebigint/explicit0nparamABI preserved. IndependentDDLmatrix/hashes/negativeconstraints unchanged; no broadnormalization."
+  },
+  "correction": "Priorreview3cad initialSOURCE_APPROVED_ONLY overlooked existing AP2testdependency. Retainitshistory but supersedeapproval immediately; noadoption/runtimeauthorized. Authoridentifiedissueandreviewerindependentlyreadexactoldtest confirmed.",
+  "next_action": "AuthornewSHA thenfull3Source+adminreview. NoSQL/test/parserexecution oroldapprovalreuse."
+}

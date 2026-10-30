@@ -2,23 +2,27 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-source-20261030",
   "run_id": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
   "epoch": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
   "acquired_at": "2026-10-30T08:53:46.209Z",
-  "renewed_at": "2026-10-30T08:53:46.209Z",
-  "expires_at": "2026-10-30T09:38:46.209Z",
+  "renewed_at": "2026-10-30T09:16:46.342Z",
+  "expires_at": "2026-10-30T09:16:46.342Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "expected_parent": "6bf8d3281811459a6c603c003eb9f867865d7b9e",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
     "observed_at": "2026-10-30T08:53:46.209Z"
   },
-  "next_action": "Publish first auditable full77/18/7 layered roadmap checkpoint withinboundedround; authorfreshpersistencypackage and nonauthorreview inparallel. No Source adoption or runtime; preserve true3rdjobfailure, expectedheadCAS andidle release.",
+  "next_action": [
+    "Fresh lawful epoch: static exact audit vocabulary/correlation and authority/ACK readback ownership contract against real current callers, with different nonauthor review; do not implement speculative writer before prerequisites.",
+    "Obtain existing A11 full raw SQL/snapshot/journal text through lawful DATA64 mechanism and review complete consistent migration chain; no new generator/codec job authorized.",
+    "After prerequisite packages and required gates, choose source adoption/CPU/PG/production stages independently. No fourth metadata or automatic runtime."
+  ],
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -39,7 +43,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:39:16.320Z"
+    "observed_at": "2026-10-30T09:16:46.342Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -89,5 +93,7 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849"
+  "current_task_dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849",
+  "released_at": "2026-10-30T09:16:46.342Z",
+  "checkpoint_timing_note": "This administrative closeout occurred later than the prescribed 15min renewal interval, while the original held45min epoch remained unexpired; no jobs or Source adoption occurred. Historical acquired/renewed timestamps preserved in parent."
 }

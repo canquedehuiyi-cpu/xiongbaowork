@@ -1,0 +1,2381 @@
+{
+  "schema": "xiongbaowork-commercial-full-scope-roadmap/v1",
+  "status": "EXACT_FIRST_SOURCE_PACKAGE_STATIC_REVIEWED_FULL_SCOPE_ROADMAP_REVISION_PENDING_REVIEW",
+  "created_at": "2026-10-30T09:01:05.575Z",
+  "dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849",
+  "goal": "ExistingRootactivegoal: complete77stories/18originaldeliverypackages/7finalgates. Nevercompletebeforeactualcommercialacceptance.",
+  "base_canonical": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "authoritative_inputs": [
+    {
+      "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+      "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+      "mode": "100644",
+      "bytes": 286013,
+      "normalized_utf8_bytes": 286013,
+      "sha256_normalized": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146",
+      "complete_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+      "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+      "mode": "100644",
+      "bytes": 45225,
+      "normalized_utf8_bytes": 45225,
+      "sha256_normalized": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac",
+      "complete_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+      "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+      "mode": "100644",
+      "bytes": 479194,
+      "normalized_utf8_bytes": 479194,
+      "sha256_normalized": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5",
+      "complete_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+      "mode": "100644",
+      "bytes": 456310,
+      "normalized_utf8_bytes": 456310,
+      "sha256_normalized": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+      "complete_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+      "blob": "33d8120f5098cca985587fbd6194904eac44bbdb",
+      "mode": "100644",
+      "bytes": 242047,
+      "normalized_utf8_bytes": 242047,
+      "sha256_normalized": "f33603f1fc8a5f3d52aa690e3193aaccf6d8b264b8982371daa9c1c8947583b5",
+      "complete_read": true
+    }
+  ],
+  "formal_source": {
+    "commit": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "manifest_blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+    "approved_repair_overlays": 28,
+    "overlays_are_not_original18packages": true,
+    "newphysicalSourcevalidation_this_round": false
+  },
+  "mapping_check": {
+    "story_count": 77,
+    "unique_story_ids": 77,
+    "original_package_count": 18,
+    "gate_count": 7,
+    "all77_mapped_once_or_more": true,
+    "unmapped_story_ids": [],
+    "unknown_story_ids": [],
+    "original_verification_counts": {
+      "REQUIRES_NEW_VALIDATION": 77
+    },
+    "mapping_complete_is_not_acceptance": true
+  },
+  "story_rows": [
+    {
+      "original_requirement_row": {
+        "id": "A1",
+        "requirement": "作为用户，我在侧边栏看到\"工作管理 > 任务看板\"，进入后看到统计条：任务总数 / 进行中 / 需要操作 / 已结束（默认数据周期=一个月，可切 一周/一月/全部）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A2",
+        "requirement": "我可以点统计条任一数字过滤下方任务列表（按下态高亮）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A3",
+        "requirement": "任务列表含列：任务名、执行者（Waker 头像+名，可点进员工详情）、来源（对话触发/自主工作/交接）、状态（进行中/需要操作/已结束-已完成/已结束-失败）、最近更新（相对时间）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A4",
+        "requirement": "我可以用搜索框按任务名过滤，用下拉按 Waker/Group、触发方式、状态、数据周期组合过滤。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A5",
+        "requirement": "我可以切换\"列表/泳道\"两个视图；泳道视图按状态分三列（进行中/需要操作/已结束），卡片可拖拽仅进入\"已结束\"（归档语义），其余方向拖拽无效。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A6",
+        "requirement": "我点任务行\"查看详情\"，进入该任务关联的执行会话（channel 或 routineRun 详情），看到完整过程。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A7",
+        "requirement": "\"需要关注\"区固定在看板上方，含两个 Tab：需要操作(n)/查收结果(n)；空态文案\"暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里\"。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A8",
+        "requirement": "当我在\"需要操作\"里批准/拒绝某审批，对应任务状态自动流转（批准→进行中；拒绝→已结束-失败），无需刷新。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "A9",
+        "requirement": "当某任务产出附件/文件/组件结果，任务进入\"查收结果\"；我点\"查收\"后任务转\"已结束-已完成\"。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION",
+        "partial_evidence": {
+          "run": 40675320033,
+          "scope": "seven restored task board unit/HappyDOM fixture files; not real browser or full story acceptance",
+          "pass": 58,
+          "fail": 0
+        }
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "B1",
+        "requirement": "我在任意频道 composer 输入 @ 出现 Waker 选择列表（仅我可见的员工，含 Group 展开后的成员）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "B2",
+        "requirement": "@ 某 Waker 发送后：创建一条 task（来源=对话触发，执行者=被 @ 的 Waker），消息路由到该 Waker 并驱动其运行（接通 `draft.agentId` 路由）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "B3",
+        "requirement": "被 @ 的 Waker 的回复同时出现在频道与任务详情中；任务状态随 run 生命周期流转。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "B4",
+        "requirement": "群聊中 Bot 交接（`message_bot`）产生的后续工作自动登记为子任务（来源=交接），在看板执行者列显示接手方。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "C1",
+        "requirement": "我在\"自主工作\"页看到所有 Waker 的 routines/responsibilities/proactive 任务清单：下次触发时间、启停开关、最近 N 次运行结果。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "C2",
+        "requirement": "每次自主触发（routine fire / responsibility trigger）自动创建 task（来源=自主工作），initiator 沿用 OpenBot 的 `initiator_kind`（routine/responsibility/handoff），看板\"无人值守\"可过滤。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "C3",
+        "requirement": "连续失败熔断（10 次）发生时，对应任务标\"已结束-失败\"并出现在\"需要关注\"区。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "C4",
+        "requirement": "我可以在此页新建/暂停/删除 routine（复用现有 `/api/routines`，15 分钟下限与 20 条上限护栏保留）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "H1",
+        "requirement": "租户在\"能力与资源 > 模型库\"**自助接入**任意多个模型：从平台 provider 模板（OpenAI 兼容/Anthropic/Google/OpenRouter/国内兼容端点/自定义 base URL）选类型 + 填**自己的** API key（入租户加密 vault，沿用 `credentials` 机制）+ 模型名；形成该租户的\"已接入模型列表\"。Free 档可用平台提供的共享体验模型池，Pro 档解锁自定义 key（K1）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "H2",
+        "requirement": "我创建/编辑 Waker 时，可为其从模型库**单选**一个默认模型（存 `agent_profiles` 扩展字段）；未选则回落部署默认（现 `BOT_MODEL` 行为，向后兼容）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "H3",
+        "requirement": "一次运行（对话触发/@派活/routine 触发/交接接手）以**执行者员工的绑定模型**起跑——即\"开发 GPT-6、审核 GLM-5.3\"在同一任务里同时成立。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "H4",
+        "requirement": "我可以在任务详情/员工详情看到该次运行实际使用的模型；审计行记录模型标识（沿用 `modelUsage` 表扩展）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "H5",
+        "requirement": "模型库条目被员工引用时不可删除，提示\"3 位 Waker 正在使用\"（引用计数保护）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "H6",
+        "requirement": "远程 AG-UI Bot（自带端点的员工）不受 H2 约束（模型在它自己端点），UI 明示\"外部托管模型\"。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "I1",
+        "requirement": "我可以创建 Group（如\"编程小组\"）并为它定义**任务模板**：有序步骤，每步绑定成员 Waker+指令，例如 步骤1 开发（GPT-6 员工）→ 步骤2 审核（GLM-5.3 员工）→ 步骤3 汇总（分身）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "I2",
+        "requirement": "我给 Group 派一个任务（看板\"@Group\"或模板页\"运行\"）：系统按模板逐步执行，每步产出作为下一步输入上下文，各步骤在看板登记为父任务下的子任务（来源=交接），执行者显示对应员工。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "I3",
+        "requirement": "任一步骤触发\"需要操作\"（审批/提问）时，父任务挂起进\"需要关注\"区；我处理后流水线从该步继续。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "I4",
+        "requirement": "我可以中止流水线（剩余步骤标\"已结束-失败\"）或跳过某步（该步标跳过，继续下一步）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "I5",
+        "requirement": "步骤间执行复用底座**无人值守 run 通道**（`routines/run-turn.ts` 的 `createTurnRunner`：本地 runner + 平台线程锁 + 同一条 transcript），不新造执行通道；治理与真人发起的那一轮走同一道闸——每步都过 `guardBotTurn`（暂停）与 `headlessTurnRefusal`（Use Bots、模型白名单）并留审计。模板只是把\"一次无人值守 run\"编排成\"N 步计划\"。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "I6",
+        "requirement": "谁能对一个 Group 派活＝对该 Group 有权限的人；**派活时逐位校验\"这个人能不能用这一步的员工\"**，不因\"它在组里\"而扩权。组里某位员工不为发起人所用时，这一步**拒绝开跑并给出可行动的失败原因**——不是悄悄换成别人，也不是拿平台身份替人跑（D11\"平台控制目录、租户控制装配\"在流水线上的落点就是这里）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D05"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D1",
+        "requirement": "\"Waker 管理\"页含 Waker/Group 双 Tab 与员工卡片墙；卡片显示头像、名字、角色（如 Backend Engineer）、运行状态（在线/休息/暂停）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D2",
+        "requirement": "我可以\"新建 Waker\"：名字、头衔、角色描述、头像种子（boring-avatars）、可见性（私有/公开），复用 `/api/agents` + `agent_profiles`。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D3",
+        "requirement": "我可以创建 Group：命名+勾选成员 Waker；看板过滤器与 @ 列表中出现 Group 选项（激活 `users.groups` 空转字段 → 新建 `waker_groups` + `waker_group_members` 关系表）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D4",
+        "requirement": "我可以按\"运行状态\"筛选卡片（在线 = 有活动 run；休息 = 空闲；暂停 = bot_lifecycle paused）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D5",
+        "requirement": "我点员工卡片进入员工详情：它的职责、进行中任务、技能授权、最近审计流水（读现有 audit 数据）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D6",
+        "requirement": "我可以为每个 Waker 编辑**人设**：性格语气、工作守则、口头约束（结构化字段注入 `shared/bot-prompt.ts` 组装的系统提示），与角色描述分开维护；人设可另存为模板复用给新员工。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "D7",
+        "requirement": "每个 Waker 有独立的\"员工装配页\"：一屏管理它的 模型绑定(H2)/技能/插件连接器/人设/职责(routines)，即\"单独授权安装\"的落地入口；授权范围仅限我拥有或对我公开的员工。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "E1",
+        "requirement": "\"能力与资源\"页是统一聚合视图：技能（personal+deployment）、MCP/连接器（含授权状态）、知识/信息源、组件，四区一屏。仅前端聚合，复用现有 `/api/plugins`、`/api/skills`、knowledge 端点，**不动后端**。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D08"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "E2",
+        "requirement": "我可以把某技能/连接器授权给指定 Waker 或整个 Group（授权对象从\"仅 Bot\"扩展到\"Group 展开为成员批量授权\"）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D08"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "E3",
+        "requirement": "\"安装\"语义：目录内的技能/连接器/MCP 由管理员上架（保留现有治理边界），员工所有者在装配页给自己的员工**自助勾选安装/卸载**，无需管理员逐次审批；每次安装写审计行。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D08"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "E4",
+        "requirement": "模型库作为\"能力与资源\"第五区（对应 H1）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D08"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "F1",
+        "requirement": "首次登录进入\"我的分身\"引导：选择信息来源（本地文件夹/知识源声明），保存后生成特殊 built-in Waker\"我的分身\"，其角色描述注入所选来源。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "F2",
+        "requirement": "**runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）打包为 Tauri 客户端，安装后**出站** WebSocket 连接中心 server（设备发起，无需公网 IP/端口映射），注册 `device_id`（machineId，UUID 持久化在本机配置）；一租户可注册多台设备并命名。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "F3",
+        "requirement": "Waker 的浏览器/shell/文件动作由服务端策略网关决策后，按任务绑定的 device_id **下发到对应 runner 执行**；CEL 策略、审批、审计、密钥脱敏全部仍在服务端，runner 只是受治的执行臂。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "F4",
+        "requirement": "设备在线/离线：员工卡片与看板显示设备状态；设备离线时新任务进入等待队列（复用 `work_items` 租约机制），设备回线自动续跑；离线超过阈值任务标\"需要操作\"提醒用户上线。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "F5",
+        "requirement": "Web 端 URL 支持 `?machineId=` 过滤\"只看待本机执行的任务\"（与 QoderWake 行为一致）；无匹配设备时显示\"Waker 们正在休息\"空态。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "F6",
+        "requirement": "服务端 Docker 电脑（底座 supervisor 链路）**降级为开发/演示回退**：`TENANT_RUNTIME=cloud` 时 Waker 跑在服务端容器（本地无 runner 也能全流程联调），生产租户默认 `TENANT_RUNTIME=device`。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "J1",
+        "requirement": "注册/登录：邮箱+密码（Better Auth 自有凭据路径）+ 可选 Google/GitHub OAuth；注册成功即开通租户（初始化：Free 档订阅、\"我的分身\"、空模型库引导页）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D04"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "J2",
+        "requirement": "全部业务表加 `tenant_id` 并启用 PostgreSQL **Row-Level Security**：连接会话注入 `app.tenant_id`，策略强制过滤；API 层同时带租户上下文做双保险。跨租户访问一律 404（不暴露资源存在性）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D03"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "J3",
+        "requirement": "我的 Waker、任务、审批、技能、连接器授权、模型 key、设备仅我可见；本期无跨租户共享/协作。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D03"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "J4",
+        "requirement": "模型凭据、连接器 token 按租户入加密 vault；底座\"管理员上架目录\"升级为**平台级目录**（provider 模板、官方技能/连接器），租户在目录内自助开通到自己的账户。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D03"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "J5",
+        "requirement": "平台运营后台（原 admin 页面收敛为平台工具）：租户列表/封禁恢复/封禁即冻结其任务队列与 runner 连接、按租户查用量与审计。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D04"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "J6",
+        "requirement": "原 `OPENBOT_SINGLE_USER` 仅保留为开发模式；产品默认注册制，公网部署强制登录。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D04"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "K1",
+        "requirement": "套餐定义（seed 数据，可配置）：Free = 2 Wakers / 50 任务·月 / 1 设备 / 平台目录基础模型；Pro = 10 Wakers / 1000 任务·月 / 5 设备 / 自定义模型接入。配额在**服务端写路径强制拦截**（非仅 UI 灰置）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "K2",
+        "requirement": "用量面板（对应 QoderWake 左下角\"用量\"）：当前档位、本周期 Waker 数/任务数/模型 token 估算（聚合自 `model_usage` + runner 上报）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "K3",
+        "requirement": "升级入口：档位对比页 + 手动/种子切换订阅；**不接支付渠道**（预留 provider 接口）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "K4",
+        "requirement": "超额返回结构化错误码（含\"已用/上限/升级链接\"），前端统一引导升级或清理。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D09"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "G1",
+        "requirement": "通过租户包 `examples/qoderwake`（brand.yaml/theme.css/agents.yaml/skills.yaml/knowledge.yaml）替换默认 fintech：产品名\"熊宝数字员工\"、中文界面文案、种子员工（含 Backend Engineer 等角色卡）。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D12"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "G2",
+        "requirement": "开发模式保留 `OPENBOT_SINGLE_USER=true` 一键起全栈（联调用），生产为注册制多租户（见 J6）；开发期 runner 与 server 可同机部署。",
+        "source_reference": "项目规格；原版实测以对应截图/DOM为准",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D04"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF1",
+        "requirement": "能力与资源中独立 WakerFlow 管理，列表空态与新建入口",
+        "source_reference": "reference-wakerflow-management.jpg",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF2",
+        "requirement": "新建 WakerFlow：自然语言输入、模型选择、场景建议",
+        "source_reference": "reference-wakerflow-new.jpg",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF3",
+        "requirement": "自然语言生成可编辑、可保存的可执行计划，错误和取消可恢复",
+        "source_reference": "原版文案明确自然语言生成工作流，未调用模型",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF4",
+        "requirement": "流程编辑、复用、运行记录和任务看板查收闭环",
+        "source_reference": "原版管理文案，细节待生成后取证",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF5",
+        "requirement": "运行中止后状态不可被旧回调覆盖，后续步骤不得启动",
+        "source_reference": "项目 I4 必须满足；不假定原版未读取的运行语义",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF6",
+        "requirement": "同一运行并发推进只有一个执行者，避免重复执行和重复计费",
+        "source_reference": "项目 I2/I5 及重复交付风险",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "AUT1",
+        "requirement": "定期与一次性调度，多个触发条件（原版显示上限5）",
+        "source_reference": "reference-automation-one-off.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "AUT2",
+        "requirement": "事件 Hook/API 入口及触发行为",
+        "source_reference": "reference-automation-form.jpg，原版任务筛选有事件/API",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "AUT3",
+        "requirement": "执行对象可选 Waker 或已创建 WakerFlow",
+        "source_reference": "reference-automation-flow.jpg",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "AUT4",
+        "requirement": "自动任务最大运行次数、截止日期、到期停止",
+        "source_reference": "reference-automation-advanced.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D06"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "RES1",
+        "requirement": "独立知识库创建与后续知识维护/授权",
+        "source_reference": "reference-knowledge-create.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D08"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "RES2",
+        "requirement": "公开项目支持名称、简介、本地目录或Git仓库和分支，当前设备下共享给全部Waker，并在任务上下文中可选；员工专属项目具备独立范围",
+        "source_reference": "原版resources/projects实际UI，未填写或保存项目",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D08"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "ROLE1",
+        "requirement": "角色模板和员工实例分离，智能生成/Markdown/手工Identity Persona Bible",
+        "source_reference": "reference-custom-role-manual.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D07"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF7",
+        "requirement": "流程图worker提示词、decision条件分支、嵌套Flow和动作实现的编辑与执行",
+        "source_reference": "reference-readonly/wakerflow-static-contracts.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF8",
+        "requirement": "输入参数、确认回答与跳过、运行事件及错误恢复、版本定义与回滚",
+        "source_reference": "reference-readonly/wakerflow-static-contracts.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WF9",
+        "requirement": "持久自定义会话和历史、工作流分享/导入及有效期/次数约束",
+        "source_reference": "reference-readonly/wakerflow-static-contracts.txt",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D10"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "SEC1",
+        "requirement": "员工级危险命令审批、敏感文件路径审批、每工具直接/询问/禁用三态及企业模式入口；执行侧遵循配置，拒绝/待审批无副作用",
+        "source_reference": "原版员工详情安全与权限页面实际UI；企业模式数据本地性尚未证实",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "WIN1",
+        "requirement": "原生Windows设备CLI可以实际执行命令，启动错误可见；中止取消整棵子进程树并清理",
+        "source_reference": "QoderWake原版运行在Windows；完整设备交付验收",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D16"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    },
+    {
+      "original_requirement_row": {
+        "id": "DEV1",
+        "requirement": "设备动作结果不明时持久暂停后续自动写入；新工具编号/跨实例/重启均不能绕过，所有者能核查详情并明确恢复",
+        "source_reference": "设备安全完整执行流程及当前UI已暂停自动执行的行为承诺",
+        "current_verification": "REQUIRES_NEW_VALIDATION"
+      },
+      "package_ids": [
+        "D11"
+      ],
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "accepted_complete": false
+    }
+  ],
+  "original_package_rows": [
+    {
+      "original_package_coverage_row": {
+        "id": "D01",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D02",
+        "story_ids": [],
+        "gate_ids": [
+          1
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D03",
+        "story_ids": [
+          "J2",
+          "J3",
+          "J4"
+        ],
+        "gate_ids": [
+          2
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D04",
+        "story_ids": [
+          "J1",
+          "J5",
+          "J6",
+          "G2"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D05",
+        "story_ids": [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6",
+          "A7",
+          "A8",
+          "A9",
+          "B1",
+          "B2",
+          "B3",
+          "B4",
+          "I1",
+          "I2",
+          "I3",
+          "I4",
+          "I5",
+          "I6"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9"
+      ],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D06",
+        "story_ids": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "AUT1",
+          "AUT2",
+          "AUT3",
+          "AUT4"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D07",
+        "story_ids": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "ROLE1"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D08",
+        "story_ids": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "RES1",
+          "RES2"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D09",
+        "story_ids": [
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6",
+          "K1",
+          "K2",
+          "K3",
+          "K4"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D10",
+        "story_ids": [
+          "WF1",
+          "WF2",
+          "WF3",
+          "WF4",
+          "WF5",
+          "WF6",
+          "WF7",
+          "WF8",
+          "WF9"
+        ],
+        "gate_ids": [
+          4
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D11",
+        "story_ids": [
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "SEC1",
+          "DEV1"
+        ],
+        "gate_ids": [
+          5
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D12",
+        "story_ids": [
+          "G1"
+        ],
+        "gate_ids": [],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D13",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D14",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D15",
+        "story_ids": [],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D16",
+        "story_ids": [
+          "WIN1"
+        ],
+        "gate_ids": [
+          3
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D17",
+        "story_ids": [],
+        "gate_ids": [
+          6
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    },
+    {
+      "original_package_coverage_row": {
+        "id": "D18",
+        "story_ids": [],
+        "gate_ids": [
+          7
+        ],
+        "status": "REQUIRES_NEW_VALIDATION"
+      },
+      "evidence_layers": {
+        "source": "FORMAL_SOURCE28_BYTES_IDENTIFIED_NOT_FULL_STORY_FUNCTIONAL_AUDIT",
+        "CPU": "ONLY_ORIGINAL_ROW_SCOPED_HISTORICAL_EVIDENCE_IF_PRESENT_NOT_CURRENT_FULL_ACCEPTANCE",
+        "PG": "NO_FINAL_REAL_PG_EVIDENCE_CLAIMED_PG_PENDING",
+        "production": "NOT_SERVICE_WIRED_DEFAULT_GATES_CLOSED",
+        "commercial": "NOT_DELIVERED"
+      },
+      "complete": false,
+      "story_partial_evidence_available": [],
+      "required_final_acceptance": "Current reviewedfinalSHA actualrequirements andattachedgates; infrastructurepackageswithemptystoryids remainoriginalpackages notdeleted"
+    }
+  ],
+  "final_gate_rows": [
+    {
+      "id": 1,
+      "original_requirement": "同一最终SHA正式镜像8 GET 200且未知API404",
+      "evidence_key": "same_final_sha_formal_image_8GET_unknown404",
+      "required_evidence": "Actual same final reviewedSHA image startup; all8listedGET200 andunknownAPI404; realhealth/listen/writerstartuporder; nofixture/Nodebundle substitution.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g1",
+      "not_acceptance": true
+    },
+    {
+      "id": 2,
+      "original_requirement": "未登录拒绝、跨租户私有资源404、无越权或拒绝后的上游调用",
+      "evidence_key": "auth_tenant_RLS_defaultdeny",
+      "required_evidence": "RealPG tenant roles/FORCERLS andauth/scope cases; unauthrefusal,cross-tenantprivate404, no upstreamsideeffect afterrefusal; originalauthority/catalog gates.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g2",
+      "not_acceptance": true
+    },
+    {
+      "id": 3,
+      "original_requirement": "前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI",
+      "evidence_key": "full_original_CI",
+      "required_evidence": "Exact finalcomposedSource manifest/frozenlock/fulloriginalsuites/noUnhandled; originalconfigs andrequiredresourceenclosure; no addition ofoverlappingcase totals orscoped178/32 substitution.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g3",
+      "not_acceptance": true
+    },
+    {
+      "id": 4,
+      "original_requirement": "WakerFlow实际生成-编辑-保存-执行-中止-查收及重启恢复",
+      "evidence_key": "WakerFlow_actual_lifecycle",
+      "required_evidence": "Generate/edit/save/execute/abort/receive/restart recovery usingexistingrun-turn/governance/actualproducerwiring; noalternateexecutor.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g4",
+      "not_acceptance": true
+    },
+    {
+      "id": 5,
+      "original_requirement": "用户设备浏览器真实动作及离线重连、授权审批闭环",
+      "evidence_key": "real_device_approval_offline",
+      "required_evidence": "Userdevice actualbrowser/shell/fileflow, offline/reconnect, approval/audit/unknownresultpause andfreshfinaldurability; CPUportsnotdurablePGproof.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g5",
+      "not_acceptance": true
+    },
+    {
+      "id": 6,
+      "original_requirement": "真实模型最小授权运行与正确计费",
+      "evidence_key": "real_model_metering",
+      "required_evidence": "Real minimal authorizedmodelrun+correctmetering/billingproof within freeexistingallocation andexplicitproviderconstraints; no paidcall/purchase orfixturebillingclaim.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g6",
+      "not_acceptance": true
+    },
+    {
+      "id": 7,
+      "original_requirement": "Windows/Linux干净客户部署证据",
+      "evidence_key": "clean_Windows_Linux_customer_deployment",
+      "required_evidence": "Real cleanclientdeployment evidence. CurrentnoWindowsprojectpayload/artifact/nativeexecution andresourcepermissions remain; prepare exactsafevalidationpermission/evidence decision before any such execution, do notlowergate.",
+      "current_status": "NOT_FINALLY_PROVEN",
+      "existing_scoped_reference": "CURRENT-GATE-SUMMARY.remaining_gate_evidence.g7",
+      "not_acceptance": true
+    }
+  ],
+  "evidence_inventory": {
+    "Source28": {
+      "run": 40830714143,
+      "job": 123304042601,
+      "focused_pass": 32,
+      "focused_fail": 0,
+      "lint_exit": 0,
+      "full_original_server_types_exit": 0,
+      "not_fullCI": true
+    },
+    "Source27": {
+      "run": 40821171620,
+      "offline_files": 178,
+      "pass": 2396,
+      "fail": 0,
+      "scope": "HistoricalSource27; notSource28wholefullCI"
+    },
+    "ledger": {
+      "files": 611,
+      "status_counts": {
+        "PASS_SCOPED_BATCH_ONLY": 468,
+        "NOT_RUN_REAL_BROWSER_OR_DEPLOYMENT": 8,
+        "PASSED_CASES_WITH_ORIGINAL_SKIPS": 2,
+        "NOT_RUN_PG_IMPORT_MARKER_ADVISORY": 132,
+        "NOT_RUN_REAL_VENDOR": 1
+      },
+      "case_totals": "NOT_SUMMED_OVERLAPPING_RUNS",
+      "full_611_row_source": {
+        "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+        "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+        "mode": "100644",
+        "bytes": 479194,
+        "normalized_utf8_bytes": 479194,
+        "sha256_normalized": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5",
+        "complete_read": true
+      }
+    },
+    "A11": {
+      "generator_run": 40902334215,
+      "generator_job": 123547693853,
+      "status": "ACTUAL_GENERATOR_SUCCESS",
+      "byte_verifier_run": 40912579798,
+      "byte_verifier_job": 123584189279,
+      "raw_identities": "FOUR_ACTUAL_MATCH",
+      "overall_verifier_job": "failure",
+      "resource_final": "UNKNOWN_NOT_ACCEPTED",
+      "full_raw_text_semantic_review_this_round": false,
+      "Source_adoption": false
+    },
+    "route": "HistoricalfreshA/Bbytesexistbutresourcefailure; notSourceadopt/formalimageproof",
+    "runtime_current": {
+      "last_metadata_run": 41004678906,
+      "job": 123896762774,
+      "attempt": 1,
+      "conclusion": "failure",
+      "consumed": 3,
+      "remaining": 0,
+      "fourth_authorized": false,
+      "collector_S_candidate": "922c30646b944e9a29a203eb061b0890a31d53a2",
+      "compatibility": "UNKNOWN_EXECUTION_HOLD",
+      "not_repeated": true
+    }
+  },
+  "short_execution_order": [
+    {
+      "id": "C01",
+      "owner": "a11_data_author",
+      "reviewer": "a11_data_reviewer",
+      "kind": "STATIC_FIRST_SOURCE_PACKAGE",
+      "scope": "Two currentapprovalschema bigintfence defaults become explicitSQLzero; newregressiontest plus precise existingAP2 reconcilefixturemaintenance",
+      "prerequisites": [
+        "freshcurrentcanonical approvals.ts/fullcaller+audit/clientread",
+        "fixedORMserializer/API sourceaudit"
+      ],
+      "outputs": [
+        "Exact3Source+1administrativeevidence candidate, full4files reviewed",
+        "fullmode/blob/UTF8bytes/SHA andunchangedSourcecomparison",
+        "nonauthorwholeexactSHAreview; testDEFINED_ONLY",
+        "ExistingAP2 sourceinverse/hash andDDLmatrix/negativeconstraints retained; only approvedtwofenceSQLzero normalized"
+      ],
+      "adoption": "NOT_ADOPTED",
+      "runtime": "NOT_RUN",
+      "supports_story_ids": [
+        "A8",
+        "I3",
+        "I5",
+        "J3",
+        "SEC1",
+        "DEV1"
+      ],
+      "support_meaning": "Indirect persistence/migration prerequisite only, notstorycompletion"
+    },
+    {
+      "id": "C02",
+      "owner": "solecloudcoordinator",
+      "reviewer": "differentnonauthor",
+      "kind": "A11_EXISTING_EXPORT_SEMANTIC_INPUT",
+      "prerequisites": [
+        "C01exactstaticreview first",
+        "authorizedcloudDATA64 method ortrustedexistingfullrawtext availability; no repeatedgenerator"
+      ],
+      "outputs": [
+        "complete actual155827B SQL/633425B snapshot/12118B journal andlog7289B tiedexistingverifiedrawhashes",
+        "fullconsistent generateddelta/schema/source28 andjournal/snapshotprevId/sequence closure"
+      ],
+      "current": "Byteidentitiesexist; actualrawGitblobs absent; thisroundnocodec/runtime. Fullsemanticreviewcannotbeclaimed fromrawhashes.",
+      "not_allowed": "No handwritten replacement snapshot/journal/SQL, no fourthmetadata oroldgenerator replay"
+    },
+    {
+      "id": "C03",
+      "owner": "disjointSourceauthor",
+      "reviewer": "differentnonauthor",
+      "kind": "FULL_MIGRATION_CONSISTENCY_SOURCE",
+      "prerequisites": [
+        "C02completeactualrawsemantic/chainreview",
+        "originalFORCERLS/authority/catalog preserved"
+      ],
+      "outputs": [
+        "budget<=8 fullsourcefiles perpackage schema+SQL+snapshot+journal consistency",
+        "exactSourcecompositionmanifest and fullgenerateddelta review"
+      ],
+      "current": "NOT_ADOPTED_NOT_RUN_PG_PENDING"
+    },
+    {
+      "id": "C04",
+      "owner": "disjointSourceauthor",
+      "reviewer": "differentnonauthor",
+      "kind": "PG_FRESH_PRIMITIVE_AND_COMMIT_READBACK_ADAPTER",
+      "prerequisites": [
+        "C03staticreview before nextpackage andactualadoption/PG prerequisites beforewiring",
+        "freshcanonicalcallers/auditvocabulary/transactioncontracts, no blindold27a/b720 reuse"
+      ],
+      "outputs": [
+        "fullidentity/legalstate/result+dispositionSQLNULLCAS/parentFORUPDATEseedFORSHARE/finalDBclock",
+        "actualdriverCOMMIT positive orcompletepositiveC-ALL distinctfromwritten_in_transaction",
+        "same-transactionrequiredsanitizedaudit, readbackmatchingfullidentity/authorization/catalog/correlation; UNKNOWNno replay"
+      ],
+      "guard": "True driverCOMMIT/completepositiveC-ALL notuniversallyblockedbyextraoriginalservertermination. NULL/newlock/partialreadback neverprovescommit orsafe replay. No fake receipt/Rootrelease.",
+      "excluded": "Globaltypesunion unlessfreshcallerprovesnecessity andseparatepackage review"
+    },
+    {
+      "id": "C05",
+      "owner": "Root-coordinatedQoderreadonly pluscloudSourceauthors",
+      "reviewer": "differentnonauthor",
+      "kind": "PARALLEL_STATIC_PRODUCTION_DEPENDENCY_WIRING",
+      "prerequisites": [
+        "NoSourcewriterconflict; perpackage<=8 andpreviousreview",
+        "freshactualindex/loader/route/DB/controlgraph nottruncatedR8assertion"
+      ],
+      "outputs": [
+        "defaultrefusal/requiredrealwriter/authority/catalog/RLS wiring candidates",
+        "A3existing10sdelay+originalmaxattempts; A6continuationreceipt separatefreshfinalcompletion",
+        "Source-specificno-sideeffectfailurecases defined"
+      ],
+      "current": "Onlydesign/read-onlyInputperRoot; noSourceadopt/productionenable"
+    },
+    {
+      "id": "C06",
+      "owner": "solecloudresourceowner ONLYafterseparateexistinggates",
+      "reviewer": "independentruntimeevidence",
+      "kind": "CPU_PG_PRODUCTION_COMMERCIAL_ACCEPTANCE",
+      "prerequisites": [
+        "actualresourcegate/compatibility resolved withauthorizedevidence andruntimeauthorization",
+        "exactreviewedSourcecomposition; genuinePG17/pool/RLS/COMMITACK proofs",
+        "no paid/deploy/Windows/native/resourceexception expansion assumed"
+      ],
+      "outputs": [
+        "originalfullCI",
+        "all7exactfinalgates",
+        "77story/18packageactualacceptance"
+      ],
+      "current": "NOT_RUN_NOT_DELIVERED_NOT_COMPLETE"
+    }
+  ],
+  "ownership": {
+    "canonical_lease_jobs": "Onlyactualcloudexecutor01a1869b/hostdurable, freshCASepoch required, nojobs authorizedthisround",
+    "Source_first_package": "a11_data_author exclusivepreparationbranch, approvals.ts+newregressiontest only",
+    "independent_review": "a11_data_reviewer authorsnoSource",
+    "root": "Three-linecoordination/evidence/acceptance, noWindowsSource/canonical/lease/jobs",
+    "WorkBuddy": "Currentpersistence/transaction/audit/migrationfirst-package boundary DESIGN_INPUT_ONLY Rootwillforward",
+    "Qoder": "Actualproductiondependency/defaultdeny/parallelpackage DESIGN_INPUT_ONLY Rootwillforward",
+    "old01a1869c": "READ_ONLY",
+    "no_wait_on_external_readonly_inputs": true
+  },
+  "runtime_and_acceptance_boundaries": {
+    "new_jobs": 0,
+    "new_Source_adoptions": 0,
+    "formal_Source28_unchanged": true,
+    "PG": "PG_PENDING",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "paid_calls": 0,
+    "deployments": 0,
+    "Windows_project_payload": 0,
+    "worker": "PAUSED_UNVERIFIED_PAGE_FROZEN",
+    "unattended_after_PC_shutdown": "NOT_RESTORED",
+    "resource_limits": "ordinary512MiB/swap0 DATA64; namedexceptionsonly. Metadata16/16/32shared64 original270300 unchanged; no4/probe/newarchitecture/environment/globalmanager policy."
+  },
+  "next_action": "Persist exactfirst3Source staticreview and current77/18/7 roadmap; keep formalSource28 unchanged. Next fullmigration semantics requires complete actualA11 rawtext lawfulDATA64 input, not hashes/summaries ornewgenerator; independentstatic governance preparation may continue after exactpackage review. No runtime/no4/PG/deployment/commercialPASS.",
+  "revised_at": "2026-10-30T09:09:07.962Z",
+  "prior_roadmap": {
+    "commit": "5e16d79bdf6b8e5920f4398df958cb3552fd7b18",
+    "review": "72d30443d17eeafa10efa2783b51cbcdd6a218b3",
+    "historical_only": "C01 was2Source initialproposal; current3Source maintenance and9984withdrawal below. Fifthauthoritativeinput is latesthandoff242047B, not supplementaryCLOUD-RECOVERY-STATUS66979B."
+  },
+  "first_source_package": {
+    "candidate": "cd6dea2c897c5076e143aa0ce076d10b154fcb1a",
+    "parent": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+    "base": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+    "prepare_branch": "codex/fresh-persistence-first-package-prep-20261030",
+    "Source_files": 3,
+    "administrative_files": 1,
+    "nonauthor_review": {
+      "commit": "2247a700ef95e10dfa03699da8d33c8ab86b0fbb",
+      "path": "archives/recovery-20261028/FRESH-PERSISTENCE-CD6-NONAUTHOR-20261030.json",
+      "blob": "cfb1381df383964617aca87d19a813bc558a4e29",
+      "bytes": 5179,
+      "sha256": "89edcc3268a8d0596058b2acfc68734ed648f1642a82d10f9fe2f874c2353220",
+      "verdict": "SOURCE_APPROVED_ONLY"
+    },
+    "initial_candidate": {
+      "candidate": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+      "prior_review": "3cad33cb483d2e6c9c75289069ad5627e4390862",
+      "approval_withdrawn": true,
+      "correction": "0340477770201a5632db258f783f744727cbc16c",
+      "finding": "P2-EXISTING-AP2-REGRESSION-CONTRACT-CONFLICT"
+    },
+    "files": [
+      {
+        "path": "openbot/server/src/db/schema/approvals.ts",
+        "blob": "ab91c389f7f8b380b14747803d42977b448d9a6b",
+        "mode": "100644",
+        "utf8bytes": 10528,
+        "sha256": "cdfeecb83257f46e9e248ecc877c769e2e747bd947d195cef47f23e240e6e4f8",
+        "full_read": true,
+        "kind": "Source"
+      },
+      {
+        "path": "openbot/server/tests/approval-fence-defaults.test.ts",
+        "blob": "ae0b81b08e24846b59ee3f8591442a0f70ba4a55",
+        "mode": "100644",
+        "utf8bytes": 3324,
+        "sha256": "d66507022b720fc7fa790ab6f5c412344af0c7245000a1e10cfc3c3ed47024df",
+        "full_read": true,
+        "kind": "Source"
+      },
+      {
+        "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+        "blob": "e9ba7dd48d5fbe2ac8f0b2e8f1dbbfb6df3f0491",
+        "mode": "100644",
+        "utf8bytes": 70964,
+        "sha256": "d26e3d4317e1c20af226a2fe4519d5648d71de7e2a41b38ac0ff1c3563794743",
+        "full_read": true,
+        "kind": "Source"
+      },
+      {
+        "path": "archives/recovery-20261028/FRESH-PERSISTENCE-FIRST-PACKAGE-20261030.json",
+        "blob": "c396acd901f66294db278f3808114e95cc998a3b",
+        "mode": "100644",
+        "utf8bytes": 17835,
+        "sha256": "8291655f8f309d3d4197a8a85fbcf34fa8f9fb87562ec81923023e99c74d4e3b",
+        "full_read": true,
+        "kind": "administrative"
+      }
+    ],
+    "CPU": "DEFINED_ONLY_NOT_RUN",
+    "new_test_cases_defined": 8,
+    "PG": "PG_PENDING_NOT_RUN",
+    "Source_adopted": false,
+    "no_seed_migration_adapter_approval": true
+  }
+}

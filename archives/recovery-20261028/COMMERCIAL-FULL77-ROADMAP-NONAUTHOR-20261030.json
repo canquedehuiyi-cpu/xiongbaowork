@@ -1,0 +1,62 @@
+{
+  "schema": "commercial-roadmap-nonauthor-review/v2",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "6bcabe68a8b2671859eaa0772bd38456ff3eb0c5",
+  "document": {
+    "path": "archives/recovery-20261028/COMMERCIAL-DELIVERY-FULL77-ROADMAP-20261030.json",
+    "blob": "a3685d5011b85d7daab14805baf813c22a9fb734",
+    "characters": 95345,
+    "utf8bytes": 104593,
+    "sha256": "0fc19e00fc565257ca400b6e3c29d8ab41f906c289c6bb200158187b1e0b0e8b",
+    "complete_read": true
+  },
+  "status": "ADMIN_STATIC_ROADMAP_ONLY",
+  "findings": [],
+  "prior_review_history": {
+    "commit": "72d30443d17eeafa10efa2783b51cbcdd6a218b3",
+    "candidate": "5e16d79bdf6b8e5920f4398df958cb3552fd7b18",
+    "historical_only": true,
+    "precision_correction": "Priorreviewincorrectlycalledstatus66979Bfifthroadmapinput. Actualroadmapfifthlatesthandoff242047B was independentlyread; status66979Bis supplementaryoriginalhandoffinput, notroadmapfifth."
+  },
+  "authoritative_input_check": {
+    "scope": {
+      "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+      "utf8bytes": 286013
+    },
+    "gates": {
+      "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+      "utf8bytes": 45225
+    },
+    "ledger": {
+      "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+      "utf8bytes": 479194
+    },
+    "manifest": {
+      "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+      "utf8bytes": 456310
+    },
+    "latest_handoff": {
+      "blob": "33d8120f5098cca985587fbd6194904eac44bbdb",
+      "utf8bytes": 242047,
+      "sha256": "f33603f1fc8a5f3d52aa690e3193aaccf6d8b264b8982371daa9c1c8947583b5"
+    },
+    "all_full_reads_and_hashes_checked": true,
+    "supplementary_status_utf8bytes": 66979
+  },
+  "independent_checks": [
+    "All77originalrequirementrows deep-equalcompleteoriginalscopeandpriorroadmap;77unique/allREQUIRES_NEW_VALIDATION.",
+    "All18packagecoveragerows exactincludingemptystoryinfrastructurepackages;full77union/unmapped0/unknown0.",
+    "All7fulloriginalgatewordings exact; allstory/package/gaterows unchangedfromoldroadmap. Mappingnotacceptance.",
+    "C01precisely3Source+1admincd6dea/schema2defaults/new7case+existingAP2strictmaintenance1case; exactfileidentities/review2247 matchindependentreview. 9984withdrawal034andold3cadhistoryexplicit; nooldapprovalreuse.",
+    "NoSourceadoption/CPUexecution promotion;8newcasesDEFINEDONLY;formalSource28still668dd223/2065/50175181.",
+    "Source28focused32+lint/types separateSource27historical2396/178;ledger611468/8/2/132/1notoverlappingcaseSUM.",
+    "ActualA11generator/rawbyteidentities preserved,fullrawtextsemanticnotread/adopted/resourcesUNKNOWN. C02requireslawfulactualfullrawinputnotcodec/runtimeinthisround ornewgenerator.",
+    "C03migrationfullschemaSQLsnapshotjournal consistency→C04primitive/driverCOMMIT-or-positiveCALLadapter→C05governance→C06runtime/commercial maintained.",
+    "PositiveCOMMIT/C-ALLnotblanketserverterminationblocked;NULL/newlocknotreplay;A3original10sdelay/maxattempts andA6receipt/finalcompletiondistinction retained.",
+    "G6freeexistingquota+realbillingproof andG7cleanWindows/Linuxgate+futureexactsafepermissiondecision preserved.",
+    "922compatUNKNOWN/HOLD/no4,PG_PENDING/release/readiness/productionclosedgates unchanged."
+  ],
+  "delta_review": "Entireparsedold/newroadmapdiffchecked: revisedstatus/time/C01/nextaction/priorhistory/exactfirstpackage only; nootheracceptanceororiginalscopechange.",
+  "limits": "Staticroadmap+SourceapprovalnotSourceadoption/runtime/PG/fullCI/commercialproof. Currentfullmigrationrawsemanticinputremainsmissing; noSource/SQL/parser/tests/codec/job/canonicalleasewritesbyreviewer.",
+  "next_action": "Rootmaycheckpoint exactreviewedroadmapandcd6SourceOnlyreviewkeepingformalSource28unchanged; obtaincompleteactualA11rawtextviaauthorizedDATA64methodbeforesemanticmigrationreview. Noadditionalruntimeorresourceauthority."
+}

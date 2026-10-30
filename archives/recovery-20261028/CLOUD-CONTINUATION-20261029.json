@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T08:53:46.209Z",
+  "checkpoint_update_at": "2026-10-30T09:16:46.342Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,10 +4429,10 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-source-20261030",
     "epoch": "2026-10-30T08:53:46.209Z:commercial-first-source-static",
-    "state": "held",
-    "expires_at": "2026-10-30T09:38:46.209Z",
+    "state": "released",
+    "expires_at": "2026-10-30T09:16:46.342Z",
     "scope": "真人完整77故事/18原包/7门商业交付既有目标本轮：fresh五权威输入和完整交付路线，首个不依赖受阻runtime的<=8Source静态持久化前置候选+不同非作者全文审。Source正式采用/CPU/PG/生产验收分层；无项目/CONTROL/generator/codec/第四metadata/probe/部署/付费/新资源架构许可；922兼容UNKNOWN_HOLD与3/3耗尽保持。",
-    "acquisition_commit": "PENDING_CAS_READBACK"
+    "acquisition_commit": "6bf8d3281811459a6c603c003eb9f867865d7b9e"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5506,7 +5506,7 @@
   },
   "commercial_delivery_continuation": {
     "dedup_key": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849",
-    "status": "ACTIVE_FRESH_SCOPE_AND_FIRST_STATIC_SOURCE_PACKAGE",
+    "status": "FIRST_REVIEWED_SOURCE_CANDIDATE_AND_FULL_ROADMAP_CHECKPOINT_GOAL_ACTIVE_NOT_COMPLETE",
     "accepted_at": "2026-10-30T08:53:46.209Z",
     "goal": "ExistingRootactivegoal complete77stories/18originalpackages/7gates; not a new/replacementgoal",
     "base_canonical": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
@@ -5530,6 +5530,103 @@
     "resource_job_authorized_this_round": false,
     "new_jobs": 0,
     "Source_adopted": 0,
-    "not_complete": true
+    "not_complete": true,
+    "checkpoint_at": "2026-10-30T09:16:46.342Z",
+    "roadmap": {
+      "commit": "6bcabe68a8b2671859eaa0772bd38456ff3eb0c5",
+      "path": "archives/recovery-20261028/COMMERCIAL-DELIVERY-FULL77-ROADMAP-20261030.json",
+      "blob": "a3685d5011b85d7daab14805baf813c22a9fb734",
+      "bytes": 104593,
+      "sha256": "0fc19e00fc565257ca400b6e3c29d8ab41f906c289c6bb200158187b1e0b0e8b",
+      "complete_original_rows": {
+        "stories": 77,
+        "packages": 18,
+        "gates": 7
+      },
+      "review_commit": "be7499b3b4f16d6f85c4dd36204cf9beb9abf091",
+      "review_blob": "be510919e41305d92750288cd250d1fcf2e076ab",
+      "status": "ADMIN_STATIC_ROADMAP_ONLY"
+    },
+    "first_source_candidate": {
+      "commit": "cd6dea2c897c5076e143aa0ce076d10b154fcb1a",
+      "parent": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+      "branch": "codex/fresh-persistence-first-package-prep-20261030",
+      "source_files": [
+        {
+          "path": "openbot/server/src/db/schema/approvals.ts",
+          "mode": "100644",
+          "blob": "ab91c389f7f8b380b14747803d42977b448d9a6b",
+          "bytes": 10528,
+          "sha256": "cdfeecb83257f46e9e248ecc877c769e2e747bd947d195cef47f23e240e6e4f8"
+        },
+        {
+          "path": "openbot/server/tests/approval-fence-defaults.test.ts",
+          "mode": "100644",
+          "blob": "ae0b81b08e24846b59ee3f8591442a0f70ba4a55",
+          "bytes": 3324,
+          "sha256": "d66507022b720fc7fa790ab6f5c412344af0c7245000a1e10cfc3c3ed47024df"
+        },
+        {
+          "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+          "mode": "100644",
+          "blob": "e9ba7dd48d5fbe2ac8f0b2e8f1dbbfb6df3f0491",
+          "bytes": 70964,
+          "sha256": "d26e3d4317e1c20af226a2fe4519d5648d71de7e2a41b38ac0ff1c3563794743"
+        }
+      ],
+      "administrative_file": {
+        "path": "archives/recovery-20261028/FRESH-PERSISTENCE-FIRST-PACKAGE-20261030.json",
+        "blob": "c396acd901f66294db278f3808114e95cc998a3b",
+        "bytes": 17835,
+        "sha256": "8291655f8f309d3d4197a8a85fbcf34fa8f9fb87562ec81923023e99c74d4e3b"
+      },
+      "review": {
+        "commit": "2247a700ef95e10dfa03699da8d33c8ab86b0fbb",
+        "blob": "cfb1381df383964617aca87d19a813bc558a4e29",
+        "bytes": 5179,
+        "sha256": "89edcc3268a8d0596058b2acfc68734ed648f1642a82d10f9fe2f874c2353220",
+        "status": "SOURCE_APPROVED_ONLY",
+        "findings": []
+      },
+      "adopted": false,
+      "tests_defined_new": 8,
+      "tests_executed": 0,
+      "earlier_candidate": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+      "earlier_approval_withdrawn_by": "0340477770201a5632db258f783f744727cbc16c",
+      "change": "Two fence default(0n) become default(sql`0`); new focused tests and exact existing AP2 regression reconciliation; no seed/migration/adapter/production wiring"
+    },
+    "remaining_prerequisites": {
+      "A11": "Actual four export raw bytes were codec/hash verified historically; full SQL/snapshot/journal semantic consistency and migration chain NOT reviewed/adopted. Need lawful full raw text under DATA64; no regenerated or handwritten substitutes.",
+      "fresh_adapter": "Current formal schema lacks approvalFreshSeeds/resultDisposition. Audit vocabulary/correlation, authority/RLS transaction ownership and precise current interfaces are prerequisites before writer/readback package.",
+      "runtime": "No CPU/PG/production/commercial acceptance this round; source candidate NOT_ADOPTED/NOT_RUN."
+    },
+    "external_R9_input": {
+      "provenance": "Root relay, not this executor's direct board/native read",
+      "WB": {
+        "task": "e48c8177-91d1-4345-b248-0dd90b43322a",
+        "message": "bceb7487-7f77-4243-9169-67b01b1b8ad3",
+        "completed_at": "2026-10-30T09:07:08.431Z",
+        "WB_complete_read_claim": "5/5 self-report; no independent bytes/SHA256 by WB",
+        "Root_independent_complete_read": "4/5 schema/fresh-producer/local-composition/candidate pg-fresh-result; test not fresh-read by Root",
+        "adjudication": [
+          "Formal schema gap and full A11 semantic/migration prerequisite remain.",
+          "contextFor binding/action/result readback does not prove outer current authority/RLS/audit/full C-ALL.",
+          "Existing lost type/branch is contract risk, not proof of actual erroneous lost/replay in unwired production.",
+          "Known authorization denial or established prerequisite refusal remains blocked; ACK/transaction uncertainty unknown. Do not map all exceptions indiscriminately or deny positive driver COMMIT.",
+          "Suggested four-file adapter package is design input only. Audit vocabulary/correlation contract must be exact and separately nonauthor reviewed; global types union excluded."
+        ]
+      },
+      "Qoder": {
+        "task": "99d47355-9d71-459c-9760-9626a344a462",
+        "received_at": "2026-10-30T09:04:03.677Z",
+        "status": "RECEIVED_RESULT_NOT_YET_RELAYED",
+        "not_blocking_first_schema_candidate": true
+      }
+    },
+    "next_action": [
+      "Fresh lawful epoch: static exact audit vocabulary/correlation and authority/ACK readback ownership contract against real current callers, with different nonauthor review; do not implement speculative writer before prerequisites.",
+      "Obtain existing A11 full raw SQL/snapshot/journal text through lawful DATA64 mechanism and review complete consistent migration chain; no new generator/codec job authorized.",
+      "After prerequisite packages and required gates, choose source adoption/CPU/PG/production stages independently. No fourth metadata or automatic runtime."
+    ]
   }
 }
