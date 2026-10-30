@@ -1,0 +1,100 @@
+{
+  "schema": "administrative-partial-query-evidence-design-supplement/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+  "status": "STATIC_DIAGNOSTIC_AND_ADMIN_PROPOSAL_ONLY_NO_CANDIDATE_OR_RUNTIME_AUTHORITY",
+  "exact_fourfiles": [
+    {
+      "blob": "1f6ac4542a7772e81153b09a8f4dbd0878a982ed",
+      "bytes": 72155,
+      "sha256": "e793bf63c0ac9805eb6eaf227b84d5faeb986a428eeab0efd5a3ccba15a229de",
+      "complete_read": true
+    },
+    {
+      "blob": "a1ce14d43dbb22899f53f7f784093a6832d075e9",
+      "bytes": 29732,
+      "sha256": "e1d9877cd1b971902d47a9a6e5522c69260de7daf5a41493507f614c820fab00",
+      "complete_read": true
+    },
+    {
+      "blob": "d56656256ea6e4c7a0b090d3aee6ee54d354f48a",
+      "bytes": 21442,
+      "sha256": "f2f9232fd13c55f59651977872bd9313322b6a470761ed61a345f865111b185d",
+      "complete_read": true
+    },
+    {
+      "blob": "018d942d646ae21b661d90da8a1bf0fb5535ae88",
+      "bytes": 8913,
+      "sha256": "1d98b31233be5330d3031843d6bd0be6bb4ebc9b90ffc0c1a7a7c9aff43c1b6c",
+      "complete_read": true
+    }
+  ],
+  "evidence_layers": {
+    "independent_prior_actual": {
+      "run": 41004678906,
+      "job": 123896762774,
+      "full_log_chars": 87455,
+      "full_log_utf8_bytes": 87457,
+      "full_log_sha256": "e840a81c3ad24c92a25a6a047fb307adbc414501e76107919db0ad3471e37cf9",
+      "PID1_raw_bytes_with_LF": 881,
+      "PID1_raw_sha256": "94a262ad86006e734aa4d12a8fdbada347edbd97119ff8e929d75884c3cf538e",
+      "runtime_report": "e0274530d663b355f434e5e14b143738ca848098"
+    },
+    "Root_relayed_witness": {
+      "dedup": "root-witness/41004678906/job123896762774/e840a81c",
+      "same_run_not_new_evidence_or_allocation": true,
+      "matches_prior_independent_hash": true
+    },
+    "current": "Fresh exactfourfiles complete connectorreads/hash plus staticcontrolflow; no newlogdownload/versionlookup/Sourceexecution."
+  },
+  "classification": {
+    "completed_assembled_but_not_exported": [
+      "manager_version query FINISHEDseq10: code constructs result exit0, complete stdout/stderr lengths/SHA256 and strictUTF8 strings before FINISHED. Actual values/hashes themselves never emitted; their content cannot be reconstructed from phase.",
+      "disk_version query FINISHEDseq12: same complete result construction and zeroexit, actual versionstdout/stderr/hash retained internally but not exported."
+    ],
+    "preserved_not_lost": [
+      "RootPID1 raw881B/hash94a262… was fully emitted and independently verified; livebinary141776B/hash508fa025… retained. This is binaryidentity not actualmanagerVersion/package equivalence."
+    ],
+    "not_proven_completed_do_not_call_lost": [
+      "owner_usr onlySTARTEDseq13; no resultbytes/hash/FINISHED/UNKNOWN exported.",
+      "owner_lib/package_versions/kernel_s/r/v/m andOS fields have no completedreport or actualvalues; do not label these completed-but-lost.",
+      "No final PLATfORM_VERSION report or identity exists; actualmanager/diskversion strings and packageassociation remainUNKNOWN."
+    ]
+  },
+  "phase_attribution": {
+    "known": "owner_usrSTARTEDseq13at23.040068797 binds exactargv /usr/bin/dpkg-query -S /usr/lib/systemd/systemd. command_phase then STARTED precede trusted_tool andPopen; nativecollectorOOM1.539s/32Mpeak/swap0 follows.",
+    "unknown": "Popenreach, nativecommand execution/allocator, fullDBscan, perprocessRSS and actualkilledallocator are not proven. Pythonresident+child same32 overlap is static potential only. CollectorOOM does not identify scope-9 actor or backfill old2 phaseUNKNOWN."
+  },
+  "bounded_partial_record_design": {
+    "scope": "Proposal only using already allowed query resultbytes; no extra reads/units/writers or allowlistchange.",
+    "format_options": [
+      "One complete bounded perquery record containing exactrun/head/unit/fixedphase/sequence/argvlabel, outcome/exit, stdout/stderr rawbytes safeencoding plus exactlength/hash.",
+      "Alternatively bounded START/CHUNK/END framing over exactalreadycollected bytes with deterministicsequence, totalcap and finalrawlength/hash; require END and completehashvalidation before treating any query complete."
+    ],
+    "placement": "Immediately after existing boundedquery result assembly before progressing to nextallowedquery; samecollector32 stdout through existing in-scope client, originalinnerremaining before/after completeflush. No outside parser/writer or savedprojectpayload.",
+    "semantics": "Missing END/chunk/hash mismatch/kill/timeout =>queryUNKNOWN, even if earlierphaseFINISHED. Complete query evidence still not fullplatform/resourcePASS. Preserve rootPID1 separately sourced and no versioninference.",
+    "memory": "Bounded emission must avoid extraunbounded copies/retainedbuffers and remain existingoutputcaps, all64aggregate and32collector. Staticproposal does not provefit32.",
+    "ordering": "Reordering existingallowedqueries may be proposed to retain usefulfacts before costlylaterphase, but is not implemented or approved as candidate here."
+  },
+  "excluded_alternative": "Replacing dpkg-S with an owner-scan/directdatabase/othercommand alternative changes command/readallowlist and requires a separate explicit design/allowlist decision and exactreview. This scope authorizes none; no fullDBscan culpritclaim.",
+  "authority_separation": {
+    "administrative_proposal": true,
+    "code_preparation_authorized_by_this_report": false,
+    "fourth_actual_attempt_authorized": false,
+    "resource_expansion_authorized": false,
+    "actualjobs_consumed": 3,
+    "remaining": 0
+  },
+  "next_action": "Root may preserve this diagnostic/proposal at alreadyreleased3234927… checkpoint. No lease redo, fourthjob, newcandidate, parser/compile/test or docslookup. Any future codeprep, runtimequota and resourcechange are separate decisions; this report grants none.",
+  "preserved": [
+    "77/18/7",
+    "Source28",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}
