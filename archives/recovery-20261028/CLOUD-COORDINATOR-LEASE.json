@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:collector-S-static-20261030",
-  "run_id": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
-  "epoch": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
-  "acquired_at": "2026-10-30T08:22:43.940Z",
-  "renewed_at": "2026-10-30T08:31:44.699Z",
-  "expires_at": "2026-10-30T08:31:44.699Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:S-review-byte-index-20261030",
+  "run_id": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
+  "epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
+  "acquired_at": "2026-10-30T08:34:05.569Z",
+  "renewed_at": "2026-10-30T08:34:05.569Z",
+  "expires_at": "2026-10-30T09:19:05.569Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "f8256b748bde3ead6b54213d1b12c04f33ce3906",
+  "expected_parent": "c4305d8ada806b76267eb0d68f19949bdb686925",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:22:43.940Z"
+    "observed_at": "2026-10-30T08:34:05.569Z"
   },
-  "next_action": "Return exact922c three-file staticcandidate and fresh7cc16594 review. Preserve EXECUTION_HOLD until trustworthy existingcompatibility/policy evidence resolved within authorizedscope; no probes or fourthallocation now. Any later runtime requires separateexplicitquota plus applicableexactreview/validsolelease/queue/dedup. NoSource/PG/deploy/managerglobal/resource/allowlistexpansion.",
+  "next_action": "Correct handoff review UTF8 bytecount with actualtree/hash evidence, readback then idle release.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -46,7 +46,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T07:26:20.249Z:owner-memory-minimal-doc-only",
+  "predecessor_epoch": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "真人明确新增静态实现准备授权：只3行政文件，5130controller仅collectorargv加-S，workflow仅controllercarrier/hashpin，plan兼容性证据矩阵。Collector24395B与所有其他角色/查询/filter/资源/权限原字节保持。不执行任何parser/compile/test/probe/作业/第四次，不改execution refs；UNKNOWN兼容门保留，不循环要求未授权实测才产静态候选。",
+  "scope": "仅更正本轮独审报告行政索引bytes：6596字符实际为6598UTF8B。原blob/SHA/候选/报告内容不变；全部3候选文件bytes已独算及Git tree核同。不改Source或执行ref，无任何运行/新额度。",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -87,6 +87,5 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  },
-  "released_at": "2026-10-30T08:31:44.699Z"
+  }
 }
