@@ -1,0 +1,514 @@
+{
+  "schema": "xiongbaowork-fresh-persistence-audit-contract-A/v1",
+  "status": "AUTHOR_ADMIN_CONTRACT_PENDING_NONAUTHOR_REVIEW_NOT_IMPLEMENTED",
+  "scope": "One static administrative contract. No writer, vocabulary/schema/type/caller implementation or Source adoption.",
+  "authority": "Human commercial continuation via Root within existing77/18/7 goal; Root lease ownership is not audit/PG/release proof.",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "fact_ref": "d45170845bd80a68e3e7a6be9179551bc127e9cc",
+  "administrative_parent": "cd6dea2c897c5076e143aa0ce076d10b154fcb1a",
+  "prepare_branch": "codex/fresh-persistence-first-package-prep-20261030",
+  "source_inputs": {
+    "full_pins": [
+      {
+        "path": "openbot/server/src/audit.ts",
+        "blob": "9f006725bcb44d75a8b98e5290632bdbf11ff4bc",
+        "chars": 43751,
+        "sha256": "ec1d947cd05e8d25ac210777e47b69d604473c62472b31991509b24dc2aee124",
+        "bytes": 43787,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/approvals/types.ts",
+        "blob": "2365ebe562751271190713a27c4f54968f6085b8",
+        "chars": 16442,
+        "sha256": "28e35e512a3f6f17ba9fd798804039640638707268a9eb06d76e0f435693b23b",
+        "bytes": 16446,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/approvals/store.ts",
+        "blob": "11c60539afb0153669766bd59caff5298de0f427",
+        "chars": 19676,
+        "sha256": "7dbd504163735daaf17764fe65c98c3f26c837f58bb2bb0cad1a0aff95bc513f",
+        "bytes": 19676,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/db/client.ts",
+        "blob": "fbf0693879f03bed8275fd371678929a1c836d92",
+        "chars": 14656,
+        "sha256": "1844135d201deb8f96b5228694a83e1f5c3ef2203cea251157f77f14e9341985",
+        "bytes": 14674,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/approvals/fresh-producer.ts",
+        "blob": "9209b40696ddb5847967b5281192173104f3f232",
+        "chars": 4527,
+        "sha256": "f67303d3258807ceb9bd02f10db9b1dc593b0fb3c84b50ad636f2ae53e1976e4",
+        "bytes": 4527,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/db/schema/approvals.ts",
+        "blob": "529995cb0d6a40137798d7df90cfd4e26fd78759",
+        "chars": 10520,
+        "sha256": "ab0bf3d9f6bc208f52293b1c0fccef8cc589314b5218df9a4e50e62f688851e7",
+        "bytes": 10520,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/db/schema/core.ts",
+        "blob": "38b94cc1b66876764af887a7c268c30d500f4c26",
+        "chars": 26433,
+        "sha256": "0091d749d70791e10c462bfc67534089bc5e88a1c93bd38dd8bb467c1d15f64a",
+        "bytes": 26447,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/approvals/service.ts",
+        "blob": "c5d71f18d44f4fb95ab1ad26ce50e74817406806",
+        "chars": 31509,
+        "sha256": "1537e3e54fb0965aded1a258a916c5ef6203c101f25db2249eee99a956fe2b09",
+        "bytes": 31509,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/approvals/local-recovery-composition.ts",
+        "blob": "15fa55da767c787d8e5754bd653c1f03b145b21a",
+        "chars": 2224,
+        "sha256": "fea0eee18df6776b842e4156d081f904bfbe19eb822f3f0993b504276a66813e",
+        "bytes": 2224,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/approvals/continuation-target-store.ts",
+        "blob": "46a2ee890b920d51e558bcf0d7984bc36770e34b",
+        "chars": 22423,
+        "sha256": "c2a82247205dfa4bd8d63bde997994ab36bcc184f4ce38737ec0c0d6097a0b97",
+        "bytes": 22423,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/index.ts",
+        "blob": "f53d3f69258a11336f1c8a42eceb7b425b6d3027",
+        "chars": 156622,
+        "sha256": "bc7187983edcba3100caf0c42ce9b4d8361dd35f237287b7074ace93bfa5b125",
+        "bytes": 156700,
+        "full_UTF8_read": true
+      },
+      {
+        "path": "openbot/server/src/tenant/context.ts",
+        "blob": "1d66c82b62d326993ba64aeab7550caae9dee333",
+        "bytes": 1837,
+        "sha256": "97dbe09b2903f0b7d7fbf08cda591a822bac0b0308a4e18f38ecf78445bd133b",
+        "full_UTF8_read": true
+      }
+    ],
+    "historical_unadopted_primitive": {
+      "path": "openbot/server/src/approvals/pg-fresh-result.ts",
+      "blob": "ec21e7a0c0790271d6f5cc5c491d8f8d6c496b39",
+      "chars": 7576,
+      "sha256": "b6578d8066d3340e5de7577373bc4076ef4fc3648fef5aed8eb737994c998f0a",
+      "ref": "27a3c67baeb305902236e02e5b7eaec9aac87b9c",
+      "bytes": 7576,
+      "full_UTF8_read": true,
+      "canonical_present": false,
+      "adopted": false
+    },
+    "read_method": "Fresh complete UTF8 connector reads; hashes over exact bytes. No parser/SQL/project/CPU/PG/codec execution.",
+    "prepare_schema_distinction": "Prep inherits reviewed-but-unadopted cd6dea schema10528B. All current-production facts in this contract refer to canonicald451 schema10520B/formalSource28, not prep's unadopted repair."
+  },
+  "current_facts": {
+    "vocabulary": {
+      "source": "src/audit.ts",
+      "all_event_types": [
+        "configuration.changed",
+        "credential.created",
+        "credential.rotated",
+        "credential.rotation_refused",
+        "credential.revoked",
+        "channel.routed",
+        "delivery.received",
+        "delivery.sent",
+        "delivery.opted_out",
+        "delivery.failed",
+        "channel.deleted",
+        "agent.dial_refused",
+        "agent.stream_stalled",
+        "mcp.tools_discovered",
+        "mcp.call_succeeded",
+        "mcp.call_rejected",
+        "mcp.call_failed",
+        "mcp.callback_refused",
+        "mcp.oauth_client_registered",
+        "mcp.connection_verified",
+        "mcp.account_connected",
+        "mcp.account_disconnected",
+        "computer.action_allowed",
+        "computer.action_refused",
+        "computer.action_failed",
+        "computer.action_stopped",
+        "computer.help_requested",
+        "computer.help_cancelled",
+        "computer.control_taken",
+        "computer.control_released",
+        "computer.secret_requested",
+        "computer.secret_supplied",
+        "computer.sign_in_requested",
+        "computer.sign_in_completed",
+        "computer.sign_in_failed",
+        "computer.sign_in_cancelled",
+        "password.saved",
+        "password.deleted",
+        "computer.stopped",
+        "computer.reset",
+        "computer.updated",
+        "computer.policy_loaded",
+        "computer.isolation_loaded",
+        "bot.declined",
+        "component.granted",
+        "component.revoked",
+        "component.published",
+        "component.unpublished",
+        "component.draft_saved",
+        "component.refused",
+        "component.function_granted",
+        "component.function_revoked",
+        "component.function_called",
+        "component.function_refused",
+        "component.function_failed",
+        "person.role_changed",
+        "person.access_revoked",
+        "person.access_restored",
+        "platform.tenant_suspended",
+        "platform.tenant_restored",
+        "session.signed_in",
+        "session.refused",
+        "person.admin_by_configuration",
+        "identity_provider.registered",
+        "identity_provider.removed",
+        "bot.created",
+        "bot.updated",
+        "bot.duplicated",
+        "bot.hidden",
+        "bot.unhidden",
+        "bot.pinned",
+        "bot.unpinned",
+        "bot.deleted",
+        "bot.callback_token_issued",
+        "bot.callback_token_revoked",
+        "bot.paused",
+        "bot.resumed",
+        "bot.reset",
+        "bot.notifications_changed",
+        "bot.follow_up_scheduled",
+        "bot.follow_up_cancelled",
+        "bot.handoff_stopped",
+        "agent.handoff_offered",
+        "agent.handoff_refused",
+        "agent.handoff_delivered",
+        "agent.handoff_failed",
+        "agent.handoff_retried",
+        "agent.escalated",
+        "agent.escalation_failed",
+        "routines.dispatch_refused",
+        "routines.run_requested",
+        "responsibility.triggered",
+        "approval.evaluated",
+        "approval.person_decided",
+        "approval.withdrawn",
+        "approval.rule_changed",
+        "approval.settings_changed",
+        "capability.changed",
+        "enterprise.setting_changed",
+        "auth.sessions_revoked",
+        "network_policy.changed",
+        "network_policy.removed",
+        "session.break_glass",
+        "person.provisioned",
+        "person.deprovisioned",
+        "person.reprovisioned",
+        "computer.terminated",
+        "computer.terminated_inactive",
+        "delivery.linked",
+        "delivery.unlinked",
+        "routine.created",
+        "routine.updated",
+        "routine.deleted",
+        "routine.enabled_changed",
+        "model.refused"
+      ],
+      "approval_event_types": [
+        "approval.evaluated",
+        "approval.person_decided",
+        "approval.withdrawn",
+        "approval.rule_changed",
+        "approval.settings_changed"
+      ],
+      "meaning": "Existing approval events mean policy verdict, person's decision, withdrawal, rule or settings changes. None is an existing fresh-result persistence/COMMIT event.",
+      "type": "AuditEventType derives115 existing auditEventTypes. AuditEventInput has no tenantId, subjectTenantId or externally supplied audit id field."
+    },
+    "audit_row_identity": {
+      "source": "src/db/schema/core.ts437-457",
+      "id": "audit_events.id uuid primaryKey defaultRandom; database-generated row UUID, not approval/admission/proof/receipt ID.",
+      "tenant": "audit_events.tenantId uses tenantId default; actorUserId and subjectTenantId nullable; initiator kind defaults person; event/target/payload required.",
+      "actual_API": "AuditStore.insert returns Promise<void>; createAuditStore does not return inserted UUID. No fresh durable audit-ID link exists in canonical approvals schema.",
+      "limit": "Schema declarations are not applied-PG/catalog/append-only/RLS proof."
+    },
+    "redaction": {
+      "sensitive_keys": [
+        "access_token",
+        "accesstoken",
+        "api_key",
+        "apikey",
+        "authorization",
+        "client_secret",
+        "clientsecret",
+        "content",
+        "credential",
+        "credentials",
+        "document_content",
+        "documentcontent",
+        "encrypted_value",
+        "encryptedvalue",
+        "id_token",
+        "idtoken",
+        "password",
+        "prompt",
+        "refresh_token",
+        "refreshtoken",
+        "result",
+        "secret",
+        "secrets",
+        "token",
+        "tokens",
+        "tool_arguments",
+        "toolarguments",
+        "tool_result",
+        "toolresult"
+      ],
+      "normalization": "Case-folding plus nonalphanumeric-stripped key matching; recursive arrays/objects.",
+      "current_function": "recordAuditEvent awaits store.insert after redactAuditPayload; createAuditStore also redacts.",
+      "not_sufficient": "Redaction is not an event-specific safe-field allowlist or provenance verifier. Do not rename raw result/content/tool arguments to evade sensitive-key matching.",
+      "cannot_audit_plain_result": "result/tool_result/content/prompt keys are redacted. A redacted placeholder cannot establish C-ALL actual result equality; read actual stored result via authorized DB, not audit plaintext."
+    },
+    "transaction_and_taps": {
+      "current_decide": "store.ts decide holds parent FOR UPDATE and calls recordAuditEvent(createAuditStore(tx as Database), approval.person_decided) inside its transaction.",
+      "current_createAuditStore": "Awaited database insert followed immediately by audit taps. If its database is a tx, taps can run before outerCOMMIT; they are not commit witnesses.",
+      "current_commitOwnerAssembly": "audit.ts695-735 exists for owner assembly: work+direct audit insert in one outer transaction, then taps after outer promise success. Existing owner-assembly use is not automatic legal reuse as a fresh writer or proof it supplies fresh authority/ID correlation.",
+      "client": "db/client.ts captures currentTenant before raw begin/savepoint, sets local tenant on that session, returns callback. This provides tenancy plumbing; it is not physical role/FORCE-RLS/catalog/current-authority or driver-version proof.",
+      "context": "tenant/context.ts missing frame returns system. Ambient/default tenant is not physical role/current authority proof; this contract adds no blanket cross-feature system-tenant prohibition."
+    },
+    "current_orchestration": {
+      "types": "ApprovalFreshProducerPort commitResult returns committed/lost/unknown; contract demands verified seed, result+disposition CAS and no unknown-ACK replay. publishSaved says continue only afterCOMMIT and final completion without receipt.",
+      "fresh_producer": "Existing prepare catch maps preparation errors blocked; commitResult catch maps any thrown commit error unknown; committed string then result equality is insufficient to demonstrate full outer authority/audit/C-ALL. These are exact current-interface facts, not a rule to classify every future internal phase identically.",
+      "service": "Existing freshOperation preserves ApprovalFreshError blocked and maps other errors unknown. resume default blocks if recovery/context or required fresh producer absent.",
+      "canonical_index": "Fully read index.ts call675-789 supplies review option but no freshProducer/continuationRecovery at THIS call. This does not prove adapter absence throughout repository.",
+      "historical27a": "Primitive returns written_in_transaction/not_written_in_transaction, captures beforeawait, parentFORUPDATE then seedFORSHARE, final clock_timestamp; no outerCOMMIT/authority/audit/ACK. Its seed/resultDisposition imports are absent in current schema; it is not a production port."
+    },
+    "existing_target_gates": "continuation-target-store transaction(db,fn) calls gate on each selected database including authorityDatabase use; authorizeRelease is separate. Existing six-table gate/catalog/release checks do not automatically attest future seed/audit-link tables."
+  },
+  "proposed_contract_not_current_implementation": {
+    "new_event": {
+      "name": "approval.fresh_result_saved",
+      "status": "PROPOSED_NOT_IN_CURRENT_VOCABULARY_NOT_WRITTEN",
+      "reason": "One new narrowly named atomic fresh-result persistence event; never reuse approval.person_decided/evaluated as if they already record this.",
+      "type_change_boundary": "Any future audit.ts literal addition is separate Source review. No global ApprovalRecord/recovery/status union changes are authorized by this contract."
+    },
+    "correlation_decision": {
+      "status": "DESIGN_RECOMMENDATION_REQUIRES_SEPARATE_SCHEMA_AND_SOURCE_REVIEW",
+      "recommended": "Use actual same-transaction audit insert RETURNING database UUID and a new durable result_audit_event_id link on the approval result state, with tenant/full-binding verification. This column/FK/API is NOT current, NOT in adopted A11, and must not be guessed.",
+      "why": "Current void audit writer plus no persisted link cannot supply an exact durable audit UUID after an unknown ACK. producerProofId/admissionId/continuation receipt must not be repurposed as audit IDs.",
+      "new_link_prerequisite": "Separately reviewed schema/migration including tenant-safe binding/constraints and full snapshot+journal/DDL chain; do not hand-edit or pretend existing A11 includes this change.",
+      "no_shortcut": "A locally generated UUID, callback value, tap, log or fabricated receipt cannot fill the missing durable link. Pending this prerequisite, no fresh writer implementation is released."
+    },
+    "correlation_field_sources": [
+      {
+        "field": "approvalId/tenantId/ownerId/runId/toolCallId/actionDigest",
+        "source": "Exact scoped database parent row plus validated ApprovalRecoveryContext; independently compare all six to immutable persisted seed and current trusted caller scope, not HTTP strings/owner-derived tenant."
+      },
+      {
+        "field": "templateDigest/producerProofId",
+        "source": "Existing immutable persisted producer seed, verified provenance; never rebuild today's input or create replacement seed during result persistence."
+      },
+      {
+        "field": "disposition/expectedStatus",
+        "source": "Stable captured trusted operation input plus legal current parent state; final/continue from immutable verified result disposition, not caller-supplied audit text."
+      },
+      {
+        "field": "auditEventId",
+        "source": "Actual inserted audit_events row RETURNING id on the same physical transaction; persist exact durable link atomically. Existing AuditEventInput cannot supply this."
+      },
+      {
+        "field": "actorUserId/initiatorKind/initiatorId",
+        "source": "Actual authenticated/authorized principal and trusted initiator context. Do not label an automated/deployment action person merely because default exists; do not invent task/worker/human IDs."
+      },
+      {
+        "field": "subjectTenantId/rowtenant",
+        "source": "Actual parent tenant plus verified physical transaction tenant. Future narrow insert DTO must set/verify exact values; no broader generic API asserted current."
+      },
+      {
+        "field": "resultBindingDigest",
+        "source": "PROPOSED stable non-secret binding digest of exact captured result plus full operation identity/disposition. Exact canonical encoding/domain separation/version and tests require future Source review; no existing digest API claimed. Actual result equality remains required; digest alone cannot replace it."
+      }
+    ],
+    "safe_payload": {
+      "proposed_allowlist": [
+        "approvalId",
+        "tenantId",
+        "ownerId",
+        "runId",
+        "toolCallId",
+        "actionDigest",
+        "templateDigest",
+        "producerProofId",
+        "disposition",
+        "expectedStatus",
+        "resultBindingDigest",
+        "bindingVersion"
+      ],
+      "omitted": [
+        "raw action args",
+        "result/content/error plaintext",
+        "credentials/tokens",
+        "prompts/documents",
+        "full continuation/receipt"
+      ],
+      "redactor_behavior": "Chosen proposed keys survive current exact/normalized sensitive-key matching, but only bounded verified identifiers/digests may be placed there; this is not permission to hide sensitive payload under new names.",
+      "C_ALL_after_redaction": "Verify surviving identity/disposition/digest/version fields and audit row UUID/link. Full actual saved result comes from approval DB row; redacted audit payload cannot prove its content.",
+      "digest_hold": "A proposed result-binding digest format/privacy classification is unresolved and must be fixed in a separate exact Source contract before writer implementation. This is an explicit blocking design gap, not an existing safe API or permission to bypass redaction by renaming fields."
+    },
+    "transaction_owner_and_order": [
+      "Trusted store adapter alone opens outer real tenant-bound physical transaction, validates current authority/release/catalog/FORCE-RLS including new tables/constraints before any write. Ambient equality is a mismatch guard, not authority.",
+      "Capture/freeze complete mutable input before firstawait. Lock exact full6identity parent FOR UPDATE; then read existing seed FOR SHARE and verify all8seed bindings/immutable provenance/legal statuses/currentauthorization.",
+      "Perform same operation's sanitized proposed audit insert RETURNING actualUUID, and result+disposition+audit-link CAS (SQLNULL result/disposition/link), final completion fields with finalDBclock wherefinal. All are on this one physical tx; never bare saveResult/finish or independent pool audit.",
+      "If audit insert succeeds but CAS misses, the transaction must be rolled back; never COMMIT an orphan success-audit row. Missing audit, count mismatch or DB failure cannot return committed. Do not swallow callback exceptions to commit partial work.",
+      "Callback returns only internal written/no-write evidence, never publicCOMMIT. Await actual outer database.transaction/driverCOMMIT success contract. Only then expose committed and emit postcommit notifications/taps.",
+      "Unknown outer outcome exposes unknown and stops external effects/replay. Recovery uses a new independently authorized committed-read transaction; no old lock/NULL is server termination proof."
+    ],
+    "result_and_error_semantics": [
+      {
+        "condition": "Established authorization/prerequisite denial before any result/audit write is issued",
+        "classification": "blocked/refused",
+        "required": "Preserve known refusal phase/reason; do not indiscriminately turn it unknown. This does not claim physical transaction end or authorize replay."
+      },
+      {
+        "condition": "Known legal-status/seed binding refusal with no write issued",
+        "classification": "blocked/no-write evidence",
+        "required": "Retain full identity and current authority checks. Public lost requires a separately justified definite attempt-nonwrite contract, not absence alone."
+      },
+      {
+        "condition": "written_in_transaction callback success",
+        "classification": "INTERNAL_ONLY_NOT_COMMITTED",
+        "required": "Outer physical COMMIT and required audit remain pending."
+      },
+      {
+        "condition": "Successful real outer driver COMMIT acknowledgement with all required atomic writes",
+        "classification": "committed",
+        "required": "No extra original-server-termination witness may universally reject this legitimate positive."
+      },
+      {
+        "condition": "ACK/transport/transaction outcome uncertain after write or COMMIT attempt, unclassifiedDB exception",
+        "classification": "unknown",
+        "required": "No lost/rollback claim, no effect replay. Preserve uncertainty until independently authorized complete positive evidence resolves it."
+      },
+      {
+        "condition": "Complete independently authorized positive C-ALL",
+        "classification": "committed evidence may be recognized",
+        "required": "Must not be permanently prohibited merely because original ACK/server-end witness is unavailable."
+      },
+      {
+        "condition": "NULL/invisible row/new lock/timeout/driver callback rejection/audit absence alone",
+        "classification": "UNKNOWN_AS_TO_COMMIT_NOT_LOST",
+        "required": "Negative observation does not prove rollback/nonexecution/server end or permit replay."
+      }
+    ],
+    "narrow_error_interface_gap": "Current commit catch maps even a thrown known refusal unknown; future adapter/coordinator need a narrow trusted local refusal error/capability classification, separately reviewed, without global types-union expansion. Do not simply relabel all exceptions blocked or all unknown. Existing lost branch is contract risk, not evidence of actual bad wired production; do not ban lawful queue retry/release or independently proven attempt outcomes.",
+    "C_ALL_positive_readback": {
+      "admission": "Independently authorize evidence recovery under current real scope/release/catalog/RLS, on an independently usable physical connection/pool where needed to avoid blocked original transaction. Necessary authorized catalog/read access is not universally forbidden by an invalid action lease.",
+      "required": [
+        "Exact durable parent full6identity and all relevant JSON/action/continuation bindings.",
+        "Exact existing seed full8identity/provenance/templateDigest/producerProofId; no seed reconstruction.",
+        "Exact saved result equality to stable captured expected result AND immutable resultDisposition.",
+        "Legal resulting status for continue/final; final is completed with actual valid DB completion time, not continuation receipt.",
+        "Required actual audit row selected through exact durable UUID/link, tenant/principal/eventType/fullidentity/seed/disposition/resultBindingDigest agreement; all required atomic-write/uniqueness/append-only policies actually attested.",
+        "Current authority and schema/catalog/release validity for this read; no forged Rootrelease or receipt."
+      ],
+      "incomplete": "Any mismatch/missing/NULL/invisible/unsupported/unverified field => no positiveC-ALL; unknown/blocked according to actual refusal phase, never replay from absence.",
+      "separate_protocol": "Fresh final completion has no fabricated ContinuationReceipt. Existing target receipt verifies target admission/effect protocol separately."
+    }
+  },
+  "minimum_future_packages": [
+    {
+      "order": 1,
+      "kind": "schema/migration prerequisites",
+      "bound": "<=8Source and independent review",
+      "paths_or_scope": [
+        "Current reviewed fence prerequisite remains unadopted; actual A11 full SQL/snapshot/journal semantic chain must first be lawfully reviewed.",
+        "Seed/resultDisposition plus proposed audit-ID link/tenant constraints require an exact new schema/full migration package; existing A11 byte identities do not contain an automatically approved audit-link extension."
+      ],
+      "not_done": true
+    },
+    {
+      "order": 2,
+      "kind": "audit/write/readback adapter",
+      "bound": "Choose exact<=8Source only after prerequisites; up-package review before next",
+      "candidate_files": [
+        "src/audit.ts narrow proposed event literal/builder boundary",
+        "src/approvals/new narrow fresh-audit writer module with RETURNING actual id/no premature tap",
+        "src/approvals/new store-owned outer transaction module using adopted primitive/schema",
+        "src/approvals/new independently authorized full readback module/local DTO",
+        "src/approvals/fresh-producer.ts minimal known-refusal/commit readback integration",
+        "focused CPU test definitions",
+        "real PG integration tests"
+      ],
+      "exclusions": [
+        "No globaltypesunion",
+        "No default production injection or Rootverifier/catalog policy invention",
+        "No writer implementation from this contract review"
+      ],
+      "not_done": true
+    },
+    {
+      "order": 3,
+      "kind": "production wiring",
+      "scope": "Fresh full caller/ticket/provider/authority chain and exact host approvals then independent review; no index-only whole-repository absence claim.",
+      "not_done": true
+    }
+  ],
+  "real_PG_acceptance_required_not_run": [
+    "Actual supportedPG version/catalog/roles/rootrelease evidence; current PG_PENDING cannot be bypassed or forged.",
+    "Same physical tenant-bound session, parent→seed lock order, fullidentity/status/SQLNULL CAS, current authority/catalog/FORCERLS on required new tables.",
+    "Audit insertion failure/missing correlation/CASmiss must roll back both result and success audit; atomiccommit success preserves real DB auditUUID and exact result/disposition/final clock.",
+    "DriverCOMMIT success distinct from callbackwritten; fail before/afterCOMMIT and unknownACK need independent completepositive readback, not negative absence inference.",
+    "Cross-tenant/owner/principal, wrong seed/template/proof/digest/disposition/status/audit ID negatives; plaintext audit fields redacted while permitted bindings still verify.",
+    "No premature taps/notifications beforeCOMMIT; no duplicate success-audit or external tool/model/network replay on uncertain outcome.",
+    "Final completion no continuation receipt; continuation target/receipt gates remain separate; existing lawful10sdelay/maxattemptqueue behavior unchanged."
+  ],
+  "external_input_adjudication": {
+    "WB_R9": "Root's current adjudication in d451 handoff: schema/A11 prerequisites and contextFor insufficiency; known refusalblocked vs txuncertaintyunknown; suggested writer design is not Source/PG proof. Preserve legitimate driverCOMMIT/C-ALL positives.",
+    "Qoder_R9B": "Root metadata-structure input only. This call lacks injected ports != repository-wide absence. Both target databases pass per-transaction gate. Without full ticket/provider chain, do not add same-reference/wrong-database prohibition gate or assert six-table gate covers future seed.",
+    "new_authority_claims": false
+  },
+  "execution_and_goals": {
+    "Source_writes": 0,
+    "canonical_writes": 0,
+    "lease_writes": 0,
+    "workflow_writes": 0,
+    "jobs": 0,
+    "codec_parser_SQL_CPU_PG_runs": 0,
+    "metadata_consumed": 3,
+    "fourth_metadata_authorized": false,
+    "formalSource28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "full_scope": "77/18/7 originals unchanged",
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "commercial": "NOT_DELIVERED"
+  },
+  "next_action": "Different nonauthor reviews this exact single administrative contract. Root may then sequence contract B/A11 recovery decision; no schema/writer/wordlist/production/runtime approval follows from accepting A."
+}
