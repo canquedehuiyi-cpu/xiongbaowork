@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
@@ -36,6 +37,7 @@ function testClient() {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   client.setQueryData(agentKeys.list(false), []);
+  client.setQueryData(agentKeys.list(true), []);
   clients.add(client);
   return client;
 }
@@ -66,9 +68,12 @@ const card = (over: { status: string; title?: string }): CardTask =>
  * outcome for the test to discover, but not one it should be made to discover twice. The roster
  * query is seeded with an empty, non-stale roster, and the card falls back to its given id.
  */
-const draw = (tasks: CardTask[]) =>
-  render(
-    <QueryClientProvider client={testClient()}>
+async function draw(tasks: CardTask[], queryClient = testClient()) {
+  const root = createRootRoute({ component: Outlet });
+  const board = createRoute({
+    getParentRoute: () => root,
+    path: "/",
+    component: () => (
       <AttentionRegion
         machineLabel={() => null}
         onArchive={() => {}}
@@ -76,11 +81,28 @@ const draw = (tasks: CardTask[]) =>
         pendingIds={new Set<string>()}
         tasks={tasks}
       />
+    ),
+  });
+  const profile = createRoute({
+    getParentRoute: () => root,
+    path: "/agents",
+    component: () => null,
+  });
+  const router = createRouter({
+    context: {},
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+    routeTree: root.addChildren([board, profile]),
+  });
+  await router.load();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+}
 
 test("the counts ride the tabs, and 需要操作 includes what broke", async () => {
-  const view = draw([
+  const view = await draw([
     card({ status: "needs_action" }),
     card({ status: "failed" }),
     card({ status: "awaiting_review" }),
@@ -101,8 +123,8 @@ test("the counts ride the tabs, and 需要操作 includes what broke", async () 
   expect(view.queryByText("failed card")).toBeNull();
 });
 
-test("the empty ask says the spec's sentence, not a generic nothing", () => {
-  const view = draw([card({ status: "running" })]);
+test("the empty ask says the spec's sentence, not a generic nothing", async () => {
+  const view = await draw([card({ status: "running" })]);
   expect(
     view.getByText(
       "暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里",
@@ -111,7 +133,7 @@ test("the empty ask says the spec's sentence, not a generic nothing", () => {
 });
 
 test("the empty results tab says what belongs there", async () => {
-  const view = draw([card({ status: "needs_action" })]);
+  const view = await draw([card({ status: "needs_action" })]);
   await userEvent.click(view.getByRole("button", { name: "查收结果 (0)" }));
   expect(
     view.getByText("暂无待查收的结果——员工做完、等你过目的任务会显示在这里"),
@@ -131,14 +153,7 @@ test("a card names its coworker, the whole crew, or the id it was given", async 
   queryClient.setQueryData(agentKeys.list(false), [
     { id: "agent-known", name: "阿审" } as never,
   ]);
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <AttentionRegion
-        machineLabel={() => null}
-        onArchive={() => {}}
-        onReview={() => {}}
-        pendingIds={new Set<string>()}
-        tasks={[
+  const view = await draw([
           {
             ...card({ status: "failed", title: "整组的活" }),
             id: "card-crew",
@@ -154,10 +169,7 @@ test("a card names its coworker, the whole crew, or the id it was given", async 
             id: "card-gone",
             executorAgentId: "agent-gone-0000-1111",
           },
-        ]}
-      />
-    </QueryClientProvider>,
-  );
+  ], queryClient);
 
   expect(view.getByText("整组")).toBeTruthy();
   expect(view.getByText("阿审")).toBeTruthy();
