@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:owner-memory-plan-20261030",
   "run_id": "2026-10-30T07:26:20.249Z:owner-memory-minimal-doc-only",
   "epoch": "2026-10-30T07:26:20.249Z:owner-memory-minimal-doc-only",
   "acquired_at": "2026-10-30T07:26:20.249Z",
-  "renewed_at": "2026-10-30T07:26:20.249Z",
-  "expires_at": "2026-10-30T08:11:20.249Z",
+  "renewed_at": "2026-10-30T07:40:36.186Z",
+  "expires_at": "2026-10-30T07:40:36.186Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "a2910b79da48f2eb192aec5c3f0bcb9955a3f1c8",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T07:26:20.249Z"
   },
-  "next_action": "Author concreteplan withinboundedround then differentnonauthor exactdocSHA review/fix; persistreviewabledecision+trueoldfailure/3of3 and idle release. Noimplementation/runtime.",
+  "next_action": "Return concreteconditionallyreviewed one-fileplan and independentreview toRoot/human. Futureimplementationpreparation is a separatedecision: targeted3adminfiles and full exactreview/compatibilityholds. No fourthruntimeallocation, noownerqueryreplacement/readallowlistexpansion, no Source/project/PG work follows.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -39,7 +39,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T05:26:45.968Z"
+    "observed_at": "2026-10-30T07:39:44.699Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -87,5 +87,6 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  }
+  },
+  "released_at": "2026-10-30T07:40:36.186Z"
 }

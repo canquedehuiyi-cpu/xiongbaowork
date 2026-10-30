@@ -1,0 +1,265 @@
+{
+  "schema": "xiongbaowork-owner-memory-minimal-plan/v1",
+  "status": "AUTHOR_DOC_ONLY_PLAN_PENDING_NONAUTHOR_REVIEW_NOT_IMPLEMENTED_NOT_RUNTIME_AUTHORIZED",
+  "dedup": "human-owner-memory-minimal-plan/5130d399/head-a2910b79/20261030T0722",
+  "authority": "Human requested one bounded document-only minimal owner-memory repair plan through Root. Root supplied collector-only -S as an option for independent evaluation; this plan recommends it conditionally from code/documentation, not as human-verbatim approval or new runtime quota.",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "administrative_parent": "2367f06b188478706a2bac78fc512ee0ffd058be",
+  "canonical_observed_prefix": "a2910b79",
+  "prepare_branch": "codex/platform-identity-prep-20261030-a1",
+  "inputs": {
+    "implementation": "5130d39915adb7a7fe492db672a07e413b72672d",
+    "implementation_review": "ab1549b4d90fe1a9fc8278deea15df71b6bd215d",
+    "implementation_files": [
+      {
+        "path": ".github/workflows/platform-identity-metadata.yml",
+        "blob": "470608b68fcb2b3f860669459fe91278399f3787",
+        "mode": "100644",
+        "bytes": 76158,
+        "sha256": "a996bc487051670cf64e7c511b6442f385e3ff632fd87a0693f75f0175cf29e7",
+        "full_readback": true
+      },
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+        "blob": "715dba936fcf377c1ec5ddfeebbd86be2f10ee3a",
+        "mode": "100644",
+        "bytes": 29732,
+        "sha256": "45d325e7b94c65a9828e5755ecabe2915ea418b60897ace639e9618c143508c6",
+        "full_readback": true
+      },
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+        "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
+        "mode": "100644",
+        "bytes": 24395,
+        "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e",
+        "full_readback": true
+      },
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+        "blob": "5fea72861f887c72fa233dd73f5263fe4ec19dc7",
+        "mode": "100644",
+        "bytes": 16439,
+        "sha256": "e984904a253c1a0fd6fed47eeb55c7be01f08d9269625f8b42c4e32cd9f98ff1",
+        "full_readback": true
+      }
+    ],
+    "memory_document": "2367f06b188478706a2bac78fc512ee0ffd058be",
+    "memory_document_path": "archives/recovery-20261028/PLATFORM-IDENTITY-MEMORY-DIAGNOSTIC-OUTLINE-20261030.json",
+    "memory_document_review": "d7db69a917e653d69bc15208c0217cfbd48a6629",
+    "memory_document_review_status": "ADMIN_STATIC_DIAGNOSTIC_REVIEW_ONLY_NOT_RUNTIME_AUTHORIZED",
+    "third_run": {
+      "run": 41004678906,
+      "job": 123896762774,
+      "log_utf8_bytes": 87457,
+      "log_sha256": "e840a81c3ad24c92a25a6a047fb307adbc414501e76107919db0ad3471e37cf9",
+      "phase": "owner_usr STARTEDseq13 BEFORE trusted_tool and Popen",
+      "fact": "Collector unit OOM/32M peak. Actual Popen/child/allocator/full-database scan not proven; no retrospective version reconstruction."
+    }
+  },
+  "decision": {
+    "recommended_option": "COLLECTOR_ONLY_DISABLE_AUTOMATIC_SITE_INITIALIZATION_WITH_UPPERCASE_S",
+    "scope": "One interpreter flag at existing run_stage metadata collector launch; no query argv/order/read change, no new runtime read/probe.",
+    "why": "This is the smallest structural startup reduction found: existing -I implies lower-s, not uppercase-S. Explicit collector payload uses standard-library modules and no site API or sys.prefix. Avoiding unneeded site initialization can remove implicit startup path processing/hooks while leaving owner query and complete ownership evidence unchanged.",
+    "confidence": "CONDITIONAL_DESIGN_NOT_OOM_FIX_PROOF",
+    "measured_savings_bytes": null,
+    "provable_positive_savings_lower_bound_bytes": 0,
+    "actual_python_version": "UNKNOWN",
+    "fit_32MiB": "UNKNOWN",
+    "not_selected": "Do not combine with del/GC, private spawn knobs, owner replacement or native handoff in this bounded recommendation."
+  },
+  "options": [
+    {
+      "id": "collector_only_uppercase_S",
+      "decision": "RECOMMENDED_CONDITIONALLY",
+      "changes": "Only metadata collector interpreter -I -B becomes -I -S -B. Payload/query code unchanged.",
+      "target": "Automatic site startup, global .pth/sitecustomize processing where normally applicable.",
+      "bound": "Zero guaranteed resident-memory saving; native query footprint, required stdlib imports, report buffers and cgroup charges unchanged.",
+      "proof": "General fixed3.12 documentation plus exact5130 code audit; actual installed interpreter/site policy not measured."
+    },
+    {
+      "id": "delete_prior_results_or_gc",
+      "decision": "NOT_RECOMMENDED_AS_REPAIR",
+      "changes": "Would remove/defer prior query strings or force GC.",
+      "reason": "Each prior query raw stdout+stderr cap10240B; first two at most20480 rawB plus representations. Removing data can break final32768 report compatibility. Emitter temporaries already return before owner, but reference release is not RSS release. No credible large reduction quantified."
+    },
+    {
+      "id": "Popen_spawn_flag_tuning",
+      "decision": "REJECT_UNPROVEN",
+      "changes": "Would change start_new_session or private spawn configuration.",
+      "reason": "Current true requests child setsid, supporting existing group kill. Actual Python version/spawn path unknown. No evidence of two full resident interpreters or fork-specific cause; weakening session/kill semantics is not a minimal safe memory repair."
+    },
+    {
+      "id": "controlled_exec_native_query_handoff",
+      "decision": "DEFER_NOT_MINIMAL",
+      "changes": "To remove Python/native-query overlap rather than merely fork another Python parent, a tiny immutable native relay would need bounded retained report state, child capture/UTF8/hash/framing, exact return/reap/deadline and Python resumption all inside same32.",
+      "reason": "Plain exec loses the collector's capture/exit/final-report continuation. A correct relay adds a trusted native artifact/ABI/build and sealed-state protocol, extra review and failure surface. No suitable existing artifact/ABI is established. Not supplied/implemented or authorized here; no new unit/outside writer/resource transfer proposed."
+    },
+    {
+      "id": "package_scoped_listfiles",
+      "decision": "CONDITIONAL_ALTERNATIVE_NOT_SELECTED_REQUIRES_HUMAN_ALLOWLIST_DECISION_NOT_IMPLEMENTED",
+      "new_argv": [
+        "/usr/bin/dpkg-query",
+        "-L",
+        "systemd"
+      ],
+      "new_direct_read_paths": [],
+      "command_policy_change": "Replace two original literal-path -S owner queries with a package-scoped listing query and new result interpretation; this changes argv/order/proof scope and is outside current allowlist.",
+      "complete_ownership_conflict": "Can show membership for one requested package only, not complete global ownership/uniqueness. Preserve original owner fields UNKNOWN; never substitute candidate membership as complete owner proof.",
+      "edge_cases": {
+        "duplicate_owners": "Other packages are not searched; do not invent uniqueness or discard multiple owners.",
+        "diversions": "Listing may contain diversion annotations; ambiguous/localized or incomplete data => UNKNOWN, not ownership of current resolved binary.",
+        "generated_symlinks_and_alternatives": "Generated/maintainer-created or alternative-managed paths need not be listed; no owner inference from symlink target alone.",
+        "conffiles": "Database path membership does not attest current contents or unmodified conffile; stable actual binary FD/hash remains independent.",
+        "architecture": "Unqualified systemd is not assumed to select one architecture or installed package record. Multiple/missing/noninstalled package association remains UNKNOWN; no new architecture probes or guessed suffix.",
+        "output_cap": "Keep existing8192 stdout/2048 stderr and5s/inner bounds; complete listing exceeding cap remains UNKNOWN, no truncation or raised limits."
+      }
+    }
+  ],
+  "exact_future_implementation_not_performed": {
+    "package_files": [
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+        "symbol": "run_stage(cfg,stage,cleaned)",
+        "baseline_lines": "201,212-220",
+        "before": "\"/usr/bin/python3\",\"-I\",\"-B\",str(root/\"collector.py\"),\"wrapper\",str(root),stage",
+        "after": "\"/usr/bin/python3\",\"-I\",\"-S\",\"-B\",str(root/\"collector.py\"),\"wrapper\",str(root),stage",
+        "allowed_delta": "Insert exactly uppercase-S only in existing metadata service argv atline220. Keep preceding actual env-i whitelist and all resource properties."
+      },
+      {
+        "path": ".github/workflows/platform-identity-metadata.yml",
+        "symbol": "PLATFORM_CONTROLLER_CODE_1..3 and bootstrap controller SHA256",
+        "allowed_delta": "Regenerate controller literal carrier and controller hash pin from exact changed management bytes. Collector carrier/hash remains byte-identical. Keep t0 position, parts counts/strictdecode/actualnewlength checks, prep-nonmatching filter, and every other role argv."
+      },
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+        "symbol": "artifacts.controller/workflow and startup compatibility section",
+        "allowed_delta": "Update exact controller/workflow identities and document this one flag, UNKNOWN savings/policy/runtime limits; no broadened allowlist or runtime authorization."
+      }
+    ],
+    "unchanged_file": {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
+      "bytes": 24395,
+      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e"
+    },
+    "before_steps": [
+      "Original same-t0 guard admission starts existing collector32 service using env-i /usr/bin/python3 -I -B collector.py wrapper.",
+      "Python normally performs site initialization before script; code then loads only named stdlib dependencies, validates immutable code/permit/actual resources, captures rootPID1, irreversibly drops UID/GID/groups and rechecks actual gates.",
+      "Original commands run serially, immediate full per-query frames then final complete bounded report; supervisor/fallback perform original cleanup/restore and final independent witness."
+    ],
+    "after_steps": [
+      "Only collector Python starts with additional -S before script, retaining -I/-B and env-i. No -O/-OO, no replacement shell or new process.",
+      "Script follows identical immutable/rootPID1/drop/postgate path. Any startup/import/identity/policy incompatibility fails before successful metadata; no fallback removing -S, no site.main, no added dependency path/install.",
+      "Same original manager/disk/-S owner_usr/-S owner_lib/package/kernel/OS ordering and argv. Same frames, hashes, UNKNOWN rules and final32768 report.",
+      "Same first t0+270/+300 including failure/stop/kill/reap/restore; no reset or additional grace; same physical readonly finalwitness/ACK."
+    ],
+    "static_acceptance": "Future different nonauthor must read exact full three changed files and verify compact payload unchanged, only targeted role flag change, every carrier/pin and unchanged gate. Current task creates only this plan, not those changes.",
+    "runtime_boundary": "Any future import/frame/resource evidence needs an explicitly separately allocated attempt; max3/3 currently consumed. Plan approval alone does not authorize implementation or a fourth run."
+  },
+  "dependency_and_policy_audit": {
+    "direct_imports_exact_code": [
+      "json",
+      "os",
+      "signal",
+      "stat",
+      "subprocess",
+      "sys",
+      "time",
+      "pathlib.Path",
+      "hashlib",
+      "selectors",
+      "base64",
+      "shlex"
+    ],
+    "payload_facts": "No direct third-party import, site/site.main, sitecustomize, site-packages/dist-packages manipulation or sys.prefix reference. Fixed /usr/bin/python3 and absolute metadata command paths do not use a venv prefix to locate commands.",
+    "transitive_assessment": "These named modules belong to CPython standard library/builtins; their normal dependencies are core stdlib/native extensions (examples: JSON/re/codecs, hashlib backends, base64/binascii/struct, selectors/select, subprocess native process support). This is a static category assessment, not a complete vendor/version-matched import graph or proof every extension is available without site.",
+    "unknowns": [
+      "Actual interpreter version/build, installed extension layout, venv/pyvenv prefix behavior, global .pth hooks and mandatory sitecustomize policy are not observed.",
+      "For documented3.12 behavior, site participates in venv prefix handling; -S can change that. The collector does not directly consume sys.prefix, but unknown vendor/transitive behavior is still a compatibility risk.",
+      "If the environment requires a site-installed audit/security hook or site-provided dependency, -S cannot silently bypass it. Reject this recommendation for that environment rather than skipping gates or automatically restoring site."
+    ],
+    "classification": "Same data-read/command permissions candidate: no additions and reduced implicit startup processing. Not approval to bypass mandatory site policy. Actual policy compatibility remains UNKNOWN and must be respected in exact implementation review; no extra probes are specified here.",
+    "fail_closed": "Unsupported flag or ImportError/native extension/policy incompatibility yields failed/UNKNOWN metadata and existing cleanup. RootPID1 may be absent if startup failed; do not infer it from disk or old runs. No second launch without-S, no imports from new paths, no pip/install or altered process privileges."
+  },
+  "memory_bounds": {
+    "existing_raw_capture_per_query": {
+      "stdout": 8192,
+      "stderr": 2048,
+      "total": 10240
+    },
+    "first_two_query_raw_upper_bound": 20480,
+    "existing_emission": {
+      "payload_ASCII": 16000,
+      "whole_line": 16384,
+      "queries": 9,
+      "total_query_transport": 147456,
+      "final_report": 32768
+    },
+    "semantics": "These are content bounds, not Python object sizes or a cgroup peak bound. cfg/imported modules/prior result strings remain. Framing has bounded UTF8/base64/JSON/line transients; references return before owner but allocators/page cache may retain charges.",
+    "selected_change": "Avoid only automatic collector site initialization and its possible retained startup objects/hooks. Does not remove core imports, native dpkg-query cost, Python/native overlap, buffers, cgroup file/kernel/slab charges or release already charged pages.",
+    "savings_lower_bound": 0,
+    "savings_upper_bound_bytes": "UNKNOWN_NO_MiB_ESTIMATE",
+    "aggregate_fit": "UNKNOWN",
+    "OOM_cause": "UNKNOWN",
+    "no_claim": "Neither little query output nor smaller startup proves32MiB fit; no measured category/RSS shares or fullDB scan attribution."
+  },
+  "ownership_and_evidence_invariants": {
+    "original_complete_owner_proof": "Keep both original literal alias dpkg-query -S results, all duplicate owners/diversion text exactly as observed; exact raw/hash evidence, never infer uniqueness/package equivalence from one line. Same-inode/hash gate still precedes each alias query.",
+    "frame": "Complete verified per-query raw frame remains required; missing/partial/hash mismatch => UNKNOWN despite any phaseFINISHED. Nonzero capture retains raw/exitUNKNOWN_EXIT; incomplete timeout/UTF8/cap usesnull notempty. Emit failure remains fatal outside alias catch.",
+    "lexical_hash": "Verify exact received ASCII payload lexical bytes; no cross-language float reserialization. Flushed raw frame with failed post-inner check is forensic evidence only, not timely completion.",
+    "final": "Original complete32768 final report and independent resources must remain distinct. No partial metadata/owner outcome grants Source/PG/fullplatform/resource PASS.",
+    "resources": "16supervisor+16fallback+32collector under common64 and project512/swap0/oom1 unchanged; no outsidewriter/holder/redistribution.",
+    "identity": "Immutable code/hash/fixed argv/rootPID1/permit/env-i/irreversible UID/GID/groups+actualpostdrop preserved; supervisor/fallback/bootstrap/always Python flags remain exact5130."
+  },
+  "primary_sources": [
+    {
+      "url": "https://docs.python.org/3.12/using/cmdline.html",
+      "read": "Actual primary doc read in this task; -I section195-200, lower-s249-250 and uppercase-S258-261.",
+      "scope": "General3.12 documented flag semantics: isolation includes lower-s, automatic site suppression is separate-S. Not runner version proof."
+    },
+    {
+      "url": "https://docs.python.org/3.12/library/site.html",
+      "read": "Actual primary read startup7-17, sitecustomize38-44.",
+      "scope": "General3.12 site startup/path/.pth/customization and venv context. Does not prove actual runner hooks or savings."
+    },
+    {
+      "url": "https://docs.python.org/3.12/library/subprocess.html",
+      "read": "Actual primary read Popen/start_new_session290-293.",
+      "scope": "General setsid-before-child-exec contract; no measured allocation/fork/posix_spawn mechanism inference."
+    },
+    {
+      "url": "https://manpages.debian.org/bookworm/dpkg/dpkg-query.1.en.html",
+      "read": "Actual primary read -L81-91, -S99-119.",
+      "scope": "Generic ownership/listing/diversion limits, not actual runner dpkg version or implementation memory scan proof."
+    }
+  ],
+  "authorization": {
+    "doc_only": true,
+    "implementation_changes": 0,
+    "Source_changes": 0,
+    "canonical_changes": 0,
+    "lease_changes": 0,
+    "parser_compile_tests": 0,
+    "probes": 0,
+    "jobs": 0,
+    "execution_refs_created": 0,
+    "runtime_consumed": 3,
+    "runtime_maximum": 3,
+    "fourth_authorized": false
+  },
+  "preserved": {
+    "scope": "77/18/7",
+    "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "hosted_worker": "paused/UNVERIFIED"
+  },
+  "next_action": "Different nonauthor reviews this exact one-file plan. Root can decide whether to authorize only the described collector-S three-file implementation preparation after policy/stdlib compatibility review. No implementation, new data allowlist, runtime allocation or fourth job follows from plan acceptance."
+}
