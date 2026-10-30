@@ -1,0 +1,363 @@
+{
+  "schema": "administrative-runtime-nonauthor-review/v1",
+  "candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+  "run_id": 40987759034,
+  "job_id": 123842654361,
+  "attempt": 1,
+  "status": "FAILED_OR_UNKNOWN_NO_VERSION_EVIDENCE",
+  "reviewer": "/root/a11_data_reviewer",
+  "native": {
+    "job_status": "completed",
+    "job_conclusion": "failure",
+    "setup": "success",
+    "admission_step": "failure",
+    "always_step": "failure",
+    "one_executed_job": true
+  },
+  "full_log": {
+    "chars": 72151,
+    "utf8_bytes": 72153,
+    "sha256": "e3a81787d202b53102b72220b4239781e01b24ea75741a3e52db68ed5ea58e97",
+    "source": "dedicated github_fetch_workflow_job_logs",
+    "full_read": true
+  },
+  "records": {
+    "PLATFORM_BOOTSTRAP_RESOURCE_GATE": [
+      {
+        "raw_bytes": 482,
+        "raw_sha256": "29b5dcf0cbf442518e3ad71356584afb6c1687ef5bfc45b70da9211baf5daf62",
+        "value": {
+          "shared": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "project": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "started": 38.337703452,
+          "inner": 308.337703452,
+          "outer": 338.337703452,
+          "before": {
+            "shared": {
+              "memory.max": "67108864",
+              "memory.swap.max": "0",
+              "memory.oom.group": "0"
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.swap.max": "0",
+              "memory.oom.group": "0"
+            },
+            "shared_empty": true,
+            "project_empty": true
+          }
+        }
+      }
+    ],
+    "PLATFORM_PID1_ADMITTED_METADATA ": [],
+    "PLATFORM_PID1_ADMITTED_METADATA_IDENTITY": [],
+    "PLATFORM_VERSION_METADATA_REPORT": [],
+    "PLATFORM_VERSION_METADATA_IDENTITY": [],
+    "PLATFORM_RESOURCE_OUTER_TERMINAL": [
+      {
+        "raw_bytes": 2185,
+        "raw_sha256": "73c72e1166171c03db643853966b1b7529c1af0a0697caee0bfcc3a15bbc3942",
+        "value": {
+          "actual": {
+            "collector": {},
+            "controls": {
+              "fallback": {
+                "absent_after_exit": true,
+                "actual_empty": false,
+                "properties": {
+                  "ActiveState": "inactive",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "not-found"
+                },
+                "quiet": true,
+                "unit": "xb-platform-40987759034-1-fallback.service"
+              },
+              "supervisor": {
+                "absent_after_exit": true,
+                "actual_empty": false,
+                "properties": {
+                  "ActiveState": "failed",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "loaded"
+                },
+                "quiet": true,
+                "unit": "xb-platform-40987759034-1-supervisor.scope"
+              }
+            },
+            "errors": [
+              "metadatareceipt:FileNotFoundError"
+            ],
+            "fallback_terminal": {
+              "collectors": {
+                "metadata": "absent"
+              },
+              "errors": [],
+              "observed_at": 38.761514924,
+              "outer": 338.337703452,
+              "parent_populated0_claim": false,
+              "restore": {
+                "absolute_deadline": 338.337703452,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 38.751292669,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "status": "COLLECTOR_EMPTY_LIMITS_OBSERVED",
+              "supervisor_death": true
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project_populated0": true,
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared_populated0": true,
+            "supervisor_terminal": {
+              "actual_parent_empty_claim": false,
+              "cleaned": [],
+              "collectors": {
+                "metadata": "absent"
+              },
+              "error": {
+                "detail": "",
+                "type": "AssertionError"
+              },
+              "observed_at": 38.741596775,
+              "outer": 338.337703452,
+              "restore": {
+                "absolute_deadline": 338.337703452,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 38.731424024,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "status": "FAILED"
+            }
+          },
+          "complete_emit_requires_supervised_ack_and_step_success": true,
+          "elapsed": 296.373761072,
+          "inner": 308.337703452,
+          "observed_at": 334.711460487,
+          "outer": 338.337703452,
+          "schema": "xiongbaowork-platform-resource-terminal/v1",
+          "source_adopted": false,
+          "started": 38.337703452,
+          "status": "FAILED_OR_UNKNOWN",
+          "supervisor_scope_command_returncode": -9,
+          "version_report_is_separate_unprivileged_evidence": true
+        }
+      }
+    ],
+    "PLATFORM_RESOURCE_ALWAYS_READONLY": [
+      {
+        "raw_bytes": 2780,
+        "raw_sha256": "b317efb1881f294b44945df25740755f48456242c7b6d9727bfdbfe036195389",
+        "value": {
+          "actual": {
+            "errors": [],
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project_populated0": true,
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared_populated0": true
+          },
+          "completion_requires_supervised_ack_and_step_success": true,
+          "emission": {
+            "emission_completed_at": 334.711740386,
+            "epoch": "xb-platform-40987759034-1:38.337703452",
+            "outer": 338.337703452,
+            "status": "FAILED_OR_UNKNOWN"
+          },
+          "no_restore_or_new_grace": true,
+          "saved_terminal": {
+            "actual": {
+              "collector": {},
+              "controls": {
+                "fallback": {
+                  "absent_after_exit": true,
+                  "actual_empty": false,
+                  "properties": {
+                    "ActiveState": "inactive",
+                    "ControlGroup": "",
+                    "Job": "",
+                    "LoadState": "not-found"
+                  },
+                  "quiet": true,
+                  "unit": "xb-platform-40987759034-1-fallback.service"
+                },
+                "supervisor": {
+                  "absent_after_exit": true,
+                  "actual_empty": false,
+                  "properties": {
+                    "ActiveState": "failed",
+                    "ControlGroup": "",
+                    "Job": "",
+                    "LoadState": "loaded"
+                  },
+                  "quiet": true,
+                  "unit": "xb-platform-40987759034-1-supervisor.scope"
+                }
+              },
+              "errors": [
+                "metadatareceipt:FileNotFoundError"
+              ],
+              "fallback_terminal": {
+                "collectors": {
+                  "metadata": "absent"
+                },
+                "errors": [],
+                "observed_at": 38.761514924,
+                "outer": 338.337703452,
+                "parent_populated0_claim": false,
+                "restore": {
+                  "absolute_deadline": 338.337703452,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 38.751292669,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "status": "COLLECTOR_EMPTY_LIMITS_OBSERVED",
+                "supervisor_death": true
+              },
+              "project": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "project_populated0": true,
+              "shared": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "shared_populated0": true,
+              "supervisor_terminal": {
+                "actual_parent_empty_claim": false,
+                "cleaned": [],
+                "collectors": {
+                  "metadata": "absent"
+                },
+                "error": {
+                  "detail": "",
+                  "type": "AssertionError"
+                },
+                "observed_at": 38.741596775,
+                "outer": 338.337703452,
+                "restore": {
+                  "absolute_deadline": 338.337703452,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 38.731424024,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "status": "FAILED"
+              }
+            },
+            "complete_emit_requires_supervised_ack_and_step_success": true,
+            "elapsed": 296.373761072,
+            "inner": 308.337703452,
+            "observed_at": 334.711460487,
+            "outer": 338.337703452,
+            "schema": "xiongbaowork-platform-resource-terminal/v1",
+            "source_adopted": false,
+            "started": 38.337703452,
+            "status": "FAILED_OR_UNKNOWN",
+            "supervisor_scope_command_returncode": -9,
+            "version_report_is_separate_unprivileged_evidence": true
+          },
+          "status": "FAILED_OR_UNKNOWN",
+          "version_report_separate": true
+        }
+      }
+    ]
+  },
+  "metadata": {
+    "root_pid1_records": 0,
+    "version_records": 0,
+    "raw_version_hash": "NOT_AVAILABLE_NO_RECORD",
+    "raw_pid1_hash": "NOT_AVAILABLE_NO_RECORD",
+    "actual_manager_version": "UNKNOWN_NOT_COLLECTED",
+    "actual_binary_package_link": "UNKNOWN_NOT_COLLECTED",
+    "ARCH1_to5_exact_version_audit": "NOT_PERFORMED_NO_EXACT_VERSION_BASIS",
+    "old_run_backfill": false
+  },
+  "runtime_findings": [
+    {
+      "id": "P2-SUPERVISOR-PID-CAPTURE-IN-FORK",
+      "type": "DEFINITE_STATIC_IDENTITY_BUG_WITH_COMPATIBLE_RUNTIME",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
+      "detail": "supervisor reads its own starttime in parent then passes lambda record(...pid:os.getpid(),starttime:start) to call_bounded. call_bounded forks and evaluates lambda in helper, so receipt combines ephemeral helper PID with parent's starttime. Fallback reads that helper's /proc stat, so absence/mismatch can report supervisor_death despite intended supervisor identity.",
+      "observed": "fallback supervisor_death=true at38.761514924, supervisor terminal AssertionError detail empty at38.741596775/cleaned[], no metadata terminal. Scope command returned-9.",
+      "causal_limit": "Compatible with early false-death abort. Logs do not show exact assertion traceback/failed expression or identify SIGKILL actor; do not assert unique root cause, OOM or manager rejection.",
+      "minimal_next_action": "Prepare only minimal administrative successor capturing supervisor PID and starttime together before fork, pass immutable values into record lambda; exact nonauthor re-review before any separately authorized future run. Preserve original no-retry/single-job consumption and all gates."
+    }
+  ],
+  "resource_interpretation": "Bootstrap actual shared64/project512 swap0oom1, beforeempty. Final and always actual shared/project same caps+swap0oom1/pop0 were independently read, but scopeexit-9, supervisorFAILED and missingmetadatareceipt keep wholejobFAILED_OR_UNKNOWN. Physical values are observations, not aggregate job PASS or version evidence.",
+  "native_image": {
+    "runner": "2.338.0",
+    "os": "Ubuntu26.04.1",
+    "image": "ubuntu-26.04",
+    "image_version": "20261025.179.1",
+    "provisioner": "20261021.618",
+    "provisioner_commit": "21505ad2541d5be6135ed84fc33697146cf75b8e",
+    "scope": "This new run's setup only, not exact systemd/kernel nor old-run version proof."
+  },
+  "no_actions": {
+    "reruns": 0,
+    "new_jobs": 0,
+    "Source_writes": 0,
+    "canonical_lease_writes": 0
+  },
+  "next_action": "Root records actual failed one-shot and pending exactmanager identity. Author may prepare minimal PID fix within administrative scope; no rerun implicitly approved. Existing77/18/7,Source28,PG_PENDING and release/service gates preserved."
+}

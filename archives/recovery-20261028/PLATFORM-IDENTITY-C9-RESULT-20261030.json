@@ -1,0 +1,435 @@
+{
+  "schema": "xiongbaowork-platform-identity-c9-result/v1",
+  "observed_at": "2026-10-30T01:52:43.347Z",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+  "exact_nonauthor_review": "672230aedd604b0234bf78db04c2151756b8c517",
+  "run": 40987759034,
+  "job": 123842654361,
+  "attempt": 1,
+  "event": "push",
+  "branch": "codex/platform-identity-run-20261030-a1",
+  "status": "completed",
+  "conclusion": "failure",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1
+    },
+    {
+      "name": "One bounded metadata admission and sustained control lifecycle",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 2
+    },
+    {
+      "name": "Always independent physical resource read only witness",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 3
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4
+    }
+  ],
+  "logs": {
+    "source": "native GitHub dedicated full job logs",
+    "utf8_bytes": 72153,
+    "characters": 72151,
+    "sha256": "e3a81787d202b53102b72220b4239781e01b24ea75741a3e52db68ed5ea58e97",
+    "raw_records": [
+      {
+        "timestamp": "2026-10-30T01:45:57.4672425Z",
+        "marker": "PLATFORM_BOOTSTRAP_RESOURCE_GATE",
+        "raw_json": "{\"shared\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"project\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"1\"}, \"started\": 38.337703452, \"inner\": 308.337703452, \"outer\": 338.337703452, \"before\": {\"shared\": {\"memory.max\": \"67108864\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"0\"}, \"project\": {\"memory.max\": \"536870912\", \"memory.swap.max\": \"0\", \"memory.oom.group\": \"0\"}, \"shared_empty\": true, \"project_empty\": true}}",
+        "parsed": {
+          "shared": {
+            "memory.max": "67108864",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "project": {
+            "memory.max": "536870912",
+            "memory.swap.max": "0",
+            "memory.oom.group": "1"
+          },
+          "started": 38.337703452,
+          "inner": 308.337703452,
+          "outer": 338.337703452,
+          "before": {
+            "shared": {
+              "memory.max": "67108864",
+              "memory.swap.max": "0",
+              "memory.oom.group": "0"
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.swap.max": "0",
+              "memory.oom.group": "0"
+            },
+            "shared_empty": true,
+            "project_empty": true
+          }
+        },
+        "raw_json_with_LF_sha256": "07872bc8f0c0ead8f4a0eb83c9d2b12cfd61df8573d23dcb007278c55616d585"
+      },
+      {
+        "timestamp": "2026-10-30T01:50:53.5323651Z",
+        "marker": "PLATFORM_RESOURCE_OUTER_TERMINAL",
+        "raw_json": "{\"actual\": {\"collector\": {}, \"controls\": {\"fallback\": {\"absent_after_exit\": true, \"actual_empty\": false, \"properties\": {\"ActiveState\": \"inactive\", \"ControlGroup\": \"\", \"Job\": \"\", \"LoadState\": \"not-found\"}, \"quiet\": true, \"unit\": \"xb-platform-40987759034-1-fallback.service\"}, \"supervisor\": {\"absent_after_exit\": true, \"actual_empty\": false, \"properties\": {\"ActiveState\": \"failed\", \"ControlGroup\": \"\", \"Job\": \"\", \"LoadState\": \"loaded\"}, \"quiet\": true, \"unit\": \"xb-platform-40987759034-1-supervisor.scope\"}}, \"errors\": [\"metadatareceipt:FileNotFoundError\"], \"fallback_terminal\": {\"collectors\": {\"metadata\": \"absent\"}, \"errors\": [], \"observed_at\": 38.761514924, \"outer\": 338.337703452, \"parent_populated0_claim\": false, \"restore\": {\"absolute_deadline\": 338.337703452, \"limits\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"observed_at\": 38.751292669, \"project_limits\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}}, \"status\": \"COLLECTOR_EMPTY_LIMITS_OBSERVED\", \"supervisor_death\": true}, \"project\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"project_populated0\": true, \"shared\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"shared_populated0\": true, \"supervisor_terminal\": {\"actual_parent_empty_claim\": false, \"cleaned\": [], \"collectors\": {\"metadata\": \"absent\"}, \"error\": {\"detail\": \"\", \"type\": \"AssertionError\"}, \"observed_at\": 38.741596775, \"outer\": 338.337703452, \"restore\": {\"absolute_deadline\": 338.337703452, \"limits\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"observed_at\": 38.731424024, \"project_limits\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}}, \"status\": \"FAILED\"}}, \"complete_emit_requires_supervised_ack_and_step_success\": true, \"elapsed\": 296.373761072, \"inner\": 308.337703452, \"observed_at\": 334.711460487, \"outer\": 338.337703452, \"schema\": \"xiongbaowork-platform-resource-terminal/v1\", \"source_adopted\": false, \"started\": 38.337703452, \"status\": \"FAILED_OR_UNKNOWN\", \"supervisor_scope_command_returncode\": -9, \"version_report_is_separate_unprivileged_evidence\": true}",
+        "parsed": {
+          "actual": {
+            "collector": {},
+            "controls": {
+              "fallback": {
+                "absent_after_exit": true,
+                "actual_empty": false,
+                "properties": {
+                  "ActiveState": "inactive",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "not-found"
+                },
+                "quiet": true,
+                "unit": "xb-platform-40987759034-1-fallback.service"
+              },
+              "supervisor": {
+                "absent_after_exit": true,
+                "actual_empty": false,
+                "properties": {
+                  "ActiveState": "failed",
+                  "ControlGroup": "",
+                  "Job": "",
+                  "LoadState": "loaded"
+                },
+                "quiet": true,
+                "unit": "xb-platform-40987759034-1-supervisor.scope"
+              }
+            },
+            "errors": [
+              "metadatareceipt:FileNotFoundError"
+            ],
+            "fallback_terminal": {
+              "collectors": {
+                "metadata": "absent"
+              },
+              "errors": [],
+              "observed_at": 38.761514924,
+              "outer": 338.337703452,
+              "parent_populated0_claim": false,
+              "restore": {
+                "absolute_deadline": 338.337703452,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 38.751292669,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "status": "COLLECTOR_EMPTY_LIMITS_OBSERVED",
+              "supervisor_death": true
+            },
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project_populated0": true,
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared_populated0": true,
+            "supervisor_terminal": {
+              "actual_parent_empty_claim": false,
+              "cleaned": [],
+              "collectors": {
+                "metadata": "absent"
+              },
+              "error": {
+                "detail": "",
+                "type": "AssertionError"
+              },
+              "observed_at": 38.741596775,
+              "outer": 338.337703452,
+              "restore": {
+                "absolute_deadline": 338.337703452,
+                "limits": {
+                  "memory.max": "67108864",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                },
+                "observed_at": 38.731424024,
+                "project_limits": {
+                  "memory.max": "536870912",
+                  "memory.oom.group": "1",
+                  "memory.swap.max": "0"
+                }
+              },
+              "status": "FAILED"
+            }
+          },
+          "complete_emit_requires_supervised_ack_and_step_success": true,
+          "elapsed": 296.373761072,
+          "inner": 308.337703452,
+          "observed_at": 334.711460487,
+          "outer": 338.337703452,
+          "schema": "xiongbaowork-platform-resource-terminal/v1",
+          "source_adopted": false,
+          "started": 38.337703452,
+          "status": "FAILED_OR_UNKNOWN",
+          "supervisor_scope_command_returncode": -9,
+          "version_report_is_separate_unprivileged_evidence": true
+        },
+        "raw_json_with_LF_sha256": "5ce95b562569cd31a9a88050c31db187e4f1de7a74df43daf13fc91f9b762704"
+      },
+      {
+        "timestamp": "2026-10-30T01:50:53.6000633Z",
+        "marker": "PLATFORM_RESOURCE_ALWAYS_READONLY",
+        "raw_json": "{\"actual\": {\"errors\": [], \"project\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"project_populated0\": true, \"shared\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"shared_populated0\": true}, \"completion_requires_supervised_ack_and_step_success\": true, \"emission\": {\"emission_completed_at\": 334.711740386, \"epoch\": \"xb-platform-40987759034-1:38.337703452\", \"outer\": 338.337703452, \"status\": \"FAILED_OR_UNKNOWN\"}, \"no_restore_or_new_grace\": true, \"saved_terminal\": {\"actual\": {\"collector\": {}, \"controls\": {\"fallback\": {\"absent_after_exit\": true, \"actual_empty\": false, \"properties\": {\"ActiveState\": \"inactive\", \"ControlGroup\": \"\", \"Job\": \"\", \"LoadState\": \"not-found\"}, \"quiet\": true, \"unit\": \"xb-platform-40987759034-1-fallback.service\"}, \"supervisor\": {\"absent_after_exit\": true, \"actual_empty\": false, \"properties\": {\"ActiveState\": \"failed\", \"ControlGroup\": \"\", \"Job\": \"\", \"LoadState\": \"loaded\"}, \"quiet\": true, \"unit\": \"xb-platform-40987759034-1-supervisor.scope\"}}, \"errors\": [\"metadatareceipt:FileNotFoundError\"], \"fallback_terminal\": {\"collectors\": {\"metadata\": \"absent\"}, \"errors\": [], \"observed_at\": 38.761514924, \"outer\": 338.337703452, \"parent_populated0_claim\": false, \"restore\": {\"absolute_deadline\": 338.337703452, \"limits\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"observed_at\": 38.751292669, \"project_limits\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}}, \"status\": \"COLLECTOR_EMPTY_LIMITS_OBSERVED\", \"supervisor_death\": true}, \"project\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"project_populated0\": true, \"shared\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"shared_populated0\": true, \"supervisor_terminal\": {\"actual_parent_empty_claim\": false, \"cleaned\": [], \"collectors\": {\"metadata\": \"absent\"}, \"error\": {\"detail\": \"\", \"type\": \"AssertionError\"}, \"observed_at\": 38.741596775, \"outer\": 338.337703452, \"restore\": {\"absolute_deadline\": 338.337703452, \"limits\": {\"memory.max\": \"67108864\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}, \"observed_at\": 38.731424024, \"project_limits\": {\"memory.max\": \"536870912\", \"memory.oom.group\": \"1\", \"memory.swap.max\": \"0\"}}, \"status\": \"FAILED\"}}, \"complete_emit_requires_supervised_ack_and_step_success\": true, \"elapsed\": 296.373761072, \"inner\": 308.337703452, \"observed_at\": 334.711460487, \"outer\": 338.337703452, \"schema\": \"xiongbaowork-platform-resource-terminal/v1\", \"source_adopted\": false, \"started\": 38.337703452, \"status\": \"FAILED_OR_UNKNOWN\", \"supervisor_scope_command_returncode\": -9, \"version_report_is_separate_unprivileged_evidence\": true}, \"status\": \"FAILED_OR_UNKNOWN\", \"version_report_separate\": true}",
+        "parsed": {
+          "actual": {
+            "errors": [],
+            "project": {
+              "memory.max": "536870912",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "project_populated0": true,
+            "shared": {
+              "memory.max": "67108864",
+              "memory.oom.group": "1",
+              "memory.swap.max": "0"
+            },
+            "shared_populated0": true
+          },
+          "completion_requires_supervised_ack_and_step_success": true,
+          "emission": {
+            "emission_completed_at": 334.711740386,
+            "epoch": "xb-platform-40987759034-1:38.337703452",
+            "outer": 338.337703452,
+            "status": "FAILED_OR_UNKNOWN"
+          },
+          "no_restore_or_new_grace": true,
+          "saved_terminal": {
+            "actual": {
+              "collector": {},
+              "controls": {
+                "fallback": {
+                  "absent_after_exit": true,
+                  "actual_empty": false,
+                  "properties": {
+                    "ActiveState": "inactive",
+                    "ControlGroup": "",
+                    "Job": "",
+                    "LoadState": "not-found"
+                  },
+                  "quiet": true,
+                  "unit": "xb-platform-40987759034-1-fallback.service"
+                },
+                "supervisor": {
+                  "absent_after_exit": true,
+                  "actual_empty": false,
+                  "properties": {
+                    "ActiveState": "failed",
+                    "ControlGroup": "",
+                    "Job": "",
+                    "LoadState": "loaded"
+                  },
+                  "quiet": true,
+                  "unit": "xb-platform-40987759034-1-supervisor.scope"
+                }
+              },
+              "errors": [
+                "metadatareceipt:FileNotFoundError"
+              ],
+              "fallback_terminal": {
+                "collectors": {
+                  "metadata": "absent"
+                },
+                "errors": [],
+                "observed_at": 38.761514924,
+                "outer": 338.337703452,
+                "parent_populated0_claim": false,
+                "restore": {
+                  "absolute_deadline": 338.337703452,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 38.751292669,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "status": "COLLECTOR_EMPTY_LIMITS_OBSERVED",
+                "supervisor_death": true
+              },
+              "project": {
+                "memory.max": "536870912",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "project_populated0": true,
+              "shared": {
+                "memory.max": "67108864",
+                "memory.oom.group": "1",
+                "memory.swap.max": "0"
+              },
+              "shared_populated0": true,
+              "supervisor_terminal": {
+                "actual_parent_empty_claim": false,
+                "cleaned": [],
+                "collectors": {
+                  "metadata": "absent"
+                },
+                "error": {
+                  "detail": "",
+                  "type": "AssertionError"
+                },
+                "observed_at": 38.741596775,
+                "outer": 338.337703452,
+                "restore": {
+                  "absolute_deadline": 338.337703452,
+                  "limits": {
+                    "memory.max": "67108864",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  },
+                  "observed_at": 38.731424024,
+                  "project_limits": {
+                    "memory.max": "536870912",
+                    "memory.oom.group": "1",
+                    "memory.swap.max": "0"
+                  }
+                },
+                "status": "FAILED"
+              }
+            },
+            "complete_emit_requires_supervised_ack_and_step_success": true,
+            "elapsed": 296.373761072,
+            "inner": 308.337703452,
+            "observed_at": 334.711460487,
+            "outer": 338.337703452,
+            "schema": "xiongbaowork-platform-resource-terminal/v1",
+            "source_adopted": false,
+            "started": 38.337703452,
+            "status": "FAILED_OR_UNKNOWN",
+            "supervisor_scope_command_returncode": -9,
+            "version_report_is_separate_unprivileged_evidence": true
+          },
+          "status": "FAILED_OR_UNKNOWN",
+          "version_report_separate": true
+        },
+        "raw_json_with_LF_sha256": "87eec9c6c761aa0717fb43d496846ccb5aa4360d4b1d428a502a7be733c15722"
+      }
+    ]
+  },
+  "version": {
+    "status": "NOT_OBTAINED",
+    "pid1_admitted_records": 0,
+    "unprivileged_version_records": 0,
+    "raw_version_identity_records": 0,
+    "manager_binary_package_kernel": "UNKNOWN",
+    "exact_version_contract": "NOT_PERFORMED_NO_ACTUAL_VERSION_IDENTITY",
+    "old_runs": "NOT_BACKFILLED"
+  },
+  "native_setup_identity": {
+    "scope": "THIS_NEW_RUN_ONLY",
+    "runner": "2.338.0",
+    "os": "Ubuntu26.04.1 LTS",
+    "image": "ubuntu-26.04",
+    "image_version": "20261025.179.1",
+    "provisioner_version": "20261021.618",
+    "provisioner_commit": "21505ad2541d5be6135ed84fc33697146cf75b8e",
+    "provisioner_build_date": "2026-10-21T00:45:21Z",
+    "not_systemd_or_kernel_version": true
+  },
+  "resource": {
+    "overall": "FAILED_OR_UNKNOWN",
+    "final_shared": {
+      "memory_max": "67108864",
+      "swap_max": "0",
+      "oom_group": "1",
+      "populated0": true
+    },
+    "final_project": {
+      "memory_max": "536870912",
+      "swap_max": "0",
+      "oom_group": "1",
+      "populated0": true
+    },
+    "not_complete_resource_acceptance": "missing metadata receipt, supervisor failed, scope return -9, controls absent_after_exit/actual_emptyfalse; final limits/pop0 do not override original gate",
+    "elapsed_outer_record_seconds": 296.373761072,
+    "outer_deadline": 338.337703452,
+    "emission_completed_at": 334.711740386,
+    "always_failed": true
+  },
+  "postmortem": {
+    "confirmed_static_defect": {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
+      "lines": [
+        56,
+        61,
+        307,
+        310,
+        329,
+        331,
+        333
+      ],
+      "description": "call_bounded forks; supervisor PID record lambda evaluates os.getpid inside ephemeral helper while starttime captured from parent. fallback watches helper PID paired with parent starttime, so can falsely classify supervisor death.",
+      "runtime_correlation": "fallback.supervisor_death true immediately; supervisor AssertionError detail empty; no metadata receipt",
+      "causal_limit": "Exact failing assertion and sole dynamic cause not proved. Scope -9 alone is not OOM proof."
+    },
+    "minimal_fix_proposal": "Capture immutable parent pid and parent starttime before call_bounded; serialize prebuilt snapshot inside helper; cross-check record against persistent scope supervisor before fallback activation. Add precise failure phase to administrative errors without exposing data. Exact full successor nonauthor review required.",
+    "implementation_now": false,
+    "second_job_now": false
+  },
+  "attempt_budget": {
+    "authorized_max_actual_collector_jobs": 1,
+    "actual_metadata_control_jobs_started": 1,
+    "remaining": 0,
+    "invalid_preparation_runs_not_collector": true
+  },
+  "next_action": "Review exact parent PID/starttime snapshot repair as minimum prerequisite. A further actual metadata attempt requires an explicit additional one-attempt allocation; do not rerun current job or claim corresponding-version contract without version. No new architecture/resource/permission condition proposed.",
+  "preserved": [
+    "Source28 668dd2238ff112bcff38ad2d0456dccd116874ed unchanged",
+    "77/18/7",
+    "original six Subject stages NOT_RUN_NOT_PASSED",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "worker paused/UNVERIFIED",
+    "no Source/project/SQL/parser/test/dependency execution"
+  ],
+  "queue_observation": {
+    "queued": 0,
+    "in_progress": 0,
+    "at": "2026-10-30T01:52:43.451Z"
+  },
+  "runtime_nonauthor": {
+    "commit": "888935229be1bb24bba174b6d42407411ed7c829",
+    "path": "archives/recovery-20261028/PLATFORM-IDENTITY-C9-RUNTIME-NONAUTHOR-20261030.json",
+    "blob": "03aa34c150daa848b70f86679ed460b137b0598f",
+    "bytes": 13958,
+    "sha256": "a079878a265acd7eaa6d2d06c18dfe7a6f9ae2645b54812106738ce4386237e0"
+  }
+}
