@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "acquired_at": "2026-10-30T03:44:01.878Z",
-  "renewed_at": "2026-10-30T03:45:14.929Z",
+  "renewed_at": "2026-10-30T03:46:39.530Z",
   "expires_at": "2026-10-30T04:29:01.878Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T03:44:01.878Z"
   },
-  "next_action": "Exact unchanged909 nonauthor admission applicability confirmation then fresh gates update reserved execution ref c9→909 once; no third metadata job.",
+  "next_action": "Receive existing second/final run40999201244 terminal, no third; hash actual version and resource evidence separately, corresponding-version contract only if trustworthy version exists.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,11 +29,11 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40987759034,
-    "job": 123842654361,
-    "candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
-    "status": "completed",
-    "conclusion": "failure"
+    "run": 40999201244,
+    "job": 123879381737,
+    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+    "status": "in_progress",
+    "conclusion": null
   },
   "queue_at_release": {
     "queued": [],
@@ -57,8 +57,18 @@
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
   "scope": "既有metadata-only准入与全部资源/身份/期限门不变。真人明确追加一次exact909；总metadata作业上限2，旧C9已1，本epoch最多1；不得自动第三次。",
-  "resource_jobs_this_epoch": [],
-  "new_jobs_started": 0,
+  "resource_jobs_this_epoch": [
+    {
+      "run": 40999201244,
+      "job": 123879381737,
+      "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+      "status": "in_progress",
+      "conclusion": null,
+      "execution_branch": "codex/platform-identity-run-20261030-a1",
+      "created_at": "2026-10-30T03:46:05Z"
+    }
+  ],
+  "new_jobs_started": 1,
   "authorization_provenance": {
     "human_request": "查因解决当前停滞、取得已授权单次版本补证后继续推进",
     "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
@@ -73,6 +83,6 @@
     "additional_jobs": 1,
     "authority_source": "Root relay of human choice call_907ac0dcf471487289749faab6d427be and human reopened-app 已恢复; not a third allocation",
     "accepted_at": "2026-10-30T03:44:01.878Z",
-    "status": "ADMISSION_CONFIRMED_NOT_YET_DISPATCHED"
+    "status": "CONSUMED_BY_RUN40999201244"
   }
 }
