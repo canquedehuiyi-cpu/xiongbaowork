@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T01:38:41.662Z",
+  "checkpoint_update_at": "2026-10-30T01:39:56.187Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,8 +4429,8 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-once-20261030",
     "epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
-    "state": "held",
-    "expires_at": "2026-10-30T01:44:29.444Z",
+    "state": "released",
+    "expires_at": "2026-10-30T01:39:56.187Z",
     "acquisition_commit": "a46d5e0e571ecd8dc7f9c1be10755df11e517bf7",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。"
   },
@@ -4682,6 +4682,13 @@
       "platform_version": "NOT_OBTAINED",
       "execution_ref": "NOT_FOUND_AT_2026-10-30T01:36Z",
       "previous_static_approval": "Retained historically; applicability corrected by newly found workflow syntax limit"
+    },
+    "validation_addendum": {
+      "commit": "29179b5be13c6ccf3d16ac40b36552890138e3b0",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-FA96-VALIDATION-ADDENDUM-20261030.json",
+      "blob": "91342acd5c26a4a1caf14bda3be19c0fb2047144",
+      "bytes": 2894,
+      "sha256": "65000c29a78553645ba2c11e3a38fa57b2301ad1141d3bf7fbfc79ecf1b7194e"
     }
   }
 }
