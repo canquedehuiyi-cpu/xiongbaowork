@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
   "run_id": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
   "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
   "acquired_at": "2026-10-30T16:34:50.707Z",
-  "renewed_at": "2026-10-30T16:34:50.707Z",
-  "expires_at": "2026-10-30T17:19:50.707Z",
+  "renewed_at": "2026-10-30T16:44:08.527Z",
+  "expires_at": "2026-10-30T16:44:08.527Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "7f5e4e78d20772df9b4abe38960a63edcf321307",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T16:34:50.707Z"
   },
-  "next_action": "Persist only the exact authorized five-file static prep candidate, independent Git byte correspondence, return for Root verification before final two-admin closeout. No Source adoption or execution.",
+  "next_action": "Root independently verify final two-admin Git readback and released lease. This bounded publication round is complete only as static saving; no automatic next package, Source adoption or execution.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -40,7 +40,7 @@
     "queued": [],
     "in_progress": [],
     "candidate_runs": 0,
-    "observed_at": "2026-10-30T15:35:27.917Z"
+    "observed_at": "2026-10-30T16:43:38.897Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -91,7 +91,7 @@
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
   "current_task_dedup": "root-D05-A4A3-five-source-publication-humanapproved/109402/570ee3be/call-a0de2cbe/base7f5e4e78/20261030T1631",
-  "checkpoint_timing_note": "New epoch after actual A4 release; original A4 missed renewal history remains retained, no old epoch reused.",
+  "checkpoint_timing_note": "Closeout timestamps are actual CAS-preparation UTC, not server completion time; original acquired_at and 45min upper bound unchanged. Actual CAS receipt and immutable readback are separately observed.",
   "public_administrative_permission": {
     "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
     "question": "call_7402e4b872d949b08b1b45bb899e778d",
@@ -106,7 +106,7 @@
   },
   "current_epoch_renewal_history": {
     "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
-    "last_successful_renewal_at": "2026-10-30T16:34:50.707Z",
+    "last_successful_renewal_at": "2026-10-30T16:44:08.527Z",
     "interval_exceeded": false
   },
   "predecessor_release": {
@@ -338,5 +338,80 @@
     ],
     "allowed_admin_content": "Preserve existing public history and append only this A3 round owner/task/epoch, real times,parent/CAS,candidate identities,review/Root verification/readback/release and zero-job metadata.",
     "excluded": "No private CPU/P1/P2/ledger/review fulltext/B/A2/B1/raw/secrets/user data; no Source adoption,execution,model,billing,PG,deployment or fourth metadata."
+  },
+  "released_at": "2026-10-30T16:44:08.527Z",
+  "a4_a3_actual_candidate": {
+    "commit": "0a10bd4f158fdf27a0bc8e70c1ad96f3d949da70",
+    "parent": "f81e6646e547e1c0e8430f51ce994f9d61df4d6d",
+    "tree": "ee978b3eb41f6b9cdc96c8282e526a7ae965785b",
+    "branch": "codex/task-board-a4-a3-profile-prep-20261030",
+    "files": [
+      {
+        "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+        "mode": "100644",
+        "bytes": 49292,
+        "sha256": "e264e4ff193fa392972aa626ea1c2d589d85c60efd100dbee3202fb0c77faa5f",
+        "git_blob": "e1054154322959831311f4c72fb89142ad473907"
+      },
+      {
+        "path": "openbot/app/tests/tasks-attention-region.test.tsx",
+        "mode": "100644",
+        "bytes": 6986,
+        "sha256": "bbd18184b8d45508b56594a22c7f77fe214b12da612307ce9ccdc716e7a99f80",
+        "git_blob": "d08b395c7a0ceab2628241e7f3ebcb48f232a594"
+      },
+      {
+        "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+        "mode": "100644",
+        "bytes": 31098,
+        "sha256": "570ee3be08b66a092dc757ccabea3e20d506f58e50264721a6867707f922c099",
+        "git_blob": "1e8f66acff5f5445f6b876e86c88c28223a067fa"
+      },
+      {
+        "path": "openbot/app/tests/tasks-executor-profile.test.tsx",
+        "mode": "100644",
+        "bytes": 12057,
+        "sha256": "6c4b298e57eadd40987a087975922c4043f32db31cc84bd4d285308aeaa1486a",
+        "git_blob": "663f53b8df7c661c794c3b935ae2e0417f89ff9e"
+      },
+      {
+        "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+        "mode": "100644",
+        "bytes": 9969,
+        "sha256": "3c2ce1101e8f93c9bd196bd42089b805101ceb28d056e94ff9a32164b3946f45",
+        "git_blob": "dcd8b2014b14072683553b067445df211aea1a4d"
+      }
+    ],
+    "utf8_bytes": 109402,
+    "parent_diff": {
+      "paths": 5,
+      "modified": 4,
+      "added": 1,
+      "removed": 0
+    },
+    "workflows_unchanged": true,
+    "adopted": false,
+    "runs": 0
+  },
+  "a4_a3_git_correspondence_review": {
+    "status": "GIT_BYTE_CORRESPONDENCE_ONLY_ROOT_VERIFICATION_PENDING",
+    "reviewer": "/root/a11_data_reviewer",
+    "turn": "01a18dac-c48c-74d5-abdb-603f85d975ff",
+    "turn_identity_source": "Root independent read_thread relay",
+    "utf8_bytes": 4154,
+    "sha256": "f21af168571add8c1e7d74cf1e7e236fde7c5645fb4dbae1c6281080d42f384d",
+    "findings": [],
+    "fulltext": "PRIVATE_NOT_PUBLISHED",
+    "historical_status_preserved": true
+  },
+  "a4_a3_root_verification": {
+    "status": "ROOT_INDEPENDENT_FIVE_FULLTEXT_VERIFIED",
+    "observed_at": "2026-10-30T16:42:48Z",
+    "source": "Root explicit relay of actual immutable commit/tree/compare/five full-body reads and independent UTF8/SHA/every-character comparison",
+    "candidate": "0a10bd4f158fdf27a0bc8e70c1ad96f3d949da70",
+    "total_bytes": 109402,
+    "exact_frozen_tuple": true,
+    "review_hash_verified": true,
+    "not_runtime_or_adoption": true
   }
 }
