@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T09:16:46.342Z",
+  "checkpoint_update_at": "2026-10-30T10:08:59.295Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,10 +4429,10 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-contract-20261030",
     "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
-    "state": "held",
-    "expires_at": "2026-10-30T10:15:16.387Z",
-    "scope": "Static exact audit/authority/COMMIT/ACK/C-ALL contract then independently reviewed existing A11 raw recovery decision. No Source adoption, codec/parser/SQL/project/CONTROL execution, no fourth metadata.",
-    "acquisition_commit": "PENDING_CAS_READBACK"
+    "state": "released",
+    "expires_at": "2026-10-30T10:08:59.295Z",
+    "scope": "Administrative closeout only: two specifically authorized public metadata files; no raw/private B or A2 fulltext/Source/runtime.",
+    "acquisition_commit": "d45170845bd80a68e3e7a6be9179551bc127e9cc"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5631,10 +5631,75 @@
   },
   "commercial_contract_round": {
     "dedup": "commercial-next-contract-and-A11-recovery-plan/head-d38a68b1/cd6-reviewed/Qoder90bc9e97",
-    "status": "STATIC_CONTRACT_PREPARATION",
+    "status": "STATIC_A_REVIEWED_B_AND_A2_PRIVATE_REVIEW_COMPLETE_PUBLIC_TWO_FILE_ADMIN_CLOSEOUT",
     "accepted_at": "2026-10-30T09:30:16.387Z",
     "new_jobs": 0,
     "metadata_remaining": 0,
-    "source_adopted": 0
+    "source_adopted": 0,
+    "checkpoint_at": "2026-10-30T10:08:59.295Z",
+    "A": {
+      "candidate": "80698b58fe037d2d6f4cdd0a1d2395d97c2ff554",
+      "path": "archives/recovery-20261028/FRESH-PERSISTENCE-AUDIT-CONTRACT-A-20261030.json",
+      "blob": "e11a52588412058d3bdbc733492ddd33b87b8697",
+      "bytes": 29124,
+      "sha256": "45b84fa76100db27530faa4b77bd7744f332f458411d5de12c4c4288faf8e985",
+      "review_commit": "6697cc310012361f99a410ffa37afb52b4c703de",
+      "review_blob": "6818852f9a333ca2dfa453a30cfddb5fc6d28788",
+      "review_bytes": 4194,
+      "review_sha256": "325246a1f6a2d7d8d520722306173432d964bc350bb89364c2863afa345e5b21",
+      "status": "ADMIN_STATIC_CONTRACT_ONLY_NOT_SOURCE_OR_RUNTIME_APPROVAL",
+      "findings": [],
+      "unchanged": true
+    },
+    "B_private": {
+      "text_sha256": "0361f1bbded2337309ea809d7867a359e9f4c0a1f4455fb368c48885cfc5881f",
+      "status": "ADMIN_STATIC_DESIGN_ONLY_NO_IDENTIFIABLE_GIT_CANDIDATE_BLOCKED_PUBLIC_PERSISTENCE",
+      "nonauthor_findings": [],
+      "prior_create_commit_outcome": "UNKNOWN_NO_RETURNED_SHA_DO_NOT_REPLAY",
+      "fulltext_public": false,
+      "implementation": 0,
+      "execution": 0,
+      "raw_output_authorized": false
+    },
+    "A2_private": {
+      "bytes": 3608,
+      "characters": 2020,
+      "sha256": "25a5e77df764cd93d98c2e472c13888d4a41588ef851c0aef079d8edca95edf8",
+      "nonauthor_independently_computed_bytes_hash": true,
+      "status": "CONDITIONAL_PRIVATE_DESIGN_ONLY_CURRENT_WRITER_HOLD",
+      "new_blocking_findings": [],
+      "fulltext_public": false,
+      "git_candidate": false,
+      "source_implemented": 0
+    },
+    "external_inputs_metadata": {
+      "WB_R10": {
+        "task": "9567157b-c866-41bb-b39d-9581d5a08bcd",
+        "result": "8e0bc827-2804-440c-b471-cff82c4ac14d",
+        "received_at": "2026-10-30T09:56:29.035Z",
+        "completed_at": "2026-10-30T09:57:54.884Z",
+        "classification": "READONLY_DESIGN_INPUT_ROOT_RELAY_NOT_SOURCE_NONAUTHOR_PASS"
+      },
+      "Qoder_R10": {
+        "task": "2c3d6f6a-70fd-4760-a729-b1916ecc8b5b",
+        "result": "153eb122-55d7-4cc1-a74b-231204993aca",
+        "classification": "ROOT_METADATA_STRUCTURE_REVIEW_SOURCE_READS0_NOT_SOURCE_PASS"
+      }
+    },
+    "metadata_consumed": 3,
+    "public_administrative_permission": {
+      "dedup": "human-admin-publication-only/questioncall_1ebd2986/head-d451/A6697cc31",
+      "source": "Root relay of actual human answer to call_1ebd2986226e4a61897981e0c1eb175a",
+      "human_answer": "明确授权，仅上述行政公开保存（建议）",
+      "public_repository": "canquedehuiyi-cpu/xiongbaowork",
+      "allowed_paths": [
+        "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+        "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+      ],
+      "allowed_content": "This round executor/task identifiers, times, run/job IDs, candidate hashes, review conclusions and lease/checkpoint state only.",
+      "excluded": "No raw artifacts, secrets or user data; no B/A2 fulltext/new report path/Source/runtime/fourth metadata/deployment permission.",
+      "accepted_at": "2026-10-30T10:08:59.295Z"
+    },
+    "next_action": "Deliver complete private B/A2 texts and review conclusions in original conversation. Future exact Source/ DATA implementation and trusted output decisions remain separate; no job or fourth metadata. Existing commercial77/18/7 goal remains active, not complete."
   }
 }
