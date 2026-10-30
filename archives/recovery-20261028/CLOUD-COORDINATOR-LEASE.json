@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:S-review-byte-index-20261030",
-  "run_id": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
-  "epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
-  "acquired_at": "2026-10-30T08:34:05.569Z",
-  "renewed_at": "2026-10-30T08:34:57.839Z",
-  "expires_at": "2026-10-30T08:34:57.839Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:root-S-admin-correction-20261030",
+  "run_id": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
+  "epoch": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
+  "acquired_at": "2026-10-30T08:37:56.068Z",
+  "renewed_at": "2026-10-30T08:37:56.068Z",
+  "expires_at": "2026-10-30T09:22:56.068Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "c4305d8ada806b76267eb0d68f19949bdb686925",
+  "expected_parent": "cba4381986f980d2fbc1a5e5b8d61a95b4d6e432",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:34:05.569Z"
+    "observed_at": "2026-10-30T08:37:56.068Z"
   },
-  "next_action": "Exact922c staticcandidate and7cc16594 review complete, reviewindex corrected6598UTF8B/6596chars. EXECUTION_HOLD remains; no fourth/no newprobe. Return exactcandidate/compatibilityholds and finalreadback.",
+  "next_action": "Stageexacttwofileadministrativecorrection, independentnon-authorreviewbeforeCAS, fullreadback andidle release. No code/reviewblob changes.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -46,7 +46,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
+  "predecessor_epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "仅更正本轮独审报告行政索引bytes：6596字符实际为6598UTF8B。原blob/SHA/候选/报告内容不变；全部3候选文件bytes已独算及Git tree核同。不改Source或执行ref，无任何运行/新额度。",
+  "scope": "仅Root指定handoff+lease行政更正：核review6598UTF8B并更新当前scope为collector-S静态/UNKNOWN执行hold/newjobs0/无第四次；原不同非作者审确切两文件commit后CAS，候选/原review/Source/历史不改。无任何作业/probe/执行ref权限。",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -88,5 +88,5 @@
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
   },
-  "released_at": "2026-10-30T08:34:57.839Z"
+  "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8"
 }
