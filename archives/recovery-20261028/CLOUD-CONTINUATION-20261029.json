@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T04:14:21.251Z",
+  "checkpoint_update_at": "2026-10-30T04:43:53.208Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,10 +4427,10 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:compact-static-20261030",
-    "epoch": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
-    "state": "released",
-    "expires_at": "2026-10-30T04:14:21.251Z",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:third96ecc-20261030",
+    "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
+    "state": "held",
+    "expires_at": "2026-10-30T05:28:53.208Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
     "released_at": "2026-10-30T04:14:21.251Z"
@@ -4952,5 +4952,27 @@
       "prerequisites_if_later_allocated": "Confirm exact unchanged applicable review, fresh soleowner/epoch/head CAS, emptyqueue anddedup; a changedcandidate requires newfullnonauthorreview.",
       "not_requested": "No resource, environment, manager-global configuration, privilege or Source expansion."
     }
+  },
+  "metadata_third_attempt": {
+    "dedup_key": "human-explicit-third-one/96ecccb7/priorrun40999201244/head996d6392/questioncall_a382c905",
+    "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+    "total_job_limit": 3,
+    "prior_jobs": 2,
+    "additional_jobs": 1,
+    "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
+    "accepted_at": "2026-10-30T04:43:53.208Z",
+    "status": "ACCEPTED_NOT_DISPATCHED",
+    "fourth_authorized": false,
+    "new_jobs": 0,
+    "old_runs": [
+      40987759034,
+      40999201244
+    ],
+    "old_jobs": [
+      123842654361,
+      123879381737
+    ],
+    "unknown_old_submission": "adc21b33-ee45-4556-8fbf-a7c88491ea50 UNKNOWN_NOT_REPLAYED",
+    "reserved_ref": "codex/platform-identity-run-20261030-static-memory-a1"
   }
 }
