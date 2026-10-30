@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T10:08:59.295Z",
+  "checkpoint_update_at": "2026-10-30T15:35:27.917Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,9 +4429,10 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
     "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
-    "state": "held",
-    "expires_at": "2026-10-30T16:01:35.208Z",
-    "scope": "Only exact authorized frozen A4-R3 three-file publication to specified nontriggering prep branch and two existing administrative files. Known static assertion risk remains open. No Source adoption/runtime/PR/CI/job/secret/model/PG/deployment/fourth metadata."
+    "state": "released",
+    "expires_at": "2026-10-30T15:35:27.917Z",
+    "scope": "Only exact authorized frozen A4-R3 three-file publication to specified nontriggering prep branch and two existing administrative files. Known static assertion risk remains open. No Source adoption/runtime/PR/CI/job/secret/model/PG/deployment/fourth metadata.",
+    "released_at": "2026-10-30T15:35:27.917Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5967,7 +5968,7 @@
       "allowed_admin_content": "Retain public history; current A4 owner/task/epoch/time/parentCAS, candidate identities, review/readback/release and zero-model/zero-job metadata; short open static-risk path/hash/status.",
       "excluded": "No secrets/user data/private B,A2,B1 or private review fulltext; no A3/future-fix bytes, PR/CI/jobs/adoption/tests/runtime/model/billing/PG/deployment/fourth metadata."
     },
-    "stage": "LEASE_ACQUISITION_STATIC_ONLY",
+    "stage": "STATIC_CANDIDATE_SAVED_CORRESPONDENCE_VERIFIED_NOT_ADOPTED_NOT_RUN",
     "source_baseline": "6f0cefeaf1b293cd81be6c52b56762d5226b1853",
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
     "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
@@ -5993,6 +5994,59 @@
     "tests_run": 0,
     "new_jobs": 0,
     "model_calls": 0,
-    "Source_adopted": false
+    "Source_adopted": false,
+    "actual_candidate": {
+      "commit": "26eb39184fb919781e4eff229d2860ace37c0133",
+      "parent": "8e4a7018b90a53797f6c33b082785480b0158f78",
+      "tree": "20d8121dbd79d6e62d84b1b594a115711a9ac18c",
+      "branch": "codex/task-board-a4-filter-prep-20261030",
+      "files": [
+        {
+          "path": "openbot/app/src/routes/_authed/_app/tasks.tsx",
+          "mode": "100644",
+          "bytes": 49328,
+          "sha256": "dc52222f4d1651906eeb7cbd82b6afa90712d303b6049c910496c3a8b585f8aa",
+          "git_blob": "b21f592bd60abfec81f4c4ad43eeca046ce7904d"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-filters.test.ts",
+          "mode": "100644",
+          "bytes": 9969,
+          "sha256": "3c2ce1101e8f93c9bd196bd42089b805101ceb28d056e94ff9a32164b3946f45",
+          "git_blob": "dcd8b2014b14072683553b067445df211aea1a4d"
+        },
+        {
+          "path": "openbot/app/tests/tasks-workbench-board-consistency.test.tsx",
+          "mode": "100644",
+          "bytes": 30834,
+          "sha256": "0e5654bf35515c10b14ca12d43eca2e1001e17b497cd93d7168d7bbf7e1ab9ac",
+          "git_blob": "84e180e8f8ae35643c10f5f5e56b5d46e0ed3b82"
+        }
+      ],
+      "utf8_bytes": 90131,
+      "parent_diff": "EXACTLY_THREE_MODIFIED_SOURCE_PATHS",
+      "workflow_blobs_unchanged": true,
+      "adopted": false,
+      "runs": 0
+    },
+    "acquisition_commit": "8e4a7018b90a53797f6c33b082785480b0158f78",
+    "git_correspondence_review": {
+      "status": "GIT_BYTE_CORRESPONDENCE_ONLY",
+      "reviewer": "/root/a11_data_reviewer",
+      "utf8_bytes": 4090,
+      "sha256": "0ab479e1307553c1381724d0ea6312157e49d20c651099dc798e47e7b0e4c209",
+      "findings": [],
+      "fulltext": "PRIVATE_NOT_PUBLISHED",
+      "independent_full_three_text_hash_mode_blob_parent_diff_verified": true,
+      "open_static_risk_not_cleared": true
+    },
+    "closed_at": "2026-10-30T15:35:27.917Z",
+    "queue_at_close": {
+      "queued": 0,
+      "in_progress": 0,
+      "candidate_runs": 0,
+      "observed_at": "2026-10-30T15:35:27.917Z"
+    },
+    "next_action": "Root independently verify this bounded publication checkpoint. No automatic next Source change, execution or publication; known static assertion risk remains open."
   }
 }
