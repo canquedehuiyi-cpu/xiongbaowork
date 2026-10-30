@@ -1,0 +1,90 @@
+{
+  "schema": "cloud-administrative-nonauthor-review/v1",
+  "candidate": "c7c74bb2eb22372890f1d87e3682db1062c48d45",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "reviewer": "/root/a11_data_reviewer",
+  "author": "/root/a11_data_author",
+  "status": "CHANGES_REQUIRED_NOT_DISPATCH_APPROVED",
+  "evidence_level": "FULL_BLOB_STATIC_REVIEW_ONLY_NOT_RUNTIME",
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "mode": "100644",
+      "blob": "93a616358b5c9fb4a51825d74c5d687e99843162",
+      "bytes": 42214,
+      "sha256": "0f2a511f2f1f72c5d06f25c9c6ae2095e7c88f2f033bb96181d7df00934b5d0a",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "mode": "100644",
+      "blob": "f730cf9e998524eee8e9aa8699a280162d17f2ec",
+      "bytes": 37102,
+      "sha256": "e070c9291b30118c5010f0ac0c2411e2cef1e4e6ec6c67926c8b96f0335e9f32",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "mode": "100644",
+      "blob": "21c64a2f58a0088f1ecc85cfdc40a7f580309b16",
+      "bytes": 9590,
+      "sha256": "8d82efdbdb295697d3656de01ad0dad81c16478f62c15388d809c99187b55ce7",
+      "full_read": true
+    }
+  ],
+  "scope": {
+    "changed_files": 3,
+    "source_changes": 0,
+    "inline_controller_exact_file_parity": true,
+    "no_project_execution": true,
+    "no_dispatch": true,
+    "no_canonical_or_lease_write": true
+  },
+  "findings": [
+    {
+      "id": "P2-FINAL-RECEIPT-ABSOLUTE-DEADLINE",
+      "severity": "P2",
+      "blocking": true,
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "lines": [
+        560,
+        563,
+        564,
+        576
+      ],
+      "detail": "final_observation checks outer deadline and records observed_at before outer.terminal.json is written. The subsequent direct outer record and emit lack remaining-deadline supervision and completion-time validation. The always witness accepts the saved pre-write observed_at. Receipt completion after the original t0+300 deadline can therefore still be accepted as RESOURCE_GATE_VERIFIED.",
+      "required_change": "Bound only the fixed pure resource observation/receipt/emit role by the original remaining outer budget, verify actual completion before the same outer deadline, and fail/UNKNOWN on timeout or late completion. Always observation completion must obey the same deadline. Do not move stop/restore/version collection outside aggregate64. Preserve full bounded receipt without routing a possible 16KiB receipt through an 8KiB management pipe. No fresh grace."
+    }
+  ],
+  "verified_static_paths": [
+    "Exact three complete Git blobs, byte counts, SHA256 and mode; compare is three added administrative files only.",
+    "Workflow push/repository/ref guard, shared concurrency cancel-in-progress=false, read-only permissions, exact inline/file parity.",
+    "t0 captured before first administrative control action; primary/independent fallback use original inner270/outer300 timestamps.",
+    "Supervisor16, fallback16, collector32 share parent64/swap0 under project512; supervisor actual scope membership, oom readback and collector irreversible UID/GID/groups drop followed by actual gates.",
+    "Scope real command returncode contributes to outcome; scope state/MainPID alone is not treated as command success. No service-only Type/RemainAfterExit applied to scope.",
+    "Collector metadata is bounded up to32768 and emitted directly, not forwarded through the 8192 management receipt pipe.",
+    "Root resource receipt and unprivileged metadata remain separate. Old final oom0/absent/late failures remain whole-job failure/UNKNOWN; metadata success alone is not resource success.",
+    "No Subject/token/network probe/install/upgrade; original six Subject stages explicitly NOT_RUN; no old-run version backfill."
+  ],
+  "environment_boundary": {
+    "scope_and_collector": "Actual explicit PATH/LC/PYTHONDONTWRITEBYTECODE environment paths reviewed; scope launch is not an external --pipe metadata forwarder.",
+    "fallback": "Transient service uses manager default execution environment; the launching systemd-run client's clean environment is not proof that the service environment is identical. No job-token inheritance or leak was demonstrated. Do not claim service environment was fully cleared merely because values were not printed."
+  },
+  "nonblocking_unknowns": [
+    "Unprivileged /proc/1/exe access may be denied: explicit UNKNOWN is acceptable and is not actual manager-binary identification.",
+    "usrmerge canonical-path dpkg-S may have no owner: package association remains UNKNOWN unless an exact supported same-inode alias or equivalent evidence establishes it.",
+    "Official v255 scope/source contracts inform static review but do not establish this runner's actual deployed version."
+  ],
+  "authority": "Root defined the metadata-only admission mapping and per-job temporary guard boundary within the user's authorized single version-evidence/cause-analysis task; no claim of human verbatim approval of those implementation details and no new resource authorization.",
+  "next_action": "Author prepares minimal successor; reviewer fully re-reads all exact successor files. Root must obtain independent approval of exact new SHA before any sole-lease bounded dispatch. c7 must not run.",
+  "preserved": [
+    "77 stories/18 packages/7 gates",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "worker paused/UNVERIFIED"
+  ]
+}
