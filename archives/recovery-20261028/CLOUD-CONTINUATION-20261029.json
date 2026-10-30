@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T01:39:56.187Z",
+  "checkpoint_update_at": "2026-10-30T01:44:57.643Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,11 +4427,11 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-once-20261030",
-    "epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
-    "state": "released",
-    "expires_at": "2026-10-30T01:39:56.187Z",
-    "acquisition_commit": "a46d5e0e571ecd8dc7f9c1be10755df11e517bf7",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-c9-20261030",
+    "epoch": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
+    "state": "held",
+    "expires_at": "2026-10-30T02:29:05.106Z",
+    "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。"
   },
   "cloud_a11_delegated_fixedpath": {
@@ -4606,7 +4606,7 @@
     "next_action": "Root resolves the single version-only non-Subject admission mapping and explicitly defines whether narrow per-job temporary resource guards are within it; no global manager change. Only then prepare a separate exact <=8 administrative implementation and different nonauthor review before any future fresh-lease serial one-shot metadata job. Do not repeat old Source stages, old404/400 chain or completed jobs."
   },
   "platform_identity_metadata_implementation": {
-    "status": "FA96_NATIVE_VALIDATION_FAILURE_ZERO_JOBS_STAGING_FIX_IN_PROGRESS",
+    "status": "EXACT_C9_STATIC_APPROVED_NATIVE_PREP_NO_RUNS_NOT_YET_DISPATCHED",
     "base": "87d4651bb60b306e64ac3e3973da2584124a9de9",
     "author": "/root/a11_data_author",
     "different_reviewer": "/root/a11_data_reviewer",
@@ -4629,30 +4629,30 @@
       "observed_at": "2026-10-30T01:15:44.130Z"
     },
     "candidate": {
-      "commit": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+      "commit": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
       "files": [
         {
           "path": ".github/workflows/platform-identity-metadata.yml",
-          "blob": "021d5fb99b09e5c1281d988e7be96d8e8a8f0276",
           "mode": "100644",
-          "bytes": 50899,
-          "sha256": "eb7ecb1cd6f8bc7e752563ef40cc5d3f758834bc784af866e7d21080c2483538",
+          "blob": "2aea8e67511a5a6bfcfa2804edcbe7d9528f628c",
+          "bytes": 63740,
+          "sha256": "e4677a9c0acb7a93400b1e7afb59a156ef31319396e135028389996d402a4e67",
           "full_read": true
         },
         {
           "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-          "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
           "mode": "100644",
+          "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
           "bytes": 45172,
           "sha256": "61c36a6a0908c93c93fa3cf81a64c5905a6b3065418597457725df15fa16bfb6",
           "full_read": true
         },
         {
           "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
-          "blob": "6a0bf7de23c6c84e733b49fcd6defeb7b573976e",
           "mode": "100644",
-          "bytes": 14358,
-          "sha256": "dc9258471df15a0fc44d0dce08bbec7d67ce2d88556027bb6ff217bcff4e6bae",
+          "blob": "992a8b7a27fbdba20d0f11febb052a58d5576cfa",
+          "bytes": 17354,
+          "sha256": "1fec40225a3178e3d93aed0fca450aca27cc1f013e5a34bea177a28dad4d0f54",
           "full_read": true
         }
       ]
@@ -4663,9 +4663,11 @@
       "blob": "f1bd375dfaf86f3bd3f5d0b9a60123246e8c5d2d"
     },
     "approved_review": {
-      "commit": "90b03105e1fdc08780c8526395d97da8db20c8ee",
-      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-FA96-NONAUTHOR-REVIEW-20261030.json",
-      "blob": "8197e0012bb5d2c8be21381747c49365e13be348",
+      "commit": "672230aedd604b0234bf78db04c2151756b8c517",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-C9-NONAUTHOR-REVIEW-20261030.json",
+      "blob": "12de2552f3c1985d52c8d50bdcc5cf9c9d6f7b09",
+      "bytes": 5381,
+      "sha256": "40fa316b6f4be325c4d8f7c0920dace858d76ef1d904385b449bade39a6c043c",
       "verdict": "ADMIN_STATIC_APPROVED_FOR_ONE_BOUNDED_METADATA_PUSH_ONLY"
     },
     "validation_failure": {
@@ -4689,6 +4691,12 @@
       "blob": "91342acd5c26a4a1caf14bda3be19c0fb2047144",
       "bytes": 2894,
       "sha256": "65000c29a78553645ba2c11e3a38fa57b2301ad1141d3bf7fbfc79ecf1b7194e"
+    },
+    "native_prep_readback": {
+      "head": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+      "total_count": 0,
+      "observed_at": "2026-10-30T01:44:57.643Z",
+      "meaning": "No invalid validation run observed; not positive native execution acceptance"
     }
   }
 }

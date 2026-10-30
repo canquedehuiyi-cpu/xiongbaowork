@@ -1,0 +1,93 @@
+{
+  "schema": "administrative-nonauthor-review/v1",
+  "candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+  "parent": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+  "reviewer": "/root/a11_data_reviewer",
+  "status": "ADMIN_STATIC_APPROVED_FOR_ONE_BOUNDED_METADATA_PUSH_ONLY",
+  "evidence_level": "STATIC_EXACT_BLOBS_NOT_RUNTIME_NOT_NATIVE_VALIDATION_ACCEPTANCE",
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "mode": "100644",
+      "blob": "2aea8e67511a5a6bfcfa2804edcbe7d9528f628c",
+      "bytes": 63740,
+      "sha256": "e4677a9c0acb7a93400b1e7afb59a156ef31319396e135028389996d402a4e67",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "mode": "100644",
+      "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
+      "bytes": 45172,
+      "sha256": "61c36a6a0908c93c93fa3cf81a64c5905a6b3065418597457725df15fa16bfb6",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "mode": "100644",
+      "blob": "992a8b7a27fbdba20d0f11febb052a58d5576cfa",
+      "bytes": 17354,
+      "sha256": "1fec40225a3178e3d93aed0fca450aca27cc1f013e5a34bea177a28dad4d0f54",
+      "full_read": true
+    }
+  ],
+  "findings": [],
+  "carrier": {
+    "parts": [
+      16000,
+      16000,
+      16000,
+      12232
+    ],
+    "encoded": 60232,
+    "exactEncodedParity": true,
+    "controllerIdentical": true,
+    "runChars": [
+      1843,
+      461
+    ],
+    "staticCarrierArgBytesWithNUL": 60236
+  },
+  "carrier_validation": "Independently re-encoded complete UTF8 controller using pure tool-memory DATA transformation, compared entire concatenated static base64 strings; exact parity. No code/parser/test run.",
+  "reviewed": [
+    "All three exact complete files, workflow/plan delta only; unchanged controller also compared byte-for-byte against previously fully reviewed exact98bc controller.",
+    "Two run literals1843/461 each satisfy documented21000 maximum. Four single-quoted literal base64 env fields contain only base64; no expression/token/inherited secret inserted into carrier.",
+    "Explicit quoted four argv fragments through sudo env-i fixed whitelist to same single bootstrap; strict validate=True base64, exact60232 encoded length and controller SHA256 before immutable root-owned0444 copy.",
+    "Original t0 before first rootmkdir retained; decode/copy/guard setup and sustained supervisor/fallback270300 remain one step and same original clock. No split lifecycle or extra long-lived external manager.",
+    "All unchanged64 aggregate/swap0 under512,16+16+32 controls, irreversible drop/postgate, fixed PID1 admitted metadata, sameinode literal aliases and resource-only final ACK deadline paths fully retained.",
+    "Exact reserved push ref/repo/event and source-recovery-bytes cancellationfalse preserved; no Source or token/network fetch/install."
+  ],
+  "argument_boundary": {
+    "fixed_carrier_arg_bytes_including_terminators": 60236,
+    "largest_carrier_argument_bytes_including_terminator": 16001,
+    "carrier_env_values_bytes": 60232,
+    "carrier_env_entries_with_names_and_terminators_bytes": 60344,
+    "python_environment": "env-i PATH/LC/PYTHONDONTWRITE only; code is argv, not retained collector environment.",
+    "initial_launcher": "Shell/sudo initially carry the fixed carrier env as well as explicit argv, roughly121KiB plus fixed arguments and pre-existing runner environment. Actual platform ARG_MAX/environment was not probed; no static guarantee of exec acceptance is claimed. E2BIG/startup failure is fail-closed before collector, not metadata/resource success."
+  },
+  "history": {
+    "c7_blocking_report": "a64b4cbac6a12d44ba19b18cc858c180d0be039d",
+    "fa96_original_review": "90b03105e1fdc08780c8526395d97da8db20c8ee",
+    "fa96_correction": "29179b5be13c6ccf3d16ac40b36552890138e3b0",
+    "fa96": "Not dispatchable: run49441>21000. Native run40986262699 completedfailure jobs0, no collector execution, exact native annotation unavailable; original approval historical corrected."
+  },
+  "limitations": [
+    "Static review is not native workflow validation acceptance; Root must read actual preparation validation state before execution-ref consideration.",
+    "No actual systemd/kernel version or resource restoration result exists from jobs0. New runner evidence cannot backfill prior runs.",
+    "Manager environment cleanup is actual env-i path, not inferred from silence. RootPID1 metadata and unprivileged report remain separate sources.",
+    "Finaloom0/missing/late evidence keeps wholejobFAILED_OR_UNKNOWN even if version metadata survives; no DATA/PG/SourcePASS."
+  ],
+  "authority": "Root metadata-only admission mapping within existing user-authorized version evidence task; no new resource authorization or claim of human verbatim mapping approval.",
+  "next_action": "Only Root valid sole leaseowner after native preparation check, queueidle and dedup may consider one exact unchanged reserved execution push; no reviewer dispatch or canonical/lease changes.",
+  "executed_by_reviewer": [],
+  "preserved": [
+    "77/18/7",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}
