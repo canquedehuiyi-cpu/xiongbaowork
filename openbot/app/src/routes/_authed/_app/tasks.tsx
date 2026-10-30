@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
 import { taskAction } from "@/lib/tasks/actions";
+import { wakerGroupsQueryOptions, type WakerGroup } from "@/lib/waker-groups/queries";
 
 /**
  * The board address, in full: which machine, which crew, which status, which words, how far back,
@@ -26,6 +27,9 @@ type View = "list" | "lanes";
 type BoardSearch = {
   machineId: string;
   crew: string;
+  executor: string;
+  groupId: string;
+  source: string;
   status: string;
   q: string;
   period: Period;
@@ -42,6 +46,9 @@ export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
   return {
     machineId: text("machineId"),
     crew: text("crew"),
+    executor: text("executor"),
+    groupId: text("groupId"),
+    source: text("source"),
     status: text("status"),
     q: text("q"),
     period: period === "week" || period === "all" ? period : "month",
@@ -127,13 +134,96 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "失败",
 };
 
-const SOURCE_LABEL: Record<string, string> = {
+export const SOURCE_LABEL: Record<string, string> = {
   chat: "对话",
   routine: "例行",
   responsibility: "职责",
   handoff: "交接",
   group_run: "组团",
 };
+
+
+/** Source values mirror schema/tasks.ts, not the separate triggerSource text field. */
+export function boardScope(
+  search: ReturnType<typeof boardSearch>,
+  agents: readonly { id: string }[] | undefined,
+  groups: readonly WakerGroup[] | undefined,
+  catalogError = false,
+): { ready: boolean; error: string | null; executors: string | undefined } {
+  if (search.source && !Object.hasOwn(SOURCE_LABEL, search.source))
+    return { ready: false, error: "未知触发方式，请清除此筛选。", executors: undefined };
+  if ((search.executor || search.groupId) && catalogError)
+    return { ready: false, error: "无法读取员工或小组，请重试或清除此筛选。", executors: undefined };
+  if ((search.executor || search.groupId) && agents === undefined)
+    return { ready: false, error: null, executors: undefined };
+  if (search.executor && !agents?.some((agent) => agent.id === search.executor))
+    return { ready: false, error: "所选员工已失效或不可见，请清除此筛选。", executors: undefined };
+  let executors = search.crew || undefined;
+  if (search.groupId) {
+    if (groups === undefined)
+      return { ready: false, error: null, executors: undefined };
+    const group = groups.find((entry) => entry.id === search.groupId);
+    if (!group || group.members.some((member) => !agents?.some((agent) => agent.id === member.agentId)))
+      return { ready: false, error: "所选小组或其成员已失效或不可见，请清除此筛选。", executors: undefined };
+    const legacy = search.crew ? new Set(search.crew.split(",").filter(Boolean)) : null;
+    executors = [...new Set(group.members.map((member) => member.agentId))]
+      .filter((id) => !legacy || legacy.has(id)).sort().join(",");
+  }
+  return { ready: true, error: null, executors };
+}
+
+/** Catalog partitions describe a display preference; server APIs still enforce access. */
+export function boardRoster<T extends { id: string }>(
+  requiredIds: readonly string[],
+  active: { data: readonly T[] | undefined; isError: boolean },
+  paused: { data: readonly T[] | undefined; isError: boolean },
+): { data: T[] | undefined; options: T[]; error: boolean } {
+  // Failed reads cannot lend their stale rows as a successful catalog answer.
+  const rows = new Map<string, T>();
+  for (const row of [
+    ...(active.isError ? [] : active.data ?? []),
+    ...(paused.isError ? [] : paused.data ?? []),
+  ]) if (!rows.has(row.id)) rows.set(row.id, row);
+  const options = [...rows.values()];
+  const missing = requiredIds.some((id) => !rows.has(id));
+  if (!missing) return { data: options, options, error: false };
+  if (active.isError || paused.isError)
+    return { data: undefined, options, error: true };
+  if (active.data === undefined || paused.data === undefined)
+    return { data: undefined, options, error: false };
+  // Only two completed successful partitions can establish absence from this selectable roster.
+  return { data: options, options, error: false };
+}
+
+/** Summary deliberately excludes status/q; every identity/source scope is shared with the list. */
+export function boardRequest(
+  search: ReturnType<typeof boardSearch>,
+  executors: string | undefined,
+  summary = false,
+): string {
+  const params = new URLSearchParams({ period: search.period });
+  if (!summary && search.status && search.status !== "ended") params.set("status", search.status);
+  if (!summary && search.q) params.set("q", search.q);
+  if (search.machineId) params.set("deviceId", search.machineId);
+  if (search.executor) params.set("executor", search.executor);
+  if (search.source) params.set("source", search.source);
+  if (executors !== undefined) params.set("executors", executors);
+  return `/api/tasks?${params.toString()}`;
+}
+
+export function boardReadKey(
+  search: ReturnType<typeof boardSearch>,
+  executors: string | undefined,
+  summary = false,
+): readonly unknown[] {
+  const base = summary
+    ? ["tasks-summary", search.period, search.machineId, search.crew]
+    : ["tasks", search.period, search.status, search.q, search.machineId, search.crew];
+  // Keep legacy keys exact when new axes are absent, including the existing polling fixtures.
+  return search.executor || search.groupId || search.source
+    ? [...base, search.executor, search.groupId, search.source, executors]
+    : base;
+}
 
 /** The board's two shapes of the same list. Rendered from the enum, which reads as English. */
 const VIEW_LABEL: Record<string, string> = {
@@ -236,8 +326,11 @@ export const boardEmptySentence = (filters: {
   crew: string;
   status: string;
   q: string;
+  executor?: string;
+  groupId?: string;
+  source?: string;
 }): string => {
-  const narrowed = Boolean(filters.status || filters.q || filters.crew);
+  const narrowed = Boolean(filters.status || filters.q || filters.crew || filters.executor || filters.groupId || filters.source);
   /*
    * Which scopes are in play decides which sentence is true. A device and a filter together are not
    * the same question as either one alone: idle in this window is a different claim from hidden by
@@ -634,6 +727,9 @@ function TasksPage() {
   const {
     machineId,
     crew,
+    executor,
+    groupId,
+    source,
     status,
     q: search,
     period,
@@ -641,6 +737,16 @@ function TasksPage() {
   } = boardSearch(Route.useSearch());
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
+  const agents = useQuery(agentListQueryOptions());
+  const [agentsOpened, setAgentsOpened] = useState(false);
+  const [groupsOpened, setGroupsOpened] = useState(false);
+  const groups = useQuery({ ...wakerGroupsQueryOptions(), enabled: groupsOpened || !!groupId });
+  const requiredIds = [executor, ...(groups.data?.find((group) => group.id === groupId)?.members.map((member) => member.agentId) ?? [])].filter(Boolean);
+  const hiddenNeeded = requiredIds.some((id) => agents.isError || !agents.data?.some((agent) => agent.id === id));
+  const paused = useQuery({ ...agentListQueryOptions(true), enabled: agentsOpened || hiddenNeeded });
+  const roster = boardRoster(requiredIds, agents, paused);
+  const address = boardSearch({ machineId, crew, executor, groupId, source, status, q: search, period, view });
+  const scope = boardScope(address, roster.data, groups.data, roster.error || (!!groupId && groups.isError));
   /*
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
@@ -648,7 +754,7 @@ function TasksPage() {
   const patch = (over: Partial<BoardSearch>) =>
     navigate({
       replace: true,
-      search: { machineId, crew, status, q: search, period, view, ...over },
+      search: { machineId, crew, executor, groupId, source, status, q: search, period, view, ...over },
       to: "/tasks",
     });
   /* Each control writes one axis of the address; the other axes ride along unchanged. */
@@ -656,38 +762,23 @@ function TasksPage() {
   const setStatus = (next: string) => patch({ status: next });
   const setSearch = (next: string) => patch({ q: next });
   const setPeriod = (next: Period) => patch({ period: next });
-  const query = [`period=${period}`];
-  // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
-  if (status && status !== "ended") query.push(`status=${status}`);
-  if (search) query.push(`q=${encodeURIComponent(search)}`);
-  if (machineId) query.push(`deviceId=${encodeURIComponent(machineId)}`);
-  if (crew) query.push(`executors=${encodeURIComponent(crew)}`);
   const tasks = useQuery({
-    queryKey: ["tasks", period, status, search, machineId, crew],
-    queryFn: () =>
-      client<Task[]>(`/api/tasks?${query.join("&")}`, "tasks", {
+    queryKey: boardReadKey(address, scope.executors),
+    enabled: scope.ready,
+    queryFn: () => {
+      if (!scope.ready) throw new Error("筛选范围尚未确认。");
+      return client<Task[]>(boardRequest(address, scope.executors), "tasks", {
         fallback: "无法读取任务，请稍后重试。",
-      }),
+      });
+    },
     refetchInterval: 5000,
-    /*
-     * A new filter is a new query key, and until it answers the list would be empty -- which renders
-     * the board's nothing-here sentence for a moment every time a number or pill is pressed.
-     * Keeping the previous list on screen until the new one arrives says nothing false meanwhile.
-     */
-    placeholderData: (previous) => previous,
   });
-  /*
-   * The bar's own read: the same window, without the status pill or the search box applied to it.
-   * Four numbers that moved when you filtered would be describing the filter rather than the
-   * workspace, which is the one thing a summary has to stay out of.
-   */
   const summary = useQuery({
-    queryKey: ["tasks-summary", period, machineId, crew],
-    queryFn: async () => {
-      const scope = [`period=${period}`];
-      if (machineId) scope.push(`deviceId=${encodeURIComponent(machineId)}`);
-      if (crew) scope.push(`executors=${encodeURIComponent(crew)}`);
-      return client<Task[]>(`/api/tasks?${scope.join("&")}`, "tasks", {
+    queryKey: boardReadKey(address, scope.executors, true),
+    enabled: scope.ready,
+    queryFn: () => {
+      if (!scope.ready) throw new Error("筛选范围尚未确认。");
+      return client<Task[]>(boardRequest(address, scope.executors, true), "tasks", {
         fallback: "无法读取任务统计，请稍后重试。",
       });
     },
@@ -731,7 +822,7 @@ function TasksPage() {
     setPendingIds(new Set(inflight.current));
     act.mutate({ id, verb });
   };
-  const list = shownForStatus(tasks.data ?? [], status);
+  const list = scope.ready ? shownForStatus(tasks.data ?? [], status) : [];
   /*
    * 51665048 froze three states that may not overlap: a read that failed says 失败, a first read
    * says 加载中, and only a read that answered with something gets to say the nothing-here
@@ -739,7 +830,7 @@ function TasksPage() {
    * query state, not whether the array happens to be empty right now -- an empty cache plus a 500
    * is a failure, not an empty workspace. Non-empty cached cards keep showing exactly as before.
    */
-  const readFailed = tasks.isError || summary.isError;
+  const readFailed = !scope.ready || tasks.isError || summary.isError;
   /*
    * Named from the machines this person owns, and the id when the machine is not among them: work
    * that happened on a laptop which has since been unpaired still happened there, and a card that
@@ -787,7 +878,11 @@ function TasksPage() {
       title="任务看板"
       description="从工作本身出发：员工做了什么、什么需要你、什么等你查收。"
     >
-      {tasks.isError || summary.isError ? (
+      {scope.error ? (
+        <QueryError label="筛选范围不可用" error={new Error(scope.error)} onRetry={() => { void agents.refetch(); if (hiddenNeeded || agentsOpened) void paused.refetch(); if (groupId) void groups.refetch(); }} retrying={agents.isFetching || paused.isFetching || groups.isFetching} />
+      ) : null}
+      {!scope.ready && !scope.error ? <p role="status">正在确认员工和小组范围…</p> : null}
+      {scope.ready && (tasks.isError || summary.isError) ? (
         <QueryError
           label="任务加载失败"
           error={tasks.error ?? summary.error}
@@ -797,6 +892,9 @@ function TasksPage() {
             void summary.refetch();
           }}
         />
+      ) : null}
+      {agents.isError || ((agentsOpened || hiddenNeeded) && paused.isError) || (groupsOpened && groups.isError) ? (
+        <QueryError label="员工或小组加载失败" error={agents.error ?? paused.error ?? groups.error} onRetry={() => { void agents.refetch(); if (agentsOpened || hiddenNeeded) void paused.refetch(); if (groupsOpened || groupId) void groups.refetch(); }} retrying={agents.isFetching || paused.isFetching || groups.isFetching} />
       ) : null}
       {machines.isError ? (
         <QueryError
@@ -825,7 +923,7 @@ function TasksPage() {
        * scope you are looking at — narrow it to one laptop and the counts follow, which is the question
        * a person actually asked by narrowing.
        */}
-      {tasks.data !== undefined ? (
+      {scope.ready && tasks.data !== undefined ? (
         <AttentionRegion
           machineLabel={machineLabel}
           onArchive={(id) => runAction(id, "archive")}
@@ -838,7 +936,7 @@ function TasksPage() {
        * The window's own totals, read without the status or the search applied (see `summary`): four
        * numbers that moved when you filtered would describe the filter rather than the workspace.
        */}
-      {summary.data !== undefined ? (
+      {scope.ready && summary.data !== undefined ? (
         <StatBar
           onSelect={setStatus}
           status={status}
@@ -878,6 +976,40 @@ function TasksPage() {
             </button>
           ))}
         </span>
+        <label>Waker
+          <select aria-label="Waker 员工" value={executor} onFocus={() => setAgentsOpened(true)} onChange={(event) => patch({ executor: event.target.value })}>
+            <option value="">全部员工</option>
+            {executor && !roster.options.some((agent) => agent.id === executor) ? <option value={executor}>不可用员工</option> : null}
+            {roster.options.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}{agent.hidden ? " · 已暂停" : ""}</option>)}
+          </select>
+        </label>
+        <label>Group
+          <select aria-label="Group 小组" value={groupId} onFocus={() => setGroupsOpened(true)} onChange={(event) => patch({ groupId: event.target.value })}>
+            <option value="">全部小组</option>
+            {groupId && !groups.data?.some((group) => group.id === groupId) ? <option value={groupId}>不可用小组</option> : null}
+            {(groups.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+        </label>
+        <label>触发方式
+          <select aria-label="触发方式" value={source} onChange={(event) => patch({ source: event.target.value })}>
+            <option value="">全部触发方式</option>
+            {source && !Object.hasOwn(SOURCE_LABEL, source) ? <option value={source}>未知触发方式</option> : null}
+            {Object.entries(SOURCE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>状态
+          <select aria-label="任务状态" value={status} onChange={(event) => setStatus(event.target.value)}>
+            <option value="">全部状态</option>
+            <option value="ended">已结束</option>
+            {status && status !== "ended" && !Object.hasOwn(STATUS_LABEL, status) ? <option value={status}>未知状态：{status}</option> : null}
+            {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>数据周期
+          <select aria-label="数据周期" value={period} onChange={(event) => setPeriod(event.target.value as Period)}>
+            {PERIODS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+          </select>
+        </label>
         <input
           aria-label="搜索任务"
           value={search}
@@ -956,7 +1088,7 @@ function TasksPage() {
           ))}
         </div>
       </div>
-      {tasks.data === undefined ? (
+      {!scope.ready ? null : tasks.data === undefined ? (
         tasks.isPending ? (
           <p className="text-muted-foreground text-sm">正在加载任务…</p>
         ) : null
@@ -978,7 +1110,7 @@ function TasksPage() {
            */}
           {list.length === 0 && !readFailed ? (
             <li className="py-10 text-center text-sm opacity-50">
-              {boardEmptySentence({ machineId, crew, status, q: search })}
+              {boardEmptySentence({ machineId, crew, executor, groupId, source, status, q: search })}
             </li>
           ) : null}
         </ul>
@@ -1024,7 +1156,7 @@ function TasksPage() {
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)
                 ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
-                : boardEmptySentence({ machineId, crew, status, q: search })}
+                : boardEmptySentence({ machineId, crew, executor, groupId, source, status, q: search })}
             </p>
           ) : null}
         </>
