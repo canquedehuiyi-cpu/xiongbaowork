@@ -202,6 +202,7 @@ import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
 import { createModelRoutes } from "./models/routes";
 import { createAgentModelResolver } from "./models/runtime-resolver";
+import { effectiveDeploymentModel } from "./models/effective-deployment";
 import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
@@ -459,7 +460,7 @@ await startupLifecycle.run(async (startup) => {
    * and this one already holds the vault: a binding is a row plus a key, and neither belongs in the
    * runtime wiring. Absent binding, absent model — the deployment's own answers, as before.
    */
-  const resolveAgentModel = createAgentModelResolver(
+  const registeredAgentModel = createAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
@@ -1219,19 +1220,28 @@ await startupLifecycle.run(async (startup) => {
   });
 
   normalizeModelBaseUrls();
-  const runtimeModel = runtimeModelForEnvironment(tenantPackage.model);
+  const originalRuntimeModel = runtimeModelForEnvironment(tenantPackage.model);
+  const effectiveModel = effectiveDeploymentModel(originalRuntimeModel, process.env);
+  const runtimeModel = effectiveModel?.model ?? originalRuntimeModel;
+  const resolveAgentModel = effectiveModel
+    ? effectiveModel.wrapAgentResolver(registeredAgentModel)
+    : registeredAgentModel;
+  const resolveOriginalDeploymentApiKey = () =>
+    resolveModelApiKey({
+          encryptionKey: config.keyEncryptionKey,
+          reader: credentialStore,
+          provider: originalRuntimeModel.provider,
+          keyId: tenantPackage.model.credentialSecretRef,
+          environment: process.env,
+        });
+  const resolveDeploymentModelApiKey = () =>
+    effectiveModel ? effectiveModel.resolveApiKey() : resolveOriginalDeploymentApiKey();
 
   const intentRouter = createIntentRouter({
     complete: createModelCompleter({
       model: runtimeModel,
-      resolveApiKey: () =>
-        resolveModelApiKey({
-          encryptionKey: config.keyEncryptionKey,
-          reader: credentialStore,
-          provider: runtimeModel.provider,
-          keyId: tenantPackage.model.credentialSecretRef,
-          environment: process.env,
-        }),
+      resolveApiKey: resolveDeploymentModelApiKey,
+      upstream: effectiveModel?.upstream,
     }),
   });
 
@@ -1243,14 +1253,8 @@ await startupLifecycle.run(async (startup) => {
    */
   const chooseSkills = createModelCompleter({
     model: runtimeModel,
-    resolveApiKey: () =>
-      resolveModelApiKey({
-        encryptionKey: config.keyEncryptionKey,
-        reader: credentialStore,
-        provider: runtimeModel.provider,
-        keyId: tenantPackage.model.credentialSecretRef,
-        environment: process.env,
-      }),
+    resolveApiKey: resolveDeploymentModelApiKey,
+    upstream: effectiveModel?.upstream,
   });
 
   /*
@@ -1265,14 +1269,10 @@ await startupLifecycle.run(async (startup) => {
    */
 
   /** The deployment's model key, resolved per call so a credential rotated a moment ago is used next. */
-  const resolveRuntimeModelApiKey = () =>
-    resolveModelApiKey({
-      encryptionKey: config.keyEncryptionKey,
-      reader: credentialStore,
-      provider: runtimeModel.provider,
-      keyId: tenantPackage.model.credentialSecretRef,
-      environment: process.env,
-    });
+  // The built-in resolver carries its own model/key; do not preempt a valid employee binding.
+  const resolveRuntimeModelApiKey = effectiveModel
+    ? async () => null
+    : resolveOriginalDeploymentApiKey;
 
   const hostAccessBroker = createHostAccessBroker(Date.now, {
     approvalGate: approvalService.gate,
@@ -3198,8 +3198,8 @@ await startupLifecycle.run(async (startup) => {
     queue: createWorkQueue(database),
     transcript: routineIntelligence,
     title: createChannelTitler({
-      model: runtimeModel.defaultModel,
-      resolveApiKey: resolveRuntimeModelApiKey,
+      model: originalRuntimeModel.defaultModel,
+      resolveApiKey: resolveOriginalDeploymentApiKey,
     }),
     owner: workOwner("summariser"),
   };
@@ -3247,7 +3247,9 @@ await startupLifecycle.run(async (startup) => {
         ...(config.computer?.token
           ? { computerToken: config.computer.token }
           : {}),
-        builtInModel: `${runtimeModel.provider}/${runtimeModel.defaultModel}`,
+        builtInModel: effectiveModel
+          ? `${effectiveModel.upstream}/${effectiveModel.modelName}`
+          : `${runtimeModel.provider}/${runtimeModel.defaultModel}`,
         people: peopleStore,
         initialAdminEmails: config.auth?.initialAdminEmails ?? [],
       }),
@@ -3378,8 +3380,8 @@ await startupLifecycle.run(async (startup) => {
     {
       store: createVoiceSessionStore(database, channelStore),
       summarize: createVoiceSummarizer({
-        model: runtimeModel,
-        resolveApiKey: resolveRuntimeModelApiKey,
+        model: originalRuntimeModel,
+        resolveApiKey: resolveOriginalDeploymentApiKey,
       }),
       channels: channelStore,
     },

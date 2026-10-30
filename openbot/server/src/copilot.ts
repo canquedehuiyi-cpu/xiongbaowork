@@ -42,6 +42,7 @@ import {
   PersonalMemoryMiddleware,
 } from "./memory/tools";
 import type { AgentModelResolver } from "./models/runtime-resolver";
+import { DedicatedModelConfigurationError } from "./models/effective-deployment";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
   latestUserText,
@@ -969,7 +970,8 @@ async function buildAgent(
   if (resolveAgentModel) {
     try {
       agentModel = (await resolveAgentModel(agent.id)) ?? undefined;
-    } catch {
+    } catch (error) {
+      if (error instanceof DedicatedModelConfigurationError) throw error;
       // Never log the thrown value: database errors can contain connection details or row contents.
       console.error({
         error: "agent_model_binding_read_failed",

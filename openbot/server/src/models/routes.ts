@@ -1,3 +1,4 @@
+import { probeDeepSeek } from "./deepseek-probe";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
@@ -291,6 +292,8 @@ async function probe(
   modelName: string,
   apiKey: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (provider === "deepseek")
+    return probeDeepSeek(baseUrl, modelName, apiKey);
   try {
     if (provider === "anthropic") {
       const response = await fetch("https://api.anthropic.com/v1/messages", {

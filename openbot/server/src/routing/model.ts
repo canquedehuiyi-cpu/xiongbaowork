@@ -11,6 +11,8 @@ import type { RuntimeModel } from "../copilot";
 export function createModelCompleter(deps: {
   model: RuntimeModel;
   resolveApiKey: () => Promise<string | null>;
+  upstream?: "deepseek";
+  transport?: typeof fetch;
 }): (prompt: string, signal?: AbortSignal) => Promise<string> {
   return async (prompt: string, signal?: AbortSignal) => {
     signal?.throwIfAborted();
@@ -18,8 +20,10 @@ export function createModelCompleter(deps: {
     signal?.throwIfAborted();
     if (!key) throw new Error("no model key");
     const anthropic = deps.model.provider === "anthropic";
-    const response = await fetch(
-      anthropic
+    const response = await (deps.transport ?? fetch)(
+      deps.upstream === "deepseek"
+        ? "https://api.deepseek.com/chat/completions"
+        : anthropic
         ? anthropicMessagesUrl(process.env)
         : chatCompletionsUrl(process.env),
       {
