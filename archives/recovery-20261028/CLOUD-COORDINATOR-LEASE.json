@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
   "epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
   "acquired_at": "2026-10-30T00:59:29.444Z",
-  "renewed_at": "2026-10-30T00:59:29.444Z",
+  "renewed_at": "2026-10-30T01:02:19.861Z",
   "expires_at": "2026-10-30T01:44:29.444Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -56,7 +56,13 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Explicit new human clarification permits independent metadata-only admission and necessary reviewed per-run transient guards, at most ONE version metadata job; shared64/swap0/oom+parent512, firstcontrol270/300, sustainedsupervisor+fallback+strictreadonlyfinal. No Source/project/architecture/globalmanager/identity/Page changes. One corresponding-version static review allowed after reliable new-run evidence.",
+  "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
   "resource_jobs_this_epoch": [],
-  "new_jobs_started": 0
+  "new_jobs_started": 0,
+  "authorization_provenance": {
+    "human_request": "查因解决当前停滞、取得已授权单次版本补证后继续推进",
+    "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
+    "not_human_verbatim_implementation_approval": true,
+    "no_new_resource_or_global_persistent_permission": true
+  }
 }
