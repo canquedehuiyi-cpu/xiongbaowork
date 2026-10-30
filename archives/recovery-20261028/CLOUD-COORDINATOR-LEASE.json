@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
-  "run_id": "2026-10-30T12:14:35.245Z:D6-public-static",
-  "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
-  "acquired_at": "2026-10-30T12:14:35.245Z",
-  "renewed_at": "2026-10-30T12:16:49.473Z",
-  "expires_at": "2026-10-30T12:16:49.473Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
+  "run_id": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
+  "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
+  "acquired_at": "2026-10-30T12:25:59.218Z",
+  "renewed_at": "2026-10-30T12:25:59.218Z",
+  "expires_at": "2026-10-30T13:10:59.218Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "e0581b79710c9f4e1ded3140a0e82e9b0cff6fee",
+  "expected_parent": "df59046add0c7d3918db7ac16d328813ad65f96c",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T12:14:35.245Z"
+    "observed_at": "2026-10-30T12:25:59.218Z"
   },
-  "next_action": "BLOCKED_PUBLIC_SOURCE_DISCLOSURE: Root to obtain explicit public disclosure authorization for exact D6 seven Source fulltexts. Do not retry/encode/split/change channel/ref; no runtime or fourth metadata.",
+  "next_action": "Persist exact D6 seven files to nontriggering preparation branch; independent full actual Git correspondence readback; record two-file checkpoint and release.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Only two explicitly authorized administrative closeout files. D6 public Source permission pending after actual automatic rejection; no Source retry or runtime.",
+  "scope": "Exact seven already-reviewed D6 Source fulltexts public static preparation only on codex/deepseek-project-integration-prep-20261030; two authorized administrative paths only on canonical; no adoption/runtime/secret/model/paid/PG/deployment/fourth metadata.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -89,8 +89,8 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "root-human-D6-admin-publication/call_7402e4b8/base7083/reviewb7f9cbf0",
-  "checkpoint_timing_note": "Current D6 epoch: no resource jobs; Source tree rejected; no retries. Prior timing overrun preserved in predecessor_administrative_history.",
+  "current_task_dedup": "root-human-D6-seven-source-publication/call_3a74ee20/base7083/canonicaldf590/reviewb7f9cbf0",
+  "checkpoint_timing_note": "New independent epoch after df590 released lease; no old epoch reused.",
   "public_administrative_permission": {
     "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
     "question": "call_7402e4b872d949b08b1b45bb899e778d",
@@ -104,22 +104,20 @@
     "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
   },
   "current_epoch_renewal_history": {
-    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
-    "last_successful_renewal_at": "2026-10-30T12:14:35.245Z",
-    "interval_exceeded": false,
-    "resource_jobs": 0
+    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
+    "last_successful_renewal_at": "2026-10-30T12:25:59.218Z",
+    "interval_exceeded": false
   },
   "predecessor_release": {
-    "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
-    "released_at": "2026-10-30T10:08:59.295Z",
-    "canonical": "7083a1239bcbf1419a2ce8732e940a12f4f5eba3"
+    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
+    "released_at": "2026-10-30T12:16:49.473Z"
   },
   "D6_authority_separation": {
     "source_implementation": "Root relay of human instruction: DeepSeek key 已保存，继续接入熊宝数字员工项目，先不要触发计费调用，第四次也先不执行; current delegation explicitly continues actual Git static candidate saving along the earlier authorized minimal Source scope, exact seven D6 files only.",
     "administrative_disclosure": "Separate call_7402e4b872d949b08b1b45bb899e778d authorizes only the two existing administrative paths; does not itself authorize Source or runtime.",
     "actual_auto_review_status": "PUBLIC_SOURCE_PERMISSION_PENDING; earlier Source implementation directive is retained as historical authorization provenance, not override of actual rejection."
   },
-  "released_at": "2026-10-30T12:16:49.473Z",
   "predecessor_administrative_history": {
     "checkpoint_timing_note": "This administrative closeout occurred later than the prescribed 15min renewal interval, while the original held45min epoch remained unexpired; no jobs or Source adoption occurred. Historical acquired/renewed timestamps preserved in parent.",
     "current_epoch_renewal_history": {
@@ -133,5 +131,72 @@
       "original_unexpired_limit": "2026-10-30T10:15:16.387Z"
     },
     "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static"
+  },
+  "seven_source_publication_permission": {
+    "id": "ROOT-HUMAN-D6-SEVEN-SOURCE-PUBLICATION-AUTH-20261030-01",
+    "question": "call_3a74ee20510f4c73b73bd4e120cacbe5",
+    "answer": "明确授权这七件 D6 源码正文公开保存",
+    "root_received_at": "2026-10-30T12:24:45Z",
+    "dedup": "root-human-D6-seven-source-publication/call_3a74ee20/base7083/canonicaldf590/reviewb7f9cbf0",
+    "repository": "canquedehuiyi-cpu/xiongbaowork",
+    "public": true,
+    "branch": "codex/deepseek-project-integration-prep-20261030",
+    "allowed_source_files": [
+      {
+        "path": "openbot/server/src/models/effective-deployment.ts",
+        "mode": "100644",
+        "bytes": 1952,
+        "sha256": "14c83cd1edfff80020f0d8ee6b3efe3e18ccda111d93a48c62d58fc0a7c0df0d",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/server/src/index.ts",
+        "mode": "100644",
+        "bytes": 157195,
+        "sha256": "1c51d9c638cae7d21d97cb658b4836dbe8b51a55cb9cc9ec322833ca584c503c",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/server/src/copilot.ts",
+        "mode": "100644",
+        "bytes": 104945,
+        "sha256": "cfd8d5910225c35590dee72d2e59b3a4d64c42181e9a14d13d4524442df6ddbd",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/server/src/routing/model.ts",
+        "mode": "100644",
+        "bytes": 5563,
+        "sha256": "c77c20bc95f5023eb151deff599759f77912bf3cb0e16de271507d5465f13b06",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/server/src/models/deepseek-probe.ts",
+        "mode": "100644",
+        "bytes": 1995,
+        "sha256": "cae8896fc45b6006d122f88a4006c383257035eae2f195fbe56d7afd9f8df932",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/server/src/models/routes.ts",
+        "mode": "100644",
+        "bytes": 13062,
+        "sha256": "0814a15a2b64dbe744cc873e44ada12413fe57419986390f1a4a323f6fd4123a",
+        "git_blob": null
+      },
+      {
+        "path": "openbot/server/tests/deepseek-integration.test.ts",
+        "mode": "100644",
+        "bytes": 6498,
+        "sha256": "e006328b751cc0382140ce67f2138b2b0b0084b5ee7d582ed0137dfc4bb27509",
+        "git_blob": null
+      }
+    ],
+    "source_bytes": 291210,
+    "administrative_paths": [
+      "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+      "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+    ],
+    "excluded": "No secrets/user data/private B,A2,B1 or review fulltext; no Source adoption/runtime/model/billing/PG/deployment/fourth metadata."
   }
 }

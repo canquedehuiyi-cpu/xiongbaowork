@@ -4427,12 +4427,11 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
-    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
-    "state": "released",
-    "expires_at": "2026-10-30T12:16:49.473Z",
-    "scope": "Only two explicitly authorized administrative closeout files. D6 public Source permission pending after actual automatic rejection; no Source retry or runtime.",
-    "acquisition_commit": "e0581b79710c9f4e1ded3140a0e82e9b0cff6fee"
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
+    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
+    "state": "held",
+    "expires_at": "2026-10-30T13:10:59.218Z",
+    "scope": "Exact seven already-reviewed D6 Source fulltexts public static preparation only on codex/deepseek-project-integration-prep-20261030; two authorized administrative paths only on canonical; no adoption/runtime/secret/model/paid/PG/deployment/fourth metadata."
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5715,10 +5714,10 @@
       "scope": "Retain public history; this round executor/task/epoch, time,parent/CAS, seven Source paths/bytes/hashes, review conclusion and zero model/new-job metadata only.",
       "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
     },
-    "stage": "ADMIN_CLOSED_SOURCE_PUBLICATION_REJECTED",
+    "stage": "SEVEN_SOURCE_PERMISSION_RECEIVED_LEASE_ACQUISITION",
     "parent": "7083a1239bcbf1419a2ce8732e940a12f4f5eba3",
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
-    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
+    "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
     "at": "2026-10-30T12:14:35.245Z",
     "review": {
       "bytes": 8756,
@@ -5825,6 +5824,77 @@
       "basis": "Actual full e058 two-JSON reads and closeout field mapping; three ambiguity fixes applied; final exact Git readback pending.",
       "status": "ADMIN_CLOSEOUT_FIELD_MAPPING_REVIEW_ONLY",
       "source_git_correspondence": "NOT_PERFORMED_NO_GIT_CANDIDATE"
+    },
+    "public_source_permission": {
+      "id": "ROOT-HUMAN-D6-SEVEN-SOURCE-PUBLICATION-AUTH-20261030-01",
+      "question": "call_3a74ee20510f4c73b73bd4e120cacbe5",
+      "answer": "明确授权这七件 D6 源码正文公开保存",
+      "root_received_at": "2026-10-30T12:24:45Z",
+      "dedup": "root-human-D6-seven-source-publication/call_3a74ee20/base7083/canonicaldf590/reviewb7f9cbf0",
+      "repository": "canquedehuiyi-cpu/xiongbaowork",
+      "public": true,
+      "branch": "codex/deepseek-project-integration-prep-20261030",
+      "allowed_source_files": [
+        {
+          "path": "openbot/server/src/models/effective-deployment.ts",
+          "mode": "100644",
+          "bytes": 1952,
+          "sha256": "14c83cd1edfff80020f0d8ee6b3efe3e18ccda111d93a48c62d58fc0a7c0df0d",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/server/src/index.ts",
+          "mode": "100644",
+          "bytes": 157195,
+          "sha256": "1c51d9c638cae7d21d97cb658b4836dbe8b51a55cb9cc9ec322833ca584c503c",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/server/src/copilot.ts",
+          "mode": "100644",
+          "bytes": 104945,
+          "sha256": "cfd8d5910225c35590dee72d2e59b3a4d64c42181e9a14d13d4524442df6ddbd",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/server/src/routing/model.ts",
+          "mode": "100644",
+          "bytes": 5563,
+          "sha256": "c77c20bc95f5023eb151deff599759f77912bf3cb0e16de271507d5465f13b06",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/server/src/models/deepseek-probe.ts",
+          "mode": "100644",
+          "bytes": 1995,
+          "sha256": "cae8896fc45b6006d122f88a4006c383257035eae2f195fbe56d7afd9f8df932",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/server/src/models/routes.ts",
+          "mode": "100644",
+          "bytes": 13062,
+          "sha256": "0814a15a2b64dbe744cc873e44ada12413fe57419986390f1a4a323f6fd4123a",
+          "git_blob": null
+        },
+        {
+          "path": "openbot/server/tests/deepseek-integration.test.ts",
+          "mode": "100644",
+          "bytes": 6498,
+          "sha256": "e006328b751cc0382140ce67f2138b2b0b0084b5ee7d582ed0137dfc4bb27509",
+          "git_blob": null
+        }
+      ],
+      "source_bytes": 291210,
+      "administrative_paths": [
+        "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+        "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+      ],
+      "excluded": "No secrets/user data/private B,A2,B1 or review fulltext; no Source adoption/runtime/model/billing/PG/deployment/fourth metadata."
+    },
+    "previous_closeout": {
+      "state": "ADMIN_CLOSED_SOURCE_PUBLICATION_REJECTED",
+      "released_at": "2026-10-30T12:16:49.473Z"
     }
   }
 }
