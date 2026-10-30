@@ -1,0 +1,117 @@
+{
+  "schema": "source-package-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+  "parent": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "status": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "blob": "ab91c389f7f8b380b14747803d42977b448d9a6b",
+      "mode": "100644",
+      "utf8bytes": 10528,
+      "sha256": "cdfeecb83257f46e9e248ecc877c769e2e747bd947d195cef47f23e240e6e4f8",
+      "full_read": true,
+      "kind": "Source"
+    },
+    {
+      "path": "openbot/server/tests/approval-fence-defaults.test.ts",
+      "blob": "ae0b81b08e24846b59ee3f8591442a0f70ba4a55",
+      "mode": "100644",
+      "utf8bytes": 3324,
+      "sha256": "d66507022b720fc7fa790ab6f5c412344af0c7245000a1e10cfc3c3ed47024df",
+      "full_read": true,
+      "kind": "Source"
+    },
+    {
+      "path": "archives/recovery-20261028/FRESH-PERSISTENCE-FIRST-PACKAGE-20261030.json",
+      "blob": "03c1fa6606db08ccd87c48c2a1d08416e76e3c4f",
+      "mode": "100644",
+      "utf8bytes": 16109,
+      "sha256": "60a1928e5dc50f6bda75e6e014722508e3e6dbf3776a87fddfc54d4e70afbd1c",
+      "full_read": true,
+      "kind": "administrative"
+    }
+  ],
+  "scope": {
+    "Source": 2,
+    "administrative": 1,
+    "workflows": 0,
+    "compare_commits": 1,
+    "only_three_paths_changed": true,
+    "formal_adoption_by_this_review": false
+  },
+  "fresh_prerequisites": [
+    "FormalSource28still668dd223/2065/50175181;fiveauthoritativeinputsfullfetch/hashmatched.",
+    "Canonicalpg-fresh-result absent,seed/resultdisposition absent; noold27a/b720 adoption assumption.",
+    "A11realgenerator andfourrawbyteidentities exist;fullrawGitblobsnotmaterialized/currentnocodec/fullrawsemanticnotread. ResourceverifieroverallfailureUNKNOWN retained; notmigrationadoption.",
+    "Freshfullschema/fresh-producer/types/store/client/service/audit boundariesread. PositiveactualdriverCOMMIT orcompleteauthorizedpositiveC-ALL notblanketblockedbyoriginalservertermination;NULL/newlock/notyetvisiblealone cannotcommit/lost/replay."
+  ],
+  "schema_check": "Fullcandidateapprovals.ts equals exactparent after exactlytwo.default(0n)→.default(sql`0`) replacements. +8UTF8B. SQLalreadyimported;modebigint/notNull/checks/keys/FK/tenant/RLS/policies/allotherbytesunchanged.",
+  "test_review": {
+    "defined": 7,
+    "executed": 0,
+    "meaningful": [
+      "Twoactualtablemetadata SQLdefault type+compiledliteral0/noparams distinguishesoldnative0n.",
+      "TwoactualPgBigInt64driverdecodecases retainzero/beyondNumberprecision/signed64max.",
+      "Twotablechecks/RLSmetadata presence notliveenforcement.",
+      "Oneindependentnative0nnegativecontrol establishesJSONboundary, notKitexecution."
+    ],
+    "not_claimed": "No parser/compile/lint/types/tests/SQL/PG/generator installedAPI execution."
+  },
+  "independent_primary_reads": [
+    {
+      "repo": "drizzle-team/drizzle-orm",
+      "ref": "273c78071d4841b497f5144734b38294df7ec64b",
+      "path": "drizzle-orm/src/pg-core/utils.ts",
+      "blob": "b7547ad664d15435c33527c431bc470eec299d1f",
+      "fact": "getTableConfigchecks/policies/enableRLSactualAPI"
+    },
+    {
+      "path": "drizzle-orm/src/pg-core/dialect.ts",
+      "blob": "bd9d6a5c9520f65033640b4433f16c0c56375a38",
+      "fact": "sqlToQuerydelegatesSQLcompilation"
+    },
+    {
+      "path": "drizzle-orm/src/pg-core/columns/bigint.ts",
+      "blob": "17ac0798b85fd8b7640cf56bf223491c3f40ce11",
+      "fact": "PgBigInt64SQLbigint/mapFromDriverValueBigInt"
+    },
+    {
+      "path": "drizzle-orm/src/pg-core/checks.ts",
+      "blob": "43740427b8a271d59065ddb3076b5ee20fa33022",
+      "fact": "Check.valueSQL"
+    },
+    {
+      "ref": "4aa6ecfee4b4728dadf6f77f071a149878a3c6c0",
+      "path": "drizzle-kit/src/serializer/pgSerializer.ts",
+      "blob": "9633908549b4e2241493e43016741d57f7daf6d3",
+      "fact": "SQLdefaultsqlToStr;ordinarybigintdefaultretainedraw"
+    }
+  ],
+  "limits": [
+    "Intendeddatabasezero default unchanged; noSQL/snapshot/journaledit orfullgenerateddelta semanticacceptance.",
+    "Doesnotprovewhichpropertycausedoldgeneratorfailure orcurrentruntimepass.",
+    "No freshseed/adapter/transaction/audit/authority/catalog/rootrelease wiringadded; noresult/receipt/finalcompletionfabricated.",
+    "Sourceapproval isnotcanonicaladoption/CPU/PG/fullCI/commercialacceptance."
+  ],
+  "next_action": "Rootmayconsiderexact2Sourcepackageadoptiononlyunderexistingmanifest/CASprotocol; thenlawfulvalidationseparate. BeforefullmigrationadoptionobtainfullactualSQL/snapshot/journal/textsemanticchain, notrawhashsummary. NextSourcepackageonlyafterthisreview,<=8 anddifferentnonauthor.",
+  "preserved": [
+    "77/18/7",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "metadata3/3no4",
+    "922compatibilityEXECUTION_HOLD"
+  ],
+  "actions": {
+    "Source_writes": 0,
+    "canonical_lease_writes": 0,
+    "project_SQL_test_codec_execution": 0,
+    "jobs": 0
+  }
+}
