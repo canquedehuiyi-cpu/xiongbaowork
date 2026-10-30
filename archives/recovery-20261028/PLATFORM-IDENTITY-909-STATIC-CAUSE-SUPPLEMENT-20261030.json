@@ -1,0 +1,95 @@
+{
+  "schema": "administrative-static-cause-supplement/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+  "controller": {
+    "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+    "blob": "cac4ea2124bd50c1af9cb831e4691d8068561875",
+    "bytes": 45272,
+    "sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
+    "full_blob_read": true,
+    "focused_ranges": [
+      "1-30",
+      "200-270",
+      "362-418",
+      "419-512"
+    ]
+  },
+  "status": "STATIC_CAUSE_BOUNDS_ONLY_NO_SPECIFIC_OOM_COMMAND_PROVEN",
+  "evidence_layers": {
+    "independently_computed_prior_runtime": {
+      "run": 40999201244,
+      "job": 123879381737,
+      "full_log_chars": 75070,
+      "full_log_utf8_bytes": 75072,
+      "full_log_sha256": "3c97b486541dd6b9611c60526c8257458652d51ad42a57797930d9891b66385f",
+      "PID1_raw884B_with_LF_SHA256": "71d524200c18027e6231501573d7cfa9bea60f75d445ea29c642b92aff69c6cc",
+      "prior_report": "c946e95f8b15315849e94b01a7942eca0e0cd679",
+      "repeated_log_download": false
+    },
+    "Root_supplemental_witness": {
+      "source": "Parent Root message; not a new runtime observation or quota allocation",
+      "dedup": "root-witness/40999201244/job123879381737/3c97b486541dd6b9611c60526c8257458652d51ad42a57797930d9891b66385f",
+      "matches_independent_prior_log_identity": true
+    },
+    "this_turn": "Exact complete controller connector read and pure-memory SHA computation/static control-flow audit only. No Source/parser/CLI/probe/job/officialversion lookup."
+  },
+  "provable_phase_bounds": [
+    {
+      "phase": "Privileged wrapper admission",
+      "proof": "RootPID1 emitted atcaptured_at196.220193597 with actual collector32/shared64/project512 swap0oom1 and epoch; code line258 snapshot follows wrapper admission lines246-257. FixedPID1 hash path was reached and complete record emitted."
+    },
+    {
+      "phase": "After root snapshot",
+      "proof": "Code line243 remaining then wrapper259 OOMadj reset,260 permit,261 irreversible drop,262-266 actual gates,267-270 exec unprivileged collector. No marker after rootPID1 proves which of these steps completed."
+    },
+    {
+      "phase": "Collector entry and commands",
+      "proof": "If exec270 succeeds, full controller is parsed/imported again before collect entry419. collect actualgates423-430 precede first systemctlVersion435; diskversion452,aliasquery466,package474,kernel477,OS478 follow. No unprivileged progress/report exists, so reaching any specific entry/command is unproven."
+    },
+    {
+      "phase": "OOM",
+      "proof": "Native unit reports oom-kill/32Mpeak/swap0/904ms. This identifies collector-unit OOM, not exact command, allocator, Python phase, or scope-9 actor."
+    }
+  ],
+  "candidate_memory_contributors_not_measured": [
+    {
+      "item": "Full module load and interpreter/import footprint",
+      "code": "1-2 imports plus all definitions loaded before role dispatch; collector exec reloads complete45272B management+collector module.",
+      "limit": "Source bytes are not RSS measurement; exec replaces wrapper process rather than establishing two simultaneous resident Python interpreters."
+    },
+    {
+      "item": "Parent/command overlap",
+      "code": "bounded_query367 launches native command while Python collector remains resident; both descend from same32 service.",
+      "limit": "No command-start receipt exists; cannot name systemctl/systemd/dpkg/uname as the actual OOM contributor."
+    },
+    {
+      "item": "Bounded output and retained report data",
+      "code": "stdout8192/stderr2048 buffers plus transient65536 read, conversion tobytes/string/hash, successive results retained inreport and finalserialization508.",
+      "limit": "Bounds prevent unbounded output but not interpreter/nativecommand peak. No measuredallocation breakdown proves these causedOOM."
+    },
+    {
+      "item": "Binary hash and OS parse temporary buffers",
+      "code": "binary_identity uses65536 stream; osrelease<=16384; fullreport<=32768.",
+      "limit": "Streaming is already bounded; cannot assert fullbinary buffered or specifichash/read phase causedOOM."
+    }
+  ],
+  "smallest_reviewable_design_decision": {
+    "proposal": "Prepare a compact dedicated fixed collector role rather than parsing management/fallback/finalwitness code in the32 collector. Keep root admission semantics and immutable exact collector bytes/hash/argv; preserve unprivileged postdrop gates in that role. Commands remain serial/bounded, promptly release temporary buffers; optional small complete per-phase receipts can distinguish STARTED versus FINISHED/UNKNOWN and preserve explicit provenance.",
+    "not_a_guarantee": "Code separation and streaming are footprint-reduction hypotheses requiring exact semantic review; no static claim of fitting32 or solvingOOM.",
+    "review_requirements": [
+      "Whole supervisor16/fallback16/collector32 and all descendants remain under common64/swap0/oom1/project512.",
+      "Same firstcontrolt0+270/+300, sustainedsupervisor/fallback/revoke/cleanup/reap/restoration and strict independentreadonlyfinalwitness.",
+      "No metadata collection or buffering outside32/shared64; no holder/outsidewriter/extra privileges/resourceincrease/RLIMITsubstitute.",
+      "New per-phase receipts remain bounded and complete, tied exactrun/unit/phase, notresourceproof; no env/token/proc expansion.",
+      "Retain original admit+irreversibleUID/GID/groups drop and actual postdrop gates, fixedread allowlist, binary/package stableidentity/UNKNOWN semantics.",
+      "Exact all changed administrative files and carrier pins must undergo independent full review before any separately allocated runtime; no implementation or runtime authorized by this report."
+    ]
+  },
+  "no_further_attempt": {
+    "total_consumed": 2,
+    "remaining": 0,
+    "third_authorized": false
+  },
+  "next_action": "Root may use this bounded static finding/design decision at its released administrative checkpoint. Preserve actual OOM and unknown precise phase, avoid specificcommand blame. No lease redo/job/Source/canonical edits or officialversion audit follows from this supplement."
+}
