@@ -1,0 +1,28 @@
+{
+  "schema": "commercial-roadmap-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "5e16d79bdf6b8e5920f4398df958cb3552fd7b18",
+  "document": {
+    "path": "archives/recovery-20261028/COMMERCIAL-DELIVERY-FULL77-ROADMAP-20261030.json",
+    "blob": "fdf03eee5b7f82c04badbbd99d9fe6d521496691",
+    "utf8bytes": 101218,
+    "sha256": "b84630734593c9c702a3c0eacdbaa582bebbf2d76a8af7f7bed9812703c076ba",
+    "complete_read": true
+  },
+  "status": "ADMIN_STATIC_ROADMAP_ONLY",
+  "findings": [],
+  "independent_checks": [
+    "Fiveexactauthoritativeinputs freshlyfetched andSHA matched: scope286013B/gates45225B/ledger479194B/manifest456310B/status66979B.",
+    "All77 original_requirement_row deep-equal fulloriginalstory_requirements includingtexts/references/historicalpartialfields;77uniqueIDs/allREQUIRES_NEW_VALIDATION.",
+    "All18 original_package_coverage_row deep-equal originalincludingemptyinfrastructurepackages;packageunion77/unmapped0/unknown0.",
+    "All7 originalgatewordings exact;noacceptancepromoted. Source/CPU/PG/prod/commercial separate;Source28focused32 distinctSource27historical2396.",
+    "Ledger611 status468/8/2/132/1 matchesfreshledger;overlappingruncases notsummed.",
+    "ActualA11generator/rawbyteidentities preserved whilefullrawtextsemanticreview/adoptionfalse/resourcesUNKNOWN notconvertedPASS.",
+    "First2Source-default prerequisite→A11completeactualrawsemantic→fullconsistentmigration→primitive/actualCOMMIT-or-CALLadapter→governancewiring→actualruntimeacceptance ordermaintained.",
+    "PositiveactualdriverCOMMIT/completepositiveC-ALL notuniversallyblockedbyoriginalservertermination;NULL/newlock/partialreadbacknotreplay. A3original10sdelay+maxattempts;A6continuationreceipt notfreshfinal.",
+    "G6freeexistingquota+realmeteringproof requirement preserved withoutpaidcall;G7cleanWindows/Linuxgate retained withfutureexactpermission/evidencedecision, notsilentlydropped.",
+    "922compatUNKNOWN/HOLD/no4/noWindowspayload/noPG/Rootrelease/readiness retained;Sourcepreparationnotfrozenbyruntimegap."
+  ],
+  "limits": "Mappingcomplete isnotimplementation, Sourceadoption orcommercialacceptance. NoSource/project/parser/test/codec/SQL/job/lease/canonicalwrites.",
+  "next_action": "Reviewauthoractualfirstexact2Sourcecandidate. FullrawSQL/snapshot/journalsemanticinputmustbeobtainedlawfullybeforefullmigrationadoption; nosummaryorhashsubstitute."
+}
