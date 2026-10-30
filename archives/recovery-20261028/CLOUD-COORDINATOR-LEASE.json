@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
   "epoch": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
   "acquired_at": "2026-10-30T01:44:05.106Z",
-  "renewed_at": "2026-10-30T01:44:57.643Z",
+  "renewed_at": "2026-10-30T01:46:11.491Z",
   "expires_at": "2026-10-30T02:29:05.106Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T01:44:05.106Z"
   },
-  "next_action": "Fresh queue/head/lease/rundedup then create exact reviewed c9 execution ref once. No actual collector job has started.",
+  "next_action": "Receive existing run40987759034 terminal and complete logs once; no second job/retry. Separate raw version identity from final resource witness and exact-version contract audit.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,11 +29,11 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": {
-    "run": 40919415179,
-    "job": 123608267218,
-    "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
-    "status": "completed",
-    "conclusion": "failure"
+    "run": 40987759034,
+    "job": 123842654361,
+    "candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+    "status": "in_progress",
+    "conclusion": null
   },
   "queue_at_release": {
     "queued": [],
@@ -57,8 +57,18 @@
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
   "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
-  "resource_jobs_this_epoch": [],
-  "new_jobs_started": 0,
+  "resource_jobs_this_epoch": [
+    {
+      "run": 40987759034,
+      "job": 123842654361,
+      "candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+      "status": "in_progress",
+      "conclusion": null,
+      "execution_branch": "codex/platform-identity-run-20261030-a1",
+      "created_at": "2026-10-30T01:45:51Z"
+    }
+  ],
+  "new_jobs_started": 1,
   "authorization_provenance": {
     "human_request": "查因解决当前停滞、取得已授权单次版本补证后继续推进",
     "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
