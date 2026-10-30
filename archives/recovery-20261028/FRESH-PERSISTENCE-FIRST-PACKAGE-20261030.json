@@ -1,12 +1,12 @@
 {
   "schema": "xiongbaowork-fresh-persistence-first-source-package/v1",
-  "status": "AUTHOR_STATIC_CANDIDATE_PENDING_WHOLE_PACKAGE_NONAUTHOR_REVIEW_NO_ADOPTION",
+  "status": "AUTHOR_STATIC_SUCCESSOR_FIXES_EXISTING_TEST_CONFLICT_PENDING_NONAUTHOR_REVIEW",
   "dedup": "human-commercial-delivery-goal/Source28/head-d8e894c5/20261030T0849",
   "author": "/root/a11_data_author",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "parent": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "parent": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
   "prepare_branch": "codex/fresh-persistence-first-package-prep-20261030",
-  "scope": "First independent schema-consistency prerequisite: exactly two existing approval fence default declarations use SQL literal0 instead of nativeBigInt0n, plus focused offline metadata test definitions.",
+  "scope": "First independent schema-consistency prerequisite: exactly two approval fence default declarations plus focused tests and existing AP2 regression compatibility; no seed migration/adapter adoption.",
   "files": [
     {
       "path": "openbot/server/src/db/schema/approvals.ts",
@@ -21,9 +21,16 @@
       "blob": "ae0b81b08e24846b59ee3f8591442a0f70ba4a55",
       "bytes": 3324,
       "sha256": "d66507022b720fc7fa790ab6f5c412344af0c7245000a1e10cfc3c3ed47024df"
+    },
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "mode": "100644",
+      "blob": "e9ba7dd48d5fbe2ac8f0b2e8f1dbbfb6df3f0491",
+      "bytes": 70964,
+      "sha256": "d26e3d4317e1c20af226a2fe4519d5648d71de7e2a41b38ac0ff1c3563794743"
     }
   ],
-  "Source_changed": 2,
+  "Source_changed": 3,
   "administrative_files_added": 1,
   "workflow_changes": 0,
   "formal_source": {
@@ -298,7 +305,23 @@
     "not_done": [
       "No parser/compile/lint/types/tests/generator/SQL/PG execution.",
       "No full migration acceptance or claim installed tagged APIs ran. Future exact independent review must flag unsupported API/type behavior before any runtime."
-    ]
+    ],
+    "additional_existing_file": {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "status": "DEFINED_ONLY_NOT_RUN",
+      "new_test_count": 1,
+      "changes": "One strict fence-default helper, scoped projection, exact2source inverse, replacement default assertion, negative representation test. No SQL parser/oracle/expected matrix/hash/DDL negative-case weakening.",
+      "rejected_values": [
+        "SQL1",
+        "SQLquoted0",
+        "SQLparameter0",
+        "native0n",
+        "number0",
+        "string0",
+        "undefined"
+      ],
+      "legacy_driver_assertions": "PgBigInt64/dataTypebigint/notNull and sql.param(0n,column) stay unchanged."
+    }
   },
   "migration_boundary": "No SQL/snapshot/journal edit, no newDDL adoption. Intended database default remains zero, but current schema/migration completeness remains pending. This small serializer prerequisite cannot be called a complete seed migration package.",
   "branch_safety": {
@@ -334,5 +357,13 @@
     "commercial": "NOT_DELIVERED",
     "Source_adoption": false
   },
-  "next_action": "Different nonauthor reads exact full two Source blobs plus this administrative evidence report. Fix concrete findings on same exclusive branch using expectedSHA. No Source adoption/runtime follows from author save or static review; Root alone owns canonical/lease and any separately authorized serialized validation."
+  "next_action": "Different nonauthor reads exact full THREE Source blobs plus this report, including all preserved AP2 independent oracle/matrix/hash/parser/negative boundaries. Predecessor9984 is not approved. No Source adoption or CPU/PG execution follows; Root owns canonical/lease and any separately gated validation.",
+  "original_base": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "author_found_blocking_predecessor": {
+    "candidate": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+    "status": "NOT_APPROVED_NOT_RUN",
+    "finding": "Existing AP2 tests required native0n default/sourceinverse; SQL0 would fail direct assertion, complete metadata matrix default type, and historical sourcehash inverse.",
+    "fix": "Add exact SQLzero projection for only the two fence columns (literal0+noSQLparams), keep independent numeric0 matrix/hash unchanged, add rejecting representation mutants; inverse exactly2 matching full default expressions before unchanged AP4/hash checks; preserve explicit0n driverparameter/BigInt ABI assertions.",
+    "not_a_test_run": true
+  }
 }
