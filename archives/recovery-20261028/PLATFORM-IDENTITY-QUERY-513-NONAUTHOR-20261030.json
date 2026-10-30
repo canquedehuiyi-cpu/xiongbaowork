@@ -1,0 +1,86 @@
+{
+  "schema": "administrative-immediate-query-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "5130d39915adb7a7fe492db672a07e413b72672d",
+  "parent": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
+  "status": "STATICONLY_NOT_RUNTIME_AUTHORIZED",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "470608b68fcb2b3f860669459fe91278399f3787",
+      "mode": "100644",
+      "bytes": 76158,
+      "sha256": "a996bc487051670cf64e7c511b6442f385e3ff632fd87a0693f75f0175cf29e7",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "715dba936fcf377c1ec5ddfeebbd86be2f10ee3a",
+      "mode": "100644",
+      "bytes": 29732,
+      "sha256": "45d325e7b94c65a9828e5755ecabe2915ea418b60897ace639e9618c143508c6",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
+      "mode": "100644",
+      "bytes": 24395,
+      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "5fea72861f887c72fa233dd73f5263fe4ec19dc7",
+      "mode": "100644",
+      "bytes": 16439,
+      "sha256": "e984904a253c1a0fd6fed47eeb55c7be01f08d9269625f8b42c4e32cd9f98ff1",
+      "full_read": true
+    }
+  ],
+  "closed_finding": {
+    "id": "P2-ALIAS-CATCH-SWALLOWS-RESULT-EMISSION-FAILURE",
+    "report": "4f8363374c4cdb919556e2bdef8014f7a24b8c99",
+    "verified_fix": "Alias identity-only catch appends originalUNKNOWN andcontinue; bounded_query andsuccessfulappend now outsidecatch. Emitter failure propagates to fatalwrapper without nextquery. Old9fbblockedhistory retained."
+  },
+  "verified": [
+    "Fourcompleteblobs and exactpins, carrierindependentfullbase64 parity; management onlycollectorhashconstantchange; runtimecode unchanged beyond producer/pin/aliasfix.",
+    "Carrierparts controller16000/16000/7644 andcollector16000/16000/528 total72172; strictdecode+SHA before rootimmutablecopy. Run2186/461chars inclterminalLF below21000; plan460 second excludesLF. ActualARGMAX/RSS/nativevalidationUNKNOWN.",
+    "Actualsame32 env-i/rootadmission/fixedPID1/selfhash/permit/drop/postgates intact. Readallowlist/argv/queryorder unchanged.",
+    "Output streamstrictUTF8 roundtrip re-encoding verifies originalrawlength/hash beforebase64; actualemptydata''/SHAempty differs fromincomplete null. Fullnonzero observedexit producesUNKNOWN_EXIT completecapture, neverFINISHED.",
+    "Payloadexactidentityrun/attempt/head/epoch/unit/phase/query/fixedargv/outcome/exit/capturecomplete, perstreamrawlength/hash, envelopepayloadlength/hash.",
+    "Hardcaps rawstdout8192/stderr2048, payloadASCII16000, entireline16384 inclprefixLF, uniquequerylabels/count9, total147456. Fixedallowlistmax9querypaths. Counter incrementsbeforewrite andnofatalretry; partialhardkillrecord remainsUNKNOWN.",
+    "Emitter/write/flush/postinner outside recoverablequerycatch andaliascatch. FINISHED only aftervalidcompleteframe+postflushinnerremaining; UNKNOWNphasefornonzero/incomplete.",
+    "No addedexternalwriter/process/read/reorder. Existingfinal32768report/rootresourceACK/always/gates and16+16+32/shared64swap0oom1/512/t0+270300 unchanged."
+  ],
+  "reader_contract_precision": {
+    "payload_binding": "Hash exact originalASCII payloadsubstring bytes in received completeframe, with original lexicalfloat representation. Do not parse+reserialize cross-language JSON floats to recompute binding. Reject duplicatekeys/nonfinite/truncation/wrongidentity/length/hash/base64. Producer canonicalizes but reader must retain rawpayloadbytes.",
+    "timing": "A completevalidframe may have flushed beforepostinnercheck fails. Suchrawbytes are forensic perquerydata; matchingtimelyFINISHED/nativecontext still required for phasecompletion. MissingFINISHED =>completionUNKNOWN, never resource/fullplatformPASS.",
+    "unknown": "Incompletecapture hasnullbytes/hash/data andexitnull, not fakeempty. Missingclosingbrace/LF orhash mismatch=>UNKNOWN despite anyphase line."
+  },
+  "limitations": [
+    "Addedbase64/JSON/UTF8/stringline copies finite but unmeasured, do not prove32fit or classifyoldOOMallocator.",
+    "No parser/compile/tests/CLI/Source/probe/runtime executed. Old3failuresretained, noactualmanagerVersion/packageassociation fromnewcode.",
+    "Framepublication doesnotadoptSource/provePG/resource/commercialreadiness."
+  ],
+  "authorization": {
+    "actualmax": 3,
+    "consumed": 3,
+    "remaining": 0,
+    "fourth_authorized": false,
+    "staticreviewonly": true
+  },
+  "next_action": "Implementationstaticreviewcomplete; next separatebounded staticmemorydiagnostic reportpackage only. Noexecutionref/job without separatelyexplicitruntimeallocation; noallowlist/resourceexpansion.",
+  "preserved": [
+    "77/18/7",
+    "Source28",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}
