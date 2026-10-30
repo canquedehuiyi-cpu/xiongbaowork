@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T04:54:34.135Z",
+  "checkpoint_update_at": "2026-10-30T05:10:31.808Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,10 +4427,10 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:third96ecc-20261030",
-    "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
-    "state": "released",
-    "expires_at": "2026-10-30T04:54:34.135Z",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:immediate-query-static-20261030",
+    "epoch": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
+    "state": "held",
+    "expires_at": "2026-10-30T05:55:31.808Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
     "released_at": "2026-10-30T04:54:34.135Z"
@@ -5048,6 +5048,28 @@
       "status": "completed",
       "conclusion": "failure",
       "observed_at": "2026-10-30T04:53:42.969Z"
+    }
+  },
+  "immediate_query_static_preparation": {
+    "dedup_key": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40",
+    "status": "ACCEPTED_STATIC_AUTHOR_REVIEWER_ACTIVE",
+    "accepted_at": "2026-10-30T05:10:31.808Z",
+    "authority": "Root准确转达真人原文：先做每项查询完成后立即输出完整结果修稿并独审，同时静态查owner阶段内存；第四次先不执行。",
+    "baseline": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+    "base_canonical": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
+    "author": "/root/a11_data_author",
+    "different_reviewer": "/root/a11_data_reviewer",
+    "prepare_branch": "codex/platform-identity-prep-20261030-a1",
+    "max_implementation_admin_files": 4,
+    "actual_jobs_consumed": 3,
+    "remaining": 0,
+    "runtime_authorized": false,
+    "new_jobs": 0,
+    "prior_actual_job": {
+      "run": 41004678906,
+      "job": 123896762774,
+      "status": "completed",
+      "conclusion": "failure"
     }
   }
 }

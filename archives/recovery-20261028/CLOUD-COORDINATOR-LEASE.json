@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:third96ecc-20261030",
-  "run_id": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
-  "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
-  "acquired_at": "2026-10-30T04:43:53.208Z",
-  "renewed_at": "2026-10-30T04:54:34.135Z",
-  "expires_at": "2026-10-30T04:54:34.135Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:immediate-query-static-20261030",
+  "run_id": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
+  "epoch": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
+  "acquired_at": "2026-10-30T05:10:31.808Z",
+  "renewed_at": "2026-10-30T05:10:31.808Z",
+  "expires_at": "2026-10-30T05:55:31.808Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "996d6392d02817c577c2bb5b9ec8f11d8a71afc7",
+  "expected_parent": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T04:43:53.208Z"
+    "observed_at": "2026-10-30T05:10:31.808Z"
   },
-  "next_action": "Third actualmetadata job failed collectorOOM after owner_usrSTARTED; all3/3 consumed. Complete per-query raw-result logging and lower-footprint exact-owner association are DESIGN decisions only, not implemented. No fourth job/variant/Source change; no exact-version ARCH audit absent actualvalues/package linkage.",
+  "next_action": "Originalauthor exact<=4candidate then differentnonauthor fullreview/fix; afterreview separate boundedmemorydiagnostic/report. Persist staticcheckpoint and idle release; NOT_RUNTIME_AUTHORIZED.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -51,7 +51,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
+  "predecessor_epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -62,20 +62,9 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Root准确转达人类questioncall_a382c905b0f14d1091ef978a4c36c2f9明确追加第三次metadata一次，仅exact96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f。总上限3、旧2、本次1、无第四/重跑/变体。全部原16+16+32/shared64/512/swap0/oom1/身份/env-i/drop/270300/fallback/physicalfinalwitness门不变。",
-  "resource_jobs_this_epoch": [
-    {
-      "run": 41004678906,
-      "job": 123896762774,
-      "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
-      "attempt": 1,
-      "status": "completed",
-      "conclusion": "failure",
-      "execution_branch": "codex/platform-identity-run-20261030-static-memory-a1",
-      "created_at": "2026-10-30T04:45:43Z"
-    }
-  ],
-  "new_jobs_started": 1,
+  "scope": "真人明确授权仅静态修稿：每项原allowlist查询完成后立即输出完整有界结果+非作者全文审，同时有界静态内存诊断。最多4实现行政文件；不新增读取/命令、不重排或替换dpkg-S、不扩大资源权限。无第四次实际额度，禁止任何候选解析/compile/test/CLI/作业/执行ref修改。",
+  "resource_jobs_this_epoch": [],
+  "new_jobs_started": 0,
   "authorization_provenance": {
     "human_request": "查因解决当前停滞、取得已授权单次版本补证后继续推进",
     "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
@@ -92,7 +81,7 @@
     "accepted_at": "2026-10-30T03:44:01.878Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN40999201244_NO_THIRD"
   },
-  "static_prepare_dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b",
+  "static_prepare_dedup": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40",
   "third_metadata_allocation": {
     "dedup_key": "human-explicit-third-one/96ecccb7/priorrun40999201244/head996d6392/questioncall_a382c905",
     "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
@@ -103,6 +92,5 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  },
-  "released_at": "2026-10-30T04:54:34.135Z"
+  }
 }
