@@ -1,0 +1,58 @@
+{
+  "schema": "administrative-nonauthor-static-finding/v1",
+  "candidate": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
+  "reviewer": "/root/a11_data_reviewer",
+  "status": "CHANGES_REQUIRED_STATIC_ONLY_NOT_RUNTIME_AUTHORIZED",
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "f24af6d9b2e54db3df28b6c074aceab1f0b52803",
+      "mode": "100644",
+      "bytes": 76030,
+      "sha256": "a93cd5d324ca257e662f90c87b49cbdf6f35054b6378e336c6d1016d526fd712",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "1b234767d3daeb3fb29aee476d876f791e560d9e",
+      "mode": "100644",
+      "bytes": 29732,
+      "sha256": "fb0b07f5cafb1e782f293cd2efd49451a4d6de00b101af35bf37177ce1cef8bb",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "b0c5635b66346024f0728e0aae5ca0e443eaae9d",
+      "mode": "100644",
+      "bytes": 24300,
+      "sha256": "b49de6c941caa3f9d706a70192ce6b7269347cce9e9c2690d96cd34dca53c2b0",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "1cbc1015db9fca0f643ea51448841d7aaf3c49fd",
+      "mode": "100644",
+      "bytes": 15481,
+      "sha256": "fe43f050c7b0f5f7f2bdf206c3bd7e7728da896887c9e535738c91788d84efdf",
+      "full_read": true
+    }
+  ],
+  "findings": [
+    {
+      "id": "P2-ALIAS-CATCH-SWALLOWS-RESULT-EMISSION-FAILURE",
+      "blocking": true,
+      "severity": "P2",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "function": "collect alias loop",
+      "detail": "Alias identity try also includes owner=bounded_query(...). bounded_query invokes emit_query_result outside query_result catch, but collect except BaseException still catches any emit hash/cap/write/flush/postinner failure, appends alias UNKNOWN and continues nextalias orpackage query. This contradicts fatal emit failure/no-nextquery contract, including plan edge_semantics.deadline.",
+      "required_change": "Keep only intended alias identity/availability validation inside recoverable catch. Invoke bounded_query/result emission outside that catch, or use an explicit fatal failure path not swallowed by outer alias handling. Preserve queryorder/readallowlist and all gates; any repair newexactSHA full review."
+    }
+  ],
+  "verified_boundaries": [
+    "Management byteidentical baseline96 after solecollector hashconstant replacement.",
+    "Collector rootPID1/drop/entry/commandallowlist unchanged; complete frame includes identityepoch/rawstreamroundtrip/hash/caps and movedFINISHED afterflush.",
+    "Plan claims failurefatal but actual outeraliascatch violates it; this is exactsource finding, not runtime test or proof of memoryfit."
+  ],
+  "next_action": "Author minimalfix newSHA; full4file independent rereview before static acceptance. Separate memoryreport only after implementationreview. No runtime/4thjob/quota/resourcegrant.",
+  "execution": "No parser/compile/test/project/CLI/probe/job/canonical/lease/Source changes; only administrative report."
+}
