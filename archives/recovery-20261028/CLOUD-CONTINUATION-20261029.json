@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T01:57:41.927Z",
+  "checkpoint_update_at": "2026-10-30T03:44:01.878Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,10 +4427,10 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-c9-20261030",
-    "epoch": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
-    "state": "released",
-    "expires_at": "2026-10-30T01:57:41.927Z",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:909-extra-one-20261030",
+    "epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
+    "state": "held",
+    "expires_at": "2026-10-30T04:29:01.878Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
     "released_at": "2026-10-30T01:57:41.927Z"
@@ -4777,5 +4777,20 @@
     },
     "lease_released": true,
     "not_complete": true
+  },
+  "metadata_second_attempt": {
+    "dedup_key": "human-explicit-extra-one/90949b0c/oldrun40987759034/head0ccdc597",
+    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+    "total_job_limit": 2,
+    "prior_jobs": 1,
+    "additional_jobs": 1,
+    "authority_source": "Root relay of human choice call_907ac0dcf471487289749faab6d427be and human reopened-app 已恢复; not a third allocation",
+    "accepted_at": "2026-10-30T03:44:01.878Z",
+    "status": "ACCEPTED_NOT_DISPATCHED",
+    "old_run": 40987759034,
+    "old_job": 123842654361,
+    "old_head": "0ccdc59784a0cb438e7886d7b7bbad844f58173e",
+    "old_unknown_submission": "adc21b33-ee45-4556-8fbf-a7c88491ea50 UNKNOWN_NOT_REPLAYED",
+    "new_jobs": 0
   }
 }
