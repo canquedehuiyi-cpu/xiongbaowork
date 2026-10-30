@@ -1,0 +1,39 @@
+{
+  "schema": "administrative-review-correction/v1",
+  "candidate": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+  "prior_review": "90b03105e1fdc08780c8526395d97da8db20c8ee",
+  "status": "PRIOR_APPROVAL_CORRECTED_NOT_DISPATCHABLE",
+  "reviewer": "/root/a11_data_reviewer",
+  "finding": {
+    "id": "P2-GITHUB-RUN-STRING-LIMIT",
+    "blocking": true,
+    "path": ".github/workflows/platform-identity-metadata.yml",
+    "blob": "021d5fb99b09e5c1281d988e7be96d8e8a8f0276",
+    "workflow_bytes": 50899,
+    "sha256": "eb7ecb1cd6f8bc7e752563ef40cc5d3f758834bc784af866e7d21080c2483538",
+    "first_run_literal_characters": 49441,
+    "inline_code_line_characters": 47913,
+    "method": "Full exact workflow already fetched and SHA checked; counted first run block after removing its fixed ten-space YAML indentation, without parsing or executing YAML/Python. Inline line alone exceeds21000, so any possible boundary newline difference does not affect defect.",
+    "official_limit": 21000,
+    "source": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun",
+    "required_change": "Every run string must satisfy documented limit. Any staging must preserve root-owned exact bytes and admission, one sustained supervisor and original common t0/270/300 including first control action; exact successor full review required."
+  },
+  "native_evidence": {
+    "run": 40986262699,
+    "head_sha": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
+    "branch": "codex/platform-identity-prep-20261030-a1",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-10-30T01:30:34Z",
+    "updated_at": "2026-10-30T01:30:34Z",
+    "jobs_total_count": 0,
+    "jobs": [],
+    "run_url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/actions/runs/40986262699",
+    "jobs_url": "https://api.github.com/repos/canquedehuiyi-cpu/xiongbaowork/actions/runs/40986262699/jobs",
+    "annotation": "UNKNOWN_NOT_READ: check-suites/111103838437/check-runs rejected400 by connector allowlist. Do not infer annotations absent or claim native annotation directly attributes cause."
+  },
+  "interpretation": "Exact workflow violates official run-string limit; immediate jobs0 is consistent with validation failure. Specific native diagnostic attribution remains unobserved. No collector/job execution or runtime resource result arose.",
+  "review_correction": "Prior static approval omitted documented platform run-string constraint. Preserve original report as historical, supersede its dispatchability forFA96. No assertion YAML otherwise validated; no parser/test executed.",
+  "next_action": "Review exact author successor in full including each run string count and staging integrity before Root may consider one bounded job.",
+  "writes": "Only this administrative addendum on exclusive review branch; no Source/canonical/lease/jobs writes."
+}
