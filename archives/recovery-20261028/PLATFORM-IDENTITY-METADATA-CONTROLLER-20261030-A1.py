@@ -196,6 +196,52 @@ def root_gate(cfg,role):
     assert limits(PROJECT)==dict(zip(KEYS,[str(PROJECT_CAP),"0","1"]))
     assert Path("/proc/self/oom_score_adj").read_text().strip()=="-1000"
     return cg
+
+def fixed_pid1_metadata_snapshot(cfg,root,unit):
+    # Sole privileged metadata exception within the already-admitted collector32.
+    # Fixed normal public PID1 exe interface only; no ptrace/CAP/LSM/proc change,
+    # no other PID/env/cmdline and no disk binary substituted for running PID1.
+    import hashlib
+    remaining(cfg["inner"])
+    assert read_small(root/"metadata.permit").decode()==cfg["epoch"] and not (root/"abort.json").exists()
+    assert os.geteuid()==0
+    cg=PARENT/unit
+    assert Path("/proc/self/cgroup").read_text().strip()=="0::/"+str(cg.relative_to(Path("/sys/fs/cgroup")))
+    assert limits(cg)==dict(zip(KEYS,[str(DATA_CAP),"0","1"]))
+    assert limits(PARENT)==dict(zip(KEYS,[str(ORDINARY),"0","1"])) and limits(PROJECT)==dict(zip(KEYS,[str(PROJECT_CAP),"0","1"]))
+    value={"schema":"xiongbaowork-fixed-pid1-metadata/v1","source":"ROOT_ADMITTED_COLLECTOR_FIXED_PROC1_EXE",
+        "run_id":cfg["runid"],"attempt":cfg["attempt"],"head_sha":cfg["target"],
+        "epoch":cfg["epoch"],"metadata_not_resource_restoration_proof":True,
+        "acquisition_uid":os.geteuid(),"resource_gate":{"collector":limits(cg),"shared":limits(PARENT),"project":limits(PROJECT)}}
+    allowed=("/usr/lib/systemd/systemd","/lib/systemd/systemd",
+             "/usr/lib/systemd/systemd (deleted)","/lib/systemd/systemd (deleted)")
+    try:
+        link=os.readlink("/proc/1/exe")
+        if link not in allowed:
+            value["readlink"]={"status":"UNKNOWN_NON_ALLOWLISTED_PID1_PATH"}
+            value["identity"]={"status":"UNKNOWN_NON_ALLOWLISTED_PID1_PATH"}
+        else:
+            value["readlink"]={"status":"CAPTURED","path":link}
+            value["identity"]=binary_identity("/proc/1/exe",cfg["inner"],follow_proc=True)
+    except BaseException as error:
+        value["readlink"]={"status":"UNKNOWN_"+type(error).__name__}
+        value["identity"]={"status":"UNKNOWN_"+type(error).__name__}
+    remaining(cfg["inner"])
+    assert limits(cg)==dict(zip(KEYS,[str(DATA_CAP),"0","1"]))
+    assert limits(PARENT)==dict(zip(KEYS,[str(ORDINARY),"0","1"])) and limits(PROJECT)==dict(zip(KEYS,[str(PROJECT_CAP),"0","1"]))
+    assert read_small(root/"metadata.permit").decode()==cfg["epoch"] and not (root/"abort.json").exists()
+    value["captured_at"]=now()
+    path=root/"pid1.metadata.json";assert not path.exists()
+    record(path,value)
+    item=path.stat();assert item.st_uid==0 and stat.S_IMODE(item.st_mode)==0o600 and item.st_nlink==1
+    raw=(json.dumps(value,sort_keys=True,separators=(",",":"))+"\n").encode()
+    assert len(raw)<8192 and read_small(path)==raw
+    print("PLATFORM_PID1_ADMITTED_METADATA "+raw.decode().rstrip("\n"),flush=True)
+    print("PLATFORM_PID1_ADMITTED_METADATA_IDENTITY "+json.dumps({"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),
+        "complete":True,"run_id":cfg["runid"],"attempt":cfg["attempt"],"source":value["source"],
+        "metadata_not_resource_restoration_proof":True}),flush=True)
+    remaining(cfg["inner"])
+
 def wrapper():
     root=Path(sys.argv[2]);cfg=json.loads(read_small(root/"config.json"));stage=sys.argv[3]
     assert stage=="metadata" and cfg["admin"]==str(root)
@@ -209,6 +255,7 @@ def wrapper():
     fixed_write(PARENT/"memory.oom.group","1");fixed_write(PROJECT/"memory.oom.group","1")
     assert limits(PARENT)==dict(zip(KEYS,[str(ORDINARY),"0","1"]))
     assert limits(PROJECT)==dict(zip(KEYS,[str(PROJECT_CAP),"0","1"]))
+    fixed_pid1_metadata_snapshot(cfg,root,unit)
     fixed_write(Path("/proc/self/oom_score_adj"),"0")
     assert read_small(root/(stage+".permit")).decode()==cfg["epoch"] and not (root/"abort.json").exists()
     os.setgroups([]);os.setresgid(cfg["gid"],cfg["gid"],cfg["gid"]);os.setresuid(cfg["uid"],cfg["uid"],cfg["uid"])
@@ -401,7 +448,27 @@ def collect():
     else:
         report["disk_systemd"]=binary_identity(binary,inner)
         report["disk_systemd_version"]=bounded_query([binary,"--version"],inner)
-        report["binary_package_owner"]=bounded_query(["/usr/bin/dpkg-query","-S",binary],inner)
+        report["binary_package_owner"]={"status":"SEE_VERIFIED_LITERAL_ALIAS_RESULTS"}
+    report["binary_owner_aliases"]=[]
+    if binary is not None and report["disk_systemd"].get("status")=="CAPTURED":
+        for alias in ("/usr/lib/systemd/systemd","/lib/systemd/systemd"):
+            try:
+                assert str(Path(alias).resolve(strict=True))==binary
+                trusted_tool(alias)
+                # Only these two fixed OS aliases may be followed, after exact
+                # trusted resolution; owner is queried using the literal alias.
+                ident=binary_identity(alias,inner,follow_proc=True)
+                assert ident.get("status")=="CAPTURED"
+                disk_identity=report["disk_systemd"]
+                assert all(ident.get(k)==disk_identity.get(k) for k in ("dev","ino","bytes","sha256"))
+                owner=bounded_query(["/usr/bin/dpkg-query","-S",alias],inner)
+                report["binary_owner_aliases"].append({"literal_alias":alias,"status":"SAME_VERIFIED_BINARY",
+                    "identity":ident,"owner_query":owner})
+            except BaseException as error:
+                report["binary_owner_aliases"].append({"literal_alias":alias,"status":"UNKNOWN_"+type(error).__name__,
+                    "owner_query":"NOT_RUN_ALIAS_IDENTITY_NOT_ESTABLISHED"})
+    else:
+        report["binary_owner_aliases_status"]="UNKNOWN_NO_VERIFIED_BINARY"
     report["systemd_package_identity"]=bounded_query(["/usr/bin/dpkg-query","-W",
         "-f=${binary:Package}\\t${Version}\\t${Architecture}\\t${source:Package}\\t${source:Version}\\t${db:Status-Abbrev}\\n","systemd"],inner)
     report["package_patch_identity_scope"]="FULL_BINARY_SOURCE_VERSION_METADATA_NOT_VENDOR_PATCH_CONTENT_PROOF"
@@ -441,6 +508,71 @@ def collect():
     print("PLATFORM_VERSION_METADATA_REPORT "+raw.decode().rstrip("\n"),flush=True)
     print("PLATFORM_VERSION_METADATA_IDENTITY "+json.dumps({"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),
         "complete":True,"run_id":runid,"attempt":attempt,"not_resource_restoration_proof":True}),flush=True)
+
+
+def fixed_resource_evidence_call(operation,deadline):
+    # Dedicated fixed-resource-only COW child: complete<=16KiB receipts/stdout
+    # never cross this tiny ACK pipe. No version/Subject or restoration access.
+    remaining(deadline)
+    readfd,writefd=os.pipe2(os.O_NONBLOCK|os.O_CLOEXEC)
+    pid=os.fork()
+    if pid==0:
+        os.close(readfd)
+        try:
+            os.setsid()
+            passed=bool(operation())
+            remaining(deadline)
+            ack={"ok":True,"passed":passed,"completed_at":now(),"deadline":deadline}
+            raw=json.dumps(ack,separators=(",",":")).encode();assert len(raw)<=1024
+            assert os.write(writefd,raw)==len(raw)
+            os._exit(0)
+        except BaseException as error:
+            try:
+                raw=json.dumps({"ok":False,"error":type(error).__name__},separators=(",",":")).encode()
+                os.write(writefd,raw)
+            except BaseException:pass
+            if os.getpgrp()==os.getpid():os.killpg(os.getpid(),signal.SIGKILL)
+            os._exit(1)
+    os.close(writefd);data=bytearray()
+    try:
+        while True:
+            try:data.extend(os.read(readfd,1025-len(data)))
+            except BlockingIOError:pass
+            assert len(data)<=1024
+            ended,status=os.waitpid(pid,os.WNOHANG)
+            if ended:
+                try:data.extend(os.read(readfd,1025-len(data)))
+                except BlockingIOError:pass
+                assert len(data)<=1024
+                ack=json.loads(data)
+                assert os.WIFEXITED(status) and os.WEXITSTATUS(status)==0 and ack.get("ok") is True,ack
+                assert ack["deadline"]==deadline and ack["completed_at"]<deadline
+                # Actual observe/record/full emit plus ACK/reap must complete
+                # inside the very same outer deadline, not just observed_at.
+                remaining(deadline)
+                return ack
+            if now()>=deadline:
+                try:os.killpg(pid,signal.SIGKILL)
+                except ProcessLookupError:
+                    try:os.kill(pid,signal.SIGKILL)
+                    except ProcessLookupError:pass
+                os.waitpid(pid,os.WNOHANG)
+                raise TimeoutError("resource evidence completion UNKNOWN at same outer deadline")
+            time.sleep(max(0.0,min(0.01,deadline-now())))
+    finally:os.close(readfd)
+def observe_record_emit_resource_terminal(cfg,code):
+    root=Path(cfg["admin"])
+    result=final_observation(cfg,code)
+    result["complete_emit_requires_supervised_ack_and_step_success"]=True
+    record(root/"outer.terminal.json",result)
+    print("PLATFORM_RESOURCE_OUTER_TERMINAL "+json.dumps(result,sort_keys=True),flush=True)
+    remaining(cfg["outer"])
+    # This root-owned marker follows the complete emission. The operation ACK
+    # and caller's post-reap remaining check additionally bound marker completion.
+    record(root/"outer.emission.json",{"epoch":cfg["epoch"],"outer":cfg["outer"],
+        "emission_completed_at":now(),"status":result["status"]})
+    remaining(cfg["outer"])
+    return result["status"]=="RESOURCE_GATE_VERIFIED"
 
 def config(root):
     cfg=json.loads(read_small(root/"config.json"))
@@ -526,6 +658,7 @@ def bootstrap():
         "--property=SendSIGKILL=yes","--property=RuntimeMaxSec="+str(runtime),
         "--property=TimeoutStartSec=1","--property=TimeoutStopSec=1",
         "--property=TimeoutStartFailureMode=kill","--property=TimeoutStopFailureMode=kill",
+        "/usr/bin/env","-i","PATH=/usr/bin:/bin","LC_ALL=C","PYTHONDONTWRITEBYTECODE=1",
         "/usr/bin/python3","-I","-B",str(root/"controller.py"),"fallback",str(root)]
     done=subprocess.run(fallback_args,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
         timeout=min(5,remaining(cfg["outer"])),env={"PATH":"/usr/bin:/bin","LC_ALL":"C"})
@@ -557,14 +690,10 @@ def bootstrap():
     if now()>=cfg["outer"]:
         print("PLATFORM_RESOURCE_UNKNOWN "+json.dumps({"status":"FAILED_OR_UNKNOWN","reason":"same300 exhausted","version_report_separate":True}),flush=True)
         raise SystemExit(1)
-    result=final_observation(cfg,code)
-    # Root-owned administrative resource receipt only; platform version report
-    # never travels through call_bounded's8192 management pipe.
-    record(root/"outer.terminal.json",result)
-    print("PLATFORM_RESOURCE_OUTER_TERMINAL "+json.dumps(result,sort_keys=True),flush=True)
-    if result["status"]!="RESOURCE_GATE_VERIFIED":raise SystemExit(1)
-def witness():
-    root=Path(sys.argv[2]);cfg=config(root)
+    ack=fixed_resource_evidence_call(lambda:observe_record_emit_resource_terminal(cfg,code),cfg["outer"])
+    remaining(cfg["outer"])
+    if not ack["passed"]:raise SystemExit(1)
+def witness_operation(root,cfg):
     actual={"shared":None,"project":None,"shared_populated0":False,"project_populated0":False,"errors":[]}
     try:
         actual["shared"]=limits(PARENT);actual["shared_populated0"]=empty(PARENT) is True
@@ -573,12 +702,26 @@ def witness():
     terminal=None
     try:terminal=json.loads(read_small(root/"outer.terminal.json"))
     except BaseException as error:actual["errors"].append("terminal:"+type(error).__name__)
+    emission=None
+    try:emission=json.loads(read_small(root/"outer.emission.json"))
+    except BaseException as error:actual["errors"].append("emission:"+type(error).__name__)
     ok=terminal is not None and terminal["status"]=="RESOURCE_GATE_VERIFIED" and terminal["observed_at"]<cfg["outer"]
+    ok=ok and emission is not None and emission["epoch"]==cfg["epoch"] and emission["outer"]==cfg["outer"]
+    ok=ok and emission["emission_completed_at"]<cfg["outer"] and emission["status"]=="RESOURCE_GATE_VERIFIED"
     ok=ok and actual["shared"]==dict(zip(KEYS,[str(ORDINARY),"0","1"])) and actual["shared_populated0"]
     ok=ok and actual["project"]==dict(zip(KEYS,[str(PROJECT_CAP),"0","1"])) and actual["project_populated0"] and not actual["errors"]
     print("PLATFORM_RESOURCE_ALWAYS_READONLY "+json.dumps({"status":"VERIFIED" if ok else "FAILED_OR_UNKNOWN",
-        "actual":actual,"saved_terminal":terminal,"no_restore_or_new_grace":True,"version_report_separate":True},sort_keys=True),flush=True)
-    if not ok:raise SystemExit(1)
+        "actual":actual,"saved_terminal":terminal,"emission":emission,
+        "completion_requires_supervised_ack_and_step_success":True,
+        "no_restore_or_new_grace":True,"version_report_separate":True},sort_keys=True),flush=True)
+    remaining(cfg["outer"])
+    return ok
+def witness():
+    root=Path(sys.argv[2]);cfg=config(root)
+    remaining(cfg["outer"])
+    ack=fixed_resource_evidence_call(lambda:witness_operation(root,cfg),cfg["outer"])
+    remaining(cfg["outer"])
+    if not ack["passed"]:raise SystemExit(1)
 if __name__=="__main__":
     mode=sys.argv[1]
     if mode=="collect":collect()

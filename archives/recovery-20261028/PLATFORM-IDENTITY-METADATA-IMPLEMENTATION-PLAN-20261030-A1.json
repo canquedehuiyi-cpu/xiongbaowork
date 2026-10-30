@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-platform-metadata-implementation-v1",
-  "status": "AUTHOR_IMPLEMENTATION_PREPARED_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUN",
+  "status": "AUTHOR_DEADLINE_ENV_AND_FIXED_PID1_SUCCESSOR_PENDING_FULL_NONAUTHOR_REVIEW_NOT_RUN",
   "authority": "Root在用户已授权单次版本补证及最新查因推进要求内，明确metadata准入实现映射及逐job临时guard边界；不是人类逐字批准具体mapping/manager配置，也不是新资源授权。",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "administrative_parent": "054a294da63a0b033d94271c8c4535e8ad9fde8e",
+  "administrative_parent": "c7c74bb2eb22372890f1d87e3682db1062c48d45",
   "canonical_observed": "87d4651bb60b306e64ac3e3973da2584124a9de9",
   "prepare_branch": "codex/platform-identity-prep-20261030-a1",
   "only_run_branch": "codex/platform-identity-run-20261030-a1",
@@ -96,7 +96,7 @@
   "temporary_restoration_boundary": "Restores original job resource baseline project512/shared64/swap0/oom1 and proves whole aggregates empty. Fixed temporary unit definitions remain for exact final evidence until ephemeral runner teardown; no claim of persistent/global manager configuration restoration. Existing final oom0/absent/missing/late conditions keep whole job FAILED_OR_UNKNOWN.",
   "metadata_allowlist": {
     "manager": "/usr/bin/systemctl show --property=Version --value --no-pager only; no Tainted/all-properties.",
-    "binary": "Normal /proc/1/exe readlink and binary FD hash; allowlisted root-owned /usr/lib/systemd/systemd or /lib/systemd/systemd --version/hash; missing permission or running/disk mismatch remains UNKNOWN, never privileged fallback.",
+    "binary": "Existing unprivileged disk binary/version/package and /proc1 attempts unchanged. Additional narrow root-admitted fixed /proc/1/exe snapshot described separately; no alternate PID, environment, cmdline, source reads or privileged metadata commands.",
     "package": "Only dpkg-query -S exact validated systemd binary and -W systemd with binary:Package, fullVersion, Architecture, source:Package, source:Version, installed status. Patch names are full version metadata, not vendor patch-content proof.",
     "kernel": "Only /usr/bin/uname -s,-r,-v,-m; no uname-a/hostname/cmdline.",
     "os": "Bounded root-owned stable os-release data with ID/VERSION_ID/VERSION/PRETTY_NAME/BUILD_ID only; no source/eval.",
@@ -113,24 +113,24 @@
     "full_report_sha256_and_bytes": true,
     "no_truncation_to_pass": true,
     "transport": "Collector stdout through in-scope client and inherited ActionsFD. Raw32768 report never goes through8192 call_bounded management pipe.",
-    "privileged_resources": "Separate root-owned receipts from actual kernel/systemctl reads only. Unprivileged metadata cannot attest restoration.",
+    "privileged_resources": "Separate root-owned receipts from actual kernel/systemctl reads only. Privileged fixedPID1 snapshot is metadata evidence, never resource proof. Neither version output enters final fixed-resource COW callback.",
     "status": "Per-query unsupported/timeout/outputcap/permission errors explicitUNKNOWN. A complete bounded metadata report may exist even when final resource gate fails."
   },
   "artifacts": {
     "controller": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-      "blob": "f730cf9e998524eee8e9aa8699a280162d17f2ec",
-      "bytes": 37102,
-      "sha256": "e070c9291b30118c5010f0ac0c2411e2cef1e4e6ec6c67926c8b96f0335e9f32",
+      "blob": "98bc2db3c7837ed57ced256c845a76c7c25a6d75",
+      "bytes": 45172,
+      "sha256": "61c36a6a0908c93c93fa3cf81a64c5905a6b3065418597457725df15fa16bfb6",
       "usage": "Exact bytes also inline immutable in workflow, no runtime code/network fetch."
     },
     "workflow": {
       "path": ".github/workflows/platform-identity-metadata.yml",
-      "bytes": 42214,
-      "sha256": "0f2a511f2f1f72c5d06f25c9c6ae2095e7c88f2f033bb96181d7df00934b5d0a"
+      "bytes": 50899,
+      "sha256": "eb7ecb1cd6f8bc7e752563ef40cc5d3f758834bc784af866e7d21080c2483538"
     }
   },
-  "proof_level": "Author construction/connector byte identities only; no local parser/compile/test/collector/job execution; no self-review approval.",
+  "proof_level": "Author pure construction/connector hash+readback only; no parser/compile/test/collector/job execution. Exact successor differs only final evidence deadline supervision, actual environment clearing, fixed in-admission PID1 metadata snapshot and verified literal OS owner aliases, with necessary pins/plan. No self-review approval.",
   "preserved": {
     "scope": "77/18/7",
     "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
@@ -144,10 +144,46 @@
     "PG": "PG_PENDING",
     "hosted_worker": "paused/UNVERIFIED"
   },
-  "next_action": "Different nonauthor reads every exact implementation byte, inline/controller parity and this operation map. Only sole current valid leaseowner after idlequeue/dedup can one-time create exact runbranch. No dispatch by author; version capture is not final resource acceptance or project adoption.",
+  "next_action": "Different nonauthor fully rereads this exact successor3-file package, including complete resource emission timing, actual env-i launch chain and fixed PID1 privileged-read boundary. Only valid sole leaseowner after idlequeue/dedup may create unchanged reserved runbranch once; c7 remains blocked/unrun.",
   "execution_branch_created": false,
   "jobs_started": 0,
   "source_writes": 0,
   "canonical_writes": 0,
-  "lease_writes": 0
+  "lease_writes": 0,
+  "revision_history": [
+    {
+      "candidate": "c7c74bb2eb22372890f1d87e3682db1062c48d45",
+      "status": "NONAUTHOR_BLOCKED_NOT_RUN",
+      "finding": "Final observe/record/emit and always completion not fully supervised against original outer; startup CLI env did not prove fallback service env."
+    }
+  ],
+  "deadline_finding_response": {
+    "scope": "Fixed outside resource-only final read/record/emit boundary; no version or restoration.",
+    "implementation": "Dedicated COW child with own session and tiny<=1024B nonblocking ACK pipe supervises complete final_observation, full<=16KiB root receipt save and stdout flush, emission marker, child actual completed_at, parent reap and post-call remaining checks.",
+    "large_receipt": "Full resource receipt is written/emitted directly by child; never transported through existing8192B management pipe or ACK.",
+    "always": "Actual kernel read+saved root terminal/emission marker read+complete stdout flush run in the same dedicated COW supervision with original outer. Child/caller actual completion must be before outer; old observed_at alone cannot pass. Any ACK/record/emit/reap timeout fails native step and whole job; no new grace.",
+    "receipt_boundary": "Printed verified status is provisional until supervised ACK and native step success, explicitly labelled. Version metadata is already independent output and is not discarded on resource failure.",
+    "new_kernel_writes": 0,
+    "new_restore_budget": 0
+  },
+  "environment_chain_correction": {
+    "fallback_service_actual_argv": "/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -I -B <immutablecontroller> fallback <fixedroot>",
+    "bootstrap_and_always": "sudo invokes the same fixed env-i chain before Python; no reading/printing inherited environment.",
+    "scope": "Actual Popen explicit PATH=/usr/bin:/bin and LC_ALL=C; normal --scope execs controller with that whitelist. -I/-B isolate Python; supervisor children and collector query commands pass explicit whitelists.",
+    "collector": "Existing irreversible-drop os.execve explicit whitelist unchanged; no service-manager default environment is asserted clean merely from its startup client env."
+  },
+  "fixed_pid1_admission_snapshot": {
+    "purpose": "Within already existing privileged collector rootwrapper and only after actual own32/shared64/project512 gates+epoch/clock have passed; before irreversible drop. This is a narrowed metadata read inside existing root admission, not new capabilities or global privilege expansion.",
+    "interface": "Only fixed /proc/1/exe readlink plus stable FD/named/rootownership SHA256 streaming. PID1 target must be exact systemd binary allowlist path (optional deleted suffix); no arbitrary PID1 path emitted/read.",
+    "bounds": "Existing inner remainder, binary16MiB cap/64KiB stream, root metadata record<8192B, common32+16+16 memory budgets unchanged.",
+    "record": "Root-owned0600/nlink1 per-run pid1.metadata.json, exact root record hash/bytes emitted with source/runID/attempt/headSHA and explicit not_resource_restoration_proof. It cannot be read as collector authorisation or resource restoration receipt.",
+    "failure": "Permission/unsupported/nonallowlisted PID1 target is explicit UNKNOWN; no ptrace/LSM/proc/CAP changes, no elevation after drop and no disk-binary substitution for runningPID1.",
+    "unprivileged_boundary": "Normal managerVersion/systemd--version/dpkg/uname/osrelease commands remain postdrop. Existing unprivileged /proc1 observations may still be UNKNOWN and do not overwrite the separately sourced root capture."
+  },
+  "usrmerge_owner_alias_fix": {
+    "scope": "Only fixed /usr/lib/systemd/systemd and /lib/systemd/systemd literal OS aliases.",
+    "gate": "Each exact alias must resolve to already validated root-owned systemd binary, trusted executable permissions and stable FD/named dev/ino/bytes/SHA256 must match that binary. Only then dpkg-query -S receives the original literal alias; do not canonicalize /lib query into /usr.",
+    "outcome": "Both raw alias identities and owner results remain separately associated. Different/unsupported/missing alias or failed owner query is explicit UNKNOWN; no wildcard inventory, fuzzy owner, install or download.",
+    "collector_delta": "Only this existing owner-metadata path changed; managerVersion/kernel/os/cap/deadline/normal unprivileged commands unchanged."
+  }
 }
