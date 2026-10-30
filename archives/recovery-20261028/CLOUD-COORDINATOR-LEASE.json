@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:platform-identity-20261030",
-  "run_id": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
-  "epoch": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
-  "acquired_at": "2026-10-30T00:41:48.995Z",
-  "renewed_at": "2026-10-30T00:51:22.177Z",
-  "expires_at": "2026-10-30T00:51:22.177Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-once-20261030",
+  "run_id": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
+  "epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
+  "acquired_at": "2026-10-30T00:59:29.444Z",
+  "renewed_at": "2026-10-30T00:59:29.444Z",
+  "expires_at": "2026-10-30T01:44:29.444Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "0468db7c1d3db5ac5dcfa39f805865755c6358fe",
+  "expected_parent": "87d4651bb60b306e64ac3e3973da2584124a9de9",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T00:41:48.995Z"
+    "observed_at": "2026-10-30T00:59:29.444Z"
   },
-  "next_action": "Root resolves the single version-only non-Subject admission mapping and explicitly defines whether narrow per-job temporary resource guards are within it; no global manager change. Only then prepare a separate exact <=8 administrative implementation and different nonauthor review before any future fresh-lease serial one-shot metadata job. Do not repeat old Source stages, old404/400 chain or completed jobs.",
+  "next_action": "Prepare exact implementation and existing different nonauthor full review; single dispatch only if all initial gates proven; capture versions separately from finalresource acceptance and oldrunner UNKNOWN.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -45,7 +45,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
+  "predecessor_epoch": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -56,8 +56,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "At most one reviewed pureCONTROL version-metadata job, shared aggregate64/swap0, original270/300 and supervisor/barrier/fallback/finalwitness constraints; no project/Source/configuration/identity/Page changes. If infeasible, concrete single-condition candidate and recommendation only.",
-  "released_at": "2026-10-30T00:51:22.177Z",
+  "scope": "Explicit new human clarification permits independent metadata-only admission and necessary reviewed per-run transient guards, at most ONE version metadata job; shared64/swap0/oom+parent512, firstcontrol270/300, sustainedsupervisor+fallback+strictreadonlyfinal. No Source/project/architecture/globalmanager/identity/Page changes. One corresponding-version static review allowed after reliable new-run evidence.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0
 }
