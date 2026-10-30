@@ -1,0 +1,130 @@
+{
+  "schema": "administrative-collector-uppercase-S-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "922c30646b944e9a29a203eb061b0890a31d53a2",
+  "parent": "967660fa77c5d8ce7720051d1b3e705b9bff00b8",
+  "code_baseline": "5130d39915adb7a7fe492db672a07e413b72672d",
+  "status": "CONDITIONAL_STATIC_ONLY_EXECUTION_HOLD_NOT_RUNTIME_AUTHORIZED",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "916be4aaec7d0fe3136c6757fb60315b9a1ec3d4",
+      "mode": "100644",
+      "bytes": 76166,
+      "sha256": "96a547db28d65a6afbe3e3aae4ed91ee6970479797830c5f1d425899d2af9282",
+      "full_read": true,
+      "changed": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "be6acaa65a09adbf916a2649f769a2eb058b03c0",
+      "mode": "100644",
+      "bytes": 29737,
+      "sha256": "d55501fc7d3434c2dee9f15e6bb3f31cf647a207062aa96d6460a52678621e22",
+      "full_read": true,
+      "changed": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
+      "mode": "100644",
+      "bytes": 24395,
+      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e",
+      "full_read": true,
+      "changed": false
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "6dbb7096738cb8b3aa05f7f14c8651daf3e7853c",
+      "mode": "100644",
+      "bytes": 29835,
+      "sha256": "5b3464af24ac14fde9315a7055f418434e00957099b0d70d832d5448937ce707",
+      "full_read": true,
+      "changed": true
+    }
+  ],
+  "scope": {
+    "parent_compare_commits": 1,
+    "changed_files": 3,
+    "historical_docs_not_new_implementation_changes": true,
+    "Source_changes": 0
+  },
+  "independent_checks": [
+    "Fullcontroller equals exact513 after only insertion fivebytes '\"-S\",' inrun_stage metadata collector Pythonargv. All fallback/supervisor/bootstrap/witness argv and othercode byteidentical.",
+    "Collector24395B blob/hash identical to513. Noimport/query/order/allowlist/frame/finalreport change.",
+    "Workflowonlycontrollercarrier/hash/encodedlength39644→39652; fullbase64re-encoding matches3controllerparts16000/16000/7652 andunchangedcollectorparts16000/16000/528 total72180. Originalfilter/permissions/concurrency/env/t0/othercontent unchanged.",
+    "Strictdecode/hash/immutablecopy/configpins align. Same16+16+32/shared64swap0oom1under512, fixedrootPID1/drop/postgates/permit/selfhash/sustainedsupfallback/cleanup/finalACK remain.",
+    "No-O/-OO/assertskip, auto-relaunchwithout-S, site.main/pathrepair/install or extra probes introduced."
+  ],
+  "compatibility_judgment": {
+    "general_supported": "FixedPython3.12docs-I implieslower-s notuppercase-S; -S separatelysuppressesautomatic site. Fixed3.14docs prefixselection movedtopathinit; actualrunnerPythonunknown. Directpayload imports onlynamedstdlib, supportedupstreamexamplesnotactualclosure.",
+    "independently_read_upstream_examples": [
+      {
+        "path": "Lib/subprocess.py",
+        "commit": "0fb18b02c8ad56299d6a2910be0bab8ad601ef24",
+        "blob": "6df5dd551ea67e9d9651f636f5a399eae9f999dd",
+        "scope": "stdlib/POSIXconditionalnativeimports, notdeployedspawnpath"
+      },
+      {
+        "path": "Lib/selectors.py",
+        "blob": "af6a4f94b5008ad6c466922eb323338604c453fc",
+        "scope": "abc/collections/math/select/sys"
+      },
+      {
+        "path": "Lib/base64.py",
+        "blob": "e233647ee76639abc96bebe161cd9095095beda6",
+        "scope": "re/struct/binascii"
+      },
+      {
+        "path": "Lib/hashlib.py",
+        "blob": "1b16441cb60ba7787b62ce6784656f6b9761409f",
+        "scope": "buildconditional_hashlib/_sha2 etc notinstalledbackendproof"
+      }
+    ],
+    "audit": "Officialsys.addaudithook distinguishes nativeC preinit fromPython hooks; -S notallauditingoff. OS/resourcegates do notestablish mandatorysitehook dispensability.",
+    "actual_unknowns": [
+      "Pythonversion/build/packageattestation",
+      "Deployedvendorstdlibmanifest/transitiveclosure",
+      "Nativeextensionlayout/buildbackends",
+      "venv/pyvenv/prefixinitializationconfiguration",
+      "Global.pth/sitecustomize andusercustomize/vendorpolicy",
+      "Mandatorysiteinstalledsecurity/auditrequirements",
+      "Nativeembedding/preinitaudithookpresence/policy"
+    ],
+    "specific_missing_evidence": "Plan explicitly identifies missingexisting trustedimage/deploymentpolicy, interpreterbuild/package, vendormodulehash/manifest, nativeextension andvenvconfiguration attestations. Old96 successwithoriginalflags throughmanager/disk is not proof new-S or513base64/shlex compatibility.",
+    "execution_hold": "Unknowncompatibility doesnotblock this staticcandidate; it DOES prevent claimingruntimeadmission. Mandatorysitepolicy orsiteprovideddependency requirement must reject/hold environment; cannot quietlybypass. Do notrun todiscoverpolicy without separateauthorizedevidence/attempt. Import/startup failures remainfailed/UNKNOWN andoriginalcleanup; noretrywithout-S.",
+    "memory": "Savings[0,UNKNOWN]; noMiBestimate/fit32/nativequeryOOMfix proof. Everyrawbuffer/frame/contentbound isnotRSS orcgrouppeak."
+  },
+  "primary_docs": [
+    "https://docs.python.org/3.12/using/cmdline.html",
+    "https://docs.python.org/3.12/library/site.html",
+    "https://docs.python.org/3.12/library/sys.html#sys.addaudithook",
+    "https://docs.python.org/3.14/library/sys_path_init.html"
+  ],
+  "authority": "New humanstaticimplementation scope conveyedbyRoot, distinctfrom priorplan approval. Reviewer doesnot useoldplan review asnewapproval or grant runtimequota.",
+  "authorization": {
+    "actual_consumed": 3,
+    "remaining": 0,
+    "fourth_authorized": false,
+    "staticonly": true,
+    "compatibility_actual_PASS": false
+  },
+  "next_action": "Root may checkpoint exactstaticcandidate and explicitexecutionholds. Obtain trustworthyexistingcompatibility/policy evidence within separatelyauthorizedscope beforeconsideringruntime; nofourthjob ornewprobeauthorized bythisreview. NoSource/PG/releaseadoption.",
+  "reviewer_actions": {
+    "runtime_parser_compile_tests": 0,
+    "jobs": 0,
+    "Source_canonical_lease_writes": 0
+  },
+  "preserved": [
+    "77/18/7",
+    "Source28",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}
