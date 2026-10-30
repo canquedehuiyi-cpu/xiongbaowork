@@ -170,7 +170,7 @@ def wrapper():
     unit=unit_name(cfg,stage);cg=PARENT/unit
     assert Path("/proc/self/cgroup").read_text().strip()=="0::/"+str(cg.relative_to(Path("/sys/fs/cgroup")))
     assert limits(cg)==dict(zip(KEYS,[str(DATA_CAP),"0","1"]))
-    PHASE_CONTEXT={"runid":cfg["runid"],"attempt":cfg["attempt"],"head":cfg["target"],"unit":unit,"inner":cfg["inner"]}
+    PHASE_CONTEXT={"runid":cfg["runid"],"attempt":cfg["attempt"],"head":cfg["target"],"epoch":cfg["epoch"],"unit":unit,"inner":cfg["inner"]}
     phase("root_entry","STARTED")
     assert read_small(root/(stage+".permit")).decode()==cfg["epoch"] and not (root/"abort.json").exists()
     assert limits(PARENT)["memory.max"]==str(ORDINARY) and limits(PARENT)["memory.swap.max"]=="0"
@@ -201,9 +201,8 @@ def trusted_tool(path):
     assert stat.S_IMODE(item.st_mode)&0o111
     return str(value)
 
-def bounded_query(argv,deadline):
+def query_result(argv,deadline):
     import selectors,hashlib
-    label=command_phase(argv);phase(label,"STARTED")
     try:
         assert isinstance(argv,list) and argv and all(isinstance(s,str) and "\0" not in s for s in argv)
         trusted_tool(argv[0]);stop=min(deadline,now()+5.0);remaining(stop)
@@ -228,7 +227,6 @@ def bounded_query(argv,deadline):
             except ProcessLookupError:pass
             try:process.wait(timeout=min(0.1,max(0.001,deadline-now())))
             except subprocess.TimeoutExpired:pass
-            phase(label,"UNKNOWN")
             return {"status":"UNKNOWN_"+type(error).__name__,"argv":argv,"complete":False}
         finally:
             selector.close();process.stdout.close();process.stderr.close()
@@ -238,11 +236,70 @@ def bounded_query(argv,deadline):
             result[key+"_bytes"]=len(raw);result[key+"_sha256"]=hashlib.sha256(raw).hexdigest()
             result[key]=raw.decode("utf-8","strict")
         del raw,output
-        phase(label,"FINISHED" if code==0 else "UNKNOWN")
         return result
     except BaseException as error:
-        phase(label,"UNKNOWN")
         return {"status":"UNKNOWN_"+type(error).__name__,"argv":argv,"complete":False}
+
+
+QUERY_COUNT=0
+QUERY_TOTAL_BYTES=0
+QUERY_SEEN=set()
+def emit_query_result(argv,label,result,deadline):
+    # Exactly one complete ASCII/base64 frame, never a partial raw-output claim.
+    # Only previously captured allowlisted result bytes; no additional data read.
+    import base64,hashlib
+    global QUERY_COUNT,QUERY_TOTAL_BYTES
+    remaining(deadline)
+    assert PHASE_CONTEXT is not None and label==command_phase(argv)
+    assert label not in QUERY_SEEN and QUERY_COUNT<9
+    complete=result.get("complete") is True
+    outcome=result["status"]
+    assert outcome=="CAPTURED" or outcome.startswith("UNKNOWN_")
+    code=result.get("exit")
+    if complete:
+        assert isinstance(code,int) and not isinstance(code,bool)
+        assert (code==0 and outcome=="CAPTURED") or (code!=0 and outcome=="UNKNOWN_EXIT")
+    else:
+        assert code is None and outcome.startswith("UNKNOWN_")
+    payload={"schema":"xb-platform-query-result/v1","run_id":PHASE_CONTEXT["runid"],
+        "attempt":PHASE_CONTEXT["attempt"],"head_sha":PHASE_CONTEXT["head"],
+        "epoch":PHASE_CONTEXT["epoch"],"unit":PHASE_CONTEXT["unit"],
+        "phase":label,"query":QUERY_COUNT+1,"argv":argv,"outcome":outcome,"exit":code,
+        "capture_complete":complete,"at":now(),"metadata_only":True,
+        "not_resource_restoration_proof":True}
+    for name,cap in (("stdout",8192),("stderr",2048)):
+        if complete:
+            raw=result[name].encode("utf-8","strict")
+            assert len(raw)==result[name+"_bytes"] and len(raw)<=cap
+            digest=hashlib.sha256(raw).hexdigest()
+            assert digest==result[name+"_sha256"]
+            payload[name]={"encoding":"base64","bytes":len(raw),"sha256":digest,
+                "data":base64.b64encode(raw).decode("ascii")}
+            del raw
+        else:
+            payload[name]={"encoding":"base64","bytes":None,"sha256":None,"data":None,
+                "status":"UNAVAILABLE_CAPTURE_INCOMPLETE"}
+    text=json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=True,allow_nan=False)
+    size=len(text)
+    assert size<=16000 and text.isascii()
+    binding=hashlib.sha256(text.encode("ascii")).hexdigest()
+    line=('PLATFORM_METADATA_QUERY_RESULT {"frame_complete":true,"payload_bytes":'+str(size)+
+        ',"payload_sha256":"'+binding+'","payload":'+text+'}\n')
+    line_bytes=len(line)
+    assert line_bytes<=16384 and QUERY_TOTAL_BYTES+line_bytes<=147456
+    remaining(deadline)
+    QUERY_COUNT+=1;QUERY_TOTAL_BYTES+=line_bytes;QUERY_SEEN.add(label)
+    sys.stdout.write(line);sys.stdout.flush()
+    remaining(deadline)
+
+def bounded_query(argv,deadline):
+    label=command_phase(argv);phase(label,"STARTED")
+    result=query_result(argv,deadline)
+    emit_query_result(argv,label,result,deadline)
+    # A zero-exit phase is FINISHED only after the complete query frame and
+    # post-flush original-deadline check; UNKNOWN results never become FINISHED.
+    phase(label,"FINISHED" if result["status"]=="CAPTURED" else "UNKNOWN")
+    return result
 
 def binary_identity(path,deadline,follow_proc=False):
     import hashlib

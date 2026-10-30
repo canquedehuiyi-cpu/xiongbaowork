@@ -1,39 +1,38 @@
 {
-  "schema": "xiongbaowork-platform-compact-collector-static-preparation/v1",
-  "status": "AUTHOR_CANDIDATE_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUNTIME_AUTHORIZED",
-  "authority": "Root coordination under existing human solve-stall and version-cause scope; concrete static role decomposition, not human-verbatim mapping approval and not new runtime quota.",
+  "schema": "xiongbaowork-platform-immediate-query-static-preparation/v1",
+  "status": "AUTHOR_IMMEDIATE_QUERY_RESULT_CANDIDATE_PENDING_NONAUTHOR_REVIEW_NOT_RUNTIME_AUTHORIZED",
+  "authority": "Human explicitly requested this bounded static immediate-query-result implementation. Root coordinates concrete framing and unchanged safety boundaries; no new runtime quota, resource or privilege authorization.",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "administrative_parent": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
-  "canonical_observed": "389d404c",
-  "dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b",
+  "administrative_parent": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+  "canonical_observed": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
+  "dedup": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40",
   "prepare_branch": "codex/platform-identity-prep-20261030-a1",
-  "reserved_filter": "codex/platform-identity-run-20261030-static-memory-a1",
+  "reserved_filter": "codex/platform-identity-run-20261030-static-query-a1",
   "runtime_authorization": {
     "status": "NOT_RUNTIME_AUTHORIZED",
-    "total_consumed": 2,
-    "maximum_allocated": 2,
+    "total_consumed": 3,
+    "maximum_allocated": 3,
     "remaining": 0,
-    "third_authorized": false,
+    "fourth_authorized": false,
     "execution_branch_created_by_author": false,
     "dispatch_by_author": false
   },
   "actual_prior_evidence": {
-    "run": 40999201244,
-    "job": 123879381737,
-    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
-    "report_commit": "8f55083b1c34335ec41e884baed042c2838a3133",
-    "report_path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-STATIC-CAUSE-SUPPLEMENT-20261030.json",
-    "report_blob": "91374b582b4dca3a274ac26a7614b6f2e4dcfca7",
-    "fact": "Root-admitted fixedPID1 record reached; collector-unit OOM-kill/32Mpeak/swap0/904ms. Precise post-snapshot/drop/entry/native-command allocator phase remains UNKNOWN.",
-    "not_proven": "No specific command caused OOM. Original exec replaced wrapper rather than establishing two resident interpreters. Source bytes are not RSS."
+    "run": 41004678906,
+    "job": 123896762774,
+    "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+    "report_commit": "19761b40115e1c447bab963d3bdfe31c68b8b5d1",
+    "report_path": "archives/recovery-20261028/PLATFORM-IDENTITY-96-PARTIAL-EVIDENCE-SUPPLEMENT-20261030.json",
+    "report_blob": "b9768b256edd05cdb20016980dcb2933a1a328c1",
+    "fact": "RootPID1 raw881B and hash were preserved independently. manager_version FINISHEDseq10 and disk_version FINISHEDseq12 prove prior result assembly but actual strings/lengths/hashes were not exported. owner_usr onlySTARTEDseq13; subsequent native OOM32M does not prove trusted_tool/Popen/allocator/fullDBscan. No final version report.",
+    "not_proven": "No actual manager/disk version values can be reconstructed from FINISHED. No owner/package/kernel/OS completion or specific OOM command/allocator proven."
   },
   "deltas": [
-    "Remove collector-specific wrapper, fixedPID1 snapshot, binary/query/collect definitions from management controller; store dedicated immutable collector.py. Other management/resource/deadline/final evidence functions remain exact original bytes.",
-    "Same collector32 service fixed argv now starts /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -I -B collector.py wrapper <fixedroot> metadata. All actual metadata/control roles preserve explicit actual clean environment chain, without reading/dumping environment.",
-    "Compact root wrapper retains exact fixedPID1 function and original own32/shared64/project512 gates, epoch permit, OOMadj0, irreversible UID/GID/groups drop, actual postdrop limits/identity gates. Calls compact collect directly in same process after these gates; no full management module reparsing/reexec.",
-    "Root-owned0444/nlink1 compact file stable FD/named identity+SHA256 verified in32 wrapper. Config and controller carry exact collector hash; workflow validates both exact payload SHA256 before original t0-bound immutable copy. No network code read.",
-    "Native commands serial and same exact allowlist/deadlines/outputcaps. Reads reduce temporary chunk65536 to at most4096 and current outputcap+1; consume output bytearrays one at time, decode directly and release temporary map. Complete report remains <=32768 with bytes+SHA256 identity.",
-    "Tiny fixed phase records identify actual reached root admission, PID1 snapshot, drop, collector entry, commands and final report. Existing assertions remain failclosed; no UNKNOWN handler resumes collection after gate/drop failure."
+    "Keep exact query order, argv, allowed reads, output caps and original result assembly. Isolate original bounded_query core as query_result, removing only old phase emission. New bounded_query emits its complete result frame outside the core error catch before original return or any next query.",
+    "One bounded complete ASCII singleline contains exact run/attempt/head/epoch/unit/phase/query/argv/outcome/exit and separate base64 stdout/stderr original bytes, bytecounts and SHA256. Canonical payload bytecount/SHA256 bind all fields. Re-encoding strict-UTF8 result text must match already assembled original bytecount/hash.",
+    "Nonzero completed exit preserves raw bytes with UNKNOWN_EXIT and capture_complete=true. Timeout/outputcap/UTF8/exception incomplete result emits explicit UNKNOWN and null byte/hash/data fields, never fake empty or a fabricated exit.",
+    "Query record write/flush and original-inner remaining checks precede FINISHED or UNKNOWN phase. Emit/hash/cap/deadline failure is outside query-result exception catch and terminates collector; no retry/double emission or next query.",
+    "Only epoch context, emitter/wrapper and necessary payload pins/carrier argv-count/filter/plan changed. Management controller changes only collector hash constant. Resource architecture, UID/env-i/permit/selfhash/admission, persistent supervisor/fallback and independent finalphysicalwitness/ACK remain unchanged."
   ],
   "admission_preserved": {
     "original_subject_stages": "NOT_RUN_NOT_CLAIMED_PASSED",
@@ -86,24 +85,24 @@
   "artifacts": {
     "controller": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-      "blob": "a1ce14d43dbb22899f53f7f784093a6832d075e9",
+      "blob": "1b234767d3daeb3fb29aee476d876f791e560d9e",
       "mode": "100644",
       "bytes": 29732,
-      "sha256": "e1d9877cd1b971902d47a9a6e5522c69260de7daf5a41493507f614c820fab00"
+      "sha256": "fb0b07f5cafb1e782f293cd2efd49451a4d6de00b101af35bf37177ce1cef8bb"
     },
     "collector": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
-      "blob": "d56656256ea6e4c7a0b090d3aee6ee54d354f48a",
+      "blob": "b0c5635b66346024f0728e0aae5ca0e443eaae9d",
       "mode": "100644",
-      "bytes": 21442,
-      "sha256": "f2f9232fd13c55f59651977872bd9313322b6a470761ed61a345f865111b185d"
+      "bytes": 24300,
+      "sha256": "b49de6c941caa3f9d706a70192ce6b7269347cce9e9c2690d96cd34dca53c2b0"
     },
     "workflow": {
       "path": ".github/workflows/platform-identity-metadata.yml",
-      "blob": "1f6ac4542a7772e81153b09a8f4dbd0878a982ed",
+      "blob": "f24af6d9b2e54db3df28b6c074aceab1f0b52803",
       "mode": "100644",
-      "bytes": 72155,
-      "sha256": "e793bf63c0ac9805eb6eaf227b84d5faeb986a428eeab0efd5a3ccba15a229de"
+      "bytes": 76030,
+      "sha256": "a93cd5d324ca257e662f90c87b49cbdf6f35054b6378e336c6d1016d526fd712"
     }
   },
   "carrier": {
@@ -114,23 +113,27 @@
     ],
     "collector_fragment_chars": [
       16000,
-      12592
+      16000,
+      400
     ],
-    "total_encoded_chars": 68236,
+    "total_encoded_chars": 72044,
     "max_fragment_chars": 16000,
     "run_scalar_chars": [
-      2157,
+      2186,
       460
     ],
     "all_run_scalars_under21000": true,
     "actual_ARG_MAX": "UNKNOWN_NOT_QUERIED",
     "native_workflow_validation": "NOT_RUN_OR_CLAIMED",
-    "buffer_boundary": "Static literal code-only environment carriers passed as fixed explicit argv through existing env-i bootstrap; decoded/hash-checked before immutable write, exec replaces bootstrap. Never collector environment inquiry or a runtime download."
+    "buffer_boundary": "Static literal code-only environment carriers passed as fixed explicit argv through existing env-i bootstrap; decoded/hash-checked before immutable write, exec replaces bootstrap. Never collector environment inquiry or a runtime download.",
+    "bootstrap_argv_items_including_script_dash": 12,
+    "collector_immutable_code_cap": 32768,
+    "collector_within_existing_code_cap": true
   },
   "unproved": [
-    "Compact role fitting32MiB/RSS/command overlap remains untested. No runtime allocated.",
-    "Platform versions, manager/package equivalence, future resource final gate and native workflow/ARG_MAX remain UNKNOWN.",
-    "Static source/hash/line checks are not parser/compile/test or runtime validation."
+    "No producer/parser/compile/test/runtime check was performed; only tool-memory text/hash checks and GitHub persistence.",
+    "Future frame transport acceptance, added transient footprint/ARGMAX/32MiB fitting and versions remain UNKNOWN.",
+    "No fourth runtime is allocated; static independent review does not grant one."
   ],
   "prohibitions": [
     "No Source/project/parser/compile/tests/CLI/filesystem/localWindows execution by author",
@@ -150,5 +153,76 @@
     "PG": "PG_PENDING",
     "hosted_worker": "paused/UNVERIFIED"
   },
-  "next_action": "Different nonauthor fully reads exact four-file candidate and verifies role split, byte-identical management primitives/rootPID1 function, actual env-i/drop/resource admission, every pin and bounded diagnostic semantics. No third run: NOT_RUNTIME_AUTHORIZED until a separate explicit runtime allocation; review alone must not schedule."
+  "next_action": "Different nonauthor fully reads exact four-file producer candidate/pins and framing/error/deadline semantics. Only after exact implementation review, prepare separate bounded memory diagnostic outline report package distinguishing code-provable/static-candidate/future-measurement facts. No new runtime/executionbranch/canonical/lease by author; max3/3 consumed, no4.",
+  "previous_candidate_evidence": {
+    "run": 40999201244,
+    "job": 123879381737,
+    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+    "report_commit": "8f55083b1c34335ec41e884baed042c2838a3133",
+    "report_path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-STATIC-CAUSE-SUPPLEMENT-20261030.json",
+    "report_blob": "91374b582b4dca3a274ac26a7614b6f2e4dcfca7",
+    "fact": "Root-admitted fixedPID1 record reached; collector-unit OOM-kill/32Mpeak/swap0/904ms. Precise post-snapshot/drop/entry/native-command allocator phase remains UNKNOWN.",
+    "not_proven": "No specific command caused OOM. Original exec replaced wrapper rather than establishing two resident interpreters. Source bytes are not RSS."
+  },
+  "prior_role_decomposition": [
+    "Remove collector-specific wrapper, fixedPID1 snapshot, binary/query/collect definitions from management controller; store dedicated immutable collector.py. Other management/resource/deadline/final evidence functions remain exact original bytes.",
+    "Same collector32 service fixed argv now starts /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -I -B collector.py wrapper <fixedroot> metadata. All actual metadata/control roles preserve explicit actual clean environment chain, without reading/dumping environment.",
+    "Compact root wrapper retains exact fixedPID1 function and original own32/shared64/project512 gates, epoch permit, OOMadj0, irreversible UID/GID/groups drop, actual postdrop limits/identity gates. Calls compact collect directly in same process after these gates; no full management module reparsing/reexec.",
+    "Root-owned0444/nlink1 compact file stable FD/named identity+SHA256 verified in32 wrapper. Config and controller carry exact collector hash; workflow validates both exact payload SHA256 before original t0-bound immutable copy. No network code read.",
+    "Native commands serial and same exact allowlist/deadlines/outputcaps. Reads reduce temporary chunk65536 to at most4096 and current outputcap+1; consume output bytearrays one at time, decode directly and release temporary map. Complete report remains <=32768 with bytes+SHA256 identity.",
+    "Tiny fixed phase records identify actual reached root admission, PID1 snapshot, drop, collector entry, commands and final report. Existing assertions remain failclosed; no UNKNOWN handler resumes collection after gate/drop failure."
+  ],
+  "query_transport": {
+    "prefix": "PLATFORM_METADATA_QUERY_RESULT ",
+    "kind": "ONE_COMPLETE_SINGLELINE_NO_SEPARATE_CHUNKS_OR_END",
+    "payload_schema": "xb-platform-query-result/v1",
+    "framing": "Prefix then JSON object with frame_complete=true, payload_bytes, payload_sha256, payload object, closing brace and LF. Binding covers exact ASCII canonical payload JSON only, excluding prefix/envelope/LF: sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False.",
+    "identity": [
+      "run_id",
+      "attempt",
+      "head_sha",
+      "epoch",
+      "unit",
+      "phase",
+      "query",
+      "fixed exact argv",
+      "outcome",
+      "exit",
+      "capture_complete"
+    ],
+    "stream_fields": "stdout/stderr each independently base64 encoding/data plus exact original bytecount and SHA256; data only base64, no duplicate raw text. Strict UTF8 re-encoding is checked against original assembly; multibyte, LF/control/escape characters survive as exact bytes.",
+    "caps": {
+      "stdout_raw_bytes": 8192,
+      "stderr_raw_bytes": 2048,
+      "canonical_payload_ASCII_bytes": 16000,
+      "complete_line_bytes_including_prefix_envelope_LF": 16384,
+      "one_line_per_query": 1,
+      "max_query_count": 9,
+      "max_query_record_lines": 9,
+      "max_fullrun_query_transport_bytes": 147456,
+      "duplicate_query_labels": "FAIL_CLOSED",
+      "phase_existing_max_line_bytes": 512,
+      "phase_existing_max_count": 64,
+      "final_fullreport_raw_bytes": 32768
+    },
+    "edge_semantics": {
+      "empty": "Captured empty stream is data='' length0 with actual SHA256(empty), distinct from unavailable/null.",
+      "unicode": "Strict original UTF8 decode then exact encode/length/hash check; raw bytes carried base64, not JSON escape length.",
+      "nonzero": "Full capture and observed integer exit may be exported but outcome UNKNOWN_EXIT, phaseUNKNOWN; never CAPTURED/FINISHED.",
+      "timeout_outputcap_exception_invalidUTF8": "Existing incomplete result summary yields capture_complete=false, exit=null and raw stream byte/hash/data=null with UNAVAILABLE_CAPTURE_INCOMPLETE. No truncated prefix is claimed complete.",
+      "hardkill_or_truncated_transport": "Missing line/closing brace+LF, malformed/duplicate-key/nonfinite JSON, wrong binding/hash/base64/length/identity or missing fields => UNKNOWN even if a phaseFINISHED line survives elsewhere. No separate END exists in this singleline format.",
+      "deadline": "Original inner remaining checked before assembly/emission, immediately before write and after complete flush; phaseFINISHED only after that post-check. Any failure escapes to fatal wrapper, no next query.",
+      "acceptance": "Valid frame is only per-query metadata bytes/outcome evidence; resource/fullplatform success and timely overall completion still require original exact gates/native terminal. A successful native phase without its independently verified query frame supplies no raw values."
+    },
+    "memory": "Only one query frame built at a time in existing32 collector stdout. Existing final-report strings retained as before. Extra bounded UTF8/base64/canonicalJSON/line transient copies and possibly cachedbase64 module remain unmeasured; local return/reference release does not prove RSS freed or fitting32. No new process/writer/reader/resource allocation.",
+    "future_verifier": "Independently parse bounded full line rejecting duplicate keys/nonfinite/truncation; verify exact envelope identity, canonicalpayloadbytehash, strictbase64 perstream and rawlength/hash before reading actualvalues. This package implements producer only, no outside parser/job."
+  },
+  "static_preservation_checks": {
+    "collect_exact": true,
+    "pid1_exact": true,
+    "command_phase_exact": true,
+    "binary_identity_exact": true,
+    "immutable_cap_exact": true,
+    "management_hash_only": true
+  }
 }
