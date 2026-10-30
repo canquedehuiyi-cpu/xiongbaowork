@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-contract-20261030",
-  "run_id": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
-  "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
-  "acquired_at": "2026-10-30T09:30:16.387Z",
-  "renewed_at": "2026-10-30T09:30:16.387Z",
-  "expires_at": "2026-10-30T10:08:59.295Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
+  "run_id": "2026-10-30T12:14:35.245Z:D6-public-static",
+  "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
+  "acquired_at": "2026-10-30T12:14:35.245Z",
+  "renewed_at": "2026-10-30T12:14:35.245Z",
+  "expires_at": "2026-10-30T12:59:35.245Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "d45170845bd80a68e3e7a6be9179551bc127e9cc",
+  "expected_parent": "7083a1239bcbf1419a2ce8732e940a12f4f5eba3",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:53:46.209Z"
+    "observed_at": "2026-10-30T12:14:35.245Z"
   },
-  "next_action": "Deliver complete private B/A2 texts and review conclusions in original conversation. Future exact Source/ DATA implementation and trusted output decisions remain separate; no job or fourth metadata. Existing commercial77/18/7 goal remains active, not complete.",
+  "next_action": "Save exact reviewed D6 seven-source candidate to nontriggering preparation branch; independent Git byte correspondence review; administrative checkpoint and queue-idle release.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -46,7 +46,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
+  "predecessor_epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Administrative closeout only: two specifically authorized public metadata files; no raw/private B or A2 fulltext/Source/runtime.",
+  "scope": "Exact already-reviewed D6 static Git preparation and two-file administrative checkpoint only. No Source adoption, execution, model request, secret read/injection, fourth metadata or deployment.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -89,21 +89,19 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "commercial-next-contract-and-A11-recovery-plan/head-d38a68b1/cd6-reviewed/Qoder90bc9e97",
+  "current_task_dedup": "root-human-D6-admin-publication/call_7402e4b8/base7083/reviewb7f9cbf0",
   "checkpoint_timing_note": "This administrative closeout occurred later than the prescribed 15min renewal interval, while the original held45min epoch remained unexpired; no jobs or Source adoption occurred. Historical acquired/renewed timestamps preserved in parent.",
-  "released_at": "2026-10-30T10:08:59.295Z",
   "public_administrative_permission": {
-    "dedup": "human-admin-publication-only/questioncall_1ebd2986/head-d451/A6697cc31",
-    "source": "Root relay of actual human answer to call_1ebd2986226e4a61897981e0c1eb175a",
-    "human_answer": "明确授权，仅上述行政公开保存（建议）",
-    "public_repository": "canquedehuiyi-cpu/xiongbaowork",
+    "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
+    "question": "call_7402e4b872d949b08b1b45bb899e778d",
+    "human_answer": "明确授权本轮两行政文件公开保存",
+    "root_received_at": "2026-10-30T12:09:06Z",
     "allowed_paths": [
       "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
       "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
     ],
-    "allowed_content": "This round executor/task identifiers, times, run/job IDs, candidate hashes, review conclusions and lease/checkpoint state only.",
-    "excluded": "No raw artifacts, secrets or user data; no B/A2 fulltext/new report path/Source/runtime/fourth metadata/deployment permission.",
-    "accepted_at": "2026-10-30T10:08:59.295Z"
+    "scope": "Retain public history; this round executor/task/epoch, time,parent/CAS, seven Source paths/bytes/hashes, review conclusion and zero model/new-job metadata only.",
+    "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
   },
   "current_epoch_renewal_history": {
     "last_successful_renewal_at": "2026-10-30T09:30:16.387Z",
@@ -114,5 +112,14 @@
     "subsequent_small_lease_write": "Explicit automatic-review rejection for public operational metadata disclosure; no bypass.",
     "new_permission_allows": "Only this two-file administrative disclosure/closeout.",
     "original_unexpired_limit": "2026-10-30T10:15:16.387Z"
+  },
+  "predecessor_release": {
+    "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
+    "released_at": "2026-10-30T10:08:59.295Z",
+    "canonical": "7083a1239bcbf1419a2ce8732e940a12f4f5eba3"
+  },
+  "D6_authority_separation": {
+    "source_implementation": "Root relay of human instruction: DeepSeek key 已保存，继续接入熊宝数字员工项目，先不要触发计费调用，第四次也先不执行; current delegation explicitly continues actual Git static candidate saving along the earlier authorized minimal Source scope, exact seven D6 files only.",
+    "administrative_disclosure": "Separate call_7402e4b872d949b08b1b45bb899e778d authorizes only the two existing administrative paths; does not itself authorize Source or runtime."
   }
 }

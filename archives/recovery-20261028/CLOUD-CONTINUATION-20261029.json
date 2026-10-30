@@ -4427,12 +4427,11 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-contract-20261030",
-    "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
-    "state": "released",
-    "expires_at": "2026-10-30T10:08:59.295Z",
-    "scope": "Administrative closeout only: two specifically authorized public metadata files; no raw/private B or A2 fulltext/Source/runtime.",
-    "acquisition_commit": "d45170845bd80a68e3e7a6be9179551bc127e9cc"
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
+    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
+    "state": "held",
+    "expires_at": "2026-10-30T12:59:35.245Z",
+    "scope": "Exact already-reviewed D6 static Git preparation and two-file administrative checkpoint only. No Source adoption, execution, model request, secret read/injection, fourth metadata or deployment."
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5701,5 +5700,48 @@
       "accepted_at": "2026-10-30T10:08:59.295Z"
     },
     "next_action": "Deliver complete private B/A2 texts and review conclusions in original conversation. Future exact Source/ DATA implementation and trusted output decisions remain separate; no job or fourth metadata. Existing commercial77/18/7 goal remains active, not complete."
+  },
+  "deepseek_D6_publication": {
+    "authorization": {
+      "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
+      "question": "call_7402e4b872d949b08b1b45bb899e778d",
+      "human_answer": "明确授权本轮两行政文件公开保存",
+      "root_received_at": "2026-10-30T12:09:06Z",
+      "allowed_paths": [
+        "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+        "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
+      ],
+      "scope": "Retain public history; this round executor/task/epoch, time,parent/CAS, seven Source paths/bytes/hashes, review conclusion and zero model/new-job metadata only.",
+      "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
+    },
+    "stage": "LEASE_ACQUISITION_STATIC_ONLY",
+    "parent": "7083a1239bcbf1419a2ce8732e940a12f4f5eba3",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:deepseek-D6-static-publication",
+    "epoch": "2026-10-30T12:14:35.245Z:D6-public-static",
+    "at": "2026-10-30T12:14:35.245Z",
+    "review": {
+      "bytes": 8756,
+      "sha256": "b7f9cbf0f2d4cc7a4f42baf2992ca9b7d991a95251880b9657cc7ddcdabd0ffb",
+      "findings": [],
+      "status": "STATIC_SOURCE_REVIEW_ONLY_NOT_ADOPTED_NOT_RUNTIME_AUTHORIZED"
+    },
+    "tests_defined": 14,
+    "tests_run": 0,
+    "model_calls": 0,
+    "new_jobs": 0,
+    "source_adopted": false,
+    "previous_rejection_retained": true,
+    "previous_coordinator": {
+      "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:commercial-contract-20261030",
+      "epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
+      "state": "released",
+      "expires_at": "2026-10-30T10:08:59.295Z",
+      "scope": "Administrative closeout only: two specifically authorized public metadata files; no raw/private B or A2 fulltext/Source/runtime.",
+      "acquisition_commit": "d45170845bd80a68e3e7a6be9179551bc127e9cc"
+    },
+    "authority_separation": {
+      "source_implementation": "Root relay of human instruction: DeepSeek key 已保存，继续接入熊宝数字员工项目，先不要触发计费调用，第四次也先不执行; current delegation explicitly continues actual Git static candidate saving along the earlier authorized minimal Source scope, exact seven D6 files only.",
+      "administrative_disclosure": "Separate call_7402e4b872d949b08b1b45bb899e778d authorizes only the two existing administrative paths; does not itself authorize Source or runtime."
+    }
   }
 }
