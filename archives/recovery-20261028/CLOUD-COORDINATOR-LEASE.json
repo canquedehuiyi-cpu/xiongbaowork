@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-once-20261030",
-  "run_id": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
-  "epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
-  "acquired_at": "2026-10-30T00:59:29.444Z",
-  "renewed_at": "2026-10-30T01:38:41.662Z",
-  "expires_at": "2026-10-30T01:39:56.187Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:metadata-c9-20261030",
+  "run_id": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
+  "epoch": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
+  "acquired_at": "2026-10-30T01:44:05.106Z",
+  "renewed_at": "2026-10-30T01:44:05.106Z",
+  "expires_at": "2026-10-30T02:29:05.106Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "87d4651bb60b306e64ac3e3973da2584124a9de9",
+  "expected_parent": "5e3c5b2eb2a07058a94c33124841c407bfe3a7f8",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T00:59:29.444Z"
+    "observed_at": "2026-10-30T01:44:05.106Z"
   },
-  "next_action": "After exact corrected workflow carrier review, acquire separate fresh epoch on actual idle queue; execute at most one collector job. Zero collector jobs so far.",
+  "next_action": "Persist exact c9 nonauthor approval then single execution-ref CAS only after fresh queue/lease/dedup; no collector jobs have started.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -45,7 +45,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
+  "predecessor_epoch": "2026-10-30T00:59:29.444Z:metadata-admission-implementation-one-shot",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -64,6 +64,5 @@
     "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
     "not_human_verbatim_implementation_approval": true,
     "no_new_resource_or_global_persistent_permission": true
-  },
-  "released_at": "2026-10-30T01:39:56.187Z"
+  }
 }
