@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:909-extra-one-20261030",
-  "run_id": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
-  "epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
-  "acquired_at": "2026-10-30T03:44:01.878Z",
-  "renewed_at": "2026-10-30T03:54:43.487Z",
-  "expires_at": "2026-10-30T03:54:43.487Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:compact-static-20261030",
+  "run_id": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
+  "epoch": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
+  "acquired_at": "2026-10-30T04:04:41.486Z",
+  "renewed_at": "2026-10-30T04:04:41.486Z",
+  "expires_at": "2026-10-30T04:49:41.486Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "0ccdc59784a0cb438e7886d7b7bbad844f58173e",
+  "expected_parent": "389d404c3423769c53a5f73c4afd1a64f2fcfa5f",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T03:44:01.878Z"
+    "observed_at": "2026-10-30T04:04:41.486Z"
   },
-  "next_action": "Two actual metadata jobs consumed. Return actual collector32MiB OOM and partial verified PID1 record; only a separately reviewed static memory-footprint decision may precede any explicitly allocated future attempt. No automatic third, no exact-version ARCH audit without versions.",
+  "next_action": "Author saves exact <=4 static administrative candidate; different nonauthor full exact review. Persist reviewable checkpoint, then idle CAS release. NOT_RUNTIME_AUTHORIZED.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -52,7 +52,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T01:44:05.106Z:platform-metadata-c9-one-shot",
+  "predecessor_epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -63,19 +63,9 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "既有metadata-only准入与全部资源/身份/期限门不变。真人明确追加一次exact909；总metadata作业上限2，旧C9已1，本epoch最多1；不得自动第三次。",
-  "resource_jobs_this_epoch": [
-    {
-      "run": 40999201244,
-      "job": 123879381737,
-      "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
-      "status": "completed",
-      "conclusion": "failure",
-      "execution_branch": "codex/platform-identity-run-20261030-a1",
-      "created_at": "2026-10-30T03:46:05Z"
-    }
-  ],
-  "new_jobs_started": 1,
+  "scope": "Root依据真人既有总协调/查因推进授权所作的一轮静态准备分工；不是人类逐字批准新方案、不分配第三次额度。最多4行政文件精简原32MiB collector并加有界阶段记录，全部原门/16+16+32/shared64保持。禁止任何候选执行/解析/compile/test/CONTROL/project作业、执行ref更新、Source采用或新拓扑/权限。",
+  "resource_jobs_this_epoch": [],
+  "new_jobs_started": 0,
   "authorization_provenance": {
     "human_request": "查因解决当前停滞、取得已授权单次版本补证后继续推进",
     "root_coordination": "Metadata-only admission mapping and narrowly necessary reviewed per-job temporary resource guard boundaries within that scope",
@@ -92,5 +82,5 @@
     "accepted_at": "2026-10-30T03:44:01.878Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN40999201244_NO_THIRD"
   },
-  "released_at": "2026-10-30T03:54:43.487Z"
+  "static_prepare_dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b"
 }
