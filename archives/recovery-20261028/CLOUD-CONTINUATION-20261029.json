@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T03:44:01.878Z",
+  "checkpoint_update_at": "2026-10-30T03:45:14.929Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4786,11 +4786,19 @@
     "additional_jobs": 1,
     "authority_source": "Root relay of human choice call_907ac0dcf471487289749faab6d427be and human reopened-app 已恢复; not a third allocation",
     "accepted_at": "2026-10-30T03:44:01.878Z",
-    "status": "ACCEPTED_NOT_DISPATCHED",
+    "status": "ADMISSION_CONFIRMED_NOT_YET_DISPATCHED",
     "old_run": 40987759034,
     "old_job": 123842654361,
     "old_head": "0ccdc59784a0cb438e7886d7b7bbad844f58173e",
     "old_unknown_submission": "adc21b33-ee45-4556-8fbf-a7c88491ea50 UNKNOWN_NOT_REPLAYED",
-    "new_jobs": 0
+    "new_jobs": 0,
+    "applicability_review": {
+      "commit": "49176d08edee88b50929615612c430b4b3df89fe",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-EXTRA-ATTEMPT-APPLICABILITY-20261030.json",
+      "blob": "9e143b1abd771847c96d338a82237ea1e5cf2d8f",
+      "bytes": 3898,
+      "sha256": "4058fbc5b1d50d52308f241a4b73ede5a214cbcdf8c6ebe59c63561cff009123",
+      "status": "EXACT_UNCHANGED_STATIC_ADMISSION_APPLIES_TO_ONE_EXPLICIT_EXTRA_ATTEMPT"
+    }
   }
 }

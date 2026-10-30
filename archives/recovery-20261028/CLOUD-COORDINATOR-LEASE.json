@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "acquired_at": "2026-10-30T03:44:01.878Z",
-  "renewed_at": "2026-10-30T03:44:01.878Z",
+  "renewed_at": "2026-10-30T03:45:14.929Z",
   "expires_at": "2026-10-30T04:29:01.878Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -73,6 +73,6 @@
     "additional_jobs": 1,
     "authority_source": "Root relay of human choice call_907ac0dcf471487289749faab6d427be and human reopened-app 已恢复; not a third allocation",
     "accepted_at": "2026-10-30T03:44:01.878Z",
-    "status": "ACCEPTED_NOT_DISPATCHED"
+    "status": "ADMISSION_CONFIRMED_NOT_YET_DISPATCHED"
   }
 }

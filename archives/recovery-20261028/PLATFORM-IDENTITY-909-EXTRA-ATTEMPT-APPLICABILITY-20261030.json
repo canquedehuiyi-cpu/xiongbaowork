@@ -1,0 +1,66 @@
+{
+  "schema": "administrative-extra-attempt-applicability/v1",
+  "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+  "status": "EXACT_UNCHANGED_STATIC_ADMISSION_APPLIES_TO_ONE_EXPLICIT_EXTRA_ATTEMPT",
+  "reviewer": "/root/a11_data_reviewer",
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "092d3052d7904f286ebcaf0915daebab0a871d7b",
+      "bytes": 63872,
+      "sha256": "9788008d3ffc43dad451d99bcc9e1f281d519c6beff27a7adf22c7a210a8a323",
+      "mode": "100644"
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "cac4ea2124bd50c1af9cb831e4691d8068561875",
+      "bytes": 45272,
+      "sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
+      "mode": "100644"
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "7f8e938f66105f8fd841d0a2ab15007689c041d7",
+      "bytes": 18486,
+      "sha256": "77914b25c64905f81245c730b96374711368e10d1228b8d175fc05faa460b2d4",
+      "mode": "100644"
+    }
+  ],
+  "prior_review": {
+    "commit": "b4007fa700e44e758be646ad905c54f7f4a84168",
+    "blob": "ca982c688e98a45015366f007db060b15c495aaf",
+    "sha256": "46da2dfea6f98d5b3322788676ad56e25975d2d4eacfdd5a21322815759cac21",
+    "full_readback": true,
+    "scope": "Only prior quota-based NOT_DISPATCH_AUTHORIZED is superseded by the new allocation. All technical gates and exactSHA restrictions remain."
+  },
+  "allocation": {
+    "source": "Root conveyed explicit human allocation, referring to priorcall_907ac0dcf471487289749faab6d427be choice 追加一次执行已审修稿. Reviewer did not independently receive the originating UI call and does not claim otherwise.",
+    "dedupkey": "human-explicit-extra-one/90949b0c/oldrun40987759034/head0ccdc597",
+    "total_actual_metadata_job_max": 2,
+    "old_consumed": 1,
+    "new_remaining": 1,
+    "old_run": 40987759034,
+    "old_job": 123842654361,
+    "allowed_extra_exact_sha": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+    "third_attempt_authorized": false
+  },
+  "independent_current_reads": {
+    "canonical": "0ccdc59784a0cb438e7886d7b7bbad844f58173e",
+    "execution_ref": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+    "candidate_native_runs_total": 0,
+    "queued_total": 0,
+    "in_progress_total": 0,
+    "all_three_exact_blob_bytes_sha_match_prior_review": true
+  },
+  "conditions": [
+    "Only sole valid leaseowner may CAS exact unchanged executionref and dispatch the one extra allocation; reviewer grants no lease or canonical authority.",
+    "Same firstcontrol t0/270300 includes cleanup/reap/restore/resource receipt and always completion; sustained supervisor/fallback and actual postdrop gates unchanged.",
+    "Aggregate64/swap0/oom1 under512, supervisor16+fallback16+collector32 with descendants; no new resource exception.",
+    "Immutable controller/config/permit/argv; parent-captured supervisor PID/starttime and original PID1 fixed-read/alias boundaries unchanged.",
+    "No Source/token/networkprobe/install/upgrade; original6Subject NOTRUN; finalphysical actualcaps/pop0 required and missing/oom0/late wholejobfails.",
+    "Metadata independent of resources; no version inference or prior-run backfill, no Source/PG/release adoption."
+  ],
+  "limitations": "Static admission applicability only, not prediction of runtime success. Blank assertion and scope-9 historical causal uncertainty preserved. Failure of this extra attempt does not authorize third attempt.",
+  "next_action": "Root may use this allocation once only after fresh own lease/queue/dedup checks. Reviewer receives exact run/job terminal and full logs, hashes complete records and classifies failures independently.",
+  "writes": "This administrative report only; no candidate/canonical/lease/Source/jobs changes."
+}
