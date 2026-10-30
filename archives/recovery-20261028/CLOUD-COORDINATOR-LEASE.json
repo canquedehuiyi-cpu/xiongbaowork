@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:collector-S-static-20261030",
   "run_id": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
   "epoch": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
   "acquired_at": "2026-10-30T08:22:43.940Z",
-  "renewed_at": "2026-10-30T08:22:43.940Z",
-  "expires_at": "2026-10-30T09:07:43.940Z",
+  "renewed_at": "2026-10-30T08:31:44.699Z",
+  "expires_at": "2026-10-30T08:31:44.699Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "f8256b748bde3ead6b54213d1b12c04f33ce3906",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T08:22:43.940Z"
   },
-  "next_action": "Author exactthree-file staticcandidate then fresh differentnonauthor fullreview ofnew3+unchangedcollector/pins/compatibilityholds. Savecheckpoints/trueoldthirdfailure/3of3 andidle release. No runtime.",
+  "next_action": "Return exact922c three-file staticcandidate and fresh7cc16594 review. Preserve EXECUTION_HOLD until trustworthy existingcompatibility/policy evidence resolved within authorizedscope; no probes or fourthallocation now. Any later runtime requires separateexplicitquota plus applicableexactreview/validsolelease/queue/dedup. NoSource/PG/deploy/managerglobal/resource/allowlistexpansion.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -39,7 +39,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T07:39:44.699Z"
+    "observed_at": "2026-10-30T08:31:12.084Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -87,5 +87,6 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  }
+  },
+  "released_at": "2026-10-30T08:31:44.699Z"
 }
