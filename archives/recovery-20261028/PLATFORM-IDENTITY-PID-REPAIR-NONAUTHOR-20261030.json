@@ -1,0 +1,77 @@
+{
+  "schema": "administrative-static-repair-nonauthor-review/v1",
+  "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+  "parent": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
+  "reviewer": "/root/a11_data_reviewer",
+  "status": "ADMIN_STATIC_PID_REPAIR_REVIEW_ONLY_NOT_DISPATCH_AUTHORIZED",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "mode": "100644",
+      "blob": "092d3052d7904f286ebcaf0915daebab0a871d7b",
+      "bytes": 63872,
+      "sha256": "9788008d3ffc43dad451d99bcc9e1f281d519c6beff27a7adf22c7a210a8a323",
+      "complete_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "mode": "100644",
+      "blob": "cac4ea2124bd50c1af9cb831e4691d8068561875",
+      "bytes": 45272,
+      "sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
+      "complete_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "mode": "100644",
+      "blob": "7f8e938f66105f8fd841d0a2ab15007689c041d7",
+      "bytes": 18486,
+      "sha256": "77914b25c64905f81245c730b96374711368e10d1228b8d175fc05faa460b2d4",
+      "complete_read": true
+    }
+  ],
+  "actual_independent_checks": {
+    "onlyControllerDelta": true,
+    "carrierParity": true,
+    "parts": [
+      16000,
+      16000,
+      16000,
+      12364
+    ],
+    "runChars": [
+      1843,
+      461
+    ],
+    "carrierChars": 60364
+  },
+  "repair": "Persistent supervisor captures os.getpid and /proc/self/stat starttime together before call_bounded fork, stores dictionary, child callback only writes captured values. No callback-time PID acquisition remains. Entire controller equals prior controller with only this exact replacement.",
+  "preserved_checks": [
+    "All unchanged collector64 aggregate/swap0/oom1 under512,16supervisor+16fallback+32collector and all management descendants.",
+    "Same270/300 from first control action, sustained scope supervisor, fallback, revoke/stop/kill/reap/restore, supervised resource-only finalreceipt and always ACK completion.",
+    "Fixed admitted rootPID1 read-only metadata boundary, irreversible drop and actual postdropgates, explicit env-i/execve whitelists, sameinode literal alias owner queries.",
+    "Exact reserved repo/ref/push guard and serial concurrency unchanged; no new Subject/token/network/install or Source changes.",
+    "Static complete base64 recomputation equals four carrier strings; lengths16000/16000/16000/12364, total60364. Run strings1843/461 below21000. Carrier argv60368B includingNUL, env60476B withnames/terminators; runtime exec/environment limits remain failclosed rather than claimed guaranteed."
+  ],
+  "attribution": "Confirmed static wrong-PID defect corrected. Previous runtime AssertionError has blankdetail/no exact traceback, fallbackdeathtrue and scope-9 remain observations. No unique cause, OOM, manager kill attribution or successful future execution asserted.",
+  "history": {
+    "C7P2": "a64b4cbac6a12d44ba19b18cc858c180d0be039d",
+    "FA96limitCorrection": "29179b5be13c6ccf3d16ac40b36552890138e3b0",
+    "C9runtime": "888935229be1bb24bba174b6d42407411ed7c829",
+    "actual_attempt": "40987759034/job123842654361 consumed failed noPID1/versionrecords"
+  },
+  "authorization": {
+    "additional_attempt_allocated": false,
+    "dispatch_authorized": false,
+    "only_static_repair_approved": true,
+    "extra_run_requires": "Separate explicit attempt allocation and exact unchanged candidate revalidation plus solelease/idlequeue/dedup; this report grants none."
+  },
+  "limitations": [
+    "No successor parser/compile/test/collector/job executed. No exact platformmanager version linkage; no ARCH1..5 corresponding-version runtime contract audit possible.",
+    "Metadata provenance, final resource gates and native step status remain separate. Finaloom0/missing/late failure cannot be converted toPASS.",
+    "Old/newrun versions never backfilled. Source28 and77/18/7 unchanged."
+  ],
+  "next_action": "Root may checkpoint this static repair then release lease. Keep successor NOT_DISPATCH_AUTHORIZED; no implicit rerun. Preserve runtime failure and blank assertion uncertainty.",
+  "writes": "One administrative review report only in reviewer exclusive branch; no canonical/Source/lease/jobs."
+}

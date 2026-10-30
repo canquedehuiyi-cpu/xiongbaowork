@@ -406,7 +406,7 @@
     "remaining": 0,
     "invalid_preparation_runs_not_collector": true
   },
-  "next_action": "Review exact parent PID/starttime snapshot repair as minimum prerequisite. A further actual metadata attempt requires an explicit additional one-attempt allocation; do not rerun current job or claim corresponding-version contract without version. No new architecture/resource/permission condition proposed.",
+  "next_action": "Exact90949 parent-PID administrative fix is saved and independently static-reviewed. One actual metadata attempt was consumed; Root must explicitly allocate one additional metadata-only attempt before any execution. No new resource/architecture/privilege required by this repair. Without actual version identity, corresponding-version ARCH audit remains NOT_PERFORMED.",
   "preserved": [
     "Source28 668dd2238ff112bcff38ad2d0456dccd116874ed unchanged",
     "77/18/7",
@@ -431,5 +431,46 @@
     "blob": "03aa34c150daa848b70f86679ed460b137b0598f",
     "bytes": 13958,
     "sha256": "a079878a265acd7eaa6d2d06c18dfe7a6f9ae2645b54812106738ce4386237e0"
+  },
+  "post_failure_static_repair": {
+    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+    "branch": "codex/platform-identity-prep-20261030-a1",
+    "files": [
+      {
+        "path": ".github/workflows/platform-identity-metadata.yml",
+        "mode": "100644",
+        "blob": "092d3052d7904f286ebcaf0915daebab0a871d7b",
+        "bytes": 63872,
+        "sha256": "9788008d3ffc43dad451d99bcc9e1f281d519c6beff27a7adf22c7a210a8a323",
+        "complete_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+        "mode": "100644",
+        "blob": "cac4ea2124bd50c1af9cb831e4691d8068561875",
+        "bytes": 45272,
+        "sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
+        "complete_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+        "mode": "100644",
+        "blob": "7f8e938f66105f8fd841d0a2ab15007689c041d7",
+        "bytes": 18486,
+        "sha256": "77914b25c64905f81245c730b96374711368e10d1228b8d175fc05faa460b2d4",
+        "complete_read": true
+      }
+    ],
+    "review": {
+      "commit": "b4007fa700e44e758be646ad905c54f7f4a84168",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-PID-REPAIR-NONAUTHOR-20261030.json",
+      "blob": "ca982c688e98a45015366f007db060b15c495aaf",
+      "bytes": 4392,
+      "sha256": "46da2dfea6f98d5b3322788676ad56e25975d2d4eacfdd5a21322815759cac21",
+      "status": "ADMIN_STATIC_PID_REPAIR_REVIEW_ONLY_NOT_DISPATCH_AUTHORIZED"
+    },
+    "dispatch_authorized": false,
+    "executed": false,
+    "source_adopted": false
   }
 }
