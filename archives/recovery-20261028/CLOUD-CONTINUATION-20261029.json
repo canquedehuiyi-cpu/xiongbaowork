@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T04:43:53.208Z",
+  "checkpoint_update_at": "2026-10-30T04:44:54.499Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4961,7 +4961,7 @@
     "additional_jobs": 1,
     "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
     "accepted_at": "2026-10-30T04:43:53.208Z",
-    "status": "ACCEPTED_NOT_DISPATCHED",
+    "status": "EXACT_UNCHANGED_ADMISSION_CONFIRMED_NOT_DISPATCHED",
     "fourth_authorized": false,
     "new_jobs": 0,
     "old_runs": [
@@ -4973,6 +4973,14 @@
       123879381737
     ],
     "unknown_old_submission": "adc21b33-ee45-4556-8fbf-a7c88491ea50 UNKNOWN_NOT_REPLAYED",
-    "reserved_ref": "codex/platform-identity-run-20261030-static-memory-a1"
+    "reserved_ref": "codex/platform-identity-run-20261030-static-memory-a1",
+    "applicability_review": {
+      "commit": "473fde89aa9faff2b71ed9991660d3d666dff7d6",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-96-THIRD-ATTEMPT-APPLICABILITY-20261030.json",
+      "blob": "d5accdc5bd904cc1d1cac93c9bc5b5d6561f49e6",
+      "bytes": 4730,
+      "sha256": "de9890fcc7c678dbbed3c63a4a0577f4b6d81bdfb0872d299aad9ca9dbfa9e0d",
+      "status": "EXACT_STATIC_ADMISSION_APPLIES_TO_EXPLICIT_SINGLE_THIRD_ATTEMPT"
+    }
   }
 }

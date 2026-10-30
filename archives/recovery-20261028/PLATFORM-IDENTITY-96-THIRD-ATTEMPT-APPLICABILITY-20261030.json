@@ -1,0 +1,97 @@
+{
+  "schema": "administrative-third-attempt-applicability/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+  "parent": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+  "status": "EXACT_STATIC_ADMISSION_APPLIES_TO_EXPLICIT_SINGLE_THIRD_ATTEMPT",
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "1f6ac4542a7772e81153b09a8f4dbd0878a982ed",
+      "mode": "100644",
+      "bytes": 72155,
+      "sha256": "e793bf63c0ac9805eb6eaf227b84d5faeb986a428eeab0efd5a3ccba15a229de",
+      "full_fresh_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "a1ce14d43dbb22899f53f7f784093a6832d075e9",
+      "mode": "100644",
+      "bytes": 29732,
+      "sha256": "e1d9877cd1b971902d47a9a6e5522c69260de7daf5a41493507f614c820fab00",
+      "full_fresh_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "d56656256ea6e4c7a0b090d3aee6ee54d354f48a",
+      "mode": "100644",
+      "bytes": 21442,
+      "sha256": "f2f9232fd13c55f59651977872bd9313322b6a470761ed61a345f865111b185d",
+      "full_fresh_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "018d942d646ae21b661d90da8a1bf0fb5535ae88",
+      "mode": "100644",
+      "bytes": 8913,
+      "sha256": "1d98b31233be5330d3031843d6bd0be6bb4ebc9b90ffc0c1a7a7c9aff43c1b6c",
+      "full_fresh_read": true
+    }
+  ],
+  "prior_review": {
+    "commit": "1c48cc577e2833e20446d3d7a3d4f5ab61a0f582",
+    "blob": "8cd27bc1ee27e4fdfe82e1e5c5f071662b7ef34e",
+    "sha256": "215725d95ac8bd4fed0f872f8bbbf107310be98ab3664f48cf0fb3a5b8f226d8",
+    "fresh_complete_readback": true,
+    "applicability": "Exact unchanged fourfile bytes/hash/pins/filter remain reviewed. New allocation supersedes quota-only NOT_RUNTIME_AUTHORIZED; no technical condition or evidence limit changes."
+  },
+  "allocation": {
+    "authority": "Root relayed explicit human choice via questioncall_a382c905b0f14d1091ef978a4c36c2f9 selected追加一次第三次补证. Reviewer did not see originatingUI and claims no direct UI witness.",
+    "dedup": "human-explicit-third-one/96ecccb7/priorrun40999201244/head996d6392/questioncall_a382c905",
+    "maximum_actual_jobs": 3,
+    "old_consumed": 2,
+    "new_allowed": 1,
+    "only_allowed_sha": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+    "fourth_authorized": false,
+    "reruns_or_variants_authorized": false
+  },
+  "independent_current_reads": {
+    "canonical": "996d6392d02817c577c2bb5b9ec8f11d8a71afc7",
+    "candidate_native_runs": 0,
+    "execution_ref": "NOT_FOUND404",
+    "queued": 0,
+    "in_progress": 0,
+    "exact_filter": "codex/platform-identity-run-20261030-static-memory-a1",
+    "exact_repo_ref_push_guard": true
+  },
+  "conditions": [
+    "Sole valid leaseowner only; freshqueue/dedup/CAS before exactunchanged reservedbranch creation. Reviewer does not dispatch or grant lease.",
+    "Same16supervisor+16fallback+32collector descendants aggregate64/swap0/oom1 under512; no4GiB/2GiB exception or resourceincrease.",
+    "Rootowned immutable exactcontroller+collector/pins/permit/argv, actual env-i before compactwrapper, fixedPID1 admission, irreversibleUID/GID/groupsdrop with actual postdrop/resourcegates.",
+    "Same firstcontrolt0/270300, sustainedsupervisor/fallback and cleanup/reap/restore/resource-onlyfullreceipt/ACK+always actualdeadline; no grace/outsidewriter/holder.",
+    "Readallowlists/aliasUNKNOWN/smallcompletephase records remain metadataonly, notresourceproof; finalmissing/oom0/late/nonempty failswholejob.",
+    "No Subject/Source/token/networkprobe/install/upgrade; no oldrunversionbackfill. Prior2 failures retained."
+  ],
+  "not_proven": [
+    "Fits32/RSS or which old allocation causedOOM",
+    "ActualARG_MAX/environment/native workflow acceptance",
+    "Future resourcegate or managerVersion/package association",
+    "PG/Source/commercialreleasePASS"
+  ],
+  "next_action": "Root may use this one specific third allocation subject to existing solelease/idle/dedup gates. Reviewer receives actualrun/job terminal/fullrawlogs and verifies records; exact-version official ARCHaudit only if reliable linkage exists. Failure does not authorize fourth or variants.",
+  "reviewer_actions": {
+    "jobs": 0,
+    "candidate_edits": 0,
+    "canonical_lease_Source_writes": 0
+  },
+  "preserved": [
+    "77/18/7",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}

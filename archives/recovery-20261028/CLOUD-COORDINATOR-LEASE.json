@@ -7,7 +7,7 @@
   "run_id": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
   "acquired_at": "2026-10-30T04:43:53.208Z",
-  "renewed_at": "2026-10-30T04:43:53.208Z",
+  "renewed_at": "2026-10-30T04:44:54.499Z",
   "expires_at": "2026-10-30T05:28:53.208Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -84,7 +84,7 @@
     "additional_jobs": 1,
     "source": "Root relay of human choice questioncall_a382c905b0f14d1091ef978a4c36c2f9; not direct observation of origin UI",
     "accepted_at": "2026-10-30T04:43:53.208Z",
-    "status": "ACCEPTED_NOT_DISPATCHED",
+    "status": "EXACT_UNCHANGED_ADMISSION_CONFIRMED_NOT_DISPATCHED",
     "fourth_authorized": false
   }
 }
