@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:immediate-query-static-20261030",
-  "run_id": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
-  "epoch": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
-  "acquired_at": "2026-10-30T05:10:31.808Z",
-  "renewed_at": "2026-10-30T05:27:32.466Z",
-  "expires_at": "2026-10-30T05:27:32.466Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:owner-memory-plan-20261030",
+  "run_id": "2026-10-30T07:26:20.249Z:owner-memory-minimal-doc-only",
+  "epoch": "2026-10-30T07:26:20.249Z:owner-memory-minimal-doc-only",
+  "acquired_at": "2026-10-30T07:26:20.249Z",
+  "renewed_at": "2026-10-30T07:26:20.249Z",
+  "expires_at": "2026-10-30T08:11:20.249Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
+  "expected_parent": "a2910b79da48f2eb192aec5c3f0bcb9955a3f1c8",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T05:10:31.808Z"
+    "observed_at": "2026-10-30T07:26:20.249Z"
   },
-  "next_action": "Return exact5130 four-file candidate, closedblockinghistory, implementationreviewab1549b4 and separatelyreviewedmemorydoc2367/d7db toRoot/human. No fourthrun; actual3/3 remainconsumed. Any later runtime requires separate explicit allocation and fresh applicableexactreview/solelease/queue/dedup. No newreadallowlist, ownerreplacement, resource/environment/permission expansion authorized.",
+  "next_action": "Author concreteplan withinboundedround then differentnonauthor exactdocSHA review/fix; persistreviewabledecision+trueoldfailure/3of3 and idle release. Noimplementation/runtime.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -46,7 +46,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T04:43:53.208Z:third-96ecc-one-shot",
+  "predecessor_epoch": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "真人明确授权仅静态修稿：每项原allowlist查询完成后立即输出完整有界结果+非作者全文审，同时有界静态内存诊断。最多4实现行政文件；不新增读取/命令、不重排或替换dpkg-S、不扩大资源权限。无第四次实际额度，禁止任何候选解析/compile/test/CLI/作业/执行ref修改。",
+  "scope": "真人明确要求仅有据静态最小owner内存修复方案+不同非作者全文审。最多1方案行政文件+1review；不改5130实现，不增读取/命令/allowlist/权限/资源，不执行parser/compile/test/probe/CONTROL/project或第四次。允许文档列出需另行人类决定的具体替代方法，未实施。",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -76,7 +76,7 @@
     "accepted_at": "2026-10-30T03:44:01.878Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN40999201244_NO_THIRD"
   },
-  "static_prepare_dedup": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40",
+  "static_prepare_dedup": "human-owner-memory-minimal-plan/5130d399/head-a2910b79/20261030T0722",
   "third_metadata_allocation": {
     "dedup_key": "human-explicit-third-one/96ecccb7/priorrun40999201244/head996d6392/questioncall_a382c905",
     "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
@@ -87,6 +87,5 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  },
-  "released_at": "2026-10-30T05:27:32.466Z"
+  }
 }

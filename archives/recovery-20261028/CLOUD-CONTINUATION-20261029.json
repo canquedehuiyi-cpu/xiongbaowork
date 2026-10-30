@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T05:27:32.466Z",
+  "checkpoint_update_at": "2026-10-30T07:26:20.249Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,10 +4427,10 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:immediate-query-static-20261030",
-    "epoch": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
-    "state": "released",
-    "expires_at": "2026-10-30T05:27:32.466Z",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:owner-memory-plan-20261030",
+    "epoch": "2026-10-30T07:26:20.249Z:owner-memory-minimal-doc-only",
+    "state": "held",
+    "expires_at": "2026-10-30T08:11:20.249Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
     "released_at": "2026-10-30T05:27:32.466Z"
@@ -5247,5 +5247,23 @@
     },
     "closed_at": "2026-10-30T05:27:32.466Z",
     "next_action": "Return exact5130 four-file candidate, closedblockinghistory, implementationreviewab1549b4 and separatelyreviewedmemorydoc2367/d7db toRoot/human. No fourthrun; actual3/3 remainconsumed. Any later runtime requires separate explicit allocation and fresh applicableexactreview/solelease/queue/dedup. No newreadallowlist, ownerreplacement, resource/environment/permission expansion authorized."
+  },
+  "owner_memory_minimal_plan": {
+    "dedup_key": "human-owner-memory-minimal-plan/5130d399/head-a2910b79/20261030T0722",
+    "status": "ACCEPTED_DOCUMENT_ONLY_AUTHOR_REVIEWER_ACTIVE",
+    "accepted_at": "2026-10-30T07:26:20.249Z",
+    "authority": "Root准确转达真人：继续静态查包归属内存、具体最小修复方案及独审，原资源权限不变，第四次先不执行。",
+    "baseline_implementation": "5130d39915adb7a7fe492db672a07e413b72672d",
+    "baseline_memory_doc": "2367f06b188478706a2bac78fc512ee0ffd058be",
+    "base_canonical": "a2910b79da48f2eb192aec5c3f0bcb9955a3f1c8",
+    "author": "/root/a11_data_author",
+    "different_reviewer": "/root/a11_data_reviewer",
+    "max_plan_files": 1,
+    "max_review_files": 1,
+    "implementation_changes": 0,
+    "new_jobs": 0,
+    "runtime_authorized": false,
+    "total_metadata_consumed": 3,
+    "remaining": 0
   }
 }
