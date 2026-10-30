@@ -374,12 +374,14 @@ def collect(cfg,unit):
                 assert ident.get("status")=="CAPTURED"
                 disk_identity=report["disk_systemd"]
                 assert all(ident.get(k)==disk_identity.get(k) for k in ("dev","ino","bytes","sha256"))
-                owner=bounded_query(["/usr/bin/dpkg-query","-S",alias],inner)
-                report["binary_owner_aliases"].append({"literal_alias":alias,"status":"SAME_VERIFIED_BINARY",
-                    "identity":ident,"owner_query":owner})
             except BaseException as error:
                 report["binary_owner_aliases"].append({"literal_alias":alias,"status":"UNKNOWN_"+type(error).__name__,
                     "owner_query":"NOT_RUN_ALIAS_IDENTITY_NOT_ESTABLISHED"})
+                continue
+            # Query/result-emission failures must escape the identity-only catch.
+            owner=bounded_query(["/usr/bin/dpkg-query","-S",alias],inner)
+            report["binary_owner_aliases"].append({"literal_alias":alias,"status":"SAME_VERIFIED_BINARY",
+                "identity":ident,"owner_query":owner})
     else:
         report["binary_owner_aliases_status"]="UNKNOWN_NO_VERIFIED_BINARY"
     report["systemd_package_identity"]=bounded_query(["/usr/bin/dpkg-query","-W",

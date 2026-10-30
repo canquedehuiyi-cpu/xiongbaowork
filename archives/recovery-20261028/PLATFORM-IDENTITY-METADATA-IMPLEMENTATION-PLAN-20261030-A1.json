@@ -1,9 +1,9 @@
 {
   "schema": "xiongbaowork-platform-immediate-query-static-preparation/v1",
-  "status": "AUTHOR_IMMEDIATE_QUERY_RESULT_CANDIDATE_PENDING_NONAUTHOR_REVIEW_NOT_RUNTIME_AUTHORIZED",
+  "status": "AUTHOR_ALIAS_EMISSION_FATAL_FIX_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUNTIME_AUTHORIZED",
   "authority": "Human explicitly requested this bounded static immediate-query-result implementation. Root coordinates concrete framing and unchanged safety boundaries; no new runtime quota, resource or privilege authorization.",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "administrative_parent": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+  "administrative_parent": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
   "canonical_observed": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
   "dedup": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40",
   "prepare_branch": "codex/platform-identity-prep-20261030-a1",
@@ -32,7 +32,8 @@
     "One bounded complete ASCII singleline contains exact run/attempt/head/epoch/unit/phase/query/argv/outcome/exit and separate base64 stdout/stderr original bytes, bytecounts and SHA256. Canonical payload bytecount/SHA256 bind all fields. Re-encoding strict-UTF8 result text must match already assembled original bytecount/hash.",
     "Nonzero completed exit preserves raw bytes with UNKNOWN_EXIT and capture_complete=true. Timeout/outputcap/UTF8/exception incomplete result emits explicit UNKNOWN and null byte/hash/data fields, never fake empty or a fabricated exit.",
     "Query record write/flush and original-inner remaining checks precede FINISHED or UNKNOWN phase. Emit/hash/cap/deadline failure is outside query-result exception catch and terminates collector; no retry/double emission or next query.",
-    "Only epoch context, emitter/wrapper and necessary payload pins/carrier argv-count/filter/plan changed. Management controller changes only collector hash constant. Resource architecture, UID/env-i/permit/selfhash/admission, persistent supervisor/fallback and independent finalphysicalwitness/ACK remain unchanged."
+    "Only epoch context, emitter/wrapper and necessary payload pins/carrier argv-count/filter/plan changed. Management controller changes only collector hash constant. Resource architecture, UID/env-i/permit/selfhash/admission, persistent supervisor/fallback and independent finalphysicalwitness/ACK remain unchanged.",
+    "Non-author blocking finding response: split only the alias identity catch from actual owner query. No query-emission failure can be swallowed by this catch."
   ],
   "admission_preserved": {
     "original_subject_stages": "NOT_RUN_NOT_CLAIMED_PASSED",
@@ -85,24 +86,24 @@
   "artifacts": {
     "controller": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-      "blob": "1b234767d3daeb3fb29aee476d876f791e560d9e",
+      "blob": "715dba936fcf377c1ec5ddfeebbd86be2f10ee3a",
       "mode": "100644",
       "bytes": 29732,
-      "sha256": "fb0b07f5cafb1e782f293cd2efd49451a4d6de00b101af35bf37177ce1cef8bb"
+      "sha256": "45d325e7b94c65a9828e5755ecabe2915ea418b60897ace639e9618c143508c6"
     },
     "collector": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
-      "blob": "b0c5635b66346024f0728e0aae5ca0e443eaae9d",
+      "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
       "mode": "100644",
-      "bytes": 24300,
-      "sha256": "b49de6c941caa3f9d706a70192ce6b7269347cce9e9c2690d96cd34dca53c2b0"
+      "bytes": 24395,
+      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e"
     },
     "workflow": {
       "path": ".github/workflows/platform-identity-metadata.yml",
-      "blob": "f24af6d9b2e54db3df28b6c074aceab1f0b52803",
+      "blob": "470608b68fcb2b3f860669459fe91278399f3787",
       "mode": "100644",
-      "bytes": 76030,
-      "sha256": "a93cd5d324ca257e662f90c87b49cbdf6f35054b6378e336c6d1016d526fd712"
+      "bytes": 76158,
+      "sha256": "a996bc487051670cf64e7c511b6442f385e3ff632fd87a0693f75f0175cf29e7"
     }
   },
   "carrier": {
@@ -114,9 +115,9 @@
     "collector_fragment_chars": [
       16000,
       16000,
-      400
+      528
     ],
-    "total_encoded_chars": 72044,
+    "total_encoded_chars": 72172,
     "max_fragment_chars": 16000,
     "run_scalar_chars": [
       2186,
@@ -218,11 +219,20 @@
     "future_verifier": "Independently parse bounded full line rejecting duplicate keys/nonfinite/truncation; verify exact envelope identity, canonicalpayloadbytehash, strictbase64 perstream and rawlength/hash before reading actualvalues. This package implements producer only, no outside parser/job."
   },
   "static_preservation_checks": {
-    "collect_exact": true,
     "pid1_exact": true,
     "command_phase_exact": true,
     "binary_identity_exact": true,
     "immutable_cap_exact": true,
-    "management_hash_only": true
+    "management_hash_only": true,
+    "collect_exact_except_alias_identity_catch_separation": true
+  },
+  "blocking_review_response": {
+    "candidate": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
+    "review_commit": "4f8363374c4cdb919556e2bdef8014f7a24b8c99",
+    "review_path": "archives/recovery-20261028/PLATFORM-IDENTITY-QUERY-9FB-FINDING-20261030.json",
+    "finding": "Alias identity try/except also covered bounded_query and could swallow fatal result emission/flush/deadline failure then continue.",
+    "status": "OLD_CANDIDATE_BLOCKED_NOT_RUN_PRESERVED",
+    "minimal_fix": "Identity-only catch records original UNKNOWN and continue; owner bounded_query and successful append occur after the catch. Emit failures propagate to fatal wrapper. Query order/argv and identity-failure no-query semantics unchanged.",
+    "no_runtime_authority": true
   }
 }
