@@ -1,0 +1,113 @@
+{
+  "schema": "administrative-compact-collector-nonauthor-static-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+  "parent": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+  "dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b",
+  "status": "STATICONLY_NOT_RUNTIME_AUTHORIZED",
+  "findings": [],
+  "files": [
+    {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "mode": "100644",
+      "blob": "1f6ac4542a7772e81153b09a8f4dbd0878a982ed",
+      "bytes": 72155,
+      "sha256": "e793bf63c0ac9805eb6eaf227b84d5faeb986a428eeab0efd5a3ccba15a229de",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "mode": "100644",
+      "blob": "a1ce14d43dbb22899f53f7f784093a6832d075e9",
+      "bytes": 29732,
+      "sha256": "e1d9877cd1b971902d47a9a6e5522c69260de7daf5a41493507f614c820fab00",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "mode": "100644",
+      "blob": "d56656256ea6e4c7a0b090d3aee6ee54d354f48a",
+      "bytes": 21442,
+      "sha256": "f2f9232fd13c55f59651977872bd9313322b6a470761ed61a345f865111b185d",
+      "full_read": true
+    },
+    {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "mode": "100644",
+      "blob": "018d942d646ae21b661d90da8a1bf0fb5535ae88",
+      "bytes": 8913,
+      "sha256": "1d98b31233be5330d3031843d6bd0be6bb4ebc9b90ffc0c1a7a7c9aff43c1b6c",
+      "full_read": true
+    }
+  ],
+  "compare": {
+    "commits": 1,
+    "files": 4,
+    "Source_changes": 0
+  },
+  "independent_carrier_measurements": {
+    "managementParity": true,
+    "collectorParity": true,
+    "managementParts": [
+      16000,
+      16000,
+      7644
+    ],
+    "collectorParts": [
+      16000,
+      12592
+    ],
+    "runChars": [
+      2157,
+      461
+    ],
+    "encodedTotal": 68236
+  },
+  "reviewed_paths": [
+    "Both complete static base64 carriers independently re-encoded from exact UTF8 originals and compared in entirety; strict length/hash decode pins and root0444 O_EXCL copies align, config collectorhash and controllerconstant identical.",
+    "Management collector launch actual fixedargv env-i whitelist precedes compact Python rootwrapper. Sameprocess drop is not assumed to clean manager environment; actual launch does so. Query processes still use explicit whitelist.",
+    "Compact file ownstable FD/named/rootUID/nlink1/mode0444/SHA check before root admission; root config permit/time/unit/own32+shared64/project512 gates remain. RootPID1 fixed snapshot exact original function, no addedproc/env/token reads.",
+    "Irreversible real/effective/savedUID/GID/groups drop, OOMadj0 and actual postdrop cgroup/caps/identity then compact collect direct. Entry repeats actual gates. No metadata work moves outside original32unit.",
+    "Fixed commandallowlist/managerVersion/binaryhash/sameinode literalalias owner/packageversions/uname/OSfields and explicitUNKNOWN semantics retained; fullreport<=32768 with exactbytes/hash.",
+    "Phase records fixednames and STARTED/FINISHED/UNKNOWN only, completeprefix+LF<=512B, count<=64; originalinner remaining before/afterflush. These are metadata progress, notresourceproof; hardkill leaves incompletephase UNKNOWN.",
+    "Query bufferread<=4096 and remainingcap+1, bytearrays pop+decode thenrelease; stillparent+nativechild aggregate32. No assertion that these measures solveOOM or exactoldallocator causedOOM.",
+    "All16supervisor+16fallback+32collector descendants share64/swap0/oom1 under512. No newunit/topology/holder/outsidewriter/resourceexception.",
+    "Exact original management call_bounded/cleanup/restore/rootgate/supervisor/fallback/finalresourceACK/observe/physicalfinal/bootstrap/witnessoperation functions compared unchanged. ParentPIDcapture remainsbeforefork.",
+    "Originalfirstcontrolt0 before all payloadcopies/guardsetup, same270/300 including cleanup/reap/restore/fullreceipt/ACK and actualalwayscompletion. No freshgrace.",
+    "Push and job guard reserve only codex/platform-identity-run-20261030-static-memory-a1, distinct from prep and originalexecutionbranch; no reviewer executionref creation orjob. Serialsource-recovery-bytes cancelfalse retained."
+  ],
+  "precision_note": "Authorplan secondrun length460 excludes terminalLF; independentliteralcount461 includes it. Both below21000; first2157. No parser/compile/nativevalidation performed.",
+  "carrier_limits": {
+    "code_only_encoded_chars": 68236,
+    "fixed_argv_carrier_bytes_with_terminators": 68241,
+    "largest_arg_bytes_with_terminator": 16001,
+    "initial_env_plus_argv": "Carrier alone exists both in launching step env and explicit argv: >136KiB plus names/fixedargs/inheritedrunnerenv. ActualARG_MAX/environment/nativevalidation UNKNOWN; no static acceptance guarantee, failure beforeadmission failclosed. env-i clears before Python roles."
+  },
+  "causal_limits": "Oldrun40999201244/job123879381737 nativecollectorOOM32M and completedPID1 record are immutable history. ExactOOMphase/postdrop/command allocator remainsUNKNOWN; newcode bytes are not RSS or runtimeproof. Newstaticcandidate does not supply platformversions/ARCHcontract evidence or oldrunbackfill.",
+  "authorization": {
+    "actual_job_max": 2,
+    "consumed": 2,
+    "remaining": 0,
+    "third_authorized": false,
+    "review_authorizes_code_execution": false,
+    "only_static_candidate_round": true
+  },
+  "next_action": "Root may checkpoint exact static review. Candidate remains NOT_RUNTIME_AUTHORIZED; no executionbranch/thirdjob without separate explicit runtimeallocation and exact applicable review. Any changedbytes require newexactSHA review.",
+  "reviewer_actions": {
+    "parser_compile_tests": 0,
+    "project_or_cli": 0,
+    "jobs": 0,
+    "canonical_lease_Source_writes": 0
+  },
+  "preserved": [
+    "77/18/7",
+    "Source28",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}
