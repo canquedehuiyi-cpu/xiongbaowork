@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T08:34:57.839Z",
+  "checkpoint_update_at": "2026-10-30T08:39:16.320Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,13 +4427,13 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:S-review-byte-index-20261030",
-    "epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:root-S-admin-correction-20261030",
+    "epoch": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
     "state": "released",
-    "expires_at": "2026-10-30T08:34:57.839Z",
-    "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
-    "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
-    "released_at": "2026-10-30T08:34:57.839Z"
+    "expires_at": "2026-10-30T08:39:16.320Z",
+    "acquisition_commit": "91c5710a28308117af2f40285db8a0a82a7efbbc",
+    "scope": "本轮仅collector大写-S静态候选与行政兼容性核对；候选922c30646b944e9a29a203eb061b0890a31d53a2已静态独审，实际Python/依赖/site与audit策略兼容UNKNOWN，EXECUTION_HOLD；newjobs=0，metadata总额度3/3已耗尽，第四次及probe/变体/执行ref修改均无许可。原Source28/77-18-7及全部资源/身份/关闭门保持。",
+    "released_at": "2026-10-30T08:39:16.320Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5482,6 +5482,27 @@
       "candidate_and_report_content_unchanged": true,
       "all_three_candidate_bytecounts_verified": true,
       "no_runtime_or_new_scope": true
+    },
+    "root_administrative_correction": {
+      "dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
+      "at": "2026-10-30T08:39:16.320Z",
+      "review_bytes": 6598,
+      "review_characters": 6596,
+      "review_blob_unchanged": "f6e16ba82569d7ba53d50a7f7d247b5f5e43c8d4",
+      "review_sha256_unchanged": "865797e70425f266112a3226667dcb6a03891ce68c2bdb7dc505f1edd2c5ab99",
+      "candidate_unchanged": "922c30646b944e9a29a203eb061b0890a31d53a2",
+      "previous_mislabeled_current_scope": {
+        "status": "HISTORICAL_SUPERSEDED_NOT_AUTHORITY",
+        "text": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。"
+      },
+      "field_level_nonauthor_confirmation": {
+        "reviewer": "/root/a11_data_reviewer",
+        "input_head": "cba4381986f980d2fbc1a5e5b8d61a95b4d6e432",
+        "findings": [],
+        "verified": "Nativeimmutableblob independently6598UTF8B/6596JScharacters and sameSHA; proposed newcurrent scope accurately static/HOLD/newjobs0/no4. Exactstagedtwofilecommitreview required beforeCAS."
+      },
+      "fresh_acquisition_commit": "91c5710a28308117af2f40285db8a0a82a7efbbc",
+      "new_jobs": 0
     }
   }
 }

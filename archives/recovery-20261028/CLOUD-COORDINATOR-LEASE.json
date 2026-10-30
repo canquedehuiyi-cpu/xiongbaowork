@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:root-S-admin-correction-20261030",
   "run_id": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
   "epoch": "2026-10-30T08:37:56.068Z:root-UTF8-and-current-scope-admin",
   "acquired_at": "2026-10-30T08:37:56.068Z",
-  "renewed_at": "2026-10-30T08:37:56.068Z",
-  "expires_at": "2026-10-30T09:22:56.068Z",
+  "renewed_at": "2026-10-30T08:39:16.320Z",
+  "expires_at": "2026-10-30T08:39:16.320Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "cba4381986f980d2fbc1a5e5b8d61a95b4d6e432",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T08:37:56.068Z"
   },
-  "next_action": "Stageexacttwofileadministrativecorrection, independentnon-authorreviewbeforeCAS, fullreadback andidle release. No code/reviewblob changes.",
+  "next_action": "RootrequestedUTF8bytes6598/currentstatic-HOLDscopecorrection only; exactcandidate922/review7ccunchanged, actual3/3/no4/probe/refupdates. Returnexactreviewedhandoff/leaseblobs and releasedstate.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -39,7 +39,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:34:57.839Z"
+    "observed_at": "2026-10-30T08:39:16.320Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -88,5 +88,6 @@
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
   },
-  "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8"
+  "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
+  "released_at": "2026-10-30T08:39:16.320Z"
 }
