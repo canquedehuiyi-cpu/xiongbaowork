@@ -1,0 +1,194 @@
+{
+  "schema": "xiongbaowork-platform-memory-diagnostic-outline/v1",
+  "status": "AUTHOR_OUTLINE_PENDING_NONAUTHOR_REVIEW_NO_RUNTIME_AUTHORITY",
+  "authority": "Separate static diagnostic outline after exact implementation review, within existing human solve-stall/static-query-result request and Root bounded coordination. This report neither adds reads nor allocates another run.",
+  "dedup": "human-query-immediate-result-static/thirdrun41004678906/head3234927f/supplement19761b40/memory-outline-after-513-review",
+  "repository": "canquedehuiyi-cpu/xiongbaowork",
+  "implementation": {
+    "candidate": "5130d39915adb7a7fe492db672a07e413b72672d",
+    "controller": {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+      "blob": "715dba936fcf377c1ec5ddfeebbd86be2f10ee3a",
+      "mode": "100644",
+      "bytes": 29732,
+      "sha256": "45d325e7b94c65a9828e5755ecabe2915ea418b60897ace639e9618c143508c6",
+      "full_readback": true
+    },
+    "collector": {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "2fa176818c511e60cdac1bf6b23f2c95fd703b89",
+      "mode": "100644",
+      "bytes": 24395,
+      "sha256": "7581ac1f2dc8f07304d69be1d7f5780f4b2d9354eb45ea3a404e22c5dc7f654e",
+      "full_readback": true
+    },
+    "workflow": {
+      "path": ".github/workflows/platform-identity-metadata.yml",
+      "blob": "470608b68fcb2b3f860669459fe91278399f3787",
+      "mode": "100644",
+      "bytes": 76158,
+      "sha256": "a996bc487051670cf64e7c511b6442f385e3ff632fd87a0693f75f0175cf29e7",
+      "full_readback": true
+    },
+    "plan": {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+      "blob": "5fea72861f887c72fa233dd73f5263fe4ec19dc7",
+      "mode": "100644",
+      "bytes": 16439,
+      "sha256": "e984904a253c1a0fd6fed47eeb55c7be01f08d9269625f8b42c4e32cd9f98ff1",
+      "full_readback": true
+    },
+    "nonauthor_review": {
+      "commit": "ab1549b4d90fe1a9fc8278deea15df71b6bd215d",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-QUERY-513-NONAUTHOR-20261030.json",
+      "reviewer": "/root/a11_data_reviewer",
+      "status": "STATICONLY_NOT_RUNTIME_AUTHORIZED",
+      "findings": []
+    }
+  },
+  "historical_boundaries": [
+    {
+      "candidate": "9fb0977eca86ee30a13f268f99154c9a4fd41305",
+      "review": "4f8363374c4cdb919556e2bdef8014f7a24b8c99",
+      "status": "BLOCKED_NOT_RUN",
+      "finding": "Owner alias identity catch could swallow emission failure and continue. 5130 moves query outside catch; preserve original blocked history."
+    },
+    {
+      "run": 41004678906,
+      "job": 123896762774,
+      "reviewed_candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+      "evidence_commit": "19761b40115e1c447bab963d3bdfe31c68b8b5d1",
+      "evidence_path": "archives/recovery-20261028/PLATFORM-IDENTITY-96-PARTIAL-EVIDENCE-SUPPLEMENT-20261030.json",
+      "evidence_blob": "b9768b256edd05cdb20016980dcb2933a1a328c1",
+      "facts": [
+        "RootPID1 complete raw881B/SHA256 independently preserved; this is live binary identity, not actual running-manager version/package equivalence.",
+        "manager_version FINISHEDseq10 and disk_version FINISHEDseq12 mean complete zero-exit result assembly reached; actual strings/lengths/hashes were not exported and cannot be reconstructed.",
+        "owner_usr STARTEDseq13 occurred before trusted_tool and Popen. Popen reach, actual child allocation, a package database scan and the responsible OOM allocator remain UNKNOWN.",
+        "Native collector-unit OOM and32M peak/swap0 identify a constrained-unit failure. No final full version report or observed resource/category/process breakdown. Native scope-9 does not identify its signal actor."
+      ]
+    },
+    {
+      "run": 40999201244,
+      "job": 123879381737,
+      "report": "8f55083b1c34335ec41e884baed042c2838a3133",
+      "facts": "Earlier909 had reached rootPID1 but lacked postdrop/entry/command markers. Its exact later phase cannot be backfilled using third-run markers."
+    }
+  ],
+  "code_provable_baseline96": [
+    {
+      "fact": "Static workflow carriers are not the collector's environment or argv.",
+      "evidence": "Workflow env-i bootstrap receives only literal administrative carriers, verifies/stages code and execs management. Metadata service separately uses fixed env-i/Python collector wrapper argv, not carrier fragments.",
+      "limit": "Do not blame old68236 carrier chars as resident collector32 input. No actual per-role RSS measurement exists."
+    },
+    {
+      "fact": "Management and compact role already separated in96.",
+      "evidence": "96 compact blobd56656256ea6e4c7a0b090d3aee6ee54d354f48a21442B only loads collector helpers; irreversible drop and direct collect call lines188-195 avoid full management reparse. Earlier909 exec replaced wrapper, not two simultaneous resident interpreters.",
+      "limit": "Module source size and fewer definitions do not establish resident-memory savings or fit."
+    },
+    {
+      "fact": "Python collector plus a native query can overlap inside same32 unit if Popen is reached.",
+      "evidence": "96 bounded_query line210 spawns child; parent holds interpreter/modules/cfg/report and waits/captures. Descendants stay within existing collector32, shared64 and project512.",
+      "limit": "Third-run owner_usr STARTED precedes this Popen, so overlap at that exact failing query is not proven. No per-process shares or native allocator stack is available."
+    },
+    {
+      "fact": "Prior completed query result objects remain referenced by final report.",
+      "evidence": "96 collect line289 stores manager result; disk result follows; result includes stdout/stderr strings/lengths/hashes/argv. Final report serializes only near line363.",
+      "limit": "Referenced strings are code facts, not measured RSS. Their content/size from third run was not exported. Unreached final serialization is not proven OOM culprit."
+    },
+    {
+      "fact": "Already bounded streaming is not full binary buffering.",
+      "evidence": "Compact selfcode hash reads4096B chunks; binary_identity reads65536B chunks with16MiB total-size cap. Query pipe reads at most4096/currentcap+1, stdout8192/stderr2048; OS data at most16384.",
+      "limit": "Do not infer entire binary/database in memory from file size. Freed Python references do not prove resident pages returned to OS."
+    }
+  ],
+  "static_candidate513": [
+    {
+      "fact": "Complete immediate query raw evidence added without command/order/read expansion.",
+      "evidence": "New query_result line204 preserves original capture; emitter line247 occurs before bounded_query returns. Original command_phase and rootPID1/binary identities remain unchanged; owner query line382 is outside identity-only catch.",
+      "limit": "This is reviewed static code, not observed output from a run."
+    },
+    {
+      "fact": "New emission has additional finite transient allocations.",
+      "evidence": "Per stream strictUTF8 encode verifies original length/hash, then base64 string. Canonical ASCII JSON payload<=16000B, complete framed line<=16384B, each query at most one record, max9, total query transport<=147456B. base64 import may leave cached module objects; existing report result strings remain. Locals return before next query; global counters/label set bounded9.",
+      "limit": "No peak/RSS allocator profile. Bounded10KiB raw outputs and bounded frame copies do not imply fitting aggregate32MiB."
+    },
+    {
+      "fact": "No new process, output writer, resource group or privilege allowance.",
+      "evidence": "Existing collector stdout and in-scope client only; original16+16+32/shared64/project512/swap0/oom1/env-i/drop/selfhash/permit and firstt0+270/+300 supervision/cleanup/finalphysicalreadonlywitness/ACK unchanged.",
+      "limit": "No fourth run authorized; added framing may itself alter peak timing/footprint."
+    },
+    {
+      "fact": "Immediate output preserves completed query evidence before next query only if framing completes.",
+      "evidence": "Exact raw ASCII payload substring hash/length plus strict base64 stream hashes bind identity/outcome/exit. Missing/corrupt frame => UNKNOWN regardless of surviving FINISHED.",
+      "limit": "Producer canonicalization is not a license for a reader to parse and reserialize cross-language JSON floats when checking hash. Hash original lexical ASCII payload bytes. A flushed frame followed by failed post-inner check is forensic raw evidence only, not timely phase completion/resource success."
+    }
+  ],
+  "general_kernel_accounting_context": {
+    "primary_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+    "provenance": "Root supplied its actual official-page read and line references in this bounded task; this author did not run a kernel/runtime metadata probe or assert version matching.",
+    "references": [
+      {
+        "section": "Memory",
+        "lines": "654-674",
+        "paraphrase": "Memory controller accounting includes anonymous memory, file/page-cache charges and kernel objects such as directory/inode objects."
+      },
+      {
+        "section": "memory.current / memory.peak",
+        "lines": "memory.current;748-753",
+        "paraphrase": "The cgroup aggregate and descendants are accounted, and peak records a maximum for that aggregate."
+      },
+      {
+        "section": "memory.stat conceptual categories",
+        "lines": "830-843 and932-945",
+        "paraphrase": "General category descriptions include anon, file, kernel/slab and directory/inode-related slab."
+      }
+    ],
+    "interpretation": "A32MiB cgroup bound is not just the sum of two displayed Python/dpkg RSS figures. Accounting can include descendant anonymous memory, file/cache and charged kernel categories.",
+    "not_claimed": [
+      "Actual runner kernel version/configuration or exact documentation-version/architecture match.",
+      "Any category shares, memory.stat values, per-process RSS, reclaimed pages, OOM allocator/site or full database scan.",
+      "That the old job read these categories or that current authorized collector may read new memory paths."
+    ]
+  },
+  "future_measurement_outline_not_implementation": {
+    "status": "NO_PROBE_IMPLEMENTATION_OR_RUNTIME_ALLOCATION",
+    "preconditions": "Any later measurement needs a separately specified exact read allowlist/producer and independent review, within unchanged aggregate resource/deadline/identity gates and an explicit runtime allocation. This report does not add that allowance.",
+    "questions": [
+      "Which already-known phase was actually reached, and did a verified complete query frame/appropriate timely phase completion exist?",
+      "What was charged to the collector aggregate and descendants at a specified moment, as distinct from observed native32M peak label?",
+      "If separately allowed, what measured category/process data could distinguish parent/child/user memory from cache/kernel charges without claiming a total from incomplete RSS?",
+      "What transient framing/import/serialization allocations were actually measured rather than inferred from source bounds?"
+    ],
+    "constraints": [
+      "No commands, new paths, env/proc reads, memory.stat probes, package-owner replacement, query reordering or new service/resource topology are supplied or enabled here.",
+      "Do not replay an ACK-unknown action or rerun Subject/generator; this is only a static diagnosis design boundary.",
+      "Any future evidence must distinguish raw category data, sampling time, missing/late samples and unsupported fields; no inferred shares or retrospectively assigning old OOM cause."
+    ]
+  },
+  "authorization": {
+    "runtime_maximum": 3,
+    "consumed": 3,
+    "remaining": 0,
+    "fourth_authorized": false,
+    "Source_changes": 0,
+    "canonical_changes": 0,
+    "lease_changes": 0,
+    "jobs_started_by_author": 0,
+    "execution_ref_created_by_author": false,
+    "only_new_file": "this administrative outline"
+  },
+  "preserved": {
+    "scope": "77/18/7",
+    "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "files": 2065,
+    "bytes": 50175181,
+    "ROOT_RELEASE": null,
+    "ready": false,
+    "AP_DISABLED": true,
+    "NOT_SERVICE_WIRED": true,
+    "migrationNOT_WIRED": true,
+    "PG": "PG_PENDING",
+    "hosted_worker": "paused/UNVERIFIED"
+  },
+  "next_action": "Different nonauthor reads this exact standalone report after the implementation review. Root may persist the phase checkpoint and actual limitations. No implementation change, new read/probe/measurement or fourth job follows from accepting the outline."
+}

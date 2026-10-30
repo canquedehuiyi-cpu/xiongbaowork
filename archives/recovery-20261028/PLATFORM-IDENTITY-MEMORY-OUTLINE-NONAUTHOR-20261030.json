@@ -1,0 +1,65 @@
+{
+  "schema": "administrative-memory-outline-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "2367f06b188478706a2bac78fc512ee0ffd058be",
+  "parent": "5130d39915adb7a7fe492db672a07e413b72672d",
+  "status": "ADMIN_STATIC_DIAGNOSTIC_REVIEW_ONLY_NOT_RUNTIME_AUTHORIZED",
+  "findings": [],
+  "document": {
+    "path": "archives/recovery-20261028/PLATFORM-IDENTITY-MEMORY-DIAGNOSTIC-OUTLINE-20261030.json",
+    "blob": "03364ecf85c1c6c7324a31f19b3ec459992353fd",
+    "mode": "100644",
+    "bytes": 12718,
+    "sha256": "4dfb79736f513ae8816eb9b33f77e95cd7f098b0b756e8d50e90b14cbc5cc0ae",
+    "complete_read": true
+  },
+  "scope": {
+    "compare_commits": 1,
+    "changed_files": 1,
+    "only_added_administrative_JSON": true,
+    "implementation_fourfiles_at_docSHA_fresh_fetched_identical_to_reviewed513": true,
+    "implementation_review": "ab1549b4d90fe1a9fc8278deea15df71b6bd215d"
+  },
+  "evidence_separation": {
+    "prior96_measured": "Existing independently downloaded fullrun41004678906/job123896762774 log87455chars/87457UTF8B SHAe840a81c3ad24c92a25a6a047fb307adbc414501e76107919db0ad3471e37cf9;13phase/owner_usrSTARTED/collectorOOM32M proven; responsibleallocator/Popenreach/fullDBscanUNKNOWN.",
+    "new513_static": "Collector24395B source and boundedimmediateemitter reviewed, notrun. Sourcebytes/caps/transientcopies notRSS/fit32. Completedqueries may nowbe exported ifactualvalidframes occur; no retrospective recovery of oldversionstrings.",
+    "general_kernel_concepts": "Outline explicitly identifies officialhttps://docs.kernel.org/admin-guide/cgroup-v2.html excerpts as Root-relayed actualread, not author measuredrunnerdata. Conceptanon/filecache/kernel/slab/descendants is generalaccounting, not actualkernelversionmatchedARCH or actualshares. Reviewer doesnotclaim independentruntime memory.stat/RSS observation.",
+    "future_measurement": "No newreadpaths/probe/allowlist/runtime enabled. Any future sampledcategory/process evidence requires separatelyspecified reviewedproducer and allocation."
+  },
+  "verified_reasoning": [
+    "Workflowcarrierargv/env onlybootstrap; collectorservice starts separatelyenv-i and doesnotreceivecarrierfragments. Do not addcarrier60232/68236/72172 tocollectorRSS.",
+    "Compact96 alreadyseparatedmanagement. cfg/moduleobjects/retainedquerystrings andpossiblePython/nativechildoverlap are codefacts/potential contributions, notmeasuredperprocessshares.",
+    "owner_usrSTARTED occursbeforetrusted_tool/Popen; exactfailurewindowknown butcommandexecution/scan/allocatorUNKNOWN. Earlier909 phaseunknown cannot bebackfilled.",
+    "Streaming4096/65536 hashbuffers do not implywholebinary/database buffered. Bounded10KiB rawcapture andfiniteJSON/base64copies are not proof fit32.",
+    "513 immediateemitter addsstrictUTF8/base64/canonicalJSON/payloadhash/linecopies and possiblemodulecache; lexicalrawASCIIhash contract andpostflushfailureforensic-only semantics precise.",
+    "All16+16+32/shared64swap0oom1under512, env/drop/permit/selfhash/allowlist/queryorder,t0/270300/fallback/cleanup/finalreadonlyACK unchanged. Noimplementationchanges in thisdocpackage."
+  ],
+  "limitations": [
+    "NoactualmanagerVersion/packageassociation orversionmatchedARCHaudit.",
+    "No newmemorymeasurement/profile/kernelversion ornativevalidation.",
+    "No runtimequota/resourceincrease/ownerqueryreplacement/reorderauthorization follows."
+  ],
+  "authorization": {
+    "maximum": 3,
+    "consumed": 3,
+    "remaining": 0,
+    "fourth_authorized": false
+  },
+  "next_action": "Root may checkpoint staticdiagnosticoutline and releaseadministrativephase. No newcandidate/probe/job/canonical/lease permission fromacceptance; futurechanges require separateconcrete scope andexactreview.",
+  "reviewer_actions": {
+    "jobs": 0,
+    "parser_compile_tests": 0,
+    "Source_canonical_lease_writes": 0
+  },
+  "preserved": [
+    "77/18/7",
+    "Source28",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "workerpaused/UNVERIFIED"
+  ]
+}

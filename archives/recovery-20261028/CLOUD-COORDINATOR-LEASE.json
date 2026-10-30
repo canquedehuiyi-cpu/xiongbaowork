@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:immediate-query-static-20261030",
   "run_id": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
   "epoch": "2026-10-30T05:10:31.808Z:immediate-query-result-static-only",
   "acquired_at": "2026-10-30T05:10:31.808Z",
-  "renewed_at": "2026-10-30T05:22:17.214Z",
-  "expires_at": "2026-10-30T05:55:31.808Z",
+  "renewed_at": "2026-10-30T05:27:32.466Z",
+  "expires_at": "2026-10-30T05:27:32.466Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "3234927f23d79d777c1e865f2d335cd46bb32d3c",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T05:10:31.808Z"
   },
-  "next_action": "Exact5130 static implementation reviewed; now separate <=8-file author memorydiagnostic document and differentnonauthor exactreview. No runtime3/3/no4. Finish administrative persistence/queueproof/release.",
+  "next_action": "Return exact5130 four-file candidate, closedblockinghistory, implementationreviewab1549b4 and separatelyreviewedmemorydoc2367/d7db toRoot/human. No fourthrun; actual3/3 remainconsumed. Any later runtime requires separate explicit allocation and fresh applicableexactreview/solelease/queue/dedup. No newreadallowlist, ownerreplacement, resource/environment/permission expansion authorized.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -37,14 +37,9 @@
     "conclusion": "failure"
   },
   "queue_at_release": {
-    "queued": 0,
-    "in_progress": 0,
-    "exact_candidate_runs": 1,
-    "run": 41004678906,
-    "attempt": 1,
-    "status": "completed",
-    "conclusion": "failure",
-    "observed_at": "2026-10-30T04:53:42.969Z"
+    "queued": [],
+    "in_progress": [],
+    "observed_at": "2026-10-30T05:26:45.968Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -92,5 +87,6 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  }
+  },
+  "released_at": "2026-10-30T05:27:32.466Z"
 }
