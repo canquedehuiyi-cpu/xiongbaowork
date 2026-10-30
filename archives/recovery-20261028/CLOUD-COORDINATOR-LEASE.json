@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:manager-contract-audit-20261030",
-  "run_id": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
-  "epoch": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
-  "acquired_at": "2026-10-29T17:40:04.878Z",
-  "renewed_at": "2026-10-29T17:44:58.002Z",
-  "expires_at": "2026-10-29T17:44:58.002Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:platform-identity-20261030",
+  "run_id": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
+  "epoch": "2026-10-30T00:41:48.995Z:platform-identity-bounded-control",
+  "acquired_at": "2026-10-30T00:41:48.995Z",
+  "renewed_at": "2026-10-30T00:41:48.995Z",
+  "expires_at": "2026-10-30T01:26:48.995Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "16c13a54fb8a769793da9b44205f08c14225781c",
+  "expected_parent": "0468db7c1d3db5ac5dcfa39f805865755c6358fe",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-29T17:40:04.878Z"
+    "observed_at": "2026-10-30T00:41:48.995Z"
   },
-  "next_action": "Static contract remains BLOCKED/UNKNOWN. Need trustworthy existing actual manager/kernel/package identity and matching official lifecycle/retention contract before further static architecture review. No new implementation/configuration/job/Source/identity/Page work authorized by this audit.",
+  "next_action": "Exact candidate+existing nonauthor review; if all gates compatible one metadata-only push after fresh queue/lease/ref/rundedup; capture newrunner identity separately from old UNKNOWN.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -45,7 +45,7 @@
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-29T17:00:04.986Z:hostdurable-delegated-control-stage",
+  "predecessor_epoch": "2026-10-29T17:40:04.878Z:manager-contract-readonly-audit",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -56,6 +56,5 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Read-only manager lifecycle contract analysis and <=8 administrative evidence files only; no implementation/configuration/job/Source/Page/automation changes",
-  "released_at": "2026-10-29T17:44:58.002Z"
+  "scope": "At most one reviewed pureCONTROL version-metadata job, shared aggregate64/swap0, original270/300 and supervisor/barrier/fallback/finalwitness constraints; no project/Source/configuration/identity/Page changes. If infeasible, concrete single-condition candidate and recommendation only."
 }
