@@ -4429,9 +4429,10 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
     "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-    "state": "held",
-    "expires_at": "2026-10-30T13:10:59.218Z",
-    "scope": "Exact seven already-reviewed D6 Source fulltexts public static preparation only on codex/deepseek-project-integration-prep-20261030; two authorized administrative paths only on canonical; no adoption/runtime/secret/model/paid/PG/deployment/fourth metadata."
+    "state": "released",
+    "expires_at": "2026-10-30T12:28:37.056Z",
+    "scope": "Completed exact D6 static Source publication on authorized preparation branch and two-file administrative closeout only. No Source adoption/runtime/secret/model/paid/PG/deployment/fourth metadata.",
+    "acquisition_commit": "23a87db608609820d7cf867a6ba67ee3bb9bedf1"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5714,7 +5715,7 @@
       "scope": "Retain public history; this round executor/task/epoch, time,parent/CAS, seven Source paths/bytes/hashes, review conclusion and zero model/new-job metadata only.",
       "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
     },
-    "stage": "SEVEN_SOURCE_PERMISSION_RECEIVED_LEASE_ACQUISITION",
+    "stage": "STATIC_GIT_CANDIDATE_SAVED_NOT_ADOPTED_NOT_RUNTIME_AUTHORIZED",
     "parent": "7083a1239bcbf1419a2ce8732e940a12f4f5eba3",
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
     "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
@@ -5742,67 +5743,68 @@
     "authority_separation": {
       "source_implementation": "Root relay of human instruction: DeepSeek key 已保存，继续接入熊宝数字员工项目，先不要触发计费调用，第四次也先不执行; current delegation explicitly continues actual Git static candidate saving along the earlier authorized minimal Source scope, exact seven D6 files only.",
       "administrative_disclosure": "Separate call_7402e4b872d949b08b1b45bb899e778d authorizes only the two existing administrative paths; does not itself authorize Source or runtime.",
-      "actual_auto_review_status": "PUBLIC_SOURCE_PERMISSION_PENDING; earlier Source implementation directive is retained as historical authorization provenance, not override of actual rejection."
+      "actual_auto_review_status": "PUBLIC_SOURCE_PERMISSION_PENDING; earlier Source implementation directive is retained as historical authorization provenance, not override of actual rejection.",
+      "current_status": "Exact seven public Source fulltexts explicitly authorized by call_3a74ee20; prior rejection remains historical. No runtime/adoption authority."
     },
-    "acquisition_commit": "e0581b79710c9f4e1ded3140a0e82e9b0cff6fee",
+    "acquisition_commit": "23a87db608609820d7cf867a6ba67ee3bb9bedf1",
     "files": [
       {
         "path": "openbot/server/src/models/effective-deployment.ts",
         "mode": "100644",
         "bytes": 1952,
         "sha256": "14c83cd1edfff80020f0d8ee6b3efe3e18ccda111d93a48c62d58fc0a7c0df0d",
-        "git_blob": null
+        "git_blob": "16161b1d9e8bc43881f0a802909b58698788fc50"
       },
       {
         "path": "openbot/server/src/index.ts",
         "mode": "100644",
         "bytes": 157195,
         "sha256": "1c51d9c638cae7d21d97cb658b4836dbe8b51a55cb9cc9ec322833ca584c503c",
-        "git_blob": null
+        "git_blob": "66553d661ea1520c8b4c69f4037cdc655a6124f5"
       },
       {
         "path": "openbot/server/src/copilot.ts",
         "mode": "100644",
         "bytes": 104945,
         "sha256": "cfd8d5910225c35590dee72d2e59b3a4d64c42181e9a14d13d4524442df6ddbd",
-        "git_blob": null
+        "git_blob": "4de3a2d3539d9f38f9ad97c361c4995f2179262b"
       },
       {
         "path": "openbot/server/src/routing/model.ts",
         "mode": "100644",
         "bytes": 5563,
         "sha256": "c77c20bc95f5023eb151deff599759f77912bf3cb0e16de271507d5465f13b06",
-        "git_blob": null
+        "git_blob": "63fd26cc03092c66bbdca7b89cd66144a069ab3b"
       },
       {
         "path": "openbot/server/src/models/deepseek-probe.ts",
         "mode": "100644",
         "bytes": 1995,
         "sha256": "cae8896fc45b6006d122f88a4006c383257035eae2f195fbe56d7afd9f8df932",
-        "git_blob": null
+        "git_blob": "48803a777d53f9363d4dbc3a016e79c1e1f6a266"
       },
       {
         "path": "openbot/server/src/models/routes.ts",
         "mode": "100644",
         "bytes": 13062,
         "sha256": "0814a15a2b64dbe744cc873e44ada12413fe57419986390f1a4a323f6fd4123a",
-        "git_blob": null
+        "git_blob": "5864b12d82efb6b5240c33a0360a9c2f0fb27c62"
       },
       {
         "path": "openbot/server/tests/deepseek-integration.test.ts",
         "mode": "100644",
         "bytes": 6498,
         "sha256": "e006328b751cc0382140ce67f2138b2b0b0084b5ee7d582ed0137dfc4bb27509",
-        "git_blob": null
+        "git_blob": "a10cdb88ba27f6332ac84f7284c760730acf0f29"
       }
     ],
     "source_total_bytes": 291210,
-    "source_candidate_commit": null,
-    "source_tree": null,
-    "source_branch_created": false,
-    "source_ref_updated": false,
+    "source_candidate_commit": "e93a02d97031031b9353ae771b4fa3c886849999",
+    "source_tree": "560655d52d69a83f70f5e38639bb236faeee863c",
+    "source_branch_created": true,
+    "source_ref_updated": true,
     "review_git_path": null,
-    "review_status": "Original private exact D6 report unchanged; no actual Git candidate available for Git byte correspondence review.",
+    "review_status": "Original D6 private semantic report unchanged; actual exact Git correspondence separately verified.",
     "rejection": {
       "tool": "mcp__codex_apps__github_create_tree",
       "isError": true,
@@ -5812,8 +5814,8 @@
       "subsequent_source_update_ref_called": false,
       "retry": false
     },
-    "released_at": "2026-10-30T12:16:49.473Z",
-    "next_action": "BLOCKED_PUBLIC_SOURCE_DISCLOSURE: Root to obtain explicit public disclosure authorization for exact D6 seven Source fulltexts. Do not retry/encode/split/change channel/ref; no runtime or fourth metadata.",
+    "released_at": "2026-10-30T12:28:37.056Z",
+    "next_action": "D6 static candidate saved and exact Git correspondence independently verified. Runtime injection, SDK/type/test/PG and production remain unverified; no runtime or model-call permission; preserve Source28 and all closed gates.",
     "queue": {
       "queued": 0,
       "in_progress": 0
@@ -5895,6 +5897,35 @@
     "previous_closeout": {
       "state": "ADMIN_CLOSED_SOURCE_PUBLICATION_REJECTED",
       "released_at": "2026-10-30T12:16:49.473Z"
-    }
+    },
+    "source_parent": "23a87db608609820d7cf867a6ba67ee3bb9bedf1",
+    "source_branch": "codex/deepseek-project-integration-prep-20261030",
+    "git_correspondence_review": {
+      "reviewer": "/root/a11_data_reviewer",
+      "status": "GIT_BYTE_CORRESPONDENCE_ONLY",
+      "findings": [],
+      "method": "Independent full connector read of all seven Git files; UTF8 byte lengths and SHA256 independently computed; actual nontruncated tree mode/blob checked; compare exact parent and seven changed paths checked; candidate runs API checked zero.",
+      "total_bytes": 291210,
+      "all_seven_match_original_D6": true,
+      "semantic_rereview": false,
+      "report_fulltext": "PRIVATE_ONLY_NOT_PUBLICLY_PERSISTED",
+      "queue_and_branch_layer": "Owner independently observed; reviewer did not separately verify these two observations."
+    },
+    "diff": {
+      "parent": "23a87db608609820d7cf867a6ba67ee3bb9bedf1",
+      "modified": 4,
+      "added": 3,
+      "paths": [
+        "openbot/server/src/models/effective-deployment.ts",
+        "openbot/server/src/index.ts",
+        "openbot/server/src/copilot.ts",
+        "openbot/server/src/routing/model.ts",
+        "openbot/server/src/models/deepseek-probe.ts",
+        "openbot/server/src/models/routes.ts",
+        "openbot/server/tests/deepseek-integration.test.ts"
+      ],
+      "workflow_changes": 0
+    },
+    "candidate_runs": 0
   }
 }

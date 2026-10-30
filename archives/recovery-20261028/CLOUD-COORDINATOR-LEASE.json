@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D6-seven-source-publication",
   "run_id": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
   "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
   "acquired_at": "2026-10-30T12:25:59.218Z",
-  "renewed_at": "2026-10-30T12:25:59.218Z",
-  "expires_at": "2026-10-30T13:10:59.218Z",
+  "renewed_at": "2026-10-30T12:28:37.056Z",
+  "expires_at": "2026-10-30T12:28:37.056Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "df59046add0c7d3918db7ac16d328813ad65f96c",
+  "expected_parent": "23a87db608609820d7cf867a6ba67ee3bb9bedf1",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
     "observed_at": "2026-10-30T12:25:59.218Z"
   },
-  "next_action": "Persist exact D6 seven files to nontriggering preparation branch; independent full actual Git correspondence readback; record two-file checkpoint and release.",
+  "next_action": "D6 static candidate saved and exact Git correspondence independently verified. Runtime injection, SDK/type/test/PG and production remain unverified; no runtime or model-call permission; preserve Source28 and all closed gates.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -39,7 +39,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T12:16:49.473Z"
+    "observed_at": "2026-10-30T12:28:37.056Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -57,7 +57,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Exact seven already-reviewed D6 Source fulltexts public static preparation only on codex/deepseek-project-integration-prep-20261030; two authorized administrative paths only on canonical; no adoption/runtime/secret/model/paid/PG/deployment/fourth metadata.",
+  "scope": "Completed exact D6 static Source publication on authorized preparation branch and two-file administrative closeout only. No Source adoption/runtime/secret/model/paid/PG/deployment/fourth metadata.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -105,7 +105,7 @@
   },
   "current_epoch_renewal_history": {
     "epoch": "2026-10-30T12:25:59.218Z:D6-seven-source-static",
-    "last_successful_renewal_at": "2026-10-30T12:25:59.218Z",
+    "last_successful_renewal_at": "2026-10-30T12:28:37.056Z",
     "interval_exceeded": false
   },
   "predecessor_release": {
@@ -198,5 +198,6 @@
       "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json"
     ],
     "excluded": "No secrets/user data/private B,A2,B1 or review fulltext; no Source adoption/runtime/model/billing/PG/deployment/fourth metadata."
-  }
+  },
+  "released_at": "2026-10-30T12:28:37.056Z"
 }
