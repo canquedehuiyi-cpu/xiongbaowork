@@ -1,139 +1,145 @@
 {
-  "schema": "xiongbaowork-platform-metadata-implementation-v1",
-  "status": "AUTHOR_PARENT_PID_SNAPSHOT_FIX_NOT_DISPATCH_AUTHORIZED",
-  "authority": "Root在用户已授权单次版本补证及最新查因推进要求内，明确metadata准入实现映射及逐job临时guard边界；不是人类逐字批准具体mapping/manager配置，也不是新资源授权。",
+  "schema": "xiongbaowork-platform-compact-collector-static-preparation/v1",
+  "status": "AUTHOR_CANDIDATE_PENDING_EXACT_NONAUTHOR_REVIEW_NOT_RUNTIME_AUTHORIZED",
+  "authority": "Root coordination under existing human solve-stall and version-cause scope; concrete static role decomposition, not human-verbatim mapping approval and not new runtime quota.",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
-  "administrative_parent": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
-  "canonical_observed": "87d4651bb60b306e64ac3e3973da2584124a9de9",
+  "administrative_parent": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+  "canonical_observed": "389d404c",
+  "dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b",
   "prepare_branch": "codex/platform-identity-prep-20261030-a1",
-  "only_run_branch": "codex/platform-identity-run-20261030-a1",
-  "admission": {
-    "kind": "INDEPENDENT_NON_SUBJECT_METADATA_ADMISSION",
-    "original_six_subject_stages": "NOT_RUN_NOT_CLAIMED_PASSED",
-    "stage": "one metadata-only collector under sustained supervisor and independent fallback",
-    "preserved_checks": [
-      "immutable root-owned controller/config/epoch permit and fixed role/unit/argv bindings",
-      "actual own cgroup and shared64/project512 memory/swap/oom gates before activation",
-      "protected root administrative controllers only; no Subject or token access",
-      "collector OOMadj0+irreversible real/effective/saved UID/GID/groups drop",
-      "independent post-drop actual cgroup/limits/identity readback",
-      "same absolute270/300 with revoke/stop/kill/reap/restoration and independent physical final witness"
-    ]
+  "reserved_filter": "codex/platform-identity-run-20261030-static-memory-a1",
+  "runtime_authorization": {
+    "status": "NOT_RUNTIME_AUTHORIZED",
+    "total_consumed": 2,
+    "maximum_allocated": 2,
+    "remaining": 0,
+    "third_authorized": false,
+    "execution_branch_created_by_author": false,
+    "dispatch_by_author": false
   },
-  "resources": {
-    "project_parent": 536870912,
-    "common_metadata_aggregate": 67108864,
-    "supervisor_scope_and_all_management_descendants": 16777216,
-    "fallback_service_and_all_management_descendants": 16777216,
-    "collector_service_and_all_command_descendants": 33554432,
+  "actual_prior_evidence": {
+    "run": 40999201244,
+    "job": 123879381737,
+    "candidate": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+    "report_commit": "8f55083b1c34335ec41e884baed042c2838a3133",
+    "report_path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-STATIC-CAUSE-SUPPLEMENT-20261030.json",
+    "report_blob": "91374b582b4dca3a274ac26a7614b6f2e4dcfca7",
+    "fact": "Root-admitted fixedPID1 record reached; collector-unit OOM-kill/32Mpeak/swap0/904ms. Precise post-snapshot/drop/entry/native-command allocator phase remains UNKNOWN.",
+    "not_proven": "No specific command caused OOM. Original exec replaced wrapper rather than establishing two resident interpreters. Source bytes are not RSS."
+  },
+  "deltas": [
+    "Remove collector-specific wrapper, fixedPID1 snapshot, binary/query/collect definitions from management controller; store dedicated immutable collector.py. Other management/resource/deadline/final evidence functions remain exact original bytes.",
+    "Same collector32 service fixed argv now starts /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -I -B collector.py wrapper <fixedroot> metadata. All actual metadata/control roles preserve explicit actual clean environment chain, without reading/dumping environment.",
+    "Compact root wrapper retains exact fixedPID1 function and original own32/shared64/project512 gates, epoch permit, OOMadj0, irreversible UID/GID/groups drop, actual postdrop limits/identity gates. Calls compact collect directly in same process after these gates; no full management module reparsing/reexec.",
+    "Root-owned0444/nlink1 compact file stable FD/named identity+SHA256 verified in32 wrapper. Config and controller carry exact collector hash; workflow validates both exact payload SHA256 before original t0-bound immutable copy. No network code read.",
+    "Native commands serial and same exact allowlist/deadlines/outputcaps. Reads reduce temporary chunk65536 to at most4096 and current outputcap+1; consume output bytearrays one at time, decode directly and release temporary map. Complete report remains <=32768 with bytes+SHA256 identity.",
+    "Tiny fixed phase records identify actual reached root admission, PID1 snapshot, drop, collector entry, commands and final report. Existing assertions remain failclosed; no UNKNOWN handler resumes collection after gate/drop failure."
+  ],
+  "admission_preserved": {
+    "original_subject_stages": "NOT_RUN_NOT_CLAIMED_PASSED",
+    "topology": "project512/shared64/supervisor16+fallback16+collector32, aggregate including all descendants",
     "swap": 0,
     "oom_group": 1,
-    "no_RLIMIT_substitute": true,
-    "no2GiB_or4GiB_exception": true
+    "resource_redistribution": false,
+    "unit_changes": "Only existing metadata service fixed payload argv switches to compact role plus env-i. No new service/cgroup/Delegate/holder/outsidewriter.",
+    "clock": "First actual control action t0 remains before /run code/config and guard setup. Original inner=t0+270 and outer=t0+300; all collection, stop/kill/reap/restore and supervised final read/record/emit/ACK within same budget, no new grace.",
+    "supervision": "Existing persistent supervisor parentPID/starttime stable snapshot and independent fallback unchanged; cleanup-once/revoke/realcommandreturn/physical finalreadonly evidence unchanged.",
+    "metadata": "Exact original privileged fixed/proc/1/exe snapshot function unchanged; same unprivileged manager Version, root-stable binary and literal same-inode aliases, exact package/sourceversion/uname/OS allowlists. UNKNOWN semantics preserved; no extra proc/env/network/permission surface.",
+    "final": "Missing/late/nonempty/oom0 limits remain FAILED_OR_UNKNOWN. Metadata phase/final reports cannot supply resource proof or backfill previous runners."
   },
-  "clock": {
-    "t0": "Workflow captures time.monotonic before /run controller/config creation and before any guard/unit setup; literal parsing/imports collect no versions.",
-    "inner": "t0+270",
-    "outer": "t0+300",
-    "normal_cleanup": "original outer-6",
-    "fallback_cleanup": "original outer-5",
-    "manager_secondary_bound": "RuntimeMaxSec recomputed from original remaining; SIGKILL controls before outer as secondary only.",
-    "always": "Read-only actual resource evidence and saved terminal; no new cleanup/restoration/grace."
-  },
-  "topology_and_reference": {
-    "route_reference": "e6a49994deda16739c095ad214266af15c616762",
-    "reused": "COW management children, monotonic remaining, nonblocking kernel writes, bounded stop/show/noJob, cleanup-once receipts, epoch permits, protected controls, postdrop reread, independent fallback and physical final witness.",
-    "changed_for_metadata": "Common xiongbaowork-metadata.slice64 added under ordinary project512; all controls+collector counted. No original Source/runtime/install/prepare/brand or A/B operations.",
-    "scope_specific": "Supervisor uses normal systemd-run --scope so registered PID execs controller, STDIO inherits Actions descriptor; collector --pipe client is inside supervisor.scope16. No long outside DATA-forwarding client.",
-    "scope_properties_only": [
-      "MemoryMax",
-      "MemorySwapMax",
-      "OOMPolicy",
-      "RuntimeMaxSec",
-      "KillMode",
-      "KillSignal",
-      "FinalKillSignal",
-      "SendSIGKILL"
+  "phase_contract": {
+    "prefix": "PLATFORM_METADATA_PHASE ",
+    "max_complete_line_bytes_including_prefix_and_LF": 512,
+    "max_count": 64,
+    "identity": [
+      "actualrun",
+      "attempt",
+      "head",
+      "unit",
+      "sequence"
     ],
-    "scope_no_service_only_properties": true,
-    "scope_exit": "Actual command returncode plus inactive/failed noJob and physical scope empty/absent-after-exit; no service MainPID success assumption.",
-    "supporting_sources": [
-      "https://www.freedesktop.org/software/systemd/man/255/systemd.scope.html",
-      "https://www.freedesktop.org/software/systemd/man/255/systemd-run.html"
+    "clock": "monotonic timestamp; remaining original inner checked before and after complete flush",
+    "states": [
+      "STARTED",
+      "FINISHED",
+      "UNKNOWN"
     ],
-    "actual_platform_support": "NOT_RUN; unsupported/rejected scope or other primitive fails closed, no guessed fallback."
-  },
-  "temporary_operations": [
-    {
-      "operation": "Create immutable controller.py0444 and privateconfig0600 under exact /run/xb-platform-<run>-<attempt>",
-      "scope": "This run only, root-owned O_EXCL; t0 already running; no version or Source read."
-    },
-    {
-      "operation": "Create /run/systemd/system/xiongbaowork.slice and xiongbaowork-metadata.slice with512M/64M andswap0",
-      "scope": "Fixed per-job resource guard definitions, O_EXCL collision rejects; no /etc or manager-global policy/enable."
-    },
-    {
-      "operation": "systemctl daemon-reload then start xiongbaowork-metadata.slice",
-      "scope": "Only make fixed ephemeral resource guards available. No service upgrade/install/persistent enable or network probe."
-    },
-    {
-      "operation": "Initial actual512/shared64/swap0/empty checks then kernel oom.group1 admission",
-      "scope": "Fixed bootstrap guard setup only; unexpected memory/swap/populated rejects before collector."
-    },
-    {
-      "operation": "Fallback transient.service16 and supervisor.scope16; collector.service32 with fixedrootwrapper",
-      "scope": "Common64; every subsequent management/command descendant counted; all runtime caps read back, unsupported properties fail."
-    },
-    {
-      "operation": "Actual nonblocking limit restoration/revoke/owned stop+kill/noJob/reap",
-      "scope": "Only supervisor/fallback inside common64 and only original remainder. No outside restore writer."
-    },
-    {
-      "operation": "Final physical project/shared limits+pop0 and owned control quiet evidence",
-      "scope": "Fixed outside normal Actions read-only witness; saves only its own administrative observations, never reads/parses version payload or Subject."
-    }
-  ],
-  "temporary_restoration_boundary": "Restores original job resource baseline project512/shared64/swap0/oom1 and proves whole aggregates empty. Fixed temporary unit definitions remain for exact final evidence until ephemeral runner teardown; no claim of persistent/global manager configuration restoration. Existing final oom0/absent/missing/late conditions keep whole job FAILED_OR_UNKNOWN.",
-  "metadata_allowlist": {
-    "manager": "/usr/bin/systemctl show --property=Version --value --no-pager only; no Tainted/all-properties.",
-    "binary": "Existing unprivileged disk binary/version/package and /proc1 attempts unchanged. Additional narrow root-admitted fixed /proc/1/exe snapshot described separately; no alternate PID, environment, cmdline, source reads or privileged metadata commands.",
-    "package": "Only dpkg-query -S exact validated systemd binary and -W systemd with binary:Package, fullVersion, Architecture, source:Package, source:Version, installed status. Patch names are full version metadata, not vendor patch-content proof.",
-    "kernel": "Only /usr/bin/uname -s,-r,-v,-m; no uname-a/hostname/cmdline.",
-    "os": "Bounded root-owned stable os-release data with ID/VERSION_ID/VERSION/PRETTY_NAME/BUILD_ID only; no source/eval.",
-    "runner_image_provisioner": "Coordinator joins native setup metadata of this exact newrun/job; collector does not read environment or usernames.",
-    "prohibitions": "No token, network probe, Source/oldexports/SQL/SDK/packageinstall/upgrade/userdata/globalmanager edits. No metadata field is inferred from Ubuntu name; no backfill to prior runs."
-  },
-  "output": {
-    "query_stdout_cap": 8192,
-    "query_stderr_cap": 2048,
-    "total_complete_report_cap": 32768,
-    "binary_stream_chunk": 65536,
-    "binary_bytes_cap": 16777216,
-    "os_release_cap": 16384,
-    "full_report_sha256_and_bytes": true,
-    "no_truncation_to_pass": true,
-    "transport": "Collector stdout through in-scope client and inherited ActionsFD. Raw32768 report never goes through8192 call_bounded management pipe.",
-    "privileged_resources": "Separate root-owned receipts from actual kernel/systemctl reads only. Privileged fixedPID1 snapshot is metadata evidence, never resource proof. Neither version output enters final fixed-resource COW callback.",
-    "status": "Per-query unsupported/timeout/outputcap/permission errors explicitUNKNOWN. A complete bounded metadata report may exist even when final resource gate fails."
+    "names": [
+      "root_entry",
+      "pid1_snapshot",
+      "drop",
+      "collector_entry",
+      "report",
+      "manager_version",
+      "disk_version",
+      "owner_usr",
+      "owner_lib",
+      "package_versions",
+      "kernel_s",
+      "kernel_r",
+      "kernel_v",
+      "kernel_m"
+    ],
+    "meaning": "FINISHED means that named phase reached its completion gate, not overall PASS. Query errors yield UNKNOWN and retain existing per-query explicitUNKNOWN result. Assertion/drop/resource failure terminates wrapper. Hard kill may leave STARTED without completion, explicitly UNKNOWN to reviewer.",
+    "scope": "Same32 stdout through existing in-scope client; no artifact/resource receipt write or additional reader. Not runtime identity or restoration proof."
   },
   "artifacts": {
     "controller": {
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
-      "blob": "cac4ea2124bd50c1af9cb831e4691d8068561875",
-      "bytes": 45272,
-      "sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
-      "usage": "Static workflow base64 carrier of exact successor bytes; no runtime network."
+      "blob": "a1ce14d43dbb22899f53f7f784093a6832d075e9",
+      "mode": "100644",
+      "bytes": 29732,
+      "sha256": "e1d9877cd1b971902d47a9a6e5522c69260de7daf5a41493507f614c820fab00"
+    },
+    "collector": {
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+      "blob": "d56656256ea6e4c7a0b090d3aee6ee54d354f48a",
+      "mode": "100644",
+      "bytes": 21442,
+      "sha256": "f2f9232fd13c55f59651977872bd9313322b6a470761ed61a345f865111b185d"
     },
     "workflow": {
       "path": ".github/workflows/platform-identity-metadata.yml",
-      "bytes": 63872,
-      "sha256": "9788008d3ffc43dad451d99bcc9e1f281d519c6beff27a7adf22c7a210a8a323"
+      "blob": "1f6ac4542a7772e81153b09a8f4dbd0878a982ed",
+      "mode": "100644",
+      "bytes": 72155,
+      "sha256": "e793bf63c0ac9805eb6eaf227b84d5faeb986a428eeab0efd5a3ccba15a229de"
     }
   },
-  "proof_level": "Read-only exact failed-run/controller review plus pure tool-memory string/carrier/hash checks and GitHub preparation persistence only; no successor execution/self-review.",
+  "carrier": {
+    "controller_fragment_chars": [
+      16000,
+      16000,
+      7644
+    ],
+    "collector_fragment_chars": [
+      16000,
+      12592
+    ],
+    "total_encoded_chars": 68236,
+    "max_fragment_chars": 16000,
+    "run_scalar_chars": [
+      2157,
+      460
+    ],
+    "all_run_scalars_under21000": true,
+    "actual_ARG_MAX": "UNKNOWN_NOT_QUERIED",
+    "native_workflow_validation": "NOT_RUN_OR_CLAIMED",
+    "buffer_boundary": "Static literal code-only environment carriers passed as fixed explicit argv through existing env-i bootstrap; decoded/hash-checked before immutable write, exec replaces bootstrap. Never collector environment inquiry or a runtime download."
+  },
+  "unproved": [
+    "Compact role fitting32MiB/RSS/command overlap remains untested. No runtime allocated.",
+    "Platform versions, manager/package equivalence, future resource final gate and native workflow/ARG_MAX remain UNKNOWN.",
+    "Static source/hash/line checks are not parser/compile/test or runtime validation."
+  ],
+  "prohibitions": [
+    "No Source/project/parser/compile/tests/CLI/filesystem/localWindows execution by author",
+    "No runtime/job/executionbranch/canonical/lease/Page/automation writes",
+    "No extra memory/quota/permission/managerglobal config/network/token/provider/account"
+  ],
   "preserved": {
     "scope": "77/18/7",
-    "Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "formal_source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
     "files": 2065,
     "bytes": 50175181,
     "ROOT_RELEASE": null,
@@ -144,108 +150,5 @@
     "PG": "PG_PENDING",
     "hosted_worker": "paused/UNVERIFIED"
   },
-  "next_action": "Different nonauthor fully reviews this exact successor. Sole collection attempt40987759034/job123842654361 is consumed and failed without version records. Successor is NOT_DISPATCH_AUTHORIZED until additional explicit attempt allocation; no execution branch/job by author.",
-  "execution_branch_created": false,
-  "jobs_started": 0,
-  "source_writes": 0,
-  "canonical_writes": 0,
-  "lease_writes": 0,
-  "revision_history": [
-    {
-      "candidate": "c7c74bb2eb22372890f1d87e3682db1062c48d45",
-      "status": "NONAUTHOR_BLOCKED_NOT_RUN",
-      "finding": "Final observe/record/emit and always completion not fully supervised against original outer; startup CLI env did not prove fallback service env."
-    }
-  ],
-  "deadline_finding_response": {
-    "scope": "Fixed outside resource-only final read/record/emit boundary; no version or restoration.",
-    "implementation": "Dedicated COW child with own session and tiny<=1024B nonblocking ACK pipe supervises complete final_observation, full<=16KiB root receipt save and stdout flush, emission marker, child actual completed_at, parent reap and post-call remaining checks.",
-    "large_receipt": "Full resource receipt is written/emitted directly by child; never transported through existing8192B management pipe or ACK.",
-    "always": "Actual kernel read+saved root terminal/emission marker read+complete stdout flush run in the same dedicated COW supervision with original outer. Child/caller actual completion must be before outer; old observed_at alone cannot pass. Any ACK/record/emit/reap timeout fails native step and whole job; no new grace.",
-    "receipt_boundary": "Printed verified status is provisional until supervised ACK and native step success, explicitly labelled. Version metadata is already independent output and is not discarded on resource failure.",
-    "new_kernel_writes": 0,
-    "new_restore_budget": 0
-  },
-  "environment_chain_correction": {
-    "fallback_service_actual_argv": "/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -I -B <immutablecontroller> fallback <fixedroot>",
-    "bootstrap_and_always": "sudo invokes the same fixed env-i chain before Python; no reading/printing inherited environment.",
-    "scope": "Actual Popen explicit PATH=/usr/bin:/bin and LC_ALL=C; normal --scope execs controller with that whitelist. -I/-B isolate Python; supervisor children and collector query commands pass explicit whitelists.",
-    "collector": "Existing irreversible-drop os.execve explicit whitelist unchanged; no service-manager default environment is asserted clean merely from its startup client env."
-  },
-  "fixed_pid1_admission_snapshot": {
-    "purpose": "Within already existing privileged collector rootwrapper and only after actual own32/shared64/project512 gates+epoch/clock have passed; before irreversible drop. This is a narrowed metadata read inside existing root admission, not new capabilities or global privilege expansion.",
-    "interface": "Only fixed /proc/1/exe readlink plus stable FD/named/rootownership SHA256 streaming. PID1 target must be exact systemd binary allowlist path (optional deleted suffix); no arbitrary PID1 path emitted/read.",
-    "bounds": "Existing inner remainder, binary16MiB cap/64KiB stream, root metadata record<8192B, common32+16+16 memory budgets unchanged.",
-    "record": "Root-owned0600/nlink1 per-run pid1.metadata.json, exact root record hash/bytes emitted with source/runID/attempt/headSHA and explicit not_resource_restoration_proof. It cannot be read as collector authorisation or resource restoration receipt.",
-    "failure": "Permission/unsupported/nonallowlisted PID1 target is explicit UNKNOWN; no ptrace/LSM/proc/CAP changes, no elevation after drop and no disk-binary substitution for runningPID1.",
-    "unprivileged_boundary": "Normal managerVersion/systemd--version/dpkg/uname/osrelease commands remain postdrop. Existing unprivileged /proc1 observations may still be UNKNOWN and do not overwrite the separately sourced root capture."
-  },
-  "usrmerge_owner_alias_fix": {
-    "scope": "Only fixed /usr/lib/systemd/systemd and /lib/systemd/systemd literal OS aliases.",
-    "gate": "Each exact alias must resolve to already validated root-owned systemd binary, trusted executable permissions and stable FD/named dev/ino/bytes/SHA256 must match that binary. Only then dpkg-query -S receives the original literal alias; do not canonicalize /lib query into /usr.",
-    "outcome": "Both raw alias identities and owner results remain separately associated. Different/unsupported/missing alias or failed owner query is explicit UNKNOWN; no wildcard inventory, fuzzy owner, install or download.",
-    "collector_delta": "Only this existing owner-metadata path changed; managerVersion/kernel/os/cap/deadline/normal unprivileged commands unchanged."
-  },
-  "workflow_validation_fix": {
-    "failed_preparation_record": {
-      "run": 40986262699,
-      "head": "fa96b6b9f273ea4cdabcb42164e12ff15d480498",
-      "branch": "codex/platform-identity-prep-20261030-a1",
-      "event": "push",
-      "status": "completed",
-      "conclusion": "failure",
-      "jobs": [],
-      "created_at": "2026-10-30T01:30:34Z",
-      "collector_executed": false,
-      "metadata_collected": false
-    },
-    "precise_static_violation": {
-      "old_first_run_characters_including_terminal_LF": 49441,
-      "official_maximum": 21000,
-      "old_largest_inline_line_characters": 47923,
-      "primary_doc": {
-        "repository": "github/docs",
-        "ref": "6cbe6413ac7177bb692a78c171a74ae8be50d721",
-        "path": "content/actions/reference/workflows-and-actions/workflow-syntax.md",
-        "blob": "0953709ba9871623a320aa24b568a8dd51fbdcbf",
-        "line": 851,
-        "section": "jobs.<job_id>.steps[*].run"
-      }
-    },
-    "native_error_boundary": "Native check-suite annotations are unavailable through connector (400 unsupported endpoint); commit check-runs list empty. No exact server annotation was observed. The actual static run-size violation is established and consistent with failure/jobs0; do not call this a platform collection failure.",
-    "minimal_fix": "Same single bootstrap step: four fixed static workflow env carrier strings passed as explicitly quoted argv through existing env-i chain; bootstrap strict base64 decodes in memory, verifies unchanged controller SHA256, writes identical immutable bytes. No Actions step split, no network, no collector env probe or new metadata.",
-    "carrier": {
-      "encoding": "base64 of exact existing administrative controller bytes",
-      "parts": [
-        16000,
-        16000,
-        16000,
-        12364
-      ],
-      "encoded_chars": 60364,
-      "decoded_bytes": 45272,
-      "decoded_sha256": "f6b252fa6c33c69ee750317da4cac0c8646fd5e150ada08b154277c142c7b75b",
-      "tool_memory_roundtrip_matches_original": true,
-      "first_new_run_scalar_chars": 1843,
-      "second_new_run_scalar_chars": 461,
-      "all_run_scalars_under21000": true
-    },
-    "timing": "Same t0 position before root directory/code copy/guard setup. Decode is inside original budget; sustained supervisor/fallback, entire270/300 deadline and final ACK/always supervision unchanged.",
-    "security": "Carrier variables are literal administrative code, never read by collector; root env-i still clears inherited environment before Python and control roles keep explicit whitelists. No token, secret or user environment is queried.",
-    "unchanged": "Carrier mechanism unchanged; controller differs only in stable parent PID/starttime snapshot.",
-    "not_claimed": "This author has not run GitHub validation/collector or any project/test. Future native validation acceptance remains to be checked; preparation validation records are not metadata runs."
-  },
-  "parent_pid_snapshot_fix": {
-    "failed_candidate": "c9d309d4fa5650ecca97c1a405ab8466cb623841",
-    "failed_run": 40987759034,
-    "failed_job": 123842654361,
-    "actual_status": "completed/failure",
-    "actual_metadata": "NO_PID1_OR_VERSION_RECORDS",
-    "actual_terminal": "supervisor AssertionError(empty detail), fallback supervisor_death=true, scope command -9, final FAILED_OR_UNKNOWN despite actual512/64swap0oom1/pop0",
-    "confirmed_code_defect": "Old controller line309 captures persistent supervisor starttime, line310 lambda evaluates os.getpid inside call_bounded fork child (lines61-66), so fallback lines329-333 watches transient helper PID with parent starttime.",
-    "attribution_limit": "No traceback/pinned PID record in exported terminal; cannot identify exact AssertionError line or prove which death branch fired. Runtime sequence is consistent with confirmed deterministic identity defect.",
-    "minimal_change": "Capture supervisor_pid, supervisor_start and identity dictionary in persistent parent before call_bounded; child only records captured immutable-in-use values. No live PID/starttime acquisition in callback.",
-    "unchanged": "All collector/deadline/env/alias/PID1/resource/cleanup/final-witness gates and architecture unchanged.",
-    "attempt_allocation": "CONSUMED; successor NOT_DISPATCH_AUTHORIZED without additional explicit attempt allocation"
-  }
+  "next_action": "Different nonauthor fully reads exact four-file candidate and verifies role split, byte-identical management primitives/rootPID1 function, actual env-i/drop/resource admission, every pin and bounded diagnostic semantics. No third run: NOT_RUNTIME_AUTHORIZED until a separate explicit runtime allocation; review alone must not schedule."
 }
