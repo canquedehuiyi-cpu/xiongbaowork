@@ -1,0 +1,99 @@
+{
+  "schema": "source-package-nonauthor-review/v1",
+  "reviewer": "/root/a11_data_reviewer",
+  "candidate": "cd6dea2c897c5076e143aa0ce076d10b154fcb1a",
+  "parent": "9984ca6354dc0e666d0c5eadcaf43317e3d3e1ac",
+  "original_base": "d8e894c54549cc42a21fe9be5845fd4fe1cf4aa2",
+  "status": "SOURCE_APPROVED_ONLY",
+  "findings": [],
+  "files": [
+    {
+      "path": "openbot/server/src/db/schema/approvals.ts",
+      "blob": "ab91c389f7f8b380b14747803d42977b448d9a6b",
+      "mode": "100644",
+      "utf8bytes": 10528,
+      "sha256": "cdfeecb83257f46e9e248ecc877c769e2e747bd947d195cef47f23e240e6e4f8",
+      "full_read": true,
+      "kind": "Source"
+    },
+    {
+      "path": "openbot/server/tests/approval-fence-defaults.test.ts",
+      "blob": "ae0b81b08e24846b59ee3f8591442a0f70ba4a55",
+      "mode": "100644",
+      "utf8bytes": 3324,
+      "sha256": "d66507022b720fc7fa790ab6f5c412344af0c7245000a1e10cfc3c3ed47024df",
+      "full_read": true,
+      "kind": "Source"
+    },
+    {
+      "path": "openbot/server/tests/recovery-ap2-parent-schema-reconcile.test.ts",
+      "blob": "e9ba7dd48d5fbe2ac8f0b2e8f1dbbfb6df3f0491",
+      "mode": "100644",
+      "utf8bytes": 70964,
+      "sha256": "d26e3d4317e1c20af226a2fe4519d5648d71de7e2a41b38ac0ff1c3563794743",
+      "full_read": true,
+      "kind": "Source"
+    },
+    {
+      "path": "archives/recovery-20261028/FRESH-PERSISTENCE-FIRST-PACKAGE-20261030.json",
+      "blob": "c396acd901f66294db278f3808114e95cc998a3b",
+      "mode": "100644",
+      "utf8bytes": 17835,
+      "sha256": "8291655f8f309d3d4197a8a85fbcf34fa8f9fb87562ec81923023e99c74d4e3b",
+      "full_read": true,
+      "kind": "administrative"
+    }
+  ],
+  "scope": {
+    "Source_changed": 3,
+    "administrative": 1,
+    "workflows": 0,
+    "full_base_compare_paths": 4,
+    "no_Source_adoption_by_review": true
+  },
+  "closed_blocker": {
+    "id": "P2-EXISTING-AP2-REGRESSION-CONTRACT-CONFLICT",
+    "withdrawal": "0340477770201a5632db258f783f744727cbc16c",
+    "prior9984_initial_review": "3cad33cb483d2e6c9c75289069ad5627e4390862",
+    "status": "9984WITHDRAWN_HISTORY_RETAINED_NEWEXACTPACKAGE_REVIEWED",
+    "fix": "ExistingAP2onlytwoactualtable.fence SQLliteral0→independentnumeric0 projection; exacttwofullSQLdefaultdeclarations inverse to0n before originalAP4/hashsteps; directSQLzeroassertion whileBigInt0nparamABI preserved. Newnegativecase rejectsnonliteral/parameter/SQL1/quoted0/native0n/number/string/undefined."
+  },
+  "independent_checks": [
+    "Fullschema exactparent aftertwo.default0n→sql0 replacements; +8UTF8B, reverse text equalsparentfullschema. Allothermode/NOTNULL/checks/FK/index/tenant/RLS/policybytes unchanged.",
+    "New3324Btestidentical9984 and7meaningfuldefinedcases actualtable.defaultSQLcompile0/noparams, PgBigInt64largevalueABI, check/RLSmetadata, independentnative0nnegativecontrol.",
+    "ExistingAP2completeold/new filesread andexactdiff reviewed. Helper requiresSQL andrender0 withunchangedrender paramslength0. Projection appliesonlyfenceontwofixedtables, no broadnumeric/string/SQLcoercion.",
+    "IndependentexpectedRaw literal/deepmatrix andAP4inverse declarations identical; alloldSHA literals preserved. SQLparser/DDLnegativecases andSnapshot/journal/historicaloracle untouched.",
+    "Exact2schemaSQL0 inverse precedesoldsourcehash; unknownadditionalchange stillfailsoldhash. PgBigInt64/dataTypebigint/notNull/nullableintentFence andsql.param0nABI remain.",
+    "FixedofficialORMutils/dialect/PgBigInt64/Check.value andKitSQLdefaultserializerbranchesindependentlyread; staticAPIsupport onlynotinstalledruntimeproof.",
+    "FreshformalSource28/fiveoriginalauthoritativeinputs pluslatesthandoff read. Canonicalseed/disposition/pgprimitiveabsent; A11generatedrawidentitiesrealbutcompleteexportsemanticnotread/adopted."
+  ],
+  "tests": {
+    "new_focused_defined": 7,
+    "new_existing_AP2_negative_defined": 1,
+    "all_executed": 0,
+    "parser_compile_lint_types_generator_SQL_PG_executed": 0
+  },
+  "boundaries": [
+    "Thisisserializer/schema prerequisite only; noSQL/snapshot/journal migrationadoption orA11full50semanticclosure.",
+    "Noadapter/COMMIT/ACK/authority/catalog/audit/receiptwriterproductionwiring introduced. TrueouterdriverCOMMIT/completepositiveC-ALL remain validpositives;NULL/newlock alone notrollback/replay.",
+    "SourceapprovalnotCPU/PG/fullCI/commercialpass; canonSource28unchangeduntilRootlawfuladoption+manifestprotocol.",
+    "No globaltypesunion orPGstatusupgrade. UnknownACKnotreplayed. Freshfinalcompletionnotcontinuationreceipt."
+  ],
+  "next_action": "Rootmayconsiderexact3Sourcecomposition/adoptionunderCASandmanifestprotocol. Before nextmigrationSourcepackage, obtaincompleteactualSQL/snapshot/journalsemanticchain lawfully; norawhashsummarysubstitute. Runtimevalidationrequiresseparateexistinggates, originaltestfilesnotclaimedpass.",
+  "preserved": [
+    "77/18/7",
+    "PG_PENDING",
+    "ROOT_RELEASE=null",
+    "ready=false",
+    "AP_DISABLED",
+    "NOT_SERVICE_WIRED",
+    "migrationNOT_WIRED",
+    "metadata3/3no4",
+    "922compatibilityEXECUTION_HOLD"
+  ],
+  "actions": {
+    "Source_canonical_lease_writes": 0,
+    "jobs": 0,
+    "project_SQL_test_codec_execution": 0
+  }
+}
