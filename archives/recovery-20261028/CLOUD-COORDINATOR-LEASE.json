@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:S-review-byte-index-20261030",
   "run_id": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
   "epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
   "acquired_at": "2026-10-30T08:34:05.569Z",
-  "renewed_at": "2026-10-30T08:34:05.569Z",
-  "expires_at": "2026-10-30T09:19:05.569Z",
+  "renewed_at": "2026-10-30T08:34:57.839Z",
+  "expires_at": "2026-10-30T08:34:57.839Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "c4305d8ada806b76267eb0d68f19949bdb686925",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T08:34:05.569Z"
   },
-  "next_action": "Correct handoff review UTF8 bytecount with actualtree/hash evidence, readback then idle release.",
+  "next_action": "Exact922c staticcandidate and7cc16594 review complete, reviewindex corrected6598UTF8B/6596chars. EXECUTION_HOLD remains; no fourth/no newprobe. Return exactcandidate/compatibilityholds and finalreadback.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -39,7 +39,7 @@
   "queue_at_release": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T08:31:12.084Z"
+    "observed_at": "2026-10-30T08:34:57.839Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -87,5 +87,6 @@
     "accepted_at": "2026-10-30T04:43:53.208Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN41004678906_NO_FOURTH",
     "fourth_authorized": false
-  }
+  },
+  "released_at": "2026-10-30T08:34:57.839Z"
 }

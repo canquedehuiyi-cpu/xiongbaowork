@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T08:31:44.699Z",
+  "checkpoint_update_at": "2026-10-30T08:34:57.839Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4427,13 +4427,13 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:collector-S-static-20261030",
-    "epoch": "2026-10-30T08:22:43.940Z:collector-uppercase-S-static",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:S-review-byte-index-20261030",
+    "epoch": "2026-10-30T08:34:05.569Z:S-review-utf8-index-correction",
     "state": "released",
-    "expires_at": "2026-10-30T08:31:44.699Z",
+    "expires_at": "2026-10-30T08:34:57.839Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
-    "released_at": "2026-10-30T08:31:44.699Z"
+    "released_at": "2026-10-30T08:34:57.839Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -5399,10 +5399,11 @@
       "path": "archives/recovery-20261028/PLATFORM-IDENTITY-UPPERCASE-S-NONAUTHOR-20261030.json",
       "blob": "f6e16ba82569d7ba53d50a7f7d247b5f5e43c8d4",
       "mode": "100644",
-      "bytes": 6596,
+      "bytes": 6598,
       "sha256": "865797e70425f266112a3226667dcb6a03891ce68c2bdb7dc505f1edd2c5ab99",
       "status": "CONDITIONAL_STATIC_ONLY_EXECUTION_HOLD_NOT_RUNTIME_AUTHORIZED",
-      "findings": []
+      "findings": [],
+      "characters": 6596
     },
     "owner_independent_checks": {
       "controller_unique_delta_plus5": true,
@@ -5471,6 +5472,16 @@
       "new_jobs": 0
     },
     "closed_at": "2026-10-30T08:31:44.699Z",
-    "next_action": "Return exact922c three-file staticcandidate and fresh7cc16594 review. Preserve EXECUTION_HOLD until trustworthy existingcompatibility/policy evidence resolved within authorizedscope; no probes or fourthallocation now. Any later runtime requires separateexplicitquota plus applicableexactreview/validsolelease/queue/dedup. NoSource/PG/deploy/managerglobal/resource/allowlistexpansion."
+    "next_action": "Return exact922c three-file staticcandidate and fresh7cc16594 review. Preserve EXECUTION_HOLD until trustworthy existingcompatibility/policy evidence resolved within authorizedscope; no probes or fourthallocation now. Any later runtime requires separateexplicitquota plus applicableexactreview/validsolelease/queue/dedup. NoSource/PG/deploy/managerglobal/resource/allowlistexpansion.",
+    "byte_index_correction": {
+      "at": "2026-10-30T08:34:57.839Z",
+      "previous_index_bytes": 6596,
+      "correct_utf8_bytes": 6598,
+      "characters": 6596,
+      "source": "Git tree blob f6e16ba82569d7ba53d50a7f7d247b5f5e43c8d4 size6598 plus independentUTF8count and unchangedSHA865797e70425f266112a3226667dcb6a03891ce68c2bdb7dc505f1edd2c5ab99",
+      "candidate_and_report_content_unchanged": true,
+      "all_three_candidate_bytecounts_verified": true,
+      "no_runtime_or_new_scope": true
+    }
   }
 }
