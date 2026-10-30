@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T04:04:41.486Z",
+  "checkpoint_update_at": "2026-10-30T04:14:21.251Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,11 +4429,11 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:compact-static-20261030",
     "epoch": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
-    "state": "held",
-    "expires_at": "2026-10-30T04:49:41.486Z",
+    "state": "released",
+    "expires_at": "2026-10-30T04:14:21.251Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
-    "released_at": "2026-10-30T03:54:43.487Z"
+    "released_at": "2026-10-30T04:14:21.251Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -4845,7 +4845,7 @@
   },
   "compact_collector_static_preparation": {
     "dedup_key": "prepare-memory-static/run40999201244/head389d404c/report8f55083b",
-    "status": "ACCEPTED_ADMIN_STATIC_ONLY_AUTHOR_AND_REVIEWER_ACTIVE",
+    "status": "EXACT_FOUR_FILE_STATIC_REVIEWED_NOT_RUNTIME_AUTHORIZED",
     "accepted_at": "2026-10-30T04:04:41.486Z",
     "authority_provenance": {
       "human_scope": "既有总协调/卡住查因推进",
@@ -4861,6 +4861,96 @@
     "new_jobs": 0,
     "runtime_authorized": false,
     "actual_metadata_jobs_consumed": 2,
-    "remaining_runtime_jobs": 0
+    "remaining_runtime_jobs": 0,
+    "candidate": {
+      "commit": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+      "parent": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8",
+      "files": [
+        {
+          "path": ".github/workflows/platform-identity-metadata.yml",
+          "mode": "100644",
+          "blob": "1f6ac4542a7772e81153b09a8f4dbd0878a982ed",
+          "bytes": 72155,
+          "sha256": "e793bf63c0ac9805eb6eaf227b84d5faeb986a428eeab0efd5a3ccba15a229de",
+          "full_read": true
+        },
+        {
+          "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-CONTROLLER-20261030-A1.py",
+          "mode": "100644",
+          "blob": "a1ce14d43dbb22899f53f7f784093a6832d075e9",
+          "bytes": 29732,
+          "sha256": "e1d9877cd1b971902d47a9a6e5522c69260de7daf5a41493507f614c820fab00",
+          "full_read": true
+        },
+        {
+          "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-COMPACT-COLLECTOR-20261030-A1.py",
+          "mode": "100644",
+          "blob": "d56656256ea6e4c7a0b090d3aee6ee54d354f48a",
+          "bytes": 21442,
+          "sha256": "f2f9232fd13c55f59651977872bd9313322b6a470761ed61a345f865111b185d",
+          "full_read": true
+        },
+        {
+          "path": "archives/recovery-20261028/PLATFORM-IDENTITY-METADATA-IMPLEMENTATION-PLAN-20261030-A1.json",
+          "mode": "100644",
+          "blob": "018d942d646ae21b661d90da8a1bf0fb5535ae88",
+          "bytes": 8913,
+          "sha256": "1d98b31233be5330d3031843d6bd0be6bb4ebc9b90ffc0c1a7a7c9aff43c1b6c",
+          "full_read": true
+        }
+      ],
+      "prepare_branch": "codex/platform-identity-prep-20261030-a1",
+      "full_readback": true,
+      "compare_changed_files": 4,
+      "Source_changes": 0
+    },
+    "nonauthor_review": {
+      "commit": "1c48cc577e2833e20446d3d7a3d4f5ab61a0f582",
+      "path": "archives/recovery-20261028/PLATFORM-IDENTITY-COMPACT-STATIC-NONAUTHOR-20261030.json",
+      "blob": "8cd27bc1ee27e4fdfe82e1e5c5f071662b7ef34e",
+      "bytes": 6199,
+      "sha256": "215725d95ac8bd4fed0f872f8bbbf107310be98ab3664f48cf0fb3a5b8f226d8",
+      "status": "STATICONLY_NOT_RUNTIME_AUTHORIZED"
+    },
+    "boundary_delta": {
+      "collector_role": "Dedicated21442B role in unchanged collector32MiB unit; management29732B; env-i at actual service entry followed by original rootPID1 admission/irreversibleUID-GID-groups drop and actualpostgates, directcompactcollect.",
+      "bounded_buffers": "Query read<=4096 and remaining outputcap+1; promptly release intermediatebytearrays; existing complete report cap32768/hash retained.",
+      "phase_records": "Fixed allowlisted STARTED/FINISHED/UNKNOWN complete line<=512B and max64; sameinnerbudget before/afterflush; progressnotresourceproof.",
+      "unchanged": "Original16+16+32/common64/swap0/oom1/project512; originalmanagement primitives and finalreadonlyACK/270300 gates unchanged; no newunit/topology/permissions/environment/metadatareadsurface/outsidewriter.",
+      "reserved_future_filter": "codex/platform-identity-run-20261030-static-memory-a1 distinct fromprep andoldexecutionref; notcreated",
+      "not_proven": [
+        "fits32MiB or solvesOOM",
+        "nativeworkflow/ARGMAX acceptance",
+        "actualsystemd/package/kernelversions",
+        "PG/production/full77scope"
+      ]
+    },
+    "carrier": {
+      "encoded_chars": 68236,
+      "controller_chars": 39644,
+      "collector_chars": 28592,
+      "largest_fragment": 16000,
+      "run_chars_including_LF": [
+        2157,
+        461
+      ],
+      "plan_second_run_excludes_final_LF": 460,
+      "initial_carrier_env_plus_argv": ">136KiB plus fixedargs/names/inheritedenv",
+      "ARGMAX": "UNKNOWN_FAIL_CLOSED"
+    },
+    "final_static_proof": {
+      "observed_at": "2026-10-30T04:13:56.956Z",
+      "candidate_runs": 0,
+      "queued": 0,
+      "in_progress": 0,
+      "reserved_future_execution_ref": "NOT_FOUND",
+      "old_execution_ref_unchanged": "90949b0c1d2bf76dd49c11fc7d6b1479f4744ae8"
+    },
+    "closed_at": "2026-10-30T04:14:21.251Z",
+    "next_action": {
+      "single_new_human_decision": "Whether to allocate a third actual metadata-only attempt for exact96ecc; no such allocation now.",
+      "prerequisites_if_later_allocated": "Confirm exact unchanged applicable review, fresh soleowner/epoch/head CAS, emptyqueue anddedup; a changedcandidate requires newfullnonauthorreview.",
+      "not_requested": "No resource, environment, manager-global configuration, privilege or Source expansion."
+    }
   }
 }

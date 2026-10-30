@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:compact-static-20261030",
   "run_id": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
   "epoch": "2026-10-30T04:04:41.486Z:compact-collector-static-only",
   "acquired_at": "2026-10-30T04:04:41.486Z",
-  "renewed_at": "2026-10-30T04:04:41.486Z",
-  "expires_at": "2026-10-30T04:49:41.486Z",
+  "renewed_at": "2026-10-30T04:14:21.251Z",
+  "expires_at": "2026-10-30T04:14:21.251Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "389d404c3423769c53a5f73c4afd1a64f2fcfa5f",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T04:04:41.486Z"
   },
-  "next_action": "Author saves exact <=4 static administrative candidate; different nonauthor full exact review. Persist reviewable checkpoint, then idle CAS release. NOT_RUNTIME_AUTHORIZED.",
+  "next_action": "Exact96ecc four-file compact administrative candidate fully statically reviewed. NOT_RUNTIME_AUTHORIZED; total actual metadata2/2 consumed. Root can present only third-attempt human allocation decision; no automatic job or implementation change.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -36,16 +36,9 @@
     "conclusion": "failure"
   },
   "queue_at_release": {
-    "queued": 0,
-    "in_progress": 0,
-    "observed_at": "2026-10-30T03:54:32.513Z",
-    "exact909_runs": [
-      {
-        "id": 40999201244,
-        "attempt": 1,
-        "conclusion": "failure"
-      }
-    ]
+    "queued": [],
+    "in_progress": [],
+    "observed_at": "2026-10-30T04:13:56.956Z"
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -82,5 +75,6 @@
     "accepted_at": "2026-10-30T03:44:01.878Z",
     "status": "CONSUMED_TERMINAL_FAILURE_RUN40999201244_NO_THIRD"
   },
-  "static_prepare_dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b"
+  "static_prepare_dedup": "prepare-memory-static/run40999201244/head389d404c/report8f55083b",
+  "released_at": "2026-10-30T04:14:21.251Z"
 }
