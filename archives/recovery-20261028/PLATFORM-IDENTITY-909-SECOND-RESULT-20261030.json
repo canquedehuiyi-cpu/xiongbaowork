@@ -894,6 +894,33 @@
   "queue": {
     "queued": 0,
     "in_progress": 0,
-    "observed_at": "2026-10-30T03:53:20.967Z"
+    "observed_at": "2026-10-30T03:54:32.513Z",
+    "exact909_runs": [
+      {
+        "id": 40999201244,
+        "attempt": 1,
+        "conclusion": "failure"
+      }
+    ]
+  },
+  "runtime_nonauthor": {
+    "commit": "c946e95f8b15315849e94b01a7942eca0e0cd679",
+    "path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-RUNTIME-NONAUTHOR-20261030.json",
+    "blob": "c3132ef98ac29a9949ceed8f3ef1bda26f2485a2",
+    "bytes": 19585,
+    "sha256": "dce6b3630b7d739d8a98a3f7bfca27eea1c4bbfda4b3b60e9010b3c3b106df58",
+    "status": "FAILED_COLLECTOR_OOM_NO_MANAGER_VERSION_LINKAGE"
+  },
+  "closeout": {
+    "at": "2026-10-30T03:54:43.487Z",
+    "lease_released": true,
+    "actual_jobs_consumed": 2,
+    "third_authorized": false,
+    "next_action": {
+      "status": "NO_THIRD_JOB_AUTHORIZED",
+      "specific_cause": "Collector was actually OOM-killed at its unchanged32MiB subcap, after successful root PID1 snapshot and before final version report.",
+      "minimal_reviewable_proposal": "Prepare static collector-memory reduction plus bounded per-query completion records within same32MiB collector/shared64 and existing16+16+32 topology, commands/UID gates/deadline; no resource increase or new architecture. Need exact full nonauthor review, then separate explicit decision on any future attempt; none implemented or executed now.",
+      "not_claimed": "Specific command causing OOM is unknown; no unsupported version lookup/latest substitution or old-run backfill."
+    }
   }
 }

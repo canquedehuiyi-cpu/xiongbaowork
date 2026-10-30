@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:909-extra-one-20261030",
   "run_id": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
   "acquired_at": "2026-10-30T03:44:01.878Z",
-  "renewed_at": "2026-10-30T03:53:20.971Z",
-  "expires_at": "2026-10-30T04:29:01.878Z",
+  "renewed_at": "2026-10-30T03:54:43.487Z",
+  "expires_at": "2026-10-30T03:54:43.487Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "0ccdc59784a0cb438e7886d7b7bbad844f58173e",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-10-30T03:44:01.878Z"
   },
-  "next_action": "Independently review actual second-job OOM/partial PID1 evidence, save exact minimal next decision and idle release. No third metadata job or code edits.",
+  "next_action": "Two actual metadata jobs consumed. Return actual collector32MiB OOM and partial verified PID1 record; only a separately reviewed static memory-footprint decision may precede any explicitly allocated future attempt. No automatic third, no exact-version ARCH audit without versions.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -36,9 +36,16 @@
     "conclusion": "failure"
   },
   "queue_at_release": {
-    "queued": [],
-    "in_progress": [],
-    "observed_at": "2026-10-30T01:57:41.927Z"
+    "queued": 0,
+    "in_progress": 0,
+    "observed_at": "2026-10-30T03:54:32.513Z",
+    "exact909_runs": [
+      {
+        "id": 40999201244,
+        "attempt": 1,
+        "conclusion": "failure"
+      }
+    ]
   },
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
@@ -83,6 +90,7 @@
     "additional_jobs": 1,
     "authority_source": "Root relay of human choice call_907ac0dcf471487289749faab6d427be and human reopened-app 已恢复; not a third allocation",
     "accepted_at": "2026-10-30T03:44:01.878Z",
-    "status": "CONSUMED_BY_RUN40999201244"
-  }
+    "status": "CONSUMED_TERMINAL_FAILURE_RUN40999201244_NO_THIRD"
+  },
+  "released_at": "2026-10-30T03:54:43.487Z"
 }

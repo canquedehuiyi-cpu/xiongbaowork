@@ -264,7 +264,7 @@
     "observed_status": "Three cloud conversations resolved; matching initial prompts independently read in three durable executor threads, all active/inProgress. No command execution evidence or repository acquisition claimed by this observation.",
     "local_root": "No further Source changes/adoption/runtime jobs. Canonical writer ownership passed to cloud coordinator. Old local heartbeat to be paused; local apps not cloud workers."
   },
-  "checkpoint_update_at": "2026-10-30T03:53:20.971Z",
+  "checkpoint_update_at": "2026-10-30T03:54:43.487Z",
   "cloud_takeover_observation": {
     "coordinator": {
       "conversation_id": "6ae2f8f3-a2d4-83ee-9612-c2b1b6e87072",
@@ -4429,11 +4429,11 @@
   "current_cloud_coordinator": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:909-extra-one-20261030",
     "epoch": "2026-10-30T03:44:01.878Z:909-extra-one-dedup",
-    "state": "held",
-    "expires_at": "2026-10-30T04:29:01.878Z",
+    "state": "released",
+    "expires_at": "2026-10-30T03:54:43.487Z",
     "acquisition_commit": "8322c0c1a5fce55b73a789a1337035af85371718",
     "scope": "Root在用户已授权单次版本补证及最新查因推进要求内，明确的metadata准入实现映射/逐job临时guard边界。至多一次版本metadata作业；共享aggregate64MiB/swap0/oom及父512，首次控制动作同270/300，持续supervisor/fallback/严格只读finalwitness。不得外推为人类逐字审批具体映射、manager配置、新资源权限/架构或任何原门放宽。",
-    "released_at": "2026-10-30T01:57:41.927Z"
+    "released_at": "2026-10-30T03:54:43.487Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -4786,7 +4786,7 @@
     "additional_jobs": 1,
     "authority_source": "Root relay of human choice call_907ac0dcf471487289749faab6d427be and human reopened-app 已恢复; not a third allocation",
     "accepted_at": "2026-10-30T03:44:01.878Z",
-    "status": "ACTUAL_SECOND_JOB_FAILED_COLLECTOR_OOM_PARTIAL_PID1_ONLY",
+    "status": "CLOSED_SECOND_FINAL_JOB_FAILURE_PARTIAL_PID1_VERIFIED_NO_VERSION",
     "old_run": 40987759034,
     "old_job": 123842654361,
     "old_head": "0ccdc59784a0cb438e7886d7b7bbad844f58173e",
@@ -4810,7 +4810,15 @@
       "conclusion": "failure",
       "created_at": "2026-10-30T03:46:05Z",
       "url": "https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/40999201244",
-      "result_path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-SECOND-RESULT-20261030.json"
+      "result_path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-SECOND-RESULT-20261030.json",
+      "nonauthor": {
+        "commit": "c946e95f8b15315849e94b01a7942eca0e0cd679",
+        "path": "archives/recovery-20261028/PLATFORM-IDENTITY-909-RUNTIME-NONAUTHOR-20261030.json",
+        "blob": "c3132ef98ac29a9949ceed8f3ef1bda26f2485a2",
+        "bytes": 19585,
+        "sha256": "dce6b3630b7d739d8a98a3f7bfca27eea1c4bbfda4b3b60e9010b3c3b106df58",
+        "status": "FAILED_COLLECTOR_OOM_NO_MANAGER_VERSION_LINKAGE"
+      }
     },
     "version": "NOT_OBTAINED_PARTIAL_PID1_RAW884B_HASH_VERIFIED",
     "next_action": {
@@ -4819,6 +4827,20 @@
       "minimal_reviewable_proposal": "Prepare static collector-memory reduction plus bounded per-query completion records within same32MiB collector/shared64 and existing16+16+32 topology, commands/UID gates/deadline; no resource increase or new architecture. Need exact full nonauthor review, then separate explicit decision on any future attempt; none implemented or executed now.",
       "not_claimed": "Specific command causing OOM is unknown; no unsupported version lookup/latest substitution or old-run backfill."
     },
-    "no_third": true
+    "no_third": true,
+    "dedup_consumed": true,
+    "queue_at_closeout": {
+      "queued": 0,
+      "in_progress": 0,
+      "observed_at": "2026-10-30T03:54:32.513Z",
+      "exact909_runs": [
+        {
+          "id": 40999201244,
+          "attempt": 1,
+          "conclusion": "failure"
+        }
+      ]
+    },
+    "closed_at": "2026-10-30T03:54:43.487Z"
   }
 }
