@@ -7,7 +7,7 @@
   "run_id": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
   "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
   "acquired_at": "2026-11-01T13:15:03.945Z",
-  "renewed_at": "2026-11-01T13:15:03.945Z",
+  "renewed_at": "2026-11-01T13:40:24.099Z",
   "expires_at": "2026-11-01T14:00:03.945Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
@@ -95,8 +95,8 @@
   "current_epoch_renewal_history": {
     "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
     "last_successful_renewal_at": null,
-    "interval_exceeded": false,
-    "renewal_due_at": "2026-11-01T13:30:03.945Z"
+    "interval_exceeded": true,
+    "renewal_due_at": "2026-11-01T13:55:24.099Z"
   },
   "predecessor_release": {
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
@@ -548,6 +548,44 @@
         "candidate_runs": 0,
         "observed_at": "2026-10-30T16:43:38.897Z"
       }
+    },
+    "checkpoint_correction_r2": {
+      "status": "PREPARED_NOT_CAS_APPLIED",
+      "prepared_at": "2026-11-01T13:40:24.099Z",
+      "interval_exceeded": true,
+      "prior_e970_header": {
+        "acquired_at": "2026-11-01T13:15:03.945Z",
+        "renewed_at": "2026-11-01T13:15:03.945Z",
+        "last_successful_renewal_at": null,
+        "renewal_due_at": "2026-11-01T13:30:03.945Z",
+        "expires_at": "2026-11-01T14:00:03.945Z"
+      },
+      "successful_renewals_before_this_proposal": 0,
+      "failed_1328_proposal": {
+        "prepared_at": "2026-11-01T13:28:06.043Z",
+        "intended_next_due": "2026-11-01T13:43:06.043Z",
+        "lease_blob": "46b1a50a2f886df6aa300bd58fcecfeb73dcb208",
+        "lease_blob_unattached": true,
+        "continuation_bytes": 282128,
+        "continuation_sha256": "7543f83b43e5e9c3c6e0ba1de7337dc2a586f5e9e18b1fbbea76c01d7ee322aa",
+        "continuation_create_blob_isError": true,
+        "rejection_reason": "This action publishes a large sensitive continuation containing internal operational history, identifiers, session metadata, and source details to a public repository, exceeding the explicitly authorized limited administrative payload.",
+        "call_id": "NOT_EXPOSED",
+        "tree_commit_ref_created": false,
+        "successful_renewal": false
+      },
+      "this_proposal": {
+        "renewed_at": "2026-11-01T13:40:24.099Z",
+        "renewal_due_at": "2026-11-01T13:55:24.099Z",
+        "expires_at": "2026-11-01T14:00:03.945Z",
+        "last_successful_renewal_at": null,
+        "cas_performed": false
+      },
+      "queue_observed_at": "2026-11-01T13:38:08.275Z",
+      "queued": 0,
+      "in_progress": 0,
+      "source_published": false,
+      "new_jobs": 0
     }
   }
 }

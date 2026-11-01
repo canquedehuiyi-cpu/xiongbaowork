@@ -4432,7 +4432,8 @@
     "state": "held",
     "expires_at": "2026-11-01T14:00:03.945Z",
     "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
-    "released_at": null
+    "released_at": null,
+    "renewed_at": "2026-11-01T13:40:24.099Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -6312,6 +6313,44 @@
       "expires_at": "2026-10-30T16:44:08.527Z",
       "scope": "Only authorized exact A4-A3 five-file public static prep and two existing administrative paths with retained public history. First stage returns held for Root Source verification; no private reports or unrelated artifacts, no execution.",
       "released_at": "2026-10-30T16:44:08.527Z"
+    },
+    "checkpoint_correction_r2": {
+      "status": "PREPARED_NOT_CAS_APPLIED",
+      "prepared_at": "2026-11-01T13:40:24.099Z",
+      "interval_exceeded": true,
+      "prior_e970_header": {
+        "acquired_at": "2026-11-01T13:15:03.945Z",
+        "renewed_at": "2026-11-01T13:15:03.945Z",
+        "last_successful_renewal_at": null,
+        "renewal_due_at": "2026-11-01T13:30:03.945Z",
+        "expires_at": "2026-11-01T14:00:03.945Z"
+      },
+      "successful_renewals_before_this_proposal": 0,
+      "failed_1328_proposal": {
+        "prepared_at": "2026-11-01T13:28:06.043Z",
+        "intended_next_due": "2026-11-01T13:43:06.043Z",
+        "lease_blob": "46b1a50a2f886df6aa300bd58fcecfeb73dcb208",
+        "lease_blob_unattached": true,
+        "continuation_bytes": 282128,
+        "continuation_sha256": "7543f83b43e5e9c3c6e0ba1de7337dc2a586f5e9e18b1fbbea76c01d7ee322aa",
+        "continuation_create_blob_isError": true,
+        "rejection_reason": "This action publishes a large sensitive continuation containing internal operational history, identifiers, session metadata, and source details to a public repository, exceeding the explicitly authorized limited administrative payload.",
+        "call_id": "NOT_EXPOSED",
+        "tree_commit_ref_created": false,
+        "successful_renewal": false
+      },
+      "this_proposal": {
+        "renewed_at": "2026-11-01T13:40:24.099Z",
+        "renewal_due_at": "2026-11-01T13:55:24.099Z",
+        "expires_at": "2026-11-01T14:00:03.945Z",
+        "last_successful_renewal_at": null,
+        "cas_performed": false
+      },
+      "queue_observed_at": "2026-11-01T13:38:08.275Z",
+      "queued": 0,
+      "in_progress": 0,
+      "source_published": false,
+      "new_jobs": 0
     }
   }
 }
