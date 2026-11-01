@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D06-reviewed-source-publication",
   "run_id": "2026-11-01T15:20:27.923Z:D06-reviewed-source-publication",
   "epoch": "2026-11-01T15:20:27.923Z:D06-reviewed-source-publication",
   "acquired_at": "2026-11-01T15:20:27.923Z",
   "renewed_at": "2026-11-01T15:20:27.923Z",
-  "expires_at": "2026-11-01T16:05:27.923Z",
+  "expires_at": "2026-11-01T15:32:39.535Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "84f52c4269f69473ce9511b7ed7d76ea670a1372",
@@ -35,7 +35,7 @@
       }
     ]
   },
-  "next_action": "PROPOSAL ONLY: obtain Root and original different-nonauthor approval of these exact two administrative candidates. Then fresh exact canonical head/lease/queue/UTC recheck and acquire by expected_sha/force=false only. After successful matching held/unexpired readback, save only the five frozen D06 leaves on the isolated D09-parent branch; obtain Root and independent Codex full five-file Git correspondence, then separately reviewed fresh two-admin release. Checkpoint within900s, hard epoch limit2700s; no automatic next package or execution.",
+  "next_action": "D06 frozen Source 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634 has passed Root and independent Codex actual five-file Git correspondence; saved only, not adopted and not run. Obtain exact two-admin release review, then CAS release and verify canonical ref plus both full administrative bodies. This bounded publication round ends after verified release. No automatic next Source, adoption, job or execution; preserve all D09 history and prior rejection evidence.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -46,7 +46,30 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": null,
-  "queue_at_release": null,
+  "queue_at_release": {
+    "observed_at": "2026-11-01T15:32:12.270Z",
+    "eventFilter": null,
+    "statuses": [
+      {
+        "status": "queued",
+        "pagesRead": 1,
+        "perPage": 100,
+        "total_count": 0,
+        "returned": 0,
+        "complete": true
+      },
+      {
+        "status": "in_progress",
+        "pagesRead": 1,
+        "perPage": 100,
+        "total_count": 0,
+        "returned": 0,
+        "complete": true
+      }
+    ],
+    "active_job": null,
+    "new_jobs_started": 0
+  },
   "predecessor_expiry": {
     "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
     "expires_at": "2026-11-01T14:00:03.945Z",
@@ -348,7 +371,7 @@
     "allowed_admin_content": "Preserve existing public history and append only this A3 round owner/task/epoch, real times,parent/CAS,candidate identities,review/Root verification/readback/release and zero-job metadata.",
     "excluded": "No private CPU/P1/P2/ledger/review fulltext/B/A2/B1/raw/secrets/user data; no Source adoption,execution,model,billing,PG,deployment or fourth metadata."
   },
-  "released_at": null,
+  "released_at": "2026-11-01T15:32:39.535Z",
   "a4_a3_actual_candidate": {
     "commit": "0a10bd4f158fdf27a0bc8e70c1ad96f3d949da70",
     "parent": "f81e6646e547e1c0e8430f51ce994f9d61df4d6d",
@@ -871,7 +894,7 @@
   },
   "d06_reviewed_source_publication": {
     "requestId": "root-nov1-d06-reviewed-source-publication-preparation-v1",
-    "stage": "PREPARED_NOT_ACQUIRED_NOT_PUBLISHED",
+    "stage": "STATIC_SAVED_GIT_VERIFIED_NOT_ADOPTED_NOT_RUN",
     "prepared_at": "2026-11-01T15:20:27.923Z",
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D06-reviewed-source-publication",
     "run_id": "2026-11-01T15:20:27.923Z:D06-reviewed-source-publication",
@@ -884,7 +907,7 @@
     "expected_sha": "84f52c4269f69473ce9511b7ed7d76ea670a1372",
     "force": false,
     "scope": "Only publish the four frozen reviewed D06 R2 Source files plus its byte-exact original manifest on codex/d06-autonomous-summary-reviewed-20261101 with unique Source parent 4b367e3c0580128bc28c31ca9030f018db18cb06. Preserve D09 five leaves. Obtain independent immutable Git readback, then separately idle-queue CAS release/closeout. No Source adoption, main/canonical Source merge, PR, dispatch, project execution, compile, install, jobs, PG, provider, billing, deployment, metadata4, or runtime/workspace/child recovery.",
-    "next_action": "PROPOSAL ONLY: obtain Root and original different-nonauthor approval of these exact two administrative candidates. Then fresh exact canonical head/lease/queue/UTC recheck and acquire by expected_sha/force=false only. After successful matching held/unexpired readback, save only the five frozen D06 leaves on the isolated D09-parent branch; obtain Root and independent Codex full five-file Git correspondence, then separately reviewed fresh two-admin release. Checkpoint within900s, hard epoch limit2700s; no automatic next package or execution.",
+    "next_action": "D06 frozen Source 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634 has passed Root and independent Codex actual five-file Git correspondence; saved only, not adopted and not run. Obtain exact two-admin release review, then CAS release and verify canonical ref plus both full administrative bodies. This bounded publication round ends after verified release. No automatic next Source, adoption, job or execution; preserve all D09 history and prior rejection evidence.",
     "source_parent": "4b367e3c0580128bc28c31ca9030f018db18cb06",
     "source_parent_tree": "f77e6599bd0188572b50ab6aaf7d202d42a24bbc",
     "formal_Source28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
@@ -907,7 +930,7 @@
           "bytes": 7121,
           "sha256": "7891781a11c8c174713a4ec6bb00d9202ba868a45dc874960907b25271a14c1f",
           "expectedGitblob": "0ad28a9ed90782b957487fc9878593236d3e0bfe",
-          "actualGitblob": "NOT_CREATED"
+          "actualGitblob": "0ad28a9ed90782b957487fc9878593236d3e0bfe"
         }
       },
       {
@@ -925,7 +948,7 @@
           "bytes": 21999,
           "sha256": "0e87ab49678035236abcbb0b3cfb40c81d010af44328e9efc32b4e0cd3facfde",
           "expectedGitblob": "4183a4f27caece1211b9bed55a27ae4590318696",
-          "actualGitblob": "NOT_CREATED"
+          "actualGitblob": "4183a4f27caece1211b9bed55a27ae4590318696"
         }
       },
       {
@@ -943,7 +966,7 @@
           "bytes": 12510,
           "sha256": "5661942194ab38fa47e7dcc7d25860f035c8e83dc6469762a42d7399f2f6bd8a",
           "expectedGitblob": "a3ce7f08befa5982d824aba43019aabea5cc9357",
-          "actualGitblob": "NOT_CREATED"
+          "actualGitblob": "a3ce7f08befa5982d824aba43019aabea5cc9357"
         }
       },
       {
@@ -961,7 +984,7 @@
           "bytes": 21679,
           "sha256": "66bfeba91df99a4f041d53235bdb509176be0fc02bc40e5192a60c0bb297ffc9",
           "expectedGitblob": "1469c4052a97c4c9494f85245aa46da0fa5fb6d6",
-          "actualGitblob": "NOT_CREATED"
+          "actualGitblob": "1469c4052a97c4c9494f85245aa46da0fa5fb6d6"
         }
       },
       {
@@ -980,7 +1003,7 @@
           "bytes": 9385,
           "sha256": "d88f3ec60df0d2628171c59e7a4bcff4187895596efa52ce2c42306e143a34a9",
           "expectedGitblob": "70239665f53580f16807edb382b3c3b17c2682d8",
-          "actualGitblob": "NOT_CREATED"
+          "actualGitblob": "70239665f53580f16807edb382b3c3b17c2682d8"
         }
       }
     ],
@@ -1155,6 +1178,121 @@
         "active_job": null,
         "new_jobs_started": 0
       }
+    },
+    "actual_acquisition": {
+      "commit": "b35641556ae2a683a22dfa10173cbb3686bf01da",
+      "parent": "84f52c4269f69473ce9511b7ed7d76ea670a1372",
+      "tree": "e5ad0c27fc6585ef75130f421efad48e08360703",
+      "expected_sha": "84f52c4269f69473ce9511b7ed7d76ea670a1372",
+      "force": false,
+      "cas_success": true,
+      "cas_response_observed_at": "2026-11-01T15:21:53.205Z",
+      "full_readback_verified_at": "2026-11-01T15:22:11.837Z",
+      "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D06-reviewed-source-publication",
+      "epoch": "2026-11-01T15:20:27.923Z:D06-reviewed-source-publication",
+      "files": [
+        {
+          "path": "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json",
+          "mode": "100644",
+          "bytes": 55954,
+          "sha256": "185decbc41bdbde1f843f6dbcb5e03ee4c65954a2091d383a117681c0077ee59",
+          "actualGitblob": "4af633d6d45895564f2ff0e47d48cb6bf35c1828"
+        },
+        {
+          "path": "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+          "mode": "100644",
+          "bytes": 303708,
+          "sha256": "93798467922398eaf35a7465be5324d9f1c9eebc39bafc59ded4253e907f635c",
+          "actualGitblob": "66f02b28d525ab2bf52f8f7a049e6813783975e1"
+        }
+      ],
+      "exact_two_modified_admin_leaves": true
+    },
+    "actual_source": {
+      "commit": "2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634",
+      "parent": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+      "tree": "ea48fde7a70474c5d51ad567e6cc6f9ffb063fb5",
+      "branch": "codex/d06-autonomous-summary-reviewed-20261101",
+      "message": "D06 autonomous summary: SOURCE_REVIEWED_NOT_RUN [skip ci]",
+      "native_create_branch": true,
+      "create_if_absent": true,
+      "fresh_404_verified_at": "2026-11-01T15:24:00.496Z",
+      "branch_create_returned_at": "2026-11-01T15:24:12.879Z",
+      "owner_full_five_readback_verified_at": "2026-11-01T15:24:25.402Z",
+      "total_bytes": 72694,
+      "source_bytes": 63309,
+      "manifest_bytes": 9385,
+      "definitions": 19,
+      "executed": 0,
+      "exact_diff": "4modified+1added",
+      "full_tree_entries": 2747,
+      "truncated": false,
+      "all_modes": "100644",
+      "D09_five_leaves_unchanged": true,
+      "independent_actual_git_review": "PASS_RELAY_FROM_01a195bd-76b0-7610-96b0-9bafd55aa5f8",
+      "root_actual_git_review_at_preparation": "PASS_ROOT_RELAY_FULL_FIVE_BODIES_REF_UNIQUE_PARENT_TREE_DIFF_MODE_ACTIONS",
+      "files_actual_blobs": "See unchanged files[].after pins plus actualGitblob set by this proposal."
+    },
+    "release_preparation": {
+      "status": "PREPARED_NOT_CAS_APPLIED",
+      "prepared_at": "2026-11-01T15:32:39.535Z",
+      "expected_sha": "b35641556ae2a683a22dfa10173cbb3686bf01da",
+      "force": false,
+      "cas_applied": false,
+      "actual_release_commit": "UNKNOWN_UNTIL_CAS_AND_READBACK",
+      "queue_proof": {
+        "observed_at": "2026-11-01T15:32:12.270Z",
+        "eventFilter": null,
+        "statuses": [
+          {
+            "status": "queued",
+            "pagesRead": 1,
+            "perPage": 100,
+            "total_count": 0,
+            "returned": 0,
+            "complete": true
+          },
+          {
+            "status": "in_progress",
+            "pagesRead": 1,
+            "perPage": 100,
+            "total_count": 0,
+            "returned": 0,
+            "complete": true
+          }
+        ],
+        "active_job": null,
+        "new_jobs_started": 0
+      },
+      "head_actions": {
+        "source_head": "2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634",
+        "admin_acquire_head": "b35641556ae2a683a22dfa10173cbb3686bf01da",
+        "eventFilter": null,
+        "pagesReadEach": 1,
+        "perPage": 100,
+        "total_countEach": 0,
+        "returnedEach": 0,
+        "complete": true
+      },
+      "new_epoch_interval_exceeded": false,
+      "renewal_due_at": "2026-11-01T15:35:27.923Z",
+      "original_epoch_hard_expiry": "2026-11-01T16:05:27.923Z",
+      "old_D09_expired_unreleased_and_both_misses_preserved": true,
+      "original_auto_review_rejections_preserved": true,
+      "human_full_two_admin_public_disclosure_approval_request": "root-nov1-d06-human-explicit-full-admin-public-disclosure-approved-v1",
+      "source_adopted": false,
+      "project_execution": 0,
+      "tests": 0,
+      "compile": 0,
+      "install": 0,
+      "new_jobs": 0,
+      "PG": 0,
+      "provider_calls": 0,
+      "metadata4": 0,
+      "billing": 0,
+      "production": 0,
+      "requires_exact_release_review": true,
+      "Root_and_independent_actual_Source_Git_acceptance_received": true
     }
   }
 }
