@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { agentKeys } from "@/lib/agents/queries";
@@ -50,13 +50,20 @@ afterAll(async () => {
   await settleReactWork();
   GlobalRegistrator.unregister();
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
-  calls.length = 0;
-  globalThis.fetch = originalFetch;
+  try {
+    await Promise.all(drawnClients.map(client => client.cancelQueries()));
+  } finally {
+    for (const client of drawnClients) client.clear();
+    drawnClients.length = 0;
+    calls.length = 0;
+    globalThis.fetch = originalFetch;
+  }
 });
 
 const originalFetch = globalThis.fetch;
+const drawnClients: QueryClient[] = [];
 const calls: { method: string; path: string; body: unknown }[] = [];
 const writes = () => calls.filter((entry) => entry.method !== "GET");
 
@@ -122,6 +129,7 @@ function draw(over: Partial<AutonomousSummary> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  drawnClients.push(queryClient);
   queryClient.setQueryData(agentKeys.list(false), [librarian]);
   queryClient.setQueryData(autonomousKeys.forAgent("agent-night"), {
     ...summary,
@@ -144,11 +152,11 @@ function draw(over: Partial<AutonomousSummary> = {}) {
       } as never),
     ]),
   });
-  return render(
+  return Object.assign(render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
-  );
+  ), { queryClient });
 }
 
 test("the schedules, the goals and the check-ins read as this coworker's own", async () => {
@@ -379,4 +387,144 @@ test("a full allowance says to switch one off, and keeps the server's own words"
   );
   // Nothing in the form is wrong, so nothing in it is drawn as an error.
   expect(alert.querySelector(".text-destructive")).toBeNull();
+});
+
+// These definitions retain the real page, router, query cache, mutations and client.
+test("delete waits for 204 and a fresh summary, invalidates routine caches and blocks duplicate clicks", async () => {
+  const id = "routine/delete ?#";
+  const row = { ...summary.routines[0]!, id };
+  const releaseDelete = Promise.withResolvers<void>();
+  const releaseSummary = Promise.withResolvers<void>();
+  const deleting = Promise.withResolvers<void>();
+  const refreshing = Promise.withResolvers<void>();
+  let parses = 0;
+  const noContent = new Response(null, { status: 204 });
+  noContent.json = async () => { parses++; throw new Error("204 must not be parsed"); };
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const path = String(input), method = init?.method ?? "GET";
+    calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : null });
+    expect(init?.credentials).toBe("include");
+    if (method === "DELETE") {
+      expect(path).toBe(`/api/routines/${encodeURIComponent(id)}`);
+      deleting.resolve(); await releaseDelete.promise; return noContent;
+    }
+    if (method === "GET" && path === "/api/agents/agent-night/autonomous") {
+      refreshing.resolve(); await releaseSummary.promise;
+      return Response.json({ autonomous: { ...summary, routines: [] } });
+    }
+    throw new Error("Unexpected delete fixture request; never forward");
+  }) as typeof fetch;
+  const screen = draw({ routines: [row] });
+  screen.queryClient.setQueryData(routineKeys.runs(id), []);
+  const inactiveKey = autonomousKeys.forAgent("agent-other-inactive");
+  const inactiveSummary = { ...summary, agentId: "agent-other-inactive" };
+  screen.queryClient.setQueryData(inactiveKey, inactiveSummary);
+  expect(screen.queryClient.getQueryState(inactiveKey)?.isInvalidated).toBe(false);
+  expect(screen.queryClient.getQueryCache().find({ queryKey: inactiveKey, exact: true })?.getObserversCount()).toBe(0);
+  try {
+    const button = await screen.findByRole("button", { name: "删除" });
+    act(() => { fireEvent.click(button); fireEvent.click(button); });
+    await deleting.promise;
+    // Try the same control while the DELETE Response is still held back.
+    await userEvent.click(button);
+    expect(writes()).toHaveLength(1);
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(row.instruction)).toBeTruthy();
+    releaseDelete.resolve();
+    await refreshing.promise;
+    expect(screen.queryClient.getQueryState(routineKeys.list())?.isInvalidated).toBe(true);
+    expect(screen.queryClient.getQueryState(routineKeys.runs(id))?.isInvalidated).toBe(true);
+    // An inactive second agent proves family invalidation, not just this view.
+    expect(screen.queryClient.getQueryState(inactiveKey)?.isInvalidated).toBe(true);
+    expect(screen.queryClient.getQueryData(inactiveKey)).toEqual(inactiveSummary);
+    // DELETE has acknowledged, but the summary still has not answered.
+    await userEvent.click(button);
+    expect(writes()).toHaveLength(1);
+    expect(parses).toBe(0);
+    // Even after DELETE ACK, no optimistic removal before the real summary GET.
+    expect(screen.getByText(row.instruction)).toBeTruthy();
+    expect(button.hasAttribute("disabled")).toBe(true);
+    releaseSummary.resolve();
+    await waitFor(() => expect(screen.queryByText(row.instruction)).toBeNull());
+    expect(await screen.findByText(/还没有安排任何定时任务/)).toBeTruthy();
+    expect(writes()).toHaveLength(1);
+    expect(calls.filter(call => call.method === "GET")).toHaveLength(1);
+    expect(parses).toBe(0);
+  } finally {
+    releaseDelete.resolve(); releaseSummary.resolve();
+    await settleReactWork();
+  }
+});
+
+test("a refused delete keeps its row, shows the server error and leaves caches intact", async () => {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    calls.push({ method, path: String(input), body: null });
+    expect(method).toBe("DELETE");
+    expect(String(input)).toBe("/api/routines/routine-1");
+    return Response.json({ error: "这条定时任务不存在，或者你不能删除它。" }, { status: 404 });
+  }) as typeof fetch;
+  const screen = draw();
+  await userEvent.click(await screen.findByRole("button", { name: "删除" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("这条定时任务不存在，或者你不能删除它。");
+  expect(screen.getByText("Summarise the day's arrivals.")).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole("button", { name: "删除" }).hasAttribute("disabled")).toBe(false));
+  expect(writes()).toHaveLength(1);
+  expect(calls.some(call => call.method === "GET")).toBe(false);
+  expect(screen.queryClient.getQueryState(routineKeys.list())?.isInvalidated).toBe(false);
+  expect(screen.queryClient.getQueryState(autonomousKeys.forAgent("agent-night"))?.isInvalidated).toBe(false);
+});
+
+test("enabled proactive work shows the server's next plan, including an expired plan, without claiming a firing", async () => {
+  for (const nextRunAt of ["2099-01-02T03:04:05.000Z", "2001-01-02T03:04:05.000Z"]) {
+    const screen = draw({ proactive: [{ ...summary.proactive[0]!, enabled: true, nextRunAt }] });
+    const time = await screen.findByLabelText("主动巡检下次计划");
+    expect(time.getAttribute("datetime")).toBe(nextRunAt);
+    expect(time.getAttribute("title")).toBe(nextRunAt);
+    expect(screen.getByText(/仅为计划/)).toBeTruthy();
+    expect(screen.getByText(/从未运行过/)).toBeTruthy();
+    screen.unmount();
+  }
+  const disabled = draw();
+  await disabled.findByText("Anything the day left unfinished.");
+  expect(disabled.queryByLabelText("主动巡检下次计划")).toBeNull();
+});
+
+test("the real screen distinguishes open routines, never-fired work and unknown outcomes", async () => {
+  const at = "2026-10-31T11:00:00.000Z";
+  const row = summary.routines[0]!;
+  const goal = summary.responsibilities[0]!;
+  const screen = draw({
+    routines: [
+      { ...row, id: "open-null", instruction: "Open legacy outcome", lastRun: { status: null, at } },
+      { ...row, id: "open-running", instruction: "Open projected outcome", lastRun: { status: "running", at } },
+      { ...row, id: "never", instruction: "Never fired", lastRun: null },
+      { ...row, id: "future", instruction: "Future outcome", lastRun: { status: "future_status", at } },
+      { ...row, id: "empty-start", instruction: "Missing start", lastRun: { status: null, at: "" } },
+      { ...row, id: "bad-start", instruction: "Invalid start", lastRun: { status: null, at: "not-a-date" } },
+    ],
+    responsibilities: [
+      { ...goal, id: "unknown-at", status: "paused", lastRun: { status: null, at } },
+      { ...goal, id: "unknown-no-start", status: "paused", lastRun: { status: null, at: null } },
+    ],
+  });
+  await screen.findByText("Open legacy outcome");
+  expect(screen.getAllByText(/正在进行（开始于/)).toHaveLength(2);
+  expect(screen.getByText(/从未触发过/)).toBeTruthy();
+  expect(screen.getByText(/上一次future_status/)).toBeTruthy();
+  expect(screen.getAllByText(/上一次结果未知/)).toHaveLength(2);
+  expect(screen.getAllByText(/结果未知（无开始时间）/)).toHaveLength(2);
+  expect(screen.queryByText(/上一次成功/)).toBeNull();
+});
+
+test("a create 404 retains both its existing explanation and the server's words", async () => {
+  serveCreate(() => Response.json({ error: "Fixture coworker unavailable" }, { status: 404 }));
+  const screen = draw({ routines: [] });
+  await userEvent.click(await screen.findByRole("button", { name: "新建定时任务" }));
+  await userEvent.type(screen.getByLabelText("执行指令"), "每天早上汇报");
+  await userEvent.click(screen.getByRole("button", { name: "建立定时任务" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("没有这位员工，或者你用不了它。");
+  expect(alert.textContent).toContain("Fixture coworker unavailable");
+  expect(screen.getByRole("button", { name: "建立定时任务" })).toBeTruthy();
 });

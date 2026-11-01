@@ -10,6 +10,8 @@ import {
   agents,
   proactiveSettings,
   responsibilities,
+  responsibilityEvents,
+  responsibilityRuns,
   routineRuns,
   routines,
   users,
@@ -164,6 +166,117 @@ test("the route answers under the signed-in person's own tenant", async () => {
   );
   expect(stranger.status).toBe(404);
   expect(await stranger.json()).toEqual({ error: "No such coworker." });
+});
+
+// Isolated owners/agents keep the original three shared-seed definitions order independent.
+async function withSummaryRows(work: (fixture: {
+  id: string; owner: string; foreign: string; bot: string;
+  addRoutine: (name: string, next?: Date) => Promise<string>;
+}) => Promise<void>) {
+  const id = `au-reg-${randomUUID()}`;
+  const owner = `${id}-owner`, foreign = `${id}-foreign`, bot = `${id}-bot`;
+  try {
+    await runAsTenant(owner, async () => {
+      await database.insert(users).values({ id: owner, email: `${owner}@example.test` });
+      await database.insert(agents).values({ id: bot, name: "Isolated summary",
+        type: "built_in", configuration: {} });
+    });
+    await work({ id, owner, foreign, bot,
+      addRoutine: async (name, next = new Date("2026-11-01T12:00:00.000Z")) => {
+        const routineId = `${id}-${name}`;
+        await runAsTenant(owner, () => database.insert(routines).values({
+          id: routineId, ownerUserId: owner, agentId: bot, channelId: `${id}-channel`,
+          instruction: name, cron: "0 3 * * *", nextRunAt: next, enabled: true,
+        }));
+        return routineId;
+      },
+    });
+  } finally {
+    await runAsTenant(owner, async () => {
+      await database.delete(routines).where(eq(routines.agentId, bot));
+      await database.delete(responsibilities).where(eq(responsibilities.agentId, bot));
+      await database.delete(responsibilityEvents).where(eq(responsibilityEvents.ownerUserId, owner));
+      await database.delete(proactiveSettings).where(eq(proactiveSettings.agentId, bot));
+      await database.delete(agents).where(eq(agents.id, bot));
+      await database.delete(users).where(eq(users.id, owner));
+    });
+  }
+}
+
+test("an unfinished routine keeps its newest start, schedule order and activity in store and HTTP", async () => {
+  await withSummaryRows(async fixture => {
+    const active = await fixture.addRoutine("active", new Date("2026-11-02T12:00:00.000Z"));
+    const idle = await fixture.addRoutine("idle");
+    const started = new Date("2026-10-31T11:00:00.000Z");
+    await runAsTenant(fixture.owner, () => database.insert(routineRuns).values([
+      { id: `${fixture.id}-old`, routineId: active, status: "succeeded",
+        startedAt: new Date("2026-10-31T10:00:00.000Z"),
+        finishedAt: new Date("2026-10-31T10:01:00.000Z") },
+      { id: `${fixture.id}-live`, routineId: active, status: null,
+        startedAt: started, finishedAt: null },
+    ]));
+    const result = await runAsTenant(fixture.owner, () => store.summaryForAgent(fixture.bot));
+    expect(result.routines.map(row => row.id)).toEqual([active, idle]);
+    expect(result.routines[0]?.lastRun).toEqual({ status: "running", at: started });
+    expect(result.routines[1]?.lastRun).toBeNull();
+    expect(result.lastActivityAt).toEqual(started);
+    const auth: MiddlewareHandler<{ Variables: AppVariables }> = async (context, next) => {
+      context.set("actor", { id: fixture.owner, role: "user" }); await next();
+    };
+    const response = await runAsTenant(fixture.owner, () =>
+      createAutonomousRoutes(store, auth).request(`http://openbot.test/${fixture.bot}/autonomous`));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.autonomous.routines[0].lastRun).toEqual({ status: "running", at: started.toISOString() });
+    expect(body.autonomous.lastActivityAt).toBe(started.toISOString());
+    const [saved] = await runAsTenant(fixture.owner, () => database.select().from(routineRuns)
+      .where(eq(routineRuns.id, `${fixture.id}-live`)));
+    expect(saved?.status).toBeNull(); // Read projection must not finish or rewrite the firing.
+    expect(saved?.startedAt).toEqual(started);
+    expect(saved?.finishedAt).toBeNull();
+  });
+});
+
+test("never-fired routines and unstarted non-routine work gain no invented running result or time", async () => {
+  await withSummaryRows(async fixture => {
+    await fixture.addRoutine("never-fired");
+    const goal = `${fixture.id}-goal`, event = `${fixture.id}-event`;
+    await runAsTenant(fixture.owner, async () => {
+      await database.insert(responsibilities).values({
+        id: goal, ownerUserId: fixture.owner, agentId: fixture.bot,
+        channelId: `${fixture.id}-channel`, threadId: `${fixture.id}-thread`,
+        title: "Queued work", instruction: "Wait.", successCriteria: "A result", status: "active",
+      });
+      await database.insert(responsibilityEvents).values({ id: event, ownerUserId: fixture.owner,
+        source: "manual", externalId: event, type: "fixture", payload: {} });
+      await database.insert(responsibilityRuns).values({ id: `${fixture.id}-queued`,
+        responsibilityId: goal, eventId: event, status: "queued", startedAt: null });
+    });
+    const result = await runAsTenant(fixture.owner, () => store.summaryForAgent(fixture.bot));
+    expect(result.routines[0]?.lastRun).toBeNull();
+    expect(result.responsibilities[0]?.lastRun).toEqual({ status: "queued", at: null });
+    expect(result.lastActivityAt).toBeNull();
+  });
+});
+
+test("the new in-flight projection does not expose another owner's routine or start time", async () => {
+  await withSummaryRows(async fixture => {
+    const routineId = await fixture.addRoutine("private-live");
+    await runAsTenant(fixture.owner, () => database.insert(routineRuns).values({
+      id: `${fixture.id}-private-run`, routineId, status: null,
+      startedAt: new Date("2026-10-31T11:00:00.000Z"),
+    }));
+    expect(await runAsTenant(fixture.foreign, () => store.summaryForAgent(fixture.bot))).toEqual({
+      agentId: fixture.bot, routines: [], responsibilities: [], proactive: [], lastActivityAt: null,
+    });
+    const auth: MiddlewareHandler<{ Variables: AppVariables }> = async (context, next) => {
+      context.set("actor", { id: fixture.foreign, role: "user" }); await next();
+    };
+    const response = await runAsTenant(fixture.foreign, () =>
+      createAutonomousRoutes(store, auth).request(`http://openbot.test/${fixture.bot}/autonomous`));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "No such coworker." });
+  });
 });
 
 afterAll(async () => {

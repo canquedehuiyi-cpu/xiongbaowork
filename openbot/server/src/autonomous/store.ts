@@ -149,7 +149,11 @@ export function createAutonomousStore(database: Database) {
               ),
       ]);
 
-      const routineLastRuns = newest(routineRunRows);
+      const routineLastRuns = newest(routineRunRows.map((row) => ({
+        ...row,
+        // Only routine null outcomes with a recorded start mean in flight.
+        status: row.status === null && row.at !== null ? "running" : row.status,
+      })));
       const responsibilityLastRuns = newest(responsibilityRunRows);
       const stamps = [
         ...routineRunRows.map((row) => row.at),

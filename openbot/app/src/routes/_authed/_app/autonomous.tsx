@@ -5,7 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   PageRows,
   PageSection,
@@ -40,6 +40,7 @@ import {
 } from "@/lib/routines/frequency";
 import {
   createRoutineMutationOptions,
+  deleteRoutineMutationOptions,
   runRoutineNowMutationOptions,
   setRoutineEnabledMutationOptions,
 } from "@/lib/routines/mutations";
@@ -67,10 +68,31 @@ function RouteComponent() {
   const summary = useQuery(autonomousQueryOptions(agentId));
   const toggle = useMutation(setRoutineEnabledMutationOptions(queryClient));
   const runNow = useMutation(runRoutineNowMutationOptions(queryClient));
+  const remove = useMutation(deleteRoutineMutationOptions(queryClient));
+  const deleting = useRef(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteProblem, setDeleteProblem] = useState<{ id: string; message: string } | null>(null);
 
   const after = () =>
     queryClient.invalidateQueries({ queryKey: autonomousKeys.all });
   const selected = roster.find((agent) => agent.id === agentId);
+  const deleteRoutine = async (id: string) => {
+    // State alone cannot block two clicks before React commits the disabled button.
+    if (deleting.current) return;
+    deleting.current = true;
+    setDeletingId(id);
+    setDeleteProblem(null);
+    try {
+      await remove.mutateAsync(id); // The shared mutation invalidates routine caches.
+      await after(); // Keep the row until the server summary actually removes it.
+    } catch (thrown) {
+      setDeleteProblem({ id, message: thrown instanceof Error && thrown.message
+        ? thrown.message : "这条定时任务没能删除，请重试。" });
+    } finally {
+      deleting.current = false;
+      setDeletingId(null);
+    }
+  };
 
   return (
     <PageShell
@@ -156,9 +178,14 @@ function RouteComponent() {
                          * this page is both halves at once, and they are already stored together.
                          */}
                         下次 {relativeTime(routine.nextRunAt)} ·{" "}
-                        {describe(routine.lastRun)} ·{" "}
+                        {describe(routine.lastRun, true)} ·{" "}
                         {routine.enabled ? "已开启" : "已关闭"}
                       </ItemDescription>
+                      {deleteProblem?.id === routine.id ? (
+                        <p className="text-destructive text-sm" role="alert">
+                          删除失败：{deleteProblem.message}
+                        </p>
+                      ) : null}
                     </ItemContent>
                     <ItemActions>
                       <Button
@@ -183,6 +210,14 @@ function RouteComponent() {
                         variant="outline"
                       >
                         {routine.enabled ? "暂停" : "恢复"}
+                      </Button>
+                      <Button
+                        disabled={deletingId !== null}
+                        onClick={() => void deleteRoutine(routine.id)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {deletingId === routine.id ? "删除中…" : "删除"}
                       </Button>
                     </ItemActions>
                   </Item>
@@ -237,6 +272,13 @@ function RouteComponent() {
                           ? `上一次 ${relativeTime(setting.lastRunAt)}（${statusWord(setting.lastStatus)}）`
                           : "从未运行过"}{" "}
                         · {setting.enabled ? "已开启" : "已关闭"}
+                        {setting.enabled ? (
+                          <> · 下次计划{" "}
+                            <time aria-label="主动巡检下次计划" dateTime={setting.nextRunAt} title={setting.nextRunAt}>
+                              {relativeTime(setting.nextRunAt)}
+                            </time>（仅为计划）
+                          </>
+                        ) : null}
                       </ItemDescription>
                     </ItemContent>
                   </Item>
@@ -514,10 +556,12 @@ function NewRoutineForm({
  * A run that never finished says so rather than going blank, because an in-flight firing is the one
  * state this page is most likely being opened to check.
  */
-function describe(run: LastRun | null): string {
+function describe(run: LastRun | null, routine = false): string {
   if (!run) return "从未触发过";
+  if (run.status === "running" || (routine && run.status === null && run.at !== null && Number.isFinite(Date.parse(run.at))))
+    return run.at ? `正在进行（开始于 ${relativeTime(run.at)}）` : "正在进行";
   if (!run.at)
-    return run.status ? `${statusWord(run.status)}（仍在进行）` : "正在进行";
+    return run.status ? `${statusWord(run.status)}（无开始时间）` : "结果未知（无开始时间）";
   return `上一次${run.status ? statusWord(run.status) : "结果未知"} ${relativeTime(run.at)}`;
 }
 
