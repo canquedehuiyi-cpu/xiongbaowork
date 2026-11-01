@@ -2,13 +2,13 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "held",
+  "state": "released",
   "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-admin-only-closeout",
   "run_id": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
   "epoch": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
   "acquired_at": "2026-11-01T14:24:27.357Z",
   "renewed_at": "2026-11-01T14:24:27.357Z",
-  "expires_at": "2026-11-01T14:54:27.357Z",
+  "expires_at": "2026-11-01T14:34:43.080Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
   "expected_parent": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
@@ -18,7 +18,7 @@
     "in_progress": [],
     "observed_at": "2026-11-01T14:24:14.567Z"
   },
-  "next_action": "After successful admin-only successor CAS and matching held/unexpired readback, separately CAS release only these two administrative paths with fresh idle-queue proof and actual UTC. Preserve old D09 expiry, both missed checkpoints and all existing history. Source 4b remains unchanged, saved and Git-verified only; no automatic next package or execution.",
+  "next_action": "D09 frozen Source 4b367e3c0580128bc28c31ca9030f018db18cb06 remains saved and independently Git-verified, not adopted and not run. After actual release CAS, verify canonical ref and both full administrative bodies. This admin-only round is closed; no automatic next Source package, adoption, job or execution. Preserve predecessor expired/unreleased history and both missed checkpoints.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -29,7 +29,30 @@
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
   "active_job": null,
-  "queue_at_release": null,
+  "queue_at_release": {
+    "observed_at": "2026-11-01T14:34:29.430Z",
+    "eventFilter": null,
+    "statuses": [
+      {
+        "status": "queued",
+        "pagesRead": 1,
+        "perPage": 100,
+        "total_count": 0,
+        "returned": 0,
+        "complete": true
+      },
+      {
+        "status": "in_progress",
+        "pagesRead": 1,
+        "perPage": 100,
+        "total_count": 0,
+        "returned": 0,
+        "complete": true
+      }
+    ],
+    "active_job": null,
+    "new_jobs_started": 0
+  },
   "predecessor_expiry": {
     "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
     "expires_at": "2026-11-01T14:00:03.945Z",
@@ -331,7 +354,7 @@
     "allowed_admin_content": "Preserve existing public history and append only this A3 round owner/task/epoch, real times,parent/CAS,candidate identities,review/Root verification/readback/release and zero-job metadata.",
     "excluded": "No private CPU/P1/P2/ledger/review fulltext/B/A2/B1/raw/secrets/user data; no Source adoption,execution,model,billing,PG,deployment or fourth metadata."
   },
-  "released_at": null,
+  "released_at": "2026-11-01T14:34:43.080Z",
   "a4_a3_actual_candidate": {
     "commit": "0a10bd4f158fdf27a0bc8e70c1ad96f3d949da70",
     "parent": "f81e6646e547e1c0e8430f51ce994f9d61df4d6d",
@@ -678,7 +701,7 @@
   },
   "d09_admin_closeout_successor": {
     "authorization_request": "root-nov1-d09-closeout-reviewed-fresh-time-or-admin-only-successor-v1",
-    "stage": "ADMIN_ONLY_SUCCESSOR_PROPOSED_NOT_ACQUIRED_NOT_RELEASED",
+    "stage": "ADMIN_ONLY_SUCCESSOR_RELEASE_PREPARED_NOT_CAS_APPLIED",
     "prepared_at": "2026-11-01T14:24:27.357Z",
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-admin-only-closeout",
     "run_id": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
@@ -691,7 +714,7 @@
     "expected_sha": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
     "force": false,
     "scope": "ADMIN ONLY: record truthful closeout of already published and independently Git-verified D09 Source 4b367e3c0580128bc28c31ca9030f018db18cb06 and separately release this new administrative window. No new Source or Source branch change, adoption, project execution, compile, install, jobs, provider, PG, billing, deployment or metadata4.",
-    "next_action": "After successful admin-only successor CAS and matching held/unexpired readback, separately CAS release only these two administrative paths with fresh idle-queue proof and actual UTC. Preserve old D09 expiry, both missed checkpoints and all existing history. Source 4b remains unchanged, saved and Git-verified only; no automatic next package or execution.",
+    "next_action": "D09 frozen Source 4b367e3c0580128bc28c31ca9030f018db18cb06 remains saved and independently Git-verified, not adopted and not run. After actual release CAS, verify canonical ref and both full administrative bodies. This admin-only round is closed; no automatic next Source package, adoption, job or execution. Preserve predecessor expired/unreleased history and both missed checkpoints.",
     "queue_proof": {
       "observed_at": "2026-11-01T14:24:14.567Z",
       "statuses": [
@@ -765,6 +788,91 @@
       "queue_at_release": null,
       "resource_jobs_this_epoch": [],
       "new_jobs_started": 0
+    },
+    "actual_acquisition": {
+      "commit": "898b5cc8939b63c5039a8fc08d7875a606b57c40",
+      "parent": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
+      "tree": "9ec9bb693d7458fcfd6fc9a5c47a10e98a9f9cf3",
+      "expected_sha": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
+      "force": false,
+      "cas_success": true,
+      "cas_response_observed_at": "2026-11-01T14:25:56.393Z",
+      "full_readback_verified_at": "2026-11-01T14:26:11.762Z",
+      "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-admin-only-closeout",
+      "epoch": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
+      "files": [
+        {
+          "path": "archives/recovery-20261028/CLOUD-COORDINATOR-LEASE.json",
+          "bytes": 39348,
+          "sha256": "e684ca9cdf3bbe62075584a8e0a94f20cf7c444bbe7bea3e5d4415b6e10c0a17",
+          "blob": "f88390ee5f2d363828ac06fc760633c7563d6529",
+          "mode": "100644"
+        },
+        {
+          "path": "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+          "bytes": 290122,
+          "sha256": "250a76adfa387b85f60068226418657760908f85aec57f762cf34d21499d884e",
+          "blob": "0338299c7b36a9390ce161c59172b8bbe3e7d4c4",
+          "mode": "100644"
+        }
+      ],
+      "exact_two_modified_admin_paths": true,
+      "tree_entries": 2854,
+      "tree_truncated": false
+    },
+    "release_preparation": {
+      "status": "PREPARED_NOT_CAS_APPLIED",
+      "prepared_at": "2026-11-01T14:34:43.080Z",
+      "expected_sha": "898b5cc8939b63c5039a8fc08d7875a606b57c40",
+      "force": false,
+      "release_requires_separate_CAS": true,
+      "cas_applied": false,
+      "actual_release_commit": "UNKNOWN_UNTIL_CAS_AND_READBACK",
+      "queue_proof": {
+        "observed_at": "2026-11-01T14:34:29.430Z",
+        "eventFilter": null,
+        "statuses": [
+          {
+            "status": "queued",
+            "pagesRead": 1,
+            "perPage": 100,
+            "total_count": 0,
+            "returned": 0,
+            "complete": true
+          },
+          {
+            "status": "in_progress",
+            "pagesRead": 1,
+            "perPage": 100,
+            "total_count": 0,
+            "returned": 0,
+            "complete": true
+          }
+        ],
+        "active_job": null,
+        "new_jobs_started": 0
+      },
+      "new_epoch_interval_exceeded": false,
+      "new_epoch_renewal_due_at": "2026-11-01T14:39:27.357Z",
+      "original_new_epoch_expires_at": "2026-11-01T14:54:27.357Z",
+      "source_ref_observed": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+      "source_actions": {
+        "head_sha": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+        "eventFilter": null,
+        "pagesRead": 1,
+        "perPage": 100,
+        "total_count": 0,
+        "returned": 0,
+        "complete": true
+      },
+      "old_D09_expired_unreleased_history_preserved": true,
+      "old_D09_both_missed_checkpoints_preserved": true,
+      "source_changes": 0,
+      "project_execution": 0,
+      "new_jobs": 0,
+      "provider_calls": 0,
+      "PG": 0,
+      "metadata4": 0
     }
   }
 }
