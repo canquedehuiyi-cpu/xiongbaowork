@@ -84,6 +84,7 @@ export class QuotaExceeded extends Error {
       used: this.used,
       limit: this.limit,
       plan: this.plan,
+      upgradeUrl: "/plans" as const,
     };
   }
 }
