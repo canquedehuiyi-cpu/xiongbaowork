@@ -4427,12 +4427,12 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
-    "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
-    "state": "released",
-    "expires_at": "2026-10-30T16:44:08.527Z",
-    "scope": "Only authorized exact A4-A3 five-file public static prep and two existing administrative paths with retained public history. First stage returns held for Root Source verification; no private reports or unrelated artifacts, no execution.",
-    "released_at": "2026-10-30T16:44:08.527Z"
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
+    "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "state": "held",
+    "expires_at": "2026-11-01T14:00:03.945Z",
+    "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
+    "released_at": null
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -6210,5 +6210,108 @@
     },
     "secret_calls": 0,
     "readback_requirement": "Final immutable two-admin full-body/hash/mode and parent-diff readback required after CAS; not claimed by this proposed body."
+  },
+  "d09_quota_contract_publication": {
+    "authorization": {
+      "requestId": "root-nov1-d09-reviewed-source-publish-prep-v1",
+      "administrative_followup": "root-nov1-d09-existing-publication-lease-protocol-located-v1",
+      "source": "Root relay of human instruction to continue and push; original writer authorized for exact D09 isolated publication and necessary two existing public administrative paths only."
+    },
+    "stage": "SOURCE_PUBLICATION_PENDING_NOT_ADOPTED_NOT_RUN",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
+    "run_id": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "prepared_at": "2026-11-01T13:15:03.945Z",
+    "admin_parent": "615c9ec850d9c1eb4bc06107415ca801ab66d377",
+    "admin_cas": {
+      "branch": "codex/cloud-repairs-recovery-20261028",
+      "expected_sha": "615c9ec850d9c1eb4bc06107415ca801ab66d377",
+      "force": false
+    },
+    "source_base": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "source_branch": "codex/d09-quota-contract-reviewed-20261101",
+    "manifest_path": "archives/recovery-20261028/D09-K4-quota-error-contract-private4-R1.manifest.json",
+    "files": [
+      {
+        "path": "openbot/server/src/quota/limits.ts",
+        "mode": "100644",
+        "bytes": 9171,
+        "sha256": "fe8472e15b4cf606ac8dfa0d6994ef13cad1e76376b19b3d22c458eba42b2ead",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "openbot/app/src/lib/client.ts",
+        "mode": "100644",
+        "bytes": 6323,
+        "sha256": "36083f5fe8791e10a49cd1967371f11d68a3a5f27978786e93e8698ba8489740",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "openbot/server/tests/quota-error-contract.test.ts",
+        "mode": "100644",
+        "bytes": 2366,
+        "sha256": "2d737f1a71aa7cf886422cdbed953b1f5447b0bf4ff1bd357d46c1fa5b221108",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "openbot/app/tests/quota-error-contract.test.ts",
+        "mode": "100644",
+        "bytes": 9325,
+        "sha256": "3b57e284afc60edec29e388fbe8ca018b6acce3f1a584f2fc37cdc25e69cd1b5",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "archives/recovery-20261028/D09-K4-quota-error-contract-private4-R1.manifest.json",
+        "mode": "100644",
+        "bytes": 5711,
+        "sha256": "6fd8899ea1e17aca53b461b5c767333876ba047f6e844da4233ca79e0c67095e",
+        "actualGitblob": "UNKNOWN"
+      }
+    ],
+    "source_bytes": 27185,
+    "manifest_bytes": 5711,
+    "reviewed_definitions": 22,
+    "tests_run": 0,
+    "source_review": "STATIC_SOURCE_REVIEW_PASS_BY_ROOT_AND_ORIGINAL_DIFFERENT_NONAUTHOR_RELAY",
+    "manifest_original_status": "PRIVATE_SOURCE_CANDIDATE_UNREVIEWED_UNEXECUTED_UNADOPTED",
+    "queue_proof": {
+      "observed_at": "2026-11-01T13:14:32.046Z",
+      "statuses": [
+        {
+          "status": "queued",
+          "eventFilter": null,
+          "perPage": 100,
+          "pagesRead": 1,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        },
+        {
+          "status": "in_progress",
+          "eventFilter": null,
+          "perPage": 100,
+          "pagesRead": 1,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        }
+      ]
+    },
+    "new_jobs": 0,
+    "model_calls": 0,
+    "source_adopted": false,
+    "runtime_recovery": "NOT_PROVEN",
+    "resource_policy_unchanged": true,
+    "metadata4": false,
+    "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
+    "next_action": "After Root and original different-nonauthor approval of this two-admin proposal, acquire only by fresh canonical head/lease and full-event idle-queue recheck with expected_sha and force=false. After successful CAS and held/unexpired matching owner/run/epoch readback, publish only frozen D09 five-leaf Source28 candidate, obtain independent Git byte correspondence, then idle-queue CAS release/closeout. No automatic next package or execution.",
+    "previous_current_cloud_coordinator": {
+      "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
+      "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+      "state": "released",
+      "expires_at": "2026-10-30T16:44:08.527Z",
+      "scope": "Only authorized exact A4-A3 five-file public static prep and two existing administrative paths with retained public history. First stage returns held for Root Source verification; no private reports or unrelated artifacts, no execution.",
+      "released_at": "2026-10-30T16:44:08.527Z"
+    }
   }
 }

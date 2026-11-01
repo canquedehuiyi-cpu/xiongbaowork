@@ -2,23 +2,23 @@
   "schema": "xiongbaowork-cloud-coordinator-lease-v1",
   "repository": "canquedehuiyi-cpu/xiongbaowork",
   "canonical_branch": "codex/cloud-repairs-recovery-20261028",
-  "state": "released",
-  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
-  "run_id": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
-  "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
-  "acquired_at": "2026-10-30T16:34:50.707Z",
-  "renewed_at": "2026-10-30T16:44:08.527Z",
-  "expires_at": "2026-10-30T16:44:08.527Z",
+  "state": "held",
+  "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
+  "run_id": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+  "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+  "acquired_at": "2026-11-01T13:15:03.945Z",
+  "renewed_at": "2026-11-01T13:15:03.945Z",
+  "expires_at": "2026-11-01T14:00:03.945Z",
   "max_lease_seconds": 2700,
   "renew_interval_seconds": 900,
-  "expected_parent": "7f5e4e78d20772df9b4abe38960a63edcf321307",
+  "expected_parent": "615c9ec850d9c1eb4bc06107415ca801ab66d377",
   "bootstrap": "Explicit human instruction to current sole Root to publish initial protocol; absent lease makes subsequent hosted workers read-only, not an implicit acquisition.",
   "queue_at_acquisition": {
     "queued": [],
     "in_progress": [],
-    "observed_at": "2026-10-30T16:34:50.707Z"
+    "observed_at": "2026-11-01T13:14:32.046Z"
   },
-  "next_action": "Root independently verify final two-admin Git readback and released lease. This bounded publication round is complete only as static saving; no automatic next package, Source adoption or execution.",
+  "next_action": "After Root and original different-nonauthor approval of this two-admin proposal, acquire only by fresh canonical head/lease and full-event idle-queue recheck with expected_sha and force=false. After successful CAS and held/unexpired matching owner/run/epoch readback, publish only frozen D09 five-leaf Source28 candidate, obtain independent Git byte correspondence, then idle-queue CAS release/closeout. No automatic next package or execution.",
   "protocol": {
     "reads": "Read exact canonical ref, then lease at that immutable head before decisions. Missing, malformed or unreadable lease: read-only/preparation, no canonical writes and no jobs.",
     "acquire": "Only released or conclusively UTC-expired lease AND no queued/in_progress project runs permits successor. Choose unique owner/run/epoch, acquired/expires <=45min. Create administrative commit from exact latest head and update_ref expected_sha/force=false. CAS failure: reread original ref+lease, never force or assume ownership.",
@@ -28,26 +28,14 @@
     "resource": "source-recovery-bytes/cancel-in-progress=false, single project job; aggregate512MiB/swap0/DATA64MiB, only previously authorized named exceptions.",
     "unreadable_or_conflict": "Stop mutations/execution. Do not change identity, bypass network, use Windows/localhost, force refs or lower gates."
   },
-  "active_job": {
-    "run": 41004678906,
-    "job": 123896762774,
-    "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
-    "attempt": 1,
-    "status": "completed",
-    "conclusion": "failure"
-  },
-  "queue_at_release": {
-    "queued": [],
-    "in_progress": [],
-    "candidate_runs": 0,
-    "observed_at": "2026-10-30T16:43:38.897Z"
-  },
+  "active_job": null,
+  "queue_at_release": null,
   "predecessor_expiry": {
     "epoch": "2026-10-29T16:19:08.289Z:hostdurable-route-data-round",
     "expires_at": "2026-10-29T16:59:09.916Z",
     "takeover_basis": "Separate successor after actual idle release30644c8f and fresh queue0/0; no rolling renewal beyond45min"
   },
-  "predecessor_epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
+  "predecessor_epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
   "owner_label_correction": {
     "previous_epoch": "2026-10-29T16:10:49.878Z:human-delegated-route-data-takeover",
     "previous_owner_label": "cloud-human-delegate:6ae2f8aa-78a4-83e8-a82e-d942cadb0988",
@@ -58,7 +46,7 @@
     "historical_epoch_preserved": true,
     "hosted_worker_identity": "PAUSED_UNVERIFIED_NO_CHANGE"
   },
-  "scope": "Only authorized exact A4-A3 five-file public static prep and two existing administrative paths with retained public history. First stage returns held for Root Source verification; no private reports or unrelated artifacts, no execution.",
+  "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
   "resource_jobs_this_epoch": [],
   "new_jobs_started": 0,
   "authorization_provenance": {
@@ -90,7 +78,7 @@
     "fourth_authorized": false
   },
   "administrative_correction_dedup": "root-UTF8-review-bytes6598/c4305d8a/reviewf6e16ba8",
-  "current_task_dedup": "root-D05-A4A3-five-source-publication-humanapproved/109402/570ee3be/call-a0de2cbe/base7f5e4e78/20261030T1631",
+  "current_task_dedup": "root-nov1-d09-reviewed-source-publish-prep-v1",
   "checkpoint_timing_note": "Closeout timestamps are actual CAS-preparation UTC, not server completion time; original acquired_at and 45min upper bound unchanged. Actual CAS receipt and immutable readback are separately observed.",
   "public_administrative_permission": {
     "id": "ROOT-HUMAN-DEEPSEEK-D6-PUBLIC-ADMIN-AUTH-20261030-01",
@@ -105,22 +93,22 @@
     "excluded": "Secret values/user data/private B,A2,B1 fulltext; no runtime/paid/deployment/PG/Source adoption/fourth metadata."
   },
   "current_epoch_renewal_history": {
-    "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
-    "last_successful_renewal_at": "2026-10-30T16:44:08.527Z",
-    "interval_exceeded": false
+    "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "last_successful_renewal_at": null,
+    "interval_exceeded": false,
+    "renewal_due_at": "2026-11-01T13:30:03.945Z"
   },
   "predecessor_release": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
-    "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
-    "released_at": "2026-10-30T15:35:27.917Z",
-    "canonical": "7f5e4e78d20772df9b4abe38960a63edcf321307",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
+    "run_id": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+    "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+    "released_at": "2026-10-30T16:44:08.527Z",
+    "expires_at": "2026-10-30T16:44:08.527Z",
+    "canonical": "615c9ec850d9c1eb4bc06107415ca801ab66d377",
     "renewal_history": {
-      "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
-      "last_successful_renewal_at": "2026-10-30T15:35:27.917Z",
-      "interval_exceeded": true,
-      "prior_successful_renewal_at": "2026-10-30T15:16:35.208Z",
-      "renewal_due_at": "2026-10-30T15:31:35.208Z",
-      "note": "No successful renewal before the 15min interval; original acquisition and 45min maximum unchanged. This timestamp is the proposed closeout CAS preparation time, not proof of successful release."
+      "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+      "last_successful_renewal_at": "2026-10-30T16:44:08.527Z",
+      "interval_exceeded": false
     }
   },
   "D6_authority_separation": {
@@ -339,7 +327,7 @@
     "allowed_admin_content": "Preserve existing public history and append only this A3 round owner/task/epoch, real times,parent/CAS,candidate identities,review/Root verification/readback/release and zero-job metadata.",
     "excluded": "No private CPU/P1/P2/ledger/review fulltext/B/A2/B1/raw/secrets/user data; no Source adoption,execution,model,billing,PG,deployment or fourth metadata."
   },
-  "released_at": "2026-10-30T16:44:08.527Z",
+  "released_at": null,
   "a4_a3_actual_candidate": {
     "commit": "0a10bd4f158fdf27a0bc8e70c1ad96f3d949da70",
     "parent": "f81e6646e547e1c0e8430f51ce994f9d61df4d6d",
@@ -413,5 +401,153 @@
     "exact_frozen_tuple": true,
     "review_hash_verified": true,
     "not_runtime_or_adoption": true
+  },
+  "d09_quota_contract_publication": {
+    "authorization": {
+      "requestId": "root-nov1-d09-reviewed-source-publish-prep-v1",
+      "administrative_followup": "root-nov1-d09-existing-publication-lease-protocol-located-v1",
+      "source": "Root relay of human instruction to continue and push; original writer authorized for exact D09 isolated publication and necessary two existing public administrative paths only."
+    },
+    "stage": "SOURCE_PUBLICATION_PENDING_NOT_ADOPTED_NOT_RUN",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
+    "run_id": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "prepared_at": "2026-11-01T13:15:03.945Z",
+    "admin_parent": "615c9ec850d9c1eb4bc06107415ca801ab66d377",
+    "admin_cas": {
+      "branch": "codex/cloud-repairs-recovery-20261028",
+      "expected_sha": "615c9ec850d9c1eb4bc06107415ca801ab66d377",
+      "force": false
+    },
+    "source_base": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "source_branch": "codex/d09-quota-contract-reviewed-20261101",
+    "manifest_path": "archives/recovery-20261028/D09-K4-quota-error-contract-private4-R1.manifest.json",
+    "files": [
+      {
+        "path": "openbot/server/src/quota/limits.ts",
+        "mode": "100644",
+        "bytes": 9171,
+        "sha256": "fe8472e15b4cf606ac8dfa0d6994ef13cad1e76376b19b3d22c458eba42b2ead",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "openbot/app/src/lib/client.ts",
+        "mode": "100644",
+        "bytes": 6323,
+        "sha256": "36083f5fe8791e10a49cd1967371f11d68a3a5f27978786e93e8698ba8489740",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "openbot/server/tests/quota-error-contract.test.ts",
+        "mode": "100644",
+        "bytes": 2366,
+        "sha256": "2d737f1a71aa7cf886422cdbed953b1f5447b0bf4ff1bd357d46c1fa5b221108",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "openbot/app/tests/quota-error-contract.test.ts",
+        "mode": "100644",
+        "bytes": 9325,
+        "sha256": "3b57e284afc60edec29e388fbe8ca018b6acce3f1a584f2fc37cdc25e69cd1b5",
+        "actualGitblob": "UNKNOWN"
+      },
+      {
+        "path": "archives/recovery-20261028/D09-K4-quota-error-contract-private4-R1.manifest.json",
+        "mode": "100644",
+        "bytes": 5711,
+        "sha256": "6fd8899ea1e17aca53b461b5c767333876ba047f6e844da4233ca79e0c67095e",
+        "actualGitblob": "UNKNOWN"
+      }
+    ],
+    "source_bytes": 27185,
+    "manifest_bytes": 5711,
+    "reviewed_definitions": 22,
+    "tests_run": 0,
+    "source_review": "STATIC_SOURCE_REVIEW_PASS_BY_ROOT_AND_ORIGINAL_DIFFERENT_NONAUTHOR_RELAY",
+    "manifest_original_status": "PRIVATE_SOURCE_CANDIDATE_UNREVIEWED_UNEXECUTED_UNADOPTED",
+    "queue_proof": {
+      "observed_at": "2026-11-01T13:14:32.046Z",
+      "statuses": [
+        {
+          "status": "queued",
+          "eventFilter": null,
+          "perPage": 100,
+          "pagesRead": 1,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        },
+        {
+          "status": "in_progress",
+          "eventFilter": null,
+          "perPage": 100,
+          "pagesRead": 1,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        }
+      ]
+    },
+    "new_jobs": 0,
+    "model_calls": 0,
+    "source_adopted": false,
+    "runtime_recovery": "NOT_PROVEN",
+    "resource_policy_unchanged": true,
+    "metadata4": false,
+    "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
+    "next_action": "After Root and original different-nonauthor approval of this two-admin proposal, acquire only by fresh canonical head/lease and full-event idle-queue recheck with expected_sha and force=false. After successful CAS and held/unexpired matching owner/run/epoch readback, publish only frozen D09 five-leaf Source28 candidate, obtain independent Git byte correspondence, then idle-queue CAS release/closeout. No automatic next package or execution.",
+    "previous_current_fields": {
+      "state": "released",
+      "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
+      "run_id": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+      "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+      "acquired_at": "2026-10-30T16:34:50.707Z",
+      "renewed_at": "2026-10-30T16:44:08.527Z",
+      "expires_at": "2026-10-30T16:44:08.527Z",
+      "expected_parent": "7f5e4e78d20772df9b4abe38960a63edcf321307",
+      "queue_at_acquisition": {
+        "queued": [],
+        "in_progress": [],
+        "observed_at": "2026-10-30T16:34:50.707Z"
+      },
+      "next_action": "Root independently verify final two-admin Git readback and released lease. This bounded publication round is complete only as static saving; no automatic next package, Source adoption or execution.",
+      "scope": "Only authorized exact A4-A3 five-file public static prep and two existing administrative paths with retained public history. First stage returns held for Root Source verification; no private reports or unrelated artifacts, no execution.",
+      "current_task_dedup": "root-D05-A4A3-five-source-publication-humanapproved/109402/570ee3be/call-a0de2cbe/base7f5e4e78/20261030T1631",
+      "current_epoch_renewal_history": {
+        "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
+        "last_successful_renewal_at": "2026-10-30T16:44:08.527Z",
+        "interval_exceeded": false
+      },
+      "predecessor_epoch": "2026-10-30T09:30:16.387Z:audit-and-A11-static",
+      "predecessor_release": {
+        "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-R3-public-static",
+        "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+        "released_at": "2026-10-30T15:35:27.917Z",
+        "canonical": "7f5e4e78d20772df9b4abe38960a63edcf321307",
+        "renewal_history": {
+          "epoch": "2026-10-30T15:16:35.208Z:A4-R3-publication",
+          "last_successful_renewal_at": "2026-10-30T15:35:27.917Z",
+          "interval_exceeded": true,
+          "prior_successful_renewal_at": "2026-10-30T15:16:35.208Z",
+          "renewal_due_at": "2026-10-30T15:31:35.208Z",
+          "note": "No successful renewal before the 15min interval; original acquisition and 45min maximum unchanged. This timestamp is the proposed closeout CAS preparation time, not proof of successful release."
+        }
+      },
+      "released_at": "2026-10-30T16:44:08.527Z",
+      "active_job": {
+        "run": 41004678906,
+        "job": 123896762774,
+        "candidate": "96ecccb71b9898a0bc30a7e8f25bc1494f7b1a2f",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      "queue_at_release": {
+        "queued": [],
+        "in_progress": [],
+        "candidate_runs": 0,
+        "observed_at": "2026-10-30T16:43:38.897Z"
+      }
+    }
   }
 }
