@@ -4427,13 +4427,13 @@
     }
   },
   "current_cloud_coordinator": {
-    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
-    "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-admin-only-closeout",
+    "epoch": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
     "state": "held",
-    "expires_at": "2026-11-01T14:00:03.945Z",
-    "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
+    "expires_at": "2026-11-01T14:54:27.357Z",
+    "scope": "ADMIN ONLY: record truthful closeout of already published and independently Git-verified D09 Source 4b367e3c0580128bc28c31ca9030f018db18cb06 and separately release this new administrative window. No new Source or Source branch change, adoption, project execution, compile, install, jobs, provider, PG, billing, deployment or metadata4.",
     "released_at": null,
-    "renewed_at": "2026-11-01T13:40:24.099Z"
+    "renewed_at": "2026-11-01T14:24:27.357Z"
   },
   "cloud_a11_delegated_fixedpath": {
     "candidate": "b0fb37b467a88a82995a3323ef57f2724ca0d754",
@@ -6218,7 +6218,7 @@
       "administrative_followup": "root-nov1-d09-existing-publication-lease-protocol-located-v1",
       "source": "Root relay of human instruction to continue and push; original writer authorized for exact D09 isolated publication and necessary two existing public administrative paths only."
     },
-    "stage": "SOURCE_PUBLICATION_PENDING_NOT_ADOPTED_NOT_RUN",
+    "stage": "STATIC_SAVED_GIT_VERIFIED_NOT_ADOPTED_NOT_RUN",
     "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
     "run_id": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
     "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
@@ -6238,35 +6238,35 @@
         "mode": "100644",
         "bytes": 9171,
         "sha256": "fe8472e15b4cf606ac8dfa0d6994ef13cad1e76376b19b3d22c458eba42b2ead",
-        "actualGitblob": "UNKNOWN"
+        "actualGitblob": "c2f83c3b5539ac493f9d7bb3c7a47e77a9dc368a"
       },
       {
         "path": "openbot/app/src/lib/client.ts",
         "mode": "100644",
         "bytes": 6323,
         "sha256": "36083f5fe8791e10a49cd1967371f11d68a3a5f27978786e93e8698ba8489740",
-        "actualGitblob": "UNKNOWN"
+        "actualGitblob": "5699bf213bb2a1d5acf548e182988c9b41db5e66"
       },
       {
         "path": "openbot/server/tests/quota-error-contract.test.ts",
         "mode": "100644",
         "bytes": 2366,
         "sha256": "2d737f1a71aa7cf886422cdbed953b1f5447b0bf4ff1bd357d46c1fa5b221108",
-        "actualGitblob": "UNKNOWN"
+        "actualGitblob": "8eef945aa8e183e23dec4687000b90d0e8f2248b"
       },
       {
         "path": "openbot/app/tests/quota-error-contract.test.ts",
         "mode": "100644",
         "bytes": 9325,
         "sha256": "3b57e284afc60edec29e388fbe8ca018b6acce3f1a584f2fc37cdc25e69cd1b5",
-        "actualGitblob": "UNKNOWN"
+        "actualGitblob": "2d544d07d31166756aef02e543ade654b0af35c1"
       },
       {
         "path": "archives/recovery-20261028/D09-K4-quota-error-contract-private4-R1.manifest.json",
         "mode": "100644",
         "bytes": 5711,
         "sha256": "6fd8899ea1e17aca53b461b5c767333876ba047f6e844da4233ca79e0c67095e",
-        "actualGitblob": "UNKNOWN"
+        "actualGitblob": "d4e8379c38fd4567364e8da0538b82f11a3acfc6"
       }
     ],
     "source_bytes": 27185,
@@ -6305,7 +6305,7 @@
     "resource_policy_unchanged": true,
     "metadata4": false,
     "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
-    "next_action": "After Root and original different-nonauthor approval of this two-admin proposal, acquire only by fresh canonical head/lease and full-event idle-queue recheck with expected_sha and force=false. After successful CAS and held/unexpired matching owner/run/epoch readback, publish only frozen D09 five-leaf Source28 candidate, obtain independent Git byte correspondence, then idle-queue CAS release/closeout. No automatic next package or execution.",
+    "next_action": "D09 Source 4b is independently Git-verified by Root and original different-nonauthor, saved only, not adopted or run. Old D09 epoch expired without release. The separate admin-only successor may only finish truthful two-admin closeout and release its own window; no Source changes or execution.",
     "previous_current_cloud_coordinator": {
       "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:A4-A3-five-source-static",
       "epoch": "2026-10-30T16:34:50.707Z:A4-A3-five-source-publication",
@@ -6351,6 +6351,142 @@
       "in_progress": 0,
       "source_published": false,
       "new_jobs": 0
+    },
+    "actual_git_closeout": {
+      "status": "STATIC_SAVED_GIT_VERIFIED_NOT_ADOPTED_NOT_RUN",
+      "prepared_at": "2026-11-01T14:24:27.357Z",
+      "independent_review": "PASS_BY_ROOT_AND_ORIGINAL_DIFFERENT_NONAUTHOR_RELAY_STATIC_GIT_CORRESPONDENCE_ONLY",
+      "r2_actual": {
+        "commit": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
+        "parent": "e970506cdafe53cbd5f2e059eba627e88dbf1393",
+        "tree": "b0447539fd4acf34c316fa19a64da2d7794e3957",
+        "cas_success": true,
+        "cas_response_observed_at": "2026-11-01T13:47:30.471Z",
+        "full_readback_verified_at": "2026-11-01T13:47:50.721Z"
+      },
+      "source_actual": {
+        "commit": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+        "parent": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+        "tree": "f77e6599bd0188572b50ab6aaf7d202d42a24bbc",
+        "branch": "codex/d09-quota-contract-reviewed-20261101",
+        "files": 5,
+        "total_bytes": 32896,
+        "source_bytes": 27185,
+        "manifest_bytes": 5711,
+        "full_five_body_mode_blob_bytes_sha_match": true,
+        "owner_readback_verified_at": "2026-11-01T13:51:49.408Z",
+        "external_full_five_git_review": "PASS_ROOT_AND_ORIGINAL_DIFFERENT_NONAUTHOR_RELAY",
+        "diff": [
+          {
+            "path": "archives/recovery-20261028/D09-K4-quota-error-contract-private4-R1.manifest.json",
+            "status": "added"
+          },
+          {
+            "path": "openbot/app/src/lib/client.ts",
+            "status": "modified"
+          },
+          {
+            "path": "openbot/app/tests/quota-error-contract.test.ts",
+            "status": "added"
+          },
+          {
+            "path": "openbot/server/src/quota/limits.ts",
+            "status": "modified"
+          },
+          {
+            "path": "openbot/server/tests/quota-error-contract.test.ts",
+            "status": "added"
+          }
+        ],
+        "actions": {
+          "head_sha": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+          "eventFilter": null,
+          "perPage": 100,
+          "pagesRead": 1,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        }
+      },
+      "old_epoch": {
+        "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
+        "run_id": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+        "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+        "acquired_at": "2026-11-01T13:15:03.945Z",
+        "expires_at": "2026-11-01T14:00:03.945Z",
+        "git_state": "held",
+        "utc_expired": true,
+        "expiry_observed_at": "2026-11-01T14:08:12.569Z",
+        "released_at": null,
+        "release_cas_performed": false,
+        "release_proposal_1356_applied": false,
+        "interval_exceeded": true,
+        "first_checkpoint_due": "2026-11-01T13:30:03.945Z",
+        "first_checkpoint_missed": true,
+        "second_checkpoint_due": "2026-11-01T13:55:24.099Z",
+        "second_checkpoint_missed": true,
+        "successful_r2_renewals": 1
+      },
+      "source_adopted": false,
+      "tests_run": 0,
+      "project_execution": 0,
+      "new_jobs": 0,
+      "provider_calls": 0,
+      "PG": 0,
+      "metadata4": 0,
+      "original_rejections_preserved": true
+    }
+  },
+  "d09_admin_closeout_successor": {
+    "authorization_request": "root-nov1-d09-closeout-reviewed-fresh-time-or-admin-only-successor-v1",
+    "stage": "ADMIN_ONLY_SUCCESSOR_PROPOSED_NOT_ACQUIRED_NOT_RELEASED",
+    "prepared_at": "2026-11-01T14:24:27.357Z",
+    "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-admin-only-closeout",
+    "run_id": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
+    "epoch": "2026-11-01T14:24:27.357Z:D09-admin-only-closeout-successor",
+    "acquired_at": "2026-11-01T14:24:27.357Z",
+    "renewed_at": "2026-11-01T14:24:27.357Z",
+    "expires_at": "2026-11-01T14:54:27.357Z",
+    "renewal_due_at": "2026-11-01T14:39:27.357Z",
+    "admin_parent": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
+    "expected_sha": "c4d8a00fe0316af9532ec662d5ed1aa8d4d3d6db",
+    "force": false,
+    "scope": "ADMIN ONLY: record truthful closeout of already published and independently Git-verified D09 Source 4b367e3c0580128bc28c31ca9030f018db18cb06 and separately release this new administrative window. No new Source or Source branch change, adoption, project execution, compile, install, jobs, provider, PG, billing, deployment or metadata4.",
+    "next_action": "After successful admin-only successor CAS and matching held/unexpired readback, separately CAS release only these two administrative paths with fresh idle-queue proof and actual UTC. Preserve old D09 expiry, both missed checkpoints and all existing history. Source 4b remains unchanged, saved and Git-verified only; no automatic next package or execution.",
+    "queue_proof": {
+      "observed_at": "2026-11-01T14:24:14.567Z",
+      "statuses": [
+        {
+          "status": "queued",
+          "eventFilter": null,
+          "pagesRead": 1,
+          "perPage": 100,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        },
+        {
+          "status": "in_progress",
+          "eventFilter": null,
+          "pagesRead": 1,
+          "perPage": 100,
+          "total_count": 0,
+          "returned": 0,
+          "complete": true
+        }
+      ]
+    },
+    "new_jobs": 0,
+    "Source_changes": 0,
+    "release_requires_separate_CAS": true,
+    "predecessor_current_cloud_coordinator": {
+      "owner": "cloud-executor:01a1869b-a979-7154-a182-fd0a2bdee08f/hostdurable:D09-reviewed-source-publication",
+      "epoch": "2026-11-01T13:15:03.945Z:D09-reviewed-source-publication",
+      "state": "held",
+      "expires_at": "2026-11-01T14:00:03.945Z",
+      "scope": "Only D09 four frozen reviewed Source files plus original manifest on codex/d09-quota-contract-reviewed-20261101 from Source28 668dd2238ff112bcff38ad2d0456dccd116874ed; independent immutable Git readback and two-admin closeout. No Source adoption, PR, job, execution, install, PG, provider, billing, deployment or metadata4. No runtime/workspace/child recovery claim.",
+      "released_at": null,
+      "renewed_at": "2026-11-01T13:40:24.099Z"
     }
   }
 }
