@@ -62,7 +62,7 @@
 | K2 | D09 | 用量面板（对应 QoderWake 左下角"用量"）：当前档位、本周期 Waker 数/任务数/模型 token 估算（聚合自 `model… | 部分（缺陷 #11 无 token 计量） | 未验收 | — | — |
 | K3 | D09 | 升级入口：档位对比页 + 手动/种子切换订阅；**不接支付渠道**（预留 provider 接口）。 | 部分（缺陷 #5 自升 Pro） | 未验收 | — | — |
 | K4 | D09 | 超额返回结构化错误码（含"已用/上限/升级链接"），前端统一引导升级或清理。 | — | 未验收 | — | — |
-| G1 | D12 | 通过租户包 `examples/qoderwake`（brand.yaml/theme.css/agents.yaml/skills.yam… | — | 未验收 | — | CI 部分证成：image job 在 run 41440923225 通过（镜像构建、容器启动、smoke 断言）；GHCR 推送与按 digest 断言待发布流程 |
+| G1 | D12 | 通过租户包 `examples/qoderwake`（brand.yaml/theme.css/agents.yaml/skills.yam… | — | 未验收 | — | — |
 | G2 | D04 | 开发模式保留 `OPENBOT_SINGLE_USER=true` 一键起全栈（联调用），生产为注册制多租户（见 J6）；开发期 runne… | — | 未验收 | — | — |
 | WF1 | D10 | 能力与资源中独立 WakerFlow 管理，列表空态与新建入口 | 缺失（D10 无 API/页面） | 未验收 | — | — |
 | WF2 | D10 | 新建 WakerFlow：自然语言输入、模型选择、场景建议 | 缺失（D10 无 API/页面） | 未验收 | — | — |
@@ -88,9 +88,9 @@
 
 | 门 | 要求 | 状态 |
 | --- | --- | --- |
-| 1 | 同一最终SHA正式镜像8 GET 200且未知API404 | 未证成 |
+| 1 | 同一最终SHA正式镜像8 GET 200且未知API404 | 部分：image job 在 run 41440923225 通过（镜像构建、容器启动、smoke 断言）；GHCR 推送与按 digest 断言待发布流程 |
 | 2 | 未登录拒绝、跨租户私有资源404、无越权或拒绝后的上游调用 | 未证成 |
-| 3 | 前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI | 未证成 |
+| 3 | 前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI | 部分：app-test 与 server-test 1–6 在 run 41440923225 零失败；agent-computer/shared/supervisor/runner 和 Windows job 尚未进入 CI |
 | 4 | WakerFlow实际生成-编辑-保存-执行-中止-查收及重启恢复 | 未证成 |
 | 5 | 用户设备浏览器真实动作及离线重连、授权审批闭环 | 未证成 |
 | 6 | 真实模型最小授权运行与正确计费 | 未证成 |
