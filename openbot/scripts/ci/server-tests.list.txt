@@ -56,6 +56,9 @@ tests/audit-limit.test.ts
 tests/audit-retention.integration.test.ts
 tests/audit.test.ts
 tests/auth-mobile-scheme.integration.test.ts
+tests/automation-tenant-policies.test.ts
+tests/automations-model.test.ts
+tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
 tests/ban-freezes-execution.test.ts
 tests/bot-access.test.ts
