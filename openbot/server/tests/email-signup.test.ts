@@ -179,4 +179,26 @@ describe("email and password registration", () => {
      */
     expect(body.token).toBeString();
   });
+
+  /*
+   * A provider reporting this address must not join the unverified password row: whoever registered
+   * it first would keep their password and gain the real person's provider sign-in. Driven through
+   * Better Auth's own adapter so the real `account.create` hook decides.
+   */
+  test("a provider is not linked onto the unverified password account", async () => {
+    expect(userId).not.toBe("");
+    const context = await auth.$context;
+    await expect(
+      context.internalAdapter.linkAccount({
+        userId,
+        providerId: "google",
+        accountId: `google-${suite}`,
+      }),
+    ).rejects.toThrow();
+    const linked = await database
+      .select({ providerId: accounts.providerId })
+      .from(accounts)
+      .where(eq(accounts.userId, userId));
+    expect(linked.map((row) => row.providerId)).toEqual(["credential"]);
+  });
 });

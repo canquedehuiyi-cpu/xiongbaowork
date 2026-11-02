@@ -6,7 +6,7 @@ import { sso } from "@better-auth/sso";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { genericOAuth, okta } from "better-auth/plugins";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createEnterpriseStore } from "../admin/settings-store";
 import type { AuditEventInput, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
@@ -31,6 +31,10 @@ import { encryptSsoConfig } from "./encrypt-sso-config";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
 import { provisionTenant } from "../tenant/provisioning";
+
+/** Answered when a provider sign-in would join an unverified password account with the same address. */
+export const LINK_REFUSAL_MESSAGE =
+  "该邮箱已有一个未验证的密码账号，不能直接用第三方登录接管。请用密码登录，或联系管理员处理。";
 
 /** What a person sees when SSO is required and they tried another way in. */
 /** The native app's custom scheme (mobile/app.config.ts). */
@@ -477,6 +481,54 @@ export function createAuth(
         : {}),
     },
     databaseHooks: {
+      account: {
+        create: {
+          /*
+           * Refuse to attach a provider to a row somebody else may hold the password to.
+           *
+           * Better Auth links a provider that reports a verified address onto the existing row with
+           * that address. Sign-up does not verify email, so the row may have been registered with
+           * a password by whoever typed the address first; linking would hand the real person's
+           * provider sign-in the squatter's account and leave the squatter's password working. A
+           * row whose address nobody verified and which holds a password is therefore not joined:
+           * the person signs in with the password they set, or an administrator removes the row.
+           */
+          before: async (account) => {
+            if (account.providerId === "credential") return;
+            const [holder] = await database
+              .select({ email: users.email, emailVerified: users.emailVerified })
+              .from(users)
+              .where(eq(users.id, account.userId))
+              .limit(1);
+            if (!holder || holder.emailVerified === true) return;
+            const [password] = await database
+              .select({ id: accounts.id })
+              .from(accounts)
+              .where(
+                and(
+                  eq(accounts.userId, account.userId),
+                  eq(accounts.providerId, "credential"),
+                ),
+              )
+              .limit(1);
+            if (!password) return;
+            await record(auditStore, {
+              eventType: "session.refused",
+              targetType: "person",
+              targetId: account.userId,
+              payload: {
+                email: holder.email,
+                provider: account.providerId,
+                reason:
+                  "an unverified password account already holds this address; the provider was not linked to it",
+              },
+            });
+            throw new APIError("FORBIDDEN", {
+              message: LINK_REFUSAL_MESSAGE,
+            });
+          },
+        },
+      },
       user: {
         create: {
           /*
