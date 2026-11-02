@@ -82,8 +82,12 @@ mock.module("@copilotkit/runtime/v2", () => ({
   },
 }));
 
+// A fresh instance, not the cached one: `class PostgresAgentRunner extends InMemoryAgentRunner` is
+// evaluated once, at load. If an earlier file in this shard process (copilot.test.ts, say) already
+// loaded postgres-runner against the real runtime, the cached class keeps the real base class and the
+// mock above never reaches it; the query makes Bun evaluate the module again against the mock.
 const { PostgresAgentRunner } = (await import(
-  "../src/threads/postgres-runner"
+  "../src/threads/postgres-runner.ts?local-threads"
 )) as typeof import("../src/threads/postgres-runner");
 
 // The explicit test URL survives earlier pools deleting DATABASE_URL. Never read the application's
