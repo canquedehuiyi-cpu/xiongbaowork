@@ -42,6 +42,7 @@ import {
   PersonalMemoryMiddleware,
 } from "./memory/tools";
 import type { AgentModelResolver } from "./models/runtime-resolver";
+import { withModelRun } from "./models/token-metering";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
   latestUserText,
@@ -1660,7 +1661,11 @@ class BuiltInAgentWithSaneHistory extends BuiltInAgent {
      */
     if (!load)
       return nativeApprovalRun({ ...input, messages: history }, () =>
-        observeModelConnection(super.run({ ...input, messages: history })),
+        // The run's ids reach the metered model through this scope; see `models/token-metering`.
+        withModelRun(
+          { runId: input.runId, threadId: input.threadId },
+          observeModelConnection(super.run({ ...input, messages: history })),
+        ),
       );
     /*
      * Deferred, because `run` has to answer with a stream straight away and reading the bytes is a
@@ -1679,7 +1684,10 @@ class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       ).pipe(
         switchMap((messages) =>
           nativeApprovalRun({ ...input, messages }, () =>
-            observeModelConnection(super.run({ ...input, messages })),
+            withModelRun(
+              { runId: input.runId, threadId: input.threadId },
+              observeModelConnection(super.run({ ...input, messages })),
+            ),
           ),
         ),
       ),
