@@ -116,7 +116,7 @@ export function SkillTools({
                        */}
                       {tool.effect === "write" ? (
                         <span
-                          aria-label="changes something"
+                          aria-label="会在外部服务做改动"
                           className="ml-1 opacity-60"
                           role="img"
                         >
