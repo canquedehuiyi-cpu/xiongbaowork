@@ -128,6 +128,12 @@ export function createDeliveryStore(database: Database) {
               address: row.address,
               mentionId: row.mentionId ?? null,
               enabled: true,
+              /*
+               * Relinking restamps the row as the tenant this runs as: the owner's own frame on
+               * every link path (G01). A binding linked before the OpenTag route was framed carries
+               * `system`, which delivery now refuses; linking it again is how it recovers.
+               */
+              tenantId: sql`current_setting('app.tenant_id', true)`,
             },
             setWhere: eq(deliveryBindings.ownerUserId, input.ownerUserId),
           })
@@ -171,7 +177,7 @@ export function createDeliveryStore(database: Database) {
     async readChallenge(
       id: string,
       owner?: string,
-    ): Promise<DeliveryChallenge | null> {
+    ): Promise<(DeliveryChallenge & { tenantId: string }) | null> {
       return (
         (
           await database
@@ -297,6 +303,8 @@ export function createDeliveryStore(database: Database) {
         )
         .returning({
           id: deliveryBindings.id,
+          // Whose binding it is, so each audit row is written as that person (G01).
+          tenantId: deliveryBindings.tenantId,
           ownerUserId: deliveryBindings.ownerUserId,
           channelId: deliveryBindings.channelId,
         });

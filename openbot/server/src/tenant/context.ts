@@ -85,6 +85,34 @@ export function assertPersonTenant(
   return stamped;
 }
 
+/**
+ * Run one claimed queue item as the tenant stamped on its row, or not at all.
+ *
+ * `owner` is whoever the item's payload says it is for. It is required, and may only agree with the
+ * stamp: a payload with no owner names nobody to act as. A row stamped as nobody's (`system`,
+ * `platform`, empty), a payload naming somebody else, or a caller already acting for another person
+ * comes back `{ ran: false }` without `work` being called, and the caller ends the item from the
+ * queue's own frame. Everything `work` does — success, failure, audit, notify, cleanup — runs in the
+ * stamped tenant.
+ */
+export async function runAsClaimedTenant<T>(
+  item: { tenantId?: unknown },
+  owner: unknown,
+  work: (tenant: string) => Promise<T>,
+): Promise<{ ran: true; value: T } | { ran: false; reason: string }> {
+  let tenant: string;
+  try {
+    if (typeof owner !== "string" || owner === "")
+      throw new TenantContextError("no owner");
+    tenant = assertPersonTenant(item.tenantId, owner);
+  } catch (error) {
+    if (error instanceof TenantContextError)
+      return { ran: false, reason: error.message };
+    throw error;
+  }
+  return { ran: true, value: await runAsTenant(tenant, () => work(tenant)) };
+}
+
 export function runAsTenant<T>(tenantId: string, fn: () => T): T {
   const result = store.run(tenantId, fn);
   /*
