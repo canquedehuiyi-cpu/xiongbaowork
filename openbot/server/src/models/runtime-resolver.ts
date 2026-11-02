@@ -5,7 +5,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { eq } from "drizzle-orm";
 import type { CredentialSecretReader } from "../credentials";
-import { decryptSecret } from "../credentials";
+import { openCredential } from "../credentials";
 import type { Database } from "../db/client";
 import { agentProfiles, modelRegistry } from "../db/schema";
 import {
@@ -154,7 +154,7 @@ export function createAgentModelResolver(
       .catch(() => null);
     if (!secret || secret.revokedAt) return null;
     try {
-      const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
+      const apiKey = await openCredential(encryptionKey, secret);
       const originalText = `${binding.provider}/${binding.modelName}`;
       return meteredLanguageModel(
         languageModelFor(

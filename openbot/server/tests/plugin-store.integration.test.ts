@@ -18,8 +18,8 @@ import type { ActionPolicy } from "../src/computer/policy";
 import {
   type CredentialStoreValue,
   createCredentialStore,
-  decryptSecret,
   encryptSecret,
+  openCredential,
 } from "../src/credentials";
 import { createDatabase, type Database } from "../src/db/client";
 import {
@@ -1276,22 +1276,13 @@ describe("refresh token rotation", () => {
    * drift from what production does.
    */
   const vault = {
-    readSecret: async (id: string) => {
-      const [row] = await database
-        .select({
-          encryptedValue: credentials.encryptedValue,
-          revokedAt: credentials.revokedAt,
-        })
-        .from(credentials)
-        .where(eq(credentials.id, id));
-      return row ?? null;
-    },
+    readSecret: createCredentialStore(database).readSecret,
+    /*
+     * The vault's own insert, so a sealed value is bound to the row it lands on (audit #9). A raw
+     * insert of the value here would have nowhere to put the seal and nothing to bind it to.
+     */
     create: async (value: CredentialStoreValue) => {
-      const [row] = await database
-        .insert(credentials)
-        .values(value)
-        .returning({ id: credentials.id, revokedAt: credentials.revokedAt });
-      if (!row) throw new Error("credential was not stored");
+      const row = await createCredentialStore(database).create(value);
       vaultRows.push(row.id);
       return row;
     },
@@ -1422,6 +1413,8 @@ describe("refresh token rotation", () => {
       database
         .select({
           id: credentials.id,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
           encryptedValue: credentials.encryptedValue,
           revokedAt: credentials.revokedAt,
         })
@@ -1661,9 +1654,11 @@ describe("refresh token rotation", () => {
     const live = rowsAfter.filter((row) => row.revokedAt === null);
     expect(live.map((row) => row.id)).toEqual([before]);
     // And the row that stayed is the one the vendor rotated to, not the one it replaced.
-    expect(
-      await decryptSecret(ROTATION_KEY, live[0]?.encryptedValue ?? ""),
-    ).toBe("rt-2");
+    // Resealed in place for this row: a v2 envelope, opened only with the row's own binding.
+    const kept = live[0];
+    if (!kept) throw new Error("no live row");
+    expect(JSON.parse(kept.encryptedValue).version).toBe(2);
+    expect(await openCredential(ROTATION_KEY, kept)).toBe("rt-2");
 
     // And nothing claims the person connected an account again. Rotation is the vendor's plumbing,
     // not somebody's act, and a trail that says otherwise is read as a re-consent that never
@@ -1832,9 +1827,9 @@ describe("refresh token rotation", () => {
     const live = (await connectionVaultRows()).filter(
       (row) => row.revokedAt === null,
     );
-    expect(
-      await decryptSecret(ROTATION_KEY, live[0]?.encryptedValue ?? ""),
-    ).toBe("rt-3");
+    const kept = live[0];
+    if (!kept) throw new Error("no live row");
+    expect(await openCredential(ROTATION_KEY, kept)).toBe("rt-3");
   });
 
   /**

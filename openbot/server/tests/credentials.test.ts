@@ -4,17 +4,23 @@ import { eq } from "drizzle-orm";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
 import {
+  type CredentialBinding,
+  CredentialUnusableError,
   createCredential,
   createCredentialStore,
   decryptCredentialForUse,
   decryptSecret,
   encryptSecret,
+  openCredential,
   resolveModelApiKey,
   revokeCredential,
   rotateCredential,
+  sealCredential,
+  vaultRequiresAad,
 } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { credentials } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -23,9 +29,17 @@ const config = loadConfig(testEnvironment({ KEY_ENCRYPTION_KEY: key }));
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const credentialIds: string[] = [];
 
+/** Rows written under a tenant scope, which row security hides from the unscoped cleanup above. */
+const tenantCredentialIds: { tenant: string; id: string }[] = [];
+
 afterEach(async () => {
   for (const credentialId of credentialIds.splice(0)) {
     await database.delete(credentials).where(eq(credentials.id, credentialId));
+  }
+  for (const { tenant, id } of tenantCredentialIds.splice(0)) {
+    await runAsTenant(tenant, () =>
+      database.delete(credentials).where(eq(credentials.id, id)),
+    );
   }
 });
 
@@ -357,7 +371,7 @@ describe("model credential store lookup", () => {
         provider: "openai",
         keyId: "openai-api-key",
       }),
-    ).resolves.toEqual({ encryptedValue: "active-value" });
+    ).resolves.toMatchObject({ encryptedValue: "active-value" });
   });
 });
 
@@ -863,5 +877,448 @@ describe("admin credential API", () => {
     expect(revoke.status).toBe(200);
     expect(calls).toEqual(["rotate:credential-old", "revoke:credential-new"]);
     expect(await rotate.text()).not.toContain("rotated-secret");
+  });
+});
+
+/**
+ * Audit #9: the live-key index is per tenant, the deployment lookup prefers the deployment's own
+ * row, and a credential's envelope is bound to the row it was written for.
+ */
+describe("tenant-scoped credential keys", () => {
+  function tenants() {
+    const suite = randomUUID().slice(0, 8);
+    return { a: `cred-a-${suite}`, b: `cred-b-${suite}` };
+  }
+
+  async function insertAs(
+    tenant: string,
+    value: { keyId: string; encryptedValue?: string; createdAt?: Date },
+  ) {
+    const id = randomUUID();
+    tenantCredentialIds.push({ tenant, id });
+    await runAsTenant(tenant, () =>
+      database.insert(credentials).values({
+        id,
+        kind: "model",
+        provider: "openai",
+        keyId: value.keyId,
+        encryptedValue: value.encryptedValue ?? `value-${tenant}`,
+        metadata: {},
+        ...(value.createdAt ? { createdAt: value.createdAt } : {}),
+      }),
+    );
+    return id;
+  }
+
+  test("two tenants each hold a live credential for the same key; one tenant still holds one", async () => {
+    const { a, b } = tenants();
+    const keyId = "gpt-4o";
+
+    await insertAs(a, { keyId });
+    // Refused by the old global index, with a unique violation that told B that A's row existed.
+    await insertAs(b, { keyId });
+
+    await expect(insertAs(a, { keyId })).rejects.toThrow();
+  });
+
+  test("findLiveByKey answers only for the current tenant, never another tenant's or system's row", async () => {
+    const { a, b } = tenants();
+    const store = createCredentialStore(database);
+    const keyId = `shared-key-${randomUUID()}`;
+    const systemId = randomUUID();
+    credentialIds.push(systemId);
+    await database.insert(credentials).values({
+      id: systemId,
+      kind: "model",
+      provider: "openai",
+      keyId,
+      encryptedValue: "system-value",
+      metadata: {},
+    });
+    const ownedByA = await insertAs(a, { keyId });
+
+    const key = { kind: "model" as const, provider: "openai", keyId };
+    await expect(
+      runAsTenant(b, () => store.findLiveByKey(key)),
+    ).resolves.toBeNull();
+    await expect(
+      runAsTenant(a, () => store.findLiveByKey(key)),
+    ).resolves.toEqual({ id: ownedByA });
+  });
+
+  test("rotate refuses a previous credential that is not this tenant's own", async () => {
+    const { a } = tenants();
+    const store = createCredentialStore(database);
+    const keyId = `system-only-${randomUUID()}`;
+    const systemId = randomUUID();
+    credentialIds.push(systemId);
+    await database.insert(credentials).values({
+      id: systemId,
+      kind: "model",
+      provider: "openai",
+      keyId,
+      encryptedValue: "system-value",
+      metadata: {},
+    });
+
+    await expect(
+      runAsTenant(a, () =>
+        store.rotate({
+          previousCredentialId: systemId,
+          kind: "model",
+          provider: "openai",
+          keyId,
+          metadata: {},
+          encryptedValue: "would-retire-the-deployment-key",
+        }),
+      ),
+    ).rejects.toMatchObject({ name: "CredentialRefusedError", status: 404 });
+    const [after] = await database
+      .select({ revokedAt: credentials.revokedAt })
+      .from(credentials)
+      .where(eq(credentials.id, systemId));
+    expect(after?.revokedAt).toBeNull();
+  });
+
+  test("readModelSecret prefers the deployment's system row and never answers with a library key", async () => {
+    const { a } = tenants();
+    const store = createCredentialStore(database);
+    const keyId = `deployment-ref-${randomUUID()}`;
+    const systemId = randomUUID();
+    credentialIds.push(systemId);
+    await database.insert(credentials).values({
+      id: systemId,
+      kind: "model",
+      provider: "openai",
+      keyId,
+      encryptedValue: "system-value",
+      metadata: {},
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    // Newer, and visible to tenant A beside the system row: it must still not be chosen.
+    await insertAs(a, {
+      keyId,
+      encryptedValue: "tenant-value",
+      createdAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    await expect(
+      runAsTenant(a, () =>
+        store.readModelSecret({ provider: "openai", keyId }),
+      ),
+    ).resolves.toMatchObject({ encryptedValue: "system-value", id: systemId });
+
+    const libraryKey = `model_registry:${randomUUID()}`;
+    const libraryId = randomUUID();
+    credentialIds.push(libraryId);
+    await database.insert(credentials).values({
+      id: libraryId,
+      kind: "model",
+      provider: "openai",
+      keyId: libraryKey,
+      encryptedValue: "library-value",
+      metadata: {},
+    });
+    await expect(
+      store.readModelSecret({ provider: "openai", keyId: libraryKey }),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("credential envelopes bound to their row", () => {
+  const binding = {
+    tenantId: "tenant-a",
+    id: "11111111-1111-4111-8111-111111111111",
+    kind: "model" as const,
+  };
+
+  test("a v2 envelope opens with its own row and with no other", async () => {
+    const sealed = await sealCredential(key, binding, "bound-secret");
+    expect(JSON.parse(sealed)).toEqual({
+      version: 2,
+      alg: "A256GCM",
+      bind: "credential",
+      kid: "k1",
+      iv: expect.any(String),
+      ciphertext: expect.any(String),
+    });
+    // The binding is rebuilt from the row, never carried in the envelope.
+    expect(sealed).not.toContain(binding.tenantId);
+    expect(sealed).not.toContain(binding.id);
+
+    await expect(
+      openCredential(key, { ...binding, encryptedValue: sealed }),
+    ).resolves.toBe("bound-secret");
+    for (const other of [
+      { ...binding, tenantId: "tenant-b" },
+      { ...binding, id: "22222222-2222-4222-8222-222222222222" },
+      { ...binding, kind: "connector" as const },
+    ]) {
+      await expect(
+        openCredential(key, { ...other, encryptedValue: sealed }),
+      ).rejects.toThrow();
+    }
+    // Without its row a v2 envelope does not open at all.
+    await expect(
+      openCredential(key, { encryptedValue: sealed }),
+    ).rejects.toThrow();
+    await expect(decryptSecret(key, sealed)).rejects.toThrow(
+      "Credential envelope is invalid",
+    );
+  });
+
+  test("a legacy v1 envelope still opens through the credential path", async () => {
+    const legacy = await encryptSecret(key, "legacy-secret");
+    await expect(
+      openCredential(key, { ...binding, encryptedValue: legacy }),
+    ).resolves.toBe("legacy-secret");
+    await expect(
+      decryptCredentialForUse(
+        key,
+        { readSecret: async () => ({ encryptedValue: legacy, revokedAt: null }) },
+        "credential-1",
+      ),
+    ).resolves.toBe("legacy-secret");
+  });
+
+  test("OPEN (audit #9): with the gate off, a v1 envelope pasted over a v2-bound row still opens", async () => {
+    /*
+     * Records the half of #9 that is NOT closed. v1 authenticates nothing about its row, and
+     * nothing records that a row was ever v2, so a v1 envelope lifted from another tenant (or
+     * from any other v1 writer under the same key) and written over a bound row is accepted. When
+     * the reseal lands and VAULT_REQUIRE_AAD is on by default, flip this to `rejects`.
+     */
+    const v2Row = {
+      ...binding,
+      encryptedValue: await sealCredential(key, binding, "own"),
+    };
+    await expect(
+      openCredential(key, v2Row, { requireAad: false }),
+    ).resolves.toBe("own");
+    const elsewhere = await encryptSecret(key, "another-tenants-secret");
+    await expect(
+      openCredential(
+        key,
+        { ...v2Row, encryptedValue: elsewhere },
+        { requireAad: false },
+      ),
+    ).resolves.toBe("another-tenants-secret");
+  });
+
+  test("VAULT_REQUIRE_AAD refuses an unbound v1 envelope and still opens a bound one", async () => {
+    const legacy = await encryptSecret(key, "legacy-secret");
+    await expect(
+      openCredential(
+        key,
+        { ...binding, encryptedValue: legacy },
+        { requireAad: true },
+      ),
+    ).rejects.toThrow("requires bound envelopes");
+    const sealed = await sealCredential(key, binding, "bound-secret");
+    await expect(
+      openCredential(
+        key,
+        { ...binding, encryptedValue: sealed },
+        { requireAad: true },
+      ),
+    ).resolves.toBe("bound-secret");
+  });
+
+  test("VAULT_REQUIRE_AAD is off unless set to 1 or true", () => {
+    expect(vaultRequiresAad({})).toBe(false);
+    expect(vaultRequiresAad({ VAULT_REQUIRE_AAD: "" })).toBe(false);
+    expect(vaultRequiresAad({ VAULT_REQUIRE_AAD: "0" })).toBe(false);
+    expect(vaultRequiresAad({ VAULT_REQUIRE_AAD: "false" })).toBe(false);
+    expect(vaultRequiresAad({ VAULT_REQUIRE_AAD: "1" })).toBe(true);
+    expect(vaultRequiresAad({ VAULT_REQUIRE_AAD: " TRUE " })).toBe(true);
+  });
+
+  test("an envelope copied into another tenant's row fails as a fault, not as a withdrawal", async () => {
+    const suite = randomUUID().slice(0, 8);
+    const a = `seal-a-${suite}`;
+    const b = `seal-b-${suite}`;
+    const store = createCredentialStore(database);
+
+    let sealedFor: unknown;
+    const created = await runAsTenant(a, () =>
+      store.create({
+        kind: "model",
+        provider: "openai",
+        keyId: `sealed-${suite}`,
+        metadata: {},
+        seal: (row) => {
+          sealedFor = row;
+          return sealCredential(key, row, "tenant-a-secret");
+        },
+      }),
+    );
+    tenantCredentialIds.push({ tenant: a, id: created.id });
+    expect(sealedFor).toEqual({ id: created.id, tenantId: a, kind: "model" });
+
+    const [stored] = await runAsTenant(a, () =>
+      database
+        .select({
+          tenantId: credentials.tenantId,
+          encryptedValue: credentials.encryptedValue,
+        })
+        .from(credentials)
+        .where(eq(credentials.id, created.id)),
+    );
+    expect(stored?.tenantId).toBe(a);
+    expect(JSON.parse(stored?.encryptedValue ?? "{}").version).toBe(2);
+    await expect(
+      runAsTenant(a, () => decryptCredentialForUse(key, store, created.id)),
+    ).resolves.toBe("tenant-a-secret");
+
+    // The same bytes pasted into a row of tenant B's, and into another row of A's own.
+    const copiedToB = randomUUID();
+    tenantCredentialIds.push({ tenant: b, id: copiedToB });
+    await runAsTenant(b, () =>
+      database.insert(credentials).values({
+        id: copiedToB,
+        kind: "model",
+        provider: "openai",
+        keyId: `sealed-${suite}`,
+        encryptedValue: stored?.encryptedValue ?? "",
+        metadata: {},
+      }),
+    );
+    const copiedInA = randomUUID();
+    tenantCredentialIds.push({ tenant: a, id: copiedInA });
+    await runAsTenant(a, () =>
+      database.insert(credentials).values({
+        id: copiedInA,
+        kind: "model",
+        provider: "openai",
+        keyId: `sealed-copy-${suite}`,
+        encryptedValue: stored?.encryptedValue ?? "",
+        metadata: {},
+      }),
+    );
+
+    for (const [tenant, id] of [
+      [b, copiedToB],
+      [a, copiedInA],
+    ] as const) {
+      const failure = await runAsTenant(tenant, () =>
+        decryptCredentialForUse(key, store, id),
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure).not.toBeInstanceOf(CredentialUnusableError);
+    }
+  });
+
+  test("a legacy v1 row still opens through the store", async () => {
+    const id = randomUUID();
+    credentialIds.push(id);
+    await database.insert(credentials).values({
+      id,
+      kind: "connector",
+      provider: "legacy",
+      keyId: `legacy-${id}`,
+      encryptedValue: await encryptSecret(key, "legacy-row-secret"),
+      metadata: {},
+    });
+
+    await expect(
+      decryptCredentialForUse(key, createCredentialStore(database), id),
+    ).resolves.toBe("legacy-row-secret");
+  });
+
+  test("rotate and updateSecret write v2 envelopes bound to the row they land on", async () => {
+    const tenant = `seal-rot-${randomUUID().slice(0, 8)}`;
+    const store = createCredentialStore(database);
+    const keyId = `rotating-${tenant}`;
+    const seal = (plaintext: string) => (row: CredentialBinding) =>
+      sealCredential(key, row, plaintext);
+
+    const first = await runAsTenant(tenant, () =>
+      store.create({
+        kind: "model",
+        provider: "openai",
+        keyId,
+        metadata: {},
+        seal: seal("first"),
+      }),
+    );
+    tenantCredentialIds.push({ tenant, id: first.id });
+    const rotated = await runAsTenant(tenant, () =>
+      store.rotate({
+        previousCredentialId: first.id,
+        kind: "model",
+        provider: "openai",
+        keyId,
+        metadata: {},
+        seal: seal("second"),
+      }),
+    );
+    tenantCredentialIds.push({ tenant, id: rotated.id });
+    expect(rotated.id).not.toBe(first.id);
+
+    const versionOf = async (id: string) => {
+      const [row] = await runAsTenant(tenant, () =>
+        database
+          .select({ encryptedValue: credentials.encryptedValue })
+          .from(credentials)
+          .where(eq(credentials.id, id)),
+      );
+      return JSON.parse(row?.encryptedValue ?? "{}").version;
+    };
+    expect(await versionOf(rotated.id)).toBe(2);
+    await expect(
+      runAsTenant(tenant, () => decryptCredentialForUse(key, store, rotated.id)),
+    ).resolves.toBe("second");
+
+    await runAsTenant(tenant, () =>
+      store.updateSecret(rotated.id, seal("third")),
+    );
+    expect(await versionOf(rotated.id)).toBe(2);
+    await expect(
+      runAsTenant(tenant, () => decryptCredentialForUse(key, store, rotated.id)),
+    ).resolves.toBe("third");
+
+    // A revoked row is still refused before anything is sealed for it.
+    await expect(
+      runAsTenant(tenant, () => store.updateSecret(first.id, seal("revived"))),
+    ).rejects.toThrow("Credential was not found or is revoked");
+  });
+
+  test("the administrator's create and rotate store v2 envelopes", async () => {
+    const service = {
+      encryptionKey: key,
+      store: createCredentialStore(database),
+      auditStore: { insert: async () => {} },
+    };
+    const keyId = `admin-sealed-${randomUUID()}`;
+    const created = await createCredential(service, {
+      kind: "model",
+      provider: "openai",
+      keyId,
+      metadata: {},
+      plaintext: "admin-first",
+    });
+    credentialIds.push(created.id);
+    const replaced = await createCredential(service, {
+      kind: "model",
+      provider: "openai",
+      keyId,
+      metadata: {},
+      plaintext: "admin-second",
+    });
+    credentialIds.push(replaced.id);
+
+    for (const [id, plaintext] of [
+      [created.id, "admin-first"],
+      [replaced.id, "admin-second"],
+    ] as const) {
+      const stored = await service.store.readSecret(id);
+      expect(JSON.parse(stored?.encryptedValue ?? "{}").version).toBe(2);
+      await expect(
+        openCredential(key, stored ?? { encryptedValue: "" }),
+      ).resolves.toBe(plaintext);
+    }
   });
 });

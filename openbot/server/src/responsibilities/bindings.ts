@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 import {
   type CredentialSecretReader,
   type CredentialStore,
-  decryptSecret,
-  encryptSecret,
+  openCredential,
+  sealCredential,
 } from "../credentials";
 import type { Database } from "../db/client";
 import { responsibilitySourceBindings } from "../db/schema/responsibilities";
@@ -47,10 +47,7 @@ export function createResponsibilityBindingStore(
           "Supply a webhook secret of 1–4096 characters.",
         );
       const id = randomUUID();
-      const encryptedValue = await encryptSecret(
-        vault.encryptionKey,
-        input.secret,
-      );
+      const { secret } = input;
       return database.transaction(async (transaction) => {
         const credential = await vault.store.create(
           {
@@ -58,7 +55,8 @@ export function createResponsibilityBindingStore(
             provider: "github-webhook",
             keyId: id,
             metadata: { ownerUserId },
-            encryptedValue,
+            seal: (binding) =>
+              sealCredential(vault.encryptionKey, binding, secret),
           },
           transaction,
         );
@@ -107,10 +105,8 @@ export function createResponsibilityBindingStore(
       return {
         ownerUserId: binding.ownerUserId,
         repository: binding.repository,
-        secret: await decryptSecret(
-          vault.encryptionKey,
-          credential.encryptedValue,
-        ),
+        // v2 since audit #9 (this store seals for the row); rows written before it are v1.
+        secret: await openCredential(vault.encryptionKey, credential),
       };
     },
   };

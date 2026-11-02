@@ -199,6 +199,15 @@ test("rotation revokes the old key in the vault; provider secrets are pasted and
       })
     ).status,
   ).toBe(401);
+  // Both writes are bound envelopes (audit #9), and the ingress just below reads one back.
+  const envelopes = await database
+    .select({ encryptedValue: credentials.encryptedValue })
+    .from(credentials)
+    .where(eq(credentials.keyId, created.trigger.id));
+  expect(envelopes).toHaveLength(2);
+  expect(
+    envelopes.map((row) => JSON.parse(row.encryptedValue).version),
+  ).toEqual([2, 2]);
   const live = await post(created.trigger.id, "{}", {
     authorization: `Bearer ${rotated.secret}`,
   });
