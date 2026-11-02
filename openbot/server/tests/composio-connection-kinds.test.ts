@@ -41,6 +41,7 @@ import {
   type BrokeredProbe,
   createPluginStore,
 } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -530,6 +531,16 @@ for (const padded of PADDED_SCHEMES) {
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
+/*
+ * The frame every hook and test below runs in. The servers, tools, Bots, grants and trail rows these
+ * fixtures write are the deployment's own configuration rather than any one person's, and the
+ * questions asked of them (an administrator's grant, a removal, a read of the whole trail) cross
+ * tenants, so they are asked in the platform frame rather than in the legacy unframed `system` one.
+ */
+function asPlatform<T>(work: () => Promise<T>): Promise<T> {
+  return runAsTenant("platform", work);
+}
+
 const suite = randomUUID().slice(0, 8);
 const person = `user_kinds_${suite}`;
 
@@ -831,37 +842,41 @@ async function clean(): Promise<void> {
     .where(inArray(composioConnections.toolkit, TOOLKITS));
 }
 
-beforeEach(async () => {
-  await clean();
-  brokerAsks = [];
-  reached = [];
-  await database.insert(agents).values({
-    id: botId,
-    name: "Kinds Helper",
-    type: "built_in",
-    configuration: {},
-  });
-  for (const app of Object.values(APP)) {
-    await seedApp(app.id, app.slug, app.recorded);
-  }
-  await seedApp(NO_PROBE_APP.id, NO_PROBE_APP.slug, "API_KEY");
-  /*
-   * THE ACTION IS PUBLISHED ON EVERY APP BUT ONE, so that the gate cell and the probe cells are
-   * about what they claim. The gate needs a granted action on each kind of app — otherwise a call
-   * would be refused for having nothing to call rather than for having no connection — and the
-   * probe cells need the key app to have one. {@link NO_PROBE_APP} is the deliberate exception.
-   */
-  for (const id of Object.values(APP).map((app) => app.id)) {
-    await publishProbe(id);
-    await store.grant("mcp", `${id}/${PROBE_ACTION}`, botId, admin);
-  }
-});
+beforeEach(() =>
+  asPlatform(async () => {
+    await clean();
+    brokerAsks = [];
+    reached = [];
+    await database.insert(agents).values({
+      id: botId,
+      name: "Kinds Helper",
+      type: "built_in",
+      configuration: {},
+    });
+    for (const app of Object.values(APP)) {
+      await seedApp(app.id, app.slug, app.recorded);
+    }
+    await seedApp(NO_PROBE_APP.id, NO_PROBE_APP.slug, "API_KEY");
+    /*
+     * THE ACTION IS PUBLISHED ON EVERY APP BUT ONE, so that the gate cell and the probe cells are
+     * about what they claim. The gate needs a granted action on each kind of app — otherwise a call
+     * would be refused for having nothing to call rather than for having no connection — and the
+     * probe cells need the key app to have one. {@link NO_PROBE_APP} is the deliberate exception.
+     */
+    for (const id of Object.values(APP).map((app) => app.id)) {
+      await publishProbe(id);
+      await store.grant("mcp", `${id}/${PROBE_ACTION}`, botId, admin);
+    }
+  }),
+);
 
 afterEach(() => useComposioClient(null));
 
-afterAll(async () => {
-  await clean();
-});
+afterAll(() =>
+  asPlatform(async () => {
+    await clean();
+  }),
+);
 
 /** Every action Composio was asked to run, so "nothing reached the vendor" is an assertion. */
 let reached: string[] = [];
@@ -1109,13 +1124,15 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
                 eq(composioConnections.userId, person),
               ),
             );
-          await database.insert(composioConnections).values({
-            toolkit: APP.consent.slug,
-            userId: person,
-            verified: true,
-            verifiedAt: consentedOn,
-            probeAction: null,
-          });
+          await runAsTenant(person, () =>
+            database.insert(composioConnections).values({
+              toolkit: APP.consent.slug,
+              userId: person,
+              verified: true,
+              verifiedAt: consentedOn,
+              probeAction: null,
+            }),
+          );
 
           await store.confirmBrokeredConnection({
             toolkit: APP.consent.slug,
@@ -1256,9 +1273,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
         decides: "spends a call against the key this deployment already holds",
         assert: async () => {
           useAnsweringClient();
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.key.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.key.slug, userId: person }),
+          );
           expect(
             await store.recheckBrokeredConnection({
               toolkit: APP.key.slug,
@@ -1272,9 +1291,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
           "refuses — there is no key here to re-check — and spends nothing, which is what protects the date the consent earned",
         assert: async () => {
           useAnsweringClient();
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.consent.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.consent.slug, userId: person }),
+          );
           expect(
             await refusalOf(
               store.recheckBrokeredConnection({
@@ -1291,9 +1312,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
           "the same refusal — there is no account here, let alone a key, and nothing is spent",
         assert: async () => {
           useAnsweringClient();
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.none.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.none.slug, userId: person }),
+          );
           expect(
             await refusalOf(
               store.recheckBrokeredConnection({
@@ -1310,9 +1333,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
           "the same refusal, which is the closed direction: there is no key recorded to re-check",
         assert: async () => {
           useAnsweringClient();
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.unreadable.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.unreadable.slug, userId: person }),
+          );
           expect(
             await refusalOf(
               store.recheckBrokeredConnection({
@@ -1333,9 +1358,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
         decides:
           "claims NO vendor revocation: there is no grant behind an API key for anybody to withdraw",
         assert: async () => {
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.key.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.key.slug, userId: person }),
+          );
           expect(
             await store.disconnectBrokered({
               toolkit: APP.key.slug,
@@ -1350,9 +1377,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
         decides:
           "reports the vendor's own withdrawal as asked for, which is a real request for a consent account",
         assert: async () => {
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.consent.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.consent.slug, userId: person }),
+          );
           expect(
             await store.disconnectBrokered({
               toolkit: APP.consent.slug,
@@ -1367,9 +1396,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
         decides:
           "reports whatever the vendor says it ended, which is the same claim it makes for everything it cannot call a key app",
         assert: async () => {
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.none.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.none.slug, userId: person }),
+          );
           expect(
             await store.disconnectBrokered({
               toolkit: APP.none.slug,
@@ -1391,9 +1422,11 @@ const SCHEME_CONSUMERS: Consumer<SchemeKind>[] = [
         decides:
           "reports it as asked for too — an app this deployment cannot say holds a key is one whose withdrawal it has to report as asked",
         assert: async () => {
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.unreadable.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.unreadable.slug, userId: person }),
+          );
           expect(
             await store.disconnectBrokered({
               toolkit: APP.unreadable.slug,
@@ -1593,9 +1626,11 @@ const PROBE_CONSUMERS: Consumer<BrokeredProbe["outcome"]>[] = [
           "writes nothing and files nothing; answers the held row beside a null probe that says why the press could not improve on it",
         assert: async () => {
           useAnsweringClient();
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: NO_PROBE_APP.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: NO_PROBE_APP.slug, userId: person }),
+          );
           expect(
             await store.recheckBrokeredConnection({
               toolkit: NO_PROBE_APP.slug,
@@ -1611,9 +1646,11 @@ const PROBE_CONSUMERS: Consumer<BrokeredProbe["outcome"]>[] = [
         decides: "records verified under the probe's name",
         assert: async () => {
           useAnsweringClient();
-          await database
-            .insert(composioConnections)
-            .values({ toolkit: APP.key.slug, userId: person });
+          await runAsTenant(person, () =>
+            database
+              .insert(composioConnections)
+              .values({ toolkit: APP.key.slug, userId: person }),
+          );
           expect(
             await store.recheckBrokeredConnection({
               toolkit: APP.key.slug,
@@ -1639,12 +1676,14 @@ const PROBE_CONSUMERS: Consumer<BrokeredProbe["outcome"]>[] = [
               };
             },
           });
-          await database.insert(composioConnections).values({
-            toolkit: APP.key.slug,
-            userId: person,
-            verified: true,
-            probeAction: PROBE_ACTION,
-          });
+          await runAsTenant(person, () =>
+            database.insert(composioConnections).values({
+              toolkit: APP.key.slug,
+              userId: person,
+              verified: true,
+              probeAction: PROBE_ACTION,
+            }),
+          );
           const said = await refusalOf(
             store.recheckBrokeredConnection({
               toolkit: APP.key.slug,
@@ -1676,12 +1715,14 @@ const PROBE_CONSUMERS: Consumer<BrokeredProbe["outcome"]>[] = [
               throw new Error("Composio was not reachable");
             },
           });
-          await database.insert(composioConnections).values({
-            toolkit: APP.key.slug,
-            userId: person,
-            verified: true,
-            probeAction: PROBE_ACTION,
-          });
+          await runAsTenant(person, () =>
+            database.insert(composioConnections).values({
+              toolkit: APP.key.slug,
+              userId: person,
+              verified: true,
+              probeAction: PROBE_ACTION,
+            }),
+          );
           expect(
             await refusalOf(
               store.recheckBrokeredConnection({
@@ -1732,7 +1773,7 @@ describe.each(SCHEME_KINDS)("a %s scheme", (kind) => {
       });
       continue;
     }
-    test(`${consumer.name} ${cell.decides}`, cell.assert);
+    test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
   }
 });
 
@@ -1746,7 +1787,7 @@ describe.each(BROKERED_PROBE_OUTCOMES)("a probe that %s", (outcome) => {
       });
       continue;
     }
-    test(`${consumer.name} ${cell.decides}`, cell.assert);
+    test(`${consumer.name} ${cell.decides}`, () => asPlatform(cell.assert));
   }
 });
 
@@ -1845,108 +1886,112 @@ describe("what a brokered connection writes into the append-only trail", () => {
    */
   const CAP = 400;
 
-  test("a vendor sentence no one bounded is capped before it becomes a row nothing can delete", async () => {
-    /*
-     * LONGER THAN THE CAP BY A WIDE MARGIN, AND GENUINELY THE VENDOR'S.
-     *
-     * `askAction` catches a throw out of the client and hands its message to `passableSentence`,
-     * which judges whether a candidate is worth repeating and says nothing at all about length;
-     * `failure` then caps at `MAX_RESULT_CHARS`, which is 20_000. So the sentence that reaches
-     * `probeBrokeredConnection` — and from there the `unreachable` field of the verification row —
-     * is up to fifty times what every sibling write of foreign text in `store.ts` allows itself.
-     * `@composio/client` builds an `APIError` message out of a whole response body, so a
-     * multi-kilobyte sentence is the ordinary shape of this arrival rather than a contrived one.
-     */
-    const shouted = `Composio was not reachable: ${"e".repeat(5_000)}`;
-    useAnsweringClient({
-      execute: async () => {
-        throw new Error(shouted);
-      },
-    });
+  test("a vendor sentence no one bounded is capped before it becomes a row nothing can delete", () =>
+    asPlatform(async () => {
+      /*
+       * LONGER THAN THE CAP BY A WIDE MARGIN, AND GENUINELY THE VENDOR'S.
+       *
+       * `askAction` catches a throw out of the client and hands its message to `passableSentence`,
+       * which judges whether a candidate is worth repeating and says nothing at all about length;
+       * `failure` then caps at `MAX_RESULT_CHARS`, which is 20_000. So the sentence that reaches
+       * `probeBrokeredConnection` — and from there the `unreachable` field of the verification row —
+       * is up to fifty times what every sibling write of foreign text in `store.ts` allows itself.
+       * `@composio/client` builds an `APIError` message out of a whole response body, so a
+       * multi-kilobyte sentence is the ordinary shape of this arrival rather than a contrived one.
+       */
+      const shouted = `Composio was not reachable: ${"e".repeat(5_000)}`;
+      useAnsweringClient({
+        execute: async () => {
+          throw new Error(shouted);
+        },
+      });
 
-    expect(
+      expect(
+        await store.connectBrokeredWithFields({
+          toolkit: APP.key.slug,
+          userId: person,
+          values: { generic_api_key: "never-sent-anywhere" },
+        }),
+      ).toEqual({ connected: true, verified: false, probe: null });
+
+      /*
+       * EVERY SUCH ROW THIS RUN FILED, not the one this test just wrote, and the difference is not
+       * fussiness. Nothing may be deleted from this table, so the earlier probe cells' rows are still
+       * here under the same app — which makes "the row I just wrote" unidentifiable and makes the
+       * whole-run claim the honest one to assert. It is also the stronger claim: no `unreachable` any
+       * path of this file can produce exceeds the cap.
+       */
+      const shouts = (
+        await filedUnder("mcp.connection_verified", APP.key.slug)
+      ).flatMap((payload) =>
+        typeof payload.unreachable === "string" ? [payload.unreachable] : [],
+      );
+
+      /*
+       * PRESENT, because its absence is the other half of what this field says: a verification row
+       * with no `unreachable` is a check that reached a verdict, and this one did not.
+       */
+      expect(shouts.length).toBeGreaterThan(0);
+      // Still the vendor's, so the cap is a bound and not a redaction — and this one is the row this
+      // test wrote, which is what ties the property below to the arrival it was found on.
+      expect(
+        shouts.some((shout) =>
+          shout.startsWith("Composio was not reachable: e"),
+        ),
+      ).toBe(true);
+      // And none longer than the four other places this file quotes somebody else's words.
+      expect(shouts.filter((shout) => shout.length > CAP)).toEqual([]);
+    }));
+
+  test("the two writers of a brokered mcp.account_connected row agree on the keys it carries", () =>
+    asPlatform(async () => {
+      /*
+       * THE SAME APP, TWO WAYS IN, ONE ROW SHAPE.
+       *
+       * `recordConnection`, `confirmBrokeredConnection` and `connectBrokeredWithFields` all file
+       * `mcp.account_connected`, and the first two write a `scope`. The third wrote none — so for one
+       * person `payload->>'scope'` on a brokered app came back `''` and for the next it came back
+       * NULL, in a table whose whole purpose is being queried, with nothing in either row saying
+       * which of the two writers made it. A brokered connection has no scopes at all, which is what
+       * the empty string means and why it is the right value rather than an omission.
+       */
+      useAnsweringClient();
+
+      await store.confirmBrokeredConnection({
+        toolkit: APP.consent.slug,
+        userId: person,
+      });
       await store.connectBrokeredWithFields({
         toolkit: APP.key.slug,
         userId: person,
         values: { generic_api_key: "never-sent-anywhere" },
-      }),
-    ).toEqual({ connected: true, verified: false, probe: null });
+      });
 
-    /*
-     * EVERY SUCH ROW THIS RUN FILED, not the one this test just wrote, and the difference is not
-     * fussiness. Nothing may be deleted from this table, so the earlier probe cells' rows are still
-     * here under the same app — which makes "the row I just wrote" unidentifiable and makes the
-     * whole-run claim the honest one to assert. It is also the stronger claim: no `unreachable` any
-     * path of this file can produce exceeds the cap.
-     */
-    const shouts = (
-      await filedUnder("mcp.connection_verified", APP.key.slug)
-    ).flatMap((payload) =>
-      typeof payload.unreachable === "string" ? [payload.unreachable] : [],
-    );
+      /*
+       * EVERY ROW EITHER WRITER FILED THIS RUN, for the reason the cap test reads them all: this
+       * table cannot be pruned, the earlier cells wrote their own rows under the same two apps, and
+       * "the row I just wrote" is not a thing a reader of the trail can identify either. What a
+       * querier actually needs is that NO row of this type is missing the key, which is what the
+       * disagreement cost them.
+       */
+      const byConsent = await filedUnder(
+        "mcp.account_connected",
+        APP.consent.slug,
+      );
+      const byFields = await filedUnder("mcp.account_connected", APP.key.slug);
+      expect(byConsent.length).toBeGreaterThan(0);
+      expect(byFields.length).toBeGreaterThan(0);
 
-    /*
-     * PRESENT, because its absence is the other half of what this field says: a verification row
-     * with no `unreachable` is a check that reached a verdict, and this one did not.
-     */
-    expect(shouts.length).toBeGreaterThan(0);
-    // Still the vendor's, so the cap is a bound and not a redaction — and this one is the row this
-    // test wrote, which is what ties the property below to the arrival it was found on.
-    expect(
-      shouts.some((shout) => shout.startsWith("Composio was not reachable: e")),
-    ).toBe(true);
-    // And none longer than the four other places this file quotes somebody else's words.
-    expect(shouts.filter((shout) => shout.length > CAP)).toEqual([]);
-  });
-
-  test("the two writers of a brokered mcp.account_connected row agree on the keys it carries", async () => {
-    /*
-     * THE SAME APP, TWO WAYS IN, ONE ROW SHAPE.
-     *
-     * `recordConnection`, `confirmBrokeredConnection` and `connectBrokeredWithFields` all file
-     * `mcp.account_connected`, and the first two write a `scope`. The third wrote none — so for one
-     * person `payload->>'scope'` on a brokered app came back `''` and for the next it came back
-     * NULL, in a table whose whole purpose is being queried, with nothing in either row saying
-     * which of the two writers made it. A brokered connection has no scopes at all, which is what
-     * the empty string means and why it is the right value rather than an omission.
-     */
-    useAnsweringClient();
-
-    await store.confirmBrokeredConnection({
-      toolkit: APP.consent.slug,
-      userId: person,
-    });
-    await store.connectBrokeredWithFields({
-      toolkit: APP.key.slug,
-      userId: person,
-      values: { generic_api_key: "never-sent-anywhere" },
-    });
-
-    /*
-     * EVERY ROW EITHER WRITER FILED THIS RUN, for the reason the cap test reads them all: this
-     * table cannot be pruned, the earlier cells wrote their own rows under the same two apps, and
-     * "the row I just wrote" is not a thing a reader of the trail can identify either. What a
-     * querier actually needs is that NO row of this type is missing the key, which is what the
-     * disagreement cost them.
-     */
-    const byConsent = await filedUnder(
-      "mcp.account_connected",
-      APP.consent.slug,
-    );
-    const byFields = await filedUnder("mcp.account_connected", APP.key.slug);
-    expect(byConsent.length).toBeGreaterThan(0);
-    expect(byFields.length).toBeGreaterThan(0);
-
-    // The key itself, because the defect is an ABSENT key rather than a wrong value: a
-    // `toMatchObject` or a `scope: ""` equality both read `undefined` as the thing they wanted.
-    expect(
-      [...byConsent, ...byFields].filter(
-        (payload) => !Object.hasOwn(payload, "scope"),
-      ),
-    ).toEqual([]);
-    // And they agree on what it holds, which is the property rather than the value.
-    expect([
-      ...new Set([...byConsent, ...byFields].map((payload) => payload.scope)),
-    ]).toEqual([""]);
-  });
+      // The key itself, because the defect is an ABSENT key rather than a wrong value: a
+      // `toMatchObject` or a `scope: ""` equality both read `undefined` as the thing they wanted.
+      expect(
+        [...byConsent, ...byFields].filter(
+          (payload) => !Object.hasOwn(payload, "scope"),
+        ),
+      ).toEqual([]);
+      // And they agree on what it holds, which is the property rather than the value.
+      expect([
+        ...new Set([...byConsent, ...byFields].map((payload) => payload.scope)),
+      ]).toEqual([""]);
+    }));
 });
