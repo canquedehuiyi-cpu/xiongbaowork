@@ -79,6 +79,19 @@ const modelRoutes = createModelRoutes(
 );
 const runnerRoutes = createRunnerRoutes(deviceStore, quota);
 const quotaRoutes = createQuotaRoutes(database, quota, requireUser);
+/*
+ * The same tenant as seen by a platform administrator. Moving a plan is an administrator's act
+ * (there is no payment behind it), so the upgrades below go through this one; `quotaRoutes` above is
+ * the tenant's own member, who can read the plan but not move it.
+ */
+const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+  context,
+  next,
+) => {
+  context.set("actor", { id: tenant, role: "admin" as const });
+  await next();
+};
+const adminQuotaRoutes = createQuotaRoutes(database, quota, requireAdminUser);
 const board = createTaskProjector(database, undefined, quota);
 
 async function call<T>(
@@ -212,7 +225,7 @@ test("the second machine is refused, and the pairing code survives it", async ()
    * The other ordering — spend then refuse — would have made them go back for a second code, which is
    * the part of a quota that feels like a bug rather than a limit.
    */
-  await call(quotaRoutes, "POST", "/plan", { planId: "pro" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "pro" });
   const after = await call<{ token: string }>(
     runnerRoutes,
     "POST",
@@ -223,7 +236,7 @@ test("the second machine is refused, and the pairing code survives it", async ()
   expect((await quota.usageFor(tenant)).devices).toBe(2);
 
   // Back on Free, so the model test below meets the tier it claims to describe.
-  await call(quotaRoutes, "POST", "/plan", { planId: "free" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "free" });
 });
 
 test("connecting a model on Free is refused before the key is stored", async () => {
@@ -302,7 +315,7 @@ test("connecting a model on Free is refused before the key is stored", async () 
     database.delete(credentials).where(eq(credentials.id, planted)),
   );
 
-  await call(quotaRoutes, "POST", "/plan", { planId: "pro" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "pro" });
   const allowed = await call<{ model?: { id: string } }>(
     modelRoutes,
     "POST",
@@ -355,7 +368,7 @@ test("the month is counted, and upgrading does not hand back what was used", asy
   expect(counter[0]?.value).toBe(3);
 
   // Pro lifts the ceiling to 1000 and keeps the three already used on the record.
-  await call(quotaRoutes, "POST", "/plan", { planId: "pro" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "pro" });
   expect((await quota.planFor(tenant))?.limits.tasksPerMonth).toBe(1000);
   expect((await quota.usageFor(tenant)).tasks).toBe(3);
 });
@@ -378,10 +391,51 @@ test("the panel answers with the plan, its ceilings and the usage", async () => 
   );
   expect(tiers.body.plans.map((tier) => tier.id)).toEqual(["free", "pro"]);
 
-  const bogus = await call<{ error?: string }>(quotaRoutes, "POST", "/plan", {
+  const bogus = await call<{ error?: string }>(
+    adminQuotaRoutes,
+    "POST",
+    "/plan",
+    { planId: "diamond" },
+  );
+  expect(bogus.status).toBe(404);
+});
+
+test("a plain member cannot move their own plan; an administrator can", async () => {
+  // The tenant is on Pro from the tests above.
+  const subscriptionPlans = () =>
+    runAsTenant(tenant, () =>
+      database
+        .select({ planId: subscriptions.planId })
+        .from(subscriptions)
+        .where(eq(subscriptions.tenantId, tenant)),
+    );
+  const before = await subscriptionPlans();
+  expect(before.map((row) => row.planId)).toEqual(["pro"]);
+
+  const refused = await call<{ error?: string }>(quotaRoutes, "POST", "/plan", {
+    planId: "free",
+  });
+  expect(refused.status).toBe(403);
+  expect(await subscriptionPlans()).toEqual(before);
+  expect((await quota.planFor(tenant))?.id).toBe("pro");
+
+  // An unknown plan is refused for the role, not looked up: a member learns nothing about the catalogue.
+  const probing = await call<{ error?: string }>(quotaRoutes, "POST", "/plan", {
     planId: "diamond",
   });
-  expect(bogus.status).toBe(404);
+  expect(probing.status).toBe(403);
+
+  const moved = await call<{ planId?: string }>(
+    adminQuotaRoutes,
+    "POST",
+    "/plan",
+    { planId: "free" },
+  );
+  expect(moved.status).toBe(200);
+  expect(moved.body.planId).toBe("free");
+  expect((await subscriptionPlans()).map((row) => row.planId)).toEqual([
+    "free",
+  ]);
 });
 
 test("a workspace with no subscription is held to the Free ceilings, not left unlimited", async () => {

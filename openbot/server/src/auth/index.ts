@@ -306,6 +306,11 @@ export function createAuth(
      * `provisionUser` runs when somebody arrives through one of them. Their role has to be written
      * here or they land with no role at all and the request guard refuses them with a 403, which
      * reads as a broken deployment rather than a first sign-in.
+     *
+     * Only a role, never the administrator one: this hook can run for a row that already existed
+     * and was linked to, which may hold a password somebody else set. A listed address is promoted
+     * by `applyConfiguredAdmin` at the session instead, which checks that and trusts an identity
+     * provider an administrator registered even when SAML reports no verified flag.
      */
     sso({
       provisionUser: async ({ user }) => {
@@ -313,11 +318,28 @@ export function createAuth(
           database,
           user.id,
           user.email,
+          false,
           authConfig.initialAdminEmails,
         );
       },
     }),
   ];
+
+  /*
+   * Providers whose address the configured administrator list may trust without a verified flag.
+   *
+   * Entra omits `email_verified` by default, so on an Entra-only deployment the list would otherwise
+   * promote nobody and leave nobody able to promote anyone. A single-tenant directory is the
+   * deployment's own, so its address is its administrator's word; `common`, `organizations` and
+   * `consumers` admit any tenant, whose administrator can write any address, so they are not.
+   * Providers registered through the SSO plugin are trusted in `applyConfiguredAdmin` itself.
+   */
+  const microsoftTenant = authConfig.microsoft?.tenantId.trim().toLowerCase();
+  const addressVouchingProviders: string[] =
+    microsoftTenant &&
+    !["common", "organizations", "consumers"].includes(microsoftTenant)
+      ? ["microsoft"]
+      : [];
 
   return betterAuth({
     user: {
@@ -513,12 +535,14 @@ export function createAuth(
             /*
              * Who is an administrator is decided by email, not by which provider signed them in. A
              * deployment mid-migration has the same person arriving through Entra one week and
-             * Okta the next, and they are the same person to this list.
+             * Okta the next, and they are the same person to this list. Only a verified address
+             * counts: a password sign-up is unverified, so naming its address grants nothing.
              */
             await seedRole(
               database,
               user.id,
               user.email,
+              user.emailVerified === true,
               authConfig.initialAdminEmails,
             );
             // Every arrival path gets its tenant: a Free subscription and its 分身.
@@ -597,13 +621,14 @@ export function createAuth(
             /*
              * The configured floor, re-applied on every sign-in. Editing the list has to mean
              * something for people already in the table, or adding yourself after you first signed
-             * in silently does nothing. Only promotes, and only addresses the list names: everybody
-             * else's role belongs to the admin screen.
+             * in silently does nothing. Only promotes, and only verified addresses the list names:
+             * everybody else's role belongs to the admin screen.
              */
             const promoted = await applyConfiguredAdmin(
               database,
               session.userId,
               authConfig.initialAdminEmails,
+              addressVouchingProviders,
             );
 
             const [user] = await database
