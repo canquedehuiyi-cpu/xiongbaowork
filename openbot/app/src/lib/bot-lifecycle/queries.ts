@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 
 /** How loudly one Bot may reach the signed-in person. Badges on the web always show. */
@@ -71,6 +71,45 @@ export type ResetPlan = {
 
 export type UpdateRouting = Record<UpdateKind, UpdateTransport[] | "all">;
 
+/**
+ * One row of a coworker's audit trail, exactly as `GET /api/bots/:agentId/audit` hands it out.
+ *
+ * The payload was redacted by the server on the way out; this screen only ever reads a few named
+ * strings from it and never prints it whole.
+ */
+export type AgentAuditEvent = {
+  id: string;
+  eventType: string;
+  actorUserId: string | null;
+  /** Read back as written: an unknown kind is shown as itself, never narrowed away. */
+  initiatorKind: string;
+  initiatorId: string | null;
+  targetType: string;
+  targetId: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+/**
+ * One page of the trail. `scope` says whose rows the server let this person see: `everyone` for the
+ * coworker's owner and administrators, `own` for anybody else, who sees only what they did.
+ */
+export type AgentAuditPage = {
+  scope: "everyone" | "own";
+  events: AgentAuditEvent[];
+  nextCursor?: string;
+};
+
+/** The fields the detail page reads off one board row; the board itself owns the full shape. */
+export type AgentRunningTask = {
+  id: string;
+  title: string;
+  executorAgentId: string | null;
+  source: string;
+  status: string;
+  updatedAt: string;
+};
+
 export const botLifecycleKeys = {
   all: ["bot-lifecycle"] as const,
   attention: ["bot-lifecycle", "attention"] as const,
@@ -81,6 +120,9 @@ export const botLifecycleKeys = {
     ["bot-lifecycle", "activity", agentId] as const,
   resetPlan: (agentId: string) =>
     ["bot-lifecycle", "reset-plan", agentId] as const,
+  audit: (agentId: string) => ["bot-lifecycle", "audit", agentId] as const,
+  runningTasks: (agentId: string) =>
+    ["bot-lifecycle", "running-tasks", agentId] as const,
 };
 
 export const botPath = (agentId: string) =>
@@ -138,5 +180,52 @@ export function updateRoutingQueryOptions() {
       client("/api/bots/routing", "routing", {
         fallback: "Could not load where your updates go",
       }),
+  });
+}
+
+/** How many trail rows one page asks for. The server caps it at 100 and defaults to 50. */
+export const AGENT_AUDIT_PAGE_SIZE = 20;
+
+/**
+ * The coworker's recent audit trail, newest first, a page at a time (story D5).
+ *
+ * Paged on the server's keyset cursor rather than by offset: rows keep arriving at the head while a
+ * person reads, and an offset would show some twice and skip others. The cursor is passed back
+ * exactly as the server wrote it.
+ */
+export function agentAuditQueryOptions(agentId: string) {
+  return infiniteQueryOptions({
+    queryKey: botLifecycleKeys.audit(agentId),
+    initialPageParam: "",
+    queryFn: ({ pageParam }): Promise<AgentAuditPage> => {
+      const query = new URLSearchParams({
+        limit: String(AGENT_AUDIT_PAGE_SIZE),
+      });
+      if (pageParam) query.set("cursor", pageParam);
+      return client(`${botPath(agentId)}/audit?${query}`, {
+        fallback: "读不到这位员工的审计记录。",
+      }).then((response) => response.json() as Promise<AgentAuditPage>);
+    },
+    getNextPageParam: (page: AgentAuditPage) => page.nextCursor ?? undefined,
+  });
+}
+
+/**
+ * The board rows this coworker is executing right now: `GET /api/tasks` narrowed to it and to
+ * `running`, with no period, because a task started last month and still running is still running.
+ *
+ * A failed read throws (the shared client does), so the page can say it could not read the board
+ * rather than claiming the coworker is idle.
+ */
+export function agentRunningTasksQueryOptions(agentId: string) {
+  return queryOptions({
+    queryKey: botLifecycleKeys.runningTasks(agentId),
+    queryFn: (): Promise<AgentRunningTask[]> =>
+      client(
+        `/api/tasks?${new URLSearchParams({ executor: agentId, status: "running" })}`,
+        "tasks",
+        { fallback: "读不到这位员工正在进行的任务。" },
+      ),
+    refetchInterval: 10_000,
   });
 }

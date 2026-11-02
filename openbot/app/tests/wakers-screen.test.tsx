@@ -169,8 +169,9 @@ function draw() {
         getParentRoute: () => root,
         path: "/wakers",
       } as never),
-      // The card's "Open" is a deep link into the roster's editor, and a Link needs its address to
-      // resolve. The generator's options are wider than this literal; the tree only needs the path.
+      // The header's 新建员工 is a deep link into the roster's create dialog, and a Link needs its
+      // address to resolve. The generator's options are wider than this literal; the tree only needs
+      // the path.
       createRoute({
         getParentRoute: () => root,
         path: "/agents",
@@ -180,6 +181,12 @@ function draw() {
       createRoute({
         getParentRoute: () => root,
         path: "/assemble/$agentId",
+        component: () => null,
+      } as never),
+      // Spec D5: each card opens the coworker's own detail page.
+      createRoute({
+        getParentRoute: () => root,
+        path: "/wakers/$agentId",
         component: () => null,
       } as never),
     ]),
@@ -259,7 +266,7 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
   expect(screen.getByRole("button", { name: "状态未知 (0)" })).toBeTruthy();
 });
 
-test("each card shows its avatar, its role, and links to its assembly screen; the header creates one", async () => {
+test("each card shows its avatar, its role, and links to its assembly and detail screens; the header creates one", async () => {
   queryClientForDraw = seed([base, reviewer], [], []);
   const screen = draw();
   await waitFor(() =>
@@ -276,6 +283,12 @@ test("each card shows its avatar, its role, and links to its assembly screen; th
     .getAllByText("装配")
     .map((node) => node.closest("a")?.getAttribute("href"));
   expect(assemble).toEqual(["/assemble/agent-1", "/assemble/agent-2"]);
+
+  // Spec D5: 打开 is the coworker's detail page, not the roster's editor dialog.
+  const open = screen
+    .getAllByText("打开")
+    .map((node) => node.closest("a")?.getAttribute("href"));
+  expect(open).toEqual(["/wakers/agent-1", "/wakers/agent-2"]);
 
   // Spec D2: creating a coworker is the roster's own create dialog, deep-linked.
   const create = screen.getByText("新建员工").closest("a");
