@@ -16,13 +16,19 @@
  */
 import { eq, sql } from "drizzle-orm";
 import { createAuditStore, recordAuditEvent } from "../src/audit";
-import { initializeRoleWriter, setRole, stopRoleWriter } from "../src/auth/roles";
+import {
+  initializeRoleWriter,
+  setRole,
+  stopRoleWriter,
+} from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema";
 
 const email = process.argv[2]?.trim().toLowerCase();
-if (!email || !email.includes("@")) {
-  console.error("Usage: bun scripts/grant-admin.ts <email of an existing account>");
+if (!email?.includes("@")) {
+  console.error(
+    "Usage: bun scripts/grant-admin.ts <email of an existing account>",
+  );
   process.exit(2);
 }
 const applicationUrl = process.env.DATABASE_URL;
@@ -42,7 +48,9 @@ try {
     .where(eq(sql`lower(${users.email})`, email))
     .limit(1);
   if (!user) {
-    console.error(`No account has the address ${email}. Sign up first, then run this again.`);
+    console.error(
+      `No account has the address ${email}. Sign up first, then run this again.`,
+    );
     code = 1;
   } else {
     await initializeRoleWriter(application, writer);
