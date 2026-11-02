@@ -207,9 +207,10 @@ test("every tenant table answers all four commands, and no writer answers the pl
    * rather than trusting the next author: a table missing one command's policy would see no rows for
    * it — safe but silently broken — and a table with a `FOR ALL` policy has re-opened the write path.
    */
+  // `pg_policies` is the catalogue, not a tenant's rows: read in the system frame.
   const rows = Array.from(
-    (await database.execute(
-      sql.raw(POLICY_CATALOG_SQL),
+    (await runAsTenant("system", () =>
+      database.execute(sql.raw(POLICY_CATALOG_SQL)),
     )) as ArrayLike<PolicyRow>,
   );
 
@@ -272,7 +273,10 @@ test("every tenant table answers all four commands, and no writer answers the pl
  */
 function ownRowCondition(clause: string | null | undefined): string {
   if (!clause) return "";
-  let text = clause.replace(/<>\s*ALL\s*\(ARRAY\[[^\]]*\]\)/g, "<> ALL (excluded)");
+  let text = clause.replace(
+    /<>\s*ALL\s*\(ARRAY\[[^\]]*\]\)/g,
+    "<> ALL (excluded)",
+  );
   for (;;) {
     const start = text.search(/EXISTS\s*\(/);
     if (start < 0) return text;
