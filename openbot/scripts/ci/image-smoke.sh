@@ -127,7 +127,8 @@ if [ "$healthy" = true ]; then
   check test "$(docker inspect -f '{{.State.Running}}' "$bad")" = false
   check test "$(docker inspect -f '{{.State.ExitCode}}' "$bad")" -ne 0
   docker logs "$bad" > "$evidence/owner.log" 2>&1
-  check grep -aq 'Refusing to serve: tenant isolation' "$evidence/owner.log"
+  # The readiness gate's own structured refusal (OPENBOT_RLS_ENFORCE=refuse in the image).
+  check grep -aq '"type":"rls-not-enforced"' "$evidence/owner.log"
 else
   failures=$((failures+1))
 fi
