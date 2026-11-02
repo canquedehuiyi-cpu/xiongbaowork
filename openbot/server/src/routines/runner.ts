@@ -60,6 +60,15 @@ export type TurnRunner = (input: {
    */
   runRef?: string;
   /**
+   * Whose run this is, when the caller does its work outside that tenant's frame.
+   *
+   * A follow-up, a delivery, a proactive run and a resumed question are each claimed by a worker on a
+   * timer, which has no tenant of its own, so the turn's own frame would file the usage row that names
+   * its model under nobody. Such a caller names the tenant of the row it claimed instead. Absent, the
+   * turn's own frame decides, which is right for every caller that already runs inside one.
+   */
+  tenantId?: string;
+  /**
    * The caller has opened, and will close, this turn's card on the task board.
    *
    * Set it at the entry, not at the runner. `PostgresAgentRunner` files a `chat` card for every turn it

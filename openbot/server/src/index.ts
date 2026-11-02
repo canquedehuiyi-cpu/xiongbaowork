@@ -2584,6 +2584,7 @@ await startupLifecycle.run(async (startup) => {
       try {
         const result = await approvalContinuationRunner({
           ownerUserId: input.ownerUserId,
+          tenantId: input.tenantId,
           routineId: `delivery:${input.runId}`,
           runId: input.runId,
           agentId: input.agentId,
@@ -2659,6 +2660,7 @@ await startupLifecycle.run(async (startup) => {
       );
       const result = await approvalContinuationRunner({
         ...scope,
+        tenantId: input.tenantId,
         routineId: input.runId,
         instruction: input.text,
         userMessage: { id: input.runId, role: "user", content: input.text },
@@ -2908,14 +2910,23 @@ await startupLifecycle.run(async (startup) => {
                 "The saved question owner does not match.",
               );
             await authoriseQuestion(payload.question);
+            /*
+             * The answer's own tenant, as stamped when the person sent it: this loop claims it on a
+             * timer and has none, so the resumed turn is told whose it is (see `TurnRunner`).
+             */
+            const { tenantId } = item;
             const outcome = await resumePersonQuestion({
               ownerUserId: payload.ownerUserId,
               question: payload.question,
               response: payload.response,
               messageId: `person-response:${item.key}`,
-              runTurn: approvalContinuationRunner,
+              runTurn: (turn) =>
+                approvalContinuationRunner({ ...turn, tenantId }),
               responsibilities: responsibilityStore,
-              responsibilityTurn: responsibilityAnswerTurn,
+              responsibilityTurn: (goal) => {
+                const run = responsibilityAnswerTurn(goal);
+                return (turn) => run({ ...turn, tenantId });
+              },
             });
             const source = await sourceForCoordinationRun({
               ...payload.question,
