@@ -214,6 +214,7 @@ tests/pipeline-control.integration.test.ts
 tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
 tests/pipeline-turn-channel.test.ts
+tests/plan-change-audit.integration.test.ts
 tests/plan-model.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
