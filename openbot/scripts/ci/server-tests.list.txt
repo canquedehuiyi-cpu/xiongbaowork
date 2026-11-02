@@ -122,6 +122,7 @@ tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
 tests/copilot.test.ts
 tests/credential-rotation-leak.integration.test.ts
+tests/credentials-reseal.test.ts
 tests/credentials.test.ts
 tests/cull-sweep-wiring.test.ts
 tests/database.test.ts
