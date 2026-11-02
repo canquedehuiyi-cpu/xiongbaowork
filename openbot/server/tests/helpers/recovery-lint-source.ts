@@ -13,6 +13,36 @@ type ApprovedLintTestInverse = Readonly<{
   edits: readonly Readonly<{ after: string; before: string; count: number }>[];
 }>;
 const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
+  // D06 suite moved onto the shared disposable-database helper (load-order rule); same guards.
+  {
+    "path": "tests/approval-continuation-preparation-transaction.integration.test.ts",
+    "currentBytes": 21393,
+    "currentSha256": "dba5050f96c073a277b65c7a50ac481a9cde66bbe30bb7f33fb2651a642c4f2f",
+    "beforeBytes": 21306,
+    "beforeSha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
+    "edits": [
+      {
+        "after": "import { runAsTenant } from \"../src/tenant/context\";\nimport { createDisposableTestDatabase } from \"./support/database\";\n",
+        "before": "import { runAsTenant } from \"../src/tenant/context\";\n",
+        "count": 1
+      },
+      {
+        "after": "const disposable = await createDisposableTestDatabase({ role: \"bypass\" });\nconst raw = disposable.url;\n",
+        "before": "const raw = process.env.TEST_DATABASE_URL;\nif (!raw) throw new Error(\"BLOCKED_TEST_DATABASE_URL\");\n",
+        "count": 1
+      },
+      {
+        "after": "    disposable.databaseName !== databaseName)",
+        "before": "    process.env.TEST_DATABASE_DISPOSABLE !== databaseName)",
+        "count": 1
+      },
+      {
+        "after": "    await database.$client.close();\n    await disposable.drop();\n",
+        "before": "    await database.$client.close();\n",
+        "count": 1
+      }
+    ]
+  },
   {
     "path": "tests/recovery-resource-project-foundations.test.ts",
     "currentBytes": 115974,
