@@ -182,6 +182,19 @@ export async function runAsClaimedTenant<T>(
   return { ran: true, value: await runAsTenant(tenant, () => work(tenant)) };
 }
 
+/**
+ * The tenant frame exactly as it stands: `undefined` outside any `runAsTenant`, unlike
+ * `currentTenant`, which answers that with `system`.
+ *
+ * The database client needs the difference. A statement built inside a frame is pinned to that frame
+ * for good, because the frame can be gone by the time it executes; one built outside every frame keeps
+ * the old behaviour of running as whichever frame awaits it. An explicit `runAsTenant("system", ...)`
+ * is a frame like any other and pins to `system`.
+ */
+export function tenantFrame(): string | undefined {
+  return store.getStore();
+}
+
 export function runAsTenant<T>(tenantId: string, fn: () => T): T {
   const result = store.run(tenantId, fn);
   /*
