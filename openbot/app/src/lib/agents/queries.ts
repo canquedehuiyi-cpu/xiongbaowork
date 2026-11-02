@@ -38,6 +38,12 @@ export type AgentProfile = {
    */
   modelRef: string | null;
   /**
+   * Which platform experience model it answers on instead (stories H1, K1). Never set together with
+   * `modelRef`; null or absent means it is not on the pool. Optional because a profile drawn before
+   * the pool existed does not carry it, and absent reads the same as null.
+   */
+  platformModelRef?: string | null;
+  /**
    * Who this coworker is, as its owner wrote it (ticket 014).
    *
    * Null means nothing was ever written. It is not the same as three empty boxes: only the first
