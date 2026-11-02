@@ -83,7 +83,7 @@ export function createModelRoutes(
     const apiKey = (body.apiKey ?? "").trim();
     if (!provider || !modelName || !apiKey) {
       return context.json(
-        { error: "provider, modelName and apiKey are all required." },
+        { error: "provider、modelName 和 apiKey 均为必填项。" },
         400,
       );
     }
@@ -93,14 +93,11 @@ export function createModelRoutes(
       .where(eq(providerTemplates.id, provider))
       .limit(1);
     if (!template[0]) {
-      return context.json({ error: "Unknown provider template." }, 400);
+      return context.json({ error: "未知的模型提供方模板。" }, 400);
     }
     const baseUrl = (body.baseUrl ?? "").trim();
     if (baseUrl && !template[0].allowsBaseUrl) {
-      return context.json(
-        { error: "This provider does not take a custom endpoint." },
-        400,
-      );
+      return context.json({ error: "该提供方不支持自定义接口地址。" }, 400);
     }
     /*
      * Before the key is stored, not after.
@@ -178,10 +175,11 @@ export function createModelRoutes(
       .where(eq(modelRegistry.id, id))
       .limit(1);
     if (!row?.credentialId) {
-      return context.json({ error: "No such model." }, 404);
+      return context.json({ error: "找不到该模型。" }, 404);
     }
     const secret = await credentials.readSecret(row.credentialId);
-    if (!secret) return context.json({ ok: false, error: "Key revoked." }, 200);
+    if (!secret)
+      return context.json({ ok: false, error: "密钥已被吊销。" }, 200);
     const { decryptSecret } = await import("../credentials");
     const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
     const answer = await probe(
@@ -202,7 +200,7 @@ export function createModelRoutes(
         id: modelRegistry.id,
         credentialId: modelRegistry.credentialId,
       });
-    if (!removed) return context.json({ error: "No such model." }, 404);
+    if (!removed) return context.json({ error: "找不到该模型。" }, 404);
     /*
      * The key goes with the model.
      *
@@ -243,14 +241,14 @@ export function createModelRoutes(
     else if (typeof body.label === "string")
       patch.label = body.label.trim().slice(0, 80) || null;
     if (Object.keys(patch).length === 0) {
-      return context.json({ error: "Nothing to change." }, 400);
+      return context.json({ error: "没有需要更改的内容。" }, 400);
     }
     const [row] = await database
       .update(modelRegistry)
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(modelRegistry.id, id))
       .returning();
-    if (!row) return context.json({ error: "No such model." }, 404);
+    if (!row) return context.json({ error: "找不到该模型。" }, 404);
     return context.json({ model: row });
   });
 
@@ -335,7 +333,7 @@ async function probe(
           : provider === "deepseek"
             ? "https://api.deepseek.com/v1"
             : "");
-    if (!base) return { ok: false, error: "No endpoint configured." };
+    if (!base) return { ok: false, error: "尚未配置接口地址。" };
     const response = await fetch(
       `${base.replace(/\/$/, "")}/chat/completions`,
       {
