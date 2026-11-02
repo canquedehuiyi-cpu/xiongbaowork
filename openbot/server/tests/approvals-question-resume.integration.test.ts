@@ -20,6 +20,7 @@ import type {
 } from "../src/responsibilities/types";
 import { ResponsibilityNotFoundError } from "../src/responsibilities/types";
 import type { TurnRunner } from "../src/routines/runner";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -32,23 +33,32 @@ const prefix = `question-${randomUUID()}`;
 const owner = `${prefix}-owner`;
 const questions = createApprovalQuestions(database, async () => undefined);
 const keys: string[] = [];
+/** The owner's questions and answers are read and written as the owner. */
+const asOwner = <T>(work: () => T) => runAsTenant(owner, work);
 
 beforeAll(async () => {
-  await database
-    .insert(users)
-    .values({ id: owner, email: `${owner}@example.test` });
+  // The account is a deployment row.
+  await runAsTenant("platform", () =>
+    database
+      .insert(users)
+      .values({ id: owner, email: `${owner}@example.test` }),
+  );
 });
 afterAll(async () => {
   if (keys.length)
-    await database
-      .delete(workItems)
-      .where(
-        and(
-          inArray(workItems.kind, ["person.question", "person.response"]),
-          inArray(workItems.key, keys),
+    await asOwner(() =>
+      database
+        .delete(workItems)
+        .where(
+          and(
+            inArray(workItems.kind, ["person.question", "person.response"]),
+            inArray(workItems.key, keys),
+          ),
         ),
-      );
-  await database.delete(users).where(eq(users.id, owner));
+    );
+  await runAsTenant("platform", () =>
+    database.delete(users).where(eq(users.id, owner)),
+  );
   await database.$client.close();
 });
 
@@ -84,19 +94,27 @@ const question = (over: Partial<PersonQuestion> = {}): PersonQuestion => ({
 test("the question's initiator survives being asked and answered", async () => {
   const key = randomUUID();
   keys.push(key);
-  await database.insert(workItems).values({
-    kind: "person.question",
-    key,
-    payload: question(),
-  });
+  await asOwner(() =>
+    database.insert(workItems).values({
+      kind: "person.question",
+      key,
+      payload: question(),
+    }),
+  );
   expect(
-    (await questions.list(owner)).some((entry) => entry.id === key),
+    (await asOwner(() => questions.list(owner))).some(
+      (entry) => entry.id === key,
+    ),
   ).toBeTrue();
-  await questions.respond(owner, key, "Ramen, please.");
-  const [response] = await database
-    .select()
-    .from(workItems)
-    .where(and(eq(workItems.kind, "person.response"), eq(workItems.key, key)));
+  await asOwner(() => questions.respond(owner, key, "Ramen, please."));
+  const [response] = await asOwner(() =>
+    database
+      .select()
+      .from(workItems)
+      .where(
+        and(eq(workItems.kind, "person.response"), eq(workItems.key, key)),
+      ),
+  );
   if (!response) throw new Error("the answer was not queued");
   const saved = (response.payload as { question: unknown }).question;
   expect(personQuestionSchema.parse(saved).initiator).toEqual({
