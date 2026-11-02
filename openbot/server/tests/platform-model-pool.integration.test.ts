@@ -54,8 +54,8 @@ function ownerConnection(): SQL {
       "TEST_DATABASE_ADMIN_URL must reach the same server as TEST_DATABASE_URL.",
     );
   }
-  // Bun prefers $DATABASE_URL over explicit parts; never let it pick the target.
-  delete process.env.DATABASE_URL;
+  // Bun prefers $DATABASE_URL over explicit parts. `createDatabase` above has already removed it
+  // from the environment, so the parts below are what this connection uses.
   return new SQL({
     adapter: "postgres",
     hostname: admin.hostname,
