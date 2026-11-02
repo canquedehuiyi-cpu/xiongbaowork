@@ -22,15 +22,18 @@ afterAll(async () => {
 
 async function server(logo: string | null, provenance = "composio") {
   const id = `logo-${randomUUID()}`;
-  await database.insert(mcpServers).values({
-    id,
-    title: "Example",
-    vendor: "Composio",
-    url: `composio://${id}`,
-    provenance,
-    logo,
-    authScheme: "API_KEY",
-  });
+  // A deployment's brokered app, the kind the boot backfill walks: the platform's own row.
+  await runAsTenant("platform", () =>
+    database.insert(mcpServers).values({
+      id,
+      title: "Example",
+      vendor: "Composio",
+      url: `composio://${id}`,
+      provenance,
+      logo,
+      authScheme: "API_KEY",
+    }),
+  );
   ids.push(id);
   return id;
 }

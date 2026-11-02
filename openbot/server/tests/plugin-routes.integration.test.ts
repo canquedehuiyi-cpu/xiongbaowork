@@ -104,33 +104,37 @@ beforeAll(async () => {
   existing = await entryRow();
 
   const encrypted = await encryptSecret(`${"A".repeat(43)}=`, "not-read-here");
-  await database.insert(credentials).values([
-    {
-      id: personalCredentialId,
-      kind: "mcp_user_token",
-      provider: serverId,
-      keyId: `user_someone_else_${suffix}`,
-      encryptedValue: encrypted,
-      metadata: {},
-    },
-    {
-      id: foreignCredentialId,
-      kind: "mcp",
-      // Minted for a different server, which is what makes it somebody else's to spend.
-      provider: `route-elsewhere-${suffix}`,
-      keyId: `mcp-elsewhere-${suffix}`,
-      encryptedValue: encrypted,
-      metadata: {},
-    },
-    {
-      id: ownCredentialId,
-      kind: "mcp",
-      provider: customServerId,
-      keyId: `mcp-${customServerId}`,
-      encryptedValue: encrypted,
-      metadata: {},
-    },
-  ]);
+  // The administrator's own vault: the request reads these in `admin-1`'s frame, so that is whose
+  // rows they are. What makes two of them unspendable is their kind and server, not their owner.
+  await asAdmin(() =>
+    database.insert(credentials).values([
+      {
+        id: personalCredentialId,
+        kind: "mcp_user_token",
+        provider: serverId,
+        keyId: `user_someone_else_${suffix}`,
+        encryptedValue: encrypted,
+        metadata: {},
+      },
+      {
+        id: foreignCredentialId,
+        kind: "mcp",
+        // Minted for a different server, which is what makes it somebody else's to spend.
+        provider: `route-elsewhere-${suffix}`,
+        keyId: `mcp-elsewhere-${suffix}`,
+        encryptedValue: encrypted,
+        metadata: {},
+      },
+      {
+        id: ownCredentialId,
+        kind: "mcp",
+        provider: customServerId,
+        keyId: `mcp-${customServerId}`,
+        encryptedValue: encrypted,
+        metadata: {},
+      },
+    ]),
+  );
 });
 
 afterAll(async () => {
@@ -160,15 +164,17 @@ afterAll(async () => {
       await database.delete(mcpServers).where(eq(mcpServers.id, custom.id));
     }
   });
-  await database
-    .delete(credentials)
-    .where(
-      inArray(credentials.id, [
-        personalCredentialId,
-        foreignCredentialId,
-        ownCredentialId,
-      ]),
-    );
+  await asAdmin(() =>
+    database
+      .delete(credentials)
+      .where(
+        inArray(credentials.id, [
+          personalCredentialId,
+          foreignCredentialId,
+          ownCredentialId,
+        ]),
+      ),
+  );
 });
 
 /**

@@ -32,9 +32,21 @@ const credentialIds: string[] = [];
 /** Rows written under a tenant scope, which row security hides from the unscoped cleanup above. */
 const tenantCredentialIds: { tenant: string; id: string }[] = [];
 
+/**
+ * The administrator every vault row in this file is written, read and removed as. The credential
+ * routes reach the store inside the request's frame, `runAsTenant(actor.id)`, so a test that talks
+ * to the real store does it in that person's frame too rather than in the unframed fallback.
+ */
+const ADMIN = "admin";
+function asAdmin<T>(work: () => Promise<T>) {
+  return runAsTenant(ADMIN, work);
+}
+
 afterEach(async () => {
   for (const credentialId of credentialIds.splice(0)) {
-    await database.delete(credentials).where(eq(credentials.id, credentialId));
+    await asAdmin(() =>
+      database.delete(credentials).where(eq(credentials.id, credentialId)),
+    );
   }
   for (const { tenant, id } of tenantCredentialIds.splice(0)) {
     await runAsTenant(tenant, () =>
@@ -317,60 +329,64 @@ describe("model credential store lookup", () => {
     const ignoredIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     credentialIds.push(activeId, ...ignoredIds);
 
-    await database.insert(credentials).values([
-      {
-        id: activeId,
-        kind: "model",
-        provider: "openai",
-        keyId: "openai-api-key",
-        encryptedValue: "active-value",
-        metadata: {},
-        createdAt: new Date("2026-02-01T00:00:00.000Z"),
-      },
-      {
-        id: ignoredIds[0]!,
-        kind: "connector",
-        provider: "openai",
-        keyId: "openai-api-key",
-        encryptedValue: "wrong-kind-value",
-        metadata: {},
-        createdAt: new Date("2026-03-01T00:00:00.000Z"),
-      },
-      {
-        id: ignoredIds[1]!,
-        kind: "model",
-        provider: "other",
-        keyId: "openai-api-key",
-        encryptedValue: "wrong-provider-value",
-        metadata: {},
-        createdAt: new Date("2026-03-01T00:00:00.000Z"),
-      },
-      {
-        id: ignoredIds[2]!,
-        kind: "model",
-        provider: "openai",
-        keyId: "other-api-key",
-        encryptedValue: "wrong-key-value",
-        metadata: {},
-        createdAt: new Date("2026-03-01T00:00:00.000Z"),
-      },
-      {
-        id: ignoredIds[3]!,
-        kind: "model",
-        provider: "openai",
-        keyId: "openai-api-key",
-        encryptedValue: "revoked-value",
-        metadata: {},
-        revokedAt: new Date("2026-03-01T00:00:00.000Z"),
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      },
-    ]);
+    await asAdmin(() =>
+      database.insert(credentials).values([
+        {
+          id: activeId,
+          kind: "model",
+          provider: "openai",
+          keyId: "openai-api-key",
+          encryptedValue: "active-value",
+          metadata: {},
+          createdAt: new Date("2026-02-01T00:00:00.000Z"),
+        },
+        {
+          id: ignoredIds[0]!,
+          kind: "connector",
+          provider: "openai",
+          keyId: "openai-api-key",
+          encryptedValue: "wrong-kind-value",
+          metadata: {},
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        },
+        {
+          id: ignoredIds[1]!,
+          kind: "model",
+          provider: "other",
+          keyId: "openai-api-key",
+          encryptedValue: "wrong-provider-value",
+          metadata: {},
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        },
+        {
+          id: ignoredIds[2]!,
+          kind: "model",
+          provider: "openai",
+          keyId: "other-api-key",
+          encryptedValue: "wrong-key-value",
+          metadata: {},
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        },
+        {
+          id: ignoredIds[3]!,
+          kind: "model",
+          provider: "openai",
+          keyId: "openai-api-key",
+          encryptedValue: "revoked-value",
+          metadata: {},
+          revokedAt: new Date("2026-03-01T00:00:00.000Z"),
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      ]),
+    );
 
     await expect(
-      createCredentialStore(database).readModelSecret({
-        provider: "openai",
-        keyId: "openai-api-key",
-      }),
+      asAdmin(() =>
+        createCredentialStore(database).readModelSecret({
+          provider: "openai",
+          keyId: "openai-api-key",
+        }),
+      ),
     ).resolves.toMatchObject({ encryptedValue: "active-value" });
   });
 });
@@ -381,33 +397,39 @@ describe("credential store rotation", () => {
     const previousId = randomUUID();
     const keyId = `rotation-atomic-${previousId}`;
     credentialIds.push(previousId);
-    await database.insert(credentials).values({
-      id: previousId,
-      kind: "model",
-      provider: "openai",
-      keyId,
-      encryptedValue: "initial",
-      metadata: {},
-    });
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id: previousId,
+        kind: "model",
+        provider: "openai",
+        keyId,
+        encryptedValue: "initial",
+        metadata: {},
+      }),
+    );
 
-    const rotated = await store.rotate({
-      previousCredentialId: previousId,
-      kind: "model",
-      provider: "openai",
-      keyId,
-      metadata: {},
-      encryptedValue: "rotated",
-    });
+    const rotated = await asAdmin(() =>
+      store.rotate({
+        previousCredentialId: previousId,
+        kind: "model",
+        provider: "openai",
+        keyId,
+        metadata: {},
+        encryptedValue: "rotated",
+      }),
+    );
     credentialIds.push(rotated.id);
 
-    const rows = await database
-      .select({
-        id: credentials.id,
-        encryptedValue: credentials.encryptedValue,
-        revokedAt: credentials.revokedAt,
-      })
-      .from(credentials)
-      .where(eq(credentials.keyId, keyId));
+    const rows = await asAdmin(() =>
+      database
+        .select({
+          id: credentials.id,
+          encryptedValue: credentials.encryptedValue,
+          revokedAt: credentials.revokedAt,
+        })
+        .from(credentials)
+        .where(eq(credentials.keyId, keyId)),
+    );
     const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
 
     expect(byId[previousId]?.revokedAt).not.toBeNull();
@@ -420,31 +442,37 @@ describe("credential store rotation", () => {
     const previousId = randomUUID();
     const keyId = `rotation-revoked-${previousId}`;
     credentialIds.push(previousId);
-    await database.insert(credentials).values({
-      id: previousId,
-      kind: "model",
-      provider: "openai",
-      keyId,
-      encryptedValue: "initial",
-      metadata: {},
-      revokedAt: new Date("2026-08-01T00:00:00.000Z"),
-    });
-
-    await expect(
-      store.rotate({
-        previousCredentialId: previousId,
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id: previousId,
         kind: "model",
         provider: "openai",
         keyId,
+        encryptedValue: "initial",
         metadata: {},
-        encryptedValue: "rotated",
+        revokedAt: new Date("2026-08-01T00:00:00.000Z"),
       }),
+    );
+
+    await expect(
+      asAdmin(() =>
+        store.rotate({
+          previousCredentialId: previousId,
+          kind: "model",
+          provider: "openai",
+          keyId,
+          metadata: {},
+          encryptedValue: "rotated",
+        }),
+      ),
     ).rejects.toThrow("already revoked");
 
-    const rows = await database
-      .select({ id: credentials.id })
-      .from(credentials)
-      .where(eq(credentials.keyId, keyId));
+    const rows = await asAdmin(() =>
+      database
+        .select({ id: credentials.id })
+        .from(credentials)
+        .where(eq(credentials.keyId, keyId)),
+    );
     expect(rows.map((row) => row.id)).toEqual([previousId]);
   });
 
@@ -454,22 +482,26 @@ describe("credential store rotation", () => {
     const keyId = `rotation-missing-${missing}`;
 
     await expect(
-      store.rotate({
-        previousCredentialId: missing,
-        kind: "model",
-        provider: "openai",
-        keyId,
-        metadata: {},
-        encryptedValue: "orphan-if-broken",
-      }),
+      asAdmin(() =>
+        store.rotate({
+          previousCredentialId: missing,
+          kind: "model",
+          provider: "openai",
+          keyId,
+          metadata: {},
+          encryptedValue: "orphan-if-broken",
+        }),
+      ),
     ).rejects.toThrow("not found");
 
     // Nothing was written, so the failed rotation left no credential behind
     // for this key at all.
-    const rows = await database
-      .select({ id: credentials.id })
-      .from(credentials)
-      .where(eq(credentials.keyId, keyId));
+    const rows = await asAdmin(() =>
+      database
+        .select({ id: credentials.id })
+        .from(credentials)
+        .where(eq(credentials.keyId, keyId)),
+    );
     expect(rows).toEqual([]);
   });
 
@@ -481,30 +513,36 @@ describe("credential store rotation", () => {
     const previousId = randomUUID();
     const previousKey = `mismatch-previous-${previousId}`;
     credentialIds.push(previousId);
-    await database.insert(credentials).values({
-      id: previousId,
-      kind: "model",
-      provider: "openai",
-      keyId: previousKey,
-      encryptedValue: "previous",
-      metadata: {},
-    });
-
-    await expect(
-      store.rotate({
-        previousCredentialId: previousId,
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id: previousId,
         kind: "model",
         provider: "openai",
-        keyId: `mismatch-input-${previousId}`,
+        keyId: previousKey,
+        encryptedValue: "previous",
         metadata: {},
-        encryptedValue: "would-retire-the-wrong-secret",
       }),
+    );
+
+    await expect(
+      asAdmin(() =>
+        store.rotate({
+          previousCredentialId: previousId,
+          kind: "model",
+          provider: "openai",
+          keyId: `mismatch-input-${previousId}`,
+          metadata: {},
+          encryptedValue: "would-retire-the-wrong-secret",
+        }),
+      ),
     ).rejects.toThrow("does not match");
 
-    const [after] = await database
-      .select({ revokedAt: credentials.revokedAt })
-      .from(credentials)
-      .where(eq(credentials.id, previousId));
+    const [after] = await asAdmin(() =>
+      database
+        .select({ revokedAt: credentials.revokedAt })
+        .from(credentials)
+        .where(eq(credentials.id, previousId)),
+    );
     expect(after?.revokedAt).toBeNull();
   });
 
@@ -512,19 +550,23 @@ describe("credential store rotation", () => {
     const store = createCredentialStore(database);
     const id = randomUUID();
     credentialIds.push(id);
-    await database.insert(credentials).values({
-      id,
-      kind: "model",
-      provider: "openai",
-      keyId: `revoke-guard-${id}`,
-      encryptedValue: "one",
-      metadata: {},
-      revokedAt: new Date("2026-08-01T00:00:00.000Z"),
-    });
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id,
+        kind: "model",
+        provider: "openai",
+        keyId: `revoke-guard-${id}`,
+        encryptedValue: "one",
+        metadata: {},
+        revokedAt: new Date("2026-08-01T00:00:00.000Z"),
+      }),
+    );
 
-    await expect(store.revoke(id)).rejects.toThrow("already revoked");
+    await expect(asAdmin(() => store.revoke(id))).rejects.toThrow(
+      "already revoked",
+    );
     // As a refusal the route can answer with a status, not an error it can only pass on as a 500.
-    await expect(store.revoke(id)).rejects.toMatchObject({
+    await expect(asAdmin(() => store.revoke(id))).rejects.toMatchObject({
       name: "CredentialRefusedError",
       status: 404,
     });
@@ -537,17 +579,19 @@ describe("one live credential per key", () => {
     const second = randomUUID();
     credentialIds.push(first, second);
     const keyId = `unique-active-${first}`;
-    await database.insert(credentials).values({
-      id: first,
-      kind: "model",
-      provider: "openai",
-      keyId,
-      encryptedValue: "first",
-      metadata: {},
-    });
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id: first,
+        kind: "model",
+        provider: "openai",
+        keyId,
+        encryptedValue: "first",
+        metadata: {},
+      }),
+    );
 
     await expect(
-      (async () =>
+      asAdmin(async () =>
         database.insert(credentials).values({
           id: second,
           kind: "model",
@@ -555,7 +599,8 @@ describe("one live credential per key", () => {
           keyId,
           encryptedValue: "second",
           metadata: {},
-        }))(),
+        }),
+      ),
     ).rejects.toThrow();
   });
 
@@ -575,31 +620,37 @@ describe("one live credential per key", () => {
     };
     const keyId = `replace-on-add-${randomUUID()}`;
 
-    const first = await createCredential(service, {
-      kind: "model",
-      provider: "openai",
-      keyId,
-      metadata: {},
-      plaintext: "first-secret",
-      actorUserId: "admin",
-    });
+    const first = await asAdmin(() =>
+      createCredential(service, {
+        kind: "model",
+        provider: "openai",
+        keyId,
+        metadata: {},
+        plaintext: "first-secret",
+        actorUserId: "admin",
+      }),
+    );
     credentialIds.push(first.id);
 
-    const second = await createCredential(service, {
-      kind: "model",
-      provider: "openai",
-      keyId,
-      metadata: {},
-      plaintext: "second-secret",
-      actorUserId: "admin",
-    });
+    const second = await asAdmin(() =>
+      createCredential(service, {
+        kind: "model",
+        provider: "openai",
+        keyId,
+        metadata: {},
+        plaintext: "second-secret",
+        actorUserId: "admin",
+      }),
+    );
     credentialIds.push(second.id);
 
     expect(second.id).not.toBe(first.id);
-    const rows = await database
-      .select({ id: credentials.id, revokedAt: credentials.revokedAt })
-      .from(credentials)
-      .where(eq(credentials.keyId, keyId));
+    const rows = await asAdmin(() =>
+      database
+        .select({ id: credentials.id, revokedAt: credentials.revokedAt })
+        .from(credentials)
+        .where(eq(credentials.keyId, keyId)),
+    );
     const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
     expect(byId[first.id]?.revokedAt).not.toBeNull();
     expect(byId[second.id]?.revokedAt).toBeNull();
@@ -622,15 +673,18 @@ describe("credential secret update", () => {
   async function liveCredential(plaintext: string, revoked = false) {
     const id = randomUUID();
     credentialIds.push(id);
-    await database.insert(credentials).values({
-      id,
-      kind: "mcp_user_token",
-      provider: "notion",
-      keyId: `user-${id}`,
-      encryptedValue: await encryptSecret(key, plaintext),
-      metadata: {},
-      revokedAt: revoked ? new Date("2026-03-01T00:00:00.000Z") : null,
-    });
+    const encryptedValue = await encryptSecret(key, plaintext);
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id,
+        kind: "mcp_user_token",
+        provider: "notion",
+        keyId: `user-${id}`,
+        encryptedValue,
+        metadata: {},
+        revokedAt: revoked ? new Date("2026-03-01T00:00:00.000Z") : null,
+      }),
+    );
     return id;
   }
 
@@ -638,11 +692,12 @@ describe("credential secret update", () => {
     const store = createCredentialStore(database);
     const id = await liveCredential("rt-1");
 
-    await store.updateSecret(id, await encryptSecret(key, "rt-2"));
+    const rotated = await encryptSecret(key, "rt-2");
+    await asAdmin(() => store.updateSecret(id, rotated));
 
     // The same row, addressed by the same id everything else already holds, now carrying the new
     // token — and still live, because nothing about the grant changed.
-    const stored = await store.readSecret(id);
+    const stored = await asAdmin(() => store.readSecret(id));
     expect(stored?.revokedAt).toBeNull();
     await expect(
       decryptSecret(key, stored?.encryptedValue ?? ""),
@@ -653,21 +708,22 @@ describe("credential secret update", () => {
     const store = createCredentialStore(database);
     const id = await liveCredential("rt-1", true);
 
+    const rotated = await encryptSecret(key, "rt-2");
     await expect(
-      store.updateSecret(id, await encryptSecret(key, "rt-2")),
+      asAdmin(() => store.updateSecret(id, rotated)),
     ).rejects.toThrow("Credential was not found or is revoked");
     // Untouched: a withdrawn grant must not become usable again by being written through.
-    const stored = await store.readSecret(id);
+    const stored = await asAdmin(() => store.readSecret(id));
     await expect(
       decryptSecret(key, stored?.encryptedValue ?? ""),
     ).resolves.toBe("rt-1");
   });
 
   test("refuses a row that is not there", async () => {
+    const rotated = await encryptSecret(key, "rt-2");
     await expect(
-      createCredentialStore(database).updateSecret(
-        randomUUID(),
-        await encryptSecret(key, "rt-2"),
+      asAdmin(() =>
+        createCredentialStore(database).updateSecret(randomUUID(), rotated),
       ),
     ).rejects.toThrow("Credential was not found or is revoked");
   });
@@ -685,17 +741,19 @@ describe("credential secret update", () => {
     const id = await liveCredential("rt-1");
 
     await expect(
-      database.transaction(async (transaction) => {
-        await store.updateSecret(
-          id,
-          await encryptSecret(key, "rt-2"),
-          transaction,
-        );
-        throw new Error("the caller changed its mind");
-      }),
+      asAdmin(() =>
+        database.transaction(async (transaction) => {
+          await store.updateSecret(
+            id,
+            await encryptSecret(key, "rt-2"),
+            transaction,
+          );
+          throw new Error("the caller changed its mind");
+        }),
+      ),
     ).rejects.toThrow("the caller changed its mind");
 
-    const stored = await store.readSecret(id);
+    const stored = await asAdmin(() => store.readSecret(id));
     await expect(
       decryptSecret(key, stored?.encryptedValue ?? ""),
     ).resolves.toBe("rt-1");

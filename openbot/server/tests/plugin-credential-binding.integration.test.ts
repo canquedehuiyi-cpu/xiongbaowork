@@ -16,6 +16,7 @@ import {
   CustomServerRefusedError,
   createPluginStore,
 } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -47,6 +48,16 @@ const OWN_TOKEN = `sk-own-${tag}`;
 const OTHER_TOKEN = `sk-other-${tag}`;
 const LEGITIMATE_URL = "https://legit.vendor.example/mcp";
 const CHOSEN_URL = "https://collector.attacker.example/mcp";
+
+/**
+ * The administrator who adds and removes these servers. The plugin routes run the store inside the
+ * request's frame, `runAsTenant(actor.id)`, so the servers, the tokens they are given and every read
+ * of them here belong to that person rather than to the unframed fallback.
+ */
+const ADMIN = "binding-admin";
+function asAdmin<T>(work: () => Promise<T>) {
+  return runAsTenant(ADMIN, work);
+}
 
 const store = createPluginStore({
   database,
@@ -101,25 +112,29 @@ beforeAll(async () => {
   }) as typeof fetch;
 
   const encrypted = async (value: string) => encryptSecret(KEY, value);
-  await database.insert(credentials).values([
-    {
-      id: ownCredentialId,
-      kind: "mcp",
-      // How `storeMcpToken` records whose token this is: the server it was minted for.
-      provider: serverId,
-      keyId: `mcp-${serverId}`,
-      encryptedValue: await encrypted(OWN_TOKEN),
-      metadata: {},
-    },
-    {
-      id: otherCredentialId,
-      kind: "mcp",
-      provider: otherServerId,
-      keyId: `mcp-${otherServerId}`,
-      encryptedValue: await encrypted(OTHER_TOKEN),
-      metadata: {},
-    },
-  ]);
+  const ownValue = await encrypted(OWN_TOKEN);
+  const otherValue = await encrypted(OTHER_TOKEN);
+  await asAdmin(() =>
+    database.insert(credentials).values([
+      {
+        id: ownCredentialId,
+        kind: "mcp",
+        // How `storeMcpToken` records whose token this is: the server it was minted for.
+        provider: serverId,
+        keyId: `mcp-${serverId}`,
+        encryptedValue: ownValue,
+        metadata: {},
+      },
+      {
+        id: otherCredentialId,
+        kind: "mcp",
+        provider: otherServerId,
+        keyId: `mcp-${otherServerId}`,
+        encryptedValue: otherValue,
+        metadata: {},
+      },
+    ]),
+  );
 });
 
 afterEach(() => {
@@ -128,31 +143,41 @@ afterEach(() => {
 
 afterAll(async () => {
   globalThis.fetch = realFetch;
-  await database.delete(mcpTools).where(like(mcpTools.serverId, `binding-%`));
-  await database.delete(mcpServers).where(like(mcpServers.id, `binding-%`));
-  await database
-    .delete(credentials)
-    .where(inArray(credentials.id, [ownCredentialId, otherCredentialId]));
+  await asAdmin(() =>
+    database.delete(mcpTools).where(like(mcpTools.serverId, `binding-%`)),
+  );
+  await asAdmin(() =>
+    database.delete(mcpServers).where(like(mcpServers.id, `binding-%`)),
+  );
+  await asAdmin(() =>
+    database
+      .delete(credentials)
+      .where(inArray(credentials.id, [ownCredentialId, otherCredentialId])),
+  );
 });
 
 async function storedUrl(id: string) {
-  const [row] = await database
-    .select({ url: mcpServers.url })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, id));
+  const [row] = await asAdmin(() =>
+    database
+      .select({ url: mcpServers.url })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, id)),
+  );
   return row?.url ?? null;
 }
 
 describe("a credential is spent only by the server it belongs to", () => {
   test("another server's token is refused", async () => {
     await expect(
-      store.addCustomServer({
-        id: serverId,
-        title: "Collector",
-        url: CHOSEN_URL,
-        credentialId: otherCredentialId,
-        by: "admin@example.com",
-      }),
+      asAdmin(() =>
+        store.addCustomServer({
+          id: serverId,
+          title: "Collector",
+          url: CHOSEN_URL,
+          credentialId: otherCredentialId,
+          by: "admin@example.com",
+        }),
+      ),
     ).rejects.toBeInstanceOf(CustomServerRefusedError);
 
     // The refusal is the whole point only if it happens before the send.
@@ -161,13 +186,15 @@ describe("a credential is spent only by the server it belongs to", () => {
   });
 
   test("the server's own token is accepted", async () => {
-    const added = await store.addCustomServer({
-      id: serverId,
-      title: "Collector",
-      url: LEGITIMATE_URL,
-      credentialId: ownCredentialId,
-      by: "admin@example.com",
-    });
+    const added = await asAdmin(() =>
+      store.addCustomServer({
+        id: serverId,
+        title: "Collector",
+        url: LEGITIMATE_URL,
+        credentialId: ownCredentialId,
+        by: "admin@example.com",
+      }),
+    );
 
     expect(added.id).toBe(serverId);
     expect(await storedUrl(serverId)).toBe(LEGITIMATE_URL);
@@ -183,13 +210,15 @@ describe("a credential is spent only at the address it was given", () => {
     // server. What changed is where the server points, and the add would spend the credential
     // against the new address in the same call.
     await expect(
-      store.addCustomServer({
-        id: serverId,
-        title: "Collector",
-        url: CHOSEN_URL,
-        credentialId: ownCredentialId,
-        by: "admin@example.com",
-      }),
+      asAdmin(() =>
+        store.addCustomServer({
+          id: serverId,
+          title: "Collector",
+          url: CHOSEN_URL,
+          credentialId: ownCredentialId,
+          by: "admin@example.com",
+        }),
+      ),
     ).rejects.toBeInstanceOf(CustomServerRefusedError);
 
     expect(sent).toEqual([]);
@@ -199,13 +228,15 @@ describe("a credential is spent only at the address it was given", () => {
   test("re-adding it at the address it already has still works", async () => {
     // Adding twice is not an attack and must stay ordinary: it is how a title is corrected and how
     // an interrupted add is retried.
-    const added = await store.addCustomServer({
-      id: serverId,
-      title: "Collector, renamed",
-      url: LEGITIMATE_URL,
-      credentialId: ownCredentialId,
-      by: "admin@example.com",
-    });
+    const added = await asAdmin(() =>
+      store.addCustomServer({
+        id: serverId,
+        title: "Collector, renamed",
+        url: LEGITIMATE_URL,
+        credentialId: ownCredentialId,
+        by: "admin@example.com",
+      }),
+    );
 
     expect(added.title).toBe("Collector, renamed");
     expect(await storedUrl(serverId)).toBe(LEGITIMATE_URL);
@@ -215,19 +246,23 @@ describe("a credential is spent only at the address it was given", () => {
     // Nothing to misdirect, so nothing to refuse. The rule is about spending a secret somewhere it
     // was not entrusted to, not about URLs being immutable.
     const openServerId = `binding-open-${tag}`;
-    await store.addCustomServer({
-      id: openServerId,
-      title: "Open",
-      url: LEGITIMATE_URL,
-      by: "admin@example.com",
-    });
+    await asAdmin(() =>
+      store.addCustomServer({
+        id: openServerId,
+        title: "Open",
+        url: LEGITIMATE_URL,
+        by: "admin@example.com",
+      }),
+    );
 
-    const moved = await store.addCustomServer({
-      id: openServerId,
-      title: "Open",
-      url: CHOSEN_URL,
-      by: "admin@example.com",
-    });
+    const moved = await asAdmin(() =>
+      store.addCustomServer({
+        id: openServerId,
+        title: "Open",
+        url: CHOSEN_URL,
+        by: "admin@example.com",
+      }),
+    );
 
     expect(moved.id).toBe(openServerId);
     expect(await storedUrl(openServerId)).toBe(CHOSEN_URL);
@@ -249,58 +284,75 @@ describe("a token does not outlive the server it was given to", () => {
   const HOLDER_TOKEN = `sk-holder-${tag}`;
 
   beforeAll(async () => {
-    await database.insert(credentials).values({
-      id: holderCredentialId,
-      kind: "mcp",
-      provider: holderId,
-      keyId: `mcp-${holderId}`,
-      encryptedValue: await encryptSecret(KEY, HOLDER_TOKEN),
-      metadata: {},
-    });
+    const encryptedValue = await encryptSecret(KEY, HOLDER_TOKEN);
+    await asAdmin(() =>
+      database.insert(credentials).values({
+        id: holderCredentialId,
+        kind: "mcp",
+        provider: holderId,
+        keyId: `mcp-${holderId}`,
+        encryptedValue,
+        metadata: {},
+      }),
+    );
   });
 
   afterAll(async () => {
     // The server row first: it holds a foreign key onto the credential, so the other order is
     // refused by the database rather than by anything this suite is testing.
-    await database.delete(mcpTools).where(eq(mcpTools.serverId, holderId));
-    await database.delete(mcpServers).where(eq(mcpServers.id, holderId));
-    await database
-      .delete(credentials)
-      .where(eq(credentials.id, holderCredentialId));
+    await asAdmin(() =>
+      database.delete(mcpTools).where(eq(mcpTools.serverId, holderId)),
+    );
+    await asAdmin(() =>
+      database.delete(mcpServers).where(eq(mcpServers.id, holderId)),
+    );
+    await asAdmin(() =>
+      database
+        .delete(credentials)
+        .where(eq(credentials.id, holderCredentialId)),
+    );
   });
 
   test("re-adding without a token keeps the one the server already holds", async () => {
     // Clearing it was the first link: the row stops naming the credential, so nothing later knows
     // the credential belongs to anything, and nothing retires it.
-    await store.addCustomServer({
-      id: holderId,
-      title: "Holder",
-      url: LEGITIMATE_URL,
-      credentialId: holderCredentialId,
-      by: "admin@example.com",
-    });
+    await asAdmin(() =>
+      store.addCustomServer({
+        id: holderId,
+        title: "Holder",
+        url: LEGITIMATE_URL,
+        credentialId: holderCredentialId,
+        by: "admin@example.com",
+      }),
+    );
 
-    await store.addCustomServer({
-      id: holderId,
-      title: "Holder, renamed",
-      url: LEGITIMATE_URL,
-      by: "admin@example.com",
-    });
+    await asAdmin(() =>
+      store.addCustomServer({
+        id: holderId,
+        title: "Holder, renamed",
+        url: LEGITIMATE_URL,
+        by: "admin@example.com",
+      }),
+    );
 
-    const [row] = await database
-      .select({ credentialId: mcpServers.credentialId })
-      .from(mcpServers)
-      .where(eq(mcpServers.id, holderId));
+    const [row] = await asAdmin(() =>
+      database
+        .select({ credentialId: mcpServers.credentialId })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, holderId)),
+    );
     expect(row?.credentialId).toBe(holderCredentialId);
   });
 
   test("removing the server retires its token", async () => {
-    await store.removeServer(holderId, "admin@example.com");
+    await asAdmin(() => store.removeServer(holderId, "admin@example.com"));
 
-    const [row] = await database
-      .select({ revokedAt: credentials.revokedAt })
-      .from(credentials)
-      .where(eq(credentials.id, holderCredentialId));
+    const [row] = await asAdmin(() =>
+      database
+        .select({ revokedAt: credentials.revokedAt })
+        .from(credentials)
+        .where(eq(credentials.id, holderCredentialId)),
+    );
     expect(row?.revokedAt).not.toBeNull();
   });
 
@@ -310,13 +362,15 @@ describe("a token does not outlive the server it was given to", () => {
     sent = [];
 
     await expect(
-      store.addCustomServer({
-        id: holderId,
-        title: "Holder",
-        url: CHOSEN_URL,
-        credentialId: holderCredentialId,
-        by: "admin@example.com",
-      }),
+      asAdmin(() =>
+        store.addCustomServer({
+          id: holderId,
+          title: "Holder",
+          url: CHOSEN_URL,
+          credentialId: holderCredentialId,
+          by: "admin@example.com",
+        }),
+      ),
     ).rejects.toBeInstanceOf(CustomServerRefusedError);
 
     expect(sent).toEqual([]);
