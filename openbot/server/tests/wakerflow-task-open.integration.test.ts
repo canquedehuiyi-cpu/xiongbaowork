@@ -72,7 +72,12 @@ async function makeRun(owner: string, flowId: string | null) {
   await runAsTenant(owner, async () => {
     await database
       .insert(wakerGroups)
-      .values({ id: groupId, tenantId: owner, name: "流程组" });
+      // One crew per run, so the (tenant, name) unique index is never hit across tests.
+      .values({
+        id: groupId,
+        tenantId: owner,
+        name: `流程组 ${groupId.slice(0, 8)}`,
+      });
     await database.insert(groupTaskRuns).values({
       id: runId,
       tenantId: owner,
