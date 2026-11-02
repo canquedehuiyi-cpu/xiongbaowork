@@ -205,7 +205,7 @@ test("a bound coworker is counted, named, and answered with the model it chose",
   expect((model as unknown as { modelId: string }).modelId).toBe("gpt-6");
 });
 
-test("removing a model unbinds the coworker and retires the key", async () => {
+test("a model still in use is refused with 409 and kept, then removed once unbound", async () => {
   const library = await call<Library>("GET", "/");
   const row = library.body.models.find((entry) => entry.modelName === "gpt-6");
   if (!row) throw new Error("The connected model disappeared.");
@@ -216,18 +216,56 @@ test("removing a model unbinds the coworker and retires the key", async () => {
       .where(eq(modelRegistry.id, row.id)),
   );
 
-  const removed = await call("DELETE", `/${row.id}`);
-  expect(removed.status).toBe(200);
+  // Audit #13: bypassing the screen must not silently unbind a coworker (`on delete set null`).
+  const refused = await call<{
+    error: string;
+    code: string;
+    references: number;
+  }>("DELETE", `/${row.id}`);
+  expect(refused.status).toBe(409);
+  expect(refused.body.code).toBe("model_in_use");
+  expect(refused.body.references).toBe(1);
+  expect(typeof refused.body.error).toBe("string");
 
-  const [profile] = await runAsTenant(tenant, () =>
+  const [kept] = await runAsTenant(tenant, () =>
+    database
+      .select({ id: modelRegistry.id })
+      .from(modelRegistry)
+      .where(eq(modelRegistry.id, row.id)),
+  );
+  expect(kept?.id).toBe(row.id);
+  const [stillBound] = await runAsTenant(tenant, () =>
     database
       .select({ modelRef: agentProfiles.modelRef })
       .from(agentProfiles)
       .where(eq(agentProfiles.agentId, `${suite}-dev`)),
   );
-  // Set null rather than left dangling: the coworker answers on the deployment's model next turn.
-  expect(profile?.modelRef).toBeNull();
+  expect(stillBound?.modelRef).toBe(row.id);
+  const [vaultKept] = await runAsTenant(tenant, () =>
+    database
+      .select({ revokedAt: credentials.revokedAt })
+      .from(credentials)
+      .where(eq(credentials.id, entry!.credentialId!)),
+  );
+  expect(vaultKept?.revokedAt).toBeNull();
 
+  // Unbound, the same delete goes through and the key goes with the model.
+  await runAsTenant(tenant, () =>
+    database
+      .update(agentProfiles)
+      .set({ modelRef: null })
+      .where(eq(agentProfiles.agentId, `${suite}-dev`)),
+  );
+  const removed = await call("DELETE", `/${row.id}`);
+  expect(removed.status).toBe(200);
+
+  const [gone] = await runAsTenant(tenant, () =>
+    database
+      .select({ id: modelRegistry.id })
+      .from(modelRegistry)
+      .where(eq(modelRegistry.id, row.id)),
+  );
+  expect(gone).toBeUndefined();
   const [vault] = await runAsTenant(tenant, () =>
     database
       .select({ revokedAt: credentials.revokedAt })
@@ -235,6 +273,9 @@ test("removing a model unbinds the coworker and retires the key", async () => {
       .where(eq(credentials.id, entry!.credentialId!)),
   );
   expect(vault?.revokedAt).not.toBeNull();
+
+  const missing = await call("DELETE", `/${row.id}`);
+  expect(missing.status).toBe(404);
 });
 
 test("the board says which model answered each task", async () => {

@@ -23,7 +23,11 @@ import {
 import { createRunnerRoutes } from "../src/devices/routes";
 import { createDeviceStore } from "../src/devices/store";
 import { createModelRoutes } from "../src/models/routes";
-import { billingPeriod, createQuotaService } from "../src/quota/limits";
+import {
+  billingPeriod,
+  createQuotaService,
+  QuotaExceeded,
+} from "../src/quota/limits";
 import { createQuotaRoutes } from "../src/quota/routes";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
@@ -75,6 +79,19 @@ const modelRoutes = createModelRoutes(
 );
 const runnerRoutes = createRunnerRoutes(deviceStore, quota);
 const quotaRoutes = createQuotaRoutes(database, quota, requireUser);
+/*
+ * The same tenant as seen by a platform administrator. Moving a plan is an administrator's act
+ * (there is no payment behind it), so the upgrades below go through this one; `quotaRoutes` above is
+ * the tenant's own member, who can read the plan but not move it.
+ */
+const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+  context,
+  next,
+) => {
+  context.set("actor", { id: tenant, role: "admin" as const });
+  await next();
+};
+const adminQuotaRoutes = createQuotaRoutes(database, quota, requireAdminUser);
 const board = createTaskProjector(database, undefined, quota);
 
 async function call<T>(
@@ -208,7 +225,7 @@ test("the second machine is refused, and the pairing code survives it", async ()
    * The other ordering — spend then refuse — would have made them go back for a second code, which is
    * the part of a quota that feels like a bug rather than a limit.
    */
-  await call(quotaRoutes, "POST", "/plan", { planId: "pro" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "pro" });
   const after = await call<{ token: string }>(
     runnerRoutes,
     "POST",
@@ -219,7 +236,7 @@ test("the second machine is refused, and the pairing code survives it", async ()
   expect((await quota.usageFor(tenant)).devices).toBe(2);
 
   // Back on Free, so the model test below meets the tier it claims to describe.
-  await call(quotaRoutes, "POST", "/plan", { planId: "free" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "free" });
 });
 
 test("connecting a model on Free is refused before the key is stored", async () => {
@@ -298,7 +315,7 @@ test("connecting a model on Free is refused before the key is stored", async () 
     database.delete(credentials).where(eq(credentials.id, planted)),
   );
 
-  await call(quotaRoutes, "POST", "/plan", { planId: "pro" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "pro" });
   const allowed = await call<{ model?: { id: string } }>(
     modelRoutes,
     "POST",
@@ -351,7 +368,7 @@ test("the month is counted, and upgrading does not hand back what was used", asy
   expect(counter[0]?.value).toBe(3);
 
   // Pro lifts the ceiling to 1000 and keeps the three already used on the record.
-  await call(quotaRoutes, "POST", "/plan", { planId: "pro" });
+  await call(adminQuotaRoutes, "POST", "/plan", { planId: "pro" });
   expect((await quota.planFor(tenant))?.limits.tasksPerMonth).toBe(1000);
   expect((await quota.usageFor(tenant)).tasks).toBe(3);
 });
@@ -374,27 +391,136 @@ test("the panel answers with the plan, its ceilings and the usage", async () => 
   );
   expect(tiers.body.plans.map((tier) => tier.id)).toEqual(["free", "pro"]);
 
-  const bogus = await call<{ error?: string }>(quotaRoutes, "POST", "/plan", {
-    planId: "diamond",
-  });
+  const bogus = await call<{ error?: string }>(
+    adminQuotaRoutes,
+    "POST",
+    "/plan",
+    { planId: "diamond" },
+  );
   expect(bogus.status).toBe(404);
 });
 
-test("a workspace with no subscription is not on a tier and is not refused", async () => {
+test("a plain member cannot move their own plan; an administrator can", async () => {
+  // The tenant is on Pro from the tests above.
+  const subscriptionPlans = () =>
+    runAsTenant(tenant, () =>
+      database
+        .select({ planId: subscriptions.planId })
+        .from(subscriptions)
+        .where(eq(subscriptions.tenantId, tenant)),
+    );
+  const before = await subscriptionPlans();
+  expect(before.map((row) => row.planId)).toEqual(["pro"]);
+
+  const refused = await call<{ error?: string }>(quotaRoutes, "POST", "/plan", {
+    planId: "free",
+  });
+  expect(refused.status).toBe(403);
+  expect(await subscriptionPlans()).toEqual(before);
+  expect((await quota.planFor(tenant))?.id).toBe("pro");
+
+  // An unknown plan is refused for the role, not looked up: a member learns nothing about the catalogue.
+  const probing = await call<{ error?: string }>(quotaRoutes, "POST", "/plan", {
+    planId: "diamond",
+  });
+  expect(probing.status).toBe(403);
+
+  const moved = await call<{ planId?: string }>(
+    adminQuotaRoutes,
+    "POST",
+    "/plan",
+    { planId: "free" },
+  );
+  expect(moved.status).toBe(200);
+  expect(moved.body.planId).toBe("free");
+  expect((await subscriptionPlans()).map((row) => row.planId)).toEqual([
+    "free",
+  ]);
+});
+
+test("a workspace with no subscription is held to the Free ceilings, not left unlimited", async () => {
+  // Fail closed (audit #7): a tenant whose provisioning never ran, or that predates the catalogue,
+  // must not escape the ceilings — the absent row reads as Free, never as "no limit".
   const stranger = `q-none-${suite}`;
   await runAsTenant(stranger, () =>
     database
       .insert(users)
       .values({ id: stranger, email: `${stranger}@q.test`, name: stranger }),
   );
-  expect(await quota.planFor(stranger)).toBeNull();
+  const plan = await quota.planFor(stranger);
+  expect(plan.id).toBe("free");
+  expect(plan.limits.wakers).toBe(2);
+  expect(plan.limits.customModels).toBeFalse();
+
+  // Two seats fit on an empty workspace; a third is refused with Free's arithmetic.
   await expect(
-    quota.assertCapacity(stranger, "wakers"),
+    quota.assertCapacity(stranger, "wakers", 2),
+  ).resolves.toBeUndefined();
+  const refusal = await quota
+    .assertCapacity(stranger, "wakers", 3)
+    .catch((error: unknown) => error);
+  expect(refusal).toBeInstanceOf(QuotaExceeded);
+  expect((refusal as QuotaExceeded).body).toMatchObject({
+    metric: "wakers",
+    used: 0,
+    limit: 2,
+    plan: "Free",
+  });
+  await expect(
+    quota.assertCapacity(stranger, "customModels"),
+  ).rejects.toBeInstanceOf(QuotaExceeded);
+
+  // The panel says Free too, rather than "no tier".
+  const panelRoutes = createQuotaRoutes(database, quota, async (context, next) => {
+    context.set("actor", { id: stranger, role: "user" as const });
+    await next();
+  });
+  const response = await runAsTenant(stranger, () =>
+    panelRoutes.request(new Request("http://openbot.test/")),
+  );
+  const body = (await response.json()) as {
+    plan: { id: string } | null;
+    limits: { wakers: number } | null;
+  };
+  expect(body.plan?.id).toBe("free");
+  expect(body.limits?.wakers).toBe(2);
+});
+
+test("two active subscriptions resolve to the most recently changed one, every time", async () => {
+  const doubled = `q-dup-${suite}`;
+  await runAsTenant(doubled, async () => {
+    await database
+      .insert(users)
+      .values({ id: doubled, email: `${doubled}@q.test`, name: doubled });
+    // Older Free row written first, newer Pro row second: a scan in insertion order would pick Free.
+    await database.insert(subscriptions).values({
+      tenantId: doubled,
+      planId: "free",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    await database.insert(subscriptions).values({
+      tenantId: doubled,
+      planId: "pro",
+      createdAt: new Date("2026-02-01T00:00:00Z"),
+      updatedAt: new Date("2026-02-01T00:00:00Z"),
+    });
+  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    expect((await quota.planFor(doubled)).id).toBe("pro");
+  }
+  await expect(
+    quota.assertCapacity(doubled, "wakers", 10),
   ).resolves.toBeUndefined();
 });
 
 afterAll(async () => {
-  for (const scope of [tenant, `q-none-${suite}`, "platform"]) {
+  for (const scope of [
+    tenant,
+    `q-none-${suite}`,
+    `q-dup-${suite}`,
+    "platform",
+  ]) {
     await runAsTenant(scope, async () => {
       await database.delete(agentProfiles);
       await database.delete(modelRegistry);

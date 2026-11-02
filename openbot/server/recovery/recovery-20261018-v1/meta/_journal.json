@@ -757,6 +757,20 @@
       "when": 1793189723181,
       "tag": "0107_import_proactive_token_foundations_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1793577600000,
+      "tag": "0108_recovery_flow_source_explicit_write_denials",
+      "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1793600000000,
+      "tag": "0109_role_writer_authority",
+      "breakpoints": true
     }
   ]
 }
