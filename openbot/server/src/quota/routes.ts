@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
-import type { AppVariables } from "../auth/guards";
+import { type AppVariables, requireAdmin } from "../auth/guards";
 import type { Database } from "../db/client";
 import { plans, subscriptions } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
@@ -12,9 +12,9 @@ type Ctx = { Variables: AppVariables };
 /**
  * The tenant's own plan, its ceilings and what has been used (ticket 022, spec K2/K3).
  *
- * Two reads and one write. The write is the manual switch — this product takes no payment — and it is
- * deliberately the same route the panel uses, so the number a person sees and the plan they can move
- * to are answered by the same code that refuses them when they are over.
+ * Two reads and one write. The write is the manual switch — this product takes no payment — so it is
+ * an administrator's act, not a self-service one: anyone signed in can read their plan, only a
+ * platform administrator can move it.
  */
 export function createQuotaRoutes(
   database: Database,
@@ -29,11 +29,11 @@ export function createQuotaRoutes(
       quota.planFor(tenantId),
       quota.usageFor(tenantId),
     ]);
-    // `plan` null is said as plainly as a number: a workspace with no subscription is not on a tier,
-    // and a panel that drew "Free" there would be advertising an upgrade from something it never was.
+    // Always a plan: a workspace with no subscription is held to Free, so the panel says Free too —
+    // the ceilings it draws are the ones the write paths enforce.
     return context.json({
-      plan: plan ? { id: plan.id, name: plan.name } : null,
-      limits: plan?.limits ?? null,
+      plan: { id: plan.id, name: plan.name },
+      limits: plan.limits,
       usage,
     });
   });
@@ -56,8 +56,13 @@ export function createQuotaRoutes(
    * There is no payment provider behind this, so the only honest framing is a row that moves: the
    * ceilings read here are the ones the write paths enforce, which is what makes "switch to Pro and
    * build the third coworker" a real test rather than a screen change.
+   *
+   * Administrators only. With no payment behind the row, a switch any signed-in person could make
+   * would hand every tenant Pro for free; the role is checked before the body is read.
    */
   routes.post("/plan", requireUser, async (context) => {
+    const denied = requireAdmin(context);
+    if (denied) return denied;
     const body = (await context.req
       .json<{ planId?: unknown }>()
       .catch(() => null)) as { planId?: unknown } | null;

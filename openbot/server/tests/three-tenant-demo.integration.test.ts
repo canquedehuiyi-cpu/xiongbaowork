@@ -140,9 +140,9 @@ for (const tenant of tenants) {
   });
   const groupId = randomUUID();
   groupOf.set(tenant, groupId);
-  // The plan, the seat-free 分身 and the rest of what a real workspace is born with. `planFor`
-  // answers null for a workspace nobody provisioned, and null means NOTHING IS INTERCEPTED -- so a
-  // quota test without this line is a quota test that never asks the question.
+  // The plan, the seat-free 分身 and the rest of what a real workspace is born with. A workspace
+  // nobody provisioned is held to Free anyway (fail closed), but the real sign-up path writes the
+  // subscription row, and this suite exercises that path.
   await provisionTenant(database, {
     id: tenant,
     email: `${tenant}@example.test`,
@@ -360,8 +360,7 @@ test("a machine belongs to exactly one workspace", async () => {
  *
  * The plan's ceiling is read rather than hard-coded, because the assertion is "this workspace ran out
  * of ITS plan's tasks this month" and a written-down number would drift the day the catalogue changes.
- * A workspace with no plan is deliberately not intercepted (ticket 022's rule), which is why the other
- * two still start.
+ * Each workspace has its own counter, which is why the other two still start.
  */
 test("one workspace over its monthly ceiling does not stop the other two", async () => {
   const atCap = tenants[0] ?? "";

@@ -1,9 +1,16 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { DEV_ACTOR, initializeDevActorUser } from "../src/auth/dev-actor";
+import {
+  DEV_ACTOR,
+  initializeDevActorUser,
+  provisionDevActorTenant,
+} from "../src/auth/dev-actor";
 import { createDatabase } from "../src/db/client";
-import { users } from "../src/db/schema";
+import { agentProfiles, agents, subscriptions, users } from "../src/db/schema";
+import { createQuotaService } from "../src/quota/limits";
+import { runAsTenant } from "../src/tenant/context";
+import { avatarAgentId } from "../src/tenant/provisioning";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const databaseUrl = testDatabaseUrl();
@@ -104,5 +111,65 @@ describe("development actor persistence", () => {
         .from(users)
         .where(eq(users.id, conflictingUserId)),
     ).toEqual([]);
+  });
+
+  test("the single-user actor gets one Free subscription row, however often it starts", async () => {
+    const inaccessibleDatabase = {
+      get select(): never {
+        throw new Error("disabled provisioning accessed the database");
+      },
+      get insert(): never {
+        throw new Error("disabled provisioning accessed the database");
+      },
+    } as unknown as Parameters<typeof provisionDevActorTenant>[0];
+    expect(await provisionDevActorTenant(inaccessibleDatabase, false)).toBe(
+      false,
+    );
+
+    const owned = () =>
+      runAsTenant(DEV_ACTOR.id, async () => ({
+        subscriptions: await database
+          .select({ id: subscriptions.id, planId: subscriptions.planId })
+          .from(subscriptions)
+          .where(eq(subscriptions.tenantId, DEV_ACTOR.id)),
+        avatar: await database
+          .select({ id: agents.id })
+          .from(agents)
+          .where(eq(agents.id, avatarAgentId(DEV_ACTOR.id))),
+      }));
+    // Other suites share the actor's tenant; only what this test created is removed afterwards.
+    const before = await owned();
+    await initializeDevActorUser(database, true);
+    try {
+      expect(await provisionDevActorTenant(database, true)).toBe(true);
+      expect(await provisionDevActorTenant(database, true)).toBe(true);
+      const after = await owned();
+      expect(after.subscriptions).toHaveLength(
+        Math.max(1, before.subscriptions.length),
+      );
+      if (before.subscriptions.length === 0)
+        expect(after.subscriptions[0]?.planId).toBe("free");
+      expect(after.avatar).toHaveLength(1);
+      if (before.subscriptions.length === 0) {
+        const plan = await createQuotaService(database).planFor(DEV_ACTOR.id);
+        expect(plan.id).toBe("free");
+        expect(plan.limits.customModels).toBeFalse();
+      }
+    } finally {
+      await runAsTenant(DEV_ACTOR.id, async () => {
+        if (before.avatar.length === 0) {
+          await database
+            .delete(agentProfiles)
+            .where(eq(agentProfiles.agentId, avatarAgentId(DEV_ACTOR.id)));
+          await database
+            .delete(agents)
+            .where(eq(agents.id, avatarAgentId(DEV_ACTOR.id)));
+        }
+        if (before.subscriptions.length === 0)
+          await database
+            .delete(subscriptions)
+            .where(eq(subscriptions.tenantId, DEV_ACTOR.id));
+      });
+    }
   });
 });
