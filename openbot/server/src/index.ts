@@ -83,6 +83,7 @@ import {
   createDevRequireUser,
   DEV_ACTOR,
   initializeDevActorUser,
+  provisionDevActorTenant,
 } from "./auth/dev-actor";
 import type { AuthService } from "./auth/guards";
 import { createRequireUser, createRoleRepository } from "./auth/guards";
@@ -416,6 +417,8 @@ await startupLifecycle.run(async (startup) => {
   );
   configureBotLifecycle({ database });
   await startup.step(() => initializeDevActorUser(database, config.singleUser));
+  // After the user row exists: the actor gets a real Free subscription row (audit #7 follow-up).
+  await startup.step(() => provisionDevActorTenant(database, config.singleUser));
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
   // key belongs here rather than on the agent row. See agents/auth-header.ts.
   const credentialStore = createCredentialStore(database);
