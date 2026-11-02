@@ -78,6 +78,16 @@ import {
   recordAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
+import { createAutomationRoutes } from "./automations/routes";
+import {
+  type AutomationFiring,
+  createAutomationStore,
+} from "./automations/store";
+import {
+  dispatchClaimedAutomations,
+  offerDueAutomations,
+} from "./automations/sweep";
+import { createWakerAutomationExecutor } from "./automations/waker-executor";
 import { createAuth } from "./auth";
 import {
   createDevRequireUser,
@@ -2701,6 +2711,61 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
   /*
+   * Automations (D06 AUT1/AUT3/AUT4, C2/C3): a person's standing "run this Waker when..." rules.
+   *
+   * One loop, both halves of `automations/sweep.ts`: due triggers become work items in their owner's
+   * frame, then claimed items become firings, each run by the Waker executor through the same
+   * unattended turn runner as a routine (same gates, same card, same ceiling). WakerFlow targets have
+   * no executor until D10, so the store refuses them at save time.
+   */
+  const automationStore = createAutomationStore(database);
+  const automationQueue = createWorkQueue(database);
+  const wakerAutomationExecutor = createWakerAutomationExecutor({
+    store: automationStore,
+    channels: channelStore,
+    actorFor,
+    runTurn: unattendedTurnRunner,
+    board: taskProjector,
+    quota,
+    deviceIdOf: deviceIdForBot,
+    accessRevokedOf: (userId: string) => isAccessRevoked(database, userId),
+  });
+  const automationSweep = {
+    store: automationStore,
+    queue: automationQueue,
+    owner: workOwner("automation"),
+    executors: {
+      waker: (firing: AutomationFiring) => wakerAutomationExecutor.run(firing),
+    },
+    // A turn can take minutes; it must not hold the next pass's offers past their grace window.
+    background: (run: () => Promise<void>) => {
+      void run();
+    },
+  };
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await offerDueAutomations(automationSweep);
+          const report = await dispatchClaimedAutomations(automationSweep);
+          if (report.fired.length || report.skipped.length) {
+            console.info(
+              JSON.stringify({ type: "automation-dispatch", ...report }),
+            );
+          }
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "automation-sweep-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 30_000),
+    (resource) => resource.stop(),
+  );
+  /*
    * Follow-ups a Bot scheduled for itself: one headless turn each, through the same turn runner as a
    * routine, into the person's conversation with that Bot. See agents/wake-up.ts.
    */
@@ -3545,6 +3610,17 @@ await startupLifecycle.run(async (startup) => {
     "/api/agents",
     createAutonomousRoutes(
       createAutonomousStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // A person's automations (D06): per-route session guard, tenant from the session frame only.
+  app.route(
+    "/api/automations",
+    createAutomationRoutes(
+      automationStore,
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
