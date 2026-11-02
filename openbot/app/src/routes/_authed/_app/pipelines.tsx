@@ -26,6 +26,8 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   abortRunMutationOptions,
   createTemplateMutationOptions,
+  PipelineDispatchRefused,
+  type RefusedStep,
   resumeRunMutationOptions,
   skipStepMutationOptions,
   startRunMutationOptions,
@@ -397,6 +399,12 @@ function TemplateRow(props: {
   const start = useMutation(startRunMutationOptions(props.queryClient));
   const [task, setTask] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  /*
+   * The steps the server refused to dispatch because their coworkers are not this person's to use
+   * (spec I6). Listed by step number and name rather than left in a sentence, because the next move is
+   * per step: grant that coworker, or give the step to somebody else.
+   */
+  const [refused, setRefused] = useState<RefusedStep[] | null>(null);
 
   return (
     <Item>
@@ -410,7 +418,20 @@ function TemplateRow(props: {
             )
             .join(" → ")}
         </ItemDescription>
-        {problem ? (
+        {refused ? (
+          <div className="text-destructive text-sm" role="alert">
+            <p>
+              这次没有派出去：下面这些步骤的员工你还没有使用权。先给他们开通使用权，或把这几步换成你能用的员工，再运行。
+            </p>
+            <ul aria-label="没有派出去的步骤" className="list-disc pl-5">
+              {refused.map((step) => (
+                <li key={`${step.index}-${step.stepId}`}>
+                  {`第 ${step.index + 1} 步：${props.names.get(step.agentId) ?? step.agentId}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : problem ? (
           <p className="text-destructive text-sm" role="alert">
             {problem}
           </p>
@@ -430,10 +451,18 @@ function TemplateRow(props: {
             start.mutate(
               { templateId: props.template.id, task: task.trim() },
               {
-                onError: (thrown: Error) => setProblem(thrown.message),
+                onError: (thrown: Error) => {
+                  setProblem(thrown.message);
+                  setRefused(
+                    thrown instanceof PipelineDispatchRefused
+                      ? thrown.refused
+                      : null,
+                  );
+                },
                 onSuccess: (run) => {
                   setTask("");
                   setProblem(null);
+                  setRefused(null);
                   props.onStarted(run.runId);
                 },
               },

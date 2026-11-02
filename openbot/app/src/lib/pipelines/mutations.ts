@@ -1,5 +1,5 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
-import { client } from "@/lib/client";
+import { client, RequestError, tryClient } from "@/lib/client";
 import { type PipelineStep, pipelineKeys } from "./queries";
 
 /**
@@ -34,25 +34,95 @@ export function createTemplateMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/** One step the person may not use, as the server names it: `index` is the step's 0-based position. */
+export type RefusedStep = { index: number; stepId: string; agentId: string };
+
+/**
+ * The server refused the whole dispatch because some steps' coworkers are not the person's to use
+ * (spec I6, a 403). Nothing was started; `refused` is every step that stopped it, so the screen can
+ * list them instead of a bare "no".
+ */
+export class PipelineDispatchRefused extends RequestError {
+  readonly refused: RefusedStep[];
+  constructor(message: string, refused: RefusedStep[]) {
+    super(message, 403);
+    this.refused = refused;
+  }
+}
+
+/** The `refused` list of a 403 body, or undefined when the body is not that shape. */
+function refusedSteps(body: unknown): RefusedStep[] | undefined {
+  if (body === null || typeof body !== "object") return undefined;
+  const list = (body as { refused?: unknown }).refused;
+  if (!Array.isArray(list) || list.length === 0) return undefined;
+  const steps: RefusedStep[] = [];
+  for (const entry of list) {
+    if (entry === null || typeof entry !== "object") return undefined;
+    const { index, stepId, agentId } = entry as Record<string, unknown>;
+    if (
+      typeof index !== "number" ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      typeof stepId !== "string" ||
+      typeof agentId !== "string"
+    ) {
+      return undefined;
+    }
+    steps.push({ index, stepId, agentId });
+  }
+  return steps;
+}
+
 /**
  * Hand the crew a task and get its run id.
  *
  * The response is the run's first two ids rather than its outcome, and that is deliberate: the press
  * answers as soon as the parent card is on the board, and the steps arrive as the crew works. The
  * screen follows the run from here on, not this response.
+ *
+ * Read through `tryClient` rather than `client` because a refusal here carries more than a sentence:
+ * a 403 names the steps whose coworkers the person may not use, and that list is what the screen shows.
+ * Every other failure is the same `RequestError` the shared client would have thrown.
  */
 export function startRunMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: async (input: { templateId: string; task: string }) =>
-      client<{ runId: string; parentTaskId: string }>(
+    mutationFn: async (input: {
+      templateId: string;
+      task: string;
+    }): Promise<{ runId: string; parentTaskId: string }> => {
+      const fallback = "小组没能接下这个任务。";
+      const response = await tryClient(
         `/api/group-pipelines/templates/${input.templateId}/runs`,
-        "run",
-        {
-          method: "POST",
-          body: { task: input.task },
-          fallback: "小组没能接下这个任务。",
-        },
-      ),
+        { method: "POST", body: { task: input.task } },
+      );
+      const body: unknown = await response.json().catch(() => undefined);
+      if (!response.ok) {
+        const said =
+          body !== null &&
+          typeof body === "object" &&
+          typeof (body as { error?: unknown }).error === "string"
+            ? (body as { error: string }).error
+            : undefined;
+        const refused =
+          response.status === 403 ? refusedSteps(body) : undefined;
+        if (refused) {
+          throw new PipelineDispatchRefused(said ?? fallback, refused);
+        }
+        throw new RequestError(said ?? fallback, response.status, body);
+      }
+      const run =
+        body !== null && typeof body === "object" && !Array.isArray(body)
+          ? (body as { run?: unknown }).run
+          : undefined;
+      if (
+        run === null ||
+        typeof run !== "object" ||
+        typeof (run as { runId?: unknown }).runId !== "string"
+      ) {
+        throw new Error(fallback);
+      }
+      return run as { runId: string; parentTaskId: string };
+    },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all }),
   });
