@@ -25,7 +25,13 @@ import { startRunMutationOptions } from "@/lib/pipelines/mutations";
 import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelAvatar } from "./avatar";
-import { Composer, type CrewOption, toAgentOptions } from "./composer";
+import {
+  Composer,
+  type CrewOption,
+  toAgentOptions,
+  toGroupOptions,
+  withGroupMembers,
+} from "./composer";
 import { TeamBotConsentCard } from "./team-bot-consent";
 
 /**
@@ -82,6 +88,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
     sendGroupMessageMutationOptions(queryClient, channelId),
   );
   const bots = group.data?.bots ?? [];
+  const roster = toAgentOptions(bots);
   const names = new Map(bots.map((bot) => [bot.id, bot.name]));
   const messages = group.data?.messages ?? [];
   const working = messages.some(
@@ -160,7 +167,12 @@ export function GroupChat({ channelId }: { channelId: string }) {
         />
         <AddPerson channelId={channelId} />
         <Composer
-          agents={toAgentOptions(bots)}
+          /*
+           * Groups expand into their members (spec B1), but only the members who are in this
+           * conversation: `@` here addresses one of its Bots, and a coworker outside it has no thread
+           * here to answer in.
+           */
+          agents={withGroupMembers(roster, toGroupOptions(crews.data, roster))}
           commands={[]}
           disabled={bots.length === 0}
           pending={send.isPending || working}
