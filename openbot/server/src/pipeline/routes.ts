@@ -4,6 +4,7 @@ import type { AppVariables } from "../auth/guards";
 import { QuotaExceeded } from "../quota/limits";
 import {
   PipelineNotFoundError,
+  PipelineStepForbiddenError,
   type PipelineStore,
   PipelineValidationError,
 } from "./store";
@@ -227,9 +228,14 @@ function drive(store: PipelineStore, runId: string, tenantId: string) {
  * A not-found is the answer to a run or template that is not this workspace's, and 404 is both the true
  * statement and D15's rule that another tenant's ids are not confirmed to it. A quota refusal keeps the
  * ceiling's own body and status, because the person's next move is the plans page rather than a retry.
+ * A step the person may not use is a 403 that names every refused step (spec I6), so the screen can say
+ * which ones to fix instead of a bare "no".
  */
 function refuse(context: Context<Ctx>, error: unknown) {
   if (error instanceof QuotaExceeded) return context.json(error.body, 402);
+  if (error instanceof PipelineStepForbiddenError) {
+    return context.json({ error: error.message, refused: error.refused }, 403);
+  }
   const message =
     error instanceof Error ? error.message : "流水线没有按预期执行。";
   if (error instanceof PipelineNotFoundError) {
