@@ -463,6 +463,16 @@ export function createWakerFlowStore(options: {
       }
       const plan: WakerFlowPlan = parsed.data;
       const modelRef = validModelRef(input.modelRef);
+      // A Flow this tenant cannot see answers 404 before anything is asked about its members: a
+      // stranger learns nothing from which coworkers would have been refused.
+      const [visible] = await runAsTenant(tenantId, () =>
+        database
+          .select({ id: wakerFlows.id })
+          .from(wakerFlows)
+          .where(ownFlow(tenantId, id))
+          .limit(1),
+      );
+      if (!visible) throw new WakerFlowNotFoundError();
       for (const member of plan.members) {
         const allowed = await canUse(actor, member.agentId).catch(() => false);
         if (!allowed) {
