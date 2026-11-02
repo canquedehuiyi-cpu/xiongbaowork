@@ -106,7 +106,7 @@ import {
   markAttachmentsSent,
 } from "./channels/attachments";
 import {
-  CHANNEL_ACTIVITY_TOPIC,
+  announceTaskUpdate,
   createChannelEventHub,
   startChannelActivityListener,
 } from "./channels/events";
@@ -648,17 +648,9 @@ await startupLifecycle.run(async (startup) => {
     database,
     (tenantId) => {
       // Same announce rail the channel roster listens on, so a second server
-      // instance's board moves too, not just this process's sockets.
-      void database.execute(
-        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify({
-          channelId: "",
-          memberIds: [tenantId],
-          lastMessage: null,
-          lastMessageAt: null,
-          lastMessageAgentId: null,
-          taskUpdated: true,
-        })})`,
-      );
+      // instance's board moves too, not just this process's sockets. The helper
+      // runs the lazy statement and logs its failure; it never rejects.
+      void announceTaskUpdate(database, tenantId);
     },
     quota,
   );
