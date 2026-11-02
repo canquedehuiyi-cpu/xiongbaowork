@@ -13,7 +13,11 @@
  */
 import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
 import type { Observable } from "rxjs";
-import { headlessTurnRefusal } from "../admin/controls";
+import {
+  headlessTurnRefusal,
+  modelNamedIn,
+  recordHeadlessModelUsage,
+} from "../admin/controls";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { suppressRunnerCard } from "../threads/unattended-card";
@@ -237,6 +241,8 @@ export function createHandoffDelivery(options: {
        */
       const said: string[] = [];
       let saying = "";
+      /** The first model the stream named: what a remote Bot, which picks its own, is recorded as. */
+      let observedModel: string | undefined;
       const runAgent =
         typeof agent.runAgent === "function"
           ? agent.runAgent.bind(agent)
@@ -256,6 +262,12 @@ export function createHandoffDelivery(options: {
                 seen.count += 1;
                 const type = String(emitted?.event?.type ?? "");
                 seen.last = type;
+                if (
+                  !observedModel &&
+                  type !== "MESSAGES_SNAPSHOT" &&
+                  type !== "STATE_SNAPSHOT"
+                )
+                  observedModel = modelNamedIn(emitted?.event);
                 if (type === "TEXT_MESSAGE_START") saying = "";
                 if (type === "TEXT_MESSAGE_CONTENT")
                   saying += String(emitted?.event?.delta ?? "");
@@ -491,6 +503,19 @@ export function createHandoffDelivery(options: {
             ),
           );
           answered = true;
+          /*
+           * The model the hop ran on, on the row its card reads (story H4) — the gate never saw it.
+           * Under the tenant the card was filed under, named outright: a hop is delivered from the work
+           * loop, which runs as `platform`, so the ambient tenant here is never the hop's own.
+           */
+          await recordHeadlessModelUsage({
+            tenantId: work.actorId,
+            ownerUserId: work.actorId,
+            agentId: work.toBotId,
+            threadId: where.threadId,
+            runId,
+            ...(observedModel ? { observedModel } : {}),
+          });
           /*
            * Only once the run is on record, and only when it said something: a conversation lifted to
            * the top of somebody's list for a turn that failed, or said nothing, is a conversation

@@ -206,7 +206,10 @@ import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
 import { createModelRoutes } from "./models/routes";
-import { createAgentModelResolver } from "./models/runtime-resolver";
+import {
+  createNamedAgentModelResolver,
+  modelOf,
+} from "./models/runtime-resolver";
 import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
@@ -498,11 +501,12 @@ await startupLifecycle.run(async (startup) => {
    * and this one already holds the vault: a binding is a row plus a key, and neither belongs in the
    * runtime wiring. Absent binding, absent model — the deployment's own answers, as before.
    */
-  const resolveAgentModel = createAgentModelResolver(
+  const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
   );
+  const resolveAgentModel = modelOf(resolveNamedAgentModel);
   const agentProfileStore = createAgentProfileStore(
     database,
     config.managedAgent?.endpoint,
@@ -3476,6 +3480,10 @@ await startupLifecycle.run(async (startup) => {
           ? { computerToken: config.computer.token }
           : {}),
         builtInModel: `${runtimeModel.provider}/${runtimeModel.defaultModel}`,
+        // The bound model by the resolver's own decision, so the allowlist and the usage row name the
+        // model a run actually speaks — the deployment's, once a binding's key is revoked.
+        agentModelName: async (agentId) =>
+          (await resolveNamedAgentModel(agentId))?.name ?? null,
         people: peopleStore,
         initialAdminEmails: config.auth?.initialAdminEmails ?? [],
       }),

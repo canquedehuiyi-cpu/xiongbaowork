@@ -191,6 +191,8 @@ describe("createRoutineRunner", () => {
         agentId: CONTEXT.agentId,
         threadId: CHANNEL.threadId,
         instruction: CONTEXT.instruction,
+        // The card's own key, so the model this turn ran on is read back onto that card (story H4).
+        runRef: RUN_ID,
         // The firing opened this run's card above, so it tells the runner not to file a second one
         // (and not to charge the month twice) — audit N10, ticket WP-1.2.
         cardOwnedByCaller: true,

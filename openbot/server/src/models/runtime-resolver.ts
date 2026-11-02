@@ -9,6 +9,7 @@ import { openCredential } from "../credentials";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
+  credentials as credentialRows,
   modelRegistry,
   PLATFORM_POOL_KEY_ENV,
   platformModelPool,
@@ -251,6 +252,10 @@ async function poolBindingFor(
  * The model this coworker is bound to, in the `provider/model` shape the deployment's own model and
  * the administrator's allowlist both use — for the usage record and the allowlist check, which need
  * a NAME and must not be given the deployment's instead. Reading one costs no key.
+ *
+ * A binding whose vault row is gone or revoked names nothing, as the resolver below builds nothing for
+ * it: the run speaks the deployment's model, and that is the one to record (story H4). Only a key that
+ * will not decrypt is beyond this read; {@link createNamedAgentModelResolver} answers that too.
  */
 export async function boundModelName(
   database: Database,
@@ -259,24 +264,44 @@ export async function boundModelName(
 ): Promise<string | null> {
   try {
     const binding = await bindingFor(database, agentId, environment);
-    return binding ? `${binding.provider}/${binding.modelName}` : null;
+    if (!binding) return null;
+    if (binding.kind === "library") {
+      const [secret] = await database
+        .select({ revokedAt: credentialRows.revokedAt })
+        .from(credentialRows)
+        .where(eq(credentialRows.id, binding.credentialId))
+        .limit(1);
+      if (!secret || secret.revokedAt) return null;
+    }
+    return `${binding.provider}/${binding.modelName}`;
   } catch {
     // Never log the thrown value: database errors can contain connection details or row contents.
     return null;
   }
 }
 
+/** The model a coworker's run will speak with, and its `provider/model` name, decided together. */
+export type ResolvedAgentModel = { model: LanguageModel; name: string };
+
 /**
+ * The resolver, with the name of what it resolved.
+ *
+ * The name is taken from the SAME decision that built the model, so a usage record cannot name a bound
+ * model while the run spoke the deployment's: a revoked key, a credential that will not decrypt, a
+ * vault row that is gone — each answers `null` here exactly when the turn falls back to the default.
+ * {@link boundModelName} reads the rows without the key, so it would still name the binding for a key
+ * that will not decrypt.
+ *
  * Every call a bound model makes is metered into `model_token_calls` (see `./token-metering`).
  * `sink` exists for tests; production writes to the same database the binding was read from.
  */
-export function createAgentModelResolver(
+export function createNamedAgentModelResolver(
   database: Database,
   credentials: CredentialSecretReader,
   encryptionKey: string,
   sink: ModelTokenCallSink = databaseTokenCallSink(database),
   options: AgentModelResolverOptions = {},
-): AgentModelResolver {
+): (agentId: string) => Promise<ResolvedAgentModel | null> {
   const environment = options.environment ?? process.env;
   const languageModel = options.languageModel ?? languageModelFor;
   return async (agentId) => {
@@ -294,7 +319,7 @@ export function createAgentModelResolver(
     try {
       const apiKey = await openCredential(encryptionKey, secret);
       const originalText = `${binding.provider}/${binding.modelName}`;
-      return meteredLanguageModel(
+      const model = meteredLanguageModel(
         languageModel(
           binding.provider,
           binding.baseUrl,
@@ -323,6 +348,7 @@ export function createAgentModelResolver(
         },
         sink,
       );
+      return { model, name: originalText };
     } catch {
       // A bad key costs the binding, not the conversation.
       return null;
@@ -336,9 +362,10 @@ function poolModel(
   agentId: string,
   languageModel: LanguageModelFactory,
   sink: ModelTokenCallSink,
-): LanguageModel | null {
+): ResolvedAgentModel | null {
   try {
-    return meteredLanguageModel(
+    const name = `${binding.provider}/${binding.modelName}`;
+    const model = meteredLanguageModel(
       languageModel(
         binding.provider,
         binding.baseUrl,
@@ -363,12 +390,38 @@ function poolModel(
             binding.modelName,
           ]),
         ),
-        originalText: `${binding.provider}/${binding.modelName}`,
+        originalText: name,
       },
       sink,
     );
+    return { model, name };
   } catch {
     // A provider client that cannot be built costs the binding, not the conversation.
     return null;
   }
+}
+
+export function createAgentModelResolver(
+  database: Database,
+  credentials: CredentialSecretReader,
+  encryptionKey: string,
+  sink: ModelTokenCallSink = databaseTokenCallSink(database),
+  options: AgentModelResolverOptions = {},
+): AgentModelResolver {
+  return modelOf(
+    createNamedAgentModelResolver(
+      database,
+      credentials,
+      encryptionKey,
+      sink,
+      options,
+    ),
+  );
+}
+
+/** The runtime's view of a named resolver: the model alone. */
+export function modelOf(
+  resolve: (agentId: string) => Promise<ResolvedAgentModel | null>,
+): AgentModelResolver {
+  return async (agentId) => (await resolve(agentId))?.model ?? null;
 }
