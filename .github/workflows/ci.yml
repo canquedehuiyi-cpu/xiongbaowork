@@ -22,8 +22,9 @@ defaults:
 
 env:
   TENANT_PACKAGE_DIR: ../examples/qoderwake
-  # Frozen before the three tracks started. Never replace with moving main.
-  DELIVERY_BASELINE_SHA: 03df9efa29cc51b64bd4a7b695dcb977ac0869f6
+  # Frozen at the commit main was created from (D06 candidate). The previous value
+  # 03df9efa... does not exist in this repository. Never replace with moving main.
+  DELIVERY_BASELINE_SHA: 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634
 
 jobs:
   static:

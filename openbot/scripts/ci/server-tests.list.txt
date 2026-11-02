@@ -28,6 +28,7 @@ tests/approval-exact-input-json.test.ts
 tests/approval-exact-object-crypto.test.ts
 tests/approval-exact-object-header.test.ts
 tests/approval-exact-object-wire.test.ts
+tests/approval-fresh-producer.test.ts
 tests/approval-open-transaction.integration.test.ts
 tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
@@ -237,6 +238,7 @@ tests/provider-error-run-error.test.ts
 tests/provider-oauth.test.ts
 tests/qoderwake-package.test.ts
 tests/quota-concurrency.integration.test.ts
+tests/quota-error-contract.test.ts
 tests/quota.test.ts
 tests/recovery-ap2-parent-schema-reconcile.test.ts
 tests/recovery-approval-direct-execution-domains.test.ts
