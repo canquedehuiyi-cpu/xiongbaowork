@@ -401,7 +401,6 @@ await startupLifecycle.run(async (startup) => {
     }
   };
 
-  await startup.step(() => roleWriterLifecycle.start());
   // Resolve APP/RLS readiness before any consumer, producer, auth bootstrap or listening socket.
   await startup.step(() =>
     checkServerReadiness({
@@ -414,6 +413,9 @@ await startupLifecycle.run(async (startup) => {
       },
     }),
   );
+  // After the readiness gate: a deployment pointed at the owner or a BYPASSRLS role must be refused as
+  // a tenant-isolation failure, not reported as a role-writer contract error.
+  await startup.step(() => roleWriterLifecycle.start());
   configureBotLifecycle({ database });
   await startup.step(() => initializeDevActorUser(database, config.singleUser));
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
