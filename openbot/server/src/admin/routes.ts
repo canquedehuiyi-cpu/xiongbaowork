@@ -20,6 +20,7 @@ import {
 } from "../computer/policy-network";
 import { mcpServers } from "../db/schema";
 import { otelConfigured } from "../telemetry/otel";
+import { runAsTenant } from "../tenant/context";
 import {
   CAPABILITIES,
   CAPABILITY_LABELS,
@@ -330,8 +331,19 @@ export function createEnterpriseAdminRoutes(
       Math.max(Number(context.req.query("days") ?? 30) || 30, 1),
       365,
     );
-    const summary = await controls.store.modelUsageSummary(days);
-    const recent = await controls.store.recentModelUsage(50);
+    /*
+     * Usage rows are filed under the tenant of the person whose run it was (#88), so the
+     * deployment-wide view an administrator asks for here is read in the explicit platform frame,
+     * as admin routes do (decision 2). `requireAdmin` above is what keeps it administrators-only.
+     */
+    const [summary, recent] = await runAsTenant(
+      "platform",
+      async () =>
+        [
+          await controls.store.modelUsageSummary(days),
+          await controls.store.recentModelUsage(50),
+        ] as const,
+    );
     const emails = await controls.store.usersById([
       ...new Set(recent.flatMap((row) => (row.userId ? [row.userId] : []))),
     ]);

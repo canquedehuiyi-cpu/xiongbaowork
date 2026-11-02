@@ -62,8 +62,8 @@ test("the routine CronJob runs every phase as the platform", () => {
   for (const phase of [
     "asPlatform(() => offerDueRoutines(options))",
     "asPlatform(() => dispatchClaimedRoutines(options))",
-    "asPlatform(() =>\n      reapAbandonedPipelineRuns(",
-    "asPlatform(() =>\n      createTaskProjector(database).reclaimAbandoned(",
+    // Restart recovery (#16) is one sweep: crew runs, unattended cards and routine runs together.
+    "asPlatform(() =>\n      sweepAbandonedWork(",
     "asPlatform(() =>\n    queue.purge(",
   ])
     expect(fireRoutines).toContain(phase);
