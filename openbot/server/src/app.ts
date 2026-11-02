@@ -123,6 +123,7 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { PackageStatusReader } from "./tenant-package";
+import { isPersonTenant, runAsTenant } from "./tenant/context";
 import {
   INSTRUCTIONS_LIMIT,
   InstructionsTooLongError,
@@ -1661,20 +1662,23 @@ export function createApp(
          * reached for" is the useful half of the question.
          */
         if (auditStore) {
-          await recordAuditEvent(auditStore, {
-            eventType: "mcp.callback_refused",
-            targetType: "mcp_tool",
-            initiator: DEPLOYMENT_INITIATOR,
-            targetId:
-              typeof body?.name === "string"
-                ? body.name.slice(0, 120)
-                : "unknown",
-            payload: {
-              refusal: verdict.reason,
-              status: verdict.status,
-              note: "A caller could not prove which Bot it was, so no grant was consulted.",
-            },
-          });
+          // Nobody's: the caller proved no person, so the row is the platform's, not `system`'s.
+          await runAsTenant("platform", () =>
+            recordAuditEvent(auditStore, {
+              eventType: "mcp.callback_refused",
+              targetType: "mcp_tool",
+              initiator: DEPLOYMENT_INITIATOR,
+              targetId:
+                typeof body?.name === "string"
+                  ? body.name.slice(0, 120)
+                  : "unknown",
+              payload: {
+                refusal: verdict.reason,
+                status: verdict.status,
+                note: "A caller could not prove which Bot it was, so no grant was consulted.",
+              },
+            }),
+          );
         }
         return context.json({ error: verdict.reason }, verdict.status);
       }
@@ -1684,85 +1688,99 @@ export function createApp(
         return context.json({ error: parsedCall.error }, 400);
       }
 
-      try {
-        const deploymentResult = await deploymentToolCaller?.({
-          name: parsedCall.value.ref,
-          args: parsedCall.value.args,
-          botId: verdict.botId,
-          actorId: verdict.actorId,
-          initiator: verdict.initiator,
-          run: verdict.run,
-        });
-        if (deploymentResult) return context.json(deploymentResult);
+      /*
+       * EVERYTHING AFTER THE VERDICT RUNS AS THE PERSON THE SIGNED RUN NAMES (G01).
+       *
+       * This route has a shared secret instead of a session, so no guard ever framed it, and every
+       * row the call wrote — the follow-up a Bot schedules for itself, the hop it offers another Bot,
+       * the memory it keeps, the audit row of the tool it ran — was stamped `system`, which every
+       * tenant can read. The actor comes from the assertion this deployment signed for the run, never
+       * from the body, so it is the one trusted answer to "whose work is this". An assertion that
+       * names nobody's tenant is refused rather than run as the platform or as `system`.
+       */
+      if (!isPersonTenant(verdict.actorId))
+        return context.json({ error: "Not authorised." }, 403);
+      return runAsTenant(verdict.actorId, async () => {
+        try {
+          const deploymentResult = await deploymentToolCaller?.({
+            name: parsedCall.value.ref,
+            args: parsedCall.value.args,
+            botId: verdict.botId,
+            actorId: verdict.actorId,
+            initiator: verdict.initiator,
+            run: verdict.run,
+          });
+          if (deploymentResult) return context.json(deploymentResult);
 
-        if (!pluginStore) {
+          if (!pluginStore) {
+            return context.json({
+              text: `${REFUSAL_MARKER} That tool is not registered in this deployment.`,
+              isError: true,
+            });
+          }
+
+          const result = await pluginStore.callTool({
+            ref: parsedCall.value.ref,
+            args: parsedCall.value.args,
+            botId: verdict.botId,
+            // From the assertion, never the body: this is the name the audit row will carry.
+            actorId: verdict.actorId,
+            ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
+          });
+          // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
+          // error as the vendor's and not as a result. Neither Bot words it on its way through.
           return context.json({
-            text: `${REFUSAL_MARKER} That tool is not registered in this deployment.`,
+            text: vendorAnswer(result),
+            isError: result.isError,
+          });
+        } catch (error) {
+          /*
+           * A refusal is an answer, not a failure: the Bot says what was blocked and carries on. The
+           * marker leads it so a transcript can draw a refusal without reading the wording.
+           *
+           * AND THE SAME QUESTION THE IN-PROCESS DOOR ASKS, which this one asked of nothing at all.
+           *
+           * CRITERION. Nothing on the `isDeploymentFault` shelf has its message relayed from here,
+           * and nothing leaving here carries a statement or a value bound to one.
+           *
+           * WHAT THIS SURFACE IS. The answer goes into the calling Bot's model as the tool result, so
+           * it is the widest audience an error message in this deployment reaches: a model repeats
+           * what it is handed — to the person asking, into whatever it writes next, and to the next
+           * tool it calls. `plugins/tools.ts` wraps the identical `callTool` for a Bot running in
+           * this process and has refused that shelf for exactly this reason since the
+           * `ServerRowAmbiguousError` finding; the two doors to one store disagreeing meant a query
+           * failure came back as `Failed query: … params: linear, usr_…` through one of them and as a
+           * fixed sentence through the other. Which door a Bot arrives at is a deployment topology
+           * decision and was never a disclosure decision.
+           *
+           * AND THROUGH {@link withoutStatement} AS WELL, because the two answer different questions
+           * and `isDeploymentFault` says so itself: it "settles who may be told, not what". The shelf
+           * decides whether this audience may hear a sentence at all; the door decides what any
+           * sentence is allowed to contain. Today the two overlap on a query failure and this arm can
+           * only be reached by something neither recognises — which is exactly the state the last two
+           * findings in this area were found in, one predicate apart from a leak.
+           *
+           * AND ONLY A REFUSAL CARRIES THE MARKER, which is the in-process door's third question. The
+           * transcript draws an answer that starts with it as a boundary holding, and the model reads
+           * "Refused." as "not allowed". `callTool` throws `PluginRefusedError` for that, and rethrows
+           * a vendor that broke after recording `mcp.call_failed`; marking every throw drew a vendor
+           * outage, or a fault of this deployment's own, as a policy refusing.
+           */
+          if (error instanceof PluginRefusedError) {
+            return context.json({
+              text: `${REFUSAL_MARKER} ${withoutStatement(error)}`,
+              isError: true,
+            });
+          }
+          return context.json({
+            text:
+              error instanceof Error && !isDeploymentFault(error)
+                ? `That tool could not be called: ${withoutStatement(error)}`
+                : "That tool could not be called.",
             isError: true,
           });
         }
-
-        const result = await pluginStore.callTool({
-          ref: parsedCall.value.ref,
-          args: parsedCall.value.args,
-          botId: verdict.botId,
-          // From the assertion, never the body: this is the name the audit row will carry.
-          actorId: verdict.actorId,
-          ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
-        });
-        // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
-        // error as the vendor's and not as a result. Neither Bot words it on its way through.
-        return context.json({
-          text: vendorAnswer(result),
-          isError: result.isError,
-        });
-      } catch (error) {
-        /*
-         * A refusal is an answer, not a failure: the Bot says what was blocked and carries on. The
-         * marker leads it so a transcript can draw a refusal without reading the wording.
-         *
-         * AND THE SAME QUESTION THE IN-PROCESS DOOR ASKS, which this one asked of nothing at all.
-         *
-         * CRITERION. Nothing on the `isDeploymentFault` shelf has its message relayed from here,
-         * and nothing leaving here carries a statement or a value bound to one.
-         *
-         * WHAT THIS SURFACE IS. The answer goes into the calling Bot's model as the tool result, so
-         * it is the widest audience an error message in this deployment reaches: a model repeats
-         * what it is handed — to the person asking, into whatever it writes next, and to the next
-         * tool it calls. `plugins/tools.ts` wraps the identical `callTool` for a Bot running in
-         * this process and has refused that shelf for exactly this reason since the
-         * `ServerRowAmbiguousError` finding; the two doors to one store disagreeing meant a query
-         * failure came back as `Failed query: … params: linear, usr_…` through one of them and as a
-         * fixed sentence through the other. Which door a Bot arrives at is a deployment topology
-         * decision and was never a disclosure decision.
-         *
-         * AND THROUGH {@link withoutStatement} AS WELL, because the two answer different questions
-         * and `isDeploymentFault` says so itself: it "settles who may be told, not what". The shelf
-         * decides whether this audience may hear a sentence at all; the door decides what any
-         * sentence is allowed to contain. Today the two overlap on a query failure and this arm can
-         * only be reached by something neither recognises — which is exactly the state the last two
-         * findings in this area were found in, one predicate apart from a leak.
-         *
-         * AND ONLY A REFUSAL CARRIES THE MARKER, which is the in-process door's third question. The
-         * transcript draws an answer that starts with it as a boundary holding, and the model reads
-         * "Refused." as "not allowed". `callTool` throws `PluginRefusedError` for that, and rethrows
-         * a vendor that broke after recording `mcp.call_failed`; marking every throw drew a vendor
-         * outage, or a fault of this deployment's own, as a policy refusing.
-         */
-        if (error instanceof PluginRefusedError) {
-          return context.json({
-            text: `${REFUSAL_MARKER} ${withoutStatement(error)}`,
-            isError: true,
-          });
-        }
-        return context.json({
-          text:
-            error instanceof Error && !isDeploymentFault(error)
-              ? `That tool could not be called: ${withoutStatement(error)}`
-              : "That tool could not be called.",
-          isError: true,
-        });
-      }
+      });
     });
   }
 

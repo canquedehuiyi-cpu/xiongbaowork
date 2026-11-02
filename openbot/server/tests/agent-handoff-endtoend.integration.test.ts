@@ -1,14 +1,23 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { mintRunAssertion } from "../src/agents/callback-token";
 import { createHandoffDesk } from "../src/agents/handoff";
 import {
   createHandoffRunner,
   type HandoffWork,
 } from "../src/agents/handoff-runner";
-import { handoffTool } from "../src/agents/handoff-tool";
+import { HANDOFF_TOOL, handoffTool } from "../src/agents/handoff-tool";
 import { createAgentProfileStore } from "../src/agents/profile-store";
+import {
+  createWakeUpRunner,
+  createWakeUpStore,
+  WAKE_UP_KIND,
+  wakeUpTools,
+} from "../src/agents/wake-up";
+import { createApp } from "../src/app";
 import { createAuditStore } from "../src/audit";
+import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -17,8 +26,10 @@ import {
   pluginGrants,
   workItems,
 } from "../src/db/schema";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { testEnvironment } from "./support/environment";
 
 /**
  * A hop from end to end: a Bot calls the tool, and another replica delivers it.
@@ -38,6 +49,8 @@ const suite = randomUUID().slice(0, 8);
 const ASKER = `e2e-asker-${suite}`;
 const TARGET = `e2e-target-${suite}`;
 const ACTOR = `e2e-actor-${suite}`;
+/** Somebody else entirely: a second tenant, to ask whether the first one's rows leak to it. */
+const STRANGER = `e2e-stranger-${suite}`;
 const RUN = `e2e-run-${suite}`;
 
 const queue = createWorkQueue(database);
@@ -66,17 +79,35 @@ const desk = createHandoffDesk({
   caps: { maxDepth: 2, maxPerRun: 3 },
 });
 
+/** Follow-ups this file made, by key, so the tear-down can find them in whichever tenant they landed. */
+const wakeUpKeys: string[] = [];
+
 async function clean() {
-  // By the suite's own actor, which every hop's payload carries. A hop's key is `hop:<hash>:<hash>`,
-  // so a key prefix matches nothing, and a hop left queued is claimed by the next suite's sweep.
-  await database
-    .delete(workItems)
-    .where(sql`${workItems.payload}->>'actorId' = ${ACTOR}`);
-  for (const id of [ASKER, TARGET]) {
-    await database.delete(pluginGrants).where(eq(pluginGrants.agentId, id));
-    await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
-    await database.delete(agents).where(eq(agents.id, id));
-  }
+  // As `platform`: a hop is offered in its person's tenant, and a tear-down from no frame would see
+  // only `system` rows and leave every one of the person's behind.
+  await runAsTenant("platform", async () => {
+    // By the suite's own actor, which every hop's payload carries. A hop's key is `hop:<hash>:<hash>`,
+    // so a key prefix matches nothing, and a hop left queued is claimed by the next suite's sweep.
+    await database
+      .delete(workItems)
+      .where(sql`${workItems.payload}->>'actorId' = ${ACTOR}`);
+    if (wakeUpKeys.length > 0)
+      await database
+        .delete(workItems)
+        .where(
+          and(
+            eq(workItems.kind, WAKE_UP_KIND),
+            inArray(workItems.key, wakeUpKeys),
+          ),
+        );
+    for (const id of [ASKER, TARGET]) {
+      await database.delete(pluginGrants).where(eq(pluginGrants.agentId, id));
+      await database
+        .delete(agentProfiles)
+        .where(eq(agentProfiles.agentId, id));
+      await database.delete(agents).where(eq(agents.id, id));
+    }
+  });
 }
 
 beforeEach(async () => {
@@ -128,12 +159,15 @@ describe("a hop, from the tool call to the delivery", () => {
     });
 
     // The asking Bot's own words, through the tool it is offered.
-    const said = await tool?.execute({
-      bot: "Target",
-      task: "find the outage window",
-      constraints: "yesterday only",
-      expecting: "a date range",
-    });
+    // Inside the person's own tenant, which is where a Bot's run always is.
+    const said = await runAsTenant(ACTOR, () =>
+      tool?.execute({
+        bot: "Target",
+        task: "find the outage window",
+        constraints: "yesterday only",
+        expecting: "a date range",
+      }),
+    );
     expect(said).toContain("Target");
 
     // A different process entirely, sharing nothing but the row.
@@ -182,7 +216,9 @@ describe("a hop, from the tool call to the delivery", () => {
       hasSomebodyToAsk: true,
       maxDepth: 2,
     });
-    await tool?.execute({ bot: "Target", task: "have a look" });
+    await runAsTenant(ACTOR, () =>
+      tool?.execute({ bot: "Target", task: "have a look" }),
+    );
 
     const sweepWith = (owner: string) => {
       const seen: string[] = [];
@@ -226,7 +262,9 @@ describe("a hop, from the tool call to the delivery", () => {
       hasSomebodyToAsk: true,
       maxDepth: 2,
     });
-    await tool?.execute({ bot: "Target", task: "have a look" });
+    await runAsTenant(ACTOR, () =>
+      tool?.execute({ bot: "Target", task: "have a look" }),
+    );
 
     const runner = createHandoffRunner({
       queue: createWorkQueue(database),
@@ -237,18 +275,484 @@ describe("a hop, from the tool call to the delivery", () => {
     });
     await runner.sweep();
 
-    const rows = await database
-      .select({
-        eventType: auditEvents.eventType,
-        payload: auditEvents.payload,
-      })
-      .from(auditEvents)
-      .where(eq(auditEvents.targetId, TARGET));
+    // Read as the person: the trail is theirs, and that is who will read it.
+    const rows = await runAsTenant(ACTOR, () =>
+      database
+        .select({
+          eventType: auditEvents.eventType,
+          payload: auditEvents.payload,
+        })
+        .from(auditEvents)
+        .where(eq(auditEvents.targetId, TARGET)),
+    );
     const kinds = rows.map((row) => row.eventType);
     expect(kinds).toContain("agent.handoff_offered");
     expect(kinds).toContain("agent.handoff_delivered");
     expect(
       rows.every((row) => (row.payload as { run?: string }).run === RUN),
     ).toBe(true);
+  });
+});
+
+/**
+ * G01: background work runs as the tenant on the row it acts on.
+ *
+ * The sweep is a timer and has no tenant of its own. Before this, a hop or a follow-up ran its whole
+ * chain as `system`: the trail, the follow-on hops and the settled outcome were stamped as the
+ * platform's, which every tenant can read. The trusted answer to "whose work is this" is the tenant
+ * stamped on the claimed row, so that is the frame it now runs in, and a row stamped as nobody's is
+ * ended without running anybody.
+ *
+ * In this file rather than one of its own, to keep the change inside one package: the property is
+ * the one this file already asks about — what crosses between the two halves is a row — and it is
+ * asked of both kinds of background work that cross that way.
+ */
+describe("G01: whose work a sweep is doing", () => {
+  test("a hop's trail and its relay land in the person's tenant, and nobody else's", async () => {
+    const tool = handoffTool({
+      desk,
+      from: {
+        botId: ASKER,
+        actorId: ACTOR,
+        runId: RUN,
+        threadId: `thread-${suite}`,
+        depth: 0,
+      },
+      hasSomebodyToAsk: true,
+      maxDepth: 2,
+    });
+    await runAsTenant(ACTOR, () =>
+      tool?.execute({ bot: "Target", task: "when was the outage" }),
+    );
+
+    const seenAs: string[] = [];
+    const runner = createHandoffRunner({
+      queue: createWorkQueue(database),
+      owner: `replica-${suite}`,
+      sign: () => "signed",
+      auditStore,
+      delivery: {
+        deliver: async ({ work }) => {
+          if (work.actorId === ACTOR) seenAs.push(currentTenant());
+          return { answer: "Tuesday, 02:10 to 02:45." };
+        },
+      },
+    });
+    // As the real loop's claim asks: for nobody in particular.
+    const report = await runAsTenant("platform", () => runner.sweep());
+    expect(report.delivered).toContain(TARGET);
+    expect(seenAs).toEqual([ACTOR]);
+
+    const mine = sql`${workItems.payload}->>'actorId' = ${ACTOR}`;
+    const ofRun = sql`${auditEvents.payload}->>'run' = ${RUN}`;
+    const everywhere = await runAsTenant("platform", async () => ({
+      work: await database
+        .select({ key: workItems.key, tenantId: workItems.tenantId })
+        .from(workItems)
+        .where(mine),
+      trail: await database
+        .select({
+          eventType: auditEvents.eventType,
+          tenantId: auditEvents.tenantId,
+        })
+        .from(auditEvents)
+        .where(ofRun),
+    }));
+    // The hop, and the relay it queued on the way home, are both the person's.
+    expect(everywhere.work.some((row) => row.key.startsWith("relay:"))).toBe(
+      true,
+    );
+    expect(new Set(everywhere.work.map((row) => row.tenantId))).toEqual(
+      new Set([ACTOR]),
+    );
+    expect(everywhere.trail.map((row) => row.eventType)).toContain(
+      "agent.handoff_delivered",
+    );
+    expect(new Set(everywhere.trail.map((row) => row.tenantId))).toEqual(
+      new Set([ACTOR]),
+    );
+
+    // And a stranger sees none of it.
+    const strangerSees = await runAsTenant(STRANGER, async () => ({
+      work: await database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(mine),
+      trail: await database
+        .select({ id: auditEvents.id })
+        .from(auditEvents)
+        .where(ofRun),
+    }));
+    expect(strangerSees).toEqual({ work: [], trail: [] });
+  });
+
+  test("a hop stamped as nobody's is ended without running anybody", async () => {
+    const run = `${RUN}-unframed`;
+    const key = `${run}:${TARGET}`;
+    // Offered from no frame, which is what stamped every background row `system` before.
+    await createWorkQueue(database).offer({
+      kind: "bot.message",
+      key,
+      payload: {
+        fromBotId: ASKER,
+        toBotId: TARGET,
+        actorId: ACTOR,
+        threadId: `thread-${suite}`,
+        runId: run,
+        depth: 1,
+        task: "nobody's question",
+      },
+    });
+
+    const ran: string[] = [];
+    const runner = createHandoffRunner({
+      queue: createWorkQueue(database),
+      owner: `replica-${suite}`,
+      sign: () => "signed",
+      auditStore,
+      delivery: {
+        deliver: async ({ work }) => {
+          ran.push(work.runId);
+          return { answer: "should never be relayed" };
+        },
+      },
+    });
+    const report = await runAsTenant("platform", () => runner.sweep());
+
+    expect(ran).not.toContain(run);
+    expect(report.skipped).toContainEqual({
+      key,
+      reason: "tenant_unresolved",
+    });
+    const after = await runAsTenant("platform", async () => ({
+      row: await database
+        .select({ finishedAt: workItems.finishedAt })
+        .from(workItems)
+        .where(and(eq(workItems.kind, "bot.message"), eq(workItems.key, key))),
+      trail: await database
+        .select({
+          eventType: auditEvents.eventType,
+          tenantId: auditEvents.tenantId,
+          actorUserId: auditEvents.actorUserId,
+        })
+        .from(auditEvents)
+        .where(sql`${auditEvents.payload}->>'run' = ${run}`),
+      relays: await database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(sql`${workItems.key} like ${`%${key}`} and ${workItems.key} <> ${key}`),
+    }));
+    expect(after.row[0]?.finishedAt).not.toBeNull();
+    // One row says it was dropped: the platform's, naming nobody, so no tenant can read it.
+    expect(after.trail).toEqual([
+      {
+        eventType: "agent.handoff_failed",
+        tenantId: "platform",
+        actorUserId: null,
+      },
+    ]);
+    expect(after.relays).toEqual([]);
+  });
+
+  /** A follow-up runner over the real queue and store, with only the turn and the channel faked. */
+  function wakeUps() {
+    const turns: Array<{ owner: string; tenant: string }> = [];
+    const wakeUpQueue = createWorkQueue(database);
+    const store = createWakeUpStore(database);
+    const runner = createWakeUpRunner({
+      queue: wakeUpQueue,
+      store,
+      owner: `wake-${suite}`,
+      actorFor: async (id) => ({ id, role: "user" }),
+      channels: {
+        get: async () => null,
+        direct: async () => ({
+          id: `channel-${suite}`,
+          threadId: `thread-${suite}`,
+          name: "",
+          agentIds: [],
+          active: true,
+          lastMessageAt: null,
+        }),
+        recordActivity: async () => {},
+      },
+      runTurn: async ({ ownerUserId }) => {
+        turns.push({ owner: ownerUserId, tenant: currentTenant() });
+        return { replyText: "Checked." };
+      },
+    });
+    /**
+     * Sweep until this key has been handled. One claim per sweep and oldest first, so a follow-up
+     * another file left due may be taken before ours.
+     */
+    const sweepUntil = async (key: string) => {
+      for (let i = 0; i < 25; i += 1) {
+        const report = await runAsTenant("platform", () => runner.sweep());
+        if (report.ran.includes(key)) return "ran";
+        if (report.skipped.includes(key)) return "skipped";
+        if (report.ran.length === 0 && report.skipped.length === 0) break;
+      }
+      return "untouched";
+    };
+    return { store, turns, sweepUntil };
+  }
+
+  /** A follow-up row written straight to the queue, stamped by whichever frame writes it. */
+  async function dueFollowUp(ownerUserId: string) {
+    const key = `wake:${suite}:${randomUUID()}`;
+    wakeUpKeys.push(key);
+    await database.insert(workItems).values({
+      kind: WAKE_UP_KIND,
+      key,
+      runAt: new Date(Date.now() - 60_000),
+      payload: {
+        ownerUserId,
+        agentId: TARGET,
+        reason: "check the build",
+        dueAt: new Date(Date.now() - 60_000).toISOString(),
+        scheduledAt: new Date(Date.now() - 120_000).toISOString(),
+      },
+    });
+    return key;
+  }
+
+  const outcomeOf = (key: string) =>
+    database
+      .select({ tenantId: workItems.tenantId, payload: workItems.payload })
+      .from(workItems)
+      .where(and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, key)));
+
+  test("a follow-up runs, and settles, as the person who scheduled it", async () => {
+    const { store, turns, sweepUntil } = wakeUps();
+    const scheduled = await runAsTenant(ACTOR, () =>
+      store.schedule({
+        ownerUserId: ACTOR,
+        agentId: TARGET,
+        reason: "check the build",
+        dueAt: new Date(Date.now() + 2 * 60_000),
+      }),
+    );
+    wakeUpKeys.push(scheduled.id);
+    // Made due in the person's own frame, because it is their row.
+    await runAsTenant(ACTOR, () =>
+      database
+        .update(workItems)
+        .set({ runAt: new Date(Date.now() - 60_000) })
+        .where(
+          and(
+            eq(workItems.kind, WAKE_UP_KIND),
+            eq(workItems.key, scheduled.id),
+          ),
+        ),
+    );
+
+    expect(await sweepUntil(scheduled.id)).toBe("ran");
+    expect(turns.filter((turn) => turn.owner === ACTOR)).toEqual([
+      { owner: ACTOR, tenant: ACTOR },
+    ]);
+    const [row] = await runAsTenant(ACTOR, () => outcomeOf(scheduled.id));
+    expect(row?.tenantId).toBe(ACTOR);
+    expect(
+      (row?.payload as { outcome?: { status: string } }).outcome?.status,
+    ).toBe("succeeded");
+    expect(await runAsTenant(STRANGER, () => outcomeOf(scheduled.id))).toEqual(
+      [],
+    );
+  });
+
+  test("a follow-up stamped `system` is failed and its turn never runs", async () => {
+    const { turns, sweepUntil } = wakeUps();
+    // From no frame: the stamp a background row used to get by default.
+    const key = await dueFollowUp(ACTOR);
+
+    expect(await sweepUntil(key)).toBe("skipped");
+    expect(turns.filter((turn) => turn.owner === ACTOR)).toEqual([]);
+    const [row] = await runAsTenant("platform", () => outcomeOf(key));
+    expect(row?.tenantId).toBe("system");
+    expect(
+      (row?.payload as { outcome?: { status: string } }).outcome?.status,
+    ).toBe("failed");
+  });
+
+  test("a follow-up whose owner is not the tenant on its row is refused", async () => {
+    const { turns, sweepUntil } = wakeUps();
+    // Stamped as one person, claiming to be for another.
+    const key = await runAsTenant(ACTOR, () => dueFollowUp(STRANGER));
+
+    expect(await sweepUntil(key)).toBe("skipped");
+    expect(turns.filter((turn) => turn.owner === STRANGER)).toEqual([]);
+    const [row] = await runAsTenant("platform", () => outcomeOf(key));
+    expect(row?.tenantId).toBe(ACTOR);
+    expect(
+      (row?.payload as { outcome?: { status: string } }).outcome?.status,
+    ).toBe("failed");
+  });
+
+  /*
+   * The callback a framework Bot runs its tools through has a shared secret, not a session, so no
+   * guard framed it, and what it queued was stamped `system`. With the sweeps now refusing `system`
+   * work, an unframed route would turn every follow-up and hop a framework Bot asks for into a drop.
+   * The caller below is the shape of the deployment's own (index.ts) cut to the two tools that
+   * queue work; the route, the signature check, the desk, the store, the queue and both sweeps are
+   * the real ones.
+   */
+  test("a follow-up and a hop asked for through the agent callback are the person's, and run", async () => {
+    const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    const TOKEN = `legacy-${suite}`;
+    const run = `${RUN}-callback`;
+    const { store, turns, sweepUntil } = wakeUps();
+    const calledAs: string[] = [];
+    const app = createApp(
+      loadConfig(
+        testEnvironment({ AGENT_TOOL_TOKEN: TOKEN, KEY_ENCRYPTION_KEY: KEY }),
+      ),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async (input) => {
+        calledAs.push(currentTenant());
+        if (input.name === HANDOFF_TOOL) {
+          const hop = handoffTool({
+            desk,
+            from: input.run,
+            hasSomebodyToAsk: true,
+            maxDepth: 2,
+            maxPerRun: 3,
+          });
+          const text = String(await hop?.execute(input.args));
+          return { text, isError: text.startsWith("Refused.") };
+        }
+        const followUp = wakeUpTools({
+          store,
+          ownerUserId: input.actorId,
+          agentId: input.botId,
+        }).find((candidate) => candidate.name === input.name);
+        if (!followUp) return null;
+        const text = await followUp.execute(input.args);
+        return { text, isError: text.startsWith("Refused.") };
+      },
+    );
+    const call = async (name: string, args: Record<string, unknown>) => {
+      const response = await app.request("/api/agent-tools/call", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-openbot-agent-token": TOKEN,
+        },
+        body: JSON.stringify({
+          name,
+          args,
+          // Ignored: the signed run is the only identity the route believes.
+          actorId: STRANGER,
+          run: mintRunAssertion(
+            {
+              botId: ASKER,
+              actorId: ACTOR,
+              runId: run,
+              threadId: `thread-${suite}`,
+            },
+            KEY,
+          ),
+        }),
+      });
+      expect(response.status).toBe(200);
+      return (await response.json()) as { text: string; isError: boolean };
+    };
+
+    const scheduled = await call("schedule_follow_up", {
+      reason: "check the build",
+      in_minutes: 2,
+    });
+    expect(scheduled.isError).toBe(false);
+    const followUpKey = (JSON.parse(scheduled.text) as { scheduled: string })
+      .scheduled;
+    wakeUpKeys.push(followUpKey);
+    const offered = await call(HANDOFF_TOOL, {
+      bot: "Target",
+      task: "when was the outage",
+    });
+    expect(offered.isError).toBe(false);
+    expect(calledAs).toEqual([ACTOR, ACTOR]);
+
+    // Both rows carry the person the signed run named, and nobody else can read them.
+    const mine = sql`(${workItems.kind} = ${WAKE_UP_KIND} and ${workItems.key} = ${followUpKey}) or ${workItems.payload}->>'runId' = ${run}`;
+    const queued = await runAsTenant("platform", () =>
+      database
+        .select({ kind: workItems.kind, tenantId: workItems.tenantId })
+        .from(workItems)
+        .where(mine),
+    );
+    expect(queued.map((row) => row.kind).sort()).toEqual(
+      ["bot.message", WAKE_UP_KIND].sort(),
+    );
+    expect(new Set(queued.map((row) => row.tenantId))).toEqual(
+      new Set([ACTOR]),
+    );
+    expect(
+      await runAsTenant(STRANGER, () =>
+        database.select({ key: workItems.key }).from(workItems).where(mine),
+      ),
+    ).toEqual([]);
+    expect(
+      await database.select({ key: workItems.key }).from(workItems).where(mine),
+    ).toEqual([]);
+
+    // And the sweeps run them, as that person.
+    const deliveredAs: string[] = [];
+    const hops = createHandoffRunner({
+      queue: createWorkQueue(database),
+      owner: `replica-${suite}`,
+      sign: () => "signed",
+      auditStore,
+      delivery: {
+        deliver: async ({ work }) => {
+          if (work.runId === run) deliveredAs.push(currentTenant());
+          return { answer: null };
+        },
+      },
+    });
+    const report = await runAsTenant("platform", () => hops.sweep());
+    expect(report.delivered).toContain(TARGET);
+    expect(deliveredAs).toEqual([ACTOR]);
+
+    await runAsTenant(ACTOR, () =>
+      database
+        .update(workItems)
+        .set({ runAt: new Date(Date.now() - 60_000) })
+        .where(
+          and(
+            eq(workItems.kind, WAKE_UP_KIND),
+            eq(workItems.key, followUpKey),
+          ),
+        ),
+    );
+    expect(await sweepUntil(followUpKey)).toBe("ran");
+    expect(turns.filter((turn) => turn.owner === ACTOR)).toEqual([
+      { owner: ACTOR, tenant: ACTOR },
+    ]);
   });
 });
