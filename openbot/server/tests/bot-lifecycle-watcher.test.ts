@@ -7,6 +7,7 @@ import {
   resetBotLifecycleForTests,
 } from "../src/agents/lifecycle";
 import type { Database } from "../src/db/client";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 
 /**
  * The pause watcher against a database that can fail on demand. A turn must not start while the
@@ -71,4 +72,43 @@ test("a database that stays unreadable stops the turns, and a pause stops them a
   state.pausedAt = new Date();
   await checkRunningTurnsForTests();
   expect(next.aborted).toBe(true);
+});
+
+/*
+ * G01-D: the watcher's interval has no frame of its own (or the frame of whoever's turn started it),
+ * so each pause is re-read as the tenant its turn was started in. Run under the `throw` guard, so a
+ * read left to the interval's frame fails instead of answering as `system`.
+ */
+test("the watcher re-reads each pause as the tenant its turn was started in", async () => {
+  const reads: string[] = [];
+  const query = {
+    from: () => query,
+    where: () => query,
+    limit: async () => {
+      reads.push(currentTenant());
+      return [{ pausedAt: null }];
+    },
+  };
+  configureBotLifecycle({
+    database: { select: () => query } as unknown as Database,
+  });
+  await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
+  await runAsTenant("grace", () =>
+    guardBotTurn({ ownerUserId: "grace", agentId: "other" }),
+  );
+  reads.length = 0;
+
+  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
+  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+  try {
+    // From grace's frame too: the interval inherits whichever frame first started it.
+    await checkRunningTurnsForTests();
+    await runAsTenant("grace", () => checkRunningTurnsForTests());
+  } finally {
+    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
+    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
+  }
+  expect(reads).toEqual(["ada", "grace", "ada", "grace"]);
 });
