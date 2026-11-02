@@ -771,6 +771,13 @@
       "when": 1793600000000,
       "tag": "0109_role_writer_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1793620000000,
+      "tag": "0112_app_role_hardening",
+      "breakpoints": true
     }
   ]
 }

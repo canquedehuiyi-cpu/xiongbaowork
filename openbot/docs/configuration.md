@@ -24,6 +24,54 @@ bash scripts/start.sh
 Sign-in adds its own pair: `BETTER_AUTH_SECRET` (at least 32 characters) and `BETTER_AUTH_URL`. All
 four stop server startup if missing.
 
+### The database role and `OPENBOT_RLS_ENFORCE`
+
+`DATABASE_URL` must name the application role `openbot_app`, not the owner: PostgreSQL does not apply
+row-level security to a superuser or a `BYPASSRLS` role, so tenant isolation would rest on the
+application's tenant context alone. The server reads its own role at boot, before it serves anything.
+
+| `OPENBOT_RLS_ENFORCE` | What an unenforced or unconfirmed role does                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| unset                 | `refuse`, unless `NODE_ENV` is `development` or `test`, where it is `warn`. Unset `NODE_ENV` refuses. |
+| `refuse`              | Prints `{"type":"rls-not-enforced", …}` (or `rls-role-check-unavailable`) on stderr and exits.   |
+| `warn`                | Prints the same line and keeps running. The written-down opt-out for a local database; do not deploy with it. |
+| anything else         | Refuses to start, so a typo cannot switch the check off.                                          |
+
+Where that bites, and who already says `warn`:
+
+- **The desktop app** connects as the compose owner `openbot`, a superuser, on a database published
+  on loopback only, and sets no `NODE_ENV`. It writes `OPENBOT_RLS_ENFORCE=warn` into the `.env` it
+  owns, next to `DATABASE_URL` (`desktop/src-tauri/src/env.rs`), so it keeps starting and prints
+  `rls-not-enforced` on every boot. Moving it to `openbot_app` is the real fix; that also moves the
+  worker, which reads the same file.
+- **The Helm chart's bundled database** (`postgresql.enabled`, off by default) connects as `postgres`.
+  The chart refuses to render until `config.extraEnv` names `OPENBOT_RLS_ENFORCE`; `extraEnv` renders
+  after the chart's own variables, so it is the value the pods get.
+- **An external database whose URL names a superuser or a `BYPASSRLS` role** (the usual way to make
+  migrations pass on a self-hosted server) only warned before and now refuses under the chart's
+  `NODE_ENV=production`. The chart gives the migrations Job and the API one `DATABASE_URL`, so it has
+  no supported way yet to migrate as the owner and serve as `openbot_app`. Until it does, either give
+  the URL a role that owns the schema without being a superuser or `BYPASSRLS` (what RDS, Cloud SQL
+  and Azure Database hand out, which are unaffected), or set
+  `config.extraEnv: [{name: OPENBOT_RLS_ENFORCE, value: warn}]` and accept that isolation rests on the
+  application.
+
+`0054_app_role.sql` creates `openbot_app` with the password `openbot`, which is printed in this
+repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
+already changed and resetting it would lock a running deployment out without a word. Instead, under
+`NODE_ENV=production` the server refuses to start when the password in `DATABASE_URL` is `openbot`
+(`{"type":"database-password-public-default", …}` on stderr); elsewhere it only warns. Set a real one
+as the owner, then put it in `DATABASE_URL`:
+
+```sql
+ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<random>';
+```
+
+The one-container image and CI already do this with a generated password. `openbot_app` holds row
+rights only: `0112_app_role_hardening.sql` revokes the `CREATE` on schemas `public` and `drizzle`
+that `0054` granted, so the role the server connects as cannot add tables, functions or triggers.
+Migrations run as the owner.
+
 There is no platform to configure. Threads and memory live in the PostgreSQL above, through the
 runtime's SSE-mode runner, so `DATABASE_URL` is the whole contract for a conversation's life.
 `INTELLIGENCE_MODE` is read only to be refused: set it to `local` or leave it unset, and naming
