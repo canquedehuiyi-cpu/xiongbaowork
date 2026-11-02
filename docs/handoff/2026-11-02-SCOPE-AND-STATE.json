@@ -1,0 +1,1352 @@
+{
+  "schema": "xiongbaowork-claude-handoff/v1",
+  "asOfUtc": "2026-11-02 07:20:49 UTC",
+  "roleChange": {
+    "userRequested": "STOP_DEVELOPMENT_PREPARE_CLAUDE_CODE_HANDOFF",
+    "developmentAuthorNext": "Claude Code (not launched by this document)",
+    "rootNext": "Independent validation and acceptance",
+    "nativeGoalLastEvent": "User cleared the goal",
+    "resumeOldDevelopment": false
+  },
+  "repository": {
+    "fullName": "canquedehuiyi-cpu/xiongbaowork",
+    "defaultBranch": "codex/cloud-dev-baseline-20261018",
+    "documentationParent": "0089682e785d03fa67e8463bf862d2b94447392c",
+    "defaultSourceIsHistorical": true,
+    "canonicalEvidenceBranch": "codex/cloud-repairs-recovery-20261028",
+    "canonicalEvidenceHead": "3fda773c5a9743eb74e0f4a2e3a75039322f99b4",
+    "formalSource28": "668dd2238ff112bcff38ad2d0456dccd116874ed",
+    "d09ReviewedNotRun": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+    "d06ReviewedNotRun": "2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634",
+    "d06Parent": "4b367e3c0580128bc28c31ca9030f018db18cb06",
+    "d06Tree": "ea48fde7a70474c5d51ad567e6cc6f9ffb063fb5",
+    "codeAdoptionByDocumentation": false
+  },
+  "scopeAuthority": {
+    "commit": "6bcabe68a8b2671859eaa0772bd38456ff3eb0c5",
+    "path": "archives/recovery-20261028/COMMERCIAL-DELIVERY-FULL77-ROADMAP-20261030.json",
+    "bytes": 104593,
+    "sha256": "0fc19e00fc565257ca400b6e3c29d8ab41f906c289c6bb200158187b1e0b0e8b",
+    "gitBlob": "a3685d5011b85d7daab14805baf813c22a9fb734",
+    "nonauthorReviewCommit": "be7499b3b4f16d6f85c4dd36204cf9beb9abf091",
+    "historicalInputs": [
+      {
+        "path": "archives/recovery-20261028/DELIVERY-SCOPE-77-18-7.json",
+        "blob": "a08c4d05bedee1f0d403910904aa08b0de45037f",
+        "mode": "100644",
+        "bytes": 286013,
+        "normalized_utf8_bytes": 286013,
+        "sha256_normalized": "0fae19911c57aa77e612cb40279e49fb49848eb5a66fefe1a041ea92d2802146",
+        "complete_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-GATE-SUMMARY.json",
+        "blob": "21ffe1dee382d54801c2e8fca0e76bc30f3f378f",
+        "mode": "100644",
+        "bytes": 45225,
+        "normalized_utf8_bytes": 45225,
+        "sha256_normalized": "a939fa0f55fe9fe4957d30a221550dce94d995efd68c5554e11a6e3f93ab45ac",
+        "complete_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-TEST-FILE-EVIDENCE-LEDGER.json",
+        "blob": "4a4d7b153df31fd1c6d2adeb4ad9db8a7524f6bb",
+        "mode": "100644",
+        "bytes": 479194,
+        "normalized_utf8_bytes": 479194,
+        "sha256_normalized": "d549b45a9a0951a56a7628cb41155c6b56e808457d142ab32bd0d315ccde59f5",
+        "complete_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CURRENT-SOURCE-EXPECTED-MANIFEST.json",
+        "blob": "f026fd506dc33880809e58fd1523233b2f6d83ff",
+        "mode": "100644",
+        "bytes": 456310,
+        "normalized_utf8_bytes": 456310,
+        "sha256_normalized": "7028278e9ff0da8e2f545964c55360c2535cba619102db4dcd0b020e23f0c632",
+        "complete_read": true
+      },
+      {
+        "path": "archives/recovery-20261028/CLOUD-CONTINUATION-20261029.json",
+        "blob": "33d8120f5098cca985587fbd6194904eac44bbdb",
+        "mode": "100644",
+        "bytes": 242047,
+        "normalized_utf8_bytes": 242047,
+        "sha256_normalized": "f33603f1fc8a5f3d52aa690e3193aaccf6d8b264b8982371daa9c1c8947583b5",
+        "complete_read": true
+      }
+    ]
+  },
+  "counts": {
+    "stories": 77,
+    "originalPackages": 18,
+    "finalGates": 7,
+    "commercialCompletionClaimed": false,
+    "implementedCodeExists": true,
+    "percentComplete": "NOT_ESTABLISHED"
+  },
+  "stories": [
+    {
+      "id": "A1",
+      "originalRequirement": "作为用户，我在侧边栏看到\"工作管理 > 任务看板\"，进入后看到统计条：任务总数 / 进行中 / 需要操作 / 已结束（默认数据周期=一个月，可切 一周/一月/全部）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A2",
+      "originalRequirement": "我可以点统计条任一数字过滤下方任务列表（按下态高亮）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A3",
+      "originalRequirement": "任务列表含列：任务名、执行者（Waker 头像+名，可点进员工详情）、来源（对话触发/自主工作/交接）、状态（进行中/需要操作/已结束-已完成/已结束-失败）、最近更新（相对时间）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A4",
+      "originalRequirement": "我可以用搜索框按任务名过滤，用下拉按 Waker/Group、触发方式、状态、数据周期组合过滤。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A5",
+      "originalRequirement": "我可以切换\"列表/泳道\"两个视图；泳道视图按状态分三列（进行中/需要操作/已结束），卡片可拖拽仅进入\"已结束\"（归档语义），其余方向拖拽无效。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A6",
+      "originalRequirement": "我点任务行\"查看详情\"，进入该任务关联的执行会话（channel 或 routineRun 详情），看到完整过程。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A7",
+      "originalRequirement": "\"需要关注\"区固定在看板上方，含两个 Tab：需要操作(n)/查收结果(n)；空态文案\"暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里\"。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A8",
+      "originalRequirement": "当我在\"需要操作\"里批准/拒绝某审批，对应任务状态自动流转（批准→进行中；拒绝→已结束-失败），无需刷新。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "A9",
+      "originalRequirement": "当某任务产出附件/文件/组件结果，任务进入\"查收结果\"；我点\"查收\"后任务转\"已结束-已完成\"。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "B1",
+      "originalRequirement": "我在任意频道 composer 输入 @ 出现 Waker 选择列表（仅我可见的员工，含 Group 展开后的成员）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "B2",
+      "originalRequirement": "@ 某 Waker 发送后：创建一条 task（来源=对话触发，执行者=被 @ 的 Waker），消息路由到该 Waker 并驱动其运行（接通 `draft.agentId` 路由）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "B3",
+      "originalRequirement": "被 @ 的 Waker 的回复同时出现在频道与任务详情中；任务状态随 run 生命周期流转。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "B4",
+      "originalRequirement": "群聊中 Bot 交接（`message_bot`）产生的后续工作自动登记为子任务（来源=交接），在看板执行者列显示接手方。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "C1",
+      "originalRequirement": "我在\"自主工作\"页看到所有 Waker 的 routines/responsibilities/proactive 任务清单：下次触发时间、启停开关、最近 N 次运行结果。",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "C2",
+      "originalRequirement": "每次自主触发（routine fire / responsibility trigger）自动创建 task（来源=自主工作），initiator 沿用 OpenBot 的 `initiator_kind`（routine/responsibility/handoff），看板\"无人值守\"可过滤。",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "C3",
+      "originalRequirement": "连续失败熔断（10 次）发生时，对应任务标\"已结束-失败\"并出现在\"需要关注\"区。",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "C4",
+      "originalRequirement": "我可以在此页新建/暂停/删除 routine（复用现有 `/api/routines`，15 分钟下限与 20 条上限护栏保留）。",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "H1",
+      "originalRequirement": "租户在\"能力与资源 > 模型库\"**自助接入**任意多个模型：从平台 provider 模板（OpenAI 兼容/Anthropic/Google/OpenRouter/国内兼容端点/自定义 base URL）选类型 + 填**自己的** API key（入租户加密 vault，沿用 `credentials` 机制）+ 模型名；形成该租户的\"已接入模型列表\"。Free 档可用平台提供的共享体验模型池，Pro 档解锁自定义 key（K1）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "H2",
+      "originalRequirement": "我创建/编辑 Waker 时，可为其从模型库**单选**一个默认模型（存 `agent_profiles` 扩展字段）；未选则回落部署默认（现 `BOT_MODEL` 行为，向后兼容）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "H3",
+      "originalRequirement": "一次运行（对话触发/@派活/routine 触发/交接接手）以**执行者员工的绑定模型**起跑——即\"开发 GPT-6、审核 GLM-5.3\"在同一任务里同时成立。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "H4",
+      "originalRequirement": "我可以在任务详情/员工详情看到该次运行实际使用的模型；审计行记录模型标识（沿用 `modelUsage` 表扩展）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "H5",
+      "originalRequirement": "模型库条目被员工引用时不可删除，提示\"3 位 Waker 正在使用\"（引用计数保护）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "H6",
+      "originalRequirement": "远程 AG-UI Bot（自带端点的员工）不受 H2 约束（模型在它自己端点），UI 明示\"外部托管模型\"。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "I1",
+      "originalRequirement": "我可以创建 Group（如\"编程小组\"）并为它定义**任务模板**：有序步骤，每步绑定成员 Waker+指令，例如 步骤1 开发（GPT-6 员工）→ 步骤2 审核（GLM-5.3 员工）→ 步骤3 汇总（分身）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "I2",
+      "originalRequirement": "我给 Group 派一个任务（看板\"@Group\"或模板页\"运行\"）：系统按模板逐步执行，每步产出作为下一步输入上下文，各步骤在看板登记为父任务下的子任务（来源=交接），执行者显示对应员工。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "I3",
+      "originalRequirement": "任一步骤触发\"需要操作\"（审批/提问）时，父任务挂起进\"需要关注\"区；我处理后流水线从该步继续。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "I4",
+      "originalRequirement": "我可以中止流水线（剩余步骤标\"已结束-失败\"）或跳过某步（该步标跳过，继续下一步）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "I5",
+      "originalRequirement": "步骤间执行复用底座**无人值守 run 通道**（`routines/run-turn.ts` 的 `createTurnRunner`：本地 runner + 平台线程锁 + 同一条 transcript），不新造执行通道；治理与真人发起的那一轮走同一道闸——每步都过 `guardBotTurn`（暂停）与 `headlessTurnRefusal`（Use Bots、模型白名单）并留审计。模板只是把\"一次无人值守 run\"编排成\"N 步计划\"。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "I6",
+      "originalRequirement": "谁能对一个 Group 派活＝对该 Group 有权限的人；**派活时逐位校验\"这个人能不能用这一步的员工\"**，不因\"它在组里\"而扩权。组里某位员工不为发起人所用时，这一步**拒绝开跑并给出可行动的失败原因**——不是悄悄换成别人，也不是拿平台身份替人跑（D11\"平台控制目录、租户控制装配\"在流水线上的落点就是这里）。",
+      "packageIds": [
+        "D05"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D1",
+      "originalRequirement": "\"Waker 管理\"页含 Waker/Group 双 Tab 与员工卡片墙；卡片显示头像、名字、角色（如 Backend Engineer）、运行状态（在线/休息/暂停）。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D2",
+      "originalRequirement": "我可以\"新建 Waker\"：名字、头衔、角色描述、头像种子（boring-avatars）、可见性（私有/公开），复用 `/api/agents` + `agent_profiles`。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D3",
+      "originalRequirement": "我可以创建 Group：命名+勾选成员 Waker；看板过滤器与 @ 列表中出现 Group 选项（激活 `users.groups` 空转字段 → 新建 `waker_groups` + `waker_group_members` 关系表）。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D4",
+      "originalRequirement": "我可以按\"运行状态\"筛选卡片（在线 = 有活动 run；休息 = 空闲；暂停 = bot_lifecycle paused）。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D5",
+      "originalRequirement": "我点员工卡片进入员工详情：它的职责、进行中任务、技能授权、最近审计流水（读现有 audit 数据）。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D6",
+      "originalRequirement": "我可以为每个 Waker 编辑**人设**：性格语气、工作守则、口头约束（结构化字段注入 `shared/bot-prompt.ts` 组装的系统提示），与角色描述分开维护；人设可另存为模板复用给新员工。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "D7",
+      "originalRequirement": "每个 Waker 有独立的\"员工装配页\"：一屏管理它的 模型绑定(H2)/技能/插件连接器/人设/职责(routines)，即\"单独授权安装\"的落地入口；授权范围仅限我拥有或对我公开的员工。",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "E1",
+      "originalRequirement": "\"能力与资源\"页是统一聚合视图：技能（personal+deployment）、MCP/连接器（含授权状态）、知识/信息源、组件，四区一屏。仅前端聚合，复用现有 `/api/plugins`、`/api/skills`、knowledge 端点，**不动后端**。",
+      "packageIds": [
+        "D08"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "E2",
+      "originalRequirement": "我可以把某技能/连接器授权给指定 Waker 或整个 Group（授权对象从\"仅 Bot\"扩展到\"Group 展开为成员批量授权\"）。",
+      "packageIds": [
+        "D08"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "E3",
+      "originalRequirement": "\"安装\"语义：目录内的技能/连接器/MCP 由管理员上架（保留现有治理边界），员工所有者在装配页给自己的员工**自助勾选安装/卸载**，无需管理员逐次审批；每次安装写审计行。",
+      "packageIds": [
+        "D08"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "E4",
+      "originalRequirement": "模型库作为\"能力与资源\"第五区（对应 H1）。",
+      "packageIds": [
+        "D08"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "F1",
+      "originalRequirement": "首次登录进入\"我的分身\"引导：选择信息来源（本地文件夹/知识源声明），保存后生成特殊 built-in Waker\"我的分身\"，其角色描述注入所选来源。",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "F2",
+      "originalRequirement": "**runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）打包为 Tauri 客户端，安装后**出站** WebSocket 连接中心 server（设备发起，无需公网 IP/端口映射），注册 `device_id`（machineId，UUID 持久化在本机配置）；一租户可注册多台设备并命名。",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "F3",
+      "originalRequirement": "Waker 的浏览器/shell/文件动作由服务端策略网关决策后，按任务绑定的 device_id **下发到对应 runner 执行**；CEL 策略、审批、审计、密钥脱敏全部仍在服务端，runner 只是受治的执行臂。",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "F4",
+      "originalRequirement": "设备在线/离线：员工卡片与看板显示设备状态；设备离线时新任务进入等待队列（复用 `work_items` 租约机制），设备回线自动续跑；离线超过阈值任务标\"需要操作\"提醒用户上线。",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "F5",
+      "originalRequirement": "Web 端 URL 支持 `?machineId=` 过滤\"只看待本机执行的任务\"（与 QoderWake 行为一致）；无匹配设备时显示\"Waker 们正在休息\"空态。",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "F6",
+      "originalRequirement": "服务端 Docker 电脑（底座 supervisor 链路）**降级为开发/演示回退**：`TENANT_RUNTIME=cloud` 时 Waker 跑在服务端容器（本地无 runner 也能全流程联调），生产租户默认 `TENANT_RUNTIME=device`。",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "J1",
+      "originalRequirement": "注册/登录：邮箱+密码（Better Auth 自有凭据路径）+ 可选 Google/GitHub OAuth；注册成功即开通租户（初始化：Free 档订阅、\"我的分身\"、空模型库引导页）。",
+      "packageIds": [
+        "D04"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "J2",
+      "originalRequirement": "全部业务表加 `tenant_id` 并启用 PostgreSQL **Row-Level Security**：连接会话注入 `app.tenant_id`，策略强制过滤；API 层同时带租户上下文做双保险。跨租户访问一律 404（不暴露资源存在性）。",
+      "packageIds": [
+        "D03"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "J3",
+      "originalRequirement": "我的 Waker、任务、审批、技能、连接器授权、模型 key、设备仅我可见；本期无跨租户共享/协作。",
+      "packageIds": [
+        "D03"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "J4",
+      "originalRequirement": "模型凭据、连接器 token 按租户入加密 vault；底座\"管理员上架目录\"升级为**平台级目录**（provider 模板、官方技能/连接器），租户在目录内自助开通到自己的账户。",
+      "packageIds": [
+        "D03"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "J5",
+      "originalRequirement": "平台运营后台（原 admin 页面收敛为平台工具）：租户列表/封禁恢复/封禁即冻结其任务队列与 runner 连接、按租户查用量与审计。",
+      "packageIds": [
+        "D04"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "J6",
+      "originalRequirement": "原 `OPENBOT_SINGLE_USER` 仅保留为开发模式；产品默认注册制，公网部署强制登录。",
+      "packageIds": [
+        "D04"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "K1",
+      "originalRequirement": "套餐定义（seed 数据，可配置）：Free = 2 Wakers / 50 任务·月 / 1 设备 / 平台目录基础模型；Pro = 10 Wakers / 1000 任务·月 / 5 设备 / 自定义模型接入。配额在**服务端写路径强制拦截**（非仅 UI 灰置）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "K2",
+      "originalRequirement": "用量面板（对应 QoderWake 左下角\"用量\"）：当前档位、本周期 Waker 数/任务数/模型 token 估算（聚合自 `model_usage` + runner 上报）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "K3",
+      "originalRequirement": "升级入口：档位对比页 + 手动/种子切换订阅；**不接支付渠道**（预留 provider 接口）。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "K4",
+      "originalRequirement": "超额返回结构化错误码（含\"已用/上限/升级链接\"），前端统一引导升级或清理。",
+      "packageIds": [
+        "D09"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "G1",
+      "originalRequirement": "通过租户包 `examples/qoderwake`（brand.yaml/theme.css/agents.yaml/skills.yaml/knowledge.yaml）替换默认 fintech：产品名\"熊宝数字员工\"、中文界面文案、种子员工（含 Backend Engineer 等角色卡）。",
+      "packageIds": [
+        "D12"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "G2",
+      "originalRequirement": "开发模式保留 `OPENBOT_SINGLE_USER=true` 一键起全栈（联调用），生产为注册制多租户（见 J6）；开发期 runner 与 server 可同机部署。",
+      "packageIds": [
+        "D04"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF1",
+      "originalRequirement": "能力与资源中独立 WakerFlow 管理，列表空态与新建入口",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF2",
+      "originalRequirement": "新建 WakerFlow：自然语言输入、模型选择、场景建议",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF3",
+      "originalRequirement": "自然语言生成可编辑、可保存的可执行计划，错误和取消可恢复",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF4",
+      "originalRequirement": "流程编辑、复用、运行记录和任务看板查收闭环",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF5",
+      "originalRequirement": "运行中止后状态不可被旧回调覆盖，后续步骤不得启动",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF6",
+      "originalRequirement": "同一运行并发推进只有一个执行者，避免重复执行和重复计费",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "AUT1",
+      "originalRequirement": "定期与一次性调度，多个触发条件（原版显示上限5）",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "AUT2",
+      "originalRequirement": "事件 Hook/API 入口及触发行为",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "AUT3",
+      "originalRequirement": "执行对象可选 Waker 或已创建 WakerFlow",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "AUT4",
+      "originalRequirement": "自动任务最大运行次数、截止日期、到期停止",
+      "packageIds": [
+        "D06"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "RES1",
+      "originalRequirement": "独立知识库创建与后续知识维护/授权",
+      "packageIds": [
+        "D08"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "RES2",
+      "originalRequirement": "公开项目支持名称、简介、本地目录或Git仓库和分支，当前设备下共享给全部Waker，并在任务上下文中可选；员工专属项目具备独立范围",
+      "packageIds": [
+        "D08"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "ROLE1",
+      "originalRequirement": "角色模板和员工实例分离，智能生成/Markdown/手工Identity Persona Bible",
+      "packageIds": [
+        "D07"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF7",
+      "originalRequirement": "流程图worker提示词、decision条件分支、嵌套Flow和动作实现的编辑与执行",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF8",
+      "originalRequirement": "输入参数、确认回答与跳过、运行事件及错误恢复、版本定义与回滚",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WF9",
+      "originalRequirement": "持久自定义会话和历史、工作流分享/导入及有效期/次数约束",
+      "packageIds": [
+        "D10"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "SEC1",
+      "originalRequirement": "员工级危险命令审批、敏感文件路径审批、每工具直接/询问/禁用三态及企业模式入口；执行侧遵循配置，拒绝/待审批无副作用",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "WIN1",
+      "originalRequirement": "原生Windows设备CLI可以实际执行命令，启动错误可见；中止取消整棵子进程树并清理",
+      "packageIds": [
+        "D16"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    },
+    {
+      "id": "DEV1",
+      "originalRequirement": "设备动作结果不明时持久暂停后续自动写入；新工具编号/跨实例/重启均不能绕过，所有者能核查详情并明确恢复",
+      "packageIds": [
+        "D11"
+      ],
+      "currentCommercialAcceptance": "NOT_ESTABLISHED_AT_HANDOFF",
+      "sourceMeaning": "Existing code and scoped repair evidence are not per-story final acceptance"
+    }
+  ],
+  "packages": [
+    {
+      "id": "D01",
+      "story_ids": [],
+      "gate_ids": [
+        3
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D02",
+      "story_ids": [],
+      "gate_ids": [
+        1
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D03",
+      "story_ids": [
+        "J2",
+        "J3",
+        "J4"
+      ],
+      "gate_ids": [
+        2
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D04",
+      "story_ids": [
+        "J1",
+        "J5",
+        "J6",
+        "G2"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D05",
+      "story_ids": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "I5",
+        "I6"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D06",
+      "story_ids": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "AUT1",
+        "AUT2",
+        "AUT3",
+        "AUT4"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D07",
+      "story_ids": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "ROLE1"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D08",
+      "story_ids": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "RES1",
+        "RES2"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D09",
+      "story_ids": [
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "K1",
+        "K2",
+        "K3",
+        "K4"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D10",
+      "story_ids": [
+        "WF1",
+        "WF2",
+        "WF3",
+        "WF4",
+        "WF5",
+        "WF6",
+        "WF7",
+        "WF8",
+        "WF9"
+      ],
+      "gate_ids": [
+        4
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D11",
+      "story_ids": [
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "SEC1",
+        "DEV1"
+      ],
+      "gate_ids": [
+        5
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D12",
+      "story_ids": [
+        "G1"
+      ],
+      "gate_ids": [],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D13",
+      "story_ids": [],
+      "gate_ids": [
+        3
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D14",
+      "story_ids": [],
+      "gate_ids": [
+        3
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D15",
+      "story_ids": [],
+      "gate_ids": [
+        3
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D16",
+      "story_ids": [
+        "WIN1"
+      ],
+      "gate_ids": [
+        3
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D17",
+      "story_ids": [],
+      "gate_ids": [
+        6
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    },
+    {
+      "id": "D18",
+      "story_ids": [],
+      "gate_ids": [
+        7
+      ],
+      "status": "REQUIRES_NEW_VALIDATION",
+      "historicalStatus": "REQUIRES_NEW_VALIDATION",
+      "currentCommercialAcceptance": "REQUIRES_FINAL_VALIDATION"
+    }
+  ],
+  "finalGates": [
+    {
+      "id": 1,
+      "originalRequirement": "同一最终SHA正式镜像8 GET 200且未知API404",
+      "requiredEvidence": "Actual same final reviewedSHA image startup; all8listedGET200 andunknownAPI404; realhealth/listen/writerstartuporder; nofixture/Nodebundle substitution.",
+      "key": "same_final_sha_formal_image_8GET_unknown404",
+      "current": "NOT_FINALLY_PROVEN"
+    },
+    {
+      "id": 2,
+      "originalRequirement": "未登录拒绝、跨租户私有资源404、无越权或拒绝后的上游调用",
+      "requiredEvidence": "RealPG tenant roles/FORCERLS andauth/scope cases; unauthrefusal,cross-tenantprivate404, no upstreamsideeffect afterrefusal; originalauthority/catalog gates.",
+      "key": "auth_tenant_RLS_defaultdeny",
+      "current": "NOT_FINALLY_PROVEN"
+    },
+    {
+      "id": 3,
+      "originalRequirement": "前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI",
+      "requiredEvidence": "Exact finalcomposedSource manifest/frozenlock/fulloriginalsuites/noUnhandled; originalconfigs andrequiredresourceenclosure; no addition ofoverlappingcase totals orscoped178/32 substitution.",
+      "key": "full_original_CI",
+      "current": "NOT_FINALLY_PROVEN"
+    },
+    {
+      "id": 4,
+      "originalRequirement": "WakerFlow实际生成-编辑-保存-执行-中止-查收及重启恢复",
+      "requiredEvidence": "Generate/edit/save/execute/abort/receive/restart recovery usingexistingrun-turn/governance/actualproducerwiring; noalternateexecutor.",
+      "key": "WakerFlow_actual_lifecycle",
+      "current": "NOT_FINALLY_PROVEN"
+    },
+    {
+      "id": 5,
+      "originalRequirement": "用户设备浏览器真实动作及离线重连、授权审批闭环",
+      "requiredEvidence": "Userdevice actualbrowser/shell/fileflow, offline/reconnect, approval/audit/unknownresultpause andfreshfinaldurability; CPUportsnotdurablePGproof.",
+      "key": "real_device_approval_offline",
+      "current": "NOT_FINALLY_PROVEN"
+    },
+    {
+      "id": 6,
+      "originalRequirement": "真实模型最小授权运行与正确计费",
+      "requiredEvidence": "Real minimal authorizedmodelrun+correctmetering/billingproof within freeexistingallocation andexplicitproviderconstraints; no paidcall/purchase orfixturebillingclaim.",
+      "key": "real_model_metering",
+      "current": "NOT_FINALLY_PROVEN"
+    },
+    {
+      "id": 7,
+      "originalRequirement": "Windows/Linux干净客户部署证据",
+      "requiredEvidence": "Real cleanclientdeployment evidence. CurrentnoWindowsprojectpayload/artifact/nativeexecution andresourcepermissions remain; prepare exactsafevalidationpermission/evidence decision before any such execution, do notlowergate.",
+      "key": "clean_Windows_Linux_customer_deployment",
+      "current": "NOT_FINALLY_PROVEN"
+    }
+  ],
+  "stop": {
+    "writer": {
+      "thread": "01a1869b-a979-7154-a182-fd0a2bdee08f",
+      "host": "durable",
+      "ackTurn": "01a19b33-20db-7262-aa8f-33fde07f9684",
+      "ackMessage": "msg_07646dd18a8665ab016ae8408c48908191a57bbb616af02362",
+      "stopped": true,
+      "nativeOperationsInFlightAtAck": false
+    },
+    "independentReviewer": {
+      "thread": "01a195bd-76b0-7610-96b0-9bafd55aa5f8",
+      "host": "local",
+      "stopped": true,
+      "onlyFutureHandoffOrClaudeVerification": true
+    },
+    "board": {
+      "room": "xiongbaowork｜77故事18包7门｜云端协作",
+      "roomId": "5c9a0089-07f6-44c9-bf7b-034b156309e2",
+      "stopMessage": "abf48e6a-d09e-4321-bef9-ad9ecba886ae",
+      "workBuddyStopTask": "1a9b5a72-2907-4ae2-83d8-0385645b8c8e",
+      "qoderStopTask": "dc4944f6-f4b8-486b-9db6-d3ea2aa8d6ff",
+      "latestRead": "UNAVAILABLE_AT_DOCUMENT_FREEZE_STOP_ACKS_NOT_ASSUMED",
+      "noAppDirectMessages": true
+    },
+    "automation": {
+      "id": "xiongbaowork",
+      "actualUpdateResponse": "Automation does not exist in the app and could not be updated",
+      "recreated": false,
+      "otherExternalSchedulers": "NOT_PROVEN_ABSENT"
+    }
+  },
+  "currentRuntimeBlockers": {
+    "originalChildrenRestored": false,
+    "originalWorkspaceRestored": false,
+    "closedDiagnosticsMustNotRepeat": [
+      "old directory/PID/socket/attachments/service ownership/tool scans",
+      "old child resume/model probes",
+      "registry/database/history fabrication"
+    ],
+    "isolatedCopyIsNotOriginalRestore": true,
+    "r8": {
+      "runtimeSHA256": "9040a8cbabd8332ead820f0467a87367d9e53bd595bd87a13abd239de0a7e610",
+      "auditSHA256": "eda3163b05436f08c154b91c0b66c0f87d7e401883a938b144a81f0b70908c46",
+      "cas": {
+        "nativeId": "exec-3c2641b6-b5d9-4018-b6dc-26e9d18ae41c",
+        "exit": 0,
+        "bytes": 3244,
+        "sha256": "d6073095ec62acde4fc0623dcf982a9a0177a0a05cf1d0db35542c67af95ee05",
+        "directRootAndNonauthor": true
+      },
+      "artifact": {
+        "nativeId": "exec-66e9ce57-e801-4339-8059-65d3a6733a4d",
+        "exit": 5,
+        "bytes": 4897,
+        "sha256": "6f17d087ff326f2068001ae2ffe30bf26302cc8a9a89a08a480fdd8fe82bd801",
+        "reason": "HTTP_STATUS_STOP_NO_RETRY",
+        "httpStatus": 403,
+        "treeStage": "TREE_DOWNLOAD",
+        "requestedArtifactKeys": [
+          "tree"
+        ],
+        "nativeStages": [],
+        "specificCause": "UNKNOWN",
+        "directRootAndNonauthor": true
+      },
+      "goSpent": 2,
+      "maxCalls": 2,
+      "newGo": false,
+      "sourcePrivateNotPublished": true,
+      "updateIncludingNUL": 131007,
+      "argStringLimit": 131072,
+      "marginBytes": 65
+    },
+    "r7ArchiveRefusal": "UNKNOWN_PERMANENTLY_NOT_RECONSTRUCTED"
+  },
+  "B": {
+    "meaning": "Bun and offline dependency preparation",
+    "wholeFilesReceived": 5,
+    "totalFiles": 6,
+    "sourceRef": "0d9b296af33f2b851fcbf4df3e9ec89751734ba4",
+    "officialRepository": "oven-sh/bun",
+    "fiveSources": [
+      {
+        "path": "src/install/PackageInstall.zig",
+        "bytes": 66791,
+        "sha256": "7e184058377092e2c2d17af6093e5cc354f13c302a133a7c1dfed71cbda5ed9f",
+        "gitBlob": "21752443b7c972de8678cf25f0af496395b31cc1"
+      },
+      {
+        "path": "src/install/extract_tarball.zig",
+        "bytes": 25272,
+        "sha256": "8f142ac24b6577f0411d4244c6b2cb1f567952ccbe8b7d53a3b072ff60c5c778",
+        "gitBlob": "04e94a2f9fc30c14763a2744b553d8b1f376e3a4"
+      },
+      {
+        "path": "src/install/PackageManager/PackageManagerEnqueue.zig",
+        "bytes": 87939,
+        "sha256": "8a98e7a8cd6ef5d73b332ef194bc1c7e5ce169dccae9652caeb4f5a7da5e622f",
+        "gitBlob": "cbe8d81c7d1a9773945383a8aef0190b761fa2a0"
+      },
+      {
+        "path": "src/install/PackageManager/processDependencyList.zig",
+        "bytes": 12640,
+        "sha256": "76f400fa6fab8363ed2d30be9745bcb3e28824ff9dbf06a66fa39a26e7ee1f14",
+        "gitBlob": "4147dfe9c89ce6bf173ecdcef664697c7cb67943"
+      },
+      {
+        "path": "src/install/PackageManager/updatePackageJSONAndInstall.zig",
+        "bytes": 32492,
+        "sha256": "754065be258c16db2f90443615d96ffcca0446db011c72814dfb415f21bde61c",
+        "gitBlob": "2e504d68155c71003a31ce829eb5f58f1ac7e78c"
+      }
+    ],
+    "lock": {
+      "repoCommit": "2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634",
+      "path": "openbot/bun.lock",
+      "bytes": 453991,
+      "sha256": "c5b3f3c17b2159e033c7cf8911780b98d0ebeba93756e175e32064b15849e670",
+      "gitBlob": "3482ff729f744a05ecd986478f34e0cb46dc6730",
+      "chatTotalParts": 38,
+      "actualRAMMatchedParts": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "failedNotReceivedParts": [
+        6
+      ],
+      "notReceivedParts": "7–38",
+      "wholeMatch": false,
+      "canRetrieveWholeFromGit": true
+    },
+    "sourceImplementationCandidate": "NOT_COMPLETED",
+    "doNotContinueStoppedChatIngestion": true,
+    "volatileRAMAvailabilityNow": "ROOT_OLD_VARIABLES_NOT_READABLE_AFTER_TOOL_CONTEXT_CHANGE_ORIGINAL_WRITER_AVAILABILITY_UNVERIFIED"
+  },
+  "C": {
+    "meaning": "Exact test commands/assertions candidate",
+    "candidate": "NOT_COMPLETED",
+    "commands": [
+      "app/quota-error-contract.test.ts",
+      "server/quota-error-contract.test.ts",
+      "app/autonomous-screen.test.tsx",
+      "server/autonomous-summary.test.ts AFTER PG GATE"
+    ],
+    "firstThreeDefinitions": [
+      16,
+      6,
+      13
+    ],
+    "firstThreeExecuted": 0,
+    "serverPGDefinitions": 6,
+    "serverPGExecuted": 0
+  },
+  "securitySourceContracts": {
+    "G01": {
+      "status": "SOURCE_CONFIRMED_NOT_IMPLEMENTED",
+      "production": [
+        "agents/handoff-runner.ts",
+        "agents/wake-up.ts",
+        "proactive/engine.ts",
+        "proactive/store.ts",
+        "channels/summary.ts"
+      ],
+      "tests": [
+        "agent-handoff-runner.test.ts",
+        "proactive.test.ts",
+        "channel-summary.integration.test.ts"
+      ],
+      "changes": 8,
+      "oldDefinitions": 50,
+      "executed": 0
+    },
+    "G02": {
+      "status": "SOURCE_CONFIRMED_NOT_IMPLEMENTED",
+      "files": [
+        "auth/index.ts",
+        "auth/roles.ts",
+        "auth/sso-required.ts",
+        "auth/scim.ts",
+        "tests/roles.test.ts",
+        "tests/email-signup.test.ts",
+        "tests/sso-required-sessions.integration.test.ts"
+      ],
+      "changes": 7,
+      "trustedVerifiedOwnershipRequired": true,
+      "SSOSuccessNotOwnershipProof": true
+    },
+    "G03": {
+      "status": "SOURCE_CONTRACT_NOT_IMPLEMENTED_NO_NEW_MIGRATION",
+      "logicalPhysicalDTOSeparate": true,
+      "customPhysicalAlsoTenantScoped": true,
+      "vaultOrder": [
+        "tighten trusted tenant callers/credential operations",
+        "new tenant live unique index",
+        "remove old global unique"
+      ],
+      "oauthExplicitTrustedTenantReentry": true,
+      "noGlobalCurrentTenantRewrite": true,
+      "noNewTeamMembershipArchitecture": true,
+      "globalBrokerRetirementDefaultOff": true,
+      "actualPGAndData": "UNKNOWN"
+    },
+    "G04": {
+      "status": "EXISTING_CREDENTIAL_GUARDS_CONFIRMED_RUNTIME_EGRESS_OPEN",
+      "provenExfiltration": false
+    },
+    "G05": {
+      "status": "DEFAULT_SANITIZER_SOURCE_CHAIN_CONFIRMED_DIST_DOM_OPEN",
+      "provenStoredXSS": false
+    }
+  },
+  "safety": {
+    "cloudOnly": true,
+    "rootWindows": "DOCUMENTATION_COORDINATION_READONLY_EVIDENCE_NO_PROJECT_EXECUTION",
+    "metadataExperiment": {
+      "used": 3,
+      "max": 3,
+      "fourthAllowed": false
+    },
+    "paidProviderCallsAllowed": false,
+    "freeCreditsConsumptionAllowed": false,
+    "productionDeploymentAllowed": false,
+    "secretReadbackAllowed": false,
+    "defaultRelease": {
+      "ROOT_RELEASE": null,
+      "ready": false,
+      "AP_DISABLED": true,
+      "NOT_SERVICE_WIRED": true,
+      "migrationNOT_WIRED": true,
+      "PG_PENDING": true
+    },
+    "legacyShared8GiBException": {
+      "scope": "specified original writer and bounded isolated copy only",
+      "exclusive": false,
+      "swapHardLimit": false,
+      "sumRSSSatisfied": false,
+      "transferToClaudeAutomatically": false
+    }
+  },
+  "validationRole": {
+    "author": "Claude Code",
+    "independentValidator": "Root/Codex",
+    "requirements": [
+      "exact final commit and parent/diff",
+      "whole-file bytes/hash/mode/blob and<=8 leaves",
+      "real command/exit/full safe outputs",
+      "NOT_RUN preserved",
+      "PG before D06 server",
+      "all77/18/7 final acceptance"
+    ]
+  },
+  "auditReport": {
+    "name": "熊宝数字员工_深度代码审计与商用交付差距报告.docx",
+    "sha256": "e0d9d8082a37c79a43a41a08b2eebcf2eb87422495f6bdc84a4a72e2e29abd39",
+    "baseline": "0089682e785d03fa67e8463bf862d2b94447392c",
+    "all90Revalidated": false,
+    "percent62Meaning": "AUTHOR_PYTHON_STYLE_EVALUATION_NOT_COMMERCIAL_PROGRESS",
+    "rawReportUploaded": false
+  }
+}
