@@ -291,6 +291,10 @@ import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
+import { createFlowGenerator } from "./wakerflows/generator";
+import { createFlowModelResolver } from "./wakerflows/model";
+import { createWakerFlowRoutes } from "./wakerflows/routes";
+import { createWakerFlowStore } from "./wakerflows/store";
 import { repeatAfterEach } from "./work/loop";
 import {
   createWorkQueue,
@@ -1984,6 +1988,24 @@ await startupLifecycle.run(async (startup) => {
     runTurn: unattendedTurnRunner,
   });
 
+  /*
+   * Spec I6: may THIS person use THIS coworker — asked per step, and never substituted.
+   *
+   * The two ways a Bot can be the caller's are the ones the memory ingestion already asks, because a
+   * crew is a grouping and not a grant: being listed beside a coworker cannot widen who may address it.
+   * An administrator's ban freezes the work the same way it freezes a routine firing (spec J5), and the
+   * monthly ceiling is asked by the store before the first card exists. Named once, because the
+   * pipeline and the WakerFlow Save must ask the same question.
+   */
+  const canUseCoworker = async (ownerUserId: string, agentId: string) => {
+    if (await isAccessRevoked(database, ownerUserId)) return false;
+    return (
+      (await pluginStore.agentOwner(agentId)) === ownerUserId ||
+      (await agentProfileStore.get(await actorFor(ownerUserId), agentId)) !==
+        null
+    );
+  };
+
   /**
    * The crew's pipeline (ticket 021): a template's ordered steps, run as unattended turns.
    *
@@ -1995,22 +2017,28 @@ await startupLifecycle.run(async (startup) => {
     database,
     board: taskProjector,
     executeStep: createPipelineStepRunner({ runTurn: unattendedTurnRunner }),
-    /*
-     * Spec I6: may THIS person use THIS coworker — asked per step, and never substituted.
-     *
-     * The two ways a Bot can be the caller's are the ones the memory ingestion already asks, because a
-     * crew is a grouping and not a grant: being listed beside a coworker cannot widen who may address it.
-     * An administrator's ban freezes the work the same way it freezes a routine firing (spec J5), and the
-     * monthly ceiling is asked by the store before the first card exists.
-     */
-    canUse: async (ownerUserId, agentId) => {
-      if (await isAccessRevoked(database, ownerUserId)) return false;
-      return (
-        (await pluginStore.agentOwner(agentId)) === ownerUserId ||
-        (await agentProfileStore.get(await actorFor(ownerUserId), agentId)) !==
-          null
-      );
-    },
+    // Spec I6, asked per step and never substituted: see `canUseCoworker` above.
+    canUse: canUseCoworker,
+    quota,
+  });
+
+  /**
+   * WakerFlow (spec D10): a saved plan compiles to a hidden crew and a template, and a run of it is
+   * this same pipeline's run — the same step runner, the same governance, the same board cards. The
+   * coworker check is the pipeline's own, asked again on every Save. The deployment's own model is
+   * not offered for planning until that product decision is made.
+   */
+  const wakerFlowStore = createWakerFlowStore({
+    database,
+    pipeline: pipelineStore,
+    board: taskProjector,
+    canUse: canUseCoworker,
+    models: createFlowModelResolver({
+      database,
+      encryptionKey: config.keyEncryptionKey,
+      allowPlatformModel: false,
+    }),
+    generator: createFlowGenerator(),
     quota,
   });
 
@@ -3568,6 +3596,17 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
     ),
+  );
+
+  // WakerFlow (spec D10): plans, their planning requests and their runs, next to the pipelines they compile to.
+  app.route(
+    "/api/wakerflows",
+    createWakerFlowRoutes({
+      store: wakerFlowStore,
+      requireUser: config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    }),
   );
 
   app.route(
