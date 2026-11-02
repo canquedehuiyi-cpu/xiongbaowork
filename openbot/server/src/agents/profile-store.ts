@@ -528,7 +528,8 @@ export function createAgentProfileStore(
           ownerUserId: actor.id,
           title: input.title,
           roleDescription: input.roleDescription,
-          avatarSeed: id,
+          // The face the person picked in the form, or the id when nothing was picked.
+          avatarSeed: input.avatarSeed ?? id,
           visibility: input.visibility,
           persona: input.persona ?? null,
         });
@@ -652,6 +653,10 @@ export function createAgentProfileStore(
               title: input.title,
               roleDescription: input.roleDescription,
               visibility: input.visibility,
+              // Only when one was sent: an edit that never showed the avatar must not redraw it.
+              ...(input.avatarSeed === undefined
+                ? {}
+                : { avatarSeed: input.avatarSeed }),
               ...(input.modelRef === undefined
                 ? {}
                 : { modelRef: input.modelRef }),
