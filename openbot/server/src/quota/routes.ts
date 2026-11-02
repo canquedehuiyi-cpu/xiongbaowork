@@ -1,6 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { commitWithAudit, recordAuditEvent } from "../audit";
 import { type AppVariables, requireAdmin } from "../auth/guards";
 import type { Database } from "../db/client";
 import { plans, subscriptions } from "../db/schema";
@@ -81,32 +82,73 @@ export function createQuotaRoutes(
     if (!known) return context.json({ error: "No such plan." }, 404);
 
     /*
-     * Move the row if the tenant has one, add one if they do not.
+     * Move the row if the tenant has one, add one if they do not — and write the trail row that says
+     * so in the same transaction.
      *
      * Update-then-insert rather than an upsert because `subscriptions` has no unique constraint on
      * `tenant_id` — provisioning's `onConflictDoNothing` only guards its own primary key — so there is
      * nothing for an upsert to conflict on. The constraint itself is a separate change (it also fixes
      * the admin list, where a second row duplicates the tenant); until then this is the shape that
      * cannot make a second row from a repeated switch.
+     *
+     * Audited, and fail closed. A tier granted with no payment behind it is exactly the act somebody
+     * later asks "who did this"; so the `plan.changed` row commits with the move or neither does, and
+     * a trail that cannot be written answers 500 with the plan where it was. Everything runs in the
+     * tenant's own frame, the one the subscription lives in, so the row is that tenant's to read and
+     * no other tenant's.
+     *
+     * A switch to the plan the workspace is already on is a no-op: nothing is written, the row or
+     * the trail, and the answer says `changed: false`. A `from == to` row would read as a grant that
+     * never happened.
      */
-    const moved = await runAsTenant(tenantId, () =>
-      database
-        .update(subscriptions)
-        .set({ planId, status: "active", updatedAt: new Date() })
-        .where(
-          and(
-            eq(subscriptions.tenantId, tenantId),
-            eq(subscriptions.status, "active"),
-          ),
-        )
-        .returning({ id: subscriptions.id }),
+    const actorUserId = context.var.actor.id;
+    const changed = await runAsTenant(tenantId, () =>
+      commitWithAudit(database, async (audit, transaction) => {
+        const current = await transaction
+          .select({ planId: subscriptions.planId })
+          .from(subscriptions)
+          .where(
+            and(
+              eq(subscriptions.tenantId, tenantId),
+              eq(subscriptions.status, "active"),
+            ),
+          )
+          .orderBy(desc(subscriptions.updatedAt))
+          .for("update");
+        if (
+          current.length > 0 &&
+          current.every((row) => row.planId === planId)
+        ) {
+          return false;
+        }
+        if (current.length > 0) {
+          await transaction
+            .update(subscriptions)
+            .set({ planId, status: "active", updatedAt: new Date() })
+            .where(
+              and(
+                eq(subscriptions.tenantId, tenantId),
+                eq(subscriptions.status, "active"),
+              ),
+            );
+        } else {
+          await transaction.insert(subscriptions).values({ tenantId, planId });
+        }
+        await recordAuditEvent(audit, {
+          eventType: "plan.changed",
+          targetType: "tenant",
+          targetId: tenantId,
+          actorUserId,
+          payload: {
+            fromPlanId: current[0]?.planId ?? null,
+            toPlanId: planId,
+            tenantId,
+          },
+        });
+        return true;
+      }),
     );
-    if (moved.length === 0) {
-      await runAsTenant(tenantId, () =>
-        database.insert(subscriptions).values({ tenantId, planId }),
-      );
-    }
-    return context.json({ planId });
+    return context.json({ planId, changed });
   });
 
   return routes;
