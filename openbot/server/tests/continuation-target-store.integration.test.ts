@@ -46,6 +46,13 @@ if (
   );
 const dbA = createDatabase(raw, { max: 1 });
 const dbB = createDatabase(raw, { max: 1 });
+/*
+ * The continuation ledger is FORCE RLS with no app-role policy, so only the fixture role can seed and
+ * lease it. The target store under test still runs as the app role on dbA/dbB.
+ */
+if (!disposable.bypassUrl)
+  throw new Error("BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_BYPASS_URL is required");
+const dbLedger = createDatabase(disposable.bypassUrl, { max: 1 });
 const owner = `target-owner-${crypto.randomUUID()}`;
 const tenant = owner;
 const ids: string[] = [];
@@ -97,6 +104,7 @@ afterAll(async () => {
   }
   await dbA.$client.close();
   await dbB.$client.close();
+  await dbLedger.$client.close();
   await disposable.drop();
 });
 class FixtureAgent extends AbstractAgent {
@@ -206,7 +214,7 @@ async function setup() {
     throw new Error(
       `BLOCKED_CANONICAL_ROLE_RLS_RELEASE:${targetA.releaseReason}:${targetB.releaseReason}`,
     );
-  const store = createContinuationStore(dbA, {
+  const store = createContinuationStore(dbLedger, {
     leaseMs: 60000,
     authorizeCurrentProvisioning: async () => true, // fixture provenance, NOT production policy
     verifyNeverAdmittedProof: targetA.verifyNeverAdmittedProof,
