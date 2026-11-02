@@ -261,6 +261,17 @@ describe("the card's labels (A3, C2, I2, A5)", () => {
     expect(
       sourceLabelOf({ source: "routine", triggerSource: "automation" }),
     ).toEqual({ label: "自主工作", detail: "自动任务" });
+    // The server stores an automation's trigger with its kind (`automation:<kind>`) and a wake-up
+    // follow-up as `wake_up` (C2); both read as their own kind, not the lane's fallback.
+    expect(
+      sourceLabelOf({
+        source: "routine",
+        triggerSource: "automation:schedule",
+      }),
+    ).toEqual({ label: "自主工作", detail: "自动任务" });
+    expect(
+      sourceLabelOf({ source: "routine", triggerSource: "wake_up" }),
+    ).toEqual({ label: "自主工作", detail: "唤醒跟进" });
     // A trigger this release does not know keeps the source's own answer.
     expect(
       sourceLabelOf({ source: "routine", triggerSource: "webhook" }),

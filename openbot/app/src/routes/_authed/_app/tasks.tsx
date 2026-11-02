@@ -247,7 +247,11 @@ const AUTONOMOUS_DETAIL: Record<string, string> = {
   responsibility: "职责",
   proactive: "巡检",
   automation: "自动任务",
+  wake_up: "唤醒跟进",
 };
+
+/** The stored trigger may carry a suffix (`automation:<kind>`); its kind is the part before it. */
+const triggerKindOf = (trigger: string) => trigger.split(":", 1)[0] ?? trigger;
 
 /**
  * A card's source, as the board prints it: the A3 label, and for 自主工作 what kind of it. An unknown
@@ -260,7 +264,9 @@ export const sourceLabelOf = (task: {
   const label = SOURCE_LABEL[task.source] ?? task.source;
   if (label !== "自主工作") return { label, detail: null };
   const detail =
-    (task.triggerSource ? AUTONOMOUS_DETAIL[task.triggerSource] : undefined) ??
+    (task.triggerSource
+      ? AUTONOMOUS_DETAIL[triggerKindOf(task.triggerSource)]
+      : undefined) ??
     AUTONOMOUS_DETAIL[task.source] ??
     null;
   return { label, detail };
