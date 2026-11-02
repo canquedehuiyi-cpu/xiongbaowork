@@ -75,6 +75,20 @@ export type Tier = {
   limits: PlanLimits;
 };
 
+/**
+ * How a change of tier happens on this deployment (spec K3), as the server's payment seam answers.
+ *
+ * Today only `manual` exists: no payment channel, and `instructions` says who moves the plan. A
+ * `redirect` kind is reserved for a channel that hands the person to a payment page.
+ */
+export type Checkout = {
+  provider: string;
+  kind: "manual" | "redirect";
+  instructions?: string;
+};
+
+export type Tiers = { plans: Tier[]; checkout?: Checkout };
+
 export const quotaKeys = {
   all: ["quota"] as const,
   usage: () => ["quota", "usage"] as const,
@@ -128,7 +142,7 @@ export function tiersQueryOptions() {
       const response = await client("/api/quota/plans", {
         fallback: "The plans could not be loaded.",
       });
-      return (await response.json()) as { plans: Tier[] };
+      return (await response.json()) as Tiers;
     },
   });
 }

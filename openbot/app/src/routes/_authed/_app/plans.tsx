@@ -49,6 +49,10 @@ function RouteComponent() {
   const current = quota.data?.plan?.id;
   const usage = quota.data?.usage;
   const tokens = quota.data?.tokens;
+  const checkout = tiers.data?.checkout;
+  // The seam's own instruction when it is the manual one; the page's own wording otherwise.
+  const manualInstructions =
+    checkout?.kind === "manual" ? checkout.instructions : undefined;
 
   return (
     <PageShell
@@ -145,7 +149,13 @@ function RouteComponent() {
             </Item>
           ))}
         </PageRows>
-        {isAdmin ? null : (
+        {manualInstructions ? (
+          <p className="mt-4 text-muted-foreground text-sm">
+            {isAdmin
+              ? `${manualInstructions}：当前未接入支付渠道，切换不收费，对这个工作空间立刻生效。`
+              : `${manualInstructions}。当前未接入支付渠道，需要切换时，请联系管理员。`}
+          </p>
+        ) : isAdmin ? null : (
           <p className="mt-4 text-muted-foreground text-sm">
             套餐由平台管理员调整。需要切换时，请联系管理员。
           </p>
