@@ -1229,10 +1229,42 @@
     "meaning": "Exact test commands/assertions candidate",
     "candidate": "NOT_COMPLETED",
     "commands": [
-      "app/quota-error-contract.test.ts",
-      "server/quota-error-contract.test.ts",
-      "app/autonomous-screen.test.tsx",
-      "server/autonomous-summary.test.ts AFTER PG GATE"
+      {
+        "order": 1,
+        "cwd": "openbot/app",
+        "repoRelativePath": "openbot/app/tests/quota-error-contract.test.ts",
+        "command": "bun test ./tests/quota-error-contract.test.ts",
+        "expectedDefinitions": 16,
+        "gate": "APPROVED_ENVIRONMENT_AND_DEPENDENCIES",
+        "status": "NOT_RUN"
+      },
+      {
+        "order": 2,
+        "cwd": "openbot/server",
+        "repoRelativePath": "openbot/server/tests/quota-error-contract.test.ts",
+        "command": "bun test ./tests/quota-error-contract.test.ts",
+        "expectedDefinitions": 6,
+        "gate": "AFTER_QUOTA_APP_AND_APPROVED_CPU_ENVIRONMENT",
+        "status": "NOT_RUN"
+      },
+      {
+        "order": 3,
+        "cwd": "openbot/app",
+        "repoRelativePath": "openbot/app/tests/autonomous-screen.test.tsx",
+        "command": "bun test ./tests/autonomous-screen.test.tsx",
+        "expectedDefinitions": 13,
+        "gate": "AFTER_QUOTA_SERVER_AND_APPROVED_CPU_ENVIRONMENT",
+        "status": "NOT_RUN"
+      },
+      {
+        "order": 4,
+        "cwd": "openbot/server",
+        "repoRelativePath": "openbot/server/tests/autonomous-summary.test.ts",
+        "command": "bun test ./tests/autonomous-summary.test.ts",
+        "expectedDefinitions": 6,
+        "gate": "AFTER_SEPARATE_REAL_PG_SCHEMA_ROLE_RLS_GATE",
+        "status": "PG_GATE_PENDING_NOT_RUN"
+      }
     ],
     "firstThreeDefinitions": [
       16,
