@@ -21,8 +21,12 @@ import {
   wakerGroupMembers,
   wakerGroups,
 } from "../db/schema";
-import type { PipelineStore } from "../pipeline/store";
-import type { QuotaService } from "../quota/limits";
+import {
+  PipelineNotFoundError,
+  type PipelineStore,
+  PipelineValidationError,
+} from "../pipeline/store";
+import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
 import {
@@ -32,7 +36,7 @@ import {
   FlowPlanFormatError,
 } from "./generator";
 import type { FlowModelResolver } from "./model";
-import { wakerFlowPlanSchema } from "./plan";
+import { flowInputs, wakerFlowPlanSchema } from "./plan";
 
 /**
  * The WakerFlow store (spec D10, stories WF1/WF3/WF4).
@@ -93,7 +97,23 @@ export class WakerFlowBusyError extends WakerFlowError {
   }
 }
 
-/** Generation and runs arrive with later packages (WF-B, WF-C). */
+/** A run that is not this Flow's, or not this workspace's, reads the same as one that never existed. */
+export class WakerFlowRunNotFoundError extends WakerFlowError {
+  constructor() {
+    super(404, "这里没有这次运行。");
+    this.name = "WakerFlowRunNotFoundError";
+  }
+}
+
+/** A run is started from the plan the person was looking at; a newer or unsaved plan is refused. */
+export class WakerFlowNotRunnableError extends WakerFlowError {
+  constructor(message: string) {
+    super(409, message);
+    this.name = "WakerFlowNotRunnableError";
+  }
+}
+
+/** A capability whose wiring this deployment does not have (no planning model configured). */
 export class WakerFlowUnavailableError extends WakerFlowError {
   constructor() {
     super(501, "这个 WakerFlow 功能尚未开放。");
@@ -233,6 +253,12 @@ export class WakerFlowRequestConflictError extends WakerFlowError {
 }
 
 const GENERATE = "generate";
+const RUN = "run";
+const NOT_SAVED_MESSAGE = "这个 WakerFlow 还没有保存为可运行的计划，请先保存。";
+const STALE_REVISION_MESSAGE = "这个 WakerFlow 已更新，请刷新后再运行。";
+const RUN_UNCERTAIN_MESSAGE =
+  "无法确认这次运行是否已经开始，请到运行记录中查看，或发起新的运行。";
+const QUOTA_MESSAGE = "本月任务额度不足，这次运行没有开始。";
 const CANCELLED_MESSAGE = "已取消生成。";
 const UNCERTAIN_MESSAGE = "无法确认模型是否完成了这次生成，请发起新的生成。";
 const SAVE_FAILED_MESSAGE = "生成的计划未能保存，请重新生成。";
@@ -319,9 +345,9 @@ function outcome(row: RequestRow): WakerFlowRequestOutcome {
 
 export function createWakerFlowStore(options: {
   database: Database;
-  /** Kept for WF-B, which starts runs from the compiled template. */
+  /** WF-C: a run is the existing pipeline's run of the compiled template, driven by its `advance`. */
   pipeline: PipelineStore;
-  /** Kept for WF-B/WF-C, which put planning and runs on the board. */
+  /** Kept for the board projections the pipeline itself writes. */
   board: TaskProjector;
   /** Spec I6: may THIS actor use THIS coworker? Asked for every member on every Save. */
   canUse: (actor: string, agentId: string) => Promise<boolean>;
@@ -330,8 +356,59 @@ export function createWakerFlowStore(options: {
   generator?: Pick<FlowGenerator, "plan">;
   /** A planning call is model spend, so it is asked against the monthly ceiling first. */
   quota?: Pick<QuotaService, "assertCapacity">;
+  /**
+   * WF-C: drive a started run without holding the request open. The default is the pipeline routes'
+   * own shape — `advance`, not awaited, a failure logged — and tests hand in one they can await.
+   */
+  drive?: (run: { tenantId: string; runId: string }) => void;
 }) {
   const { database, canUse } = options;
+  const drive =
+    options.drive ??
+    ((run: { tenantId: string; runId: string }) => {
+      void options.pipeline.advance(run).catch((error: unknown) =>
+        console.error(
+          JSON.stringify({
+            type: "wakerflow-drive-failed",
+            runId: run.runId,
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        ),
+      );
+    });
+
+  /** The caller's own, live, json-plan-v1 Flow, or null. */
+  const visibleFlow = async (tenantId: string, id: string) => {
+    if (!isUuid(id)) return null;
+    const [row] = await runAsTenant(tenantId, async () =>
+      database
+        .select(columns)
+        .from(wakerFlows)
+        .where(ownFlow(tenantId, id))
+        .limit(1),
+    );
+    return row ?? null;
+  };
+
+  /** A run of THIS Flow in THIS tenant; anything else reads as not here. */
+  const ownRun = async (tenantId: string, flowId: string, runId: string) => {
+    if (!isUuid(runId) || !(await visibleFlow(tenantId, flowId)))
+      throw new WakerFlowRunNotFoundError();
+    const [row] = await runAsTenant(tenantId, async () =>
+      database
+        .select({ id: groupTaskRuns.id })
+        .from(groupTaskRuns)
+        .where(
+          and(
+            eq(groupTaskRuns.tenantId, tenantId),
+            eq(groupTaskRuns.id, runId),
+            eq(groupTaskRuns.flowId, flowId),
+          ),
+        )
+        .limit(1),
+    );
+    if (!row) throw new WakerFlowRunNotFoundError();
+  };
   /** Calls running in THIS process, so Cancel can stop the socket and not only the row. */
   const inflight = new Map<
     string,
@@ -623,7 +700,7 @@ export function createWakerFlowStore(options: {
               and(
                 eq(wakerFlowRequests.tenantId, tenantId),
                 eq(wakerFlowRequests.flowId, id),
-                eq(wakerFlowRequests.kind, "generate"),
+                // Planning, or a run request that has claimed its row and not yet registered its run.
                 eq(wakerFlowRequests.status, "pending"),
               ),
             )
@@ -903,19 +980,228 @@ export function createWakerFlowStore(options: {
       return row ? outcome(row) : null;
     },
 
-    /** WF-B: start a run of the saved template. */
+    /**
+     * Start a run of the saved plan (stories WF4/WF5/WF6), once per request id.
+     *
+     * The order is the contract. A repeat of a claimed request answers from its row and never starts a
+     * second run — not even one whose outcome is `unknown`, because the pipeline may have opened its
+     * card. A new request is refused for a Flow that is not the caller's (404), one that is not saved
+     * or not at the revision the person was looking at (409), and inputs the plan does not declare or
+     * leaves missing (400) — all before any row or card exists. Then the claim, taken under a share
+     * lock on the Flow so a concurrent delete either lands first (and this is a 404) or waits and then
+     * sees the pending request; the run id is fixed in that row before the pipeline is asked, so a
+     * crash between the two cannot mint a second id. Then the pipeline's own start, and the drive.
+     */
     async start(
-      _tenantId: string,
-      _actor: string,
-      _id: string,
-      _input: WakerFlowStartInput,
+      tenantId: string,
+      actor: string,
+      id: string,
+      input: WakerFlowStartInput,
     ): Promise<WakerFlowRequestOutcome> {
-      throw new WakerFlowUnavailableError();
+      if (!isUuid(id)) throw new WakerFlowNotFoundError();
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      if (!Number.isInteger(input.revision) || input.revision < 0)
+        throw new WakerFlowValidationError(
+          "缺少有效的版本号，请刷新后再运行。",
+        );
+      const fingerprint = createHash("sha256")
+        .update(
+          canonical({
+            kind: RUN,
+            flowId: id,
+            revision: input.revision,
+            inputs: input.inputs ?? {},
+          }),
+        )
+        .digest("hex");
+      const answer = (row: RequestRow) => {
+        if (row.fingerprint !== fingerprint)
+          throw new WakerFlowRequestConflictError();
+        return outcome(row);
+      };
+      const existing = await readRequest(tenantId, input.requestId);
+      if (existing) return answer(existing);
+
+      const flow = await visibleFlow(tenantId, id);
+      if (!flow) throw new WakerFlowNotFoundError();
+      const { plan, templateId } = flow;
+      // The same fact `shape` calls "ready": Save has compiled the plan into a crew and a template.
+      if (!plan || !templateId || !flow.groupId)
+        throw new WakerFlowNotRunnableError(NOT_SAVED_MESSAGE);
+      if (flow.revision !== input.revision)
+        throw new WakerFlowNotRunnableError(STALE_REVISION_MESSAGE);
+      let inputs: Record<string, string>;
+      try {
+        inputs = flowInputs(plan, input.inputs ?? {});
+      } catch (error) {
+        throw new WakerFlowValidationError(
+          error instanceof z.ZodError
+            ? "流程输入格式不正确。"
+            : error instanceof Error
+              ? error.message
+              : "流程输入格式不正确。",
+        );
+      }
+      // Refused before the claim, so a workspace at its ceiling is left with no row to explain.
+      await options.quota?.assertCapacity(
+        tenantId,
+        "tasksPerMonth",
+        plan.steps.length + 1,
+      );
+
+      const claimed = await runAsTenant(tenantId, () =>
+        database.transaction(async (tx) => {
+          const [locked] = await tx
+            .select({
+              revision: wakerFlows.revision,
+              templateId: wakerFlows.templateId,
+            })
+            .from(wakerFlows)
+            .where(ownFlow(tenantId, id))
+            .for("share");
+          if (!locked) throw new WakerFlowNotFoundError();
+          if (
+            locked.revision !== input.revision ||
+            locked.templateId !== templateId
+          )
+            throw new WakerFlowNotRunnableError(STALE_REVISION_MESSAGE);
+          const [row] = await tx
+            .insert(wakerFlowRequests)
+            .values({
+              tenantId,
+              requestId: input.requestId,
+              flowId: id,
+              kind: RUN,
+              fingerprint,
+              runId: randomUUID(),
+            })
+            .onConflictDoNothing({
+              target: [wakerFlowRequests.tenantId, wakerFlowRequests.requestId],
+            })
+            .returning({
+              ...requestColumns,
+              tenantId: wakerFlowRequests.tenantId,
+            });
+          return row ?? null;
+        }),
+      );
+      const runId = claimed?.runId;
+      if (!claimed || !runId) {
+        // A twin claimed it first; its row is the answer, whatever state it is in.
+        const twin = await readRequest(tenantId, input.requestId);
+        if (!twin) throw new WakerFlowNotFoundError();
+        return answer(twin);
+      }
+
+      // From here on the tenant is the claimed row's, never a value carried in from elsewhere.
+      const owner = claimed.tenantId;
+      let started: { runId: string; parentTaskId: string };
+      try {
+        started = await options.pipeline.start({
+          tenantId: owner,
+          templateId,
+          flowId: id,
+          inputs,
+          task: flow.name,
+          initiatedBy: actor,
+          runId,
+        });
+      } catch (error) {
+        // These are raised before the pipeline opens a card or writes a run: nothing happened.
+        if (error instanceof QuotaExceeded) {
+          await finish(owner, claimed.id, "failed", QUOTA_MESSAGE);
+          throw error;
+        }
+        if (
+          error instanceof PipelineNotFoundError ||
+          error instanceof PipelineValidationError
+        ) {
+          await finish(owner, claimed.id, "failed", error.message);
+          throw error;
+        }
+        // Anything else may have left a card behind: recorded as such and never replayed.
+        await finish(owner, claimed.id, "unknown", RUN_UNCERTAIN_MESSAGE).catch(
+          () => undefined,
+        );
+        const settled = await readRequest(owner, input.requestId);
+        return outcome(settled ?? claimed);
+      }
+      const registered = started;
+      drive({ tenantId: owner, runId: registered.runId });
+      await runAsTenant(owner, async () =>
+        database
+          .update(wakerFlowRequests)
+          .set({
+            status: "completed",
+            error: null,
+            runId: registered.runId,
+            taskId: registered.parentTaskId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(wakerFlowRequests.id, claimed.id),
+              eq(wakerFlowRequests.tenantId, owner),
+              eq(wakerFlowRequests.status, "pending"),
+            ),
+          ),
+      );
+      const settled = await readRequest(owner, input.requestId);
+      return outcome(settled ?? claimed);
     },
 
-    /** WF-B: the runs of this Flow. */
-    async runs(_tenantId: string, _id: string): Promise<WakerFlowRunSummary[]> {
-      throw new WakerFlowUnavailableError();
+    /** The runs of this Flow, newest first. */
+    async runs(tenantId: string, id: string): Promise<WakerFlowRunSummary[]> {
+      if (!(await visibleFlow(tenantId, id)))
+        throw new WakerFlowNotFoundError();
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select({
+            id: groupTaskRuns.id,
+            status: groupTaskRuns.status,
+            templateId: groupTaskRuns.templateId,
+            parentTaskId: groupTaskRuns.parentTaskId,
+            createdAt: groupTaskRuns.createdAt,
+          })
+          .from(groupTaskRuns)
+          .where(
+            and(
+              eq(groupTaskRuns.tenantId, tenantId),
+              eq(groupTaskRuns.flowId, id),
+            ),
+          )
+          .orderBy(desc(groupTaskRuns.createdAt)),
+      );
+      return rows.map((row) => ({
+        id: row.id,
+        status: row.status,
+        templateId: row.templateId,
+        parentTaskId: row.parentTaskId,
+        createdAt: row.createdAt.toISOString(),
+      }));
+    },
+
+    /** One run of this Flow, as the pipeline reads it. */
+    async run(tenantId: string, id: string, runId: string) {
+      await ownRun(tenantId, id, runId);
+      const run = await options.pipeline.inspect({ tenantId, runId });
+      if (!run) throw new WakerFlowRunNotFoundError();
+      return { id: runId, flowId: id, ...run };
+    },
+
+    /** Stop a run of this Flow; the pipeline's abort is what fences late step results. */
+    async abortRun(tenantId: string, id: string, runId: string) {
+      await ownRun(tenantId, id, runId);
+      return options.pipeline.abort({ tenantId, runId });
+    },
+
+    /** The planning model picker; 501 without a resolver. */
+    async modelChoices(tenantId: string) {
+      if (!options.models) throw new WakerFlowUnavailableError();
+      return options.models.choices(tenantId);
     },
   };
 }

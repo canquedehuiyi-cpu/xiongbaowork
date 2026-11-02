@@ -383,6 +383,8 @@ tests/waker-groups.test.ts
 tests/wakerflow-generation-requests.integration.test.ts
 tests/wakerflow-generator.test.ts
 tests/wakerflow-plan.test.ts
+tests/wakerflow-routes.test.ts
+tests/wakerflow-run.integration.test.ts
 tests/wakerflows-store.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
