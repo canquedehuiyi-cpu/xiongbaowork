@@ -55,6 +55,7 @@ tests/audit-initiator.integration.test.ts
 tests/audit-limit.test.ts
 tests/audit-retention.integration.test.ts
 tests/audit.test.ts
+tests/auth-audit-tenant.integration.test.ts
 tests/auth-mobile-scheme.integration.test.ts
 tests/autonomous-summary.test.ts
 tests/ban-freezes-execution.test.ts
@@ -133,6 +134,7 @@ tests/delivery-store.integration.test.ts
 tests/delivery-turn.test.ts
 tests/demonstrations-store.integration.test.ts
 tests/demonstrations.test.ts
+tests/deployment-frames.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
 tests/dev-actor.integration.test.ts
@@ -148,6 +150,7 @@ tests/email-signup.test.ts
 tests/encrypt-sso-config.test.ts
 tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts
+tests/enterprise-frames.integration.test.ts
 tests/entra-profile.test.ts
 tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
@@ -230,6 +233,7 @@ tests/plugin-user-credential.integration.test.ts
 tests/policy-dry-run.test.ts
 tests/policy-durability.integration.test.ts
 tests/policy-fanout.integration.test.ts
+tests/policy-store-tenant.integration.test.ts
 tests/private-share-group.test.ts
 tests/proactive-store.integration.test.ts
 tests/proactive.test.ts

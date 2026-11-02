@@ -13,6 +13,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import type { Database } from "./db/client";
 import { auditEvents } from "./db/schema";
 import { parsePageLimit } from "./paging";
+import { assertPersonTenant, runAsTenant } from "./tenant/context";
 
 const sensitiveKeys = new Set([
   "access_token",
@@ -651,6 +652,38 @@ export async function recordAuditEvent(
     ...event,
     payload: redactAuditPayload(event.payload) as Record<string, unknown>,
   });
+}
+
+/**
+ * A row that belongs to nobody: the deployment's own (a boot note, a refusal of a caller who proved
+ * no person). Written as `platform` (G01), never left to the caller's frame.
+ *
+ * Unframed, the legacy fallback filed these as `system`, and a `system` row is one every tenant's
+ * trail shows: a refused sign-in, with the address it was refused for, in everybody's audit list.
+ */
+export function recordPlatformAuditEvent(
+  store: AuditStore,
+  event: AuditEventInput,
+): Promise<void> {
+  return runAsTenant("platform", () => recordAuditEvent(store, event));
+}
+
+/**
+ * A row about one person, filed in that person's tenant (G01).
+ *
+ * `tenant` must come from a row the caller read or was handed by the identity layer (a session's
+ * user id, a user row's id), never from a request payload. Somebody who is nobody (`system`,
+ * `platform`, empty) is refused with a `TenantContextError` rather than filed where everybody sees it,
+ * and so is a person other than the one whose frame this already runs in.
+ */
+export async function recordPersonAuditEvent(
+  store: AuditStore,
+  tenant: unknown,
+  event: AuditEventInput,
+): Promise<void> {
+  // Async so a refusal is a rejection, which every caller's `.catch` already handles.
+  const owner = assertPersonTenant(tenant);
+  await runAsTenant(owner, () => recordAuditEvent(store, event));
 }
 
 function initiatorColumns(initiator: AuditInitiator | undefined) {

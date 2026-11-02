@@ -5,13 +5,16 @@ import { createDatabase } from "../src/db/client";
 import { mcpServers } from "../src/db/schema";
 import type { BrokerApp } from "../src/plugins/broker";
 import { backfillComposioLogos } from "../src/plugins/logos";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const ids: string[] = [];
 afterEach(async () => {
   for (const id of ids.splice(0))
-    await database.delete(mcpServers).where(eq(mcpServers.id, id));
+    await runAsTenant("platform", () =>
+      database.delete(mcpServers).where(eq(mcpServers.id, id)),
+    );
 });
 afterAll(async () => {
   await database.$client.close();
@@ -43,10 +46,9 @@ function app(slug: string): BrokerApp {
   };
 }
 async function row(id: string) {
-  const [result] = await database
-    .select()
-    .from(mcpServers)
-    .where(eq(mcpServers.id, id));
+  const [result] = await runAsTenant("platform", () =>
+    database.select().from(mcpServers).where(eq(mcpServers.id, id)),
+  );
   return result;
 }
 
@@ -74,4 +76,39 @@ test("catalogue errors preserve the saved app and propagate to the startup warni
   ).rejects.toThrow("Catalogue unavailable");
   expect((await row(id))?.logo).toBeNull();
   expect((await row(id))?.authScheme).toBe("API_KEY");
+});
+
+/*
+ * G01-D: the backfill is boot maintenance across every tenant, so it runs as `platform`. Unframed it
+ * read as `system` and never saw an app a person enabled in their own workspace.
+ */
+test("fills an app a person enabled in their own workspace, and leaves it theirs", async () => {
+  const tenant = `logo-tenant-${randomUUID()}`;
+  const id = `logo-${randomUUID()}`;
+  await runAsTenant(tenant, () =>
+    database.insert(mcpServers).values({
+      id,
+      title: "Example",
+      vendor: "Composio",
+      url: `composio://${id}`,
+      provenance: "composio",
+      logo: null,
+      authScheme: "API_KEY",
+    }),
+  );
+  ids.push(id);
+
+  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
+  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+  try {
+    await backfillComposioLogos(database, {
+      listApps: async () => [app(id)],
+    });
+  } finally {
+    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
+    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
+  }
+  const filled = await row(id);
+  expect(filled?.logo).toBe("https://example.com/logo.svg");
+  expect(filled?.tenantId).toBe(tenant);
 });

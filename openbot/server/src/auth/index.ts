@@ -9,7 +9,7 @@ import { genericOAuth, okta } from "better-auth/plugins";
 import { eq, sql } from "drizzle-orm";
 import { createEnterpriseStore } from "../admin/settings-store";
 import type { AuditEventInput, AuditStore } from "../audit";
-import { recordAuditEvent } from "../audit";
+import { recordPersonAuditEvent, recordPlatformAuditEvent } from "../audit";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
 import {
@@ -76,14 +76,22 @@ export async function decideSignInMethod(input: {
  * These run inside Better Auth's own hooks, where a thrown error becomes a refused sign-in. A trail
  * that is briefly unavailable must not lock everybody out of the deployment, so the failure is
  * logged where an operator will see it and the sign-in continues.
+ *
+ * Every row says whose it is (G01). `person` is the user id of the account Better Auth itself
+ * resolved (a session's `userId`), and the row goes in that person's trail. Without one — a refusal
+ * before any account is proven, keyed only on the address somebody typed — the row is the
+ * deployment's, `platform`. Unframed, these were all `system`, so every tenant's trail listed every
+ * refused sign-in in the deployment, address included.
  */
 async function record(
   auditStore: AuditStore | undefined,
   event: AuditEventInput,
+  person?: string,
 ): Promise<void> {
   if (!auditStore) return;
   try {
-    await recordAuditEvent(auditStore, event);
+    if (person === undefined) await recordPlatformAuditEvent(auditStore, event);
+    else await recordPersonAuditEvent(auditStore, person, event);
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -550,31 +558,39 @@ export function createAuth(
               user &&
               !emailDomainAllowed(user.email, authConfig.allowedEmailDomains)
             ) {
-              await record(auditStore, {
-                eventType: "session.refused",
-                targetType: "person",
-                targetId: session.userId,
-                actorUserId: session.userId,
-                payload: {
-                  email: user.email,
-                  reason: "email domain not admitted by this deployment",
+              await record(
+                auditStore,
+                {
+                  eventType: "session.refused",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user.email,
+                    reason: "email domain not admitted by this deployment",
+                  },
                 },
-              });
+                session.userId,
+              );
               throw new APIError("FORBIDDEN", {
                 message: DOMAIN_REFUSAL_MESSAGE,
               });
             }
             if (user && (await isRevoked?.(user.email))) {
-              await record(auditStore, {
-                eventType: "session.refused",
-                targetType: "person",
-                targetId: session.userId,
-                actorUserId: session.userId,
-                payload: {
-                  email: user.email,
-                  reason: "access removed by an administrator",
+              await record(
+                auditStore,
+                {
+                  eventType: "session.refused",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user.email,
+                    reason: "access removed by an administrator",
+                  },
                 },
-              });
+                session.userId,
+              );
               throw new APIError("FORBIDDEN", {
                 message: "Your access to this deployment has been removed.",
               });
@@ -621,26 +637,34 @@ export function createAuth(
              * produce one of these on every sign-in.
              */
             if (promoted) {
-              await record(auditStore, {
-                eventType: "person.admin_by_configuration",
+              await record(
+                auditStore,
+                {
+                  eventType: "person.admin_by_configuration",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user?.email,
+                    reason:
+                      "this address is named in INITIAL_ADMIN_EMAILS, so the configuration granted it",
+                  },
+                },
+                session.userId,
+              );
+            }
+
+            await record(
+              auditStore,
+              {
+                eventType: "session.signed_in",
                 targetType: "person",
                 targetId: session.userId,
                 actorUserId: session.userId,
-                payload: {
-                  email: user?.email,
-                  reason:
-                    "this address is named in INITIAL_ADMIN_EMAILS, so the configuration granted it",
-                },
-              });
-            }
-
-            await record(auditStore, {
-              eventType: "session.signed_in",
-              targetType: "person",
-              targetId: session.userId,
-              actorUserId: session.userId,
-              payload: { email: user?.email },
-            });
+                payload: { email: user?.email },
+              },
+              session.userId,
+            );
           },
         },
       },

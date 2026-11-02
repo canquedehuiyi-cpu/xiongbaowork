@@ -6,6 +6,7 @@ import {
 } from "../src/computer/policy-store";
 import { createDatabase } from "../src/db/client";
 import { actionPolicy } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -25,8 +26,11 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const configured = DEFAULT_ACTION_POLICY;
 const rule = 'intent == "activate" && contains(element.name, "submit")';
 
+// The boundary row is the deployment's (`platform`), so the cleanup has to be able to see it.
 afterEach(async () => {
-  await database.delete(actionPolicy).where(eq(actionPolicy.id, "current"));
+  await runAsTenant("platform", () =>
+    database.delete(actionPolicy).where(eq(actionPolicy.id, "current")),
+  );
 });
 
 describe("a boundary set while running", () => {
@@ -66,7 +70,9 @@ describe("a boundary set while running", () => {
     await store.set({ mode: "enforce", deny: ["first"], allow: ["true"] });
     await store.set({ mode: "dry-run", deny: ["second"], allow: ["true"] });
 
-    const rows = await database.select().from(actionPolicy);
+    const rows = await runAsTenant("platform", () =>
+      database.select().from(actionPolicy),
+    );
     // One boundary per deployment, by construction. Two rows would mean something has to choose.
     expect(rows).toHaveLength(1);
     expect(rows[0]?.mode).toBe("dry-run");
@@ -80,7 +86,9 @@ describe("a boundary set while running", () => {
       "admin@example.test",
     );
 
-    const [row] = await database.select().from(actionPolicy);
+    const [row] = await runAsTenant("platform", () =>
+      database.select().from(actionPolicy),
+    );
     expect(row?.updatedBy).toBe("admin@example.test");
   });
 

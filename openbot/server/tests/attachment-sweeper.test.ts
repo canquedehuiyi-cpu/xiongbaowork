@@ -17,8 +17,11 @@ const createdChannelIds: string[] = [];
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
+  // As `platform`, so a person-stamped fixture is cleaned up too, even when its test failed.
   for (const id of createdAttachmentIds.splice(0)) {
-    await database.delete(attachments).where(eq(attachments.id, id));
+    await runAsTenant("platform", () =>
+      database.delete(attachments).where(eq(attachments.id, id)),
+    );
   }
   for (const id of createdChannelIds.splice(0)) {
     await database.delete(channels).where(eq(channels.id, id));
@@ -377,6 +380,65 @@ describe("sweeping staged attachments", () => {
         database.delete(attachments).where(eq(attachments.id, unrelated.id)),
       );
     }
+  });
+});
+
+/*
+ * G01-D: the cron script hands the culler a plain pool with no frame. The sweep is housekeeping over
+ * every tenant, so it runs as `platform`; unframed it read as the legacy `system` scope, and under
+ * row-level security a person's staged upload was never found. Driven against the pool itself here,
+ * not a transaction, because a transaction carries the frame it was opened in.
+ *
+ * The window is fifty years and the row sixty, so no other staged row in a shared database is old
+ * enough to be touched by this sweep.
+ */
+describe("the cron job's own sweep", () => {
+  test("reaches a person's staged upload with no frame of its own", async () => {
+    const { userId, channelId } = await seedChannel();
+    const tenant = `${testPrefix}-person-${randomUUID()}`;
+    const [row] = await runAsTenant(tenant, () =>
+      database
+        .insert(attachments)
+        .values({
+          tenantId: tenant,
+          channelId,
+          uploadedBy: userId,
+          name: "abandoned.bin",
+          mimeType: "application/octet-stream",
+          sizeBytes: 1,
+          bytes: Buffer.from([0x05]),
+        })
+        .returning({ id: attachments.id }),
+    );
+    createdAttachmentIds.push(row.id);
+    await runAsTenant(tenant, () =>
+      database
+        .update(attachments)
+        .set({ createdAt: ago(60 * 365 * 24) })
+        .where(eq(attachments.id, row.id)),
+    );
+
+    const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
+    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+    let deleted: number;
+    try {
+      deleted = await cullStagedAttachments(database, {
+        olderThanHours: 50 * 365 * 24,
+      });
+    } finally {
+      if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
+      else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
+    }
+
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    expect(
+      await runAsTenant(tenant, () =>
+        database
+          .select({ id: attachments.id })
+          .from(attachments)
+          .where(eq(attachments.id, row.id)),
+      ),
+    ).toEqual([]);
   });
 });
 
