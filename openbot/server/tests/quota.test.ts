@@ -52,7 +52,8 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   next,
 ) => {
   context.set("actor", { id: tenant, role: "user" as const });
-  await next();
+  // As the real guard does: the rest of the request runs in the signed-in person's own frame.
+  await runAsTenant(tenant, () => next());
 };
 
 const agentRoutes = createAgentRoutes(
