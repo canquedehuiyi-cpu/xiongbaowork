@@ -38,6 +38,7 @@ import {
 import { responsibilities } from "../src/db/schema/responsibilities";
 import { workItems } from "../src/db/schema/work";
 import { createRoutineRunner } from "../src/routines/runner";
+import { runAsTenant, TenantContextError } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -215,9 +216,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   resetBotLifecycleForTests();
-  await database
-    .delete(workItems)
-    .where(sql`${workItems.key} like ${`%${prefix}%`}`);
+  // As the platform, because follow-ups are stamped with the person who scheduled them.
+  await runAsTenant("platform", () =>
+    database
+      .delete(workItems)
+      .where(sql`${workItems.key} like ${`%${prefix}%`}`),
+  );
   await database
     .delete(approvalRequests)
     .where(eq(approvalRequests.ownerUserId, owner));
@@ -362,23 +366,34 @@ describe("Activity and attention", () => {
 
 describe("follow-ups", () => {
   const wakeUps = createWakeUpStore(database);
+  /*
+   * Scheduling, listing and cancelling run in the person's own frame, the way a turn's tool call
+   * does (POST /api/agent-tools/call runs as the signed run's actor). The follow-up row is stamped
+   * with that tenant, and the sweep later runs it as exactly that tenant (G01).
+   */
+  const asOwner = <T>(fn: () => Promise<T>) => runAsTenant(owner, fn);
+  const asOther = <T>(fn: () => Promise<T>) => runAsTenant(other, fn);
 
   test("are bounded in time and in number, and cancellable", async () => {
     await expect(
-      wakeUps.schedule({
-        ownerUserId: owner,
-        agentId: bot,
-        reason: "too soon",
-        dueAt: new Date(Date.now() + 1_000),
-      }),
+      asOwner(() =>
+        wakeUps.schedule({
+          ownerUserId: owner,
+          agentId: bot,
+          reason: "too soon",
+          dueAt: new Date(Date.now() + 1_000),
+        }),
+      ),
     ).rejects.toBeInstanceOf(WakeUpRefusedError);
     await expect(
-      wakeUps.schedule({
-        ownerUserId: owner,
-        agentId: bot,
-        reason: "too late",
-        dueAt: new Date(Date.now() + 8 * 24 * 3_600_000),
-      }),
+      asOwner(() =>
+        wakeUps.schedule({
+          ownerUserId: owner,
+          agentId: bot,
+          reason: "too late",
+          dueAt: new Date(Date.now() + 8 * 24 * 3_600_000),
+        }),
+      ),
     ).rejects.toBeInstanceOf(WakeUpRefusedError);
 
     const [tool] = wakeUpTools({
@@ -389,19 +404,111 @@ describe("follow-ups", () => {
     const answers: string[] = [];
     for (let i = 0; i <= WAKE_UP_MAX_PENDING; i += 1)
       answers.push(
-        await tool!.execute({ reason: `check ${i}`, in_minutes: 60 }),
+        await asOwner(() =>
+          tool!.execute({ reason: `check ${i}`, in_minutes: 60 }),
+        ),
       );
     expect(answers.filter((a) => a.startsWith("Refused."))).toHaveLength(1);
 
     const scheduled = (
-      await createActivityStore(database).forBot(owner, bot)
+      await asOwner(() => createActivityStore(database).forBot(owner, bot))
     ).scheduled.filter((item) => item.kind === "follow_up");
     expect(scheduled).toHaveLength(WAKE_UP_MAX_PENDING);
     expect(scheduled.every((item) => item.cancellable)).toBe(true);
 
-    expect(await wakeUps.cancel(other, bot, scheduled[0]!.id)).toBe(false);
-    expect(await wakeUps.cancel(owner, bot, scheduled[0]!.id)).toBe(true);
-    expect(await wakeUps.cancel(owner, bot, scheduled[0]!.id)).toBe(false);
+    expect(
+      await asOther(() => wakeUps.cancel(other, bot, scheduled[0]!.id)),
+    ).toBe(false);
+    expect(
+      await asOwner(() => wakeUps.cancel(owner, bot, scheduled[0]!.id)),
+    ).toBe(true);
+    expect(
+      await asOwner(() => wakeUps.cancel(owner, bot, scheduled[0]!.id)),
+    ).toBe(false);
+  });
+
+  test("land in the scheduling person's tenant, which nobody else reads", async () => {
+    const record = await asOwner(() =>
+      wakeUps.schedule({
+        ownerUserId: owner,
+        agentId: helper,
+        reason: "tenant check",
+        dueAt: new Date(Date.now() + 2 * 3_600_000),
+      }),
+    );
+    const stamped = await asOwner(() =>
+      database
+        .select({ tenantId: workItems.tenantId })
+        .from(workItems)
+        .where(
+          and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, record.id)),
+        ),
+    );
+    expect(stamped).toEqual([{ tenantId: owner }]);
+    // The other tenant reads none of it, at the row level and through the store.
+    expect(
+      await asOther(() =>
+        database
+          .select({ key: workItems.key })
+          .from(workItems)
+          .where(
+            and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, record.id)),
+          ),
+      ),
+    ).toHaveLength(0);
+    expect(await asOther(() => wakeUps.list(owner, helper))).toHaveLength(0);
+    expect(
+      (await asOwner(() => wakeUps.list(owner, helper))).map((r) => r.id),
+    ).toContain(record.id);
+  });
+
+  test("are never scheduled outside the person's own frame", async () => {
+    const input = {
+      ownerUserId: owner,
+      agentId: helper,
+      reason: "untrusted",
+      dueAt: new Date(Date.now() + 3 * 3_600_000),
+    };
+    // Unframed (would be stamped `system`), the platform's frame, and another person's frame.
+    await expect(wakeUps.schedule(input)).rejects.toBeInstanceOf(
+      TenantContextError,
+    );
+    await expect(
+      runAsTenant("platform", () => wakeUps.schedule(input)),
+    ).rejects.toBeInstanceOf(TenantContextError);
+    await expect(
+      runAsTenant("system", () => wakeUps.schedule(input)),
+    ).rejects.toBeInstanceOf(TenantContextError);
+    await expect(asOther(() => wakeUps.schedule(input))).rejects.toBeInstanceOf(
+      TenantContextError,
+    );
+    // The tool says so as a refusal rather than throwing into the turn.
+    const [tool] = wakeUpTools({
+      store: wakeUps,
+      ownerUserId: owner,
+      agentId: helper,
+    });
+    expect(
+      await asOther(() => tool!.execute({ reason: "x", in_minutes: 60 })),
+    ).toStartWith("Refused.");
+    const rows = await runAsTenant("platform", () =>
+      database
+        .select({ payload: workItems.payload })
+        .from(workItems)
+        .where(
+          and(
+            eq(workItems.kind, WAKE_UP_KIND),
+            sql`${workItems.key} like ${`%${prefix}%`}`,
+          ),
+        ),
+    );
+    expect(
+      rows.filter(
+        (row) =>
+          (row.payload as { reason?: string }).reason === "untrusted" ||
+          (row.payload as { reason?: string }).reason === "x",
+      ),
+    ).toHaveLength(0);
   });
 });
 
@@ -484,7 +591,13 @@ describe("reset", () => {
   });
 
   test("the notice counts per kind, and the reset deletes only the owner's", async () => {
-    const plan = await reset.plan(owner, bot);
+    /*
+     * The follow-ups are stamped with the owner (the "follow-ups" block schedules them in the
+     * owner's frame, G01), while this file's seed is written unframed and so stamped `system`. The
+     * owner's own frame reads both; deleting rows of both stamps takes the platform's write scope
+     * until the seed itself is framed (G01-C).
+     */
+    const plan = await runAsTenant(owner, () => reset.plan(owner, bot));
     expect(plan).toMatchObject({
       conversations: 1,
       sharedConversationsKept: 1,
@@ -495,10 +608,14 @@ describe("reset", () => {
     });
     expect(plan.followUps).toBeGreaterThan(0);
 
-    const deleted = await reset.execute({ id: owner, role: "user" }, bot);
+    const deleted = await runAsTenant("platform", () =>
+      reset.execute({ id: owner, role: "user" }, bot),
+    );
     expect(deleted).toEqual(plan);
     expect(softDeleted).toEqual([direct]);
-    expect(await reset.plan(owner, bot)).toMatchObject({
+    expect(
+      await runAsTenant(owner, () => reset.plan(owner, bot)),
+    ).toMatchObject({
       conversations: 0,
       memories: 0,
       routines: 0,
@@ -528,16 +645,20 @@ describe("reset", () => {
       .from(channels)
       .where(eq(channels.id, shared));
     expect(sharedRow?.deletedAt).toBeNull();
-    const remaining = await database
-      .select({ key: workItems.key })
-      .from(workItems)
-      .where(
-        and(
-          eq(workItems.kind, WAKE_UP_KIND),
-          sql`${workItems.finishedAt} is null`,
-          sql`${workItems.payload}->>'ownerUserId' = ${owner}`,
+    // Read as the platform, so a follow-up of any stamp that survived would be seen.
+    const remaining = await runAsTenant("platform", () =>
+      database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(
+          and(
+            eq(workItems.kind, WAKE_UP_KIND),
+            sql`${workItems.finishedAt} is null`,
+            sql`${workItems.payload}->>'ownerUserId' = ${owner}`,
+            sql`${workItems.payload}->>'agentId' = ${bot}`,
+          ),
         ),
-      );
+    );
     expect(remaining).toHaveLength(0);
   });
 

@@ -38,3 +38,42 @@ test("the cull sweep keeps a finished suspension for the configured idle window"
 test("and gives a suspension that gave up the longer window before it is tried again", () => {
   expect(script).toContain("olderThanMs: 24 * 60 * 60 * 1000");
 });
+
+/*
+ * The routine sweeps name their frame (G01).
+ *
+ * Both entry points are top-level scripts that open a database on load, so, like the cull sweep
+ * above, the wire is read as text. A phase called outside any frame falls through to the legacy
+ * `system` default, which files rows every tenant can read; each phase is therefore called as the
+ * platform, and the per-routine and per-item tenant frames stay inside `routines/sweep.ts`, taken
+ * from the rows it reads (`routine-sweep.integration.test.ts` owns that behaviour).
+ */
+const fireRoutines = readFileSync(
+  join(import.meta.dir, "..", "scripts", "fire-routines.ts"),
+  "utf8",
+);
+const worker = readFileSync(
+  join(import.meta.dir, "..", "..", "worker", "src", "index.ts"),
+  "utf8",
+);
+
+test("the routine CronJob runs every phase as the platform", () => {
+  expect(fireRoutines).toContain('runAsTenant("platform", phase)');
+  for (const phase of [
+    "asPlatform(() => offerDueRoutines(options))",
+    "asPlatform(() => dispatchClaimedRoutines(options))",
+    "asPlatform(() =>\n      reapAbandonedPipelineRuns(",
+    "asPlatform(() =>\n      createTaskProjector(database).reclaimAbandoned(",
+    "asPlatform(() =>\n    queue.purge(",
+  ])
+    expect(fireRoutines).toContain(phase);
+});
+
+test("and so does the local worker's tick", () => {
+  for (const phase of [
+    'runAsTenant("platform", () =>\n      offerDueRoutines(options),',
+    'runAsTenant("platform", () =>\n      dispatchClaimedRoutines(options),',
+    'runAsTenant("platform", () =>\n        queue.purge(',
+  ])
+    expect(worker).toContain(phase);
+});
