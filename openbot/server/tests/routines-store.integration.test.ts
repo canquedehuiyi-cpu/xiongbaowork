@@ -1216,6 +1216,16 @@ describe("the runner's read of one firing", () => {
   });
 });
 
+/** The tenant stamped on a routine row, read back from the row itself. */
+async function stampOf(routineId: string): Promise<string | undefined> {
+  const [row] = await database
+    .select({ tenantId: routines.tenantId })
+    .from(routines)
+    .where(eq(routines.id, routineId))
+    .limit(1);
+  return row?.tenantId;
+}
+
 /**
  * The consumer's re-read: "gone or disabled since the offer -> finish without dispatching" needs a
  * by-id read that is not owner-scoped, because the id it is given comes from a work item's own
@@ -1224,21 +1234,29 @@ describe("the runner's read of one firing", () => {
  */
 describe("the sweep's by-id read of a routine before firing", () => {
   test("an existing enabled routine reads back enabled", async () => {
-    const { routine } = await makeRoutine();
+    const { owner, routine } = await makeRoutine();
 
+    // The routine's own tenant and owner travel with it, so the consumer can check a claimed
+    // firing's stamp against them (G01). The tenant is whatever the row was stamped with.
+    const tenantId = await stampOf(routine.id);
     expect(await store.routineForFiring(routine.id)).toEqual({
       id: routine.id,
       enabled: true,
+      tenantId,
+      ownerUserId: owner.id,
     });
   });
 
   test("a disabled routine reads back disabled, not missing", async () => {
     const { owner, routine } = await makeRoutine();
     await store.setEnabled(owner.id, routine.id, false);
+    const tenantId = await stampOf(routine.id);
 
     expect(await store.routineForFiring(routine.id)).toEqual({
       id: routine.id,
       enabled: false,
+      tenantId,
+      ownerUserId: owner.id,
     });
   });
 

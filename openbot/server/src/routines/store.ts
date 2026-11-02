@@ -237,9 +237,15 @@ export type RoutineStore = {
    * work item's stamp is what the worker later runs the firing as, and a routine offered from a
    * contextless timer would otherwise be queued as the platform's own and answer to nobody.
    */
-  dueRoutines(
-    limit: number,
-  ): Promise<{ id: string; nextRunAt: Date; tenantId: string }[]>;
+  dueRoutines(limit: number): Promise<
+    {
+      id: string;
+      nextRunAt: Date;
+      tenantId: string;
+      /** Whose routine it is; the sweep only offers a row whose stamp is this person (G01). */
+      ownerUserId: string;
+    }[]
+  >;
   /**
    * Compare-and-set the clock forward. False means another sweep got there first.
    *
@@ -265,10 +271,16 @@ export type RoutineStore = {
    * item's own payload, not from a person, so there is no owner to check it against. Answers exactly
    * what the consumer's re-read needs before firing: has the routine been deleted or switched off
    * since the offer. Null means deleted; otherwise `enabled` says the rest.
+   *
+   * `tenantId` and `ownerUserId` are the routine's own, so the consumer can check the claimed work
+   * item's stamp against the routine it names before firing anything in that tenant (G01).
    */
-  routineForFiring(
-    id: string,
-  ): Promise<{ id: string; enabled: boolean } | null>;
+  routineForFiring(id: string): Promise<{
+    id: string;
+    enabled: boolean;
+    tenantId: string;
+    ownerUserId: string;
+  } | null>;
   /** Close a run row with its outcome, and the capped error when there was one. */
   finishRun(
     runId: string,
@@ -808,6 +820,7 @@ export function createRoutineStore(database: Database): RoutineStore {
             id: routines.id,
             nextRunAt: routines.nextRunAt,
             tenantId: routines.tenantId,
+            ownerUserId: routines.ownerUserId,
           })
           .from(routines)
           .where(
@@ -921,7 +934,12 @@ export function createRoutineStore(database: Database): RoutineStore {
       // worker that claimed it is not in it.
       const [row] = await runAsTenant("platform", () =>
         database
-          .select({ id: routines.id, enabled: routines.enabled })
+          .select({
+            id: routines.id,
+            enabled: routines.enabled,
+            tenantId: routines.tenantId,
+            ownerUserId: routines.ownerUserId,
+          })
           .from(routines)
           .where(eq(routines.id, id))
           .limit(1),
