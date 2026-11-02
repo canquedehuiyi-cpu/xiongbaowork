@@ -253,10 +253,11 @@ export class WakerFlowRequestConflictError extends WakerFlowError {
 }
 
 const GENERATE = "generate";
-const RUN = "run";
+/** The request kind for a run; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
+export const RUN = "run";
 const NOT_SAVED_MESSAGE = "这个 WakerFlow 还没有保存为可运行的计划，请先保存。";
 const STALE_REVISION_MESSAGE = "这个 WakerFlow 已更新，请刷新后再运行。";
-const RUN_UNCERTAIN_MESSAGE =
+export const RUN_UNCERTAIN_MESSAGE =
   "无法确认这次运行是否已经开始，请到运行记录中查看，或发起新的运行。";
 const QUOTA_MESSAGE = "本月任务额度不足，这次运行没有开始。";
 const CANCELLED_MESSAGE = "已取消生成。";

@@ -212,13 +212,6 @@ import { createPersonaRoutes } from "./personas/routes";
 import { createPersonaTemplateStore } from "./personas/store";
 import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
-import {
-  APPROVAL_RESUME_GATED_REASON,
-  abandonedWorkPhases,
-  RECOVERY_PURGE_AFTER_MS,
-  RECOVERY_SWEEP_KIND,
-  sweepAbandonedWork,
-} from "./recovery/abandoned-work";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
 import { useRoutineTools } from "./plugins/builtin-routines";
@@ -248,6 +241,13 @@ import { createProactiveStore } from "./proactive/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
 import { createQuotaService } from "./quota/limits";
 import { createQuotaRoutes } from "./quota/routes";
+import {
+  APPROVAL_RESUME_GATED_REASON,
+  abandonedWorkPhases,
+  RECOVERY_PURGE_AFTER_MS,
+  RECOVERY_SWEEP_KIND,
+  sweepAbandonedWork,
+} from "./recovery/abandoned-work";
 import { createResponsibilityBindingStore } from "./responsibilities/bindings";
 import {
   createEmailTriggerRoutes,
@@ -301,6 +301,7 @@ import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
 import { createFlowGenerator } from "./wakerflows/generator";
 import { createFlowModelResolver } from "./wakerflows/model";
+import { recoverInterruptedFlowRuns } from "./wakerflows/recovery";
 import { createWakerFlowRoutes } from "./wakerflows/routes";
 import { createWakerFlowStore } from "./wakerflows/store";
 import { repeatAfterEach } from "./work/loop";
@@ -2060,6 +2061,8 @@ await startupLifecycle.run(async (startup) => {
   const recoveryPhases = abandonedWorkPhases({
     routineStore,
     reapPipelineRuns: (input) => pipelineStore.reapAbandoned(input),
+    recoverFlowRuns: (input) =>
+      recoverInterruptedFlowRuns(database, taskProjector, input),
     board: taskProjector,
   });
   startup.acquireSync(

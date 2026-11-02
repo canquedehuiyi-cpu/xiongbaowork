@@ -28,6 +28,7 @@ import {
   ROUTINE_FIRE_KIND,
 } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
+import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWorkQueue } from "../src/work/queue";
 
 const config = loadConfig(process.env);
@@ -126,6 +127,8 @@ try {
         routineStore,
         reapPipelineRuns: (input) =>
           reapAbandonedPipelineRuns(database, board, input),
+        recoverFlowRuns: (input) =>
+          recoverInterruptedFlowRuns(database, board, input),
         board,
       }),
     });
