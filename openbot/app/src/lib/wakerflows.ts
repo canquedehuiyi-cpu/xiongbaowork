@@ -58,6 +58,102 @@ export type WakerFlowRunSummary = {
   createdAt: string;
 };
 
+/** Where a run of a Flow stands, as the pipeline records it. */
+export type WakerFlowRunStatus =
+  | "running"
+  | "awaiting_action"
+  | "done"
+  | "failed"
+  | "aborted";
+
+/** One step of a run: the plan's step, plus where it got to and what it produced. */
+export type WakerFlowRunStep = {
+  id: string;
+  agentId: string;
+  instruction: string;
+  inputKeys?: string[];
+  outputKey?: string;
+  state:
+    | "pending"
+    | "running"
+    | "awaiting_action"
+    | "done"
+    | "failed"
+    | "skipped"
+    | "aborted";
+  taskId?: string;
+  output?: string;
+  error?: string;
+};
+
+/** One run of a Flow, as `GET /api/wakerflows/:id/runs/:runId` answers it. */
+export type WakerFlowRun = {
+  id: string;
+  flowId: string;
+  status: WakerFlowRunStatus;
+  cursor: number;
+  steps: WakerFlowRunStep[];
+  parentTaskId: string | null;
+  inputs: Record<string, string>;
+};
+
+/** What the abort endpoint answers: the run as it stands once stopped (or as it had already ended). */
+export type WakerFlowAbortOutcome = {
+  status: WakerFlowRunStatus;
+  cursor: number;
+  steps: WakerFlowRunStep[];
+};
+
+/** A run in one of these states has ended and never runs again (spec D10, story WF5). */
+export function isTerminalRunStatus(status: string): boolean {
+  return status === "done" || status === "failed" || status === "aborted";
+}
+
+/**
+ * The run a screen shows when two answers about it arrived out of order (story WF5).
+ *
+ * Polling and 停止 race: a poll sent before the stop can answer after it, still saying `running`.
+ * Once a run has been seen ended, an answer that says otherwise is the stale one, so the ended
+ * reading is kept. Between two non-terminal readings the newer one wins.
+ */
+export function laterRunReading<T extends { status: string }>(
+  known: T | null | undefined,
+  incoming: T | null | undefined,
+): T | null {
+  if (!known) return incoming ?? null;
+  if (!incoming) return known;
+  if (
+    isTerminalRunStatus(known.status) &&
+    !isTerminalRunStatus(incoming.status)
+  )
+    return known;
+  return incoming;
+}
+
+/**
+ * The run form's checks before anything is sent: each required input filled, nothing over the
+ * server's bounds. Keyed by input key; empty means the run may start. The server stays the authority
+ * (`server/src/wakerflows/plan.ts` `flowInputs`).
+ */
+export function runInputProblems(
+  plan: WakerFlowPlan,
+  values: Record<string, string>,
+): Record<string, string> {
+  const problems: Record<string, string> = {};
+  let total = 0;
+  for (const input of plan.inputs) {
+    const value = values[input.key] ?? "";
+    total += value.length;
+    if (input.required && !value.trim())
+      problems[input.key] = `请填写 ${input.label}。`;
+    else if (value.length > 10000)
+      problems[input.key] = `${input.label} 不能超过 10000 字。`;
+  }
+  if (total > 20000 && plan.inputs[0])
+    problems[plan.inputs[0].key] ??= "流程输入合计不能超过 20000 字。";
+  return problems;
+}
+
 export type WakerFlowGenerateInput = {
   requestId: string;
   modelRef: string;
@@ -71,6 +167,9 @@ export const wakerFlowKeys = {
   list: () => ["wakerflows", "list"] as const,
   detail: (id: string) => ["wakerflows", "detail", id] as const,
   modelChoices: () => ["wakerflows", "model-choices"] as const,
+  runs: (id: string) => ["wakerflows", "runs", id] as const,
+  run: (id: string, runId: string) =>
+    ["wakerflows", "runs", id, runId] as const,
 };
 
 export function listWakerFlows() {
@@ -179,19 +278,28 @@ export function listWakerFlowRuns(id: string) {
 }
 
 export function getWakerFlowRun(id: string, runId: string) {
-  return client<Record<string, unknown> & { id: string; flowId: string }>(
+  return client<WakerFlowRun>(
     `${at(id)}/runs/${encodeURIComponent(runId)}`,
     "run",
     { fallback: "这次运行没能加载。" },
   );
 }
 
-export async function abortWakerFlowRun(id: string, runId: string) {
+/** The answer is not enveloped: the pipeline's own outcome, or null when it could not be read. */
+export async function abortWakerFlowRun(
+  id: string,
+  runId: string,
+): Promise<WakerFlowAbortOutcome | null> {
   const response = await client(
     `${at(id)}/runs/${encodeURIComponent(runId)}/abort`,
     { method: "POST", fallback: "这次运行没能中止。" },
   );
-  return (await response.json().catch(() => null)) as unknown;
+  const body = (await response.json().catch(() => null)) as unknown;
+  return body !== null &&
+    typeof body === "object" &&
+    typeof (body as { status?: unknown }).status === "string"
+    ? (body as WakerFlowAbortOutcome)
+    : null;
 }
 
 export function wakerFlowsQueryOptions() {

@@ -69,7 +69,10 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
  * raw ref sent every chat card to "Could not load this channel." (audit N1), so the server now says
  * which screen holds the work and this file only draws it.
  */
-export type OpenTarget = { kind: "channel" | "group" | "pipeline"; id: string };
+export type OpenTarget = {
+  kind: "channel" | "group" | "pipeline" | "wakerflow";
+  id: string;
+};
 
 type Task = {
   id: string;
@@ -365,11 +368,12 @@ function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
 }
 
-/** What a card's 打开 does: one of three screens, a sentence saying the place is gone, or nothing. */
+/** What a card's 打开 does: one of four screens, a sentence saying the place is gone, or nothing. */
 export type CardLink =
   | { to: "/channel/$channelId"; params: { channelId: string } }
   | { to: "/group/$channelId"; params: { channelId: string } }
   | { to: "/pipelines"; search: { run: string } }
+  | { to: "/wakerflows/$flowId"; params: { flowId: string } }
   | "gone"
   | null;
 
@@ -395,6 +399,9 @@ export function cardLinkOf(task: Pick<Task, "open" | "channelRef">): CardLink {
       return { to: "/group/$channelId", params: { channelId: task.open.id } };
     case "pipeline":
       return { to: "/pipelines", search: { run: task.open.id } };
+    // A WakerFlow's run (parent or step card) is reviewed on the Flow, where its runs are listed.
+    case "wakerflow":
+      return { to: "/wakerflows/$flowId", params: { flowId: task.open.id } };
     default:
       return null;
   }
@@ -409,6 +416,17 @@ function CardOpenLink({ task }: { task: Task }) {
       <Link
         to="/pipelines"
         search={link.search}
+        className="underline opacity-80"
+      >
+        打开
+      </Link>
+    );
+  }
+  if (link.to === "/wakerflows/$flowId") {
+    return (
+      <Link
+        to="/wakerflows/$flowId"
+        params={link.params}
         className="underline opacity-80"
       >
         打开
