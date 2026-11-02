@@ -252,14 +252,39 @@ test("every tenant table answers all four commands, and no writer answers the pl
   const reachable = rows
     .filter((row) => row.command !== "SELECT")
     .filter((row) =>
-      [row.using, row.check].some(
-        (clause) =>
-          clause?.includes("'system'::text") || clause?.includes("= 'system'"),
-      ),
+      [row.using, row.check].some((clause) => {
+        const own = ownRowCondition(clause);
+        return own.includes("'system'::text") || own.includes("= 'system'");
+      }),
     )
     .map((row) => `"${row.table}" ${row.command} can reach a platform row`);
   expect(reachable).toEqual([]);
 });
+
+/*
+ * The part of a policy clause that is about the row being written.
+ *
+ * Two shapes mention 'system' without letting a tenant reach the platform's rows, and both are
+ * removed before looking: an exclusion (`tenant_id <> ALL (ARRAY['system'::text, …])`, which is how
+ * PostgreSQL stores `NOT IN ('system', …)` and which forbids exactly those rows), and an `EXISTS (…)`
+ * subquery, which reads another table (a binding may point at a built-in 'system' agent while the
+ * binding itself must carry the writer's own tenant). Anything else naming 'system' still counts.
+ */
+function ownRowCondition(clause: string | null | undefined): string {
+  if (!clause) return "";
+  let text = clause.replace(/<>\s*ALL\s*\(ARRAY\[[^\]]*\]\)/g, "<> ALL (excluded)");
+  for (;;) {
+    const start = text.search(/EXISTS\s*\(/);
+    if (start < 0) return text;
+    let depth = 0;
+    let end = text.indexOf("(", start);
+    for (; end < text.length; end++) {
+      if (text[end] === "(") depth++;
+      else if (text[end] === ")" && --depth === 0) break;
+    }
+    text = `${text.slice(0, start)}SUBQUERY_EXISTS${text.slice(end + 1)}`;
+  }
+}
 
 afterAll(async () => {
   /*

@@ -428,7 +428,7 @@ export const credentials = pgTable(
     // At most one live credential per (tenant_id, kind, provider, key_id).
     // Revoked rows are excluded so history is preserved, and two replicas racing
     // to rotate the same secret cannot both insert a live row. Scoped by tenant
-    // (audit #9, recovery 0110): a global index let one tenant's key block
+    // (audit #9, recovery 0111): a global index let one tenant's key block
     // another's and answered the second with a unique violation that told it the
     // first existed.
     uniqueIndex("credentials_tenant_active_key_idx")

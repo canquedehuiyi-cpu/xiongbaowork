@@ -52,9 +52,20 @@ if (
   const [basePath, headPath, label] = process.argv.slice(2);
   let summary;
   try {
-    const base = parseLog(readFileSync(basePath, "utf8"));
+    // The head log alone decides the gate. A baseline that cannot be parsed (the frozen baseline
+    // predates fixes this branch carries, e.g. its migrations) only loses the comparison section.
     const head = parseLog(readFileSync(headPath, "utf8"));
-    summary = `## ${label}\n\n基线：${process.env.DELIVERY_BASELINE_SHA ?? "local"}（同一测试范围，独立库）\n\n基线 ${base.fail} fail；本次 ${head.fail} fail。仅日志明确 0 fail 才判绿。\n\n### 新增失败（多重集差集）\n\n${names(difference(head.failures, base.failures))}\n\n### 消失的失败（多重集差集）\n\n${names(difference(base.failures, head.failures))}\n\n阶段 0–2 的 continue-on-error 不是 DoD-1 全绿。阶段 3 必须移除。\n`;
+    let base;
+    let baseProblem;
+    try {
+      base = parseLog(readFileSync(basePath, "utf8"));
+    } catch (error) {
+      baseProblem = error.message;
+    }
+    const comparison = base
+      ? `基线 ${base.fail} fail；本次 ${head.fail} fail。仅日志明确 0 fail 才判绿。\n\n### 新增失败（多重集差集）\n\n${names(difference(head.failures, base.failures))}\n\n### 消失的失败（多重集差集）\n\n${names(difference(base.failures, head.failures))}`
+      : `基线不可比较：${baseProblem}\n\n本次 ${head.fail} fail。仅日志明确 0 fail 才判绿。\n\n### 本次失败\n\n${names([...head.failures].sort(([a], [b]) => a.localeCompare(b)))}`;
+    summary = `## ${label}\n\n基线：${process.env.DELIVERY_BASELINE_SHA ?? "local"}（同一测试范围，独立库）\n\n${comparison}\n\n阶段 0–2 的 continue-on-error 不是 DoD-1 全绿。阶段 3 必须移除。\n`;
     process.exitCode = head.fail === 0 ? 0 : 1;
   } catch (error) {
     summary = `## ${label}\n\n未验证：${error.message}\n`;

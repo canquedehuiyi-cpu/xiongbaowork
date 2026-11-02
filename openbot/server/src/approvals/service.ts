@@ -597,8 +597,10 @@ export function createApprovalService(
         );
       // Default remains closed. A trusted producer must verify an EXISTING
       // frozen seed before validation, execution or any result write.
-      if (!options.continuationRecovery || !store.getRecoveryContext ||
-          (!request.result && !fresh))
+      // The no-result/no-producer case is decided first so a blocked retry
+      // reads no recovery option or store capability at all.
+      if ((!request.result && !fresh) || !options.continuationRecovery ||
+          !store.getRecoveryContext)
         throw new ApprovalRecoveryBlockedError();
       const prepared = !request.result && fresh
         ? await freshOperation(() => fresh.prepare(request, ownerUserId))
