@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import type { ApprovalDecision } from "@/lib/approvals";
 import { client, RequestError } from "@/lib/client";
+import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
@@ -155,8 +156,11 @@ type Task = {
   deliverableRef: unknown;
   /** Which model answered this task's run, or null when it has not answered yet. */
   model: string | null;
-  /** Which of the tenant's machines the work happened on, in device mode. */
-  device: string | null;
+  /**
+   * Which of the tenant's machines the work happened on, in device mode. The server sends the row's
+   * own column, `deviceId`; reading a `device` field that never arrives drew no machine on any card.
+   */
+  deviceId: string | null;
   /**
    * When a person filed this card away (spec A5/A7), or null. Only a failure carries one: it keeps
    * reading `failed`, and this is what moves it from 需要关注 to 已结束. Absent from an older server.
@@ -521,6 +525,46 @@ function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
 }
 
+/**
+ * What a card says its run produced, or null when there is nothing to say (spec A9).
+ *
+ * Only a `deliverable` record is read. `deliverable_ref` is a column other writers may also use for
+ * other facts, and a card that called one of those an output would invite a person to 查收 nothing.
+ */
+export function deliverableSummary(ref: unknown): string | null {
+  if (!ref || typeof ref !== "object") return null;
+  const { kind, components, attachments } = ref as {
+    kind?: unknown;
+    components?: unknown;
+    attachments?: unknown;
+  };
+  if (kind !== "deliverable") return null;
+  const titles = Array.isArray(components)
+    ? [
+        ...new Set(
+          components
+            .map((component: unknown) =>
+              component &&
+              typeof component === "object" &&
+              typeof (component as { name?: unknown }).name === "string"
+                ? componentDisplayTitle({
+                    name: (component as { name: string }).name,
+                    title: (component as { name: string }).name,
+                  })
+                : null,
+            )
+            .filter((title): title is string => title !== null),
+        ),
+      ]
+    : [];
+  const files = Array.isArray(attachments) ? attachments.length : 0;
+  const parts = [
+    ...(titles.length > 0 ? [titles.join("、")] : []),
+    ...(files > 0 ? [`${files} 个附件`] : []),
+  ];
+  return parts.length > 0 ? `产出：${parts.join(" · ")}` : null;
+}
+
 /** What a card's 打开 does: one of three screens, a sentence saying the place is gone, or nothing. */
 export type CardLink =
   | { to: "/channel/$channelId"; params: { channelId: string } }
@@ -633,6 +677,7 @@ function TaskCard({
       {executor.name}
     </>
   ) : null;
+  const deliverable = deliverableSummary(task.deliverableRef);
 
   return (
     /*
@@ -746,6 +791,18 @@ function TaskCard({
          */}
         {machine ? (
           <span className="rounded bg-foreground/5 px-1.5">{machine}</span>
+        ) : null}
+        {/*
+         * What there is to 查收 (spec A9): the components it drew and the files it handed over, so the
+         * button beside it is a decision about something named rather than a guess.
+         */}
+        {deliverable ? (
+          <span
+            className="rounded bg-amber-500/10 px-1.5 text-amber-600 dark:text-amber-400"
+            data-deliverable
+          >
+            {deliverable}
+          </span>
         ) : null}
         <span>{relative(task.updatedAt)}</span>
         <CardOpenLink task={task} />
@@ -863,7 +920,7 @@ export function AttentionRegion({
             <TaskCard
               decidingIds={decidingIds}
               key={task.id}
-              machine={machineLabel(task.device)}
+              machine={machineLabel(task.deviceId)}
               onArchive={onArchive}
               onDecide={onDecide}
               onReview={onReview}
@@ -1325,7 +1382,7 @@ function TasksPage() {
             <TaskCard
               key={task.id}
               task={task}
-              machine={machineLabel(task.device)}
+              machine={machineLabel(task.deviceId)}
               onReview={(id) => runAction(id, "review")}
               onArchive={(id) => runAction(id, "archive")}
               pendingIds={pendingIds}
@@ -1377,7 +1434,7 @@ function TasksPage() {
                       <TaskCard
                         key={task.id}
                         task={task}
-                        machine={machineLabel(task.device)}
+                        machine={machineLabel(task.deviceId)}
                         onReview={(id) => runAction(id, "review")}
                         onArchive={(id) => runAction(id, "archive")}
                         pendingIds={pendingIds}

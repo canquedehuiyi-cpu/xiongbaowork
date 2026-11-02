@@ -75,6 +75,7 @@ import {
   HeadlessToolsMiddleware,
   type HeadlessWaiting,
 } from "../computer/headless-tools";
+import { producedAttachments } from "../tasks/projector";
 import { suppressRunnerCard } from "../threads/unattended-card";
 import type { DrawnComponent, TurnRunner } from "./runner";
 
@@ -754,7 +755,13 @@ export function createTurnRunner(options: {
     }
 
     const drawn = drawnComponents(added);
-    return drawn.length > 0 ? { replyText, components: drawn } : { replyText };
+    // What the Bot handed over as files, beside what it drew: the board's 查收 reads both (spec A9).
+    const attachments = producedAttachments(added);
+    return {
+      replyText,
+      ...(drawn.length > 0 ? { components: drawn } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
+    };
   };
 
   /*

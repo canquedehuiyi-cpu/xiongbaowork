@@ -139,6 +139,7 @@ tests/desktop-connection-failure.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-queue.test.ts
 tests/device-safety.integration.test.ts
+tests/device-selection.test.ts
 tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
@@ -324,6 +325,7 @@ tests/support/database.test.ts
 tests/support/load-order.test.ts
 tests/task-card-reclaim.test.ts
 tests/task-card-run-error.test.ts
+tests/task-deliverable.test.ts
 tests/tasks-approval-decision.integration.test.ts
 tests/tasks-open-target.integration.test.ts
 tests/tasks-projector.test.ts
