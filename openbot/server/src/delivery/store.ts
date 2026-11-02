@@ -12,6 +12,7 @@ import {
   pushDevices,
 } from "../db/schema/delivery";
 import { workItems } from "../db/schema/work";
+import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import {
   type BindingTransport,
   type DeliveryBinding,
@@ -431,20 +432,56 @@ export function createDeliveryStore(database: Database) {
         new Date(Date.now() + 15 * 60_000),
       );
     },
+    /**
+     * A provider's status callback for one sent SMS (G01).
+     *
+     * The callback carries no person, only Twilio's message id, so which outbox row it names is a
+     * question across tenants and is asked as `platform`. Each row is then updated in the tenant the
+     * database stamped on it, confirmed by its owner; a row that names nobody is left as it is and
+     * logged. Nothing the provider sends chooses the tenant.
+     */
     async updateSmsStatus(
       providerId: string,
       state: "delivered" | "failed" | "sent",
       error: string | null,
     ) {
-      await database
-        .update(deliveryOutbox)
-        .set({ state, error })
-        .where(
-          and(
-            eq(deliveryOutbox.transport, "sms"),
-            eq(deliveryOutbox.providerId, providerId),
-          ),
-        );
+      // The whole callback is the platform's: it hands each row to its own tenant, and the frame the
+      // caller arrived in decides nothing.
+      await runAsTenant("platform", async () => {
+        const rows = await database
+          .select({
+            id: deliveryOutbox.id,
+            tenantId: deliveryOutbox.tenantId,
+            ownerUserId: deliveryOutbox.ownerUserId,
+          })
+          .from(deliveryOutbox)
+          .where(
+            and(
+              eq(deliveryOutbox.transport, "sms"),
+              eq(deliveryOutbox.providerId, providerId),
+            ),
+          );
+        for (const row of rows) {
+          const updated = await runAsClaimedTenant(
+            row,
+            row.ownerUserId,
+            async () => {
+              await database
+                .update(deliveryOutbox)
+                .set({ state, error })
+                .where(eq(deliveryOutbox.id, row.id));
+            },
+          );
+          if (!updated.ran)
+            console.warn(
+              JSON.stringify({
+                type: "sms-status-untrusted-tenant",
+                outboxId: row.id,
+                reason: updated.reason,
+              }),
+            );
+        }
+      });
     },
     async history(owner: string) {
       return database

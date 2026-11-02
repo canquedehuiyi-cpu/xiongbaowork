@@ -171,6 +171,78 @@ test("outbound dedupe and atomic send transition preserve provider id, errors an
       .where(eq(deliveryOutbox.ownerUserId, owner)),
   ).toHaveLength(1);
 });
+/*
+ * The Twilio status callback carries only a MessageSid (G01-C). Which outbox row that names is asked
+ * as `platform`, and each row is updated in the tenant stamped on it, confirmed by its owner: a row
+ * that names nobody, or names somebody other than its owner, is left exactly as it was. Called with
+ * no frame, as the public webhook calls it, and inside a stranger's frame to show that the caller's
+ * frame redirects nothing.
+ */
+test("an SMS status callback updates each outbox row in its own tenant and never as system", async () => {
+  const sid = (label: string) => `${prefix}-sid-${label}`;
+  const row = (label: string, tenantId: string) => ({
+    tenantId,
+    id: `${prefix}-sms-${label}`,
+    ...scope,
+    dedupeKey: `${prefix}:sms:${label}`,
+    bindingId: null,
+    deviceId: null,
+    transport: "sms" as const,
+    text: "Text",
+    kind: "reply" as const,
+    requestId: null,
+    state: "sent" as const,
+    providerId: sid(label),
+  });
+  const rows = [
+    row("owned", owner),
+    row("system", "system"),
+    row("platform", "platform"),
+    row("stranger", stranger),
+  ];
+  await runAsTenant("platform", () => db.insert(deliveryOutbox).values(rows));
+  const read = (label: string) =>
+    runAsTenant("platform", () =>
+      db
+        .select({
+          tenantId: deliveryOutbox.tenantId,
+          state: deliveryOutbox.state,
+          error: deliveryOutbox.error,
+        })
+        .from(deliveryOutbox)
+        .where(eq(deliveryOutbox.id, `${prefix}-sms-${label}`)),
+    ).then(([found]) => found);
+  try {
+    await store.updateSmsStatus(sid("owned"), "delivered", null);
+    expect(await read("owned")).toEqual({
+      tenantId: owner,
+      state: "delivered",
+      error: null,
+    });
+    await runAsTenant(stranger, () =>
+      store.updateSmsStatus(sid("owned"), "failed", "30003"),
+    );
+    expect(await read("owned")).toEqual({
+      tenantId: owner,
+      state: "failed",
+      error: "30003",
+    });
+    for (const label of ["system", "platform", "stranger"]) {
+      await store.updateSmsStatus(sid(label), "delivered", null);
+      expect(await read(label)).toMatchObject({ state: "sent", error: null });
+    }
+  } finally {
+    await runAsTenant("platform", () =>
+      db.delete(deliveryOutbox).where(
+        inArray(
+          deliveryOutbox.id,
+          rows.map((value) => value.id),
+        ),
+      ),
+    );
+  }
+});
+
 test("a paired chat turn is recorded once, running, and never queued", async () => {
   const binding = await store.bind({
     ...scope,

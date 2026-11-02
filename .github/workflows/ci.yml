@@ -104,6 +104,11 @@ jobs:
             bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         continue-on-error: true
+        env:
+          # G01-D step one: every database read with no tenant frame is still answered as the legacy
+          # `system` tenant, but each call site is logged once as `tenant-unframed-access` in
+          # head.log, so the remaining offenders are listed before the fallback becomes a throw.
+          OPENBOT_TENANT_FRAME_GUARD: report
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()

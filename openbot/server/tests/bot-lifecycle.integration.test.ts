@@ -268,6 +268,7 @@ describe("pause", () => {
         runContext: async () => ({
           routineId: "r",
           ownerUserId: owner,
+          tenantId: owner,
           agentId: bot,
           channelId: direct,
           instruction: "x",
