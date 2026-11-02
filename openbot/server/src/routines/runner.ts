@@ -30,7 +30,7 @@ import type { AuditInitiator } from "../audit";
 import type { ChannelStore } from "../channels/routes";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
-import type { TaskProjector } from "../tasks/projector";
+import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
 import type { RoutineRunContext, RoutineStore } from "./store";
 
@@ -70,7 +70,12 @@ export type TurnRunner = (input: {
   depth?: number;
   /** The reply so far, each time more of it arrives, for a surface that shows a turn in progress. */
   onText?: (text: string) => void;
-}) => Promise<{ replyText: string; components?: DrawnComponent[] }>;
+}) => Promise<{
+  replyText: string;
+  components?: DrawnComponent[];
+  /** Attachment ids the Bot's own messages carried in this turn. */
+  attachments?: string[];
+}>;
 
 /** A display component the Bot drew in a turn and the server allowed, with the props it drew. */
 export type DrawnComponent = { name: string; args: Record<string, unknown> };
@@ -307,8 +312,12 @@ export function createRoutineRunner(options: {
       }
     }
     let replyText: string;
+    let produced: Pick<
+      Awaited<ReturnType<TurnRunner>>,
+      "components" | "attachments"
+    > = {};
     try {
-      ({ replyText } = await runTurn({
+      ({ replyText, ...produced } = await runTurn({
         ownerUserId,
         routineId,
         agentId,
@@ -416,7 +425,12 @@ export function createRoutineRunner(options: {
     await routineStore.finishRun(routineRunId, "succeeded");
     if (carded && board) {
       await board
-        .finished({ tenantId: ownerUserId, runRef: routineRunId })
+        .finished({
+          tenantId: ownerUserId,
+          runRef: routineRunId,
+          // What the firing drew or handed over, for the person who opens 查收结果 (spec A9).
+          deliverableRef: deliverableRefOf(produced),
+        })
         .catch((boardError) =>
           console.error(
             JSON.stringify({

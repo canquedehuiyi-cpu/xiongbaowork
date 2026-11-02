@@ -7,6 +7,7 @@ import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
+import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
 
 /**
@@ -86,8 +87,11 @@ type Task = {
   deliverableRef: unknown;
   /** Which model answered this task's run, or null when it has not answered yet. */
   model: string | null;
-  /** Which of the tenant's machines the work happened on, in device mode. */
-  device: string | null;
+  /**
+   * Which of the tenant's machines the work happened on, in device mode. The server sends the row's
+   * own column, `deviceId`; reading a `device` field that never arrives drew no machine on any card.
+   */
+  deviceId: string | null;
   updatedAt: string;
 };
 
@@ -264,7 +268,6 @@ export const boardEmptySentence = (filters: {
 export const lanesUnmappable = (tasks: { status: string }[]): boolean =>
   tasks.length > 0 && tasks.every((task) => laneOf(task.status).length === 0);
 
-
 /**
  * Spec A1/A2: the window's totals, each one a filter. Pressing a number shows those tasks; pressing
  * the pressed one again shows everything. It shares its state with the pills below, so the two can
@@ -326,6 +329,46 @@ function relative(date: string): string {
  */
 function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
+}
+
+/**
+ * What a card says its run produced, or null when there is nothing to say (spec A9).
+ *
+ * Only a `deliverable` record is read. `deliverable_ref` is a column other writers may also use for
+ * other facts, and a card that called one of those an output would invite a person to 查收 nothing.
+ */
+export function deliverableSummary(ref: unknown): string | null {
+  if (!ref || typeof ref !== "object") return null;
+  const { kind, components, attachments } = ref as {
+    kind?: unknown;
+    components?: unknown;
+    attachments?: unknown;
+  };
+  if (kind !== "deliverable") return null;
+  const titles = Array.isArray(components)
+    ? [
+        ...new Set(
+          components
+            .map((component: unknown) =>
+              component &&
+              typeof component === "object" &&
+              typeof (component as { name?: unknown }).name === "string"
+                ? componentDisplayTitle({
+                    name: (component as { name: string }).name,
+                    title: (component as { name: string }).name,
+                  })
+                : null,
+            )
+            .filter((title): title is string => title !== null),
+        ),
+      ]
+    : [];
+  const files = Array.isArray(attachments) ? attachments.length : 0;
+  const parts = [
+    ...(titles.length > 0 ? [titles.join("、")] : []),
+    ...(files > 0 ? [`${files} 个附件`] : []),
+  ];
+  return parts.length > 0 ? `产出：${parts.join(" · ")}` : null;
 }
 
 /** What a card's 打开 does: one of three screens, a sentence saying the place is gone, or nothing. */
@@ -426,6 +469,7 @@ function TaskCard({
   const executor = coworkers.data?.find(
     (coworker) => coworker.id === task.executorAgentId,
   );
+  const deliverable = deliverableSummary(task.deliverableRef);
 
   return (
     /*
@@ -503,6 +547,18 @@ function TaskCard({
          */}
         {machine ? (
           <span className="rounded bg-foreground/5 px-1.5">{machine}</span>
+        ) : null}
+        {/*
+         * What there is to 查收 (spec A9): the components it drew and the files it handed over, so the
+         * button beside it is a decision about something named rather than a guess.
+         */}
+        {deliverable ? (
+          <span
+            className="rounded bg-amber-500/10 px-1.5 text-amber-600 dark:text-amber-400"
+            data-deliverable
+          >
+            {deliverable}
+          </span>
         ) : null}
         <span>{relative(task.updatedAt)}</span>
         <CardOpenLink task={task} />
@@ -608,7 +664,7 @@ export function AttentionRegion({
             // TaskCard is an `li` of its own — the board's cards and these are the same cards.
             <TaskCard
               key={task.id}
-              machine={machineLabel(task.device)}
+              machine={machineLabel(task.deviceId)}
               onArchive={onArchive}
               onReview={onReview}
               pendingIds={pendingIds}
@@ -764,11 +820,26 @@ function TasksPage() {
    * denial we are allowed to assert: the write may have landed. So the screen says 未确认 and offers
    * a read, never a second write.
    */
-  const actionFailure = (): { label: string; note: string; detail: string | null } => {
+  const actionFailure = (): {
+    label: string;
+    note: string;
+    detail: string | null;
+  } => {
     const status = act.error instanceof RequestError ? act.error.status : 0;
-    const message = act.error instanceof Error ? act.error.message : "请稍后再试。";
-    if (status === 404) return { label: "这个任务已经不在那里了", note: "服务端拒绝（404）", detail: message };
-    if (status === 409) return { label: "这个任务当前状态不接受这个操作", note: "服务端拒绝（409）", detail: message };
+    const message =
+      act.error instanceof Error ? act.error.message : "请稍后再试。";
+    if (status === 404)
+      return {
+        label: "这个任务已经不在那里了",
+        note: "服务端拒绝（404）",
+        detail: message,
+      };
+    if (status === 409)
+      return {
+        label: "这个任务当前状态不接受这个操作",
+        note: "服务端拒绝（409）",
+        detail: message,
+      };
     return {
       label: "结果未确认，请刷新任务后核对",
       note: status ? `服务端返回 ${status}` : "请求没有收到回应",
@@ -810,8 +881,7 @@ function TasksPage() {
         <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
           <p className="text-destructive">
             {failure.label}
-            {failure.detail ? `：${failure.detail}` : ""}
-            （{failure.note}）
+            {failure.detail ? `：${failure.detail}` : ""}（{failure.note}）
           </p>
           <Button onClick={refreshReadsOnly} size="sm" variant="outline">
             刷新任务
@@ -966,7 +1036,7 @@ function TasksPage() {
             <TaskCard
               key={task.id}
               task={task}
-              machine={machineLabel(task.device)}
+              machine={machineLabel(task.deviceId)}
               onReview={(id) => runAction(id, "review")}
               onArchive={(id) => runAction(id, "archive")}
               pendingIds={pendingIds}
@@ -984,42 +1054,42 @@ function TasksPage() {
         </ul>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {LANES.map((lane) => (
-            // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-            <div
-              aria-label={`${lane.label}泳道`}
-              key={lane.key}
-              role="group"
-              onDragOver={(event) => {
-                if (lane.key === "finished") event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                dropLane(lane.key, event.dataTransfer.getData("text/plain"));
-              }}
-              className="bg-foreground/[0.02] rounded-xl p-2"
-            >
-              <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                {lane.label}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {LANES.map((lane) => (
+              // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+              <div
+                aria-label={`${lane.label}泳道`}
+                key={lane.key}
+                role="group"
+                onDragOver={(event) => {
+                  if (lane.key === "finished") event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  dropLane(lane.key, event.dataTransfer.getData("text/plain"));
+                }}
+                className="bg-foreground/[0.02] rounded-xl p-2"
+              >
+                <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
+                  {lane.label}
+                </div>
+                <ul className="list-none space-y-1.5">
+                  {list
+                    .filter((task) => lane.statuses.includes(task.status))
+                    .map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        machine={machineLabel(task.deviceId)}
+                        onReview={(id) => runAction(id, "review")}
+                        onArchive={(id) => runAction(id, "archive")}
+                        pendingIds={pendingIds}
+                      />
+                    ))}
+                </ul>
               </div>
-              <ul className="list-none space-y-1.5">
-                {list
-                  .filter((task) => lane.statuses.includes(task.status))
-                  .map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      machine={machineLabel(task.device)}
-                      onReview={(id) => runAction(id, "review")}
-                      onArchive={(id) => runAction(id, "archive")}
-                      pendingIds={pendingIds}
-                    />
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
           {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)

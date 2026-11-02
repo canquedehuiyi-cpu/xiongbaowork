@@ -324,6 +324,7 @@ tests/support/database.test.ts
 tests/support/load-order.test.ts
 tests/task-card-reclaim.test.ts
 tests/task-card-run-error.test.ts
+tests/task-deliverable.test.ts
 tests/tasks-open-target.integration.test.ts
 tests/tasks-projector.test.ts
 tests/tasks-routes-filters.integration.test.ts

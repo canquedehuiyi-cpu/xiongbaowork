@@ -19,7 +19,7 @@ import {
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
-import type { TaskProjector } from "../tasks/projector";
+import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import { runnerCardSuppressed } from "./unattended-card";
 
@@ -350,10 +350,32 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         : undefined;
     const finish = (failed: boolean) => {
       if (!card) return;
+      /*
+       * What the turn produced rides on the card (spec A9), read from the stream before it is handed
+       * on. A failed turn's half-drawn output is not something to review, so it carries none.
+       */
+      const produced = () => {
+        // Read inside the stream's `complete`: a throw here would skip the transcript's write below.
+        try {
+          return deliverableFromEvents(
+            events,
+            new Set(request.input.messages.map((message) => message.id)),
+          );
+        } catch (error) {
+          console.error("task deliverable unreadable", error);
+          return undefined;
+        }
+      };
+      const deliverableRef = failed ? undefined : produced();
       void card
         .then(() =>
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
-          this.board!.finished({ tenantId: tenant, runRef: runId, failed }),
+          this.board!.finished({
+            tenantId: tenant,
+            runRef: runId,
+            failed,
+            deliverableRef,
+          }),
         )
         .catch((error) => console.error("task projection failed", error));
     };
