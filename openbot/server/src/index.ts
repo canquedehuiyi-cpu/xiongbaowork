@@ -78,12 +78,17 @@ import {
   recordAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
+import {
+  createAutomationHookDirectory,
+  createAutomationHookRoutes,
+} from "./automations/ingress-routes";
 import { createAutomationRoutes } from "./automations/routes";
 import {
   type AutomationFiring,
   createAutomationStore,
 } from "./automations/store";
 import {
+  type AutomationEvent,
   dispatchClaimedAutomations,
   offerDueAutomations,
 } from "./automations/sweep";
@@ -2735,12 +2740,40 @@ await startupLifecycle.run(async (startup) => {
     queue: automationQueue,
     owner: workOwner("automation"),
     executors: {
-      waker: (firing: AutomationFiring) => wakerAutomationExecutor.run(firing),
+      waker: (firing: AutomationFiring, event?: AutomationEvent) =>
+        wakerAutomationExecutor.run(firing, event),
     },
     // A turn can take minutes; it must not hold the next pass's offers past their grace window.
     background: (run: () => Promise<void>) => {
       void run();
     },
+  };
+  /*
+   * AUT2: an event (public hook or signed-in API call) is queued straight away; this starts a
+   * dispatch at once rather than at the next 30-second pass. Claims are leased, so it may overlap
+   * the loop safely, and the loop is still what drains the queue if this is lost.
+   *
+   * As `platform`, like the loop: it is called from inside a signed-in request, and every claimed
+   * item re-enters its own owner's frame, which `assertPersonTenant` refuses from another person's.
+   */
+  const dispatchAutomationsNow = () => {
+    void runAsTenant("platform", async () => {
+      return await dispatchClaimedAutomations(automationSweep);
+    }).catch((error: unknown) =>
+      console.error(
+        JSON.stringify({
+          type: "automation-dispatch-now-error",
+          error: error instanceof Error ? error.name : "UnknownError",
+          timestamp: new Date().toISOString(),
+        }),
+      ),
+    );
+  };
+  const automationIngress = {
+    queue: automationQueue,
+    signingPepper: config.keyEncryptionKey,
+    auditStore: bootAuditStore,
+    onOffered: dispatchAutomationsNow,
   };
   startup.acquireSync(
     () =>
@@ -3616,6 +3649,19 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
 
+  /*
+   * AUT2: an automation's public event entry. No session: the trigger's secret (Bearer, or a Standard
+   * Webhooks signature) is the credential, and the tenant is the one the trigger row names. Mounted
+   * before `/api/automations` so the signed-in routes never see a hook delivery.
+   */
+  app.route(
+    "/api/automations/hooks",
+    createAutomationHookRoutes({
+      ...automationIngress,
+      directory: createAutomationHookDirectory(database),
+    }),
+  );
+
   // A person's automations (D06): per-route session guard, tenant from the session frame only.
   app.route(
     "/api/automations",
@@ -3624,6 +3670,7 @@ await startupLifecycle.run(async (startup) => {
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
+      automationIngress,
     ),
   );
 

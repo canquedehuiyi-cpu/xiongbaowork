@@ -471,6 +471,8 @@ export const auditEventTypes = [
   "routines.run_requested",
   /** An authenticated trigger (webhook, provider, email, Slack) queued a responsibility run. */
   "responsibility.triggered",
+  /** D06 AUT2: an automation's event entry (public hook or signed-in API call) queued a firing. */
+  "automation.triggered",
   /*
    * The approval gate and the person, kept apart so a reader never mistakes one for the other.
    *
