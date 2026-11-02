@@ -57,6 +57,9 @@ tests/audit-limit.test.ts
 tests/audit-retention.integration.test.ts
 tests/audit.test.ts
 tests/auth-mobile-scheme.integration.test.ts
+tests/automation-tenant-policies.test.ts
+tests/automations-model.test.ts
+tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
 tests/ban-freezes-execution.test.ts
 tests/bot-access.test.ts
@@ -225,6 +228,7 @@ tests/plugin-oauth.test.ts
 tests/plugin-routes.integration.test.ts
 tests/plugin-routes.test.ts
 tests/plugin-selection.test.ts
+tests/plugin-self-install.integration.test.ts
 tests/plugin-servers-validation.test.ts
 tests/plugin-share-target.test.ts
 tests/plugin-store.integration.test.ts

@@ -778,6 +778,27 @@
       "when": 1793605000000,
       "tag": "0110_approval_continuation_tenant_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1793625000000,
+      "tag": "0116_task_archives",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1793625600000,
+      "tag": "0117_automation_tenant_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793628000000,
+      "tag": "0118_plugin_install_listings",
+      "breakpoints": true
     }
   ]
 }
