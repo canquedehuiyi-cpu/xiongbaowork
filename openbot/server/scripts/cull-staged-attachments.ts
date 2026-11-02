@@ -19,6 +19,7 @@
 import { and, isNull, lt, sql } from "drizzle-orm";
 import { createDatabase, type Database } from "../src/db/client";
 import { attachments } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 
 /** How long a staged attachment is kept, absent a CLI argument saying otherwise. */
 const DEFAULT_OLDER_THAN_HOURS = 24;
@@ -118,21 +119,33 @@ export async function cullStagedAttachments(
 
   let deleted = 0;
   for (;;) {
-    const doomed = database
-      .select({ id: attachments.id })
-      .from(attachments)
-      .where(
-        and(isNull(attachments.attachedAt), lt(attachments.createdAt, cutoff)),
-      )
-      // Oldest first, so a sweep that is cut off has reclaimed the rows nobody could still want.
-      .orderBy(attachments.createdAt)
-      .limit(batchSize)
-      .for("update", { skipLocked: true });
+    /*
+     * As `platform` (G01): the sweep is housekeeping over every tenant's staged files, and a cron job
+     * has no frame of its own. Unframed it read as the legacy `system` scope, where row-level security
+     * admits only the platform's own rows, so a person's abandoned upload was never found and the
+     * table grew without bound while every run reported a clean sweep of nothing. Both statements are
+     * built inside the frame: the client reads the tenant when a builder is first reached for.
+     */
+    const batch = await runAsTenant("platform", () => {
+      const doomed = database
+        .select({ id: attachments.id })
+        .from(attachments)
+        .where(
+          and(
+            isNull(attachments.attachedAt),
+            lt(attachments.createdAt, cutoff),
+          ),
+        )
+        // Oldest first, so a sweep that is cut off has reclaimed the rows nobody could still want.
+        .orderBy(attachments.createdAt)
+        .limit(batchSize)
+        .for("update", { skipLocked: true });
 
-    const batch = await database
-      .delete(attachments)
-      .where(sql`${attachments.id} in ${doomed}`)
-      .returning({ id: attachments.id });
+      return database
+        .delete(attachments)
+        .where(sql`${attachments.id} in ${doomed}`)
+        .returning({ id: attachments.id });
+    });
 
     deleted += batch.length;
     if (batch.length < batchSize) {
