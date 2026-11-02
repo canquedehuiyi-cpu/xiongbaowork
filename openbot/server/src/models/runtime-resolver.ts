@@ -3,11 +3,18 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { CredentialSecretReader } from "../credentials";
 import { openCredential } from "../credentials";
 import type { Database } from "../db/client";
-import { agentProfiles, modelRegistry } from "../db/schema";
+import {
+  agentProfiles,
+  modelRegistry,
+  PLATFORM_POOL_KEY_ENV,
+  platformModelPool,
+  subscriptions,
+} from "../db/schema";
+import { runAsTenant } from "../tenant/context";
 import {
   databaseTokenCallSink,
   type ModelTokenCallSink,
@@ -28,7 +35,8 @@ export type AgentModelResolver = (
 ) => Promise<LanguageModel | null>;
 
 /** What a coworker is bound to, before the key behind it is touched. */
-type Binding = {
+type LibraryBinding = {
+  kind: "library";
   /** The tenant stamped on the binding's own rows; metering is written under it. */
   tenantId: string;
   modelRef: string;
@@ -36,6 +44,39 @@ type Binding = {
   baseUrl: string | null;
   modelName: string;
   credentialId: string;
+};
+
+/**
+ * A platform pool model (stories H1, K1): the platform's key, the coworker's tenant. Metering is
+ * written under the PROFILE's tenant, never `system` or `platform`, because that is who spent it.
+ */
+type PoolBinding = {
+  kind: "pool";
+  tenantId: string;
+  poolId: string;
+  provider: string;
+  baseUrl: string | null;
+  modelName: string;
+  apiKeyEnv: string;
+  apiKey: string;
+};
+
+type Binding = LibraryBinding | PoolBinding;
+
+/** Where a pool row's key is read from; tests pass their own instead of the process's. */
+export type PoolKeyEnvironment = Readonly<Record<string, string | undefined>>;
+
+/** Builds the provider client; tests inject a fake so no provider is ever called. */
+export type LanguageModelFactory = (
+  provider: string,
+  baseUrl: string | null,
+  modelName: string,
+  apiKey: string,
+) => LanguageModel;
+
+export type AgentModelResolverOptions = {
+  environment?: PoolKeyEnvironment;
+  languageModel?: LanguageModelFactory;
 };
 
 const OPENAI_COMPATIBLE_DEFAULTS: Record<string, string> = {
@@ -84,16 +125,28 @@ export function languageModelFor(
 async function bindingFor(
   database: Database,
   agentId: string,
+  environment: PoolKeyEnvironment,
 ): Promise<Binding | null> {
   const [profile] = await database
     .select({
       tenantId: agentProfiles.tenantId,
       modelRef: agentProfiles.modelRef,
+      platformModelRef: agentProfiles.platformModelRef,
     })
     .from(agentProfiles)
     .where(eq(agentProfiles.agentId, agentId))
     .limit(1);
-  if (!profile?.modelRef) return null;
+  if (!profile) return null;
+  if (!profile.modelRef) {
+    return profile.platformModelRef
+      ? poolBindingFor(
+          database,
+          profile.tenantId,
+          profile.platformModelRef,
+          environment,
+        )
+      : null;
+  }
   const [entry] = await database
     .select({
       tenantId: modelRegistry.tenantId,
@@ -109,12 +162,88 @@ async function bindingFor(
   if (!entry?.enabled || !entry.credentialId) return null;
   if (entry.tenantId !== profile.tenantId) return null;
   return {
+    kind: "library",
     tenantId: entry.tenantId,
     modelRef: profile.modelRef,
     provider: entry.provider,
     baseUrl: entry.baseUrl,
     modelName: entry.modelName,
     credentialId: entry.credentialId,
+  };
+}
+
+/**
+ * The plan the tenant is on, read under that tenant's own frame: the newest active subscription, and
+ * Free when there is none (audit #7: an absent row is never "no limit", and never Pro).
+ */
+async function planIdFor(
+  database: Database,
+  tenantId: string,
+): Promise<string> {
+  const [row] = await runAsTenant(tenantId, () =>
+    database
+      .select({ planId: subscriptions.planId })
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.tenantId, tenantId),
+          eq(subscriptions.status, "active"),
+        ),
+      )
+      .orderBy(
+        desc(subscriptions.updatedAt),
+        desc(subscriptions.createdAt),
+        desc(subscriptions.id),
+      )
+      .limit(1),
+  );
+  return row?.planId ?? "free";
+}
+
+/**
+ * A pool binding, or `null` for every reason it may not hold: the row is gone or switched off, the
+ * tenant's plan is not one of the row's tiers, the row names no pool key, or the deployment has no
+ * value for that key. Each of those falls back to the deployment default, as a library binding does.
+ * A coworker stamped `system` or `platform` gets none: its calls could not be metered to anybody.
+ */
+async function poolBindingFor(
+  database: Database,
+  tenantId: string,
+  poolId: string,
+  environment: PoolKeyEnvironment,
+): Promise<PoolBinding | null> {
+  if (!tenantId || tenantId === "system" || tenantId === "platform") {
+    return null;
+  }
+  const [entry] = await database
+    .select({
+      id: platformModelPool.id,
+      provider: platformModelPool.provider,
+      baseUrl: platformModelPool.baseUrl,
+      modelName: platformModelPool.modelName,
+      apiKeyEnv: platformModelPool.apiKeyEnv,
+      tiers: platformModelPool.tiers,
+      enabled: platformModelPool.enabled,
+    })
+    .from(platformModelPool)
+    .where(eq(platformModelPool.id, poolId))
+    .limit(1);
+  if (!entry?.enabled) return null;
+  const plan = await planIdFor(database, tenantId);
+  if (!(entry.tiers as readonly string[]).includes(plan)) return null;
+  // The CHECK already holds this; asking again keeps a row from ever naming DATABASE_URL.
+  if (!PLATFORM_POOL_KEY_ENV.test(entry.apiKeyEnv)) return null;
+  const apiKey = environment[entry.apiKeyEnv];
+  if (!apiKey) return null;
+  return {
+    kind: "pool",
+    tenantId,
+    poolId: entry.id,
+    provider: entry.provider,
+    baseUrl: entry.baseUrl,
+    modelName: entry.modelName,
+    apiKeyEnv: entry.apiKeyEnv,
+    apiKey,
   };
 }
 
@@ -126,9 +255,10 @@ async function bindingFor(
 export async function boundModelName(
   database: Database,
   agentId: string,
+  environment: PoolKeyEnvironment = process.env,
 ): Promise<string | null> {
   try {
-    const binding = await bindingFor(database, agentId);
+    const binding = await bindingFor(database, agentId, environment);
     return binding ? `${binding.provider}/${binding.modelName}` : null;
   } catch {
     // Never log the thrown value: database errors can contain connection details or row contents.
@@ -145,10 +275,18 @@ export function createAgentModelResolver(
   credentials: CredentialSecretReader,
   encryptionKey: string,
   sink: ModelTokenCallSink = databaseTokenCallSink(database),
+  options: AgentModelResolverOptions = {},
 ): AgentModelResolver {
+  const environment = options.environment ?? process.env;
+  const languageModel = options.languageModel ?? languageModelFor;
   return async (agentId) => {
-    const binding = await bindingFor(database, agentId).catch(() => null);
+    const binding = await bindingFor(database, agentId, environment).catch(
+      () => null,
+    );
     if (!binding) return null;
+    if (binding.kind === "pool") {
+      return poolModel(binding, agentId, languageModel, sink);
+    }
     const secret = await credentials
       .readSecret(binding.credentialId)
       .catch(() => null);
@@ -157,7 +295,7 @@ export function createAgentModelResolver(
       const apiKey = await openCredential(encryptionKey, secret);
       const originalText = `${binding.provider}/${binding.modelName}`;
       return meteredLanguageModel(
-        languageModelFor(
+        languageModel(
           binding.provider,
           binding.baseUrl,
           binding.modelName,
@@ -190,4 +328,47 @@ export function createAgentModelResolver(
       return null;
     }
   };
+}
+
+/** A pool binding as a metered model: the platform's key, the profile tenant's usage row. */
+function poolModel(
+  binding: PoolBinding,
+  agentId: string,
+  languageModel: LanguageModelFactory,
+  sink: ModelTokenCallSink,
+): LanguageModel | null {
+  try {
+    return meteredLanguageModel(
+      languageModel(
+        binding.provider,
+        binding.baseUrl,
+        binding.modelName,
+        binding.apiKey,
+      ),
+      {
+        tenantId: binding.tenantId,
+        agentId,
+        modelRef: binding.poolId,
+        provider: binding.provider,
+        modelName: binding.modelName,
+        credentialId: binding.poolId,
+        // Moves when the operator rotates the key or renames its variable; never carries the key.
+        credentialDigest: sha256Hex(
+          `pool:${binding.poolId}:${binding.apiKeyEnv}:${sha256Hex(binding.apiKey)}`,
+        ),
+        originalModelFingerprint: sha256Hex(
+          JSON.stringify([
+            binding.provider,
+            binding.baseUrl,
+            binding.modelName,
+          ]),
+        ),
+        originalText: `${binding.provider}/${binding.modelName}`,
+      },
+      sink,
+    );
+  } catch {
+    // A provider client that cannot be built costs the binding, not the conversation.
+    return null;
+  }
 }

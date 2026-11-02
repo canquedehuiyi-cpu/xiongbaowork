@@ -215,6 +215,7 @@ tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
 tests/pipeline-turn-channel.test.ts
 tests/plan-model.test.ts
+tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
 tests/plugin-catalogue.test.ts
@@ -271,6 +272,7 @@ tests/recovery-knowledge-foundations.test.ts
 tests/recovery-knowledge-write-foundations.test.ts
 tests/recovery-outbox-knowledge-heads.test.ts
 tests/recovery-overlay-journal.test.ts
+tests/recovery-platform-model-pool.test.ts
 tests/recovery-plugin-assembly-foundations.test.ts
 tests/recovery-resource-project-foundations.test.ts
 tests/recovery-role-foundations.test.ts
