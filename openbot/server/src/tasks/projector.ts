@@ -22,6 +22,12 @@ export type TaskProjector = {
     /** See `tasks.executor_agent_id`: omit it when the card is a whole group's ask. */
     executorAgentId?: string | null;
     source: "chat" | "routine" | "responsibility" | "handoff" | "group_run";
+    /**
+     * Which autonomous trigger set the card in motion, finer than `source` (story C2): `proactive`
+     * is a Bot's background research, filed under the `routine` lane the board already counts as
+     * unattended work. Omitted, the column stays null, which every existing card already reads as.
+     */
+    triggerSource?: "proactive" | null;
     channelRef?: string;
     runRef?: string;
     parentTaskId?: string;
@@ -183,6 +189,7 @@ export function createTaskProjector(
               title: input.title.slice(0, 200),
               executorAgentId: input.executorAgentId ?? null,
               source: input.source,
+              triggerSource: input.triggerSource ?? null,
               channelRef: input.channelRef,
               deviceId: input.deviceId ?? null,
               runRef: input.runRef,

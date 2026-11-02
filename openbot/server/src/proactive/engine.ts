@@ -14,6 +14,7 @@ import type { HeadlessTool } from "../computer/headless-tools";
 import type { MemoryStore } from "../memory/store";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { TurnRunner } from "../routines/runner";
+import type { TaskProjector } from "../tasks/projector";
 import {
   assertPersonTenant,
   runAsTenant,
@@ -74,6 +75,12 @@ export type ProactiveEngineDeps = {
   queue: WorkQueue;
   owner: string;
   runTurn: TurnRunner;
+  /**
+   * The task board (story C2): every research run is autonomous work the person did not start, so it
+   * files its own card as `routine` with trigger source `proactive` and closes it when the run ends.
+   * Absent, the turn runner's own card is the run's only mark, as before.
+   */
+  board?: Pick<TaskProjector, "opened" | "finished">;
   /** The person's channel with this Bot, or null when they can no longer reach either. */
   resolveScope(
     ownerUserId: string,
@@ -279,7 +286,17 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
       return;
     }
     await deps.store.recordRun(setting.id, "running");
+    /*
+     * THE RUN'S OWN CARD (story C2), opened before the turn and keyed by this run's id.
+     *
+     * The tenant is the one the claimed queue row proved and the setting's own row agreed with above,
+     * never the payload's or a default. A board that cannot be written is logged and the research
+     * goes ahead without its card: the setting row stays the ledger, and the turn runner then files
+     * its own card, so the run still leaves a mark (and still meets the month's task ceiling there).
+     */
+    const carded = await openCard(tenant, setting, scope, runId);
     running.set(runId, setting);
+    let failed = false;
     try {
       await deps.runTurn({
         ownerUserId: setting.ownerUserId,
@@ -290,10 +307,13 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
         initiator: proactiveInitiator(runId),
         runId,
         signal,
+        // The card opened above is this run's record; the runner files none of its own.
+        cardOwnedByCaller: carded,
       });
       await deliver(scope, runId);
       await deps.store.recordRun(setting.id, "succeeded");
     } catch (error) {
+      failed = true;
       await deps.store.recordRun(
         setting.id,
         "error",
@@ -303,6 +323,53 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
       await deliver(scope, runId).catch(() => undefined);
     } finally {
       running.delete(runId);
+      // Succeeded goes to the review lane (查收结果); a failed run reads as failed.
+      if (carded) await closeCard(tenant, runId, failed);
+    }
+  }
+
+  async function openCard(
+    tenant: string,
+    setting: ProactiveSetting,
+    scope: ProactiveScope,
+    runId: string,
+  ): Promise<boolean> {
+    if (!deps.board) return false;
+    try {
+      await deps.board.opened({
+        tenantId: tenant,
+        title: setting.focus ? `主动调研：${setting.focus}` : "主动调研",
+        executorAgentId: setting.agentId,
+        source: "routine",
+        triggerSource: "proactive",
+        channelRef: scope.channelId,
+        runRef: runId,
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "proactive-board-open-failed",
+          settingId: setting.id,
+          runId,
+          reason: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
+      return false;
+    }
+  }
+
+  async function closeCard(tenant: string, runId: string, failed: boolean) {
+    try {
+      await deps.board?.finished({ tenantId: tenant, runRef: runId, failed });
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "proactive-board-close-failed",
+          runId,
+          reason: error instanceof Error ? error.name : "UnknownError",
+        }),
+      );
     }
   }
 

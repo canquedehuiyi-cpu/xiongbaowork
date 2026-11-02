@@ -29,6 +29,7 @@ import type {
   StampedProactiveSuggestion,
 } from "../src/proactive/store";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
+import type { TaskProjector } from "../src/tasks/projector";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 import type { WorkItem, WorkQueue } from "../src/work/queue";
 
@@ -524,6 +525,8 @@ describe("G01: whose research a sweep is doing", () => {
     due?: StampedProactiveSetting[];
     suggestions?: StampedProactiveSuggestion[];
     queued?: Queued[];
+    board?: Pick<TaskProjector, "opened" | "finished">;
+    turnFails?: boolean;
   }) {
     const settings = input.settings;
     const suggestions = [...(input.suggestions ?? [])];
@@ -534,6 +537,8 @@ describe("G01: whose research a sweep is doing", () => {
       turns: [] as { owner: string; as: string }[],
       notified: [] as string[],
       tasks: [] as { owner: string; as: string }[],
+      cardOwnedByCaller: [] as (boolean | undefined)[],
+      order: [] as string[],
     };
     const find = (id: string) =>
       settings.find((row) => row.id === id && visible(row.tenantId)) ?? null;
@@ -631,8 +636,11 @@ describe("G01: whose research a sweep is doing", () => {
       },
       queue,
       owner: "worker",
+      board: input.board,
       runTurn: async (turn) => {
         seen.turns.push({ owner: turn.ownerUserId, as: currentTenant() });
+        seen.cardOwnedByCaller.push(turn.cardOwnedByCaller);
+        seen.order.push(`turn:${turn.runId}`);
         const tools = await engine.toolsForTurn({
           ownerUserId: turn.ownerUserId,
           agentId: turn.agentId,
@@ -644,6 +652,7 @@ describe("G01: whose research a sweep is doing", () => {
             { title: "Reply to Sam", detail: "Sam asked for the spec." },
             { toolCallId: "call", signal: new AbortController().signal },
           );
+        if (input.turnFails) throw new Error("model unavailable");
         return { replyText: "Summary." };
       },
       resolveScope: async (ownerUserId, channelId, agentId) => ({
@@ -794,6 +803,125 @@ describe("G01: whose research a sweep is doing", () => {
       "as-system": PROACTIVE_TENANT_UNRESOLVED,
       "as-alice": "finished",
     });
+  });
+
+  /*
+   * Story C2: every autonomous trigger files a card of its own. A research run is one, so it opens a
+   * `routine` card marked `proactive`, in the tenant the claimed setting proved, tells the turn runner
+   * the card is taken (so no second `chat` card is filed for the same work), and closes it when the
+   * run ends.
+   */
+  function recordingBoard(
+    order: () => string[],
+    options: { openFails?: boolean } = {},
+  ) {
+    const opened: (Parameters<TaskProjector["opened"]>[0] & { as: string })[] =
+      [];
+    const finished: (Parameters<TaskProjector["finished"]>[0] & {
+      as: string;
+    })[] = [];
+    const board: Pick<TaskProjector, "opened" | "finished"> = {
+      opened: async (card) => {
+        order().push(`opened:${card.runRef}`);
+        if (options.openFails) throw new Error("board unavailable");
+        opened.push({ ...card, as: currentTenant() });
+        return `card-${opened.length}`;
+      },
+      finished: async (card) => {
+        order().push(`finished:${card.runRef}`);
+        finished.push({ ...card, as: currentTenant() });
+      },
+    };
+    return { board, opened, finished };
+  }
+
+  test("C2: a research run opens its own proactive card in the setting's tenant and closes it for review", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order);
+    const { engine, queued, seen } = harness({
+      settings: [
+        stamp("alice", "alice", "a"),
+        stamp("system", "alice", "sys"),
+        stamp("alice", "bob", "foreign"),
+      ],
+      board: recorded.board,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    const runId = String(queued[0]?.payload.runId);
+    expect(runId).not.toBe("undefined");
+    // One card, only for the trusted setting, filed as Alice's autonomous work.
+    expect(recorded.opened).toEqual([
+      {
+        tenantId: "alice",
+        title: "主动调研",
+        executorAgentId: "bot-a",
+        source: "routine",
+        triggerSource: "proactive",
+        channelRef: "channel-a",
+        runRef: runId,
+        as: "alice",
+      },
+    ]);
+    // The runner is told the card is taken, so it files no `chat` card of its own.
+    expect(seen.cardOwnedByCaller).toEqual([true]);
+    // Opened before the turn, closed after it, to the review lane.
+    expect(seen.order).toEqual([
+      `opened:${runId}`,
+      `turn:${runId}`,
+      `finished:${runId}`,
+    ]);
+    expect(recorded.finished).toEqual([
+      { tenantId: "alice", runRef: runId, failed: false, as: "alice" },
+    ]);
+  });
+
+  test("C2: the card names the research focus, and a failed run closes its card as failed", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order);
+    const { engine, queued, seen } = harness({
+      settings: [{ ...stamp("alice", "alice", "a"), focus: "客户续约" }],
+      board: recorded.board,
+      turnFails: true,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    const runId = String(queued[0]?.payload.runId);
+    expect(recorded.opened.map((card) => card.title)).toEqual([
+      "主动调研：客户续约",
+    ]);
+    expect(seen.runs.filter((row) => row.id === "a").at(-1)?.status).toBe(
+      "error",
+    );
+    expect(recorded.finished).toEqual([
+      { tenantId: "alice", runRef: runId, failed: true, as: "alice" },
+    ]);
+  });
+
+  test("C2: a board that cannot be written does not stop the research, and the runner keeps its own card", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order, { openFails: true });
+    const { engine, seen, suggestions } = harness({
+      settings: [stamp("alice", "alice", "a")],
+      board: recorded.board,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    expect(seen.turns).toEqual([{ owner: "alice", as: "alice" }]);
+    // Not taken: the turn runner's own card is the run's only mark.
+    expect(seen.cardOwnedByCaller).toEqual([false]);
+    expect(suggestions).toHaveLength(1);
+    expect(seen.runs.filter((row) => row.id === "a").at(-1)?.status).toBe(
+      "succeeded",
+    );
+    // Nothing to close: no card was opened.
+    expect(recorded.finished).toEqual([]);
   });
 });
 
