@@ -201,6 +201,17 @@ function namedHost(url: URL, allowedHosts?: ReadonlySet<string>): boolean {
   return allowedHosts.has(url.port ? `${hostname}:${url.port}` : hostname);
 }
 
+/** Whether the operator named this host at all, with or without a port. */
+function hostIsNamed(url: URL, allowedHosts?: ReadonlySet<string>): boolean {
+  if (!allowedHosts || allowedHosts.size === 0) return false;
+  const hostname = url.hostname.toLowerCase();
+  for (const entry of allowedHosts) {
+    const named = entry.toLowerCase();
+    if (named === hostname || named.startsWith(`${hostname}:`)) return true;
+  }
+  return false;
+}
+
 export type OutboundVerdict =
   | { allowed: true; url: string }
   | { allowed: false; reason: string };
@@ -252,6 +263,14 @@ export function checkOutboundUrl(
       allowed: false,
       reason:
         "A model endpoint must use https, or the key would travel unencrypted.",
+    };
+  }
+  // A named host is scoped to the port it was named with (a bare name: the scheme's default port),
+  // so naming `agents.internal` never opens `agents.internal:6379`.
+  if (!opened && hostIsNamed(url, policy.allowedHosts)) {
+    return {
+      allowed: false,
+      reason: "That host is allowed only on the port it was named with.",
     };
   }
   const bare = canonicalHostname(hostname);
