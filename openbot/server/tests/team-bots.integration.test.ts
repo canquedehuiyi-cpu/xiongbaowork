@@ -23,6 +23,7 @@ import {
   TEAM_BOT_CONSENT_MARKER,
   TeamBotRefusedError,
 } from "../src/team-bots/team-bots";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -47,21 +48,24 @@ const teamBots = createTeamBots({
 });
 
 afterEach(async () => {
-  for (const id of createdChannels.splice(0)) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, id));
-    await database.delete(channels).where(eq(channels.id, id));
-  }
-  const ids = createdAgents.splice(0);
-  if (ids.length) {
-    await database
-      .delete(agentProfiles)
-      .where(inArray(agentProfiles.agentId, ids));
-    await database.delete(agents).where(inArray(agents.id, ids));
-  }
-  for (const id of createdUsers.splice(0))
-    await database.delete(users).where(eq(users.id, id));
+  // Cleanup spans several people's rows, which only the platform reaches.
+  await runAsTenant("platform", async () => {
+    for (const id of createdChannels.splice(0)) {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, id));
+      await database.delete(channels).where(eq(channels.id, id));
+    }
+    const ids = createdAgents.splice(0);
+    if (ids.length) {
+      await database
+        .delete(agentProfiles)
+        .where(inArray(agentProfiles.agentId, ids));
+      await database.delete(agents).where(inArray(agents.id, ids));
+    }
+    for (const id of createdUsers.splice(0))
+      await database.delete(users).where(eq(users.id, id));
+  });
   connected.clear();
 });
 afterAll(async () => {
@@ -74,9 +78,9 @@ async function person(
 ): Promise<AgentActor & { email: string }> {
   const id = `${prefix}-user-${randomUUID()}`;
   const email = `${id}@example.test`;
-  await database
-    .insert(users)
-    .values({ id, email, name: "Team Bot Test", groups });
+  await runAsTenant(id, () =>
+    database.insert(users).values({ id, email, name: "Team Bot Test", groups }),
+  );
   createdUsers.push(id);
   return { id, role, email };
 }
