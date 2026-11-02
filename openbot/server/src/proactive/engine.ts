@@ -14,13 +14,22 @@ import type { HeadlessTool } from "../computer/headless-tools";
 import type { MemoryStore } from "../memory/store";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { TurnRunner } from "../routines/runner";
+import {
+  assertPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 import {
   proactiveInitiator,
   proactiveRunIdOf,
   refusalsFor,
 } from "./restriction";
-import type { ProactiveRead, ProactiveStore } from "./store";
+import type {
+  ProactiveRead,
+  ProactiveStore,
+  StampedProactiveSetting,
+} from "./store";
 import {
   MAX_MEMORIES_PER_RUN,
   MAX_SUGGESTIONS_PER_RUN,
@@ -35,6 +44,22 @@ export const PROACTIVE_TASK_KIND = "proactive.task";
 const RUN_LEASE_MS = 10 * 60_000;
 /** A person pressing "Run now" twice in a minute gets one run. */
 const RUN_NOW_GAP_MS = 10 * 60_000;
+/** Said on a queue row that was ended because nobody trusted could be found to run it for. */
+export const PROACTIVE_TENANT_UNRESOLVED = "tenant_unresolved";
+
+/**
+ * WHOSE RESEARCH THIS IS comes from the setting's own row (G01): the tenant the database stamped on
+ * it when its person created it, which the owner on the same row may only agree with. A setting
+ * stamped as nobody's (`system`, `platform`), or one that names somebody other than the tenant it
+ * is filed under, has no person to read apps for, and running it would file the turn, the
+ * suggestions and the memories where the wrong people can read them.
+ */
+function settingTenant(setting: {
+  tenantId?: unknown;
+  ownerUserId: string;
+}): string {
+  return assertPersonTenant(setting.tenantId, setting.ownerUserId);
+}
 
 export type ProactiveScope = {
   ownerUserId: string;
@@ -228,9 +253,18 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     }
   }
 
-  async function run(settingId: string, runId: string, signal: AbortSignal) {
+  async function run(
+    tenant: string,
+    settingId: string,
+    runId: string,
+    signal: AbortSignal,
+  ) {
+    // Read in the item's own tenant, so another person's setting is not even visible from here.
     const setting = await deps.store.byId(settingId);
     if (!setting?.enabled) return;
+    // A `system` row is still visible from a person's frame; it is not theirs to run.
+    if (settingTenant(setting) !== tenant)
+      throw new TenantContextError("setting/tenant mismatch");
     const scope = await deps.resolveScope(
       setting.ownerUserId,
       setting.channelId,
@@ -275,6 +309,7 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
   async function drain(
     kind: string,
     work: (
+      tenant: string,
       payload: Record<string, unknown>,
       signal: AbortSignal,
     ) => Promise<void>,
@@ -287,6 +322,20 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
       maxAttempts: 1,
     });
     if (!item) return false;
+    /*
+     * The claim asks as `platform`; the work is done as the tenant stamped on the claimed row, which
+     * is where the person's `runNow`, `start` or this sweep's own per-setting offer put it. A row
+     * stamped as nobody's is ended without running anybody (one attempt, so the release below is
+     * final) and keeps the reason on the queue row, which only the platform reads.
+     */
+    let tenant: string;
+    try {
+      tenant = assertPersonTenant(item.tenantId);
+    } catch (error) {
+      if (!(error instanceof TenantContextError)) throw error;
+      await dropUntrusted(kind, item.key);
+      return true;
+    }
     const controller = new AbortController();
     const renew = setInterval(() => {
       void deps.queue
@@ -305,9 +354,16 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     }, RUN_LEASE_MS / 3);
     renew.unref?.();
     try {
-      await work(item.payload, controller.signal);
+      // The whole chain — turn, suggestions, memories, notification, run status — in that tenant.
+      await runAsTenant(tenant, () =>
+        work(tenant, item.payload, controller.signal),
+      );
       await deps.queue.finish({ kind, key: item.key, owner: deps.owner });
     } catch (error) {
+      if (error instanceof TenantContextError) {
+        await dropUntrusted(kind, item.key);
+        return true;
+      }
       // One attempt only: a background run is not worth repeating a partial read for.
       await deps.queue.release({
         kind,
@@ -321,6 +377,20 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
       clearInterval(renew);
     }
     return true;
+  }
+
+  /** Ended, not retried, and said on the row and in the log, naming nobody the row did not prove. */
+  async function dropUntrusted(kind: string, key: string) {
+    await deps.queue.release({
+      kind,
+      key,
+      owner: deps.owner,
+      delayMs: 60_000,
+      reason: PROACTIVE_TENANT_UNRESOLVED,
+    });
+    console.warn(
+      JSON.stringify({ type: "proactive-untrusted-tenant", kind, key }),
+    );
   }
 
   const payloadSchema = z.object({
@@ -428,25 +498,62 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     },
     /** One scheduling pass: offer what is due, then run at most one research turn and one task. */
     async sweep() {
-      for (const setting of await deps.store.claimDue()) {
+      // "What is due" belongs to no tenant, so it is asked as the platform, which sees every one.
+      const due: StampedProactiveSetting[] = await runAsTenant("platform", () =>
+        deps.store.claimDue(),
+      );
+      for (const setting of due) {
+        let tenant: string;
+        try {
+          tenant = settingTenant(setting);
+        } catch (error) {
+          if (!(error instanceof TenantContextError)) throw error;
+          // Its interval already moved forward in the claim, so this is said once per interval.
+          await runAsTenant("platform", () =>
+            deps.store.recordRun(
+              setting.id,
+              "error",
+              "This background research has no trusted owner, so it did not run.",
+            ),
+          ).catch(() => undefined);
+          console.warn(
+            JSON.stringify({
+              type: "proactive-untrusted-tenant",
+              kind: PROACTIVE_RUN_KIND,
+              settingId: setting.id,
+            }),
+          );
+          continue;
+        }
         const runId = crypto.randomUUID();
-        await deps.queue.offer({
-          kind: PROACTIVE_RUN_KIND,
-          key: `${setting.id}:${runId}`,
-          payload: { settingId: setting.id, runId },
-        });
+        // Offered from the setting's tenant, so the queue row is stamped as that person's work.
+        await runAsTenant(tenant, () =>
+          deps.queue.offer({
+            kind: PROACTIVE_RUN_KIND,
+            key: `${setting.id}:${runId}`,
+            payload: { settingId: setting.id, runId },
+          }),
+        );
       }
-      await drain(PROACTIVE_RUN_KIND, async (payload, signal) => {
+      await drain(PROACTIVE_RUN_KIND, async (tenant, payload, signal) => {
         const { settingId, runId } = payloadSchema.parse(payload);
-        await run(settingId, runId, signal);
+        await run(tenant, settingId, runId, signal);
       });
-      await drain(PROACTIVE_TASK_KIND, async (payload, signal) => {
+      await drain(PROACTIVE_TASK_KIND, async (tenant, payload, signal) => {
         const { ownerUserId, suggestionId } = taskSchema.parse(payload);
+        // The payload's person may only agree with the row's tenant, never stand in for it.
+        assertPersonTenant(tenant, ownerUserId);
         const suggestion = await deps.store.suggestion(
           ownerUserId,
           suggestionId,
         );
         const setting = await deps.store.get(ownerUserId, suggestion.settingId);
+        if (
+          suggestion.tenantId !== tenant ||
+          setting.tenantId !== tenant ||
+          settingTenant(setting) !== tenant
+        )
+          throw new TenantContextError("suggestion/tenant mismatch");
         const scope = await deps.resolveScope(
           ownerUserId,
           setting.channelId,
