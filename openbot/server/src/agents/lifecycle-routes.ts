@@ -10,8 +10,12 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { ActivityStore } from "../activity/activity";
-import type { AuditEventType, AuditStore } from "../audit";
-import { recordAuditEvent } from "../audit";
+import type { AgentTrailReader, AuditEventType, AuditStore } from "../audit";
+import {
+  AuditQueryError,
+  agentTrailPageFromUrl,
+  recordAuditEvent,
+} from "../audit";
 import type { AppVariables } from "../auth/guards";
 import {
   type BotLifecycleStore,
@@ -39,14 +43,23 @@ export type BotLifecycleServices = {
     get(actor: AgentActor, id: string): Promise<AgentProfile | null>;
   };
   auditStore?: AuditStore;
+  /** Reads one agent's trail for its detail page; absent means the trail answers 503. */
+  auditTrail?: AgentTrailReader;
 };
 
 export function createBotLifecycleRoutes(
   services: BotLifecycleServices,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
 ) {
-  const { lifecycle, reset, activity, wakeUps, profiles, auditStore } =
-    services;
+  const {
+    lifecycle,
+    reset,
+    activity,
+    wakeUps,
+    profiles,
+    auditStore,
+    auditTrail,
+  } = services;
   const routes = new Hono<{ Variables: AppVariables }>();
   type C = Context<{ Variables: AppVariables }>;
 
@@ -230,6 +243,50 @@ export function createBotLifecycleRoutes(
     return context.json({
       activity: await activity.forBot(context.var.actor.id, agent.id),
     });
+  });
+
+  /**
+   * The Bot's recent audit trail, for the employee detail page (story D5).
+   *
+   * GET /api/bots/:agentId/audit?limit=1..100&cursor=…
+   * → 200 { scope: "everyone" | "own", events: AuditEvent[], nextCursor?: string }
+   *
+   * Each event is `{ id, eventType, actorUserId, initiatorKind, initiatorId, targetType, targetId,
+   * payload, createdAt }`, newest first; pass `nextCursor` back as `cursor` for the next page.
+   *
+   * The Bot's owner and an administrator see what everybody and the system did to it (`scope:
+   * "everyone"`); anybody else who can reach it sees only what they did (`scope: "own"`). Either way
+   * a row about one person's own relationship with the Bot — pausing, muting, resetting it — is shown
+   * only to that person. 404 when the Bot is not reachable, 400 for a bad `limit` or `cursor`, 503
+   * when no trail reader is wired.
+   */
+  routes.get("/:agentId/audit", requireUser, async (context) => {
+    const agent = await reachable(context);
+    if (agent instanceof Response) return agent;
+    if (!auditTrail)
+      return context.json({ error: "Audit logging is not configured." }, 503);
+    const actor = context.var.actor;
+    const seesEveryone =
+      actor.role === "admin" ||
+      (typeof agent.ownerUserId === "string" && agent.ownerUserId === actor.id);
+    try {
+      const page = agentTrailPageFromUrl(new URL(context.req.url));
+      const trail = await auditTrail.listAgentTrail({
+        agentId: agent.id,
+        viewerUserId: actor.id,
+        seesEveryone,
+        ...page,
+      });
+      return context.json({
+        scope: seesEveryone ? "everyone" : "own",
+        events: trail.events,
+        ...(trail.nextCursor ? { nextCursor: trail.nextCursor } : {}),
+      });
+    } catch (error) {
+      if (error instanceof AuditQueryError)
+        return context.json({ error: error.message }, 400);
+      throw error;
+    }
   });
 
   routes.post(
