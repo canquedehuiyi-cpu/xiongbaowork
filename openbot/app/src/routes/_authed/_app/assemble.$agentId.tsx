@@ -28,6 +28,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import {
+  knowledgeForAgentQueryOptions,
+  knowledgeNotebooksQueryOptions,
+  setKnowledgeBindingMutationOptions,
+} from "@/lib/knowledge/queries";
 import { setPluginGrantMutationOptions } from "@/lib/plugins/mutations";
 import {
   agentPluginsQueryOptions,
@@ -119,6 +124,11 @@ function AssemblePage() {
 
       <SkillsZone agentId={profile.id} canManage={profile.canManage} />
       <ConnectorZone agentId={profile.id} />
+      <KnowledgeZone
+        agentId={profile.id}
+        canManage={profile.canManage}
+        mine={profile.mine}
+      />
 
       <PageSection description="它按计划自己做的事。" title="定时任务">
         <RoutinesList agentId={profile.id} embedded />
@@ -299,6 +309,121 @@ function ConnectorZone({ agentId }: { agentId: string }) {
           ))}
         </ItemGroup>
       )}
+    </PageSection>
+  );
+}
+
+/**
+ * Which of the person's knowledge bases this coworker may read (D08 RES1), one box per base.
+ *
+ * A knowledge base and the binding on it belong to one person, and the server grants a binding only
+ * between a person's own base and their own Waker. So the boxes are live only when the viewer both
+ * manages this coworker and is the one who created it; for anybody else's coworker they are drawn
+ * unticked and disabled, which is also the truth — none of the viewer's bases can be bound to it.
+ * The per-Waker read is not even asked for then, because the server answers it with a 403.
+ */
+function KnowledgeZone({
+  agentId,
+  canManage,
+  mine,
+}: {
+  agentId: string;
+  canManage: boolean;
+  mine: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const editable = canManage && mine;
+  const notebooks = useQuery(knowledgeNotebooksQueryOptions());
+  const bound = useQuery({
+    ...knowledgeForAgentQueryOptions(agentId),
+    enabled: mine,
+  });
+  const setBinding = useMutation(
+    setKnowledgeBindingMutationOptions(queryClient),
+  );
+
+  const rows = notebooks.data ?? [];
+  const readable = new Set(
+    (bound.data ?? []).map((notebook) => notebook.notebookId),
+  );
+  const pending = notebooks.isPending || (mine && bound.isPending);
+  const failed = notebooks.error ?? (mine ? bound.error : null);
+
+  return (
+    <PageSection
+      action={
+        <Button
+          render={(props) => <Link {...props} to="/knowledge" />}
+          size="sm"
+          variant="outline"
+        >
+          <IconExternalLink />
+          管理知识库
+        </Button>
+      }
+      description="勾选即允许这位员工只读该知识库；取消勾选即收回。"
+      title="知识库"
+    >
+      {pending ? (
+        <Skeleton className="h-14" />
+      ) : failed ? (
+        <p className="text-destructive text-sm" role="alert">
+          读不到知识库。
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          你还没有知识库，先到知识库页里建一个。
+        </p>
+      ) : (
+        <ItemGroup>
+          {rows.map((notebook) => {
+            return (
+              <Item key={notebook.id} variant="muted">
+                <ItemContent>
+                  <ItemTitle>{notebook.title}</ItemTitle>
+                </ItemContent>
+                <ItemActions>
+                  {/*
+                   * No <label> around or for the box: Base UI names a span checkbox after any
+                   * label it finds (aria-labelledby beats aria-label), and "可读取" would then
+                   * name every box alike. The box is named by its aria-label alone.
+                   */}
+                  <div className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      aria-label={`允许读取 ${notebook.title}`}
+                      checked={readable.has(notebook.id)}
+                      disabled={
+                        !editable ||
+                        (setBinding.isPending &&
+                          setBinding.variables?.notebookId === notebook.id)
+                      }
+                      onCheckedChange={(checked) => {
+                        if (!editable) return;
+                        setBinding.mutate({
+                          agentId,
+                          granted: checked === true,
+                          notebookId: notebook.id,
+                        });
+                      }}
+                    />
+                    <span aria-hidden="true">可读取</span>
+                  </div>
+                </ItemActions>
+              </Item>
+            );
+          })}
+        </ItemGroup>
+      )}
+      {!mine && rows.length > 0 ? (
+        <p className="mt-3 text-muted-foreground text-sm">
+          知识库只能授权给你自己的员工。
+        </p>
+      ) : null}
+      {setBinding.error ? (
+        <p className="mt-2 text-destructive text-sm" role="alert">
+          {setBinding.error.message}
+        </p>
+      ) : null}
     </PageSection>
   );
 }

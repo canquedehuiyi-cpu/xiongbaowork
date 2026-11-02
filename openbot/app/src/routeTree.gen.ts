@@ -19,6 +19,7 @@ import { Route as AuthedAppIndexRouteImport } from './routes/_authed/_app/index'
 import { Route as AuthedAppApprovalsRouteImport } from './routes/_authed/_app/approvals'
 import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
 import { Route as AuthedAppMemoryRouteImport } from './routes/_authed/_app/memory'
+import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
 import { Route as AuthedAppTasksRouteImport } from './routes/_authed/_app/tasks'
 import { Route as AuthedAppPlatformRouteImport } from './routes/_authed/_app/platform'
 import { Route as AuthedAppResourcesRouteImport } from './routes/_authed/_app/resources'
@@ -146,6 +147,11 @@ const AuthedAppBotRoute = AuthedAppBotRouteImport.update({
 const AuthedAppMemoryRoute = AuthedAppMemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppKnowledgeRoute = AuthedAppKnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppReachabilityRoute = AuthedAppReachabilityRouteImport.update({
@@ -361,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/approvals': typeof AuthedAppApprovalsRoute
   '/bot': typeof AuthedAppBotRoute
   '/memory': typeof AuthedAppMemoryRoute
+  '/knowledge': typeof AuthedAppKnowledgeRoute
   '/tasks': typeof AuthedAppTasksRoute
   '/platform': typeof AuthedAppPlatformRoute
   '/resources': typeof AuthedAppResourcesRoute
@@ -414,6 +421,7 @@ export interface FileRoutesByTo {
   '/approvals': typeof AuthedAppApprovalsRoute
   '/bot': typeof AuthedAppBotRoute
   '/memory': typeof AuthedAppMemoryRoute
+  '/knowledge': typeof AuthedAppKnowledgeRoute
   '/tasks': typeof AuthedAppTasksRoute
   '/platform': typeof AuthedAppPlatformRoute
   '/resources': typeof AuthedAppResourcesRoute
@@ -471,6 +479,7 @@ export interface FileRoutesById {
   '/_authed/_app/approvals': typeof AuthedAppApprovalsRoute
   '/_authed/_app/bot': typeof AuthedAppBotRoute
   '/_authed/_app/memory': typeof AuthedAppMemoryRoute
+  '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
   '/_authed/_app/tasks': typeof AuthedAppTasksRoute
   '/_authed/_app/platform': typeof AuthedAppPlatformRoute
   '/_authed/_app/resources': typeof AuthedAppResourcesRoute
@@ -529,6 +538,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/bot'
     | '/memory'
+    | '/knowledge'
     | '/tasks'
     | '/platform'
     | '/resources'
@@ -582,6 +592,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/bot'
     | '/memory'
+    | '/knowledge'
     | '/tasks'
     | '/platform'
     | '/resources'
@@ -638,6 +649,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/approvals'
     | '/_authed/_app/bot'
     | '/_authed/_app/memory'
+    | '/_authed/_app/knowledge'
     | '/_authed/_app/tasks'
     | '/_authed/_app/platform'
     | '/_authed/_app/reachability'
@@ -755,6 +767,13 @@ declare module '@tanstack/react-router' {
       path: '/memory'
       fullPath: '/memory'
       preLoaderRoute: typeof AuthedAppMemoryRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/knowledge': {
+      id: '/_authed/_app/knowledge'
+      path: '/knowledge'
+      fullPath: '/knowledge'
+      preLoaderRoute: typeof AuthedAppKnowledgeRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/tasks': {
@@ -1148,6 +1167,7 @@ interface AuthedAppRouteChildren {
   AuthedAppApprovalsRoute: typeof AuthedAppApprovalsRoute
   AuthedAppBotRoute: typeof AuthedAppBotRoute
   AuthedAppMemoryRoute: typeof AuthedAppMemoryRoute
+  AuthedAppKnowledgeRoute: typeof AuthedAppKnowledgeRoute
   AuthedAppReachabilityRoute: typeof AuthedAppReachabilityRoute
   AuthedAppResponsibilitiesRoute: typeof AuthedAppResponsibilitiesRoute
   AuthedAppRoutinesRoute: typeof AuthedAppRoutinesRoute
@@ -1169,6 +1189,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppApprovalsRoute: AuthedAppApprovalsRoute,
   AuthedAppBotRoute: AuthedAppBotRoute,
   AuthedAppMemoryRoute: AuthedAppMemoryRoute,
+  AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,
   AuthedAppTasksRoute: AuthedAppTasksRoute,
   AuthedAppPlatformRoute: AuthedAppPlatformRoute,
   AuthedAppResourcesRoute: AuthedAppResourcesRoute,
