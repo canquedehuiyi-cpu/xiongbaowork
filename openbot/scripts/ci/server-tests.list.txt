@@ -317,6 +317,7 @@ tests/settings-instructions-routes.test.ts
 tests/shared-computer-run.integration.test.ts
 tests/single-user.test.ts
 tests/skill-ownership.integration.test.ts
+tests/skill-tenant-slugs.integration.test.ts
 tests/skill-tools.integration.test.ts
 tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts

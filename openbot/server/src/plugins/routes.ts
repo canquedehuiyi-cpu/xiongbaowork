@@ -2231,7 +2231,15 @@ export function createPluginRoutes(
     const refusal = await skillRefusal(context, slug);
     if (refusal) return context.json({ error: refusal }, 403);
 
-    await store.uninstallSkill(slug, actorEmail(context));
+    try {
+      await store.uninstallSkill(slug, actorEmail(context));
+    } catch (error) {
+      // The platform's own row under this name: a workspace may shadow it, never remove it.
+      if (error instanceof PluginRefusedError) {
+        return context.json({ error: error.message }, 403);
+      }
+      throw error;
+    }
     return context.json({ ok: true });
   });
 
