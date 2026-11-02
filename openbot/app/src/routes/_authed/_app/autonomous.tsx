@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";
+import { AutomationsSection } from "@/components/automations/automations-section";
 import {
   PageRows,
   PageSection,
@@ -188,6 +189,7 @@ function RouteComponent() {
           query={overview}
         />
       ) : null}
+      {everyone ? <AutomationsSection /> : null}
 
       {agentId && summary.isPending ? <Skeleton className="h-24" /> : null}
       {summary.isError ? (
