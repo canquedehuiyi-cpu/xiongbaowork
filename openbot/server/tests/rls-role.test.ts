@@ -8,6 +8,7 @@ import {
   ROLE_FACTS_SQL,
   readRoleFacts,
 } from "../src/db/rls-role";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -70,7 +71,10 @@ test("both at once names both", () => {
 
 test("the catalog query answers in the shape the reader expects", async () => {
   const database = createDatabase(testDatabaseUrl(), TEST_POOL);
-  const rows = await database.execute(sql.raw(ROLE_FACTS_SQL));
+  // The role catalogue belongs to no tenant: read in the system frame.
+  const rows = await runAsTenant("system", () =>
+    database.execute(sql.raw(ROLE_FACTS_SQL)),
+  );
   const facts = readRoleFacts(rows as unknown[]);
 
   // The test database is reached as the application role, so this is also the assertion that the
