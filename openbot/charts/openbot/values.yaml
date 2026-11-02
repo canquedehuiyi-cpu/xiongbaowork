@@ -151,7 +151,7 @@ config:
     okta:
       clientId: ""
       issuer: ""
-  tenantPackageDir: /app/examples/fintech
+  tenantPackageDir: /app/examples/qoderwake
 
   # How far one Bot may hand work to another.
   #
