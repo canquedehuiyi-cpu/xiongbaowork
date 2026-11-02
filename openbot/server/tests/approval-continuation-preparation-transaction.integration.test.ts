@@ -11,18 +11,19 @@ import { createDatabase, type Database } from "../src/db/client";
 import { approvalContinuations as ledger, approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { runAsTenant } from "../src/tenant/context";
+import { createDisposableTestDatabase } from "./support/database";
 
 // SOURCE_ONLY: real PG17 definitions, zero executions. Import opens the existing
 // DB module; this file is never a CPU-only import or an authorization artifact.
 // No DDL, automatic migration, grants, fallback URL, provider or production DB.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw) throw new Error("BLOCKED_TEST_DATABASE_URL");
+const disposable = await createDisposableTestDatabase({ role: "bypass" });
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (!/^postgres(?:ql)?:$/.test(url.protocol) ||
     !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
     !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-    process.env.TEST_DATABASE_DISPOSABLE !== databaseName)
+    disposable.databaseName !== databaseName)
   throw new Error("BLOCKED_NOT_DISPOSABLE");
 const database = createDatabase(raw, { max: 1 });
 const tenant = `preparation-${randomUUID()}`;
@@ -67,6 +68,7 @@ afterAll(async () => {
     }
   } finally {
     await database.$client.close();
+    await disposable.drop();
   }
 });
 

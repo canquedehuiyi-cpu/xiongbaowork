@@ -7,16 +7,17 @@ import { createApprovalStore } from "../src/approvals/store";
 import { createApprovalService } from "../src/approvals/service";
 import { approvalAction } from "../src/approvals/types";
 import { runAsTenant } from "../src/tenant/context";
+import { createDisposableTestDatabase } from "./support/database";
 // Explicit opt-in disposable PG only. Never import this file in CPU runs.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw) throw new Error("BLOCKED_TEST_DATABASE_URL: NOT RUN");
+const disposable = await createDisposableTestDatabase();
+const raw = disposable.url;
 const url = new URL(raw);
 const name = decodeURIComponent(url.pathname.slice(1));
 if (
   !/^postgres(?:ql)?:$/.test(url.protocol) ||
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
   !/^openbot_continuation_test_[0-9a-f]{16}$/.test(name) ||
-  process.env.TEST_DATABASE_DISPOSABLE !== name
+  disposable.databaseName !== name
 )
   throw new Error("BLOCKED_NOT_DISPOSABLE");
 const a = createDatabase(raw, { max: 1 });
@@ -72,6 +73,7 @@ afterAll(async () => {
   await scope(() => a.delete(users).where(eq(users.id, owner)));
   await a.$client.close();
   await b.$client.close();
+  await disposable.drop();
 });
 test("PG owned recovery DTO uses actual parent columns on independent connections", async () => {
   const first = await scope(() =>
