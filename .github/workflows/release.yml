@@ -1,0 +1,338 @@
+# Tag-triggered release (phase 6, R1). A person pushes a tag; this workflow never creates or moves
+# one. The image is built once, pushed to GHCR by digest only, smoke-tested (Gate 1) on exactly that
+# pulled digest, and only then given human-readable tags and a GitHub Release. The only credential
+# is the workflow's own GITHUB_TOKEN.
+name: 熊宝发布
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-rc.*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 只构建镜像，不推送、不打标签、不发布
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Not delivery-<ref> (ci.yml): the called CI workflow takes that group, and sharing it would make
+# the release wait on itself. Never cancelled, so a half-promoted release is not abandoned.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tag-check:
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      base: ${{ steps.tag.outputs.base }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - id: tag
+        name: Tag format, version, CHANGELOG and origin/main ancestry
+        working-directory: openbot
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" != tag ]; then
+            echo "::error::A release runs only from a tag (got $REF_TYPE $REF_NAME)."
+            exit 1
+          fi
+          # Every later job builds, labels and tags github.sha: it must be the commit the tag names
+          # now, so a tag moved after the push (or a tag-object SHA) stops the release here.
+          head="$(git rev-parse HEAD)"
+          tagged="$(git rev-parse --verify "refs/tags/$REF_NAME^{commit}")"
+          if [ "$head" != "$GITHUB_SHA" ] || [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::$REF_NAME names $tagged, checked out $head, run is for $GITHUB_SHA."
+            exit 1
+          fi
+          bun scripts/ci/release-tag.mjs "$REF_NAME" --check-ancestry \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  # The same CI that gates main, on the tagged tree. Nothing is built unless it passes.
+  checks:
+    needs: tag-check
+    if: ${{ !cancelled() && (needs.tag-check.result == 'success' || inputs.dry_run) }}
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  image:
+    needs: [tag-check, checks]
+    if: ${{ !cancelled() && needs.checks.result == 'success' && (needs.tag-check.result == 'success' || inputs.dry_run) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      repository: ${{ steps.name.outputs.repository }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: name
+        name: Lowercase image repository
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "repository=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: ${{ !inputs.dry_run }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Pushed untagged, by digest. Tags are written only by promote, after the digest passed G1.
+      - id: push
+        if: ${{ !inputs.dry_run }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: openbot
+          platforms: linux/amd64
+          outputs: type=image,name=${{ steps.name.outputs.repository }},push-by-digest=true,name-canonical=true,push=${{ !inputs.dry_run }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.tag-check.outputs.version }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,mode=max,scope=release
+      - name: Assert the pushed digest
+        if: ${{ !inputs.dry_run }}
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::build-push returned no usable digest: '$DIGEST'"
+            exit 1
+          fi
+          echo "Pushed $DIGEST"
+      - if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.name.outputs.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      # Dry run: the same build, loaded into the local daemon under a local tag. Nothing leaves the runner.
+      - name: Build only (dry run)
+        if: ${{ inputs.dry_run }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: openbot
+          platforms: linux/amd64
+          load: true
+          tags: openbot-release:dry-run
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=dry-run
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=release
+      - name: Assert the dry-run image exists
+        if: ${{ inputs.dry_run }}
+        run: docker image inspect openbot-release:dry-run --format '{{.Id}}'
+
+  # Gate 1 on the digest that was pushed, pulled back from GHCR, not on a local build.
+  verify-digest:
+    needs: [tag-check, image]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        working-directory: openbot
+    env:
+      REFERENCE: ${{ needs.image.outputs.repository }}@${{ needs.image.outputs.digest }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull by digest
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull "$REFERENCE"
+          docker image inspect "$REFERENCE" --format '{{json .RepoDigests}}' | grep -F "\"$REFERENCE\""
+          # Same final SHA: the pulled digest must carry the tagged commit it was built from.
+          revision="$(docker image inspect "$REFERENCE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+          if [ "$revision" != "$GITHUB_SHA" ]; then
+            echo "::error::$REFERENCE was built from '$revision', expected $GITHUB_SHA"
+            exit 1
+          fi
+      - name: G1 smoke on the pushed digest (no provider credentials)
+        run: EVIDENCE_DIR="$RUNNER_TEMP/release-evidence" bash scripts/ci/image-smoke.sh "$REFERENCE"
+      - name: Record the verified reference
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-evidence"
+          printf '%s\n' "$REFERENCE" > "$RUNNER_TEMP/release-evidence/reference.txt"
+      - name: Print container logs (credentials masked)
+        if: failure()
+        run: |
+          for f in startup owner auth recreated; do
+            bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/release-evidence/$f.log" || true
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: release-evidence
+          path: ${{ runner.temp }}/release-evidence/
+          if-no-files-found: error
+
+  promote:
+    needs: [tag-check, image, verify-digest]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the verified digest
+        env:
+          REPOSITORY: ${{ needs.image.outputs.repository }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          PRERELEASE: ${{ needs.tag-check.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          tags=("$REPOSITORY:$TAG" "$REPOSITORY:sha-$GITHUB_SHA")
+          case "$PRERELEASE" in
+            false) tags+=("$REPOSITORY:latest") ;;
+            true) ;;
+            *) echo "::error::prerelease output is '$PRERELEASE'"; exit 1 ;;
+          esac
+          # The version and sha- tags are immutable: a re-run builds a new digest, and it must not
+          # take over a tag (or :latest) that already names another one. Only "not found" is absent.
+          for t in "$REPOSITORY:$TAG" "$REPOSITORY:sha-$GITHUB_SHA"; do
+            if existing="$(docker buildx imagetools inspect "$t" --format '{{.Manifest.Digest}}' 2>"$RUNNER_TEMP/inspect.err")"; then
+              if [ "$existing" != "$DIGEST" ]; then
+                echo "::error::$t already names $existing; refusing to move it to $DIGEST"
+                exit 1
+              fi
+            elif ! grep -qi 'not found' "$RUNNER_TEMP/inspect.err"; then
+              cat "$RUNNER_TEMP/inspect.err" >&2
+              echo "::error::could not tell whether $t exists"
+              exit 1
+            fi
+          done
+          args=()
+          for t in "${tags[@]}"; do args+=(--tag "$t"); done
+          docker buildx imagetools create "${args[@]}" "$REPOSITORY@$DIGEST"
+          # Read each tag back from the registry: it must name the digest G1 verified.
+          for t in "${tags[@]}"; do
+            got="$(docker buildx imagetools inspect "$t" --format '{{.Manifest.Digest}}')"
+            if [ "$got" != "$DIGEST" ]; then
+              echo "::error::$t resolves to $got, expected $DIGEST"
+              exit 1
+            fi
+            echo "$t -> $got"
+          done
+
+  github-release:
+    needs: [tag-check, image, verify-digest, promote]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-notes
+          path: notes
+      - name: Write container-images.json
+        env:
+          VERSION: ${{ needs.tag-check.outputs.version }}
+          REPOSITORY: ${{ needs.image.outputs.repository }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          jq -n \
+            --arg version "$VERSION" \
+            --arg commit "$GITHUB_SHA" \
+            --arg repository "$REPOSITORY" \
+            --arg digest "$DIGEST" \
+            '{
+              version: $version,
+              commit: $commit,
+              images: {
+                openbot: {
+                  repository: $repository,
+                  digest: $digest,
+                  reference: ($repository + "@" + $digest)
+                }
+              }
+            }' > container-images.json
+          cat container-images.json
+      - name: Publish the GitHub Release (existing tag only)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          PRERELEASE: ${{ needs.tag-check.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          test -s notes/release-notes.md
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" container-images.json \
+            --verify-tag --title "$TAG" --notes-file notes/release-notes.md "${flags[@]}"
