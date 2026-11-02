@@ -15,6 +15,7 @@ import { recordAuditEvent } from "../audit";
 import type { AppVariables } from "../auth/guards";
 import { agents } from "../db/schema";
 import { boundModelName } from "../models/runtime-resolver";
+import { currentTenant, isTenantFramed, runAsTenant } from "../tenant/context";
 import { type Capability, capabilityRefusal } from "./capabilities";
 import { enterpriseControls } from "./controls";
 
@@ -158,7 +159,13 @@ export function createEnterpriseGate(
       : undefined;
     if (!controls || !rule) return next();
 
+    // A suggestion runs the model as a run does, so the allowlist governs it the same way.
+    const governedAgent =
+      (run?.action === "run" || run?.action === "suggest") && run.agentId
+        ? run.agentId
+        : undefined;
     let refused: Response | undefined;
+    let governed: Response | undefined;
     const authenticated = await requireUser(context, async () => {
       let needed: Capability[];
       try {
@@ -190,14 +197,25 @@ export function createEnterpriseGate(
           503,
         );
       }
+      /*
+       * A governed run is judged, run and recorded HERE, inside the tenant frame `requireUser` opened
+       * for this person: the Bot lookup, the bound model, the usage row and the audit row are theirs.
+       * Outside it they would read and write as `system` (or throw under
+       * OPENBOT_TENANT_FRAME_GUARD=throw), where a Bot stamped with its owner's tenant is not found,
+       * so a built-in Bot would pass the allowlist unjudged.
+       */
+      if (!refused && governedAgent)
+        governed = await governRun(context, next, governedAgent);
     });
     // requireUser answered on its own: not signed in, or no role.
     if (authenticated instanceof Response) return authenticated;
     if (refused) return refused;
-
-    // A suggestion runs the model as a run does, so the allowlist governs it the same way.
-    if ((run?.action === "run" || run?.action === "suggest") && run.agentId)
-      return governRun(context, next, run.agentId);
+    if (governedAgent) return governed;
+    /*
+     * Everything else passes on outside the frame, as before: each gated route sits behind its own
+     * `requireUser`, which opens the person's frame again, and the CopilotKit runtime frames every
+     * call by the actor it resolves itself.
+     */
     return next();
   };
 }
@@ -227,6 +245,14 @@ async function governRun(
     typeof request.threadId === "string" ? request.threadId : null;
   const runId = typeof request.runId === "string" ? request.runId : null;
   const actor = context.var.actor;
+  /*
+   * The frame this runs in, kept for the stream's `flush`, which runs whenever the body is read --
+   * after this function has returned and outside any frame. The tenant is the one `requireUser`
+   * framed the request as, not re-derived here.
+   */
+  const tenant = isTenantFramed() ? currentTenant() : undefined;
+  const inFrame = <T>(work: () => T): T =>
+    tenant === undefined ? work() : runAsTenant(tenant, work);
 
   let builtIn = false;
   let bound: string | null = null;
@@ -316,19 +342,23 @@ async function governRun(
     flush() {
       const model = found ?? `remote:${agentId}`;
       const allowed = found ? isAllowed(found) : !allowlist?.enabled;
-      void record(model, found ? "observed" : "unknown", allowed);
+      void inFrame(() =>
+        record(model, found ? "observed" : "unknown", allowed),
+      );
       if (!allowed) {
-        void recordAuditEvent(controls.deps.auditStore, {
-          eventType: "model.refused",
-          targetType: "agent",
-          targetId: agentId,
-          actorUserId: actor.id,
-          payload: {
-            model,
-            source: found ? "observed" : "unknown",
-            note: "A remote Bot chooses its own model; this run was recorded against the allowlist after it streamed.",
-          },
-        }).catch(() => undefined);
+        void inFrame(() =>
+          recordAuditEvent(controls.deps.auditStore, {
+            eventType: "model.refused",
+            targetType: "agent",
+            targetId: agentId,
+            actorUserId: actor.id,
+            payload: {
+              model,
+              source: found ? "observed" : "unknown",
+              note: "A remote Bot chooses its own model; this run was recorded against the allowlist after it streamed.",
+            },
+          }),
+        ).catch(() => undefined);
       }
     },
   });
