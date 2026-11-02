@@ -28,6 +28,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import {
+  setProactiveEnabledMutationOptions,
+  setResponsibilityEnabledMutationOptions,
+} from "@/lib/autonomous/mutations";
+import {
   type AutonomousSummary,
   autonomousKeys,
   autonomousQueryOptions,
@@ -184,6 +188,13 @@ function RouteComponent() {
 
       {everyone ? (
         <Overview
+          manageable={
+            new Set(
+              roster
+                .filter((agent) => agent.canManage)
+                .map((agent) => agent.id),
+            )
+          }
           names={new Map(roster.map((agent) => [agent.id, agent.name]))}
           onChanged={() => void after()}
           query={overview}
@@ -309,6 +320,14 @@ function RouteComponent() {
                       <RunStrip runs={recentRunsOf(goal)} />
                     </ItemContent>
                     <ItemActions>
+                      <WorkSwitch
+                        canManage={selected.canManage}
+                        enabled={goal.status === "active"}
+                        id={goal.id}
+                        kind="responsibility"
+                        name={goal.title}
+                        status={goal.status}
+                      />
                       <Link
                         className="text-muted-foreground text-xs underline-offset-2 hover:underline"
                         to="/responsibilities"
@@ -356,6 +375,15 @@ function RouteComponent() {
                         ) : null}
                       </ItemDescription>
                     </ItemContent>
+                    <ItemActions>
+                      <WorkSwitch
+                        canManage={selected.canManage}
+                        enabled={setting.enabled}
+                        id={setting.id}
+                        kind="proactive"
+                        name={setting.focus || "未填写重点"}
+                      />
+                    </ItemActions>
                   </Item>
                 ))}
               </PageRows>
@@ -382,10 +410,13 @@ function RouteComponent() {
 function Overview({
   query,
   names,
+  manageable,
   onChanged,
 }: {
   query: UseQueryResult<AutonomousSummary[]>;
   names: ReadonlyMap<string, string>;
+  /** The coworkers whose switches this person may move, as the server decided (`canManage`). */
+  manageable: ReadonlySet<string>;
   onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -457,6 +488,16 @@ function Overview({
                   <ItemDescription>{statusWord(goal.status)}</ItemDescription>
                   <RunStrip runs={recentRunsOf(goal)} />
                 </ItemContent>
+                <ItemActions>
+                  <WorkSwitch
+                    canManage={manageable.has(entry.agentId)}
+                    enabled={goal.status === "active"}
+                    id={goal.id}
+                    kind="responsibility"
+                    name={goal.title}
+                    status={goal.status}
+                  />
+                </ItemActions>
               </Item>
             ))}
             {entry.proactive.map((setting) => (
@@ -476,12 +517,100 @@ function Overview({
                       : "关"}
                   </ItemDescription>
                 </ItemContent>
+                <ItemActions>
+                  <WorkSwitch
+                    canManage={manageable.has(entry.agentId)}
+                    enabled={setting.enabled}
+                    id={setting.id}
+                    kind="proactive"
+                    name={setting.focus || "未填写重点"}
+                  />
+                </ItemActions>
               </Item>
             ))}
           </PageRows>
         </PageSection>
       ))}
     </>
+  );
+}
+
+const SWITCH_NOUN = {
+  responsibility: "长期职责",
+  proactive: "主动巡检",
+} as const;
+
+/**
+ * The 启停开关 of spec C1 for one responsibility or one proactive check-in.
+ *
+ * It moves at once and moves back if the server refuses, with the server's sentence shown under it as
+ * it was said. A person who cannot manage this coworker sees the switch but cannot move it, and a
+ * completed responsibility has nothing left to switch on. Routines keep their 暂停/恢复 press, which
+ * goes through the routine store and its floor.
+ *
+ * A native `<button role="switch">` drawn like `ui/switch`, not the Base UI one: this page draws a
+ * switch on every row, and with a Base UI root per row a single failed DOM assertion took bun several
+ * seconds to print (measured: ~4 s per element), enough to time out the page's existing tests.
+ */
+function WorkSwitch({
+  kind,
+  id,
+  name,
+  enabled,
+  canManage,
+  status,
+}: {
+  kind: keyof typeof SWITCH_NOUN;
+  id: string;
+  name: string;
+  enabled: boolean;
+  canManage: boolean;
+  /** A responsibility's own status; only `active` and `paused` can be switched. */
+  status?: string;
+}) {
+  const queryClient = useQueryClient();
+  const toggle = useMutation(
+    kind === "responsibility"
+      ? setResponsibilityEnabledMutationOptions(queryClient)
+      : setProactiveEnabledMutationOptions(queryClient),
+  );
+  const [problem, setProblem] = useState<string | null>(null);
+  const finished = kind === "responsibility" && status === "completed";
+  const reason = !canManage
+    ? "只有能管理这位员工的人才能开关"
+    : finished
+      ? "这条职责已经完成，不能再开启"
+      : undefined;
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        aria-checked={enabled}
+        aria-label={`${SWITCH_NOUN[kind]}开关：${name}`}
+        className="group/switch relative inline-flex h-[14px] w-[24px] shrink-0 items-center rounded-full border border-transparent bg-input outline-none transition-[background-color,box-shadow] duration-150 ease-out focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-checked:bg-primary dark:bg-input/80 dark:aria-checked:bg-primary"
+        disabled={reason !== undefined || toggle.isPending}
+        onClick={() => {
+          setProblem(null);
+          toggle.mutate(
+            { id, enabled: !enabled },
+            {
+              onError: (thrown: Error) =>
+                setProblem(thrown.message || "没能切换，请重试。"),
+            },
+          );
+        }}
+        role="switch"
+        title={reason}
+        type="button"
+      >
+        <span className="pointer-events-none block size-3 rounded-full bg-background transition-transform duration-150 ease-out group-aria-checked/switch:translate-x-[calc(100%-2px)] dark:bg-foreground dark:group-aria-checked/switch:bg-primary-foreground" />
+      </button>
+      {problem ? (
+        <p className="text-destructive text-xs" role="alert">
+          {problem}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
