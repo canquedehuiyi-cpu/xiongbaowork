@@ -14,6 +14,8 @@ set -eu
 DATA=/var/lib/postgresql/data
 PW_FILE=/var/lib/postgresql/pgpassword
 APP_PW_FILE=/var/lib/postgresql/pgpassword-app
+# The restricted identity-role writer (migration 0109): the only login allowed to write user_roles.
+WRITER_PW_FILE=/var/lib/postgresql/pgpassword-role-writer
 BIN=/usr/lib/postgresql/16/bin
 
 if [ ! -s "$DATA/PG_VERSION" ]; then
@@ -74,8 +76,12 @@ if [ ! -s "$APP_PW_FILE" ]; then
   APP_PW="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
   ( umask 077; printf '%s' "$APP_PW" > "$APP_PW_FILE" )
 fi
-chmod 600 "$PW_FILE" "$APP_PW_FILE"
-chown postgres:postgres "$PW_FILE" "$APP_PW_FILE"
+if [ ! -s "$WRITER_PW_FILE" ]; then
+  WRITER_PW="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  ( umask 077; printf '%s' "$WRITER_PW" > "$WRITER_PW_FILE" )
+fi
+chmod 600 "$PW_FILE" "$APP_PW_FILE" "$WRITER_PW_FILE"
+chown postgres:postgres "$PW_FILE" "$APP_PW_FILE" "$WRITER_PW_FILE"
 PW="$(cat "$PW_FILE")"
 APP_PW="$(cat "$APP_PW_FILE")"
 printf 'postgres://openbot:%s@127.0.0.1:5432/openbot' "$PW" \
@@ -86,4 +92,10 @@ chmod 600 /run/s6/container_environment/MIGRATION_DATABASE_URL
 if [ -z "${DATABASE_URL:-}" ]; then
   printf 'postgres://openbot_app:%s@127.0.0.1:5432/openbot' "$APP_PW" \
     > /run/s6/container_environment/DATABASE_URL
+fi
+# The server refuses to start without the role writer; same rule as DATABASE_URL for an explicit value.
+if [ -z "${ROLE_WRITER_DATABASE_URL:-}" ]; then
+  printf 'postgres://openbot_role_writer:%s@127.0.0.1:5432/openbot' "$(cat "$WRITER_PW_FILE")" \
+    > /run/s6/container_environment/ROLE_WRITER_DATABASE_URL
+  chmod 600 /run/s6/container_environment/ROLE_WRITER_DATABASE_URL
 fi
