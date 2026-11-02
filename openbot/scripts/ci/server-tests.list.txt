@@ -181,6 +181,7 @@ tests/memory.test.ts
 tests/migration-journal.test.ts
 tests/mobile-links.test.ts
 tests/model-library-routes.test.ts
+tests/model-probe.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
 tests/oauth-refresh-redirect.test.ts
@@ -191,6 +192,7 @@ tests/organization-store.integration.test.ts
 tests/otel-export-scrubbing.test.ts
 tests/otel-exporter-compat.test.ts
 tests/otel-sdk-lifecycle.test.ts
+tests/outbound-guard.test.ts
 tests/owner-assembly-audit.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
