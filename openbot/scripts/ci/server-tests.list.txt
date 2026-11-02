@@ -158,8 +158,8 @@ tests/handoff-caps-defaults.test.ts
 tests/handoff-child-card.test.ts
 tests/headless-components.integration.test.ts
 tests/headless-components.test.ts
-tests/headless-tools.test.ts
 tests/headless-model-usage.integration.test.ts
+tests/headless-tools.test.ts
 tests/health.test.ts
 tests/history-sanitize.test.ts
 tests/host-access-broker.test.ts
