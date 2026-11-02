@@ -196,3 +196,136 @@ test("the axes compose rather than overwrite each other", async () => {
   );
   expect(composed.map((task) => task.id)).toEqual([extras[2]]);
 });
+
+/*
+ * Spec A4/C2: 触发方式 as the screen asks for it. 自主工作 is two sources at once — a routine firing
+ * and a responsibility firing — and that pair is also the board's 无人值守 filter, so `source=` takes a
+ * comma list. Run in its own coworker ids, for the reason `historian` gives above, and next to a second
+ * workspace holding the very same sources: the list is narrowed inside the caller's tenant, and a
+ * neighbour's routine is never part of "my unattended work".
+ */
+const neighbour = `w-${suite}-neighbour`;
+const steward = `${suite}-steward`;
+const triggers = await runAsTenant(tenant, async () => {
+  const rows = await database
+    .insert(tasks)
+    .values([
+      {
+        title: "Nightly digest",
+        executorAgentId: steward,
+        source: "routine",
+        status: "done",
+      },
+      {
+        title: "Inbox duty",
+        executorAgentId: steward,
+        source: "responsibility",
+        status: "running",
+      },
+      {
+        title: "Asked in chat",
+        executorAgentId: steward,
+        source: "chat",
+        status: "running",
+      },
+      {
+        title: "Passed along",
+        executorAgentId: steward,
+        source: "handoff",
+        status: "running",
+      },
+    ])
+    .returning({ id: tasks.id });
+  return rows.map((row) => row.id);
+});
+const theirs = await runAsTenant(neighbour, async () => {
+  const rows = await database
+    .insert(tasks)
+    .values([
+      {
+        title: "Their nightly digest",
+        executorAgentId: steward,
+        source: "routine",
+        status: "done",
+      },
+      {
+        title: "Their inbox duty",
+        executorAgentId: steward,
+        source: "responsibility",
+        status: "running",
+      },
+    ])
+    .returning({ id: tasks.id });
+  return rows.map((row) => row.id);
+});
+
+/** The neighbour's own signed-in caller, so its read is a whole request of its own and not a borrowed one. */
+const neighbourRoutes = createTaskRoutes(
+  database,
+  async (context, next) => {
+    context.set("actor", { id: neighbour, role: "user" as const });
+    await next();
+  },
+  projector,
+);
+
+afterAll(async () => {
+  await runAsTenant(neighbour, async () => {
+    await database.delete(tasks).where(eq(tasks.tenantId, neighbour));
+  });
+});
+
+test("source takes a comma list: 自主工作 is routine and responsibility, in this tenant only", async () => {
+  const unattended = await get(
+    `?executors=${steward}&source=routine,responsibility`,
+  );
+  expect(unattended.map((task) => task.id).sort()).toEqual(
+    [triggers[0]!, triggers[1]!].sort(),
+  );
+  // The neighbour's rows match the same two sources and the same coworker id, and still are not here.
+  for (const id of theirs) {
+    expect(unattended.map((task) => task.id)).not.toContain(id);
+  }
+  // Without the coworker narrowing too: no row of another workspace rides in on a source match.
+  const everyUnattended = await get("?source=routine,responsibility");
+  for (const id of theirs) {
+    expect(everyUnattended.map((task) => task.id)).not.toContain(id);
+  }
+  expect(everyUnattended.map((task) => task.id)).toEqual(
+    expect.arrayContaining([triggers[0]!, triggers[1]!]),
+  );
+
+  // And the neighbour, asking the same question, sees only its own two.
+  const theirView = await runAsTenant(neighbour, async () => {
+    const response = await neighbourRoutes.request(
+      new Request(
+        `http://openbot.test/?executors=${steward}&source=routine,responsibility`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { tasks: { id: string }[] }).tasks;
+  });
+  expect(theirView.map((task) => task.id).sort()).toEqual([...theirs].sort());
+});
+
+test("a single source still narrows to that one, and the list composes with status", async () => {
+  const chat = await get(`?executors=${steward}&source=chat`);
+  expect(chat.map((task) => task.id)).toEqual([triggers[2]]);
+
+  const runningUnattended = await get(
+    `?executors=${steward}&source=routine,responsibility&status=running`,
+  );
+  expect(runningUnattended.map((task) => task.id)).toEqual([triggers[1]]);
+});
+
+test("unknown sources are dropped, and a list that names nothing matches nothing", async () => {
+  // An enum value Postgres does not know used to reach it as 22P02 — a 500 on a typed address.
+  const mixed = await get(
+    `?executors=${steward}&source=handoff,carrier-pigeon`,
+  );
+  expect(mixed.map((task) => task.id)).toEqual([triggers[3]]);
+
+  expect(await get(`?executors=${steward}&source=carrier-pigeon`)).toEqual([]);
+  expect(await get("?source=")).toEqual([]);
+  expect(await get("?source=,,")).toEqual([]);
+});

@@ -49,6 +49,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -384,6 +385,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
          * person reads just before something is refused, and it has to be somewhere they already look.
          */}
         <UsagePanel />
+        {/*
+         * Spec A1: "工作管理 > 任务看板". The heading names the group the board opens, so the way in
+         * reads the same as the spec and the reference product's navigation.
+         */}
+        <SidebarGroupLabel>工作管理</SidebarGroupLabel>
         <SidebarMenu className="gap-px">
           <SidebarMenuItem>
             {/* The board first: it is the way in from "things", not from "chats". */}

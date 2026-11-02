@@ -1,14 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { boardSearch } from "@/routes/_authed/_app/tasks";
+import {
+  boardEmptySentence,
+  boardQuery,
+  boardSearch,
+  executorOptions,
+  LANES,
+  sourceLabelOf,
+  statusLabelOf,
+  TRIGGERS,
+} from "@/routes/_authed/_app/tasks";
 
 /**
  * A1 moved the whole filter set into the address, so the address is the thing worth pinning. Every
  * case below is a link somebody could paste into chat: the coercions are what a stale or hand-edited
  * URL meets, and the defaults are what a bare /tasks has to answer with.
  *
- * The mapping onto the wire (machineId to deviceId, crew to executors) is decided inside the page
- * component and stays covered by the board-level suites. No export was invented to make it unit
- * testable, because a second source of truth about the request format would be worse than a gap.
+ * The mapping onto the wire (machineId to deviceId, crew to executors, 触发方式 to a source list) is
+ * `boardQuery`, which is what the page itself sends — one source of truth about the request format,
+ * so the round trip below is the page's own and not a copy of it.
  */
 const EMPTY = {
   machineId: "",
@@ -17,6 +26,7 @@ const EMPTY = {
   q: "",
   period: "month",
   view: "list",
+  source: "",
 } as const;
 
 describe("boardSearch", () => {
@@ -50,7 +60,17 @@ describe("boardSearch", () => {
     }
   });
 
-  test("all six axes survive together rather than one replacing another", () => {
+  test("触发方式 is a closed set of the screen's three choices", () => {
+    for (const ok of ["chat", "autonomous", "handoff"] as const) {
+      expect(boardSearch({ source: ok }).source).toBe(ok);
+    }
+    // The server's own words are not the address's: `routine` alone is half of 自主工作, not a choice.
+    for (const bad of ["routine", "group_run", "", 3, null, "CHAT"]) {
+      expect(boardSearch({ source: bad }).source).toBe("");
+    }
+  });
+
+  test("all seven axes survive together rather than one replacing another", () => {
     const shared: ReturnType<typeof boardSearch> = {
       machineId: "d-1",
       crew: "增长小组",
@@ -58,6 +78,7 @@ describe("boardSearch", () => {
       q: "周报",
       period: "all",
       view: "lanes",
+      source: "autonomous",
     };
     expect(boardSearch(shared)).toEqual(shared);
   });
@@ -81,5 +102,204 @@ describe("boardSearch", () => {
       ...EMPTY,
       crew: "增长小组",
     });
+  });
+});
+
+/**
+ * Spec A4 and C2 on the wire: what the address asks the server for, through the page's own builder.
+ * The address is parsed first, as the route does, so each case is a pasted link end to end.
+ */
+describe("boardQuery", () => {
+  const wire = (search: Record<string, unknown>) =>
+    boardQuery(boardSearch(search));
+
+  test("a bare address asks for the month and nothing else", () => {
+    expect(wire({})).toEqual({ list: "period=month", scope: "period=month" });
+  });
+
+  test("自主工作 is routine and responsibility — the 无人值守 filter — on both reads", () => {
+    const { list, scope } = wire({ source: "autonomous" });
+    expect(new URLSearchParams(list).get("source")).toBe(
+      "routine,responsibility",
+    );
+    // The stat bar counts inside the same 触发方式, like it does for a crew or a machine.
+    expect(new URLSearchParams(scope).get("source")).toBe(
+      "routine,responsibility",
+    );
+  });
+
+  test("对话触发 and 交接 name their own sources, and no choice names none", () => {
+    expect(
+      new URLSearchParams(wire({ source: "chat" }).list).get("source"),
+    ).toBe("chat");
+    expect(
+      new URLSearchParams(wire({ source: "handoff" }).list).get("source"),
+    ).toBe("handoff,group_run");
+    expect(new URLSearchParams(wire({}).list).has("source")).toBe(false);
+    // A stale or hand-edited value is no filter, not a request the server would answer with nothing.
+    expect(
+      new URLSearchParams(wire({ source: "routine" }).list).has("source"),
+    ).toBe(false);
+  });
+
+  test("a Waker or a Group rides as executors; status and words stay off the stat bar's read", () => {
+    const { list, scope } = wire({
+      machineId: "d-1",
+      crew: "agent-a,agent-b",
+      status: "failed",
+      q: "周报",
+      period: "week",
+      source: "handoff",
+    });
+    const asked = new URLSearchParams(list);
+    expect(asked.get("deviceId")).toBe("d-1");
+    expect(asked.get("executors")).toBe("agent-a,agent-b");
+    expect(asked.get("status")).toBe("failed");
+    expect(asked.get("q")).toBe("周报");
+    expect(asked.get("period")).toBe("week");
+    expect(asked.get("source")).toBe("handoff,group_run");
+    const counted = new URLSearchParams(scope);
+    expect(counted.has("status")).toBe(false);
+    expect(counted.has("q")).toBe(false);
+    expect(counted.get("executors")).toBe("agent-a,agent-b");
+    expect(counted.get("source")).toBe("handoff,group_run");
+  });
+
+  test("ended is the screen's own filter and is never sent as a status", () => {
+    expect(
+      new URLSearchParams(wire({ status: "ended" }).list).has("status"),
+    ).toBe(false);
+  });
+
+  test("every trigger choice is spelled in the spec's words", () => {
+    expect(TRIGGERS.map((entry) => entry.label)).toEqual([
+      "对话触发",
+      "自主工作（无人值守）",
+      "交接",
+    ]);
+  });
+
+  test("a 触发方式 that emptied the list is named as a filter, not as an empty workspace", () => {
+    expect(
+      boardEmptySentence({
+        machineId: "",
+        crew: "",
+        status: "",
+        q: "",
+        source: "autonomous",
+      }),
+    ).toBe("没有符合当前筛选条件的任务。");
+  });
+});
+
+describe("the Waker/Group dropdown (A4)", () => {
+  test("a coworker is its id and a crew is its roster, which is what /wakers links with", () => {
+    const options = executorOptions(
+      [
+        { id: "agent-a", name: "阿开" },
+        { id: "agent-b", name: "阿审" },
+      ],
+      [
+        {
+          id: "group-1",
+          name: "编程小组",
+          members: [{ agentId: "agent-a" }, { agentId: "agent-b" }],
+        },
+        { id: "group-empty", name: "空组", members: [] },
+      ],
+    );
+    expect(options).toEqual([
+      { kind: "waker", value: "agent-a", label: "阿开" },
+      { kind: "waker", value: "agent-b", label: "阿审" },
+      { kind: "group", value: "agent-a,agent-b", label: "小组 · 编程小组" },
+    ]);
+    // Chosen, it is an ordinary crew address, and parses back to the same roster.
+    expect(boardSearch({ crew: options[2]?.value }).crew).toBe(
+      "agent-a,agent-b",
+    );
+  });
+});
+
+/**
+ * Spec A3's words on a card. These replace the labels the board used to print (对话/例行/职责/组团 for a
+ * source, 已完成/失败 for the two ways work ends), which is the change this story makes.
+ */
+describe("the card's labels (A3, C2, I2, A5)", () => {
+  test("sources read 对话触发 / 自主工作 / 交接", () => {
+    expect(sourceLabelOf({ source: "chat" })).toEqual({
+      label: "对话触发",
+      detail: null,
+    });
+    expect(sourceLabelOf({ source: "handoff" })).toEqual({
+      label: "交接",
+      detail: null,
+    });
+    // I2: a crew's step is registered as a hand-off.
+    expect(sourceLabelOf({ source: "group_run" })).toEqual({
+      label: "交接",
+      detail: null,
+    });
+  });
+
+  test("自主工作 says which kind, from the trigger when it is recorded and the source when not", () => {
+    expect(sourceLabelOf({ source: "routine" })).toEqual({
+      label: "自主工作",
+      detail: "例行",
+    });
+    expect(
+      sourceLabelOf({ source: "responsibility", triggerSource: null }),
+    ).toEqual({
+      label: "自主工作",
+      detail: "职责",
+    });
+    expect(
+      sourceLabelOf({ source: "routine", triggerSource: "proactive" }),
+    ).toEqual({
+      label: "自主工作",
+      detail: "巡检",
+    });
+    expect(
+      sourceLabelOf({ source: "routine", triggerSource: "automation" }),
+    ).toEqual({ label: "自主工作", detail: "自动任务" });
+    // A trigger this release does not know keeps the source's own answer.
+    expect(
+      sourceLabelOf({ source: "routine", triggerSource: "webhook" }),
+    ).toEqual({
+      label: "自主工作",
+      detail: "例行",
+    });
+    // A trigger on a non-autonomous card adds nothing.
+    expect(
+      sourceLabelOf({ source: "chat", triggerSource: "proactive" }),
+    ).toEqual({
+      label: "对话触发",
+      detail: null,
+    });
+  });
+
+  test("an unknown source keeps its own value rather than going blank", () => {
+    expect(sourceLabelOf({ source: "carrier" })).toEqual({
+      label: "carrier",
+      detail: null,
+    });
+  });
+
+  test("statuses read 进行中 / 需要操作 / 已结束-已完成 / 已结束-失败", () => {
+    expect(statusLabelOf({ status: "running" })).toBe("进行中");
+    expect(statusLabelOf({ status: "needs_action" })).toBe("需要操作");
+    expect(statusLabelOf({ status: "done" })).toBe("已结束-已完成");
+    expect(statusLabelOf({ status: "failed" })).toBe("已结束-失败");
+    // Filed away or not, a failure reads the same: P1's archived wording is the spec's wording.
+    expect(
+      statusLabelOf({ status: "failed", archivedAt: new Date().toISOString() }),
+    ).toBe("已结束-失败");
+  });
+
+  test("the lanes are 进行中 / 需要操作 / 已结束", () => {
+    expect(LANES.map((lane) => lane.label)).toEqual([
+      "进行中",
+      "需要操作",
+      "已结束",
+    ]);
   });
 });

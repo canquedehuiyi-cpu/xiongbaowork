@@ -148,38 +148,117 @@ test("a card names its coworker, the whole crew, or the id it was given", async 
   queryClient.setQueryData(agentKeys.list(false), [
     { id: "agent-known", name: "阿审" } as never,
   ]);
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <AttentionRegion
-        machineLabel={() => null}
-        onArchive={() => {}}
-        onReview={() => {}}
-        pendingIds={new Set<string>()}
-        tasks={[
-          {
-            ...card({ status: "failed", title: "整组的活" }),
-            id: "card-crew",
-            executorAgentId: null,
-          },
-          {
-            ...card({ status: "needs_action", title: "有名字的活" }),
-            id: "card-known",
-            executorAgentId: "agent-known",
-          },
-          {
-            ...card({ status: "failed", title: "人已不在的活" }),
-            id: "card-gone",
-            executorAgentId: "agent-gone-0000-1111",
-          },
-        ]}
-      />
-    </QueryClientProvider>,
+  // Routed now: a known coworker is a link (A3), and a link needs a router to be drawn at all.
+  const view = drawRouted(
+    [
+      {
+        ...card({ status: "failed", title: "整组的活" }),
+        id: "card-crew",
+        executorAgentId: null,
+      },
+      {
+        ...card({ status: "needs_action", title: "有名字的活" }),
+        id: "card-known",
+        executorAgentId: "agent-known",
+      },
+      {
+        ...card({ status: "failed", title: "人已不在的活" }),
+        id: "card-gone",
+        executorAgentId: "agent-gone-0000-1111",
+      },
+    ],
+    queryClient,
   );
 
-  expect(view.getByText("整组")).toBeTruthy();
+  expect(await view.findByText("整组")).toBeTruthy();
   expect(view.getByText("阿审")).toBeTruthy();
   // Gone rather than renamed: eight characters of a key, which is all the route has to work with.
   expect(view.getByText("agent-go")).toBeTruthy();
+});
+
+/*
+ * Spec A3: the executor opens that coworker's own page (D5's /wakers/$agentId), and only a coworker
+ * that exists is offered as a way in — the crew's parent and a vanished id stay plain text.
+ */
+test("the executor is a link to the coworker's detail page, and only a known one is", async () => {
+  const queryClient = testClient();
+  queryClient.setQueryData(agentKeys.list(false), [
+    { id: "agent-known", name: "阿审", avatarSeed: "seed" } as never,
+  ]);
+  const view = drawRouted(
+    [
+      {
+        ...card({ status: "needs_action", title: "有名字的活" }),
+        id: "card-known",
+        executorAgentId: "agent-known",
+      },
+      {
+        ...card({ status: "failed", title: "整组的活" }),
+        id: "card-crew",
+        executorAgentId: null,
+      },
+      {
+        ...card({ status: "failed", title: "人已不在的活" }),
+        id: "card-gone",
+        executorAgentId: "agent-gone-0000-1111",
+      },
+    ],
+    queryClient,
+  );
+
+  // Found by the name it prints; the avatar inside also announces it, so the role query's name doubles.
+  const link = (await view.findByText("阿审")).closest("a");
+  expect(link).not.toBeNull();
+  if (!link) return;
+  expect(link.getAttribute("href")).toBe("/wakers/agent-known");
+  expect(link.closest("li")?.textContent).toContain("有名字的活");
+  // Exactly one executor link on the region: neither 整组 nor the bare id became one.
+  expect(view.container.querySelectorAll("a[data-executor]")).toHaveLength(1);
+  expect(view.getByText("整组").closest("a")).toBeNull();
+  expect(view.getByText("agent-go").closest("a")).toBeNull();
+});
+
+/*
+ * Spec A3/C2/I2 as drawn: the source chip and the status badge in the spec's words. This replaces the
+ * board's earlier words (对话/例行/职责/组团, 已完成/失败), which is the change these stories make.
+ */
+test("cards print A3's sources and the 已结束 statuses", () => {
+  const sourced = (
+    id: string,
+    status: string,
+    source: string,
+    triggerSource: string | null = null,
+  ): CardTask =>
+    ({
+      ...card({ status, title: `${id} card` }),
+      id,
+      source,
+      triggerSource,
+    }) as unknown as CardTask;
+  const view = draw([
+    sourced("asked", "needs_action", "chat"),
+    sourced("nightly", "failed", "routine"),
+    sourced("duty", "failed", "responsibility"),
+    sourced("checkin", "failed", "routine", "proactive"),
+    sourced("passed", "needs_action", "handoff"),
+    sourced("step", "needs_action", "group_run"),
+  ]);
+  const chipOf = (id: string) =>
+    (
+      view.getByText(`${id} card`).closest("li")?.querySelector("[data-source]")
+        ?.textContent ?? ""
+    ).trim();
+  expect(chipOf("asked")).toBe("对话触发");
+  expect(chipOf("nightly")).toBe("自主工作 · 例行");
+  expect(chipOf("duty")).toBe("自主工作 · 职责");
+  expect(chipOf("checkin")).toBe("自主工作 · 巡检");
+  expect(chipOf("passed")).toBe("交接");
+  expect(chipOf("step")).toBe("交接");
+
+  const badgeOf = (id: string) =>
+    view.getByText(`${id} card`).closest("li")?.querySelector("[data-status]");
+  expect(badgeOf("nightly")?.textContent).toBe("已结束-失败");
+  expect(badgeOf("asked")?.textContent).toBe("需要操作");
 });
 
 /*
@@ -207,7 +286,7 @@ const failedCard = (
     archivedAt,
   }) as unknown as CardTask;
 
-function drawRouted(tasks: CardTask[]) {
+function drawRouted(tasks: CardTask[], queryClient = testClient()) {
   const root = createRootRoute({
     component: () => (
       <AttentionRegion
@@ -228,10 +307,15 @@ function drawRouted(tasks: CardTask[]) {
         path: "/autonomous",
         component: () => null,
       } as never),
+      createRoute({
+        getParentRoute: () => root,
+        path: "/wakers/$agentId",
+        component: () => null,
+      } as never),
     ]),
   });
   return render(
-    <QueryClientProvider client={testClient()}>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );

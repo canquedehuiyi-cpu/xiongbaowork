@@ -21,11 +21,20 @@ import {
   intelligenceChannelMappings,
   modelUsage,
   tasks,
+  taskSource,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
+
+/**
+ * What may be asked of `tasks.source`, and nothing else. The column is a Postgres enum, so a value
+ * outside it would reach the database as `22P02` and come back as a 500 on input anyone can type.
+ */
+type TaskSource = (typeof taskSource.enumValues)[number];
+const isTaskSource = (value: string): value is TaskSource =>
+  (taskSource.enumValues as readonly string[]).includes(value);
 
 const PERIODS: Record<string, number> = {
   week: 7 * 86400000,
@@ -313,7 +322,27 @@ export function createTaskRoutes(
      */
     const executors = context.req.query("executors");
     if (status) conditions.push(eq(tasks.status, status as never));
-    if (source) conditions.push(eq(tasks.source, source as never));
+    /*
+     * Spec A4/C2: 触发方式 is one choice on the screen and more than one value here — 自主工作 is a
+     * routine OR a responsibility firing, and that pair is also the board's 无人值守 filter. So the
+     * parameter is a comma list. Values the enum does not know are dropped rather than sent on, and a
+     * list left with nothing in it (`?source=`, or only unknown words) matches nothing — the same rule
+     * `executors=` keeps below: a filter that was asked for and names nothing is an answer, not the
+     * absence of a filter.
+     */
+    if (source !== undefined) {
+      const sources = [
+        ...new Set(
+          source
+            .split(",")
+            .map((value) => value.trim())
+            .filter(isTaskSource),
+        ),
+      ];
+      conditions.push(
+        sources.length > 0 ? inArray(tasks.source, sources) : sql`false`,
+      );
+    }
     if (executor) conditions.push(eq(tasks.executorAgentId, executor));
     // `!== undefined` rather than truthiness: `?executors=` with nothing after it is a crew that has
     // nobody in it, which is an answer — no work — and not the same as never being asked.
