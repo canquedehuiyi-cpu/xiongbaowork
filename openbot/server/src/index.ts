@@ -2635,6 +2635,8 @@ await startupLifecycle.run(async (startup) => {
     memory: personalMemoryStore,
     queue: createWorkQueue(database),
     owner: workOwner("proactive"),
+    // Each research run files its own card (story C2); see `ProactiveEngineDeps.board`.
+    board: taskProjector,
     runTurn: createTurnRunner({
       intelligence: routineIntelligence,
       runner: routineAgentRunner,

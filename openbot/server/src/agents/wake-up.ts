@@ -25,6 +25,11 @@ import type { Database } from "../db/client";
 import { workItems } from "../db/schema/work";
 import type { GrantedTool } from "../plugins/tools";
 import { REFUSAL_MARKER } from "../plugins/tools";
+import {
+  assertPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 import { BotPausedError } from "./lifecycle";
 import type { AgentActor } from "./profile-types";
@@ -286,7 +291,7 @@ export function createWakeUpStore(
       await database
         .update(workItems)
         .set({
-          payload: sql`${workItems.payload} || ${JSON.stringify({ outcome })}::jsonb`,
+          payload: sql`${workItems.payload} || ${{ outcome }}::jsonb`,
           updatedAt: sql`now()`,
         })
         .where(and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, id)));
@@ -458,84 +463,110 @@ export function createWakeUpRunner(options: {
           });
           await queue.finish({ kind: WAKE_UP_KIND, key: item.key, owner });
         };
-        try {
-          if (!payload?.ownerUserId || !payload.agentId) {
-            await done("skipped", "not a follow-up");
-            report.skipped.push(item.key);
-            continue;
-          }
-          const actor = await actorFor(payload.ownerUserId);
-          const channel =
-            (payload.channelId
-              ? await channels.get(actor, payload.channelId)
-              : null) ?? (await channels.direct(actor, payload.agentId));
-          const initiator: AuditInitiator = {
-            kind: "routine",
-            id: `follow-up:${item.key}`,
-          };
-          try {
-            const { replyText } = await runTurn({
-              ownerUserId: payload.ownerUserId,
-              routineId: `follow-up:${item.key}`,
-              agentId: payload.agentId,
-              threadId: channel.threadId,
-              instruction: wakeUpInstruction(payload),
-              initiator,
-            });
-            await channels.recordActivity(
-              actor,
-              channel.id,
-              { text: replyText, agentId: payload.agentId, at: new Date() },
-              { id: `follow-up:${item.key}` },
-            );
-            await done("succeeded");
-            report.ran.push(item.key);
-            await notify?.(
-              {
-                ownerUserId: payload.ownerUserId,
-                channelId: channel.id,
-                agentId: payload.agentId,
-                threadId: channel.threadId,
-              },
-              { id: `follow-up:${item.key}`, text: replyText, kind: "reply" },
-            ).catch((error: unknown) =>
-              console.warn("Could not notify about a follow-up.", error),
-            );
-          } catch (error) {
-            if (error instanceof BotPausedError) {
-              await done("skipped", error.message);
-              report.skipped.push(item.key);
-            } else if (error instanceof HeadlessToolSuspension) {
-              await channels
-                .recordActivity(
-                  actor,
-                  channel.id,
-                  {
-                    text: error.message,
-                    agentId: payload.agentId,
-                    at: new Date(),
-                  },
-                  { id: `follow-up:${item.key}` },
-                )
-                .catch(() => {});
-              await done("waiting", error.message);
-              report.ran.push(item.key);
-            } else {
-              await done(
-                "failed",
-                error instanceof Error ? error.message : String(error),
-              );
-              report.skipped.push(item.key);
-            }
-          }
-        } catch (error) {
-          // The channel or the person could not be resolved: over, and said on the row.
-          await done(
-            "failed",
-            error instanceof Error ? error.message : String(error),
+        if (!payload?.ownerUserId || !payload.agentId) {
+          // The sweep's own frame is nobody's, so it says so rather than writing as `system`.
+          await runAsTenant("platform", () =>
+            done("skipped", "not a follow-up"),
           ).catch(() => {});
           report.skipped.push(item.key);
+          continue;
         }
+        /*
+         * WHOSE FOLLOW-UP THIS IS comes from the row, never from the payload alone (G01). The tenant
+         * stamped on the claimed row is what the database wrote from the frame that scheduled it;
+         * the payload's owner is only allowed to agree with it. A row stamped as nobody's has no
+         * person to wake up for, and running it would file the turn, the reply and the outcome as
+         * `system`, which every tenant can read.
+         */
+        let tenant: string;
+        try {
+          tenant = assertPersonTenant(item.tenantId, payload.ownerUserId);
+        } catch (error) {
+          if (!(error instanceof TenantContextError)) throw error;
+          await runAsTenant("platform", () =>
+            done("failed", "no trusted tenant"),
+          ).catch(() => {});
+          console.warn(
+            JSON.stringify({ type: "wakeup-untrusted-tenant", key: item.key }),
+          );
+          report.skipped.push(item.key);
+          continue;
+        }
+        await runAsTenant(tenant, async () => {
+          try {
+            const actor = await actorFor(payload.ownerUserId);
+            const channel =
+              (payload.channelId
+                ? await channels.get(actor, payload.channelId)
+                : null) ?? (await channels.direct(actor, payload.agentId));
+            const initiator: AuditInitiator = {
+              kind: "routine",
+              id: `follow-up:${item.key}`,
+            };
+            try {
+              const { replyText } = await runTurn({
+                ownerUserId: payload.ownerUserId,
+                routineId: `follow-up:${item.key}`,
+                agentId: payload.agentId,
+                threadId: channel.threadId,
+                instruction: wakeUpInstruction(payload),
+                initiator,
+              });
+              await channels.recordActivity(
+                actor,
+                channel.id,
+                { text: replyText, agentId: payload.agentId, at: new Date() },
+                { id: `follow-up:${item.key}` },
+              );
+              await done("succeeded");
+              report.ran.push(item.key);
+              await notify?.(
+                {
+                  ownerUserId: payload.ownerUserId,
+                  channelId: channel.id,
+                  agentId: payload.agentId,
+                  threadId: channel.threadId,
+                },
+                { id: `follow-up:${item.key}`, text: replyText, kind: "reply" },
+              ).catch((error: unknown) =>
+                console.warn("Could not notify about a follow-up.", error),
+              );
+            } catch (error) {
+              if (error instanceof BotPausedError) {
+                await done("skipped", error.message);
+                report.skipped.push(item.key);
+              } else if (error instanceof HeadlessToolSuspension) {
+                await channels
+                  .recordActivity(
+                    actor,
+                    channel.id,
+                    {
+                      text: error.message,
+                      agentId: payload.agentId,
+                      at: new Date(),
+                    },
+                    { id: `follow-up:${item.key}` },
+                  )
+                  .catch(() => {});
+                await done("waiting", error.message);
+                report.ran.push(item.key);
+              } else {
+                await done(
+                  "failed",
+                  error instanceof Error ? error.message : String(error),
+                );
+                report.skipped.push(item.key);
+              }
+            }
+          } catch (error) {
+            // The channel or the person could not be resolved: over, and said on the row.
+            await done(
+              "failed",
+              error instanceof Error ? error.message : String(error),
+            ).catch(() => {});
+            report.skipped.push(item.key);
+          }
+        });
       }
       return report;
     },
