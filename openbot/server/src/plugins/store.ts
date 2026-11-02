@@ -12,13 +12,14 @@ import {
   policyInitiator,
 } from "../computer/policy";
 import {
+  type CredentialBinding,
   type CredentialExecutor,
   type CredentialSecretReader,
   type CredentialStore,
   CredentialUnusableError,
   decryptCredentialForUse,
-  decryptSecret,
-  encryptSecret,
+  openCredential,
+  sealCredential,
 } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -1857,6 +1858,10 @@ export function createPluginStore(options: PluginStoreOptions) {
             .select({
               encryptedValue: credentialRows.encryptedValue,
               revokedAt: credentialRows.revokedAt,
+              // The row's identity, which a v2 envelope is bound to (audit #9).
+              id: credentialRows.id,
+              tenantId: credentialRows.tenantId,
+              kind: credentialRows.kind,
             })
             .from(credentialRows)
             .where(eq(credentialRows.id, current.credentialId))
@@ -1872,10 +1877,7 @@ export function createPluginStore(options: PluginStoreOptions) {
               null,
             );
           }
-          const refreshToken = await decryptSecret(
-            encryptionKey,
-            locked.encryptedValue,
-          );
+          const refreshToken = await openCredential(encryptionKey, locked);
 
           const minted = await exchangeRefreshToken({
             tokenUrl,
@@ -2027,9 +2029,10 @@ export function createPluginStore(options: PluginStoreOptions) {
     const value = {
       ...key,
       metadata: { server: input.serverId, scope: input.scope },
-      // Encrypted before the transaction opens: it is arithmetic, and it has no business happening
-      // while a pooled connection is held open behind row locks.
-      encryptedValue: await encryptSecret(encryptionKey, input.refreshToken),
+      // Sealed by the store for the row id it picks, so the envelope is bound to that row (audit
+      // #9). One AES-GCM call inside the transaction; nothing else runs behind the row locks.
+      seal: (binding: CredentialBinding) =>
+        sealCredential(encryptionKey, binding, input.refreshToken),
     };
 
     return await database.transaction(async (transaction) => {
@@ -2122,9 +2125,10 @@ export function createPluginStore(options: PluginStoreOptions) {
      */
     executor?: CredentialExecutor,
   ): Promise<void> {
+    // Resealed for the row being written: the store reads its tenant and kind under lock (audit #9).
     await credentials.updateSecret(
       input.credentialId,
-      await encryptSecret(encryptionKey, input.refreshToken),
+      (binding) => sealCredential(encryptionKey, binding, input.refreshToken),
       executor,
     );
   }
@@ -2193,6 +2197,9 @@ export function createPluginStore(options: PluginStoreOptions) {
       .select({
         encryptedValue: credentialRows.encryptedValue,
         revokedAt: credentialRows.revokedAt,
+        id: credentialRows.id,
+        tenantId: credentialRows.tenantId,
+        kind: credentialRows.kind,
       })
       .from(credentialRows)
       .where(eq(credentialRows.id, server.credentialId))
@@ -2201,7 +2208,7 @@ export function createPluginStore(options: PluginStoreOptions) {
 
     try {
       const parsed: unknown = JSON.parse(
-        await decryptSecret(encryptionKey, held.encryptedValue),
+        await openCredential(encryptionKey, held),
       );
       // A value that parsed and is not a client is unreadable in the same way and for the same
       // caller — see {@link isUsableClient}. Null, because that is what this reader's caller acts
@@ -2231,10 +2238,8 @@ export function createPluginStore(options: PluginStoreOptions) {
     const value = {
       ...key,
       metadata: { server: input.serverId, clientId: input.client.clientId },
-      encryptedValue: await encryptSecret(
-        encryptionKey,
-        JSON.stringify(input.client),
-      ),
+      seal: (binding: CredentialBinding) =>
+        sealCredential(encryptionKey, binding, JSON.stringify(input.client)),
     };
 
     const live = await credentials.findLiveByKey(key, transaction);

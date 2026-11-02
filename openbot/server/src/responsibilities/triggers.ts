@@ -14,10 +14,11 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
+  type CredentialBinding,
   type CredentialSecretReader,
   type CredentialStore,
-  decryptSecret,
-  encryptSecret,
+  openCredential,
+  sealCredential,
 } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -420,7 +421,8 @@ export function createTriggerStore(
     if (!credentialId) return null;
     const credential = await vault.reader.readSecret(credentialId);
     if (!credential || credential.revokedAt) return null;
-    return decryptSecret(vault.encryptionKey, credential.encryptedValue);
+    // v2 since audit #9 (this store seals for the row); rows written before it are v1.
+    return openCredential(vault.encryptionKey, credential);
   }
   async function resolved(
     row: Row & { ownerUserId: string; status: ResponsibilityStatus },
@@ -484,10 +486,8 @@ export function createTriggerStore(
                 provider: `${config.kind}-trigger`,
                 keyId: id,
                 metadata: { ownerUserId, responsibilityId },
-                encryptedValue: await encryptSecret(
-                  vault.encryptionKey,
-                  secret,
-                ),
+                seal: (binding) =>
+                  sealCredential(vault.encryptionKey, binding, secret),
               },
               transaction,
             )
@@ -575,7 +575,6 @@ export function createTriggerStore(
       const secret = generated
         ? generateWebhookSecret()
         : checkSecret(pasted ?? "");
-      const encryptedValue = await encryptSecret(vault.encryptionKey, secret);
       return database.transaction(async (transaction) => {
         const value = {
           kind: "connector" as const,
@@ -585,7 +584,8 @@ export function createTriggerStore(
             ownerUserId,
             responsibilityId: existing.responsibilityId,
           },
-          encryptedValue,
+          seal: (binding: CredentialBinding) =>
+            sealCredential(vault.encryptionKey, binding, secret),
         };
         const credential = existing.credentialId
           ? await vault.store.rotate(

@@ -1,9 +1,10 @@
 import {
+  type CredentialBinding,
   type CredentialExecutor,
   type CredentialSecretReader,
   type CredentialStore,
-  decryptSecret,
-  encryptSecret,
+  openCredential,
+  sealCredential,
 } from "../credentials";
 
 /**
@@ -86,7 +87,9 @@ export async function storeAgentAuth(input: {
     // The header name is metadata precisely because it is not a secret; keeping it here makes the
     // vault row self-describing for later audit.
     metadata: { header: input.header },
-    encryptedValue: await encryptSecret(input.encryptionKey, input.value),
+    // Sealed by the store for the row it picks, so the envelope is bound to that row (audit #9).
+    seal: (binding: CredentialBinding) =>
+      sealCredential(input.encryptionKey, binding, input.value),
   };
 
   // A live previous credential is rotated, so the agent never holds two. Any
@@ -179,9 +182,6 @@ export async function agentAuthHeaders(input: {
   const stored = await input.reader.readSecret(input.auth.credentialId);
   if (!stored || stored.revokedAt) return undefined;
   return {
-    [input.auth.header]: await decryptSecret(
-      input.encryptionKey,
-      stored.encryptedValue,
-    ),
+    [input.auth.header]: await openCredential(input.encryptionKey, stored),
   };
 }
