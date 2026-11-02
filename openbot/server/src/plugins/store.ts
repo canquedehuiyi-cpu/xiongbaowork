@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { type ApprovalGate, currentApprovalContext } from "../approvals/types";
 import {
@@ -42,6 +43,7 @@ import {
   skills,
   skillTools,
 } from "../db/schema";
+import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { currentTenant } from "../tenant/context";
 import {
@@ -1234,6 +1236,46 @@ function ownRowFirst() {
   return sql`(${mcpServers.tenantId} = ${currentTenant()})::int desc`;
 }
 
+/**
+ * The tenants a skill slug can name for the caller: their own, then the platform's (audit #9).
+ *
+ * Stated in every slug query rather than left to row security, because the platform frame's SELECT
+ * policy admits EVERY tenant's row, and since `skills_tenant_slug_key` the same slug can be several
+ * tenants' at once. Asked there, "the skill called standup" has no single answer, and taking whichever
+ * row came back first would hand one tenant another's instructions. So the platform frame is refused
+ * outright: nothing an operator does resolves a skill by name. The one caller that does know whose
+ * slug it means there, `listForAgent`, names the Bot's own tenant instead of the frame.
+ */
+function skillTenants(tenant = currentTenant()): [string, string] {
+  if (tenant === "platform") {
+    throw new PluginInvariantError(
+      "A skill is named by slug within one workspace; the platform scope sees every workspace's skills and cannot resolve one by name.",
+    );
+  }
+  return [tenant, SYSTEM_TENANT];
+}
+
+const skillsVisibleHere = () => inArray(skills.tenantId, skillTenants());
+
+/** The caller's own row before the platform's, for a read that takes one row per slug. */
+const ownSkillFirst = () => sql`(${skills.tenantId} = ${SYSTEM_TENANT})`;
+
+/**
+ * Drops each platform row the caller's own row shadows. A slug names at most two rows here (one per
+ * tenant in {@link skillTenants}), so the rule is exactly "the tenant's own wins", and the input's
+ * order — the database's, under its own collation — is kept.
+ */
+function withoutShadowed<T extends { tenantId: string; slug: string }>(
+  rows: T[],
+): T[] {
+  const own = new Set(
+    rows.filter((row) => row.tenantId !== SYSTEM_TENANT).map((row) => row.slug),
+  );
+  return rows.filter(
+    (row) => row.tenantId !== SYSTEM_TENANT || !own.has(row.slug),
+  );
+}
+
 export function createPluginStore(options: PluginStoreOptions) {
   const { database, auditStore, credentials, encryptionKey } = options;
   /*
@@ -1279,7 +1321,16 @@ export function createPluginStore(options: PluginStoreOptions) {
     const rows = await database
       .select()
       .from(pluginGrants)
-      .where(and(eq(pluginGrants.kind, kind), inArray(pluginGrants.ref, refs)));
+      .where(
+        and(
+          eq(pluginGrants.kind, kind),
+          inArray(pluginGrants.ref, refs),
+          // A skill grant's ref is a slug, and a slug is per tenant: see `skillTenants`.
+          kind === "skill"
+            ? inArray(pluginGrants.tenantId, skillTenants())
+            : undefined,
+        ),
+      );
     const byRef = new Map<string, string[]>();
     for (const row of rows) {
       byRef.set(row.ref, [...(byRef.get(row.ref) ?? []), row.agentId]);
@@ -4395,15 +4446,23 @@ export function createPluginStore(options: PluginStoreOptions) {
      * governing what Bots are told is the job of the surface they are looking at.
      */
     async listSkills(actor?: SkillActor): Promise<SkillRecord[]> {
-      const visible =
-        !actor || actor.isAdmin
-          ? undefined
-          : or(isNull(skills.ownerUserId), eq(skills.ownerUserId, actor.id));
-      const rows = await database
-        .select()
-        .from(skills)
-        .where(visible)
-        .orderBy(asc(skills.title));
+      /*
+       * Shadowing first, visibility second, so this list names the same row per slug that a Bot's
+       * grant resolves to in `listForAgent`, whoever is looking.
+       */
+      const rows = withoutShadowed(
+        await database
+          .select()
+          .from(skills)
+          .where(skillsVisibleHere())
+          .orderBy(asc(skills.title)),
+      ).filter(
+        (row) =>
+          !actor ||
+          actor.isAdmin ||
+          row.ownerUserId === null ||
+          row.ownerUserId === actor.id,
+      );
       const grants = await grantsFor(
         "skill",
         rows.map((row) => row.slug),
@@ -4428,7 +4487,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       const [row] = await database
         .select({ ownerUserId: skills.ownerUserId })
         .from(skills)
-        .where(eq(skills.slug, slug))
+        .where(and(eq(skills.slug, slug), skillsVisibleHere()))
+        .orderBy(ownSkillFirst())
         .limit(1);
       return row ? row.ownerUserId : undefined;
     },
@@ -4524,6 +4584,11 @@ export function createPluginStore(options: PluginStoreOptions) {
       by: string;
     }): Promise<void> {
       /*
+       * Whose row this is, decided before anything else. The platform frame may write into any
+       * tenant and could only guess which one was meant, so it is refused (`skillTenants`).
+       */
+      const [tenant] = skillTenants();
+      /*
        * Checked before anything is written, so a save is all-or-nothing from the caller's side: a
        * skill is never left saved with half its declarations because the fourth ref was a typo.
        */
@@ -4545,10 +4610,17 @@ export function createPluginStore(options: PluginStoreOptions) {
         }
       }
 
-      await database
+      /*
+       * One row per (tenant, slug). A tenant saving a slug the platform ships gets its own row, which
+       * shadows the platform's for that tenant and leaves it untouched. Only a `system` row keeps
+       * `id = slug` — the key the package sync upserts on — and every tenant row takes a fresh uuid,
+       * so no tenant can ever hold the id a catalogue skill of the same name needs (migration 0113).
+       */
+      const [saved] = await database
         .insert(skills)
         .values({
-          id: input.slug,
+          id: tenant === SYSTEM_TENANT ? input.slug : randomUUID(),
+          tenantId: tenant,
           slug: input.slug,
           ownerUserId: input.ownerUserId,
           title: input.title,
@@ -4560,14 +4632,21 @@ export function createPluginStore(options: PluginStoreOptions) {
         // Editing keeps the owner it already had. Whose a skill is, is not something a re-save
         // should quietly change, and the route has already checked this person may edit it.
         .onConflictDoUpdate({
-          target: skills.slug,
+          target: [skills.tenantId, skills.slug],
           set: {
             title: input.title,
             summary: input.summary,
             instructions: input.instructions,
             updatedAt: new Date(),
           },
-        });
+        })
+        // The id actually stored: a re-save keeps the uuid the first save drew.
+        .returning({ id: skills.id });
+      if (!saved) {
+        throw new PluginInvariantError(
+          `Saving skill ${input.slug} wrote no row.`,
+        );
+      }
 
       /*
        * Replaced wholesale rather than merged. What a skill needs is a set the author is editing, so
@@ -4576,11 +4655,11 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (declared !== undefined) {
         await database
           .delete(skillTools)
-          .where(eq(skillTools.skillId, input.slug));
+          .where(eq(skillTools.skillId, saved.id));
         if (declared.length > 0) {
           await database.insert(skillTools).values(
             declared.map((ref) => ({
-              skillId: input.slug,
+              skillId: saved.id,
               ref,
               declaredBy: input.by,
             })),
@@ -4604,13 +4683,42 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     async uninstallSkill(slug: string, by: string): Promise<void> {
+      const [tenant] = skillTenants();
       await database.transaction(async (transaction) => {
+        /*
+         * Only the caller's own row. A tenant row under a slug the platform ships is a shadow, and
+         * taking it away lets the platform's answer again; the platform's own row is not a tenant's
+         * to remove, and row security alone would not say so (the platform frame may delete anything).
+         */
+        const removed = await transaction
+          .delete(skills)
+          .where(and(eq(skills.tenantId, tenant), eq(skills.slug, slug)))
+          .returning({ id: skills.id });
+        if (removed.length === 0) {
+          const [platformRow] = await transaction
+            .select({ id: skills.id })
+            .from(skills)
+            .where(
+              and(eq(skills.tenantId, SYSTEM_TENANT), eq(skills.slug, slug)),
+            )
+            .limit(1);
+          if (platformRow) {
+            throw new PluginRefusedError(
+              `${slug} is shipped with this deployment. A workspace can write its own skill under that name, but cannot remove this one.`,
+              null,
+            );
+          }
+        }
+        // The tenant's own grants under this name, which named the row just removed.
         await transaction
           .delete(pluginGrants)
           .where(
-            and(eq(pluginGrants.kind, "skill"), eq(pluginGrants.ref, slug)),
+            and(
+              eq(pluginGrants.kind, "skill"),
+              eq(pluginGrants.ref, slug),
+              eq(pluginGrants.tenantId, tenant),
+            ),
           );
-        await transaction.delete(skills).where(eq(skills.slug, slug));
       });
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",
@@ -4709,10 +4817,40 @@ export function createPluginStore(options: PluginStoreOptions) {
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
+      /*
+       * Whose slugs this Bot's skill grants name: the Bot's own workspace, read from the Bot's row
+       * and stated in every query below rather than left to row security.
+       *
+       * Not refused in the platform frame, unlike the other slug lookups, because this one has an
+       * answer there: a Bot belongs to exactly one tenant (`agents.id` is the key), so its grants can
+       * only mean that tenant's skills. And background work calls it in exactly that frame —
+       * `repeatAfterEach` runs every body as `platform`, and the scheduled memory sync authorizes each
+       * due source through here — so refusing would stop every one of them. In a tenant frame the
+       * Bot must be that tenant's (row security already hides any other); in the platform frame it
+       * is whichever tenant owns it, never "every tenant at once".
+       */
+      const frame = currentTenant();
+      let tenant: string;
+      if (frame === "platform") {
+        const [owner] = await database
+          .select({ tenantId: agents.tenantId })
+          .from(agents)
+          .where(eq(agents.id, agentId))
+          .limit(1);
+        if (!owner) return { tools: [], skills: [] };
+        tenant = owner.tenantId;
+      } else {
+        tenant = frame;
+      }
       const held = await database
         .select()
         .from(pluginGrants)
-        .where(eq(pluginGrants.agentId, agentId));
+        .where(
+          and(
+            eq(pluginGrants.agentId, agentId),
+            eq(pluginGrants.tenantId, tenant),
+          ),
+        );
       if (held.length === 0) return { tools: [], skills: [] };
 
       const toolRefs = held
@@ -4766,13 +4904,24 @@ export function createPluginStore(options: PluginStoreOptions) {
           };
         });
 
+      /*
+       * The caller's own row for each slug, else the platform's: a tenant's row shadows the shipped
+       * one in grant resolution exactly as it does on the Skills page.
+       */
       const skillRows =
         skillSlugs.length === 0
           ? []
-          : await database
-              .select()
-              .from(skills)
-              .where(inArray(skills.slug, skillSlugs));
+          : withoutShadowed(
+              await database
+                .select()
+                .from(skills)
+                .where(
+                  and(
+                    inArray(skills.slug, skillSlugs),
+                    inArray(skills.tenantId, skillTenants(tenant)),
+                  ),
+                ),
+            );
 
       /*
        * What each skill says it needs, carried alongside rather than folded into `tools`.
@@ -5111,7 +5260,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        *
        * REASON. This read used to be an inner join on `mcp_servers.url = 'composio://' || toolkit`,
        * and nothing in the schema makes that column unique — the one `uniqueIndex` in
-       * `db/schema/plugins.ts` is `skills_slug_key` on `skills.slug`. A join answers one row per
+       * `db/schema/plugins.ts` is `skills_tenant_slug_key` on `skills`. A join answers one row per
        * PAIR, so a second row at an app's url listed the same account twice: two rows on the
        * settings page saying the same app under two different server ids, each offering to
        * disconnect the single connection standing behind both. And it is not an exotic state — it

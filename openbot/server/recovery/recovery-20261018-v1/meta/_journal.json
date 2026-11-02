@@ -785,6 +785,13 @@
       "when": 1793619000000,
       "tag": "0111_credentials_tenant_scoped_key",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1793621500000,
+      "tag": "0113_tenant_skill_slugs",
+      "breakpoints": true
     }
   ]
 }
