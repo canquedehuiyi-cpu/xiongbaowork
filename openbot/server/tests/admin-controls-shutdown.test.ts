@@ -67,7 +67,11 @@ mock.module("postgres", () => ({
     };
   },
 }));
+// Keep the module's other exports (otelConfigured, surfaceOf, parseHeaders): Bun's module mock
+// outlives this file in the shard process, and admin routes import them later.
+const realOtel = { ...(await import("../src/telemetry/otel")) };
 mock.module("../src/telemetry/otel", () => ({
+  ...realOtel,
   createOtelEventExporter: (): EventExporter => {
     const owner = current;
     owner.events.push("exporter");
