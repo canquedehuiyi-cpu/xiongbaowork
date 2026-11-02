@@ -81,11 +81,13 @@ afterAll(async () => {
 
 async function createUser(): Promise<AgentActor> {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Channel Summary Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Channel Summary Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
@@ -528,9 +530,12 @@ describe("naming a claimed conversation", () => {
     for (let index = 0; index < 40; index += 1) {
       const member = await createUser();
       crowd.push(member.id);
-      await database
-        .insert(channelMemberships)
-        .values({ channelId: channel.id, userId: member.id });
+      // Admitted by the owner, as `addMember` does in the owner's request: the owner's tenant.
+      await runAsTenant(owner.id, () =>
+        database
+          .insert(channelMemberships)
+          .values({ channelId: channel.id, userId: member.id }),
+      );
     }
 
     await offer(channel.id);
