@@ -1,9 +1,15 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 import {
   WAKERFLOW_CONFLICT_MESSAGE,
+  WAKERFLOW_PLAN_FORMAT_MESSAGE,
+  WAKERFLOW_SUGGESTIONS,
   type WakerFlow,
+  type WakerFlowCandidate,
+  type WakerFlowGenerationResult,
   type WakerFlowPlan,
+  type WakerFlowRequestStatus,
   type WakerFlowSaveInput,
 } from "../../../shared/wakerflows";
 import type { Database } from "../db/client";
@@ -16,8 +22,16 @@ import {
   wakerGroups,
 } from "../db/schema";
 import type { PipelineStore } from "../pipeline/store";
+import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
+import {
+  FlowGenerationCancelledError,
+  FlowGenerationRefusedError,
+  type FlowGenerator,
+  FlowPlanFormatError,
+} from "./generator";
+import type { FlowModelResolver } from "./model";
 import { wakerFlowPlanSchema } from "./plan";
 
 /**
@@ -94,11 +108,16 @@ export type WakerFlowCreateInput = {
   modelRef?: string | null;
 };
 
+/**
+ * One planning request. `members` are the coworkers the person offers the model (their own usable
+ * coworkers); `scenario` is one of {@link WAKERFLOW_SUGGESTIONS} when the person started from one.
+ */
 export type WakerFlowGenerateInput = {
   requestId: string;
   modelRef: string;
   idea: string;
-  members: WakerFlowPlan["members"];
+  members: WakerFlowCandidate[];
+  scenario?: string;
 };
 
 export type WakerFlowStartInput = {
@@ -108,10 +127,16 @@ export type WakerFlowStartInput = {
 };
 
 export type WakerFlowRequestOutcome = {
-  status: "pending" | "completed" | "failed";
+  id: string;
+  requestId: string;
+  flowId: string;
+  kind: string;
+  status: WakerFlowRequestStatus;
   runId: string | null;
   taskId: string | null;
+  /** Always this product's own words; a provider's error text is never stored or shown. */
   error: string | null;
+  result: WakerFlowGenerationResult | null;
 };
 
 export type WakerFlowRunSummary = {
@@ -199,6 +224,99 @@ function validModelRef(value: unknown): string | null | undefined {
   return value;
 }
 
+/** A request id reused for different arguments: the second intent is refused, never merged. */
+export class WakerFlowRequestConflictError extends WakerFlowError {
+  constructor() {
+    super(409, "这个请求编号已用于另一项操作，请刷新后重新发起。");
+    this.name = "WakerFlowRequestConflictError";
+  }
+}
+
+const GENERATE = "generate";
+const CANCELLED_MESSAGE = "已取消生成。";
+const UNCERTAIN_MESSAGE = "无法确认模型是否完成了这次生成，请发起新的生成。";
+const SAVE_FAILED_MESSAGE = "生成的计划未能保存，请重新生成。";
+
+const candidatesSchema = z
+  .array(
+    z.object({
+      agentId: z.string().min(1).max(200),
+      name: z.string().trim().max(160).default(""),
+      role: z.string().trim().min(1).max(160),
+    }),
+  )
+  .min(1)
+  .max(50);
+
+/** Keys sorted at every depth, so the same arguments always hash the same. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .filter((name) => record[name] !== undefined)
+      .sort()
+      .map((name) => `${JSON.stringify(name)}:${canonical(record[name])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const requestColumns = {
+  id: wakerFlowRequests.id,
+  requestId: wakerFlowRequests.requestId,
+  flowId: wakerFlowRequests.flowId,
+  kind: wakerFlowRequests.kind,
+  fingerprint: wakerFlowRequests.fingerprint,
+  status: wakerFlowRequests.status,
+  runId: wakerFlowRequests.runId,
+  taskId: wakerFlowRequests.taskId,
+  error: wakerFlowRequests.error,
+  result: wakerFlowRequests.result,
+};
+
+type RequestRow = {
+  id: string;
+  requestId: string;
+  flowId: string;
+  kind: string;
+  fingerprint: string;
+  status: string;
+  runId: string | null;
+  taskId: string | null;
+  error: string | null;
+  result: unknown;
+};
+
+const STATUSES: readonly WakerFlowRequestStatus[] = [
+  "pending",
+  "completed",
+  "failed",
+  "cancelled",
+  "unknown",
+];
+
+/** The column has no CHECK; the statuses are this file's convention, and anything else reads as unknown. */
+function outcome(row: RequestRow): WakerFlowRequestOutcome {
+  const status = (STATUSES as readonly string[]).includes(row.status)
+    ? (row.status as WakerFlowRequestStatus)
+    : "unknown";
+  return {
+    id: row.id,
+    requestId: row.requestId,
+    flowId: row.flowId,
+    kind: row.kind,
+    status,
+    runId: row.runId,
+    taskId: row.taskId,
+    error: row.error,
+    result:
+      status === "completed" && row.result
+        ? (row.result as WakerFlowGenerationResult)
+        : null,
+  };
+}
+
 export function createWakerFlowStore(options: {
   database: Database;
   /** Kept for WF-B, which starts runs from the compiled template. */
@@ -207,8 +325,57 @@ export function createWakerFlowStore(options: {
   board: TaskProjector;
   /** Spec I6: may THIS actor use THIS coworker? Asked for every member on every Save. */
   canUse: (actor: string, agentId: string) => Promise<boolean>;
+  /** WF-B: the planning model picker. Without it (and `generator`) generation answers 501. */
+  models?: FlowModelResolver;
+  generator?: Pick<FlowGenerator, "plan">;
+  /** A planning call is model spend, so it is asked against the monthly ceiling first. */
+  quota?: Pick<QuotaService, "assertCapacity">;
 }) {
   const { database, canUse } = options;
+  /** Calls running in THIS process, so Cancel can stop the socket and not only the row. */
+  const inflight = new Map<
+    string,
+    { flowId: string; controller: AbortController }
+  >();
+  const inflightKey = (tenantId: string, requestId: string) =>
+    `${tenantId}\u0000${requestId}`;
+
+  const readRequest = async (tenantId: string, requestId: string) => {
+    const [row] = await runAsTenant(tenantId, async () =>
+      database
+        .select(requestColumns)
+        .from(wakerFlowRequests)
+        .where(
+          and(
+            eq(wakerFlowRequests.tenantId, tenantId),
+            eq(wakerFlowRequests.requestId, requestId),
+          ),
+        )
+        .limit(1),
+    );
+    return row ?? null;
+  };
+
+  /** A terminal write that loses to Cancel (or to another terminal write) changes nothing. */
+  const finish = async (
+    tenantId: string,
+    claimId: string,
+    status: Exclude<WakerFlowRequestStatus, "pending" | "completed">,
+    error: string,
+  ) => {
+    await runAsTenant(tenantId, async () =>
+      database
+        .update(wakerFlowRequests)
+        .set({ status, error, updatedAt: new Date() })
+        .where(
+          and(
+            eq(wakerFlowRequests.id, claimId),
+            eq(wakerFlowRequests.tenantId, tenantId),
+            eq(wakerFlowRequests.status, "pending"),
+          ),
+        ),
+    );
+  };
 
   return {
     async create(tenantId: string, input: WakerFlowCreateInput) {
@@ -487,14 +654,253 @@ export function createWakerFlowStore(options: {
       );
     },
 
-    /** WF-C: natural-language planning. Typed here so routes and tests compile against one shape. */
+    /**
+     * Natural-language planning (story WF3), once per request id.
+     *
+     * The order is the contract. A repeat of a request already claimed answers from the stored row and
+     * never calls the model again — not even a request whose outcome is `unknown`, because the provider
+     * may have done that work. A new request is refused for a Flow that is not the caller's, a model
+     * that is not usable, or a coworker the actor may not use before any row is written or any call is
+     * made; then the quota; then the claim, which a concurrent twin loses on the unique key; then the
+     * one call. A plan that arrives is written into a draft that was never compiled — a saved Flow is
+     * not changed behind its template, the editor applies the result itself — and only if nobody
+     * cancelled the request meanwhile.
+     */
     async generate(
-      _tenantId: string,
-      _actor: string,
-      _id: string,
-      _input: WakerFlowGenerateInput,
+      tenantId: string,
+      actor: string,
+      id: string,
+      input: WakerFlowGenerateInput,
     ): Promise<WakerFlowRequestOutcome> {
-      throw new WakerFlowUnavailableError();
+      if (!isUuid(id)) throw new WakerFlowNotFoundError();
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      const idea = typeof input.idea === "string" ? input.idea.trim() : "";
+      if (!idea) throw new WakerFlowValidationError("请先描述你想创建的流程。");
+      if (idea.length > 4000)
+        throw new WakerFlowValidationError("流程描述不能超过 4000 字。");
+      if (typeof input.modelRef !== "string" || !input.modelRef)
+        throw new WakerFlowValidationError("请选择可用的模型。");
+      const scenario = input.scenario ?? undefined;
+      if (
+        scenario !== undefined &&
+        !(WAKERFLOW_SUGGESTIONS as readonly string[]).includes(scenario)
+      )
+        throw new WakerFlowValidationError("请选择列表中的场景建议。");
+      const parsedMembers = candidatesSchema.safeParse(input.members);
+      if (!parsedMembers.success)
+        throw new WakerFlowValidationError("请至少选择一位可用的员工。");
+      const members: WakerFlowCandidate[] = parsedMembers.data;
+      if (
+        new Set(members.map((member) => member.agentId)).size !== members.length
+      )
+        throw new WakerFlowValidationError("同一位员工不能重复加入计划。");
+      const fingerprint = createHash("sha256")
+        .update(
+          canonical({
+            kind: GENERATE,
+            flowId: id,
+            modelRef: input.modelRef,
+            idea,
+            members,
+            scenario: scenario ?? null,
+          }),
+        )
+        .digest("hex");
+
+      const answer = (row: RequestRow) => {
+        if (row.fingerprint !== fingerprint)
+          throw new WakerFlowRequestConflictError();
+        return outcome(row);
+      };
+      const existing = await readRequest(tenantId, input.requestId);
+      if (existing) return answer(existing);
+
+      const { models, generator } = options;
+      if (!models || !generator) throw new WakerFlowUnavailableError();
+      const [flow] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ id: wakerFlows.id })
+          .from(wakerFlows)
+          .where(ownFlow(tenantId, id))
+          .limit(1),
+      );
+      // The request row references the Flow, and a foreign key does not look through row-level
+      // security: without this read another tenant's Flow id would be accepted as a reference.
+      if (!flow) throw new WakerFlowNotFoundError();
+      const resolved = await models.resolve(tenantId, input.modelRef);
+      for (const member of members) {
+        const allowed = await canUse(actor, member.agentId).catch(() => false);
+        if (!allowed)
+          throw new WakerFlowValidationError(
+            `你无权使用员工「${member.name || member.role}」，请换一位员工后再生成。`,
+          );
+      }
+      await options.quota?.assertCapacity(tenantId, "tasksPerMonth");
+
+      const [claimed] = await runAsTenant(tenantId, async () =>
+        database
+          .insert(wakerFlowRequests)
+          .values({
+            tenantId,
+            requestId: input.requestId,
+            flowId: id,
+            kind: GENERATE,
+            fingerprint,
+          })
+          .onConflictDoNothing({
+            target: [wakerFlowRequests.tenantId, wakerFlowRequests.requestId],
+          })
+          .returning(requestColumns),
+      );
+      if (!claimed) {
+        // A twin claimed it first; its row is the answer, whatever state it is in.
+        const twin = await readRequest(tenantId, input.requestId);
+        if (!twin) throw new WakerFlowNotFoundError();
+        return answer(twin);
+      }
+
+      const key = inflightKey(tenantId, input.requestId);
+      const controller = new AbortController();
+      inflight.set(key, { flowId: id, controller });
+      let generated: WakerFlowPlan | null = null;
+      try {
+        generated = await generator.plan({
+          model: resolved.model,
+          idea,
+          members,
+          scenario,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error instanceof FlowPlanFormatError)
+          await finish(
+            tenantId,
+            claimed.id,
+            "failed",
+            WAKERFLOW_PLAN_FORMAT_MESSAGE,
+          );
+        else if (error instanceof FlowGenerationRefusedError)
+          await finish(tenantId, claimed.id, "failed", error.message);
+        else if (error instanceof FlowGenerationCancelledError)
+          await finish(tenantId, claimed.id, "cancelled", CANCELLED_MESSAGE);
+        // Everything else — a timeout, a dropped line, an error nobody classified — may have been
+        // done and charged by the provider, so it is recorded as such and never replayed.
+        else await finish(tenantId, claimed.id, "unknown", UNCERTAIN_MESSAGE);
+        const settled = await readRequest(tenantId, input.requestId);
+        return outcome(settled ?? claimed);
+      } finally {
+        inflight.delete(key);
+      }
+      const plan = generated;
+      // Unreachable: the call either answered with a plan or the catch above returned.
+      if (!plan) return outcome(claimed);
+
+      try {
+        await runAsTenant(tenantId, () =>
+          database.transaction(async (tx) => {
+            // Locked so Cancel either lands first (and the plan is not written) or waits and misses.
+            const [pending] = await tx
+              .select({ id: wakerFlowRequests.id })
+              .from(wakerFlowRequests)
+              .where(
+                and(
+                  eq(wakerFlowRequests.id, claimed.id),
+                  eq(wakerFlowRequests.tenantId, tenantId),
+                  eq(wakerFlowRequests.status, "pending"),
+                ),
+              )
+              .for("update");
+            if (!pending) return;
+            const [written] = await tx
+              .update(wakerFlows)
+              .set({
+                plan,
+                name: plan.name,
+                description: plan.description,
+                idea,
+                ...(isUuid(resolved.modelRef)
+                  ? { modelRef: resolved.modelRef }
+                  : {}),
+                revision: sql`${wakerFlows.revision} + 1`,
+                updatedAt: new Date(),
+              })
+              .where(and(ownFlow(tenantId, id), isNull(wakerFlows.templateId)))
+              .returning({ revision: wakerFlows.revision });
+            const result: WakerFlowGenerationResult = {
+              plan,
+              modelRef: resolved.modelRef,
+              revision: written?.revision ?? null,
+              applied: Boolean(written),
+            };
+            await tx
+              .update(wakerFlowRequests)
+              .set({
+                status: "completed",
+                error: null,
+                result,
+                updatedAt: new Date(),
+              })
+              .where(eq(wakerFlowRequests.id, claimed.id));
+          }),
+        );
+      } catch (error) {
+        // The answer arrived but could not be stored: settle the row so it does not stay pending (and
+        // block deleting the Flow) forever. A new request id is the way to try again.
+        await finish(tenantId, claimed.id, "failed", SAVE_FAILED_MESSAGE).catch(
+          () => undefined,
+        );
+        throw error;
+      }
+      const settled = await readRequest(tenantId, input.requestId);
+      return outcome(settled ?? claimed);
+    },
+
+    /**
+     * Stop a planning request. The row is marked first, with a condition on `pending`, so a request
+     * that already finished keeps its outcome; then the call is aborted if it runs in this process.
+     * Another process's call finishes into a cancelled row and writes nothing.
+     */
+    async cancel(
+      tenantId: string,
+      flowId: string,
+      requestId: string,
+    ): Promise<WakerFlowRequestOutcome | null> {
+      if (!isUuid(flowId) || !isUuid(requestId)) return null;
+      await runAsTenant(tenantId, async () =>
+        database
+          .update(wakerFlowRequests)
+          .set({
+            status: "cancelled",
+            error: CANCELLED_MESSAGE,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(wakerFlowRequests.tenantId, tenantId),
+              eq(wakerFlowRequests.requestId, requestId),
+              eq(wakerFlowRequests.flowId, flowId),
+              eq(wakerFlowRequests.kind, GENERATE),
+              eq(wakerFlowRequests.status, "pending"),
+            ),
+          ),
+      );
+      const running = inflight.get(inflightKey(tenantId, requestId));
+      if (running && running.flowId === flowId) running.controller.abort();
+      const row = await readRequest(tenantId, requestId);
+      return row && row.flowId === flowId ? outcome(row) : null;
+    },
+
+    /** One request of the caller's own tenant, or null. */
+    async getRequest(
+      tenantId: string,
+      requestId: string,
+    ): Promise<WakerFlowRequestOutcome | null> {
+      if (!isUuid(requestId)) return null;
+      const row = await readRequest(tenantId, requestId);
+      return row ? outcome(row) : null;
     },
 
     /** WF-B: start a run of the saved template. */
