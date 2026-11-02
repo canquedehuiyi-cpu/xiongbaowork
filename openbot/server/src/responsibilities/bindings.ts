@@ -105,6 +105,7 @@ export function createResponsibilityBindingStore(
       const credential = await vault.reader.readSecret(binding.credentialId);
       if (!credential || credential.revokedAt) return null;
       return {
+        tenantId: binding.tenantId,
         ownerUserId: binding.ownerUserId,
         repository: binding.repository,
         secret: await decryptSecret(
