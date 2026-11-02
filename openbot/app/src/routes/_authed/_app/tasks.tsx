@@ -69,7 +69,10 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
  * raw ref sent every chat card to "Could not load this channel." (audit N1), so the server now says
  * which screen holds the work and this file only draws it.
  */
-export type OpenTarget = { kind: "channel" | "group" | "pipeline"; id: string };
+export type OpenTarget = {
+  kind: "channel" | "group" | "pipeline" | "wakerflow";
+  id: string;
+};
 
 type Task = {
   id: string;
@@ -264,7 +267,6 @@ export const boardEmptySentence = (filters: {
 export const lanesUnmappable = (tasks: { status: string }[]): boolean =>
   tasks.length > 0 && tasks.every((task) => laneOf(task.status).length === 0);
 
-
 /**
  * Spec A1/A2: the window's totals, each one a filter. Pressing a number shows those tasks; pressing
  * the pressed one again shows everything. It shares its state with the pills below, so the two can
@@ -328,11 +330,12 @@ function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
 }
 
-/** What a card's 打开 does: one of three screens, a sentence saying the place is gone, or nothing. */
+/** What a card's 打开 does: one of four screens, a sentence saying the place is gone, or nothing. */
 export type CardLink =
   | { to: "/channel/$channelId"; params: { channelId: string } }
   | { to: "/group/$channelId"; params: { channelId: string } }
   | { to: "/pipelines"; search: { run: string } }
+  | { to: "/wakerflows/$flowId"; params: { flowId: string } }
   | "gone"
   | null;
 
@@ -358,6 +361,9 @@ export function cardLinkOf(task: Pick<Task, "open" | "channelRef">): CardLink {
       return { to: "/group/$channelId", params: { channelId: task.open.id } };
     case "pipeline":
       return { to: "/pipelines", search: { run: task.open.id } };
+    // A WakerFlow's run (parent or step card) is reviewed on the Flow, where its runs are listed.
+    case "wakerflow":
+      return { to: "/wakerflows/$flowId", params: { flowId: task.open.id } };
     default:
       return null;
   }
@@ -372,6 +378,17 @@ function CardOpenLink({ task }: { task: Task }) {
       <Link
         to="/pipelines"
         search={link.search}
+        className="underline opacity-80"
+      >
+        打开
+      </Link>
+    );
+  }
+  if (link.to === "/wakerflows/$flowId") {
+    return (
+      <Link
+        to="/wakerflows/$flowId"
+        params={link.params}
         className="underline opacity-80"
       >
         打开
@@ -764,11 +781,26 @@ function TasksPage() {
    * denial we are allowed to assert: the write may have landed. So the screen says 未确认 and offers
    * a read, never a second write.
    */
-  const actionFailure = (): { label: string; note: string; detail: string | null } => {
+  const actionFailure = (): {
+    label: string;
+    note: string;
+    detail: string | null;
+  } => {
     const status = act.error instanceof RequestError ? act.error.status : 0;
-    const message = act.error instanceof Error ? act.error.message : "请稍后再试。";
-    if (status === 404) return { label: "这个任务已经不在那里了", note: "服务端拒绝（404）", detail: message };
-    if (status === 409) return { label: "这个任务当前状态不接受这个操作", note: "服务端拒绝（409）", detail: message };
+    const message =
+      act.error instanceof Error ? act.error.message : "请稍后再试。";
+    if (status === 404)
+      return {
+        label: "这个任务已经不在那里了",
+        note: "服务端拒绝（404）",
+        detail: message,
+      };
+    if (status === 409)
+      return {
+        label: "这个任务当前状态不接受这个操作",
+        note: "服务端拒绝（409）",
+        detail: message,
+      };
     return {
       label: "结果未确认，请刷新任务后核对",
       note: status ? `服务端返回 ${status}` : "请求没有收到回应",
@@ -810,8 +842,7 @@ function TasksPage() {
         <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
           <p className="text-destructive">
             {failure.label}
-            {failure.detail ? `：${failure.detail}` : ""}
-            （{failure.note}）
+            {failure.detail ? `：${failure.detail}` : ""}（{failure.note}）
           </p>
           <Button onClick={refreshReadsOnly} size="sm" variant="outline">
             刷新任务
@@ -984,42 +1015,42 @@ function TasksPage() {
         </ul>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {LANES.map((lane) => (
-            // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-            <div
-              aria-label={`${lane.label}泳道`}
-              key={lane.key}
-              role="group"
-              onDragOver={(event) => {
-                if (lane.key === "finished") event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                dropLane(lane.key, event.dataTransfer.getData("text/plain"));
-              }}
-              className="bg-foreground/[0.02] rounded-xl p-2"
-            >
-              <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                {lane.label}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {LANES.map((lane) => (
+              // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+              <div
+                aria-label={`${lane.label}泳道`}
+                key={lane.key}
+                role="group"
+                onDragOver={(event) => {
+                  if (lane.key === "finished") event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  dropLane(lane.key, event.dataTransfer.getData("text/plain"));
+                }}
+                className="bg-foreground/[0.02] rounded-xl p-2"
+              >
+                <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
+                  {lane.label}
+                </div>
+                <ul className="list-none space-y-1.5">
+                  {list
+                    .filter((task) => lane.statuses.includes(task.status))
+                    .map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        machine={machineLabel(task.device)}
+                        onReview={(id) => runAction(id, "review")}
+                        onArchive={(id) => runAction(id, "archive")}
+                        pendingIds={pendingIds}
+                      />
+                    ))}
+                </ul>
               </div>
-              <ul className="list-none space-y-1.5">
-                {list
-                  .filter((task) => lane.statuses.includes(task.status))
-                  .map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      machine={machineLabel(task.device)}
-                      onReview={(id) => runAction(id, "review")}
-                      onArchive={(id) => runAction(id, "archive")}
-                      pendingIds={pendingIds}
-                    />
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
           {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)

@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, gte, inArray, like, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  sql,
+} from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
@@ -11,6 +21,7 @@ import {
   intelligenceChannelMappings,
   modelUsage,
   tasks,
+  wakerFlows,
 } from "../db/schema";
 import type { TaskProjector } from "./projector";
 
@@ -26,11 +37,12 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Where a card's "打开" lands, in the three shapes the board's screens take: a one-coworker
- * conversation, a group conversation, or a crew run.
+ * Where a card's "打开" lands, in the four shapes the board's screens take: a one-coworker
+ * conversation, a group conversation, a crew run, or the WakerFlow a crew run was started from
+ * (spec D10, story WF4: a Flow's run is reviewed from the Flow, where its inputs, steps and 停止 are).
  */
 export type TaskOpenTarget = {
-  kind: "channel" | "group" | "pipeline";
+  kind: "channel" | "group" | "pipeline" | "wakerflow";
   id: string;
 };
 
@@ -197,18 +209,36 @@ async function openTargetsFor(
         .filter((id) => id !== ""),
     ),
   ];
-  const runsAboard = new Set<string>();
+  /*
+   * Which of those runs are this workspace's, and which WakerFlow started each one. `flow_id` is read
+   * in the same tenant-scoped query as the run itself, so a Flow id is only ever the run row's own and
+   * never something a card claimed: the card carries a run reference, nothing more.
+   *
+   * The Flow is joined, not just named: only a Flow this workspace can still open (its own, a plan
+   * Flow, not deleted) is a target. A deleted Flow's page answers 404, so its runs' cards keep opening
+   * the run's pipeline panel, which still reads the run itself.
+   */
+  const runsAboard = new Map<string, string | null>();
   if (runIds.length > 0) {
     for (const row of await database
-      .select({ id: groupTaskRuns.id })
+      .select({ id: groupTaskRuns.id, flowId: wakerFlows.id })
       .from(groupTaskRuns)
+      .leftJoin(
+        wakerFlows,
+        and(
+          eq(wakerFlows.id, groupTaskRuns.flowId),
+          eq(wakerFlows.tenantId, tenantId),
+          eq(wakerFlows.definitionMode, "json-plan-v1"),
+          isNull(wakerFlows.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(groupTaskRuns.tenantId, tenantId),
           inArray(groupTaskRuns.id, runIds),
         ),
       )) {
-      runsAboard.add(row.id);
+      runsAboard.set(row.id, row.flowId ?? null);
     }
   }
 
@@ -217,9 +247,18 @@ async function openTargetsFor(
       const runId = row.parentTaskId
         ? (parentRunRef.get(row.parentTaskId) ?? null)
         : (row.runRef ?? null);
+      if (!runId || !runsAboard.has(runId)) {
+        targets.set(row.id, null);
+        continue;
+      }
+      // A Flow's run opens the Flow; a crew run started from the pipelines screen (or whose Flow is
+      // gone) keeps its panel.
+      const flowId = runsAboard.get(runId) ?? null;
       targets.set(
         row.id,
-        runId && runsAboard.has(runId) ? { kind: "pipeline", id: runId } : null,
+        flowId
+          ? { kind: "wakerflow", id: flowId }
+          : { kind: "pipeline", id: runId },
       );
       continue;
     }

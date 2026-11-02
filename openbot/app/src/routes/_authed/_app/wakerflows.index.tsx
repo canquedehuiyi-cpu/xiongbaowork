@@ -24,7 +24,7 @@ import { wakerFlowsQueryOptions } from "@/lib/wakerflows";
  * The workspace's WakerFlows (spec D10, story WF1): a Flow is a plan a crew of coworkers carries out
  * step by step, written from one sentence and edited before it is saved.
  *
- * Rows open the plan editor for now; the detail screen with runs comes with WF-E.
+ * Rows open the Flow's own page (`wakerflows.$flowId.tsx`): its plan, 编辑/复用/删除, and its runs.
  */
 export const Route = createFileRoute("/_authed/_app/wakerflows/")({
   component: WakerFlowsPage,
@@ -90,15 +90,15 @@ function WakerFlowsPage() {
                 <Button
                   render={(props) => (
                     <Link
-                      search={{ flow: flow.id }}
-                      to="/wakerflows/new"
+                      params={{ flowId: flow.id }}
+                      to="/wakerflows/$flowId"
                       {...props}
                     />
                   )}
                   size="sm"
                   variant="outline"
                 >
-                  编辑
+                  查看
                 </Button>
               </ItemActions>
             </Item>
