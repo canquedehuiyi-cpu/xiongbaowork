@@ -102,9 +102,7 @@ async function clean() {
         );
     for (const id of [ASKER, TARGET]) {
       await database.delete(pluginGrants).where(eq(pluginGrants.agentId, id));
-      await database
-        .delete(agentProfiles)
-        .where(eq(agentProfiles.agentId, id));
+      await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
       await database.delete(agents).where(eq(agents.id, id));
     }
   });
@@ -440,7 +438,9 @@ describe("G01: whose work a sweep is doing", () => {
       relays: await database
         .select({ key: workItems.key })
         .from(workItems)
-        .where(sql`${workItems.key} like ${`%${key}`} and ${workItems.key} <> ${key}`),
+        .where(
+          sql`${workItems.key} like ${`%${key}`} and ${workItems.key} <> ${key}`,
+        ),
     }));
     expect(after.row[0]?.finishedAt).not.toBeNull();
     // One row says it was dropped: the platform's, naming nobody, so no tenant can read it.
@@ -553,7 +553,8 @@ describe("G01: whose work a sweep is doing", () => {
     const [row] = await runAsTenant(ACTOR, () => outcomeOf(scheduled.id));
     expect(row?.tenantId).toBe(ACTOR);
     expect(
-      (row?.payload as { outcome?: { status: string } }).outcome?.status,
+      (row?.payload as { outcome?: { status: string } } | undefined)?.outcome
+        ?.status,
     ).toBe("succeeded");
     expect(await runAsTenant(STRANGER, () => outcomeOf(scheduled.id))).toEqual(
       [],
@@ -570,7 +571,8 @@ describe("G01: whose work a sweep is doing", () => {
     const [row] = await runAsTenant("platform", () => outcomeOf(key));
     expect(row?.tenantId).toBe("system");
     expect(
-      (row?.payload as { outcome?: { status: string } }).outcome?.status,
+      (row?.payload as { outcome?: { status: string } } | undefined)?.outcome
+        ?.status,
     ).toBe("failed");
   });
 
@@ -584,7 +586,8 @@ describe("G01: whose work a sweep is doing", () => {
     const [row] = await runAsTenant("platform", () => outcomeOf(key));
     expect(row?.tenantId).toBe(ACTOR);
     expect(
-      (row?.payload as { outcome?: { status: string } }).outcome?.status,
+      (row?.payload as { outcome?: { status: string } } | undefined)?.outcome
+        ?.status,
     ).toBe("failed");
   });
 
@@ -744,10 +747,7 @@ describe("G01: whose work a sweep is doing", () => {
         .update(workItems)
         .set({ runAt: new Date(Date.now() - 60_000) })
         .where(
-          and(
-            eq(workItems.kind, WAKE_UP_KIND),
-            eq(workItems.key, followUpKey),
-          ),
+          and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, followUpKey)),
         ),
     );
     expect(await sweepUntil(followUpKey)).toBe("ran");
