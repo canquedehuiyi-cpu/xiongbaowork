@@ -56,7 +56,9 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   next,
 ) => {
   context.set("actor", { id: tenant, role: "user" as const });
-  await next();
+  // As createRequireUser does: the whole request runs inside its tenant, so a transaction a route
+  // opens is scoped to it rather than to the context-free default.
+  await runAsTenant(tenant, () => next());
 };
 
 const agentRoutes = createAgentRoutes(
@@ -89,7 +91,9 @@ const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   next,
 ) => {
   context.set("actor", { id: tenant, role: "admin" as const });
-  await next();
+  // As createRequireUser does: the whole request runs inside its tenant, so a transaction a route
+  // opens is scoped to it rather than to the context-free default.
+  await runAsTenant(tenant, () => next());
 };
 const adminQuotaRoutes = createQuotaRoutes(database, quota, requireAdminUser);
 const board = createTaskProjector(database, undefined, quota);
