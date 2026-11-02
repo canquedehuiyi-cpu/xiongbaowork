@@ -76,6 +76,7 @@ import {
   DEPLOYMENT_INITIATOR,
   PERSON_INITIATOR,
   recordAuditEvent,
+  recordPlatformAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
 import { createAuth } from "./auth";
@@ -371,14 +372,20 @@ await startupLifecycle.run(async (startup) => {
     if (config.singleUser) {
       return { id: DEV_ACTOR.id, name: DEV_ACTOR.email, role: DEV_ACTOR.role };
     }
-    const session = await auth?.api.getSession({ headers: request.headers });
+    // Asked of the identity tables, which are the deployment's, before there is anybody to act as:
+    // `platform`, like the request guard (G01).
+    const session = await runAsTenant("platform", () =>
+      auth?.api.getSession({ headers: request.headers }),
+    );
     const user = session?.user;
     if (!user) {
       throw new Error("A CopilotKit run requires a signed-in user.");
     }
     const roles = user.role
       ? [user.role]
-      : await roleRepository.rolesForUser(user.id);
+      : await runAsTenant("platform", () =>
+          roleRepository.rolesForUser(user.id),
+        );
     if (!roles.includes("admin") && !roles.includes("user")) {
       throw new Error("A CopilotKit run requires an authorized user.");
     }
@@ -1150,7 +1157,9 @@ await startupLifecycle.run(async (startup) => {
     caps: config.handoff,
   });
 
-  void recordAuditEvent(bootAuditStore, {
+  // The deployment's own boot notes, so `platform`: unframed they were `system`, which every tenant's
+  // trail shows (G01).
+  void recordPlatformAuditEvent(bootAuditStore, {
     eventType: "computer.policy_loaded",
     targetType: "policy",
     initiator: DEPLOYMENT_INITIATOR,
@@ -1177,7 +1186,7 @@ await startupLifecycle.run(async (startup) => {
    */
   const isolation = describeComputerIsolation(computerProvider);
 
-  void recordAuditEvent(bootAuditStore, {
+  void recordPlatformAuditEvent(bootAuditStore, {
     eventType: "computer.isolation_loaded",
     targetType: "computer",
     initiator: DEPLOYMENT_INITIATOR,

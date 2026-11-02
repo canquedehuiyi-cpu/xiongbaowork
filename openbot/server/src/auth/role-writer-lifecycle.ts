@@ -1,4 +1,5 @@
 import { judgeRlsEnforcement } from "../db/rls-role";
+import { runAsTenant } from "../tenant/context";
 
 export type ReadinessDiagnostic =
   | { type: "rls-role-check-unavailable"; reason: string }
@@ -90,7 +91,13 @@ export async function checkServerReadiness(options: {
   const strict = options.mode !== "warn";
   let rows: unknown;
   try {
-    rows = await options.read();
+    /*
+     * As `platform` (G01): the role facts are the deployment's, and boot has no frame. Unframed, the
+     * read took the legacy `system` fallback today and a `TenantContextError` once the fallback is
+     * gone, which this catch would turn into "role facts unavailable" and, under `refuse`, a server
+     * that will not start for a reason that has nothing to do with its role.
+     */
+    rows = await runAsTenant("platform", () => options.read());
   } catch {
     rows = undefined;
   }
