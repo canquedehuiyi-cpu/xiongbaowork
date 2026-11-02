@@ -18,7 +18,7 @@ mask() {
 strip() { sed -E 's/\x1b\[[0-9;]*m//g'; }
 echo "::group::$(basename "$log"): $(wc -l < "$log") lines"
 echo "--- failures, errors and import problems (first 150) ---"
-strip < "$log" | grep -nE '^\(fail\)|error:|Error:|\(unnamed\)|preload|remaining connection slots|too many clients|^ *[0-9]+ errors?$|does not exist|Refusing|exited|panic' | head -150 | mask
+strip < "$log" | grep -nE '^\(fail\)|error:|Error:|\(unnamed\)|preload|remaining connection slots|too many clients|^ *[0-9]+ errors?$|does not exist|Refusing|exited|panic|ERROR|unrecognized' | head -150 | mask
 echo "--- last 60 lines ---"
 strip < "$log" | tail -60 | mask
 echo "::endgroup::"

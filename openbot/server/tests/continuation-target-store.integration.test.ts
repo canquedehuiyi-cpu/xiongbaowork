@@ -4,6 +4,7 @@ import type { AgentRunnerRunRequest } from "@copilotkit/runtime/v2";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { EMPTY, of } from "rxjs";
 import { createDatabase, type Database } from "../src/db/client";
+import { createDisposableTestDatabase } from "./support/database";
 import {
   approvalContinuations,
   approvalContinuationSteps,
@@ -30,22 +31,28 @@ import { runAsTenant } from "../src/tenant/context";
 
 // REAL PG only. No default URL, DDL, auto-migration, service, model or provider.
 // Root supplies canonical schema/RLS and a non-owner, non-BYPASS fixture role.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw)
-  throw new Error("BLOCKED_TEST_DATABASE_URL: PG bodies/connections NOT RUN");
+const disposable = await createDisposableTestDatabase();
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !/^postgres(?:ql)?:$/.test(url.protocol) ||
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
   !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-  process.env.TEST_DATABASE_DISPOSABLE !== databaseName
+  disposable.databaseName !== databaseName
 )
   throw new Error(
     "BLOCKED_NOT_DISPOSABLE: explicit loopback one-time test DB required",
   );
 const dbA = createDatabase(raw, { max: 1 });
 const dbB = createDatabase(raw, { max: 1 });
+/*
+ * The continuation ledger is FORCE RLS with no app-role policy, so only the fixture role can seed and
+ * lease it. The target store under test still runs as the app role on dbA/dbB.
+ */
+if (!disposable.bypassUrl)
+  throw new Error("BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_BYPASS_URL is required");
+const dbLedger = createDatabase(disposable.bypassUrl, { max: 1 });
 const owner = `target-owner-${crypto.randomUUID()}`;
 const tenant = owner;
 const ids: string[] = [];
@@ -97,6 +104,8 @@ afterAll(async () => {
   }
   await dbA.$client.close();
   await dbB.$client.close();
+  await dbLedger.$client.close();
+  await disposable.drop();
 });
 class FixtureAgent extends AbstractAgent {
   run() {
@@ -205,7 +214,7 @@ async function setup() {
     throw new Error(
       `BLOCKED_CANONICAL_ROLE_RLS_RELEASE:${targetA.releaseReason}:${targetB.releaseReason}`,
     );
-  const store = createContinuationStore(dbA, {
+  const store = createContinuationStore(dbLedger, {
     leaseMs: 60000,
     authorizeCurrentProvisioning: async () => true, // fixture provenance, NOT production policy
     verifyNeverAdmittedProof: targetA.verifyNeverAdmittedProof,
