@@ -37,6 +37,7 @@ import {
 import { createTurnRunner } from "../src/routines/run-turn";
 import { createTeamBots } from "../src/team-bots/team-bots";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * The enterprise controls against a real PostgreSQL, through the same seams production uses: the
@@ -46,6 +47,8 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const auditStore = createAuditStore(database);
 const suite = randomUUID().slice(0, 8);
+// SCIM and SSO provisioning seed roles through the restricted writer, as the server does.
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 const admin = {
   id: `ent-admin-${suite}`,
   email: `ent-admin-${suite}@acme.test`,
@@ -91,6 +94,7 @@ async function clean() {
 }
 
 beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
   await clean();
   await database.insert(users).values([
     { ...admin, name: "Admin" },
@@ -131,6 +135,7 @@ afterAll(async () => {
     .delete(scimGroups)
     .where(like(scimGroups.displayName, `%${suite}%`));
   await database.delete(users).where(like(users.email, `%${suite}%`));
+  await releaseRoleWriter?.();
   await database.$client.end({ timeout: 5 });
 });
 

@@ -70,6 +70,18 @@ function makeModel(store: ApprovalStore) {
     }
     return row;
   };
+  const policy = store.policy;
+  if (policy) {
+    const withdraw = policy.withdrawPending.bind(policy);
+    policy.withdrawPending = async (owner, reason, match) => {
+      const ids = await withdraw(owner, reason, match);
+      // A withdrawal commits its no-execution reason together with the status
+      // change in the store itself; the modeled producer records that saved
+      // result as a continue disposition so it can be published once.
+      for (const id of ids) dispositions.set(id, "continue");
+      return ids;
+    };
+  }
   store.getRecoveryContext = async (owner, id) => {
     await committing.get(id)?.promise;
     const request = await store.get(owner, id);

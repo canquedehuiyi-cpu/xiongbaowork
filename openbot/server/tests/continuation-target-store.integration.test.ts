@@ -4,6 +4,7 @@ import type { AgentRunnerRunRequest } from "@copilotkit/runtime/v2";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { EMPTY, of } from "rxjs";
 import { createDatabase, type Database } from "../src/db/client";
+import { createDisposableTestDatabase } from "./support/database";
 import {
   approvalContinuations,
   approvalContinuationSteps,
@@ -30,16 +31,15 @@ import { runAsTenant } from "../src/tenant/context";
 
 // REAL PG only. No default URL, DDL, auto-migration, service, model or provider.
 // Root supplies canonical schema/RLS and a non-owner, non-BYPASS fixture role.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw)
-  throw new Error("BLOCKED_TEST_DATABASE_URL: PG bodies/connections NOT RUN");
+const disposable = await createDisposableTestDatabase();
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !/^postgres(?:ql)?:$/.test(url.protocol) ||
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
   !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-  process.env.TEST_DATABASE_DISPOSABLE !== databaseName
+  disposable.databaseName !== databaseName
 )
   throw new Error(
     "BLOCKED_NOT_DISPOSABLE: explicit loopback one-time test DB required",
@@ -97,6 +97,7 @@ afterAll(async () => {
   }
   await dbA.$client.close();
   await dbB.$client.close();
+  await disposable.drop();
 });
 class FixtureAgent extends AbstractAgent {
   run() {
