@@ -25,6 +25,7 @@ import {
   ROUTINE_FIRE_KIND,
 } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 
 const config = loadConfig(process.env);
@@ -98,6 +99,17 @@ async function dispatch(routineRunId: string): Promise<void> {
   }
 }
 
+/*
+ * THE SWEEP RUNS AS THE PLATFORM, explicitly (G01). It belongs to no person: what is due, what is
+ * claimable, what is stranded and what is stale are every tenant's rows, asked by nobody. Each
+ * routine is offered in its owner's frame and each claimed firing opens its run in the claimed item's
+ * tenant — `routines/sweep.ts` takes both from the row it read, never from this frame — and the
+ * reapers close each row as its own tenant. Unframed, anything a phase forgot to frame would fall
+ * through to the legacy `system` default, which files rows where every tenant can read them.
+ */
+const asPlatform = <T>(phase: () => Promise<T>) =>
+  runAsTenant("platform", phase);
+
 try {
   const options = { routineStore, queue, dispatch, owner };
   /*
@@ -105,8 +117,8 @@ try {
    * the consume below, so a routine due right now fires in this sweep rather than in the next one.
    * Neither half needs the other to have run — another replica's offer is claimed here just the same.
    */
-  const { offered } = await offerDueRoutines(options);
-  const report = await dispatchClaimedRoutines(options);
+  const { offered } = await asPlatform(() => offerDueRoutines(options));
+  const report = await asPlatform(() => dispatchClaimedRoutines(options));
   /*
    * The same stranded-row problem one table over (ticket 021).
    *
@@ -117,10 +129,10 @@ try {
    * cannot run must not stop the routines that are due from firing.
    */
   try {
-    const runs = await reapAbandonedPipelineRuns(
-      database,
-      createTaskProjector(database),
-      { olderThanMs: ABANDONED_RUN_MS },
+    const runs = await asPlatform(() =>
+      reapAbandonedPipelineRuns(database, createTaskProjector(database), {
+        olderThanMs: ABANDONED_RUN_MS,
+      }),
     );
     if (runs > 0) {
       console.warn(JSON.stringify({ type: "pipeline-runs-reaped", runs }));
@@ -144,9 +156,11 @@ try {
    * and a sweep that cannot tidy the display must still fire the routines that are due.
    */
   try {
-    const cards = await createTaskProjector(database).reclaimAbandoned({
-      olderThanMs: ABANDONED_RUN_MS,
-    });
+    const cards = await asPlatform(() =>
+      createTaskProjector(database).reclaimAbandoned({
+        olderThanMs: ABANDONED_RUN_MS,
+      }),
+    );
     if (cards > 0) {
       console.warn(JSON.stringify({ type: "task-cards-reclaimed", cards }));
     }
@@ -168,10 +182,12 @@ try {
    * be offered for that minute again. `server/src/work/queue.ts:262-274` documents that bug at
    * length; the culler pays the same rent at `cull-idle-computers.ts:71-74`.
    */
-  const purged = await queue.purge({
-    kind: ROUTINE_FIRE_KIND,
-    olderThanMs: 24 * 60 * 60 * 1000,
-  });
+  const purged = await asPlatform(() =>
+    queue.purge({
+      kind: ROUTINE_FIRE_KIND,
+      olderThanMs: 24 * 60 * 60 * 1000,
+    }),
+  );
   console.info(
     JSON.stringify({
       type: "routine-sweep",

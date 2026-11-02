@@ -1,15 +1,19 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents, channels, users } from "../src/db/schema/core";
 import {
+  deliveryBindings,
   deliveryChallenges,
   deliveryInbox,
   deliveryOutbox,
 } from "../src/db/schema/delivery";
 import { workItems } from "../src/db/schema/work";
 import { createDeliveryStore } from "../src/delivery/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const db = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -278,4 +282,67 @@ test("a push token registered by one person cannot be moved to another person's 
     expect.objectContaining({ id: next, token }),
   ]);
   expect(await store.devices(owner)).toEqual([]);
+});
+
+/*
+ * Migration 0114 (G01): bindings linked before the link routes ran in the owner's frame carry the
+ * stamp of nobody (`system`, `platform`, empty), and delivery refuses those since G01-B. The
+ * migration restamps them to their owner. `delivery_bindings` has FORCE RLS, so the statement only
+ * reaches those rows as the platform writer; this runs the migration file itself from a frame that
+ * could not reach them (the empty one a migrator arrives with), as this NOBYPASSRLS role, inside a
+ * transaction that is rolled back so no other file's bindings are touched.
+ */
+test("migration 0114 restamps bindings of nobody's to their owner, and only those", async () => {
+  const migration = readFileSync(
+    join(
+      import.meta.dir,
+      "..",
+      "recovery",
+      "recovery-20261018-v1",
+      "sql",
+      "0114_delivery_binding_owner_tenant.sql",
+    ),
+    "utf8",
+  );
+  const realm = `${prefix}-0114`;
+  // Nobody's three ways, and one stamped with a person who is not the owner: a conflict, not a legacy default.
+  const stamps = ["system", "platform", "", stranger];
+  const rollback = new Error("rollback the migration fixture");
+  let seen: { frame: unknown; rows: unknown[] } | undefined;
+  await expect(
+    db.$client.begin(async (tx) => {
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      for (const [index, stamp] of stamps.entries())
+        await tx`insert into delivery_bindings (tenant_id, id, owner_user_id, channel_id, agent_id, thread_id, transport, identity, realm, address) values (${stamp}, ${`${realm}-${index}`}, ${owner}, ${channel}, ${bot}, ${scope.threadId}, 'slack', ${`U${index}`}, ${realm}, 'D')`;
+      await tx`select set_config('app.tenant_id', '', true)`;
+      await tx.unsafe(migration);
+      const [frame] =
+        await tx`select current_setting('app.tenant_id', true) as tenant`;
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      const rows =
+        await tx`select id, tenant_id from delivery_bindings where realm = ${realm} order by id`;
+      seen = {
+        frame: (frame as { tenant: unknown }).tenant,
+        rows: Array.from(rows as ArrayLike<unknown>),
+      };
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
+  // The frame the migration found is the frame it leaves, so a later migration in the same run does not inherit `platform`.
+  expect(seen?.frame).toBe("");
+  expect(seen?.rows).toEqual([
+    { id: `${realm}-0`, tenant_id: owner },
+    { id: `${realm}-1`, tenant_id: owner },
+    { id: `${realm}-2`, tenant_id: owner },
+    { id: `${realm}-3`, tenant_id: stranger },
+  ]);
+  // Rolled back: nothing of the fixture is left for anybody.
+  expect(
+    await runAsTenant("platform", () =>
+      db
+        .select({ id: deliveryBindings.id })
+        .from(deliveryBindings)
+        .where(eq(deliveryBindings.realm, realm)),
+    ),
+  ).toEqual([]);
 });
