@@ -101,9 +101,12 @@ afterAll(async () => {
         .delete(subscriptions)
         .where(eq(subscriptions.tenantId, userId));
     });
-    await database.delete(accounts).where(eq(accounts.userId, userId));
-    await database.delete(sessions).where(eq(sessions.userId, userId));
-    await database.delete(users).where(eq(users.id, userId));
+    // The identity tables carry no tenant: they are the deployment's, cleaned up as the platform.
+    await runAsTenant("platform", async () => {
+      await database.delete(accounts).where(eq(accounts.userId, userId));
+      await database.delete(sessions).where(eq(sessions.userId, userId));
+      await database.delete(users).where(eq(users.id, userId));
+    });
   }
   await releaseRoleWriter?.();
   await database.$client.end({ timeout: 5 });
