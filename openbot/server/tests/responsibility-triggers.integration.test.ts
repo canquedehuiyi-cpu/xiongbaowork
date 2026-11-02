@@ -251,10 +251,13 @@ test("rotation revokes the old key in the vault; provider secrets are pasted and
     ).status,
   ).toBe(401);
   // Both writes are bound envelopes (audit #9), and the ingress just below reads one back.
-  const envelopes = await database
-    .select({ encryptedValue: credentials.encryptedValue })
-    .from(credentials)
-    .where(eq(credentials.keyId, created.trigger.id));
+  // Read in the owner's frame: the vault rows are stamped with the owner's tenant (G01).
+  const envelopes = await asOwner(() =>
+    database
+      .select({ encryptedValue: credentials.encryptedValue })
+      .from(credentials)
+      .where(eq(credentials.keyId, created.trigger.id)),
+  );
   expect(envelopes).toHaveLength(2);
   expect(
     envelopes.map((row) => JSON.parse(row.encryptedValue).version),
