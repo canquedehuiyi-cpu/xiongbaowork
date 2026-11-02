@@ -98,6 +98,9 @@ jobs:
       - name: Failure name multiset difference and zero-fail gate
         if: always()
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" "server shard ${{ matrix.shard }}"
+      - name: Print head test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -149,6 +152,12 @@ jobs:
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
         run: bash scripts/ci/image-smoke.sh openbot:trackb
+      - name: Print container logs (credentials masked)
+        if: failure()
+        run: |
+          for f in startup owner auth recreated; do
+            bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/delivery-evidence/$f.log" || true
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

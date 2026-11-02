@@ -46,7 +46,7 @@ function errorRecord(value: unknown): Record<string, unknown> | undefined {
 
 function quotaDetails(value: unknown): QuotaErrorDetails | undefined {
   const body = errorRecord(value);
-  if (!body || body.code !== "quota_exceeded" ||
+  if (body?.code !== "quota_exceeded" ||
       (body.metric !== "wakers" && body.metric !== "tasksPerMonth" &&
        body.metric !== "devices" && body.metric !== "customModels") ||
       typeof body.used !== "number" || !Number.isFinite(body.used) || body.used < 0 ||

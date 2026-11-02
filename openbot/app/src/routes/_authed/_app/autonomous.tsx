@@ -274,6 +274,7 @@ function RouteComponent() {
                         · {setting.enabled ? "已开启" : "已关闭"}
                         {setting.enabled ? (
                           <> · 下次计划{" "}
+                            {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: autonomous-screen.test.tsx locates this element by its label and the handoff keeps original test bodies unchanged; replace with a supported labelling pattern together with that test. */}
                             <time aria-label="主动巡检下次计划" dateTime={setting.nextRunAt} title={setting.nextRunAt}>
                               {relativeTime(setting.nextRunAt)}
                             </time>（仅为计划）
