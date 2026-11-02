@@ -11,6 +11,7 @@ import {
 import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -19,23 +20,35 @@ const owner = `${prefix}-owner`,
   stranger = `${prefix}-stranger`;
 const store = createApprovalStore(database);
 const keys: string[] = [];
+// The owner's calls run in her own frame, as the request guard frames them. The user rows are
+// identity rows, written and removed in the deployment's own (platform) frame.
+const asOwner = <T>(work: () => Promise<T>) => runAsTenant(owner, work);
+// The stranger's probes run as `platform`, which can see the owner's row: in the stranger's own frame
+// row-level security would hide it, and "not found" would no longer prove the store's owner filter.
+const asStranger = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: stranger, email: `${stranger}@example.test` },
-  ]);
+  await runAsTenant("platform", () =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: stranger, email: `${stranger}@example.test` },
+    ]),
+  );
 });
 afterAll(async () => {
   if (keys.length)
-    await database
-      .delete(workItems)
-      .where(
-        and(
-          eq(workItems.kind, "approval.resume"),
-          inArray(workItems.key, keys),
+    await runAsTenant(owner, () =>
+      database
+        .delete(workItems)
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            inArray(workItems.key, keys),
+          ),
         ),
-      );
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+    );
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [owner, stranger])),
+  );
   await database.$client.close();
 });
 function candidate(scope = "project"): ApprovalCandidate {
@@ -61,77 +74,86 @@ function candidate(scope = "project"): ApprovalCandidate {
     },
   };
 }
-test("PostgreSQL stores one immutable owned request, one decision queue item and one atomic consumption", async () => {
-  await store.setEnabled(owner, true);
-  const action = approvalAction(candidate());
-  const requests = await Promise.all([store.open(action), store.open(action)]);
-  const request = requests[0];
-  if (!request) throw new Error("missing request");
-  keys.push(request.id);
-  expect(requests[1]?.id).toBe(request.id);
-  await expect(store.get(stranger, request.id)).rejects.toBeInstanceOf(
-    ApprovalNotFoundError,
-  );
-  await expect(
-    store.decide(stranger, request.id, "allow_once"),
-  ).rejects.toBeInstanceOf(ApprovalNotFoundError);
-  const choices = await Promise.allSettled([
-    store.decide(owner, request.id, "allow_once"),
-    store.decide(owner, request.id, "allow_once"),
-  ]);
-  expect(
-    choices.filter((choice) => choice.status === "fulfilled"),
-  ).toHaveLength(1);
-  expect(
-    await database
-      .select()
-      .from(workItems)
-      .where(
-        and(
-          eq(workItems.kind, "approval.resume"),
-          eq(workItems.key, request.id),
+test("PostgreSQL stores one immutable owned request, one decision queue item and one atomic consumption", () =>
+  asOwner(async () => {
+    await store.setEnabled(owner, true);
+    const action = approvalAction(candidate());
+    const requests = await Promise.all([
+      store.open(action),
+      store.open(action),
+    ]);
+    const request = requests[0];
+    if (!request) throw new Error("missing request");
+    keys.push(request.id);
+    expect(requests[1]?.id).toBe(request.id);
+    await expect(
+      asStranger(() => store.get(stranger, request.id)),
+    ).rejects.toBeInstanceOf(ApprovalNotFoundError);
+    await expect(
+      asStranger(() => store.decide(stranger, request.id, "allow_once")),
+    ).rejects.toBeInstanceOf(ApprovalNotFoundError);
+    const choices = await Promise.allSettled([
+      store.decide(owner, request.id, "allow_once"),
+      store.decide(owner, request.id, "allow_once"),
+    ]);
+    expect(
+      choices.filter((choice) => choice.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      await database
+        .select()
+        .from(workItems)
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            eq(workItems.key, request.id),
+          ),
         ),
+    ).toHaveLength(1);
+    const consumed = await Promise.all([
+      store.consume(owner, request.id, action.actionDigest),
+      store.consume(owner, request.id, action.actionDigest),
+    ]);
+    expect(consumed.filter(Boolean)).toHaveLength(1);
+    await store.saveResult(owner, request.id, { content: '{"saved":true}' });
+    await store.finish(owner, request.id);
+    const restarted = createApprovalService(createApprovalStore(database));
+    expect(await restarted.gate({ ...action })).toMatchObject({
+      replay: { saved: true },
+    });
+    await expect(
+      store.open(
+        approvalAction({ ...action, args: { path: "different.txt" } }),
       ),
-  ).toHaveLength(1);
-  const consumed = await Promise.all([
-    store.consume(owner, request.id, action.actionDigest),
-    store.consume(owner, request.id, action.actionDigest),
-  ]);
-  expect(consumed.filter(Boolean)).toHaveLength(1);
-  await store.saveResult(owner, request.id, { content: '{"saved":true}' });
-  await store.finish(owner, request.id);
-  const restarted = createApprovalService(createApprovalStore(database));
-  expect(await restarted.gate({ ...action })).toMatchObject({
-    replay: { saved: true },
-  });
-  await expect(
-    store.open(approvalAction({ ...action, args: { path: "different.txt" } })),
-  ).rejects.toThrow("changed");
-});
-test("PostgreSQL persistent permissions are exact, revocable and denied choices stay durable", async () => {
-  const first = await store.open(approvalAction(candidate("persistent")));
-  keys.push(first.id);
-  await store.decide(owner, first.id, "allow_always");
-  const subsequent = await store.open(approvalAction(candidate("persistent")));
-  keys.push(subsequent.id);
-  expect(subsequent.status).toBe("approved");
-  const elsewhere = await store.open(
-    approvalAction(candidate("other-project")),
-  );
-  keys.push(elsewhere.id);
-  expect(elsewhere.status).toBe("pending");
-  const [rule] = await store.rules(owner);
-  if (!rule) throw new Error("missing rule");
-  await expect(store.revoke(stranger, rule.id)).rejects.toBeInstanceOf(
-    ApprovalNotFoundError,
-  );
-  await store.revoke(owner, rule.id);
-  expect(
-    await store.consume(owner, subsequent.id, subsequent.action.actionDigest),
-  ).toBe(false);
-  const denied = await store.open(approvalAction(candidate("deny")));
-  keys.push(denied.id);
-  await store.decide(owner, denied.id, "deny");
-  const restarted = createApprovalService(createApprovalStore(database));
-  await expect(restarted.gate(denied.action)).rejects.toThrow("declined");
-});
+    ).rejects.toThrow("changed");
+  }));
+test("PostgreSQL persistent permissions are exact, revocable and denied choices stay durable", () =>
+  asOwner(async () => {
+    const first = await store.open(approvalAction(candidate("persistent")));
+    keys.push(first.id);
+    await store.decide(owner, first.id, "allow_always");
+    const subsequent = await store.open(
+      approvalAction(candidate("persistent")),
+    );
+    keys.push(subsequent.id);
+    expect(subsequent.status).toBe("approved");
+    const elsewhere = await store.open(
+      approvalAction(candidate("other-project")),
+    );
+    keys.push(elsewhere.id);
+    expect(elsewhere.status).toBe("pending");
+    const [rule] = await store.rules(owner);
+    if (!rule) throw new Error("missing rule");
+    await expect(
+      asStranger(() => store.revoke(stranger, rule.id)),
+    ).rejects.toBeInstanceOf(ApprovalNotFoundError);
+    await store.revoke(owner, rule.id);
+    expect(
+      await store.consume(owner, subsequent.id, subsequent.action.actionDigest),
+    ).toBe(false);
+    const denied = await store.open(approvalAction(candidate("deny")));
+    keys.push(denied.id);
+    await store.decide(owner, denied.id, "deny");
+    const restarted = createApprovalService(createApprovalStore(database));
+    await expect(restarted.gate(denied.action)).rejects.toThrow("declined");
+  }));
