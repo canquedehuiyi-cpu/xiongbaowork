@@ -6,6 +6,7 @@ import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { revokedAccess, sessions, users } from "../src/db/schema";
 import { createPeopleStore } from "../src/people/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -16,6 +17,9 @@ const adminId = `offboarding-admin-${suite}`;
 const memberId = `offboarding-member-${suite}`;
 const memberEmail = `${memberId}@openbot.test`;
 
+/** The identity rows and the deny list are the deployment's: seeded, read and removed as `platform`. */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
+
 const ADMIN = {
   id: adminId,
   email: `${adminId}@openbot.test`,
@@ -24,11 +28,13 @@ const ADMIN = {
 };
 
 afterAll(async () => {
-  await database
-    .delete(revokedAccess)
-    .where(eq(revokedAccess.email, memberEmail));
-  await database.delete(sessions).where(eq(sessions.userId, memberId));
-  await database.delete(users).where(inArray(users.id, [adminId, memberId]));
+  await asPlatform(async () => {
+    await database
+      .delete(revokedAccess)
+      .where(eq(revokedAccess.email, memberEmail));
+    await database.delete(sessions).where(eq(sessions.userId, memberId));
+    await database.delete(users).where(inArray(users.id, [adminId, memberId]));
+  });
 });
 
 function appFor(retire: () => Promise<{ retired: number }>) {
@@ -65,28 +71,30 @@ function appFor(retire: () => Promise<{ retired: number }>) {
 }
 
 test("a broker that will not answer still leaves the removal on the trail, and asking again finishes it", async () => {
-  await database
-    .insert(users)
-    .values([
-      {
-        id: adminId,
-        email: ADMIN.email,
-        name: "An Administrator",
-        emailVerified: true,
-      },
-      {
-        id: memberId,
-        email: memberEmail,
-        name: "A Member",
-        emailVerified: true,
-      },
-    ])
-    .onConflictDoNothing();
-  await database.insert(sessions).values({
-    id: `${memberId}-session`,
-    userId: memberId,
-    token: `${memberId}-token`,
-    expiresAt: new Date(Date.now() + 86_400_000),
+  await asPlatform(async () => {
+    await database
+      .insert(users)
+      .values([
+        {
+          id: adminId,
+          email: ADMIN.email,
+          name: "An Administrator",
+          emailVerified: true,
+        },
+        {
+          id: memberId,
+          email: memberEmail,
+          name: "A Member",
+          emailVerified: true,
+        },
+      ])
+      .onConflictDoNothing();
+    await database.insert(sessions).values({
+      id: `${memberId}-session`,
+      userId: memberId,
+      token: `${memberId}-token`,
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
   });
 
   let attempts = 0;
@@ -100,16 +108,20 @@ test("a broker that will not answer still leaves the removal on the trail, and a
 
   expect((await remove()).status).toBe(500);
 
-  const denied = await database
-    .select({ email: revokedAccess.email })
-    .from(revokedAccess)
-    .where(eq(revokedAccess.email, memberEmail));
+  const denied = await asPlatform(() =>
+    database
+      .select({ email: revokedAccess.email })
+      .from(revokedAccess)
+      .where(eq(revokedAccess.email, memberEmail)),
+  );
   expect(denied).toHaveLength(1);
   expect(
-    await database
-      .select({ id: sessions.id })
-      .from(sessions)
-      .where(eq(sessions.userId, memberId)),
+    await asPlatform(() =>
+      database
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.userId, memberId)),
+    ),
   ).toEqual([]);
   expect(events).toEqual(["person.access_revoked"]);
 
