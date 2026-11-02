@@ -424,8 +424,9 @@ test("old worker late terminal after actual DB expiry/ABA is rejected with zero 
   const h = await setup();
   await h.targetA.reserve(h.intent);
   await h.targetA.begin(h.intent);
+  // Simulated expiry is fixture work on the closed ledger, which the app role cannot change.
   await scoped(() =>
-    dbB
+    dbLedger
       .update(approvalContinuations)
       .set({ leaseUntil: sql`clock_timestamp()-interval '1 second'` })
       .where(
