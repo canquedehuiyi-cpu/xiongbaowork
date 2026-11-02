@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -28,6 +28,7 @@ import {
   createQuotaService,
   QuotaExceeded,
 } from "../src/quota/limits";
+import type { PlanChangeEvent } from "../src/quota/payment-provider";
 import { createQuotaRoutes } from "../src/quota/routes";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
@@ -475,10 +476,14 @@ test("a workspace with no subscription is held to the Free ceilings, not left un
   ).rejects.toBeInstanceOf(QuotaExceeded);
 
   // The panel says Free too, rather than "no tier".
-  const panelRoutes = createQuotaRoutes(database, quota, async (context, next) => {
-    context.set("actor", { id: stranger, role: "user" as const });
-    await next();
-  });
+  const panelRoutes = createQuotaRoutes(
+    database,
+    quota,
+    async (context, next) => {
+      context.set("actor", { id: stranger, role: "user" as const });
+      await next();
+    },
+  );
   const response = await runAsTenant(stranger, () =>
     panelRoutes.request(new Request("http://openbot.test/")),
   );
@@ -518,11 +523,155 @@ test("two active subscriptions resolve to the most recently changed one, every t
   ).resolves.toBeUndefined();
 });
 
+test("GET /plans says how a tier changes here: the manual provider and its instruction", async () => {
+  const tiers = await call<{
+    plans: { id: string }[];
+    checkout?: Record<string, unknown>;
+  }>(quotaRoutes, "GET", "/plans");
+  expect(tiers.status).toBe(200);
+  // The tiers themselves are unchanged by the seam.
+  expect(tiers.body.plans.map((tier) => tier.id)).toEqual(["free", "pro"]);
+  expect(tiers.body.checkout).toEqual({
+    provider: "manual",
+    kind: "manual",
+    instructions: "由平台管理员切换套餐",
+  });
+});
+
+test("a plan switch fires the hooks with the plan it replaced, and a failing hook does not undo it", async () => {
+  const heard: PlanChangeEvent[] = [];
+  const planWhenHeard: string[] = [];
+  const secret = "sk-hook-should-not-be-logged";
+  const hooks = [
+    () => {
+      throw new Error(`hook failed with ${secret}`);
+    },
+    async (event: PlanChangeEvent) => {
+      heard.push(event);
+      // The hook runs after the switch committed: the plan it reads is already the new one.
+      planWhenHeard.push((await quota.planFor(event.tenantId)).id);
+    },
+  ];
+  const memberWithHooks = createQuotaRoutes(database, quota, requireUser, {
+    hooks,
+  });
+  const adminWithHooks = createQuotaRoutes(database, quota, requireAdminUser, {
+    hooks,
+  });
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    // The tenant is on Free from the member/administrator test above.
+    expect((await quota.planFor(tenant)).id).toBe("free");
+
+    // A member is refused before any hook hears anything, and nothing moves.
+    const refused = await call<{ error?: string }>(
+      memberWithHooks,
+      "POST",
+      "/plan",
+      { planId: "pro" },
+    );
+    expect(refused.status).toBe(403);
+    expect(heard).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+    expect((await quota.planFor(tenant)).id).toBe("free");
+
+    // An administrator's switch: the body's tenant is ignored; the moved row's tenant is the one heard.
+    const moved = await call<{ planId?: string }>(
+      adminWithHooks,
+      "POST",
+      "/plan",
+      { planId: "pro", tenantId: `q-elsewhere-${suite}` },
+    );
+    expect(moved.status).toBe(200);
+    expect(moved.body.planId).toBe("pro");
+    expect(heard.length).toBe(1);
+    expect(heard[0]).toMatchObject({
+      tenantId: tenant,
+      fromPlanId: "free",
+      toPlanId: "pro",
+      actorId: tenant,
+      provider: "manual",
+    });
+    expect(heard[0]?.at).toBeInstanceOf(Date);
+    expect(planWhenHeard).toEqual(["pro"]);
+
+    // The first hook threw: it was logged, without what it threw, and the switch stands.
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0] ?? "");
+    expect(line).not.toContain(secret);
+    expect((await quota.planFor(tenant)).id).toBe("pro");
+
+    // And back: "from" is the plan this switch replaced, read inside the same move.
+    await call(adminWithHooks, "POST", "/plan", { planId: "free" });
+    expect(heard.length).toBe(2);
+    expect(heard[1]).toMatchObject({
+      tenantId: tenant,
+      fromPlanId: "pro",
+      toPlanId: "free",
+    });
+
+    // A refused switch (unknown plan) fires nothing.
+    const bogus = await call(adminWithHooks, "POST", "/plan", {
+      planId: "diamond",
+    });
+    expect(bogus.status).toBe(404);
+    expect(heard.length).toBe(2);
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+test("a first subscription written by the switch is heard with no previous plan", async () => {
+  const fresh = `q-first-${suite}`;
+  await runAsTenant(fresh, () =>
+    database
+      .insert(users)
+      .values({ id: fresh, email: `${fresh}@q.test`, name: fresh }),
+  );
+  const heard: PlanChangeEvent[] = [];
+  const freshAdmin = createQuotaRoutes(
+    database,
+    quota,
+    async (context, next) => {
+      context.set("actor", { id: fresh, role: "admin" as const });
+      await runAsTenant(fresh, () => next());
+    },
+    {
+      hooks: [
+        (event) => {
+          heard.push(event);
+        },
+      ],
+    },
+  );
+  const moved = await call<{ planId?: string }>(freshAdmin, "POST", "/plan", {
+    planId: "pro",
+  });
+  expect(moved.status).toBe(200);
+  expect(heard.length).toBe(1);
+  expect(heard[0]).toMatchObject({
+    tenantId: fresh,
+    fromPlanId: null,
+    toPlanId: "pro",
+    actorId: fresh,
+    provider: "manual",
+  });
+  expect((await quota.planFor(fresh)).id).toBe("pro");
+  const rows = await runAsTenant(fresh, () =>
+    database
+      .select({ tenantId: subscriptions.tenantId })
+      .from(subscriptions)
+      .where(eq(subscriptions.tenantId, fresh)),
+  );
+  expect(rows).toEqual([{ tenantId: fresh }]);
+});
+
 afterAll(async () => {
   for (const scope of [
     tenant,
     `q-none-${suite}`,
     `q-dup-${suite}`,
+    `q-first-${suite}`,
     "platform",
   ]) {
     await runAsTenant(scope, async () => {

@@ -197,6 +197,7 @@ tests/paging.test.ts
 tests/parallel-research.test.ts
 tests/passwords-sign-in.test.ts
 tests/passwords-store.integration.test.ts
+tests/payment-provider.test.ts
 tests/people-last-sign-in.integration.test.ts
 tests/people-paging.integration.test.ts
 tests/people-routes.test.ts

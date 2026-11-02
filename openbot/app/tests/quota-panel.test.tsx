@@ -89,12 +89,22 @@ const tiers = {
   ],
 };
 
-function seed() {
+/** The catalogue as the server now answers it: the tiers plus the reserved payment seam (spec K3). */
+const tiersWithCheckout = {
+  ...tiers,
+  checkout: {
+    provider: "manual",
+    kind: "manual",
+    instructions: "由平台管理员切换套餐",
+  },
+};
+
+function seed(catalogue: object = tiers) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   queryClient.setQueryData(quotaKeys.usage(), free);
-  queryClient.setQueryData(quotaKeys.tiers(), tiers);
+  queryClient.setQueryData(quotaKeys.tiers(), catalogue);
   globalThis.fetch = (async (
     path: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -110,7 +120,7 @@ function seed() {
     // Reads answer with the same document the cache was seeded with: a panel that polls would
     // otherwise replace its own seed with whatever this stub last returned, and then render nothing.
     if (url.includes("/api/quota/plans")) {
-      return new Response(JSON.stringify(tiers), { status: 200 });
+      return new Response(JSON.stringify(catalogue), { status: 200 });
     }
     if (url.endsWith("/api/quota")) {
       return new Response(JSON.stringify(free), { status: 200 });
@@ -128,7 +138,11 @@ function seed() {
  * The plans page on its own, at the address the panel links to, as a viewer with this role. Moving a
  * plan is a platform administrator's act, so the role decides whether the page offers a switch.
  */
-function draw(role: "admin" | "user", at = "/plans") {
+function draw(
+  role: "admin" | "user",
+  at = "/plans",
+  catalogue: object = tiers,
+) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
@@ -142,7 +156,7 @@ function draw(role: "admin" | "user", at = "/plans") {
       } as never),
     ]),
   });
-  const queryClient = seed();
+  const queryClient = seed(catalogue);
   queryClient.setQueryData(authKeys.currentUser(), {
     id: `${role}-1`,
     email: `${role}@openbot.test`,
@@ -257,6 +271,29 @@ test("a member who is not an administrator is shown the tiers but no switch", as
       .queryAllByRole("button")
       .some((button) => ["切换", "使用中"].includes(button.textContent ?? "")),
   ).toBeFalse();
+  expect(calls.some((entry) => entry.method === "POST")).toBeFalse();
+});
+
+test("with no payment channel, a member reads the manual instruction and still gets no switch", async () => {
+  const view = draw("user", "/plans", tiersWithCheckout);
+
+  expect(await view.findByText(/由平台管理员切换套餐/)).toBeTruthy();
+  expect(view.getByText(/未接入支付渠道/)).toBeTruthy();
+  expect(
+    view
+      .queryAllByRole("button")
+      .some((button) => ["切换", "使用中"].includes(button.textContent ?? "")),
+  ).toBeFalse();
+  expect(calls.some((entry) => entry.method === "POST")).toBeFalse();
+});
+
+test("an administrator reads the same instruction next to the switch it describes", async () => {
+  const view = draw("admin", "/plans", tiersWithCheckout);
+
+  expect(await view.findByText(/由平台管理员切换套餐/)).toBeTruthy();
+  const buttons = await view.findAllByRole("button");
+  expect(buttons.some((button) => button.textContent === "切换")).toBeTrue();
+  // Nothing on the page starts a payment: no request leaves until a tier is chosen.
   expect(calls.some((entry) => entry.method === "POST")).toBeFalse();
 });
 

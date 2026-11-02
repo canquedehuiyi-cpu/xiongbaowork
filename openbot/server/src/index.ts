@@ -240,6 +240,7 @@ import {
 import { createProactiveStore } from "./proactive/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
 import { createQuotaService } from "./quota/limits";
+import { paymentProviderFromEnv } from "./quota/payment-provider";
 import { createQuotaRoutes } from "./quota/routes";
 import { createResponsibilityBindingStore } from "./responsibilities/bindings";
 import {
@@ -420,7 +421,9 @@ await startupLifecycle.run(async (startup) => {
   configureBotLifecycle({ database });
   await startup.step(() => initializeDevActorUser(database, config.singleUser));
   // After the user row exists: the actor gets a real Free subscription row (audit #7 follow-up).
-  await startup.step(() => provisionDevActorTenant(database, config.singleUser));
+  await startup.step(() =>
+    provisionDevActorTenant(database, config.singleUser),
+  );
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
   // key belongs here rather than on the agent row. See agents/auth-header.ts.
   const credentialStore = createCredentialStore(database);
@@ -457,6 +460,12 @@ await startupLifecycle.run(async (startup) => {
    * shows.
    */
   const quota = createQuotaService(database);
+  /*
+   * How a tenant changes plan (spec K3): the reserved payment seam. Only the manual provider exists,
+   * and a deployment that names any other in `OPENBOT_PAYMENT_PROVIDER` stops here, at boot, rather
+   * than handing out plans it believes are being paid for.
+   */
+  const paymentProvider = paymentProviderFromEnv(process.env);
   /*
    * Which model each coworker speaks with, read from this tenant's own model library.
    *
@@ -3524,6 +3533,7 @@ await startupLifecycle.run(async (startup) => {
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
+      { payment: paymentProvider, hooks: [] },
     ),
   );
 
