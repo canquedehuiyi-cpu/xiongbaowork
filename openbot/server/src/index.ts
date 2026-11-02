@@ -57,6 +57,7 @@ import {
   type PersonQuestion,
   personQuestionSchema,
   questionConversationBot,
+  withQuestionParking,
 } from "./approvals/questions";
 import {
   type ApprovalResumeDependencies,
@@ -644,7 +645,7 @@ await startupLifecycle.run(async (startup) => {
       throw new ApprovalRefusedError("That Bot is no longer available to you.");
   };
   // The board projector: approvals, runs and routines project into tasks.
-  const taskProjector = createTaskProjector(
+  const boardProjector = createTaskProjector(
     database,
     (tenantId) => {
       // Same announce rail the channel roster listens on, so a second server
@@ -662,6 +663,18 @@ await startupLifecycle.run(async (startup) => {
     },
     quota,
   );
+  /*
+   * Spec I3: a run that asked its person a question parks its card in 需要操作, and the answer moves it
+   * back. The questions write through the plain projector, and every card the runners finish goes through
+   * `withQuestionParking`: `ask_person` lets the turn end, so a park written while it was running would be
+   * overwritten by that close.
+   */
+  const approvalQuestions = createApprovalQuestions(
+    database,
+    authoriseQuestion,
+    boardProjector,
+  );
+  const taskProjector = withQuestionParking(boardProjector, approvalQuestions);
   const storedApprovals = createApprovalStore(database, taskProjector);
 
   /*
@@ -726,7 +739,7 @@ await startupLifecycle.run(async (startup) => {
         return request;
       },
     },
-    createApprovalQuestions(database, authoriseQuestion),
+    approvalQuestions,
     async (ownerUserId, botId, snapshot) => {
       const source = await sourceForCoordinationRun({
         actorId: ownerUserId,
@@ -2913,6 +2926,22 @@ await startupLifecycle.run(async (startup) => {
               responsibilities: responsibilityStore,
               responsibilityTurn: responsibilityAnswerTurn,
             });
+            /*
+             * Spec I3: the card that asked was moved back to 进行中 when the person answered; the turn the
+             * answer started has now replied, so the card goes on to the review lane. A responsibility's
+             * own run closes its own card when it finishes, so it is left to do that. The tenant is the
+             * claimed work row's, not a default.
+             */
+            if (!outcome.responsibilityId)
+              await taskProjector
+                .finished({
+                  tenantId: item.tenantId,
+                  runRef: payload.question.runId,
+                  onlyUnsettled: true,
+                })
+                .catch((error) =>
+                  console.error("task projection failed", error),
+                );
             const source = await sourceForCoordinationRun({
               ...payload.question,
               botId: questionConversationBot(payload.question),

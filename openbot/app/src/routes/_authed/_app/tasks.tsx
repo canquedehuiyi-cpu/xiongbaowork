@@ -6,11 +6,11 @@ import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
 import {
   ApprovalActions,
+  type OnBoardAnswer,
   useApprovalDecision,
 } from "@/components/tasks/approval-actions";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import type { ApprovalDecision } from "@/lib/approvals";
 import { client, RequestError } from "@/lib/client";
 import { taskAction } from "@/lib/tasks/actions";
 
@@ -113,7 +113,8 @@ type Task = {
  * approval buttons, rather than buttons that do nothing.
  */
 type ApprovalWiring = {
-  onDecide?: (approvalId: string, decision: ApprovalDecision) => void;
+  /** 批准/拒绝, or a written answer to a question the card is parked on (spec I3). */
+  onDecide?: OnBoardAnswer;
   decidingIds?: ReadonlySet<string>;
 };
 
@@ -879,8 +880,8 @@ function TasksPage() {
    */
   const approvalFailure = approval.error
     ? approval.error instanceof RequestError
-      ? `审批没有提交：${approval.error.message}（服务端返回 ${approval.error.status}）`
-      : "审批结果未确认，请刷新任务后核对"
+      ? `审批或回答没有提交：${approval.error.message}（服务端返回 ${approval.error.status}）`
+      : "审批或回答结果未确认，请刷新任务后核对"
     : null;
   const refreshReadsOnly = () => {
     void tasks.refetch();
