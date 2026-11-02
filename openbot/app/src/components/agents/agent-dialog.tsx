@@ -792,6 +792,11 @@ export function PersonaSection({
     habits: draft.habits.trim(),
   });
   const written = Object.values(trimmed()).some((value) => value.length > 0);
+  /*
+   * Somebody else's coworker is read here, not rewritten: the server refuses the PATCH anyway, and
+   * boxes that type and a Save that bounces would contradict the "这里只能看" the screen says.
+   */
+  const readOnly = !profile.canManage;
 
   return (
     <div className="flex flex-col gap-3">
@@ -809,6 +814,7 @@ export function PersonaSection({
           <Textarea
             id={`persona-${part.key}`}
             maxLength={2000}
+            readOnly={readOnly}
             onChange={(event) =>
               setDraft((draft) => ({
                 ...draft,
@@ -828,34 +834,16 @@ export function PersonaSection({
       {notice ? (
         <p className="text-muted-foreground text-sm">{notice}</p>
       ) : null}
-      <div className="flex gap-2">
-        <Button
-          disabled={saving || !dirty}
-          onClick={async () => {
-            setError(null);
-            setNotice(null);
-            try {
-              await save({ persona: trimmed() });
-              setNotice("Saved. It applies from the coworker's next turn.");
-            } catch (failure) {
-              setError(
-                failure instanceof Error ? failure.message : "Could not save.",
-              );
-            }
-          }}
-          size="sm"
-        >
-          {saving ? "正在保存…" : "保存"}
-        </Button>
-        {profile.persona ? (
+      {readOnly ? null : (
+        <div className="flex gap-2">
           <Button
-            disabled={saving}
+            disabled={saving || !dirty}
             onClick={async () => {
               setError(null);
-              setDraft(emptyPersona);
+              setNotice(null);
               try {
-                await save({ persona: emptyPersona });
-                setNotice("Cleared.");
+                await save({ persona: trimmed() });
+                setNotice("Saved. It applies from the coworker's next turn.");
               } catch (failure) {
                 setError(
                   failure instanceof Error
@@ -865,12 +853,34 @@ export function PersonaSection({
               }
             }}
             size="sm"
-            variant="outline"
           >
-            清空
+            {saving ? "正在保存…" : "保存"}
           </Button>
-        ) : null}
-      </div>
+          {profile.persona ? (
+            <Button
+              disabled={saving}
+              onClick={async () => {
+                setError(null);
+                setDraft(emptyPersona);
+                try {
+                  await save({ persona: emptyPersona });
+                  setNotice("Cleared.");
+                } catch (failure) {
+                  setError(
+                    failure instanceof Error
+                      ? failure.message
+                      : "Could not save.",
+                  );
+                }
+              }}
+              size="sm"
+              variant="outline"
+            >
+              清空
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       <Separator className="my-1" />
 
@@ -904,6 +914,7 @@ export function PersonaSection({
                 </ItemContent>
                 <ItemActions>
                   <Button
+                    disabled={readOnly}
                     onClick={() => {
                       setDraft(template.persona);
                       setError(null);
