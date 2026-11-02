@@ -277,8 +277,21 @@ export const boardEmptySentence = (filters: {
   crew: string;
   status: string;
   q: string;
+  /**
+   * Whether `machineId` names one of this person's registered devices: `false` only once the device
+   * list has answered and the id is not on it. While that list is loading or has failed the answer
+   * is unknown (`undefined`), and an unknown answer must not be spoken as "nobody is here".
+   */
+  machineRegistered?: boolean;
 }): string => {
   const narrowed = Boolean(filters.status || filters.q || filters.crew);
+  /*
+   * Spec F5: an address naming a machine this person does not have is not an idle machine -- there
+   * is no machine. No filter can bring work back from it, so this answer comes before the others.
+   */
+  if (filters.machineId && filters.machineRegistered === false) {
+    return "Waker 们正在休息——这台设备不在你的设备列表里，到 /tasks 看全部设备。";
+  }
   /*
    * Which scopes are in play decides which sentence is true. A device and a filter together are not
    * the same question as either one alone: idle in this window is a different claim from hidden by
@@ -368,7 +381,7 @@ function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
 }
 
-/** What a card's 打开 does: one of four screens, a sentence saying the place is gone, or nothing. */
+/** What a card's 查看详情 does: one of four screens, a sentence saying the place is gone, or nothing. */
 export type CardLink =
   | { to: "/channel/$channelId"; params: { channelId: string } }
   | { to: "/group/$channelId"; params: { channelId: string } }
@@ -380,7 +393,7 @@ export type CardLink =
 /**
  * Spec A6 ("查看详情 enters the run's own conversation"), decided from the server's `open` field.
  *
- * A server without the field gets the old link back rather than none: hiding every 打开 the moment
+ * A server without the field gets the old link back rather than none: hiding every 查看详情 the moment
  * the screen ships ahead of its server would trade a link that sometimes lands for one that never
  * appears. An unknown kind draws nothing — the enum is server-owned, and a guessed route is the dead
  * link this exists to stop drawing.
@@ -418,7 +431,7 @@ function CardOpenLink({ task }: { task: Task }) {
         search={link.search}
         className="underline opacity-80"
       >
-        打开
+        查看详情
       </Link>
     );
   }
@@ -429,7 +442,7 @@ function CardOpenLink({ task }: { task: Task }) {
         params={link.params}
         className="underline opacity-80"
       >
-        打开
+        查看详情
       </Link>
     );
   }
@@ -440,7 +453,7 @@ function CardOpenLink({ task }: { task: Task }) {
         params={link.params}
         className="underline opacity-80"
       >
-        打开
+        查看详情
       </Link>
     );
   }
@@ -450,7 +463,7 @@ function CardOpenLink({ task }: { task: Task }) {
       params={link.params}
       className="underline opacity-80"
     >
-      打开
+      查看详情
     </Link>
   );
 }
@@ -699,6 +712,15 @@ function TasksPage() {
   } = boardSearch(Route.useSearch());
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
+  /*
+   * F5: whether the address's machine is one of this person's own. Asked only of a list that has
+   * answered -- loading or failed leaves it unknown, so the board never says the Wakers are resting
+   * on the strength of a read that has not come back.
+   */
+  const machineRegistered =
+    machineId && machines.isSuccess
+      ? machines.data.some((machine) => machine.deviceId === machineId)
+      : undefined;
   /*
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
@@ -1050,7 +1072,13 @@ function TasksPage() {
            */}
           {list.length === 0 && !readFailed ? (
             <li className="py-10 text-center text-sm opacity-50">
-              {boardEmptySentence({ machineId, crew, status, q: search })}
+              {boardEmptySentence({
+                machineId,
+                crew,
+                status,
+                q: search,
+                machineRegistered,
+              })}
             </li>
           ) : null}
         </ul>
@@ -1096,7 +1124,13 @@ function TasksPage() {
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)
                 ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
-                : boardEmptySentence({ machineId, crew, status, q: search })}
+                : boardEmptySentence({
+                    machineId,
+                    crew,
+                    status,
+                    q: search,
+                    machineRegistered,
+                  })}
             </p>
           ) : null}
         </>
