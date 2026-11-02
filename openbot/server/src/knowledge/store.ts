@@ -816,7 +816,9 @@ export function createKnowledgeStore(database: Database) {
       assertFrame(actorId);
       if (!(await ownsWaker(actorId, agentId)))
         throw new KnowledgeForbiddenError("找不到你的这个 Waker。");
-      return bindingsFor(actorId, agentId);
+      // Awaited here, not returned: on Bun 1.3.14 a query builder returned from an async function
+      // after an earlier await runs outside the caller's tenant frame, so RLS shows it nothing.
+      return await bindingsFor(actorId, agentId);
     },
 
     /**
