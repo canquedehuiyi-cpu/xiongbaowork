@@ -436,7 +436,9 @@ test("delete waits for 204 and a fresh summary, invalidates routine caches and b
     expect(screen.queryClient.getQueryState(routineKeys.runs(id))?.isInvalidated).toBe(true);
     // An inactive second agent proves family invalidation, not just this view.
     expect(screen.queryClient.getQueryState(inactiveKey)?.isInvalidated).toBe(true);
-    expect(screen.queryClient.getQueryData(inactiveKey)).toEqual(inactiveSummary);
+    // The untagged key infers `undefined`; widen so the assertion compares real cached data.
+    const inactiveCached: unknown = screen.queryClient.getQueryData(inactiveKey);
+    expect(inactiveCached).toEqual(inactiveSummary);
     // DELETE has acknowledged, but the summary still has not answered.
     await userEvent.click(button);
     expect(writes()).toHaveLength(1);
