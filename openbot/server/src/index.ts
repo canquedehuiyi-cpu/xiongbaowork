@@ -59,6 +59,7 @@ import {
   questionConversationBot,
 } from "./approvals/questions";
 import {
+  ApprovalRecoveryBlockedError,
   type ApprovalResumeDependencies,
   createApprovalService,
 } from "./approvals/service";
@@ -211,6 +212,13 @@ import { createPersonaRoutes } from "./personas/routes";
 import { createPersonaTemplateStore } from "./personas/store";
 import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
+import {
+  APPROVAL_RESUME_GATED_REASON,
+  abandonedWorkPhases,
+  RECOVERY_PURGE_AFTER_MS,
+  RECOVERY_SWEEP_KIND,
+  sweepAbandonedWork,
+} from "./recovery/abandoned-work";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
 import { useRoutineTools } from "./plugins/builtin-routines";
@@ -669,14 +677,9 @@ await startupLifecycle.run(async (startup) => {
   const storedApprovals = createApprovalStore(database, taskProjector);
 
   /*
-   * `taskProjector.reclaimAbandoned` exists and is tested, and it is deliberately NOT started here.
-   *
-   * A module-level timer that updates every tenant's stale unattended cards is a side effect of
-   * importing this file — and this file is imported by dozens of test files, several of which assert
-   * against `tasks`. The full server suite grew from 45 failures to 58 the day this line was added,
-   * which is the suspicion to settle before it goes back; the safer home is beside the run reaper in
-   * `routines/sweep.ts`, whose sweep is started where routines are enabled rather than at import, and
-   * whose predicate can check the ledger row before touching the card.
+   * Restart recovery (`taskProjector.reclaimAbandoned` and the run reapers) is started below, once the
+   * pipeline store exists — inside `startup.acquireSync`, so importing this file never starts a timer.
+   * See `recovery/abandoned-work.ts`.
    */
   const approvalService = createApprovalService(
     {
@@ -2042,6 +2045,78 @@ await startupLifecycle.run(async (startup) => {
     quota,
   });
 
+  /*
+   * Restart recovery (audit defect #10): close what a dead process left "in progress".
+   *
+   * Every replica runs this; the work-queue lease in `sweepAbandonedWork` lets one replica per
+   * five-minute bucket do the work, and every phase is a conditional, database-clocked UPDATE that a
+   * second runner would find nothing for. Nothing is replayed: abandoned routine firings are closed as
+   * skipped, abandoned crew runs and their cards as failed, and stale routine/responsibility cards as
+   * failed, each in the tenant recorded on its own row. Approved-action resume is NOT part of this —
+   * it stays gated on a Root-attested release (see the `approval.resume` loop below).
+   */
+  const recoveryQueue = createWorkQueue(database);
+  const recoveryOwner = workOwner("recovery");
+  const recoveryPhases = abandonedWorkPhases({
+    routineStore,
+    reapPipelineRuns: (input) => pipelineStore.reapAbandoned(input),
+    board: taskProjector,
+  });
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          const report = await sweepAbandonedWork({
+            queue: recoveryQueue,
+            owner: recoveryOwner,
+            phases: recoveryPhases,
+          });
+          if (
+            report.won &&
+            (report.routineRuns ||
+              report.pipelineRuns ||
+              report.cards ||
+              report.failed.length ||
+              report.leaseLost)
+          )
+            console.warn(
+              JSON.stringify({ type: "restart-recovery-sweep", ...report }),
+            );
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "restart-recovery-sweep-error",
+              error: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
+  );
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(
+        async () => {
+          try {
+            await recoveryQueue.purge({
+              kind: RECOVERY_SWEEP_KIND,
+              olderThanMs: RECOVERY_PURGE_AFTER_MS,
+            });
+          } catch (error) {
+            console.warn(
+              JSON.stringify({
+                type: "restart-recovery-purge-failed",
+                reason: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          }
+        },
+        60 * 60 * 1_000,
+      ),
+    (resource) => resource.stop(),
+  );
+
   /**
    * The runtime, and the two things beside it a hop needs.
    *
@@ -2543,6 +2618,22 @@ await startupLifecycle.run(async (startup) => {
             throw error;
           }
         } catch (error) {
+          /*
+           * Named, so an operator can tell this from a fault: resuming an approved action after the
+           * decision needs the local continuation recovery port, which is composed only from a
+           * Root-verified release attestation. This deployment has none, and the server never
+           * fabricates one (`approvals/local-recovery-composition.ts`), so the refusal is expected.
+           */
+          if (error instanceof ApprovalRecoveryBlockedError) {
+            console.warn(
+              JSON.stringify({
+                type: "approval-resume-gated",
+                reason: APPROVAL_RESUME_GATED_REASON,
+                timestamp: new Date().toISOString(),
+              }),
+            );
+            return;
+          }
           console.error(
             JSON.stringify({
               type: "approval-resume-error",

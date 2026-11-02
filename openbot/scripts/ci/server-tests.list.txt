@@ -277,6 +277,8 @@ tests/responsibilities-store.integration.test.ts
 tests/responsibility-trigger-tools.test.ts
 tests/responsibility-triggers.integration.test.ts
 tests/responsibility-triggers.test.ts
+tests/restart-recovery-sweep.integration.test.ts
+tests/restart-recovery-sweep.test.ts
 tests/rls-role.test.ts
 tests/rls-write-scope.test.ts
 tests/role-writer-lifecycle.test.ts
