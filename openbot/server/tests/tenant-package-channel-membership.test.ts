@@ -49,11 +49,13 @@ const applyPackage = () =>
     synchronizeTenantPackage(database, loaded, [person]),
   );
 
-await database.insert(users).values({
-  id: person,
-  email: `${person}@example.test`,
-  name: "Package channel fixture",
-});
+await runAsTenant(person, () =>
+  database.insert(users).values({
+    id: person,
+    email: `${person}@example.test`,
+    name: "Package channel fixture",
+  }),
+);
 await applyPackage();
 
 afterAll(async () => {
@@ -75,7 +77,9 @@ afterAll(async () => {
         ]),
       );
   });
-  await database.delete(users).where(eq(users.id, person));
+  await runAsTenant(person, () =>
+    database.delete(users).where(eq(users.id, person)),
+  );
   await database.$client.close();
 });
 

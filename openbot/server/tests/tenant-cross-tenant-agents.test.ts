@@ -36,14 +36,16 @@ const stranger = `agent-tenant-${suite}-stranger`;
  * stranger's 404 ends up being asserted about a coworker that was never created.
  */
 async function ensureUser(tenantId: string) {
-  await database
-    .insert(users)
-    .values({
-      id: tenantId,
-      email: `${tenantId}@example.test`,
-      name: "Cross-tenant coworker fixture",
-    })
-    .onConflictDoNothing();
+  await runAsTenant(tenantId, () =>
+    database
+      .insert(users)
+      .values({
+        id: tenantId,
+        email: `${tenantId}@example.test`,
+        name: "Cross-tenant coworker fixture",
+      })
+      .onConflictDoNothing(),
+  );
 }
 
 await Promise.all([ensureUser(owner), ensureUser(stranger)]);
@@ -112,8 +114,12 @@ afterAll(async () => {
       .where(eq(agentProfiles.ownerUserId, owner));
     await database.delete(agents).where(eq(agents.tenantId, owner));
   });
-  await database.delete(users).where(eq(users.id, owner));
-  await database.delete(users).where(eq(users.id, stranger));
+  await runAsTenant(owner, () =>
+    database.delete(users).where(eq(users.id, owner)),
+  );
+  await runAsTenant(stranger, () =>
+    database.delete(users).where(eq(users.id, stranger)),
+  );
 });
 
 let privateAgentId = "";

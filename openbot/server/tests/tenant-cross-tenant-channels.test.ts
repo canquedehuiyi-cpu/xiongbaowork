@@ -99,11 +99,13 @@ let seenByStrangerDirectly: string | undefined;
 
 beforeAll(async () => {
   for (const tenantId of [owner, stranger]) {
-    await database.insert(users).values({
-      id: tenantId,
-      email: `${tenantId}@example.test`,
-      name: "Cross-tenant channel fixture",
-    });
+    await runAsTenant(tenantId, () =>
+      database.insert(users).values({
+        id: tenantId,
+        email: `${tenantId}@example.test`,
+        name: "Cross-tenant channel fixture",
+      }),
+    );
   }
 
   const coworker = await profileStore.create(
@@ -133,19 +135,22 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const id of channelIds) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, id));
-    await database.delete(channels).where(eq(channels.id, id));
-  }
-  for (const id of agentIds) {
-    await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
-    await database.delete(agents).where(eq(agents.id, id));
-  }
-  for (const id of [owner, stranger]) {
-    await database.delete(users).where(eq(users.id, id));
-  }
+  // Cleanup reaches whichever partition the fixture landed in, and two people's rows: the platform.
+  await runAsTenant("platform", async () => {
+    for (const id of channelIds) {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, id));
+      await database.delete(channels).where(eq(channels.id, id));
+    }
+    for (const id of agentIds) {
+      await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
+      await database.delete(agents).where(eq(agents.id, id));
+    }
+    for (const id of [owner, stranger]) {
+      await database.delete(users).where(eq(users.id, id));
+    }
+  });
 });
 
 test("the owner reads the channel, and a stranger can see the row in the database", async () => {
