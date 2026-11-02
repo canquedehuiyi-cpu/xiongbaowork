@@ -2601,8 +2601,6 @@ await startupLifecycle.run(async (startup) => {
               JSON.stringify({
                 type: "approval-resume-gated",
                 reason: APPROVAL_RESUME_GATED_REASON,
-                key: item.key,
-                tenantId: item.tenantId,
                 timestamp: new Date().toISOString(),
               }),
             );
