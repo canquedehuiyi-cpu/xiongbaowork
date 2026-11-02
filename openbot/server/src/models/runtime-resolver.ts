@@ -8,6 +8,12 @@ import type { CredentialSecretReader } from "../credentials";
 import { decryptSecret } from "../credentials";
 import type { Database } from "../db/client";
 import { agentProfiles, modelRegistry } from "../db/schema";
+import {
+  databaseTokenCallSink,
+  type ModelTokenCallSink,
+  meteredLanguageModel,
+  sha256Hex,
+} from "./token-metering";
 
 /**
  * Per-coworker model binding (ticket 012): the profile's `model_ref` decides
@@ -23,6 +29,9 @@ export type AgentModelResolver = (
 
 /** What a coworker is bound to, before the key behind it is touched. */
 type Binding = {
+  /** The tenant stamped on the binding's own rows; metering is written under it. */
+  tenantId: string;
+  modelRef: string;
   provider: string;
   baseUrl: string | null;
   modelName: string;
@@ -100,6 +109,8 @@ async function bindingFor(
   if (!entry?.enabled || !entry.credentialId) return null;
   if (entry.tenantId !== profile.tenantId) return null;
   return {
+    tenantId: entry.tenantId,
+    modelRef: profile.modelRef,
     provider: entry.provider,
     baseUrl: entry.baseUrl,
     modelName: entry.modelName,
@@ -125,10 +136,15 @@ export async function boundModelName(
   }
 }
 
+/**
+ * Every call a bound model makes is metered into `model_token_calls` (see `./token-metering`).
+ * `sink` exists for tests; production writes to the same database the binding was read from.
+ */
 export function createAgentModelResolver(
   database: Database,
   credentials: CredentialSecretReader,
   encryptionKey: string,
+  sink: ModelTokenCallSink = databaseTokenCallSink(database),
 ): AgentModelResolver {
   return async (agentId) => {
     const binding = await bindingFor(database, agentId).catch(() => null);
@@ -139,11 +155,35 @@ export function createAgentModelResolver(
     if (!secret || secret.revokedAt) return null;
     try {
       const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
-      return languageModelFor(
-        binding.provider,
-        binding.baseUrl,
-        binding.modelName,
-        apiKey,
+      const originalText = `${binding.provider}/${binding.modelName}`;
+      return meteredLanguageModel(
+        languageModelFor(
+          binding.provider,
+          binding.baseUrl,
+          binding.modelName,
+          apiKey,
+        ),
+        {
+          tenantId: binding.tenantId,
+          agentId,
+          modelRef: binding.modelRef,
+          provider: binding.provider,
+          modelName: binding.modelName,
+          credentialId: binding.credentialId,
+          // Of the stored ciphertext, so it moves when the key is rotated and never sees the key.
+          credentialDigest: sha256Hex(
+            `${binding.credentialId}:${secret.encryptedValue}`,
+          ),
+          originalModelFingerprint: sha256Hex(
+            JSON.stringify([
+              binding.provider,
+              binding.baseUrl,
+              binding.modelName,
+            ]),
+          ),
+          originalText,
+        },
+        sink,
       );
     } catch {
       // A bad key costs the binding, not the conversation.

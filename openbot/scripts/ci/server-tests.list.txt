@@ -183,6 +183,7 @@ tests/mobile-links.test.ts
 tests/model-library-routes.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
+tests/model-token-metering.test.ts
 tests/oauth-refresh-redirect.test.ts
 tests/offboarding-retirement.integration.test.ts
 tests/onboarding-routes.test.ts
