@@ -17,12 +17,20 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * it also WRITES them, and a `system` row is one every tenant can read, so background work that
  * forgot its frame filed a person's results where everybody could see them. It goes away in
  * follow-up G01-D, when `currentTenant()` throws outside a frame the way `requireTenant()` does now.
+ *
+ * THE ROAD THERE (G01-D, step one). `OPENBOT_TENANT_FRAME_GUARD` decides what an unframed read of
+ * the tenant does, so offenders can be found before the fallback is removed:
+ *   - unset / `off`: the legacy `system` answer, silently. Production today.
+ *   - `report`: still `system`, but each distinct call site is written once to stderr as a
+ *     `tenant-unframed-access` line with the stack that reached it. CI's server shards run this
+ *     way, so the logs list every remaining offender without failing anything.
+ *   - `throw`: a `TenantContextError`, exactly what G01-D makes the only behaviour. Run a test file
+ *     with it to prove that file is clean.
+ * The escape for work that genuinely belongs to nobody is NOT the fallback: it is an explicit
+ * `runAsTenant("platform", ...)` (a question across tenants, or a deployment row) or, for the
+ * catalogue rows every tenant must read, `runAsTenant("system", ...)`, at the call site.
  */
 const store = new AsyncLocalStorage<string>();
-
-export function currentTenant(): string {
-  return store.getStore() ?? "system";
-}
 
 /**
  * The tenant frame exactly as it stands: `undefined` outside any `runAsTenant`, unlike
@@ -40,6 +48,67 @@ export function tenantFrame(): string | undefined {
 /** No trusted tenant to act as: outside any frame, a row that names nobody, or the wrong person. */
 export class TenantContextError extends Error {
   override name = "TenantContextError";
+}
+
+export type TenantFrameGuard = "off" | "report" | "throw";
+
+/** Read at call time, so a test can switch it for one case and restore it. */
+export function tenantFrameGuard(
+  env: Record<string, string | undefined> = process.env,
+): TenantFrameGuard {
+  const value = env.OPENBOT_TENANT_FRAME_GUARD?.trim().toLowerCase();
+  return value === "report" || value === "throw" ? value : "off";
+}
+
+const reportedSites = new Set<string>();
+const REPORTED_SITES_LIMIT = 1000;
+
+/** The first stack frame outside this module and the database client: who forgot the frame. */
+function unframedCallSite(stack: string | undefined): string {
+  const frames = (stack ?? "").split("\n").slice(1);
+  const caller = frames.find(
+    (line) =>
+      !/tenant[\\/]context\.ts|db[\\/]client\.ts|node_modules|node:/.test(line),
+  );
+  return (caller ?? frames[0] ?? "unknown").trim();
+}
+
+/**
+ * Forget which call sites were reported. For the guard's own test: a CI shard runs every file in one
+ * process under `report`, so by the time that test runs the cap may already be spent by others.
+ */
+export function forgetReportedUnframedSites() {
+  reportedSites.clear();
+}
+
+function reportUnframed(error: Error) {
+  const site = unframedCallSite(error.stack);
+  if (reportedSites.has(site) || reportedSites.size >= REPORTED_SITES_LIMIT)
+    return;
+  reportedSites.add(site);
+  // stderr rather than console.warn: a test that spies on the console must not see the guard.
+  process.stderr.write(
+    `${JSON.stringify({
+      type: "tenant-unframed-access",
+      site,
+      stack: (error.stack ?? "")
+        .split("\n")
+        .slice(1, 9)
+        .map((line) => line.trim()),
+    })}\n`,
+  );
+}
+
+export function currentTenant(): string {
+  const tenant = store.getStore();
+  if (tenant !== undefined) return tenant;
+  const guard = tenantFrameGuard();
+  if (guard === "throw")
+    throw new TenantContextError(
+      "no tenant frame (OPENBOT_TENANT_FRAME_GUARD=throw): run this inside runAsTenant",
+    );
+  if (guard === "report") reportUnframed(new Error("unframed tenant read"));
+  return "system";
 }
 
 export function isTenantFramed(): boolean {

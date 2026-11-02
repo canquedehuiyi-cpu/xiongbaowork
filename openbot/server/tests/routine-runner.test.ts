@@ -34,6 +34,8 @@ const OWNER: AgentActor = { id: "user_owner", role: "user" };
 const CONTEXT: RoutineRunContext = {
   routineId: "routine_1",
   ownerUserId: "user_owner",
+  // The routine's own stamp: its owner's, which is the only one the runner will act as (G01-C).
+  tenantId: "user_owner",
   agentId: "bot_helper",
   channelId: "channel_1",
   instruction: "Post the standup summary.",

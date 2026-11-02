@@ -1188,19 +1188,23 @@ export function createApp(
          */
         if (auditStore) {
           try {
-            await recordAuditEvent(auditStore, {
-              eventType: "routines.dispatch_refused",
-              targetType: "worker",
-              initiator: DEPLOYMENT_INITIATOR,
-              payload: {
-                reason: !expected
-                  ? "unconfigured"
-                  : !offered
-                    ? "missing-header"
-                    : "mismatch",
-                note: "A worker's bearer secret did not check out, so no routine run was dispatched.",
-              },
-            });
+            // Nobody's row, so written as `platform` like `mcp.callback_refused`: unframed it was
+            // `system`, which every tenant's trail shows (G01-C).
+            await runAsTenant("platform", () =>
+              recordAuditEvent(auditStore, {
+                eventType: "routines.dispatch_refused",
+                targetType: "worker",
+                initiator: DEPLOYMENT_INITIATOR,
+                payload: {
+                  reason: !expected
+                    ? "unconfigured"
+                    : !offered
+                      ? "missing-header"
+                      : "mismatch",
+                  note: "A worker's bearer secret did not check out, so no routine run was dispatched.",
+                },
+              }),
+            );
           } catch (error) {
             // Never fatal: the 401 above is already decided and sent. A trail that is briefly
             // unavailable is not a reason to turn a refusal into a 500.

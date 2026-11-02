@@ -336,6 +336,7 @@ tests/tenant-cross-tenant-agents.test.ts
 tests/tenant-cross-tenant-approvals.test.ts
 tests/tenant-cross-tenant-attachments.test.ts
 tests/tenant-cross-tenant-channels.test.ts
+tests/tenant-frame-guard.test.ts
 tests/tenant-frame-returned-builder.test.ts
 tests/tenant-package-agent-files.test.ts
 tests/tenant-package-channel-membership.test.ts

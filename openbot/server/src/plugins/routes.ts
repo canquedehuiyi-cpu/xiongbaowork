@@ -4,6 +4,7 @@ import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { reasonWithoutStatement } from "../db/query-failure";
+import { isPersonTenant, runAsTenant } from "../tenant/context";
 import {
   type BrokerApp,
   type BrokerField,
@@ -2010,6 +2011,21 @@ export function createPluginRoutes(
       if (!code || !state) return context.redirect(failed);
 
       /*
+       * WHOSE FRAME THIS RUNS IN IS THE SEALED STATE'S PERSON, AND NOBODY ELSE'S (G01).
+       *
+       * There is no session here, so no guard opened a tenant frame, and without one every read and
+       * write below ran as `system`: the person's refresh token and their connection row were filed
+       * where every tenant can read them, and the swap looked for their existing grant in a partition
+       * it is not in. The state was sealed by this deployment for one person at connect time, so it
+       * is the trusted claim, and everything that touches the database runs as that person — exactly
+       * the frame the connect route that sealed it ran in. A state naming nobody (`system`,
+       * `platform`, empty) cannot have been sealed by that route, and fails like a forged one.
+       */
+      const userId = state.userId;
+      if (!isPersonTenant(userId)) return context.redirect(failed);
+      const asPerson = <T>(work: () => Promise<T>) => runAsTenant(userId, work);
+
+      /*
        * Is the person in the state still somebody here?
        *
        * Asked here, before the code is redeemed and before anything is written, because a state is
@@ -2022,14 +2038,14 @@ export function createPluginRoutes(
        * The same anonymous failure as an unreadable state. Whether an address is deny-listed is not a
        * fact this endpoint owes an unauthenticated caller.
        */
-      if (!(await connect.personHasAccess(state.userId))) {
+      if (!(await asPerson(() => connect.personHasAccess(userId)))) {
         return context.redirect(failed);
       }
 
       const entry = catalogueEntry(state.serverId);
       if (entry?.auth.kind !== "user-oauth") return context.redirect(failed);
 
-      const client = await store.oauthClientFor(state.serverId);
+      const client = await asPerson(() => store.oauthClientFor(state.serverId));
       if (!client) return context.redirect(failed);
 
       const grant = await redeemAuthorizationCode({
@@ -2055,12 +2071,14 @@ export function createPluginRoutes(
        * logged: it is the one thing here worth stealing, and the row it belonged to was never written.
        */
       try {
-        await store.recordConnection({
-          serverId: state.serverId,
-          userId: state.userId,
-          refreshToken: grant.refreshToken,
-          scope: grant.scope,
-        });
+        await asPerson(() =>
+          store.recordConnection({
+            serverId: state.serverId,
+            userId,
+            refreshToken: grant.refreshToken,
+            scope: grant.scope,
+          }),
+        );
       } catch (error) {
         console.error(
           JSON.stringify({
