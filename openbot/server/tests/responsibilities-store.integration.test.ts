@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import {
@@ -178,7 +178,16 @@ test("pause before dispatch prevents the selected Bot from being run", () =>
     const runId = result.runIds[0];
     if (!runId) throw new Error("Expected a queued run.");
     await store.transition(ownerId, value.id, "paused");
+    const dbg = async (label: string) => {
+      const seen = await database.execute(sql`select current_setting('app.tenant_id', true) as t`);
+      const all = await runAsTenant("platform", () => database.execute(sql`select tenant_id, status from responsibility_runs where responsibility_id = ${value.id}`));
+      const goalRow = await runAsTenant("platform", () => database.execute(sql`select tenant_id, status from responsibilities where id = ${value.id}`));
+      console.log("DBG", label, JSON.stringify({ seen: Array.from(seen as any), runs: Array.from(all as any), goal: Array.from(goalRow as any) }));
+    };
+    await dbg("after-pause");
     expect(await store.beginRun(runId)).toBeNull();
+    await dbg("after-begin");
+    console.log("DBG listRuns", JSON.stringify(await store.listRuns(ownerId, value.id)));
     expect((await store.listRuns(ownerId, value.id))[0]?.status).toBe(
       "skipped",
     );
