@@ -35,15 +35,21 @@ test("a turn does not start while the pause cannot be read", async () => {
   configureBotLifecycle({ database });
   state.fail = true;
   await expect(
-    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+    runAsTenant("ada", () =>
+      guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+    ),
   ).rejects.toBeInstanceOf(BotPausedError);
 });
 
 test("one failed read in the watcher leaves running turns alone", async () => {
   const { database, state } = flakyDatabase();
   configureBotLifecycle({ database });
-  const ada = await guardBotTurn({ ownerUserId: "ada", agentId: "bot" });
-  const grace = await guardBotTurn({ ownerUserId: "grace", agentId: "other" });
+  const ada = await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
+  const grace = await runAsTenant("grace", () =>
+    guardBotTurn({ ownerUserId: "grace", agentId: "other" }),
+  );
 
   state.fail = true;
   await checkRunningTurnsForTests();
@@ -62,13 +68,17 @@ test("one failed read in the watcher leaves running turns alone", async () => {
 test("a database that stays unreadable stops the turns, and a pause stops them at once", async () => {
   const { database, state } = flakyDatabase();
   configureBotLifecycle({ database });
-  const signal = await guardBotTurn({ ownerUserId: "ada", agentId: "bot" });
+  const signal = await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
   state.fail = true;
   for (let check = 0; check < 3; check += 1) await checkRunningTurnsForTests();
   expect(signal.aborted).toBe(true);
 
   state.fail = false;
-  const next = await guardBotTurn({ ownerUserId: "ada", agentId: "bot" });
+  const next = await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
   state.pausedAt = new Date();
   await checkRunningTurnsForTests();
   expect(next.aborted).toBe(true);

@@ -10,6 +10,7 @@ import { type ApprovalCandidate, approvalAction } from "../src/approvals/types";
 import { createDatabase } from "../src/db/client";
 import { approvalRequests, approvalRules, users } from "../src/db/schema";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -91,10 +92,13 @@ let requestId = "";
 let ruleId = "";
 
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: stranger, email: `${stranger}@example.test` },
-  ]);
+  // Two people's rows in one statement: a fixture across tenants, so the platform's frame.
+  await runAsTenant("platform", () =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: stranger, email: `${stranger}@example.test` },
+    ]),
+  );
   await store.setEnabled(owner, true);
   const request = await store.open(approvalAction(candidate(owner)));
   if (!request) throw new Error("Expected an approval request to open.");
@@ -120,23 +124,26 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await database
-    .delete(approvalRules)
-    .where(eq(approvalRules.ownerUserId, owner));
-  await database
-    .delete(approvalRequests)
-    .where(eq(approvalRequests.ownerUserId, owner));
-  if (queueKeys.length) {
+  // Cleanup reaches whichever partition the fixture landed in, and two people's rows: the platform.
+  await runAsTenant("platform", async () => {
     await database
-      .delete(workItems)
-      .where(
-        and(
-          eq(workItems.kind, "approval.resume"),
-          inArray(workItems.key, queueKeys),
-        ),
-      );
-  }
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+      .delete(approvalRules)
+      .where(eq(approvalRules.ownerUserId, owner));
+    await database
+      .delete(approvalRequests)
+      .where(eq(approvalRequests.ownerUserId, owner));
+    if (queueKeys.length) {
+      await database
+        .delete(workItems)
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            inArray(workItems.key, queueKeys),
+          ),
+        );
+    }
+    await database.delete(users).where(inArray(users.id, [owner, stranger]));
+  });
 });
 
 test("the owner's inbox holds the request, so the refusals below are about tenancy", async () => {
@@ -169,22 +176,26 @@ test("a stranger's decision on that request is a 404, and their rule revoke is a
 });
 
 test("nothing moved: the request is still pending and the rule is still granted", async () => {
-  const [row] = await database
-    .select({
-      status: approvalRequests.status,
-      decision: approvalRequests.decision,
-    })
-    .from(approvalRequests)
-    .where(eq(approvalRequests.id, requestId))
-    .limit(1);
+  const [row] = await runAsTenant(owner, () =>
+    database
+      .select({
+        status: approvalRequests.status,
+        decision: approvalRequests.decision,
+      })
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, requestId))
+      .limit(1),
+  );
   expect(row?.status).toBe("pending");
   expect(row?.decision).toBeNull();
 
-  const [rule] = await database
-    .select({ revokedAt: approvalRules.revokedAt })
-    .from(approvalRules)
-    .where(eq(approvalRules.id, ruleId))
-    .limit(1);
+  const [rule] = await runAsTenant(owner, () =>
+    database
+      .select({ revokedAt: approvalRules.revokedAt })
+      .from(approvalRules)
+      .where(eq(approvalRules.id, ruleId))
+      .limit(1),
+  );
   expect(rule?.revokedAt).toBeNull();
 
   // The owner can still decide it, which is the answer a refusal must not have consumed.

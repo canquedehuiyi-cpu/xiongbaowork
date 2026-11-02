@@ -41,6 +41,7 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -762,31 +763,39 @@ const createdChannelIds: string[] = [];
 const createdPackageIds: string[] = [];
 
 afterEach(async () => {
-  for (const channelId of createdChannelIds.splice(0)) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, channelId));
-    await database.delete(channels).where(eq(channels.id, channelId));
-  }
-  for (const packageId of createdPackageIds.splice(0)) {
-    await database
-      .delete(deploymentPackages)
-      .where(eq(deploymentPackages.id, packageId));
-  }
-  for (const agentId of createdAgentIds.splice(0)) {
-    await database
-      .delete(agentProfiles)
-      .where(eq(agentProfiles.agentId, agentId));
-    await database.delete(agents).where(eq(agents.id, agentId));
-  }
-  for (const userId of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, userId));
-  }
+  // Cleanup spans several people's rows and deployment rows, which only the platform reaches.
+  await runAsTenant("platform", async () => {
+    for (const channelId of createdChannelIds.splice(0)) {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, channelId));
+      await database.delete(channels).where(eq(channels.id, channelId));
+    }
+    for (const packageId of createdPackageIds.splice(0)) {
+      await database
+        .delete(deploymentPackages)
+        .where(eq(deploymentPackages.id, packageId));
+    }
+    for (const agentId of createdAgentIds.splice(0)) {
+      await database
+        .delete(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId));
+      await database.delete(agents).where(eq(agents.id, agentId));
+    }
+    for (const userId of createdUserIds.splice(0)) {
+      await database.delete(users).where(eq(users.id, userId));
+    }
+  });
 });
 
 afterAll(async () => {
   await database.$client.close();
 });
+
+/** As a signed-in request runs: inside the person's own tenant. */
+function as<T>(actor: AgentActor, work: () => T): T {
+  return runAsTenant(actor.id, work);
+}
 
 function persistentId(kind: string) {
   return `${testPrefix}-${kind}-${randomUUID()}`;
@@ -794,11 +803,13 @@ function persistentId(kind: string) {
 
 async function createPersistentUser(): Promise<AgentActor> {
   const userId = persistentId("user");
-  await database.insert(users).values({
-    id: userId,
-    email: `${userId}@example.test`,
-    name: "Channel Store Test User",
-  });
+  await runAsTenant(userId, () =>
+    database.insert(users).values({
+      id: userId,
+      email: `${userId}@example.test`,
+      name: "Channel Store Test User",
+    }),
+  );
   createdUserIds.push(userId);
   return { id: userId, role: "user" };
 }
@@ -848,8 +859,9 @@ async function persistedChannel(channelId: string) {
   return { channelRow, memberships, linkedAgents, mappings };
 }
 
+/** Every row of the channel tables, whoever's: read as the platform. */
 async function channelTableSnapshot() {
-  return {
+  return runAsTenant("platform", async () => ({
     channels: (await database.select({ id: channels.id }).from(channels))
       .map(({ id }) => id)
       .sort(),
@@ -887,40 +899,49 @@ async function channelTableSnapshot() {
           `${channelId}:${threadId}:${userId}`,
       )
       .sort(),
-  };
+  }));
 }
 
 describe("channel store integration", () => {
   test("reads the creator's persisted channel exactly", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Historical agent",
-      owner: actor,
-    });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Historical agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
 
-    expect(await persistentStore.get(actor, created.id)).toEqual(created);
+      expect(await persistentStore.get(actor, created.id)).toEqual(created);
+    });
   });
 
   test("does not expose a member's channel to another user through public agents", async () => {
     const creator = await createPersistentUser();
     const otherUser = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Public historical agent",
-      owner: creator,
-      visibility: "public",
-    });
-    const created = await persistentStore.create(creator, [agentId]);
+    const agentId = await as(creator, () =>
+      createPersistentAgent({
+        name: "Public historical agent",
+        owner: creator,
+        visibility: "public",
+      }),
+    );
+    const created = await as(creator, () =>
+      persistentStore.create(creator, [agentId]),
+    );
     createdChannelIds.push(created.id);
     const otherUserMiddleware: MiddlewareHandler<{
       Variables: AppVariables;
     }> = async (context, next) => {
       context.set("actor", otherUser);
-      await next();
+      // As `requireUser` in production: the request runs inside the signed-in person's tenant.
+      await as(otherUser, () => next());
     };
 
-    expect(await persistentStore.get(otherUser, created.id)).toBeNull();
+    expect(
+      await as(otherUser, () => persistentStore.get(otherUser, created.id)),
+    ).toBeNull();
     const response = await appFor(persistentStore, otherUserMiddleware).request(
       `http://openbot.test/${created.id}`,
     );
@@ -930,173 +951,185 @@ describe("channel store integration", () => {
 
   test("reads linked agent IDs in lexicographic order", async () => {
     const actor = await createPersistentUser();
-    const agentIdBase = persistentId("ordered-agent");
-    const laterAgentId = await createPersistentAgent({
-      id: `${agentIdBase}-zulu`,
-      name: "Zulu",
-      owner: actor,
-    });
-    const earlierAgentId = await createPersistentAgent({
-      id: `${agentIdBase}-alpha`,
-      name: "Alpha",
-      owner: actor,
-    });
-    const created = await persistentStore.create(actor, [
-      laterAgentId,
-      earlierAgentId,
-    ]);
-    createdChannelIds.push(created.id);
+    await as(actor, async () => {
+      const agentIdBase = persistentId("ordered-agent");
+      const laterAgentId = await createPersistentAgent({
+        id: `${agentIdBase}-zulu`,
+        name: "Zulu",
+        owner: actor,
+      });
+      const earlierAgentId = await createPersistentAgent({
+        id: `${agentIdBase}-alpha`,
+        name: "Alpha",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [
+        laterAgentId,
+        earlierAgentId,
+      ]);
+      createdChannelIds.push(created.id);
 
-    expect((await persistentStore.get(actor, created.id))?.agentIds).toEqual(
-      [earlierAgentId, laterAgentId].sort(),
-    );
+      expect((await persistentStore.get(actor, created.id))?.agentIds).toEqual(
+        [earlierAgentId, laterAgentId].sort(),
+      );
+    });
   });
 
   test("keeps a historical channel readable but inactive after a linked profile is deleted", async () => {
     const actor = await createPersistentUser();
-    const activeAgentId = await createPersistentAgent({
-      name: "Active historical agent",
-      owner: actor,
-    });
-    const deletedAgentId = await createPersistentAgent({
-      name: "Deleted historical agent",
-      owner: actor,
-    });
-    const created = await persistentStore.create(
-      actor,
-      [activeAgentId, deletedAgentId].sort(),
-    );
-    createdChannelIds.push(created.id);
-    await profileStore.softDelete(actor, deletedAgentId);
+    await as(actor, async () => {
+      const activeAgentId = await createPersistentAgent({
+        name: "Active historical agent",
+        owner: actor,
+      });
+      const deletedAgentId = await createPersistentAgent({
+        name: "Deleted historical agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(
+        actor,
+        [activeAgentId, deletedAgentId].sort(),
+      );
+      createdChannelIds.push(created.id);
+      await profileStore.softDelete(actor, deletedAgentId);
 
-    expect(await persistentStore.get(actor, created.id)).toEqual({
-      ...created,
-      active: false,
+      expect(await persistentStore.get(actor, created.id)).toEqual({
+        ...created,
+        active: false,
+      });
     });
   });
 
   test("returns null when the member's channel mapping is missing", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Unmapped historical agent",
-      owner: actor,
-    });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, created.id));
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Unmapped historical agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, created.id));
 
-    expect(await persistentStore.get(actor, created.id)).toBeNull();
+      expect(await persistentStore.get(actor, created.id)).toBeNull();
+    });
   });
 
   test("creates independent persisted channels for repeated agent selections", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Solo Agent",
-      owner: actor,
-    });
-
-    const first = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(first.id);
-    const second = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(second.id);
-
-    expect(first).toMatchObject({
-      name: "Solo Agent",
-      agentIds: [agentId],
-      active: true,
-    });
-    expect(second).toMatchObject({
-      name: "Solo Agent",
-      agentIds: [agentId],
-      active: true,
-    });
-    expect(first.id).toMatch(/^channel_[0-9a-f-]{36}$/);
-    expect(second.id).toMatch(/^channel_[0-9a-f-]{36}$/);
-    expect(first.id).not.toBe(second.id);
-    expect(first.threadId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(second.threadId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(first.threadId).not.toBe(second.threadId);
-
-    for (const created of [first, second]) {
-      const persisted = await persistedChannel(created.id);
-      expect(persisted.channelRow).toMatchObject({
-        id: created.id,
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
         name: "Solo Agent",
-        description: "Private agent channel.",
-        suggestedPrompts: [],
-        allowedGroups: [],
-        packageId: null,
-        override: null,
+        owner: actor,
       });
-      expect(persisted.memberships).toHaveLength(1);
-      expect(persisted.memberships[0]).toMatchObject({
-        channelId: created.id,
-        userId: actor.id,
+
+      const first = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(first.id);
+      const second = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(second.id);
+
+      expect(first).toMatchObject({
+        name: "Solo Agent",
+        agentIds: [agentId],
+        active: true,
       });
-      expect(persisted.linkedAgents).toHaveLength(1);
-      expect(persisted.linkedAgents[0]).toMatchObject({
-        channelId: created.id,
-        agentId,
+      expect(second).toMatchObject({
+        name: "Solo Agent",
+        agentIds: [agentId],
+        active: true,
       });
-      expect(persisted.mappings).toHaveLength(1);
-      expect(persisted.mappings[0]).toMatchObject({
-        userId: actor.id,
-        channelId: created.id,
-        threadId: created.threadId,
-      });
-    }
+      expect(first.id).toMatch(/^channel_[0-9a-f-]{36}$/);
+      expect(second.id).toMatch(/^channel_[0-9a-f-]{36}$/);
+      expect(first.id).not.toBe(second.id);
+      expect(first.threadId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(second.threadId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(first.threadId).not.toBe(second.threadId);
+
+      for (const created of [first, second]) {
+        const persisted = await persistedChannel(created.id);
+        expect(persisted.channelRow).toMatchObject({
+          id: created.id,
+          name: "Solo Agent",
+          description: "Private agent channel.",
+          suggestedPrompts: [],
+          allowedGroups: [],
+          packageId: null,
+          override: null,
+        });
+        expect(persisted.memberships).toHaveLength(1);
+        expect(persisted.memberships[0]).toMatchObject({
+          channelId: created.id,
+          userId: actor.id,
+        });
+        expect(persisted.linkedAgents).toHaveLength(1);
+        expect(persisted.linkedAgents[0]).toMatchObject({
+          channelId: created.id,
+          agentId,
+        });
+        expect(persisted.mappings).toHaveLength(1);
+        expect(persisted.mappings[0]).toMatchObject({
+          userId: actor.id,
+          channelId: created.id,
+          threadId: created.threadId,
+        });
+      }
+    });
   });
 
   test("persists every canonical agent and derives its name in canonical order", async () => {
     const actor = await createPersistentUser();
-    const firstId = await createPersistentAgent({
-      id: persistentId("agent-a"),
-      name: "Zulu",
-      owner: actor,
-    });
-    const secondId = await createPersistentAgent({
-      id: persistentId("agent-b"),
-      name: "Alpha",
-      owner: actor,
-    });
-    const canonicalAgentIds = [firstId, secondId].sort();
+    await as(actor, async () => {
+      const firstId = await createPersistentAgent({
+        id: persistentId("agent-a"),
+        name: "Zulu",
+        owner: actor,
+      });
+      const secondId = await createPersistentAgent({
+        id: persistentId("agent-b"),
+        name: "Alpha",
+        owner: actor,
+      });
+      const canonicalAgentIds = [firstId, secondId].sort();
 
-    const created = await persistentStore.create(actor, canonicalAgentIds);
-    createdChannelIds.push(created.id);
+      const created = await persistentStore.create(actor, canonicalAgentIds);
+      createdChannelIds.push(created.id);
 
-    expect(created).toEqual({
-      id: created.id,
-      name: "Zulu, Alpha",
-      agentIds: canonicalAgentIds,
-      threadId: created.threadId,
-      active: true,
-      lastMessageAt: null,
+      expect(created).toEqual({
+        id: created.id,
+        name: "Zulu, Alpha",
+        agentIds: canonicalAgentIds,
+        threadId: created.threadId,
+        active: true,
+        lastMessageAt: null,
+      });
+      const persisted = await persistedChannel(created.id);
+      expect(persisted.channelRow?.name).toBe("Zulu, Alpha");
+      expect(
+        persisted.linkedAgents.map(({ agentId }) => agentId).sort(),
+      ).toEqual(canonicalAgentIds);
     });
-    const persisted = await persistedChannel(created.id);
-    expect(persisted.channelRow?.name).toBe("Zulu, Alpha");
-    expect(persisted.linkedAgents.map(({ agentId }) => agentId).sort()).toEqual(
-      canonicalAgentIds,
-    );
   });
 
   test("truncates derived names to 120 Unicode code points with an ellipsis", async () => {
     const actor = await createPersistentUser();
-    const longName = "😀".repeat(121);
-    const agentId = await createPersistentAgent({
-      name: longName,
-      owner: actor,
+    await as(actor, async () => {
+      const longName = "😀".repeat(121);
+      const agentId = await createPersistentAgent({
+        name: longName,
+        owner: actor,
+      });
+
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+
+      expect(Array.from(created.name)).toHaveLength(120);
+      expect(created.name).toBe(`${"😀".repeat(119)}…`);
+      expect((await persistedChannel(created.id)).channelRow?.name).toBe(
+        created.name,
+      );
     });
-
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-
-    expect(Array.from(created.name)).toHaveLength(120);
-    expect(created.name).toBe(`${"😀".repeat(119)}…`);
-    expect((await persistedChannel(created.id)).channelRow?.name).toBe(
-      created.name,
-    );
   });
 
   test.each(["inaccessible private", "soft-deleted"] as const)(
@@ -1107,21 +1140,28 @@ describe("channel store integration", () => {
         scenario === "inaccessible private"
           ? await createPersistentUser()
           : actor;
-      const accessibleAgentId = await createPersistentAgent({
-        name: "Accessible agent",
-        owner: actor,
-      });
-      const agentId = await createPersistentAgent({
-        name: `${scenario} agent`,
-        owner,
-      });
+      const accessibleAgentId = await as(actor, () =>
+        createPersistentAgent({
+          name: "Accessible agent",
+          owner: actor,
+        }),
+      );
+      // Each Bot is written by its own owner, into that owner's tenant.
+      const agentId = await as(owner, () =>
+        createPersistentAgent({
+          name: `${scenario} agent`,
+          owner,
+        }),
+      );
       if (scenario === "soft-deleted") {
-        await profileStore.softDelete(actor, agentId);
+        await as(actor, () => profileStore.softDelete(actor, agentId));
       }
       const before = await channelTableSnapshot();
 
       await expect(
-        persistentStore.create(actor, [accessibleAgentId, agentId].sort()),
+        as(actor, () =>
+          persistentStore.create(actor, [accessibleAgentId, agentId].sort()),
+        ),
       ).rejects.toBeInstanceOf(AgentNotFoundError);
 
       expect(await channelTableSnapshot()).toEqual(before);
@@ -1132,73 +1172,81 @@ describe("channel store integration", () => {
 describe("channel pinning", () => {
   test("stamps and clears pinned_at on the caller's own membership", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Pinnable agent",
-      owner: actor,
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Pinnable agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+
+      await persistentStore.setPinned(actor, created.id, true);
+      let [row] = await database
+        .select({ pinnedAt: channelMemberships.pinnedAt })
+        .from(channelMemberships)
+        .where(
+          and(
+            eq(channelMemberships.channelId, created.id),
+            eq(channelMemberships.userId, actor.id),
+          ),
+        );
+      expect(row?.pinnedAt).not.toBeNull();
+
+      await persistentStore.setPinned(actor, created.id, false);
+      [row] = await database
+        .select({ pinnedAt: channelMemberships.pinnedAt })
+        .from(channelMemberships)
+        .where(
+          and(
+            eq(channelMemberships.channelId, created.id),
+            eq(channelMemberships.userId, actor.id),
+          ),
+        );
+      expect(row?.pinnedAt).toBeNull();
     });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-
-    await persistentStore.setPinned(actor, created.id, true);
-    let [row] = await database
-      .select({ pinnedAt: channelMemberships.pinnedAt })
-      .from(channelMemberships)
-      .where(
-        and(
-          eq(channelMemberships.channelId, created.id),
-          eq(channelMemberships.userId, actor.id),
-        ),
-      );
-    expect(row?.pinnedAt).not.toBeNull();
-
-    await persistentStore.setPinned(actor, created.id, false);
-    [row] = await database
-      .select({ pinnedAt: channelMemberships.pinnedAt })
-      .from(channelMemberships)
-      .where(
-        and(
-          eq(channelMemberships.channelId, created.id),
-          eq(channelMemberships.userId, actor.id),
-        ),
-      );
-    expect(row?.pinnedAt).toBeNull();
   });
 
   test("refuses to pin a channel the caller is not a member of", async () => {
     const member = await createPersistentUser();
     const outsider = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Members-only agent",
-      owner: member,
-    });
-    const created = await persistentStore.create(member, [agentId]);
+    const agentId = await as(member, () =>
+      createPersistentAgent({
+        name: "Members-only agent",
+        owner: member,
+      }),
+    );
+    const created = await as(member, () =>
+      persistentStore.create(member, [agentId]),
+    );
     createdChannelIds.push(created.id);
 
     await expect(
-      persistentStore.setPinned(outsider, created.id, true),
+      as(outsider, () => persistentStore.setPinned(outsider, created.id, true)),
     ).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
 
   test("pins and unpins through the caller's own membership", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Pinnable agent",
-      owner: actor,
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Pinnable agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+
+      await persistentStore.setPinned(actor, created.id, true);
+      let page = await persistentStore.list(actor);
+      expect(
+        page.channels.find((channel) => channel.id === created.id)?.pinned,
+      ).toBe(true);
+
+      await persistentStore.setPinned(actor, created.id, false);
+      page = await persistentStore.list(actor);
+      expect(
+        page.channels.find((channel) => channel.id === created.id)?.pinned,
+      ).toBe(false);
     });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-
-    await persistentStore.setPinned(actor, created.id, true);
-    let page = await persistentStore.list(actor);
-    expect(
-      page.channels.find((channel) => channel.id === created.id)?.pinned,
-    ).toBe(true);
-
-    await persistentStore.setPinned(actor, created.id, false);
-    page = await persistentStore.list(actor);
-    expect(
-      page.channels.find((channel) => channel.id === created.id)?.pinned,
-    ).toBe(false);
   });
 
   test("one member's pin is invisible to another member", async () => {
@@ -1235,18 +1283,20 @@ describe("channel pinning", () => {
 
   test("reports pinned false for a channel nobody pinned", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Unpinned agent",
-      owner: actor,
-    });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Unpinned agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
 
-    expect(
-      (await persistentStore.list(actor)).channels.find(
-        (channel) => channel.id === created.id,
-      )?.pinned,
-    ).toBe(false);
+      expect(
+        (await persistentStore.list(actor)).channels.find(
+          (channel) => channel.id === created.id,
+        )?.pinned,
+      ).toBe(false);
+    });
   });
 });
 
@@ -1255,6 +1305,24 @@ describe("channel read markers", () => {
   async function sharedChannel() {
     const reader = await createPersistentUser();
     const other = await createPersistentUser();
+    return { reader, other, channelId: await seedSharedChannel(reader, other) };
+  }
+
+  /**
+   * The same channel with every row written in the reader's request, as `addMember` writes the second
+   * member's rows in the inviter's: all of it lands in the reader's tenant.
+   */
+  async function framedSharedChannel() {
+    const reader = await createPersistentUser();
+    const other = await createPersistentUser();
+    return {
+      reader,
+      other,
+      channelId: await as(reader, () => seedSharedChannel(reader, other)),
+    };
+  }
+
+  async function seedSharedChannel(reader: AgentActor, other: AgentActor) {
     const agentId = await createPersistentAgent({
       name: "Shared readable agent",
       owner: reader,
@@ -1275,25 +1343,28 @@ describe("channel read markers", () => {
       // created.threadId, so the other member's row needs one of its own.
       threadId: randomUUID(),
     });
-    return { reader, other, channelId: created.id };
+    return created.id;
   }
 
   test("stamps last_read_at on the caller's own membership only", async () => {
-    const { reader, other, channelId } = await sharedChannel();
+    const { reader, other, channelId } = await framedSharedChannel();
+    await as(reader, async () => {
+      await persistentStore.markRead(reader, channelId);
 
-    await persistentStore.markRead(reader, channelId);
-
-    const rows = await database
-      .select({
-        userId: channelMemberships.userId,
-        lastReadAt: channelMemberships.lastReadAt,
-      })
-      .from(channelMemberships)
-      .where(eq(channelMemberships.channelId, channelId));
-    expect(
-      rows.find((row) => row.userId === reader.id)?.lastReadAt,
-    ).not.toBeNull();
-    expect(rows.find((row) => row.userId === other.id)?.lastReadAt).toBeNull();
+      const rows = await database
+        .select({
+          userId: channelMemberships.userId,
+          lastReadAt: channelMemberships.lastReadAt,
+        })
+        .from(channelMemberships)
+        .where(eq(channelMemberships.channelId, channelId));
+      expect(
+        rows.find((row) => row.userId === reader.id)?.lastReadAt,
+      ).not.toBeNull();
+      expect(
+        rows.find((row) => row.userId === other.id)?.lastReadAt,
+      ).toBeNull();
+    });
   });
 
   test("the list carries the caller's lastReadAt and nobody else's", async () => {
@@ -1313,61 +1384,64 @@ describe("channel read markers", () => {
   });
 
   test("refuses to mark read a channel the caller is not a member of", async () => {
-    const { channelId } = await sharedChannel();
+    const { channelId } = await framedSharedChannel();
     const outsider = await createPersistentUser();
 
     await expect(
-      persistentStore.markRead(outsider, channelId),
+      as(outsider, () => persistentStore.markRead(outsider, channelId)),
     ).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
 
   test("stamps a read no earlier than the channel's own last-message clock", async () => {
-    const { reader, channelId } = await sharedChannel();
-    // last_message_at is written from the reporting browser's clock and is not bounded; simulate
-    // one running ahead of the server so a plain "now" stamp would still read as unseen.
-    const future = new Date(Date.now() + 60_000);
-    await database
-      .update(channels)
-      .set({ lastMessageAt: future })
-      .where(eq(channels.id, channelId));
+    const { reader, channelId } = await framedSharedChannel();
+    await as(reader, async () => {
+      // last_message_at is written from the reporting browser's clock and is not bounded; simulate
+      // one running ahead of the server so a plain "now" stamp would still read as unseen.
+      const future = new Date(Date.now() + 60_000);
+      await database
+        .update(channels)
+        .set({ lastMessageAt: future })
+        .where(eq(channels.id, channelId));
 
-    await persistentStore.markRead(reader, channelId);
+      await persistentStore.markRead(reader, channelId);
 
-    const [row] = await database
-      .select({ lastReadAt: channelMemberships.lastReadAt })
-      .from(channelMemberships)
-      .where(
-        and(
-          eq(channelMemberships.channelId, channelId),
-          eq(channelMemberships.userId, reader.id),
-        ),
+      const [row] = await database
+        .select({ lastReadAt: channelMemberships.lastReadAt })
+        .from(channelMemberships)
+        .where(
+          and(
+            eq(channelMemberships.channelId, channelId),
+            eq(channelMemberships.userId, reader.id),
+          ),
+        );
+      expect(row?.lastReadAt).not.toBeNull();
+      expect(row?.lastReadAt?.getTime() ?? 0).toBeGreaterThanOrEqual(
+        future.getTime(),
       );
-    expect(row?.lastReadAt).not.toBeNull();
-    expect(row?.lastReadAt?.getTime() ?? 0).toBeGreaterThanOrEqual(
-      future.getTime(),
-    );
+    });
   });
 
   test("refuses to mark a soft-deleted channel read, mirroring setPinned", async () => {
-    const { reader, channelId } = await sharedChannel();
+    const { reader, channelId } = await framedSharedChannel();
+    await as(reader, async () => {
+      await persistentStore.softDelete(reader, channelId);
 
-    await persistentStore.softDelete(reader, channelId);
+      await expect(
+        persistentStore.markRead(reader, channelId),
+      ).rejects.toBeInstanceOf(ChannelNotFoundError);
 
-    await expect(
-      persistentStore.markRead(reader, channelId),
-    ).rejects.toBeInstanceOf(ChannelNotFoundError);
-
-    const [row] = await database
-      .select({ lastReadAt: channelMemberships.lastReadAt })
-      .from(channelMemberships)
-      .where(
-        and(
-          eq(channelMemberships.channelId, channelId),
-          eq(channelMemberships.userId, reader.id),
-        ),
-      );
-    // The membership row outlives the channel, but its marker was never stamped.
-    expect(row?.lastReadAt).toBeNull();
+      const [row] = await database
+        .select({ lastReadAt: channelMemberships.lastReadAt })
+        .from(channelMemberships)
+        .where(
+          and(
+            eq(channelMemberships.channelId, channelId),
+            eq(channelMemberships.userId, reader.id),
+          ),
+        );
+      // The membership row outlives the channel, but its marker was never stamped.
+      expect(row?.lastReadAt).toBeNull();
+    });
   });
 });
 
@@ -1413,53 +1487,61 @@ describe("channel soft delete", () => {
 
   test("stamps deleted_at on the channel", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Deletable agent",
-      owner: actor,
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Deletable agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+
+      await persistentStore.softDelete(actor, created.id);
+
+      // Soft: the row is still there, stamped rather than gone.
+      const [row] = await database
+        .select({ deletedAt: channels.deletedAt })
+        .from(channels)
+        .where(eq(channels.id, created.id));
+      expect(row?.deletedAt).not.toBeNull();
     });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-
-    await persistentStore.softDelete(actor, created.id);
-
-    // Soft: the row is still there, stamped rather than gone.
-    const [row] = await database
-      .select({ deletedAt: channels.deletedAt })
-      .from(channels)
-      .where(eq(channels.id, created.id));
-    expect(row?.deletedAt).not.toBeNull();
   });
 
   test("deleting again is a no-op, not an error", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Twice-deleted agent",
-      owner: actor,
-    });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Twice-deleted agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
 
-    await expect(persistentStore.softDelete(actor, created.id)).resolves.toBe(
-      true,
-    );
-    // Resolves rather than throws, and says it deleted nothing, so nothing is announced or recorded.
-    await expect(persistentStore.softDelete(actor, created.id)).resolves.toBe(
-      false,
-    );
+      await expect(persistentStore.softDelete(actor, created.id)).resolves.toBe(
+        true,
+      );
+      // Resolves rather than throws, and says it deleted nothing, so nothing is announced or recorded.
+      await expect(persistentStore.softDelete(actor, created.id)).resolves.toBe(
+        false,
+      );
+    });
   });
 
   test("refuses to delete a channel the caller is not a member of", async () => {
     const member = await createPersistentUser();
     const outsider = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Guarded agent",
-      owner: member,
-    });
-    const created = await persistentStore.create(member, [agentId]);
+    const agentId = await as(member, () =>
+      createPersistentAgent({
+        name: "Guarded agent",
+        owner: member,
+      }),
+    );
+    const created = await as(member, () =>
+      persistentStore.create(member, [agentId]),
+    );
     createdChannelIds.push(created.id);
 
     await expect(
-      persistentStore.softDelete(outsider, created.id),
+      as(outsider, () => persistentStore.softDelete(outsider, created.id)),
     ).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
 
@@ -1473,92 +1555,101 @@ describe("channel soft delete", () => {
    */
   test("refuses activity on a deleted channel and leaves the last message alone", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Silenced agent",
-      owner: actor,
-    });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-    await persistentStore.recordActivity(actor, created.id, {
-      agentId,
-      at: new Date(Date.now() - 60_000),
-      text: "Said before the delete.",
-    });
-    await persistentStore.softDelete(actor, created.id);
-
-    await expect(
-      persistentStore.recordActivity(actor, created.id, {
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Silenced agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+      await persistentStore.recordActivity(actor, created.id, {
         agentId,
-        at: new Date(),
-        text: "Said after the delete.",
-      }),
-    ).rejects.toBeInstanceOf(ChannelNotFoundError);
+        at: new Date(Date.now() - 60_000),
+        text: "Said before the delete.",
+      });
+      await persistentStore.softDelete(actor, created.id);
 
-    // Same answer `get` gives, and the row the roster would have shown is untouched.
-    const [row] = await database
-      .select({
-        lastMessage: channels.lastMessage,
-        lastMessageAt: channels.lastMessageAt,
-      })
-      .from(channels)
-      .where(eq(channels.id, created.id));
-    expect(row?.lastMessage).toBe("Said before the delete.");
+      await expect(
+        persistentStore.recordActivity(actor, created.id, {
+          agentId,
+          at: new Date(),
+          text: "Said after the delete.",
+        }),
+      ).rejects.toBeInstanceOf(ChannelNotFoundError);
+
+      // Same answer `get` gives, and the row the roster would have shown is untouched.
+      const [row] = await database
+        .select({
+          lastMessage: channels.lastMessage,
+          lastMessageAt: channels.lastMessageAt,
+        })
+        .from(channels)
+        .where(eq(channels.id, created.id));
+      expect(row?.lastMessage).toBe("Said before the delete.");
+    });
   });
 
   test("refuses to pin a deleted channel and leaves the membership alone", async () => {
     const actor = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Unpinnable agent",
-      owner: actor,
+    await as(actor, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Unpinnable agent",
+        owner: actor,
+      });
+      const created = await persistentStore.create(actor, [agentId]);
+      createdChannelIds.push(created.id);
+      await persistentStore.softDelete(actor, created.id);
+
+      await expect(
+        persistentStore.setPinned(actor, created.id, true),
+      ).rejects.toBeInstanceOf(ChannelNotFoundError);
+
+      const [row] = await database
+        .select({ pinnedAt: channelMemberships.pinnedAt })
+        .from(channelMemberships)
+        .where(
+          and(
+            eq(channelMemberships.channelId, created.id),
+            eq(channelMemberships.userId, actor.id),
+          ),
+        );
+      expect(row?.pinnedAt).toBeNull();
     });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-    await persistentStore.softDelete(actor, created.id);
-
-    await expect(
-      persistentStore.setPinned(actor, created.id, true),
-    ).rejects.toBeInstanceOf(ChannelNotFoundError);
-
-    const [row] = await database
-      .select({ pinnedAt: channelMemberships.pinnedAt })
-      .from(channelMemberships)
-      .where(
-        and(
-          eq(channelMemberships.channelId, created.id),
-          eq(channelMemberships.userId, actor.id),
-        ),
-      );
-    expect(row?.pinnedAt).toBeNull();
   });
 
   test("refuses to delete a package-defined channel", async () => {
     const actor = await createPersistentUser();
-    const [pkg] = await database
-      .insert(deploymentPackages)
-      .values({
-        tenantId: persistentId("tenant"),
-        sourcePath: "/tmp/none",
-        checksum: "0",
-      })
-      .returning({ id: deploymentPackages.id });
-    if (!pkg) throw new Error("package row was not created");
-    createdPackageIds.push(pkg.id);
-    const channelId = persistentId("package-channel");
-    await database.insert(channels).values({
-      id: channelId,
-      name: "Package channel",
-      description: "Defined by the tenant package.",
-      packageId: pkg.id,
-    });
-    createdChannelIds.push(channelId);
-    await database.insert(channelMemberships).values({
-      channelId,
-      userId: actor.id,
-    });
+    // The package is a deployment row; the channel it defines is this member's.
+    const [pkg] = await runAsTenant("platform", () =>
+      database
+        .insert(deploymentPackages)
+        .values({
+          tenantId: persistentId("tenant"),
+          sourcePath: "/tmp/none",
+          checksum: "0",
+        })
+        .returning({ id: deploymentPackages.id }),
+    );
+    await as(actor, async () => {
+      if (!pkg) throw new Error("package row was not created");
+      createdPackageIds.push(pkg.id);
+      const channelId = persistentId("package-channel");
+      await database.insert(channels).values({
+        id: channelId,
+        name: "Package channel",
+        description: "Defined by the tenant package.",
+        packageId: pkg.id,
+      });
+      createdChannelIds.push(channelId);
+      await database.insert(channelMemberships).values({
+        channelId,
+        userId: actor.id,
+      });
 
-    await expect(
-      persistentStore.softDelete(actor, channelId),
-    ).rejects.toBeInstanceOf(ChannelPackageOwnedError);
+      await expect(
+        persistentStore.softDelete(actor, channelId),
+      ).rejects.toBeInstanceOf(ChannelPackageOwnedError);
+    });
   });
 });
 
@@ -1580,66 +1671,70 @@ describe("channel store concurrency", () => {
       createThreadIdentity("test-deployment"),
     );
     const owner = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Single connection agent",
-      owner,
+    await as(owner, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Single connection agent",
+        owner,
+      });
+
+      try {
+        const created = await store.create(owner, [agentId]);
+        createdChannelIds.push(created.id);
+
+        expect(created.agentIds).toEqual([agentId]);
+      } finally {
+        await singleConnection.$client.close();
+      }
     });
-
-    try {
-      const created = await store.create(owner, [agentId]);
-      createdChannelIds.push(created.id);
-
-      expect(created.agentIds).toEqual([agentId]);
-    } finally {
-      await singleConnection.$client.close();
-    }
   });
 
   test("refuses an agent whose deletion commits mid-creation", async () => {
     const owner = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Concurrently deleted agent",
-      owner,
-    });
+    await as(owner, async () => {
+      const agentId = await createPersistentAgent({
+        name: "Concurrently deleted agent",
+        owner,
+      });
 
-    let markDeleted: () => void = () => {};
-    let releaseDeletion: () => void = () => {};
-    const deletionApplied = new Promise<void>((resolve) => {
-      markDeleted = resolve;
-    });
-    const deletionHeld = new Promise<void>((resolve) => {
-      releaseDeletion = resolve;
-    });
-    const deletion = database.transaction(async (transaction) => {
-      await transaction
-        .update(agentProfiles)
-        .set({ deletedAt: new Date() })
-        .where(eq(agentProfiles.agentId, agentId));
-      markDeleted();
-      await deletionHeld;
-    });
+      let markDeleted: () => void = () => {};
+      let releaseDeletion: () => void = () => {};
+      const deletionApplied = new Promise<void>((resolve) => {
+        markDeleted = resolve;
+      });
+      const deletionHeld = new Promise<void>((resolve) => {
+        releaseDeletion = resolve;
+      });
+      const deletion = database.transaction(async (transaction) => {
+        await transaction
+          .update(agentProfiles)
+          .set({ deletedAt: new Date() })
+          .where(eq(agentProfiles.agentId, agentId));
+        markDeleted();
+        await deletionHeld;
+      });
 
-    await deletionApplied;
-    const creation = persistentStore.create(owner, [agentId]);
-    // Long enough for a correct implementation to reach the row lock and block on it.
-    await Bun.sleep(250);
-    releaseDeletion();
-    await deletion;
+      await deletionApplied;
+      const creation = persistentStore.create(owner, [agentId]);
+      // Long enough for a correct implementation to reach the row lock and block on it.
+      await Bun.sleep(250);
+      releaseDeletion();
+      await deletion;
 
-    const outcome = await creation.then(
-      (created) => {
-        createdChannelIds.push(created.id);
-        return created;
-      },
-      (error: unknown) => error,
-    );
+      const outcome = await creation.then(
+        (created) => {
+          createdChannelIds.push(created.id);
+          return created;
+        },
+        (error: unknown) => error,
+      );
 
-    expect(outcome).toBeInstanceOf(AgentNotFoundError);
-    expect(
-      await database
-        .select({ channelId: channelAgents.channelId })
-        .from(channelAgents)
-        .where(eq(channelAgents.agentId, agentId)),
-    ).toEqual([]);
+      expect(outcome).toBeInstanceOf(AgentNotFoundError);
+      expect(
+        await database
+          .select({ channelId: channelAgents.channelId })
+          .from(channelAgents)
+          .where(eq(channelAgents.agentId, agentId)),
+      ).toEqual([]);
+    });
   });
 });

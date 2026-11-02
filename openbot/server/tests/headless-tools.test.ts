@@ -12,6 +12,7 @@ import type { AuditEventInput } from "../src/audit";
 import { createComputerGateway } from "../src/computer/gateway";
 import * as headless from "../src/computer/headless-tools";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
+import { runAsTenant } from "../src/tenant/context";
 
 const definition = {
   name: "computer_snapshot",
@@ -132,14 +133,17 @@ function turnHarness(
         ReturnType<typeof createTurnRunner>
       >[0]["continuation"],
     ) =>
-      run({
-        ownerUserId: "owner",
-        routineId: "routine",
-        agentId: "bot",
-        threadId: "thread",
-        instruction: "Inspect the browser",
-        continuation,
-      }),
+      // In the owner's frame, as every production caller runs a turn: the pause guard reads it.
+      runAsTenant("owner", () =>
+        run({
+          ownerUserId: "owner",
+          routineId: "routine",
+          agentId: "bot",
+          threadId: "thread",
+          instruction: "Inspect the browser",
+          continuation,
+        }),
+      ),
   };
 }
 

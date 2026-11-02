@@ -95,7 +95,10 @@ async function eventually<T>(read: () => Promise<T[]>): Promise<T[]> {
 }
 
 beforeAll(async () => {
-  await database.insert(users).values({ ...person, name: "Person" });
+  // The identity row is the identity layer's, written as `platform` the way sign-up writes it.
+  await runAsTenant("platform", () =>
+    database.insert(users).values({ ...person, name: "Person" }),
+  );
   // The person's own Bot, stamped with their tenant the way provisioning stamps it.
   await runAsTenant(person.id, async () => {
     await database.insert(agents).values({
@@ -146,11 +149,11 @@ afterAll(async () => {
     await database.delete(agentProfiles).where(eq(agentProfiles.agentId, bot));
     await database.delete(agents).where(eq(agents.id, bot));
     await database.delete(agents).where(eq(agents.id, remoteBot));
+    await database
+      .delete(revokedAccess)
+      .where(like(revokedAccess.email, `%${suite}%`));
+    await database.delete(users).where(eq(users.id, person.id));
   });
-  await database
-    .delete(revokedAccess)
-    .where(like(revokedAccess.email, `%${suite}%`));
-  await database.delete(users).where(eq(users.id, person.id));
   await database.$client.end({ timeout: 5 });
 });
 
