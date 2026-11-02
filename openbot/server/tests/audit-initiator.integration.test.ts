@@ -7,12 +7,23 @@ import {
 } from "../src/audit";
 import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const databaseUrl = testDatabaseUrl();
 const database = createDatabase(databaseUrl, TEST_POOL);
-const store = createAuditStore(database);
+const auditStore = createAuditStore(database);
 const reader = createAuditReader(database);
+
+/**
+ * One person's trail. Every row this file writes and every page it reads is in this tenant's frame,
+ * as the store and reader are reached in the product, never in no frame at all.
+ */
+const tenant = `audit-initiator-${crypto.randomUUID()}`;
+const store = {
+  insert: (event: Parameters<typeof auditStore.insert>[0]) =>
+    runAsTenant(tenant, () => auditStore.insert(event)),
+};
 
 // Nothing is cleaned up: the retention trigger refuses the delete, so each test takes its own target id.
 const target = () => `initiator-test-${crypto.randomUUID()}`;
@@ -26,8 +37,10 @@ const target = () => `initiator-test-${crypto.randomUUID()}`;
  * to have done so by reading the page before that cut.
  */
 async function pageFor(search = "") {
-  const { events } = await reader.list(
-    auditQueryFromUrl(new URL(`https://openbot.test/audit${search}`)),
+  const { events } = await runAsTenant(tenant, () =>
+    reader.list(
+      auditQueryFromUrl(new URL(`https://openbot.test/audit${search}`)),
+    ),
   );
   return events;
 }
@@ -282,10 +295,12 @@ describe("what started a run", () => {
     });
 
     const reattribute = async () => {
-      await database
-        .update(auditEvents)
-        .set({ initiatorKind: "person", initiatorId: null })
-        .where(eq(auditEvents.targetId, TARGET));
+      await runAsTenant(tenant, () =>
+        database
+          .update(auditEvents)
+          .set({ initiatorKind: "person", initiatorId: null })
+          .where(eq(auditEvents.targetId, TARGET)),
+      );
     };
 
     expect(reattribute()).rejects.toThrow();
