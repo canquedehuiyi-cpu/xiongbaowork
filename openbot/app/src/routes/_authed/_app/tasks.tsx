@@ -8,6 +8,7 @@ import {
   ApprovalActions,
   useApprovalDecision,
 } from "@/components/tasks/approval-actions";
+import { DispatchToGroup } from "@/components/tasks/dispatch-to-group";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import type { ApprovalDecision } from "@/lib/approvals";
@@ -1157,6 +1158,8 @@ function TasksPage() {
   };
   return (
     <PageShell
+      /* Spec I2: hand a crew's flow a task from the board itself. */
+      action={<DispatchToGroup />}
       title="任务看板"
       description="从工作本身出发：员工做了什么、什么需要你、什么等你查收。"
     >
