@@ -46,8 +46,7 @@ export async function signInWith(
     // Naming the provider matters more with three buttons than it did with one: "Could not start
     // sign-in" leaves somebody looking at three of them with no idea which one refused.
     throw new Error(
-      result.error.message ||
-        `Could not start ${providerName(provider)} sign-in.`,
+      result.error.message || `无法开始 ${providerName(provider)} 登录。`,
     );
   }
 }
@@ -77,8 +76,7 @@ export async function signInWithEmailDomain(
 
   if (result.error) {
     throw new Error(
-      result.error.message ||
-        "No identity provider is registered for that address.",
+      result.error.message || "这个邮箱地址没有登记任何身份提供方。",
     );
   }
 }
@@ -109,9 +107,7 @@ export async function signInWithEmail(
   const result = await start({ email, password });
 
   if (result.error) {
-    throw new Error(
-      result.error.message || "That address and password did not sign you in.",
-    );
+    throw new Error(result.error.message || "用这个邮箱地址和密码没能登录。");
   }
 }
 
@@ -135,8 +131,6 @@ export async function signUpWithEmail(
   const result = await start(input);
 
   if (result.error) {
-    throw new Error(
-      result.error.message || "Could not create the account with that address.",
-    );
+    throw new Error(result.error.message || "无法用这个邮箱地址创建账号。");
   }
 }
