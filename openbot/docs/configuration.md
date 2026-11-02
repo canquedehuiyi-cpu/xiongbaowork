@@ -38,11 +38,36 @@ coworker without its own endpoint is refused. A leftover token with no URL is ig
 one-container image has no Bot process, so leave the URL unset there. `scripts/start.sh` points it
 at `agent-langgraph` on a laptop.
 
+### Binding stored credentials to their row (`VAULT_REQUIRE_AAD`)
+
+Credentials written by this version are sealed in a v2 envelope whose AES-GCM additional data is the
+row's own tenant, id and kind, so a value copied into another tenant's row, another row or another
+kind fails to open. Rows written by earlier versions are v1 envelopes, which carry no such binding
+and still open wherever they are pasted. They keep working until you finish the upgrade:
+
+1. Reseal the existing rows, from the server's own shell with the same `DATABASE_URL` and
+   `KEY_ENCRYPTION_KEY` the server uses:
+
+   ```sh
+   cd server && bun scripts/reseal-credentials.ts
+   ```
+
+   It lists tenants in the platform scope and reseals each tenant's rows inside that tenant's own
+   scope, replacing a row only if its stored value is still the one it read, so it is safe on a live
+   deployment and safe to run again. It prints one JSON line per tenant and a summary of counts and
+   row ids, never a secret, and exits `0` only when no unbound row remains. Exit `1` means some
+   remain: rerun it for rows that changed while it ran, and look at any row it reports as
+   `credential-reseal-unreadable` (not an envelope, or sealed under another key).
+2. Once it exits `0`, set `VAULT_REQUIRE_AAD=1` (or `true`) and restart. From then on an unbound
+   envelope is refused instead of opened. Leave it unset until step 1 is clean, or every remaining
+   v1 credential stops working.
+
 ## General variables
 
 | Variable             | Default                            | Meaning                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | `PORT`               | `3001`                             | API server port. `SERVER_PORT` names the same port; set either, or both to the same value, or the server refuses to start. |
+| `VAULT_REQUIRE_AAD`  | unset (off)                        | `1` or `true` refuses stored credentials that are not bound to their row. Set it only after `scripts/reseal-credentials.ts` exits `0`; see [above](#binding-stored-credentials-to-their-row-vault_require_aad). |
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
 | `TENANT_PACKAGE_DIR` | `../examples/fintech`              | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database.                      |

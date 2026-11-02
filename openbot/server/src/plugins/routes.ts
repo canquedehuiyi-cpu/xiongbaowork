@@ -2072,7 +2072,7 @@ export function createPluginRoutes(
              * IS THE ONE WHOSE MESSAGE CARRIES THE REFRESH TOKEN.
              *
              * `recordConnection` runs `swapUserCredential` → `credentials.create/rotate`, whose
-             * bound parameters include `encryptedValue: await encryptSecret(key, refreshToken)`.
+             * bound parameters include the refresh token's sealed envelope (`sealCredential`).
              * drizzle wraps a driver failure as a `DrizzleQueryError` whose own message is
              * `Failed query: insert into "credentials" … params: …, <the envelope>, …`, so
              * `String(error)` here put the envelope on this deployment's stdout and into whatever
