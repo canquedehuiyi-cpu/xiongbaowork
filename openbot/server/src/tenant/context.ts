@@ -5,14 +5,28 @@ import { AsyncLocalStorage } from "node:async_hooks";
  *
  * AsyncLocalStorage rather than a parameter because the database client is reached from a hundred
  * call sites, and a tenant argument threaded through all of them is a hundred places someone forgets
- * to pass it. The client reads this at query time; a query with no context runs as `system` and sees
- * only platform rows, which is the fail-closed side of the deal: forgetting the context loses data
- * loudly rather than leaking it quietly.
+ * to pass it. The client reads this when a statement is built (and, for one built outside every frame,
+ * when it runs); a query with no context runs as `system` and sees only platform rows, which is the
+ * fail-closed side of the deal: forgetting the context loses data loudly rather than leaking it
+ * quietly.
  */
 const store = new AsyncLocalStorage<string>();
 
 export function currentTenant(): string {
   return store.getStore() ?? "system";
+}
+
+/**
+ * The tenant frame exactly as it stands: `undefined` outside any `runAsTenant`, unlike
+ * `currentTenant`, which answers that with `system`.
+ *
+ * The database client needs the difference. A statement built inside a frame is pinned to that frame
+ * for good, because the frame can be gone by the time it executes; one built outside every frame keeps
+ * the old behaviour of running as whichever frame awaits it. An explicit `runAsTenant("system", ...)`
+ * is a frame like any other and pins to `system`.
+ */
+export function tenantFrame(): string | undefined {
+  return store.getStore();
 }
 
 export function runAsTenant<T>(tenantId: string, fn: () => T): T {
