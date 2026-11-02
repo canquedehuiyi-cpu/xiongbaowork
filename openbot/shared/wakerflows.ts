@@ -32,3 +32,15 @@ export const WAKERFLOW_SUGGESTIONS = [
   "帮我创建会议纪要流程，整理结论、待办和负责人",
   "帮我创建工作周报流程，汇总进展、风险和下周计划",
 ] as const;
+
+/** What the editor sends on Save: the plan it edited, fenced by the revision it was editing. */
+export type WakerFlowSaveInput = {
+  revision: number;
+  plan: WakerFlowPlan;
+  /** Omitted keeps the stored model; `null` clears it. */
+  modelRef?: string | null;
+};
+
+/** Shown when a Save lost the race to another tab or person; the editor reloads instead of overwriting. */
+export const WAKERFLOW_CONFLICT_MESSAGE =
+  "这个 WakerFlow 已在另一处修改，请刷新后再保存。";
