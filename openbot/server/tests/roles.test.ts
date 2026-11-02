@@ -220,6 +220,20 @@ function databaseWithUser(
    * on every sign-in.
    */
   alreadyAdmin = false,
+  /**
+   * Whether the stored address is verified. Local sign-up leaves it false, and a listed address
+   * that is not verified must not be promoted.
+   */
+  emailVerified = true,
+  /**
+   * The account rows behind this person: which provider each came through, and whether that
+   * provider is one an administrator registered through the SSO plugin.
+   */
+  arrivals: { providerId: string; registered: string | null }[] = [
+    { providerId: "google", registered: null },
+  ],
+  /** Roles the person already holds, for seeding, which must never take one away. */
+  heldRoles: string[] = [],
 ): {
   database: Database;
   written: string[];
@@ -227,16 +241,20 @@ function databaseWithUser(
   const written: string[] = [];
   const database = {
     execute: async () => [unitRoleFacts],
-    // Two different reads go through here: the user's address, and whether they already hold the
-    // role. Told apart by the projection, because that is the only thing the double can see.
+    // Three different reads go through here: the user's address, whether they already hold the
+    // role, and their accounts. Told apart by the projection, because that is the only thing the
+    // double can see.
     select: (projection?: Record<string, unknown>) => ({
       from: () => ({
+        leftJoin: () => ({
+          where: async () => arrivals,
+        }),
         where: () => ({
           limit: async () => {
             if (projection && "role" in projection) {
               return alreadyAdmin ? [{ role: "admin" }] : [];
             }
-            return email === null ? [] : [{ email }];
+            return email === null ? [] : [{ email, emailVerified }];
           },
         }),
       }),
@@ -244,6 +262,13 @@ function databaseWithUser(
     transaction: async (run: (t: unknown) => Promise<void>) => {
       await run({
         execute: async () => [],
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => heldRoles.map((role) => ({ role })),
+            }),
+          }),
+        }),
         delete: () => ({ where: () => Promise.resolve() }),
         insert: () => ({
           values: (row: { role: string }) => ({
@@ -336,6 +361,102 @@ describe("applyConfiguredAdmin", () => {
     expect(written).toEqual([]);
   });
 
+  /*
+   * Whoever registers a listed address first is not the person the deployment named: local sign-up
+   * does not verify email, so the address alone must not make them an administrator.
+   */
+  test("does not promote a listed address that is not verified", async () => {
+    const { database, written } = databaseWithUser(
+      "admin@openbot.test",
+      false,
+      false,
+    );
+    await initializeRecordingRoleWriter(database);
+
+    expect(
+      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+    ).toBe(false);
+    expect(written).toEqual([]);
+  });
+
+  /*
+   * The squat the verified flag alone does not stop. Somebody signs up with a password as a listed
+   * address; later the real person signs in with Google, Better Auth links that onto the same row and
+   * marks it verified. The password the squatter set still opens the row, so it must not be promoted:
+   * not at that link's sign-in, not at the squatter's next password sign-in.
+   */
+  test("does not promote a verified row that also holds a password", async () => {
+    const { database, written } = databaseWithUser(
+      "admin@openbot.test",
+      false,
+      true,
+      [
+        { providerId: "credential", registered: null },
+        { providerId: "google", registered: null },
+      ],
+    );
+    await initializeRecordingRoleWriter(database);
+
+    expect(
+      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+    ).toBe(false);
+    expect(written).toEqual([]);
+  });
+
+  /*
+   * Entra omits `email_verified` by default and SAML often does too, so the flag alone would leave
+   * an Entra-only or SAML-only deployment with no administrator and nobody able to make one.
+   */
+  test("promotes an unverified row that arrived through a vouching provider", async () => {
+    const { database, written } = databaseWithUser(
+      "admin@openbot.test",
+      false,
+      false,
+      [{ providerId: "microsoft", registered: null }],
+    );
+    await initializeRecordingRoleWriter(database);
+
+    expect(
+      await applyConfiguredAdmin(
+        database,
+        "u1",
+        ["admin@openbot.test"],
+        ["microsoft"],
+      ),
+    ).toBe(true);
+    expect(written).toEqual(["admin"]);
+  });
+
+  test("promotes an unverified row that arrived through a registered identity provider", async () => {
+    const { database, written } = databaseWithUser(
+      "admin@openbot.test",
+      false,
+      false,
+      [{ providerId: "acme-saml", registered: "acme-saml" }],
+    );
+    await initializeRecordingRoleWriter(database);
+
+    expect(
+      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+    ).toBe(true);
+    expect(written).toEqual(["admin"]);
+  });
+
+  test("does not trust a multi-tenant provider it was not told to", async () => {
+    const { database, written } = databaseWithUser(
+      "admin@openbot.test",
+      false,
+      false,
+      [{ providerId: "microsoft", registered: null }],
+    );
+    await initializeRecordingRoleWriter(database);
+
+    expect(
+      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+    ).toBe(false);
+    expect(written).toEqual([]);
+  });
+
   test("does nothing for a session whose user is not there", async () => {
     const { database, written } = databaseWithUser(null);
     await initializeRecordingRoleWriter(database);
@@ -351,18 +472,50 @@ describe("seedRole", () => {
     const { database, written } = databaseWithUser("admin@openbot.test");
     await initializeRecordingRoleWriter(database);
 
-    await seedRole(database, "u1", "admin@openbot.test", [
+    await seedRole(database, "u1", "admin@openbot.test", true, [
       "admin@openbot.test",
     ]);
 
     expect(written).toEqual(["admin"]);
   });
 
+  test("starts an unverified address on the list as a user", async () => {
+    const { database, written } = databaseWithUser("admin@openbot.test");
+    await initializeRecordingRoleWriter(database);
+
+    await seedRole(database, "u1", "admin@openbot.test", false, [
+      "admin@openbot.test",
+    ]);
+
+    expect(written).toEqual(["user"]);
+  });
+
+  /*
+   * Seeding runs again from the SSO plugin's provisioning hook, which may fire for somebody already
+   * here. Writing "user" exclusively would demote an administrator the screen or the floor made.
+   */
+  test("never takes a role away from somebody who already holds one", async () => {
+    const { database, written } = databaseWithUser(
+      "admin@openbot.test",
+      true,
+      false,
+      undefined,
+      ["admin"],
+    );
+    await initializeRecordingRoleWriter(database);
+
+    await seedRole(database, "u1", "admin@openbot.test", false, [
+      "admin@openbot.test",
+    ]);
+
+    expect(written).toEqual([]);
+  });
+
   test("starts everybody else as a user", async () => {
     const { database, written } = databaseWithUser("member@openbot.test");
     await initializeRecordingRoleWriter(database);
 
-    await seedRole(database, "u1", "member@openbot.test", [
+    await seedRole(database, "u1", "member@openbot.test", true, [
       "admin@openbot.test",
     ]);
 
