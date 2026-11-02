@@ -88,6 +88,11 @@ type Task = {
   model: string | null;
   /** Which of the tenant's machines the work happened on, in device mode. */
   device: string | null;
+  /**
+   * When a person filed this card away (spec A5/A7), or null. Only a failure carries one: it keeps
+   * reading `failed`, and this is what moves it from 需要关注 to 已结束. Absent from an older server.
+   */
+  archivedAt?: string | null;
   updatedAt: string;
 };
 
@@ -148,6 +153,34 @@ export const laneOf = (status: string): string[] =>
   );
 
 /**
+ * The lane a CARD lives in, which is its status's lane except for one case: a failure somebody has
+ * archived. It still reads 已结束-失败 — the server never turns it into `done` — but it has been seen
+ * and put away, so it leaves 需要关注 for 已结束 instead of asking for attention forever.
+ */
+export const laneOfTask = (task: {
+  status: string;
+  archivedAt?: string | null;
+}): string[] =>
+  task.status === "failed" && task.archivedAt
+    ? ["finished"]
+    : laneOf(task.status);
+
+/** Whether this card is a failure a person has already archived. */
+const isArchivedFailure = (task: {
+  status: string;
+  archivedAt?: string | null;
+}): boolean => task.status === "failed" && Boolean(task.archivedAt);
+
+/** The badge's words: an archived failure says it is over, and that it failed. */
+export const statusLabelOf = (task: {
+  status: string;
+  archivedAt?: string | null;
+}): string =>
+  isArchivedFailure(task)
+    ? "已结束-失败"
+    : (STATUS_LABEL[task.status] ?? task.status);
+
+/**
  * Spec A5 / decision D7: dragging is an archive gesture, one way only -- into 已结束, and only from a
  * state the archive accepts (`awaiting_review`, `failed`; the server's `archived` says the same).
  *
@@ -155,9 +188,14 @@ export const laneOf = (status: string): string[] =>
  * whether the card's status belonged to the target lane, and 已结束 holds only `done`, so no
  * archivable card ever passed and the drag did nothing at all.
  */
-export const archivesOnDrop = (laneKey: string, status: string): boolean =>
+export const archivesOnDrop = (
+  laneKey: string,
+  status: string,
+  /** A failure that is already archived has nothing left to archive; the server would answer 409. */
+  archivedAt?: string | null,
+): boolean =>
   laneKey === "finished" &&
-  (status === "awaiting_review" || status === "failed");
+  (status === "awaiting_review" || (status === "failed" && !archivedAt));
 
 const FILTERS = [
   { key: "", label: "全部" },
@@ -263,7 +301,6 @@ export const boardEmptySentence = (filters: {
  */
 export const lanesUnmappable = (tasks: { status: string }[]): boolean =>
   tasks.length > 0 && tasks.every((task) => laneOf(task.status).length === 0);
-
 
 /**
  * Spec A1/A2: the window's totals, each one a filter. Pressing a number shows those tasks; pressing
@@ -455,7 +492,7 @@ function TaskCard({
           }`}
           data-status={task.status}
         >
-          {STATUS_LABEL[task.status] ?? task.status}
+          {statusLabelOf(task)}
         </span>
       </div>
       {/*
@@ -516,7 +553,7 @@ function TaskCard({
           >
             {busy ? "查收中…" : "查收"}
           </button>
-        ) : task.status === "failed" ? (
+        ) : task.status === "failed" && !task.archivedAt ? (
           <button
             className="rounded bg-foreground/10 px-2 py-0.5"
             type="button"
@@ -547,7 +584,10 @@ export const attentionGroups = (
   tasks: Task[],
 ): Record<"needsYou" | "review", Task[]> => ({
   needsYou: tasks.filter(
-    (task) => task.status === "needs_action" || task.status === "failed",
+    (task) =>
+      task.status === "needs_action" ||
+      // An archived failure has been seen and put away: it is in 已结束, not asking any more.
+      (task.status === "failed" && !isArchivedFailure(task)),
   ),
   review: tasks.filter((task) => task.status === "awaiting_review"),
 });
@@ -754,7 +794,7 @@ function TasksPage() {
   };
   const dropLane = (laneKey: string, taskId: string) => {
     const task = list.find((entry) => entry.id === taskId);
-    if (task && archivesOnDrop(laneKey, task.status)) {
+    if (task && archivesOnDrop(laneKey, task.status, task.archivedAt)) {
       runAction(taskId, "archive");
     }
   };
@@ -764,11 +804,26 @@ function TasksPage() {
    * denial we are allowed to assert: the write may have landed. So the screen says 未确认 and offers
    * a read, never a second write.
    */
-  const actionFailure = (): { label: string; note: string; detail: string | null } => {
+  const actionFailure = (): {
+    label: string;
+    note: string;
+    detail: string | null;
+  } => {
     const status = act.error instanceof RequestError ? act.error.status : 0;
-    const message = act.error instanceof Error ? act.error.message : "请稍后再试。";
-    if (status === 404) return { label: "这个任务已经不在那里了", note: "服务端拒绝（404）", detail: message };
-    if (status === 409) return { label: "这个任务当前状态不接受这个操作", note: "服务端拒绝（409）", detail: message };
+    const message =
+      act.error instanceof Error ? act.error.message : "请稍后再试。";
+    if (status === 404)
+      return {
+        label: "这个任务已经不在那里了",
+        note: "服务端拒绝（404）",
+        detail: message,
+      };
+    if (status === 409)
+      return {
+        label: "这个任务当前状态不接受这个操作",
+        note: "服务端拒绝（409）",
+        detail: message,
+      };
     return {
       label: "结果未确认，请刷新任务后核对",
       note: status ? `服务端返回 ${status}` : "请求没有收到回应",
@@ -810,8 +865,7 @@ function TasksPage() {
         <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
           <p className="text-destructive">
             {failure.label}
-            {failure.detail ? `：${failure.detail}` : ""}
-            （{failure.note}）
+            {failure.detail ? `：${failure.detail}` : ""}（{failure.note}）
           </p>
           <Button onClick={refreshReadsOnly} size="sm" variant="outline">
             刷新任务
@@ -984,42 +1038,42 @@ function TasksPage() {
         </ul>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {LANES.map((lane) => (
-            // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-            <div
-              aria-label={`${lane.label}泳道`}
-              key={lane.key}
-              role="group"
-              onDragOver={(event) => {
-                if (lane.key === "finished") event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                dropLane(lane.key, event.dataTransfer.getData("text/plain"));
-              }}
-              className="bg-foreground/[0.02] rounded-xl p-2"
-            >
-              <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                {lane.label}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {LANES.map((lane) => (
+              // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+              <div
+                aria-label={`${lane.label}泳道`}
+                key={lane.key}
+                role="group"
+                onDragOver={(event) => {
+                  if (lane.key === "finished") event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  dropLane(lane.key, event.dataTransfer.getData("text/plain"));
+                }}
+                className="bg-foreground/[0.02] rounded-xl p-2"
+              >
+                <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
+                  {lane.label}
+                </div>
+                <ul className="list-none space-y-1.5">
+                  {list
+                    .filter((task) => laneOfTask(task).includes(lane.key))
+                    .map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        machine={machineLabel(task.device)}
+                        onReview={(id) => runAction(id, "review")}
+                        onArchive={(id) => runAction(id, "archive")}
+                        pendingIds={pendingIds}
+                      />
+                    ))}
+                </ul>
               </div>
-              <ul className="list-none space-y-1.5">
-                {list
-                  .filter((task) => lane.statuses.includes(task.status))
-                  .map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      machine={machineLabel(task.device)}
-                      onReview={(id) => runAction(id, "review")}
-                      onArchive={(id) => runAction(id, "archive")}
-                      pendingIds={pendingIds}
-                    />
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
           {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)

@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, gte, inArray, like, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  like,
+  sql,
+} from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
@@ -12,6 +22,7 @@ import {
   modelUsage,
   tasks,
 } from "../db/schema";
+import { taskArchives } from "../db/schema/task-archives";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
@@ -322,9 +333,27 @@ export function createTaskRoutes(
 
   routes.get("/", requireUser, async (context) => {
     const where = filters(context);
+    /*
+     * `archivedAt` rides beside each card (spec A5/A7): a failure somebody filed away still reads
+     * `failed`, and this stamp is what moves it from 需要关注 to 已结束 on the screen. Joined on the
+     * tenant too, so a stamp can only ever describe a card of the same workspace -- and only while
+     * it is current: the projector writes the stamp and the card's `updatedAt` at one instant, so a
+     * card that moved again since (a re-run that failed afresh) no longer counts as filed away.
+     */
     const rows = await database
-      .select()
+      .select({
+        ...getTableColumns(tasks),
+        archivedAt: taskArchives.archivedAt,
+      })
       .from(tasks)
+      .leftJoin(
+        taskArchives,
+        and(
+          eq(taskArchives.taskId, tasks.id),
+          eq(taskArchives.tenantId, tasks.tenantId),
+          gte(taskArchives.archivedAt, tasks.updatedAt),
+        ),
+      )
       .where(where)
       .orderBy(desc(tasks.updatedAt))
       .limit(200);
@@ -406,7 +435,11 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) {
       return context.json({ error: "No such task here." }, 404);
     }
-    const ok = await projector.archived({ tenantId, taskId });
+    const ok = await projector.archived({
+      tenantId,
+      taskId,
+      archivedBy: context.var.actor.id,
+    });
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Cannot archive from this state." }, 409);
