@@ -29,11 +29,11 @@ export function createQuotaRoutes(
       quota.planFor(tenantId),
       quota.usageFor(tenantId),
     ]);
-    // `plan` null is said as plainly as a number: a workspace with no subscription is not on a tier,
-    // and a panel that drew "Free" there would be advertising an upgrade from something it never was.
+    // Always a plan: a workspace with no subscription is held to Free, so the panel says Free too —
+    // the ceilings it draws are the ones the write paths enforce.
     return context.json({
-      plan: plan ? { id: plan.id, name: plan.name } : null,
-      limits: plan?.limits ?? null,
+      plan: { id: plan.id, name: plan.name },
+      limits: plan.limits,
       usage,
     });
   });
