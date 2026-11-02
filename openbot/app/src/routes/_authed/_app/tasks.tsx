@@ -4,8 +4,13 @@ import { useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import {
+  ApprovalActions,
+  useApprovalDecision,
+} from "@/components/tasks/approval-actions";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import type { ApprovalDecision } from "@/lib/approvals";
 import { client, RequestError } from "@/lib/client";
 import { taskAction } from "@/lib/tasks/actions";
 
@@ -93,8 +98,26 @@ type Task = {
    * reading `failed`, and this is what moves it from 需要关注 to 已结束. Absent from an older server.
    */
   archivedAt?: string | null;
+  /**
+   * The approval this card is parked against while it is `needs_action` (spec A8), or null. It is what
+   * the card's 批准/拒绝 answer, and every card carrying the same id moves together. Absent from an
+   * older server, which simply draws no buttons.
+   */
+  pendingApprovalId?: string | null;
   updatedAt: string;
 };
+
+/**
+ * A8's answer, threaded to every card: the board's one decision write and which approvals it is
+ * currently answering. Optional so a card drawn without it (a test of the region alone) simply has no
+ * approval buttons, rather than buttons that do nothing.
+ */
+type ApprovalWiring = {
+  onDecide?: (approvalId: string, decision: ApprovalDecision) => void;
+  decidingIds?: ReadonlySet<string>;
+};
+
+const NOTHING_DECIDING: ReadonlySet<string> = new Set();
 
 /**
  * Where a card is found, which is not the same fact as what the card says it is.
@@ -164,6 +187,32 @@ export const laneOfTask = (task: {
   task.status === "failed" && task.archivedAt
     ? ["finished"]
     : laneOf(task.status);
+
+/**
+ * The circuit breaker a card carries, or null (spec C3).
+ *
+ * The routine runner closes the tenth consecutive failure's card with
+ * `deliverableRef: { kind: "circuit_breaker", failures, routineId }`, written only once the routine
+ * really has been switched off. `kind` is what is asked, so a later deliverable reference of another
+ * kind is simply not a breaker; a malformed one is read as no breaker rather than a broken card.
+ */
+export type CircuitBreaker = { failures: number; routineId: string };
+
+export const breakerOf = (task: {
+  status: string;
+  deliverableRef?: unknown;
+}): CircuitBreaker | null => {
+  const ref = task.deliverableRef;
+  if (task.status !== "failed" || typeof ref !== "object" || ref === null) {
+    return null;
+  }
+  const record = ref as Record<string, unknown>;
+  if (record.kind !== "circuit_breaker") return null;
+  return {
+    failures: typeof record.failures === "number" ? record.failures : 0,
+    routineId: typeof record.routineId === "string" ? record.routineId : "",
+  };
+};
 
 /** Whether this card is a failure a person has already archived. */
 const isArchivedFailure = (task: {
@@ -443,6 +492,8 @@ function TaskCard({
   onReview,
   onArchive,
   pendingIds,
+  onDecide,
+  decidingIds,
 }: {
   task: Task;
   /** Which of the tenant's machines did it, already named — or its id if the machine is gone. */
@@ -450,7 +501,7 @@ function TaskCard({
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
-}) {
+} & ApprovalWiring) {
   const busy = pendingIds.has(task.id);
   /*
    * A3 asks the board to show which coworker did the work — its name and avatar, the same identity
@@ -463,6 +514,7 @@ function TaskCard({
   const executor = coworkers.data?.find(
     (coworker) => coworker.id === task.executorAgentId,
   );
+  const breaker = breakerOf(task);
 
   return (
     /*
@@ -495,6 +547,28 @@ function TaskCard({
           {statusLabelOf(task)}
         </span>
       </div>
+      {breaker ? (
+        /*
+         * Spec C3: why it failed and what happened next, on the card. The routine is already off --
+         * the runner only writes this after the switch-off -- so the way back is the page where it
+         * can be switched on again.
+         */
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+          <span
+            className="rounded bg-red-500/20 px-1.5 text-red-500"
+            data-breaker="circuit_breaker"
+            title={`连续失败 ${breaker.failures} 次`}
+          >
+            已熔断·已自动停用
+          </span>
+          <span className="opacity-70">
+            连续失败 {breaker.failures} 次，例行任务已暂停
+          </span>
+          <Link className="underline opacity-80" to="/autonomous">
+            去自主工作页处理
+          </Link>
+        </div>
+      ) : null}
       {/*
        * Wraps rather than squeezes. In a narrow lane a single line had every chip shrink until a name
        * broke one character per line; each item keeps its own line and the row takes a second one.
@@ -563,6 +637,12 @@ function TaskCard({
           >
             {busy ? "归档中…" : "归档"}
           </button>
+        ) : onDecide ? (
+          <ApprovalActions
+            onDecide={onDecide}
+            pending={decidingIds ?? NOTHING_DECIDING}
+            task={task}
+          />
         ) : null}
       </div>
     </li>
@@ -598,13 +678,15 @@ export function AttentionRegion({
   onReview,
   onArchive,
   pendingIds,
+  onDecide,
+  decidingIds,
 }: {
   tasks: Task[];
   machineLabel: (deviceId: string | null) => string | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
-}) {
+} & ApprovalWiring) {
   const [tab, setTab] = useState<"needsYou" | "review">("needsYou");
   const groups = attentionGroups(tasks);
   const shown = groups[tab];
@@ -647,9 +729,11 @@ export function AttentionRegion({
           {shown.map((task) => (
             // TaskCard is an `li` of its own — the board's cards and these are the same cards.
             <TaskCard
+              decidingIds={decidingIds}
               key={task.id}
               machine={machineLabel(task.device)}
               onArchive={onArchive}
+              onDecide={onDecide}
               onReview={onReview}
               pendingIds={pendingIds}
               task={task}
@@ -771,6 +855,12 @@ function TasksPage() {
     setPendingIds(new Set(inflight.current));
     act.mutate({ id, verb });
   };
+  /*
+   * A8: 批准/拒绝 on the card itself. Its own write rather than a third verb on `act`, because it is a
+   * different endpoint with a different gate (one approval, however many cards share it) and it moves
+   * the card ahead of the server instead of after it.
+   */
+  const approval = useApprovalDecision();
   const list = shownForStatus(tasks.data ?? [], status);
   /*
    * 51665048 froze three states that may not overlap: a read that failed says 失败, a first read
@@ -832,6 +922,15 @@ function TasksPage() {
     };
   };
   const failure = act.isError ? actionFailure() : null;
+  /*
+   * A refused decision has already been rolled back on the cards; this says why, in the server's own
+   * sentence. Whatever the outcome, the reads were refreshed after it, so the board shows the truth.
+   */
+  const approvalFailure = approval.error
+    ? approval.error instanceof RequestError
+      ? `审批没有提交：${approval.error.message}（服务端返回 ${approval.error.status}）`
+      : "审批结果未确认，请刷新任务后核对"
+    : null;
   const refreshReadsOnly = () => {
     void tasks.refetch();
     void summary.refetch();
@@ -872,6 +971,14 @@ function TasksPage() {
           </Button>
         </div>
       ) : null}
+      {approvalFailure ? (
+        <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
+          <p className="text-destructive">{approvalFailure}</p>
+          <Button onClick={approval.reset} size="sm" variant="outline">
+            知道了
+          </Button>
+        </div>
+      ) : null}
       {/*
        * A7's region, fixed above the board. It reads the same list the board renders, on purpose: a
        * second fetch would put two answers to "what needs me" on one screen, and they would disagree
@@ -881,8 +988,10 @@ function TasksPage() {
        */}
       {tasks.data !== undefined ? (
         <AttentionRegion
+          decidingIds={approval.pending}
           machineLabel={machineLabel}
           onArchive={(id) => runAction(id, "archive")}
+          onDecide={approval.decide}
           onReview={(id) => runAction(id, "review")}
           pendingIds={pendingIds}
           tasks={list}
@@ -1024,6 +1133,8 @@ function TasksPage() {
               onReview={(id) => runAction(id, "review")}
               onArchive={(id) => runAction(id, "archive")}
               pendingIds={pendingIds}
+              onDecide={approval.decide}
+              decidingIds={approval.pending}
             />
           ))}
           {/*
@@ -1068,6 +1179,8 @@ function TasksPage() {
                         onReview={(id) => runAction(id, "review")}
                         onArchive={(id) => runAction(id, "archive")}
                         pendingIds={pendingIds}
+                        onDecide={approval.decide}
+                        decidingIds={approval.pending}
                       />
                     ))}
                 </ul>
