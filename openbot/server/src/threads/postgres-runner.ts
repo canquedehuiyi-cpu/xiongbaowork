@@ -76,7 +76,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * Asked, never insisted on: a turn that cannot name a machine still runs — in cloud mode there is
      * none — so the answer here is a label for the card rather than a gate. The gate is the dispatch.
      */
-    private readonly deviceOf?: (agentId: string) => Promise<string | null>,
+    private readonly deviceOf?: (
+      agentId: string,
+      taskRef?: string,
+    ) => Promise<string | null>,
   ) {
     super({ onConcurrentRun: "supersede" });
   }
@@ -325,7 +328,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      */
     const card =
       this.board && !cardIsTaken
-        ? Promise.resolve(this.deviceOf?.(agentId))
+        ? Promise.resolve(this.deviceOf?.(agentId, runId))
             .catch(() => null)
             .then((deviceId) =>
               // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here

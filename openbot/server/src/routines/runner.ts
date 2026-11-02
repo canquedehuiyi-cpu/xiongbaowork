@@ -126,7 +126,7 @@ export function createRoutineRunner(options: {
    */
   accessRevokedOf?: (userId: string) => Promise<boolean>;
   /** Which of the owner's machines this coworker's actions run on, in device mode. */
-  deviceIdOf?: (agentId: string) => Promise<string | null>;
+  deviceIdOf?: (agentId: string, taskRef?: string) => Promise<string | null>;
 }): RoutineRunner {
   const {
     routineStore,
@@ -283,7 +283,7 @@ export function createRoutineRunner(options: {
           source: "routine",
           channelRef: channelId,
           runRef: routineRunId,
-          deviceId: (await deviceIdOf?.(agentId)) ?? null,
+          deviceId: (await deviceIdOf?.(agentId, routineRunId)) ?? null,
         });
         carded = true;
       } catch (error) {

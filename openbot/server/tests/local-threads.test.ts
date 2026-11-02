@@ -38,7 +38,11 @@ const stored = new Map<
   { runs: StoredRun[]; messages: unknown[]; createdAt: number }
 >();
 
+// Keep the module's other exports (BuiltInAgent, CopilotRuntime, …): Bun's module mock outlives this
+// file in the shard process, and later files import src/copilot.ts, which needs them.
+const realRuntime = { ...(await import("@copilotkit/runtime/v2")) };
 mock.module("@copilotkit/runtime/v2", () => ({
+  ...realRuntime,
   ɵGLOBAL_STORE: {
     appendRun(threadId: string, run: StoredRun) {
       const entry = stored.get(threadId) ?? {
