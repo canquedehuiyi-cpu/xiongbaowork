@@ -213,14 +213,19 @@ test("a 402 mutation opens the dialog with used/limit, the /plans link and the c
   expect(dialog.textContent).toContain("Team 套餐：员工已用 2/2");
   expect(hrefOf(dialog, "升级套餐")).toBe("/plans");
   expect(hrefOf(dialog, "管理员工")).toBe("/agents");
-  // The screen's own inline message is kept beside the dialog.
-  expect((await view.findByRole("alert")).textContent).toBe(
-    "This workspace has reached its allowance.",
-  );
+  // The screen's own inline message is kept beside the dialog. The modal dialog marks everything
+  // outside its portal aria-hidden while open, so the alert is only reachable with `hidden: true`.
+  const alert = await view.findByRole("alert", { hidden: true });
+  expect(alert.textContent).toBe("This workspace has reached its allowance.");
+  expect(dialog.contains(alert)).toBe(false);
 
   await user.click(view.getByRole("button", { name: "关闭" }));
   await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
   expect(currentQuotaGuidance()).toBeNull();
+  // Once the dialog closes the inline message is back in the accessibility tree.
+  expect(view.getByRole("alert").textContent).toBe(
+    "This workspace has reached its allowance.",
+  );
 });
 
 test("a 402 read opens the dialog without being retried, and a monthly tally offers no cleanup", async () => {
@@ -237,9 +242,10 @@ test("a 402 read opens the dialog without being retried, and a monthly tally off
   expect(dialog.textContent).toContain("下个周期自动恢复");
   expect(hrefOf(dialog, "升级套餐")).toBe("/plans");
   expect(dialog.querySelectorAll("a")).toHaveLength(1);
-  expect((await view.findByRole("alert")).textContent).toBe(
-    "This month's tasks are used up.",
-  );
+  // Behind the open modal the inline message is aria-hidden, hence `hidden: true`.
+  const alert = await view.findByRole("alert", { hidden: true });
+  expect(alert.textContent).toBe("This month's tasks are used up.");
+  expect(dialog.contains(alert)).toBe(false);
   expect(server.calls).toBe(1);
 });
 
