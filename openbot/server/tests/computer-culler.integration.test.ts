@@ -88,6 +88,16 @@ const ran = (botId: string, when: Date) => ({
 });
 
 /*
+ * The audit row a person's turn on the computer leaves behind, written in that person's frame the way
+ * the gateway writes it. The culler reads it back as the platform, across tenants, so the person who
+ * used a Bot need not be the Bot's owner: tenant A stands in for whoever it was.
+ */
+const used = (botId: string, when: Date) =>
+  runAsTenant(tenantA, () =>
+    database.insert(auditEvents).values(ran(botId, when)),
+  );
+
+/*
  * This suite's own rows and nobody else's.
  *
  * The kind is fixed by the culler, so scoping on it alone deleted every queued suspension in the
@@ -144,7 +154,7 @@ const minutesAgo = (minutes: number) =>
 describe("suspending computers nobody is using", () => {
   test("a computer idle longer than the threshold is offered, and then suspended", async () => {
     const botId = botOf("idle");
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(45)));
+    await used(botId, minutesAgo(45));
     const { provider, stopped } = providerWith([
       { botId, status: "running", url: "http://c" },
     ]);
@@ -166,7 +176,7 @@ describe("suspending computers nobody is using", () => {
 
   test("a computer used a minute ago is left alone", async () => {
     const botId = botOf("busy");
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(1)));
+    await used(botId, minutesAgo(1));
     const { provider, stopped } = providerWith([
       { botId, status: "running", url: "http://c" },
     ]);
@@ -191,7 +201,7 @@ describe("suspending computers nobody is using", () => {
    */
   test("a computer used after being offered is not suspended", async () => {
     const botId = botOf("returned");
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(45)));
+    await used(botId, minutesAgo(45));
     const { provider, stopped } = providerWith([
       { botId, status: "running", url: "http://c" },
     ]);
@@ -206,7 +216,7 @@ describe("suspending computers nobody is using", () => {
 
     await offerIdleComputers(options);
     // They came back while the item sat on the queue.
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(2)));
+    await used(botId, minutesAgo(2));
     const report = await suspendClaimedComputers(options);
 
     expect(stopped).toEqual([]);
@@ -235,7 +245,7 @@ describe("suspending computers nobody is using", () => {
 
   test("a computer already stopped is not offered again", async () => {
     const botId = botOf("stopped");
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(90)));
+    await used(botId, minutesAgo(90));
     const { provider } = providerWith([
       { botId, status: "stopped", url: "http://c" },
     ]);
@@ -257,7 +267,7 @@ describe("suspending computers nobody is using", () => {
   test("two replicas culling together suspend each computer once", async () => {
     const ids = ["a", "b", "c", "d"].map(botOf);
     for (const botId of ids) {
-      await database.insert(auditEvents).values(ran(botId, minutesAgo(60)));
+      await used(botId, minutesAgo(60));
     }
     const { provider, stopped } = providerWith(
       ids.map((botId) => ({
@@ -320,13 +330,11 @@ describe("suspending computers nobody is using", () => {
       return report;
     };
 
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(60)));
+    await used(botId, minutesAgo(60));
     expect((await sweep("2026-08-24T12:00:00Z")).suspended).toEqual([botId]);
 
     // Somebody comes back at 13:00, and it is quiet again by 14:00.
-    await database
-      .insert(auditEvents)
-      .values(ran(botId, new Date("2026-08-24T13:00:00Z")));
+    await used(botId, new Date("2026-08-24T13:00:00Z"));
     const second = await sweep("2026-08-24T14:00:00Z");
 
     expect(second.suspended).toEqual([botId]);
@@ -353,7 +361,7 @@ describe("whose suspension it is (G01)", () => {
 
   test("is offered in the Bot's own tenant, which another tenant cannot read", async () => {
     const botId = botOf("mine");
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(45)));
+    await used(botId, minutesAgo(45));
     const { provider, stopped } = providerWith([
       { botId, status: "running", url: "http://c" },
     ]);
@@ -372,8 +380,7 @@ describe("whose suspension it is (G01)", () => {
 
   test("a Bot stamped as nobody's is offered and suspended as the platform", async () => {
     const ids = [nobodysBots.system, nobodysBots.platform];
-    for (const botId of ids)
-      await database.insert(auditEvents).values(ran(botId, minutesAgo(90)));
+    for (const botId of ids) await used(botId, minutesAgo(90));
     const { provider, stopped } = providerWith(
       ids.map((botId) => ({
         botId,
@@ -403,7 +410,7 @@ describe("whose suspension it is (G01)", () => {
 
   test("an orphaned computer, whose Bot row is gone, is still suspended as the platform", async () => {
     const botId = botOf("orphan");
-    await database.insert(auditEvents).values(ran(botId, minutesAgo(90)));
+    await used(botId, minutesAgo(90));
     const { provider, stopped } = providerWith([
       { botId, status: "running", url: "http://c" },
     ]);
@@ -425,7 +432,7 @@ describe("whose suspension it is (G01)", () => {
     const mislabelled = botOf("mislabelled");
     const unstamped = botOf("unstamped");
     for (const botId of [mislabelled, unstamped])
-      await database.insert(auditEvents).values(ran(botId, minutesAgo(90)));
+      await used(botId, minutesAgo(90));
     const { provider, stopped } = providerWith([]);
     const offer = (botId: string) =>
       queue.offer({
