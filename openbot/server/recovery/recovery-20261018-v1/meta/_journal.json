@@ -806,6 +806,13 @@
       "when": 1793623000000,
       "tag": "0114_delivery_binding_owner_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1793623800000,
+      "tag": "0115_routine_memory_owner_tenant",
+      "breakpoints": true
     }
   ]
 }

@@ -287,6 +287,12 @@ export type TriggerRecord = {
 /** What an ingress route needs: the owner, target, config, lifecycle and the plaintext secret. */
 export type ResolvedTrigger = {
   id: string;
+  /**
+   * The tenant the database stamped on the trigger row (G01). Background delivery that is nobody's
+   * request (a Slack event fanned out to every listener) runs each trigger as this, and only when it
+   * is the owner's own.
+   */
+  tenantId: string;
   ownerUserId: string;
   responsibilityId: string;
   responsibilityStatus: ResponsibilityStatus;
@@ -425,10 +431,15 @@ export function createTriggerStore(
     return openCredential(vault.encryptionKey, credential);
   }
   async function resolved(
-    row: Row & { ownerUserId: string; status: ResponsibilityStatus },
+    row: Row & {
+      tenantId: string;
+      ownerUserId: string;
+      status: ResponsibilityStatus;
+    },
   ) {
     return {
       id: row.id,
+      tenantId: row.tenantId,
       ownerUserId: row.ownerUserId,
       responsibilityId: row.responsibilityId,
       responsibilityStatus: row.status,
@@ -441,6 +452,7 @@ export function createTriggerStore(
   }
   const resolvedColumns = {
     ...columns,
+    tenantId: responsibilityTriggers.tenantId,
     ownerUserId: responsibilityTriggers.ownerUserId,
     status: responsibilities.status,
     agentId: responsibilities.agentId,
