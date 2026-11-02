@@ -17,14 +17,18 @@ import { workOwner } from "../../shared/work-owner";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { reapAbandonedPipelineRuns } from "../src/pipeline/reap";
+import {
+  abandonedWorkPhases,
+  sweepAbandonedWork,
+} from "../src/recovery/abandoned-work";
 import { createRoutineStore } from "../src/routines/store";
 import {
-  ABANDONED_RUN_MS,
   dispatchClaimedRoutines,
   offerDueRoutines,
   ROUTINE_FIRE_KIND,
 } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
+import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWorkQueue } from "../src/work/queue";
 
 const config = loadConfig(process.env);
@@ -108,52 +112,41 @@ try {
   const { offered } = await offerDueRoutines(options);
   const report = await dispatchClaimedRoutines(options);
   /*
-   * The same stranded-row problem one table over (ticket 021).
-   *
-   * A crew's run advances inside an HTTP request, so a server that restarted mid-step leaves a run row
-   * reading `running` with nothing left to write it — and the board counts that as work. It is not
-   * replayed here: every step is a turn that spent the month's ceiling and may have written to the
-   * world. Best-effort with its own catch, for the reason this sweep already states: a reaper that
-   * cannot run must not stop the routines that are due from firing.
+   * Restart recovery: crew runs and unattended cards a dead server left at `running` (ticket 021,
+   * audit defect #10). The same sweep, lease and phases the API server runs on its own timer
+   * (`src/recovery/abandoned-work.ts`), so there is one implementation; whichever process takes this
+   * five-minute bucket's lease does the work and the other finds nothing to do. Nothing is replayed.
+   * Best-effort with its own catch: a recovery pass that cannot run must not stop due routines firing.
    */
   try {
-    const runs = await reapAbandonedPipelineRuns(
-      database,
-      createTaskProjector(database),
-      { olderThanMs: ABANDONED_RUN_MS },
-    );
-    if (runs > 0) {
-      console.warn(JSON.stringify({ type: "pipeline-runs-reaped", runs }));
-    }
-  } catch (error) {
-    console.warn(
-      JSON.stringify({
-        type: "pipeline-run-reap-failed",
-        reason: String(error),
+    const board = createTaskProjector(database);
+    const recovered = await sweepAbandonedWork({
+      queue,
+      owner,
+      phases: abandonedWorkPhases({
+        routineStore,
+        reapPipelineRuns: (input) =>
+          reapAbandonedPipelineRuns(database, board, input),
+        recoverFlowRuns: (input) =>
+          recoverInterruptedFlowRuns(database, board, input),
+        board,
       }),
-    );
-  }
-  /*
-   * The cards the two unattended engines left at `running`, on the same clock as the runs above and
-   * for the same reason: a reaper nobody calls is why the board still shows work that died with the
-   * process that opened it. The pass reads the ledgers before closing anything (`tasks/reclaim.ts`),
-   * so a card whose run row is still open — a device that has been offline for longer than the
-   * horizon, one legitimately slow turn — is left alone however stale its own row looks.
-   *
-   * Best-effort with its own catch, the same shape as the crew reaper beside it: cards are the display,
-   * and a sweep that cannot tidy the display must still fire the routines that are due.
-   */
-  try {
-    const cards = await createTaskProjector(database).reclaimAbandoned({
-      olderThanMs: ABANDONED_RUN_MS,
     });
-    if (cards > 0) {
-      console.warn(JSON.stringify({ type: "task-cards-reclaimed", cards }));
+    if (
+      recovered.won &&
+      (recovered.routineRuns ||
+        recovered.pipelineRuns ||
+        recovered.cards ||
+        recovered.failed.length)
+    ) {
+      console.warn(
+        JSON.stringify({ type: "restart-recovery-sweep", ...recovered }),
+      );
     }
   } catch (error) {
     console.warn(
       JSON.stringify({
-        type: "task-card-reclaim-failed",
+        type: "restart-recovery-sweep-failed",
         reason: String(error),
       }),
     );

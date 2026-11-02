@@ -252,15 +252,19 @@ export class WakerFlowRequestConflictError extends WakerFlowError {
   }
 }
 
-const GENERATE = "generate";
-const RUN = "run";
+/** The request kind for planning; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
+export const GENERATE = "generate";
+/** The request kind for a run; restart recovery (`recovery.ts`) settles the ones a crash left pending. */
+export const RUN = "run";
 const NOT_SAVED_MESSAGE = "这个 WakerFlow 还没有保存为可运行的计划，请先保存。";
 const STALE_REVISION_MESSAGE = "这个 WakerFlow 已更新，请刷新后再运行。";
-const RUN_UNCERTAIN_MESSAGE =
+export const RUN_UNCERTAIN_MESSAGE =
   "无法确认这次运行是否已经开始，请到运行记录中查看，或发起新的运行。";
 const QUOTA_MESSAGE = "本月任务额度不足，这次运行没有开始。";
 const CANCELLED_MESSAGE = "已取消生成。";
-const UNCERTAIN_MESSAGE = "无法确认模型是否完成了这次生成，请发起新的生成。";
+/** A planning call whose outcome nobody saw: a timeout, an unclassified error, or a restart mid-call. */
+export const UNCERTAIN_MESSAGE =
+  "无法确认模型是否完成了这次生成，请发起新的生成。";
 const SAVE_FAILED_MESSAGE = "生成的计划未能保存，请重新生成。";
 
 const candidatesSchema = z
