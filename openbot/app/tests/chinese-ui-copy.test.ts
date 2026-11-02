@@ -112,6 +112,11 @@ const CURATED = [
   "components/agents/agent-dialog.tsx",
   "components/app-sidebar/app-sidebar.tsx",
   "routes/_authed/_app/group/new.tsx",
+  "components/skills/skill-tools.tsx",
+  "lib/dictation/session.ts",
+  "lib/voice/archive.ts",
+  "lib/bot-lifecycle/mutations.ts",
+  "lib/agents/queries.ts",
 ] as const;
 
 /** English copy that previously reached people from the files above. */
@@ -132,6 +137,25 @@ const FORMER_ENGLISH = [
   '"first", "second", "third"',
   "answers {",
   " via {origin.via}",
+  "changes something",
+  "Microphone access was denied",
+  "Could not start recording",
+  "Could not finish recording",
+  "Transcription failed",
+  "Could not load voice chats",
+  "Could not save this voice chat",
+  "browser recovery is unavailable",
+  "The page closed before saving",
+  "Bot operation failed",
+  "Could not reset this Bot",
+  "Could not stop the delegated task",
+  "Could not cancel the follow-up",
+  "Could not save where updates go",
+  "Could not load what this deployment supports",
+  "Could not load coworkers",
+  "Could not load this coworker",
+  "Could not load which Bots",
+  "could not be tested",
 ] as const;
 
 /** Comments may say anything; only code is copy. Block comments, JSX comments and `//` lines go. */
@@ -163,6 +187,22 @@ describe("curated person-facing files carry no English copy", () => {
         const text = match[1] ?? "";
         const english = /^[A-Z][a-z]+(?:\s+[a-z]+){2,}/.test(text);
         expect(english && !HAN.test(text), `${path}: ${text}`).toBeFalse();
+      }
+      // Error copy a screen shows when a request or the microphone fails: the `fallback`, `error`,
+      // `saveError` and `reason` a person reads, a shared `FALLBACK`-style constant, and the message
+      // of an `Error` thrown to a screen.
+      for (const match of source.matchAll(
+        /(?:\b(?:fallback|error|saveError|reason):|\bconst\s+[A-Z_]+\s*=|new Error\(|\?\?|(?:^|\s)[?:])\s*"([^"]*)"/gm,
+      )) {
+        const value = match[1] ?? "";
+        // Two or more plain English words ("Load failed.") read as copy. Class lists
+        // (`line-clamp-2`) are hyphenated tokens and do not count.
+        const english =
+          value
+            .split(/\s+/)
+            .filter((token) => /^[A-Za-z]{2,}[,.;:!?']?$/.test(token)).length >=
+          2;
+        expect(english && !HAN.test(value), `${path}: ${value}`).toBeFalse();
       }
     });
   }
