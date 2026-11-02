@@ -71,7 +71,13 @@ export interface DisposableTestDatabase {
   /** Same credentials as the chosen role, pointed at the new one-time database. */
   readonly url: string;
   readonly databaseName: string;
-  /** Drops the one-time database. Call after every pool on `url` is closed. */
+  /**
+   * The same one-time database through the BYPASSRLS fixture role, when `TEST_DATABASE_BYPASS_URL`
+   * is configured: for a suite whose code under test must run as the app role but whose fixture
+   * writes the closed continuation ledger, which no app-role policy admits.
+   */
+  readonly bypassUrl?: string;
+  /** Drops the one-time database. Call after every pool on `url` (and `bypassUrl`) is closed. */
   drop(): Promise<void>;
 }
 
@@ -111,6 +117,9 @@ export async function createDisposableTestDatabase(
     options.role === "bypass"
       ? loopbackPostgresUrl(environment.TEST_DATABASE_BYPASS_URL, "TEST_DATABASE_BYPASS_URL")
       : app;
+  const bypass = environment.TEST_DATABASE_BYPASS_URL
+    ? loopbackPostgresUrl(environment.TEST_DATABASE_BYPASS_URL, "TEST_DATABASE_BYPASS_URL")
+    : undefined;
   const template = environment.TEST_DATABASE_TEMPLATE?.trim() ?? "";
   if (!TEMPLATE_NAME.test(template)) {
     throw new Error("BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_TEMPLATE must be openbot_continuation_template");
@@ -145,6 +154,19 @@ export async function createDisposableTestDatabase(
         "BLOCKED_NOT_DISPOSABLE: the suite role must be NOSUPERUSER, and BYPASSRLS only for role \"bypass\"",
       );
     }
+    // The separate fixture connection, when one is configured, must itself be BYPASSRLS and never a
+    // superuser, whatever role the suite runs as.
+    if (bypass) {
+      const [fixture] = await client`
+        select rolsuper as super, rolbypassrls as bypass
+        from pg_catalog.pg_roles where rolname = ${decodeURIComponent(bypass.username)}
+      `;
+      if (fixture?.super !== false || fixture.bypass !== true) {
+        throw new Error(
+          "BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_BYPASS_URL must name a NOSUPERUSER BYPASSRLS role",
+        );
+      }
+    }
     // Both names are fixed-shape identifiers checked above; CREATE DATABASE takes no parameters.
     await client.unsafe(`CREATE DATABASE "${databaseName}" TEMPLATE "${template}"`);
   } catch (error) {
@@ -154,10 +176,17 @@ export async function createDisposableTestDatabase(
 
   const url = new URL(credentials.toString());
   url.pathname = `/${databaseName}`;
+  let bypassUrl: string | undefined;
+  if (bypass) {
+    const fixture = new URL(bypass.toString());
+    fixture.pathname = `/${databaseName}`;
+    bypassUrl = fixture.toString();
+  }
   let dropped = false;
   return {
     url: url.toString(),
     databaseName,
+    bypassUrl,
     async drop() {
       if (dropped) return;
       dropped = true;
