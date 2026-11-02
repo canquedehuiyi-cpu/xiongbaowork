@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { agentProfiles, agents, subscriptions } from "../db/schema";
 import { runAsTenant } from "./context";
@@ -29,7 +30,10 @@ export function packageChannelId(tenantId: string, channelId: string): string {
  * their 分身, the personal coworker the onboarding then asks to configure.
  *
  * Called from Better Auth's user-create hook, so every arrival path — password sign-up, OAuth,
- * SSO — provisions the same way. It must be idempotent against a retry: one agent row per user.
+ * SSO — provisions the same way; and from the paths that never pass through that hook, the
+ * organization store (enterprise sign-in against a pinned authority) and the single-user actor at
+ * start-up, so no tenant is left without a subscription row an administrator can switch. It must be
+ * idempotent against a retry and a repeat: one subscription row and one agent row per user.
  */
 export async function provisionTenant(
   database: Database,
@@ -38,10 +42,22 @@ export async function provisionTenant(
   // The rows name a tenant that does not exist yet, so the write has to run
   // inside that tenant's scope; RLS will not admit another scope's stamp.
   await runAsTenant(user.id, async () => {
-    await database
-      .insert(subscriptions)
-      .values({ tenantId: user.id, planId: "free" })
-      .onConflictDoNothing();
+    // `subscriptions` has no unique key on the tenant, so `onConflictDoNothing` alone never fires and
+    // a second call would add a second row. Callers that run on every sign-in (the organization
+    // store) and at every start (the single-user actor) call this repeatedly, so the Free row is
+    // written only when the tenant has no subscription row at all -- an existing one, active or
+    // canceled, is the plan someone chose and is left alone. Two first calls racing can still both
+    // insert; the quota reader resolves that deterministically to the most recent active row.
+    const [existing] = await database
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(eq(subscriptions.tenantId, user.id))
+      .limit(1);
+    if (!existing)
+      await database
+        .insert(subscriptions)
+        .values({ tenantId: user.id, planId: "free" })
+        .onConflictDoNothing();
 
     // One 分身 per tenant, keyed by a deterministic id so a retried hook cannot make a second.
     const avatarId = avatarAgentId(user.id);

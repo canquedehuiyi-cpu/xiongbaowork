@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from "hono";
 import type { Database } from "../db/client";
 import { users } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
+import { provisionTenant } from "../tenant/provisioning";
 import type { AppVariables, AuthenticatedActor } from "./guards";
 
 /**
@@ -54,6 +55,31 @@ export async function initializeDevActorUser(
       },
     });
 
+  return true;
+}
+
+/**
+ * The single-user actor's tenant: a Free subscription row and its 分身.
+ *
+ * The actor is written at start-up, not by Better Auth's user-create hook, so it never got a
+ * subscription. Quota fails closed to Free on an absent row (audit #7), so the limits are the same
+ * either way -- including `customModels: false`, which refuses POST /api/models until the plan is
+ * switched -- but with the row in place the administrator can switch it with POST /api/quota/plan.
+ *
+ * Separate from {@link initializeDevActorUser} because provisioning writes tenant-scoped rows and has
+ * to run in the actor's own tenant scope, which a transaction already opened as `system` cannot give
+ * it. Idempotent: called on every start.
+ */
+export async function provisionDevActorTenant(
+  database: Database,
+  enabled: boolean,
+): Promise<boolean> {
+  if (!enabled) return false;
+  await provisionTenant(database, {
+    id: DEV_ACTOR.id,
+    email: DEV_ACTOR.email,
+    name: DEV_ACTOR.name ?? DEV_ACTOR.email,
+  });
   return true;
 }
 
