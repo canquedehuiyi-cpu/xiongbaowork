@@ -6,7 +6,12 @@ import {
   stepIsSettled,
 } from "../db/schema/pipeline";
 import { runAsTenant } from "../tenant/context";
-import { RUN, RUN_UNCERTAIN_MESSAGE } from "./store";
+import {
+  GENERATE,
+  RUN,
+  RUN_UNCERTAIN_MESSAGE,
+  UNCERTAIN_MESSAGE,
+} from "./store";
 
 /**
  * Restart recovery for WakerFlow runs (spec D10, WF-F).
@@ -39,6 +44,13 @@ import { RUN, RUN_UNCERTAIN_MESSAGE } from "./store";
  * but never marked, it would block deleting the Flow for good and answer "pending" to every repeat.
  * It is never re-driven; it is pointed at its run if the pipeline had registered one, and otherwise
  * recorded as uncertain, exactly as `start` records a pipeline failure it cannot classify.
+ *
+ * A planning request (kind `generate`) the crash left `pending` blocks deleting the Flow the same way.
+ * Its model call died with the process, but the provider may already have done and charged the work,
+ * so it is settled `unknown` with the sentence `generate` itself stores for a call whose outcome
+ * nobody saw. It is never re-driven and no model is called; the Flow is not written (the plan only
+ * reaches the Flow in the transaction that also marks the request `completed`, and the Flow has no
+ * planning status of its own). A new request id is how a person plans again.
  */
 
 /** What the step that was running says about itself after a restart. */
@@ -178,7 +190,11 @@ export async function recoverInterruptedFlowRuns(
         })
         .catch(() => undefined);
   }
-  return recovered + (await settleStrandedRunRequests(database, input));
+  return (
+    recovered +
+    (await settleStrandedRunRequests(database, input)) +
+    (await settleStrandedGenerateRequests(database, input))
+  );
 }
 
 /**
@@ -279,6 +295,63 @@ async function settleStrandedRunRequests(
       }),
     );
     if (done) settled++;
+  }
+  return settled;
+}
+
+/**
+ * Planning requests a crash left between the claim and the outcome. `generate` holds no heartbeat, but
+ * its model call is bounded by the generator's timeout (two minutes), far inside the recovery horizon,
+ * so a `pending` row older than the horizon has no live call on any replica. Fenced on kind, `pending`
+ * and age in the UPDATE itself, so a live call, a Cancel that landed first, a second pass and a second
+ * replica are all left alone; a late answer from a call that somehow survived finds the row no longer
+ * `pending` and writes nothing, exactly as after a Cancel.
+ */
+async function settleStrandedGenerateRequests(
+  database: Database,
+  input: { olderThanMs: number },
+): Promise<number> {
+  const stale = sql`${wakerFlowRequests.updatedAt} < now() - (${input.olderThanMs} * interval '1 millisecond')`;
+  const stranded = await runAsTenant("platform", async () => {
+    return await database
+      .select({
+        id: wakerFlowRequests.id,
+        tenantId: wakerFlowRequests.tenantId,
+      })
+      .from(wakerFlowRequests)
+      .where(
+        and(
+          eq(wakerFlowRequests.kind, GENERATE),
+          eq(wakerFlowRequests.status, "pending"),
+          stale,
+        ),
+      );
+  });
+
+  let settled = 0;
+  for (const request of stranded) {
+    // From here on the tenant is the claimed row's own.
+    const owner = request.tenantId;
+    const marked = await runAsTenant(owner, async () => {
+      return await database
+        .update(wakerFlowRequests)
+        .set({
+          status: "unknown",
+          error: UNCERTAIN_MESSAGE,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(wakerFlowRequests.tenantId, owner),
+            eq(wakerFlowRequests.id, request.id),
+            eq(wakerFlowRequests.kind, GENERATE),
+            eq(wakerFlowRequests.status, "pending"),
+            stale,
+          ),
+        )
+        .returning({ id: wakerFlowRequests.id });
+    });
+    if (marked.length > 0) settled++;
   }
   return settled;
 }

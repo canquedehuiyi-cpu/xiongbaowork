@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { WakerFlowPlan } from "../../shared/wakerflows";
 import { createDatabase } from "../src/db/client";
 import {
@@ -21,6 +21,8 @@ import { abandonedWorkPhases } from "../src/recovery/abandoned-work";
 import { ABANDONED_RUN_MS } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
+import type { FlowGenerationInput } from "../src/wakerflows/generator";
+import type { FlowModelResolver } from "../src/wakerflows/model";
 import {
   FLOW_STEP_INTERRUPTED,
   FLOW_STEP_NOT_STARTED,
@@ -29,6 +31,9 @@ import {
 import {
   createWakerFlowStore,
   RUN_UNCERTAIN_MESSAGE,
+  UNCERTAIN_MESSAGE,
+  WakerFlowBusyError,
+  type WakerFlowGenerateInput,
 } from "../src/wakerflows/store";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -121,7 +126,13 @@ async function savedFlow() {
     actor === tenantId && (agentId === member || agentId === reviewer);
 
   /** One server process: its own board, pipeline and Flow store, and a log of the steps it ran. */
-  const boot = (executeStep: (call: StepCall) => StepAnswer) => {
+  const boot = (
+    executeStep: (call: StepCall) => StepAnswer,
+    planning: Pick<
+      Parameters<typeof createWakerFlowStore>[0],
+      "models" | "generator"
+    > = {},
+  ) => {
     const board = createTaskProjector(database);
     const calls: StepCall[] = [];
     const pipeline = createPipelineStore({
@@ -142,6 +153,7 @@ async function savedFlow() {
       drive: (run) => {
         drives.push(pipeline.advance(run));
       },
+      ...planning,
     });
     return { board, calls, pipeline, drives, store };
   };
@@ -236,6 +248,7 @@ async function savedFlow() {
   return {
     tenantId,
     flow,
+    plan,
     boot,
     start,
     runRow,
@@ -533,5 +546,215 @@ test("a run request the crash left pending is settled, never re-driven, and no l
       .set({ status: "failed" })
       .where(eq(wakerFlowRequests.requestId, liveRequest)),
   );
+  expect(await restarted.store.remove(f.tenantId, f.flow.id)).toBeTrue();
+});
+
+test("a planning request the crash left pending is settled uncertain, never re-planned, and no longer blocks deleting the Flow", async () => {
+  const f = await savedFlow();
+  const other = await savedFlow();
+  const requestRow = (tenantId: string, requestId: string) =>
+    runAsTenant(tenantId, async () => {
+      const [row] = await database
+        .select({
+          tenantId: wakerFlowRequests.tenantId,
+          kind: wakerFlowRequests.kind,
+          status: wakerFlowRequests.status,
+          error: wakerFlowRequests.error,
+          result: wakerFlowRequests.result,
+          updatedAt: wakerFlowRequests.updatedAt,
+        })
+        .from(wakerFlowRequests)
+        .where(
+          and(
+            eq(wakerFlowRequests.tenantId, tenantId),
+            eq(wakerFlowRequests.requestId, requestId),
+          ),
+        )
+        .limit(1);
+      return row;
+    });
+  const ageRequest = (tenantId: string, requestId: string) =>
+    runAsTenant(tenantId, () =>
+      database
+        .update(wakerFlowRequests)
+        .set({ updatedAt: new Date(Date.now() - 60 * 60_000) })
+        .where(
+          and(
+            eq(wakerFlowRequests.tenantId, tenantId),
+            eq(wakerFlowRequests.requestId, requestId),
+          ),
+        ),
+    );
+  const flowRow = (g: typeof f) =>
+    runAsTenant(g.tenantId, async () => {
+      const [row] = await database
+        .select({
+          revision: wakerFlows.revision,
+          plan: wakerFlows.plan,
+          deletedAt: wakerFlows.deletedAt,
+        })
+        .from(wakerFlows)
+        .where(eq(wakerFlows.id, g.flow.id))
+        .limit(1);
+      return row;
+    });
+
+  /*
+   * One process whose planning call never answers: the request is claimed and the model call is
+   * outstanding when the process dies. `answer` lets the test hand a late answer to a call that
+   * somehow outlived the restart; `calls` counts every model call made through it.
+   */
+  const planner = () => {
+    const calls: FlowGenerationInput[] = [];
+    const answers: ((plan: WakerFlowPlan) => void)[] = [];
+    const models: FlowModelResolver = {
+      choices: async () => [],
+      resolve: async (_tenantId, modelRef) => ({
+        modelRef: String(modelRef),
+        name: "planner",
+        model: "unused-model" as never,
+      }),
+    };
+    const generator = {
+      plan: (input: FlowGenerationInput) => {
+        calls.push(input);
+        return new Promise<WakerFlowPlan>((resolve) => {
+          answers.push(resolve);
+        });
+      },
+    };
+    return { calls, answers, planning: { models, generator } };
+  };
+  const generateInput = (
+    g: typeof f,
+    requestId: string,
+  ): WakerFlowGenerateInput => ({
+    requestId,
+    idea: "整理会议",
+    modelRef: "planner-model",
+    members: g.plan.members.map((member) => ({
+      agentId: member.agentId,
+      name: "",
+      role: member.role,
+    })),
+  });
+  /** Claim a planning request whose call is still outstanding, as a process that then dies would. */
+  const claimPlanning = async (g: typeof f, requestId: string) => {
+    const dying = planner();
+    const store = g.boot(
+      async () => ({ status: "done", output: "unused" }),
+      dying.planning,
+    ).store;
+    const outstanding = store.generate(
+      g.tenantId,
+      g.tenantId,
+      g.flow.id,
+      generateInput(g, requestId),
+    );
+    for (let tick = 0; dying.calls.length === 0 && tick < 200; tick++)
+      await Bun.sleep(5);
+    expect(dying.calls).toHaveLength(1);
+    expect((await requestRow(g.tenantId, requestId))?.status).toBe("pending");
+    return { ...dying, outstanding };
+  };
+
+  // (1) Tenant A's planning call was outstanding at the crash, and the horizon has passed since.
+  const strandedRequest = randomUUID();
+  const stranded = await claimPlanning(f, strandedRequest);
+  await ageRequest(f.tenantId, strandedRequest);
+  // (2) Tenant A's other planning request was claimed moments ago by a live process.
+  const liveRequest = randomUUID();
+  const live = await claimPlanning(f, liveRequest);
+  // (3) Tenant B's live request under the very same request id, on its own Flow.
+  const otherLive = await claimPlanning(other, strandedRequest);
+
+  // (4) Tenant A's planning request cancelled long ago: settled already, however old it is.
+  const cancelledRequest = randomUUID();
+  await runAsTenant(f.tenantId, () =>
+    database.insert(wakerFlowRequests).values({
+      tenantId: f.tenantId,
+      requestId: cancelledRequest,
+      flowId: f.flow.id,
+      kind: "generate",
+      fingerprint: "cancelled-before-the-crash",
+      status: "cancelled",
+      error: "已取消生成。",
+    }),
+  );
+  await ageRequest(f.tenantId, cancelledRequest);
+
+  const flowBefore = await flowRow(f);
+  const cancelledBefore = await requestRow(f.tenantId, cancelledRequest);
+  const liveBefore = await requestRow(f.tenantId, liveRequest);
+  const otherBefore = await requestRow(other.tenantId, strandedRequest);
+  // While the stranded request is pending the Flow cannot be deleted.
+  const blocked = f.boot(async () => ({ status: "done", output: "unused" }));
+  await expect(blocked.store.remove(f.tenantId, f.flow.id)).rejects.toThrow(
+    WakerFlowBusyError,
+  );
+
+  // The server comes back: new stores whose model must never be asked, and the restart sweep.
+  const restartedPlanner = planner();
+  const restarted = f.boot(
+    async () => ({ status: "done", output: "x" }),
+    restartedPlanner.planning,
+  );
+  await restartPhase()();
+
+  const settled = await requestRow(f.tenantId, strandedRequest);
+  expect(settled).toMatchObject({
+    tenantId: f.tenantId,
+    kind: "generate",
+    status: "unknown",
+    error: UNCERTAIN_MESSAGE,
+    result: null,
+  });
+  // The Flow was not written, the fresh request and tenant B's request are exactly as they were.
+  expect(await flowRow(f)).toEqual(flowBefore);
+  expect(await requestRow(f.tenantId, liveRequest)).toEqual(liveBefore);
+  expect(await requestRow(other.tenantId, strandedRequest)).toEqual(
+    otherBefore,
+  );
+  expect(await requestRow(f.tenantId, cancelledRequest)).toEqual(
+    cancelledBefore,
+  );
+
+  // A repeat of the stranded request answers from its row and calls no model.
+  const repeated = await restarted.store.generate(
+    f.tenantId,
+    f.tenantId,
+    f.flow.id,
+    generateInput(f, strandedRequest),
+  );
+  expect(repeated.status).toBe("unknown");
+  expect(repeated.error).toBe(UNCERTAIN_MESSAGE);
+  expect(repeated.result).toBeNull();
+
+  // A second pass, as after a second restart, changes nothing.
+  const once = await requestRow(f.tenantId, strandedRequest);
+  expect(
+    await recoverInterruptedFlowRuns(database, restarted.board, {
+      olderThanMs: ABANDONED_RUN_MS,
+    }),
+  ).toBe(0);
+  await restartPhase()();
+  expect(await requestRow(f.tenantId, strandedRequest)).toEqual(once);
+  expect(await requestRow(f.tenantId, liveRequest)).toEqual(liveBefore);
+  expect(await requestRow(other.tenantId, strandedRequest)).toEqual(
+    otherBefore,
+  );
+
+  // A late answer from the dead call finds the row settled and writes nothing.
+  stranded.answers[0]?.(f.plan);
+  expect((await stranded.outstanding).status).toBe("unknown");
+  expect(await requestRow(f.tenantId, strandedRequest)).toEqual(once);
+  expect(await flowRow(f)).toEqual(flowBefore);
+  expect(restartedPlanner.calls).toHaveLength(0);
+
+  // Once the live calls answer (and settle their own requests), the Flow can be deleted.
+  live.answers[0]?.(f.plan);
+  otherLive.answers[0]?.(other.plan);
+  expect((await live.outstanding).status).toBe("completed");
+  expect((await otherLive.outstanding).status).toBe("completed");
   expect(await restarted.store.remove(f.tenantId, f.flow.id)).toBeTrue();
 });
