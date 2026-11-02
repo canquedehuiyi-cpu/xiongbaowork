@@ -362,6 +362,11 @@ export const auditEventTypes = [
   "platform.tenant_suspended",
   "platform.tenant_restored",
   /*
+   * A workspace moved between tiers by hand. No payment stands behind the switch, so this row is the
+   * only record of who granted a tier and from what; written in the same transaction as the move.
+   */
+  "plan.changed",
+  /*
    * Getting in, and being turned away.
    *
    * The trail had nothing about sign-in at all, which left two questions unanswerable. Anybody who
@@ -733,6 +738,58 @@ export async function commitOwnerAssembly<T>(
     }
   }
   return result.value;
+}
+
+/**
+ * A change and the rows that record it, committed together.
+ *
+ * `work` gets an `AuditStore` bound to the transaction, so `recordAuditEvent(audit, ...)` inside it
+ * writes on the same connection as the change: a trail row that cannot be written rolls the change
+ * back with it, and a change that fails leaves no row claiming it happened. Taps hear the rows only
+ * after COMMIT returns, for the same reason `commitOwnerAssembly` waits — nothing is streamed that
+ * the trail does not hold.
+ *
+ * The tenant is the caller's frame when this is called (`runAsTenant(t, () => commitWithAudit(...))`),
+ * which is the frame both the change and the row are written in.
+ */
+export async function commitWithAudit<T>(
+  database: Database,
+  work: (
+    audit: AuditStore,
+    transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
+  ) => Promise<T>,
+): Promise<T> {
+  const written: AuditTapEvent[] = [];
+  const value = await database.transaction(async (transaction) => {
+    const audit: AuditStore = {
+      insert: async ({ initiator, ...event }) => {
+        const row = {
+          ...event,
+          ...initiatorColumns(initiator),
+          payload: redactAuditPayload(event.payload) as Record<string, unknown>,
+        };
+        await transaction.insert(auditEvents).values(row);
+        written.push(row);
+      },
+    };
+    return await work(audit, transaction);
+  });
+  for (const row of written) {
+    for (const tap of auditTaps) {
+      try {
+        tap(row);
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "audit-tap-failed",
+            eventType: row.eventType,
+            error: String(error),
+          }),
+        );
+      }
+    }
+  }
+  return value;
 }
 
 export function createAuditStore(database: Database): AuditStore {
