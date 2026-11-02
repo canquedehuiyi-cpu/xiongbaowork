@@ -43,9 +43,13 @@ import {
   skills,
   skillTools,
 } from "../db/schema";
+import {
+  type InstallListingKind,
+  pluginInstallListings,
+} from "../db/schema/plugin-install-listings";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import { currentTenant } from "../tenant/context";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import {
   accessFor,
   type ServerAccess,
@@ -4762,6 +4766,11 @@ export function createPluginStore(options: PluginStoreOptions) {
       ref: string,
       agentId: string,
       by: string,
+      /**
+       * Spec E3: an owner installed a listed entry on their own Waker, with no administrator in the
+       * loop. Recorded in the trail so a reader can tell that grant from one an administrator made.
+       */
+      options?: { selfService?: boolean },
     ): Promise<void> {
       await database
         .insert(pluginGrants)
@@ -4781,6 +4790,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           kind,
           ref,
           bot: agentId,
+          selfService: options?.selfService === true,
         },
       });
     },
@@ -4790,6 +4800,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       ref: string,
       agentId: string,
       by: string,
+      /** See {@link grant}: an owner uninstalled it from their own Waker. */
+      options?: { selfService?: boolean },
     ): Promise<void> {
       await database
         .delete(pluginGrants)
@@ -4811,8 +4823,150 @@ export function createPluginStore(options: PluginStoreOptions) {
           kind,
           ref,
           bot: agentId,
+          selfService: options?.selfService === true,
         },
       });
+    },
+
+    /**
+     * Who wrote this grant, or `undefined` if there is none.
+     *
+     * Asked on an owner's uninstall of an entry that is no longer listed: what they installed
+     * themselves stays theirs to take away, and what an administrator granted stays the
+     * administrator's.
+     */
+    async grantedBy(
+      kind: PluginKind,
+      ref: string,
+      agentId: string,
+    ): Promise<string | null | undefined> {
+      const [row] = await database
+        .select({ grantedBy: pluginGrants.grantedBy })
+        .from(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.kind, kind),
+            eq(pluginGrants.ref, ref),
+            eq(pluginGrants.agentId, agentId),
+          ),
+        )
+        .limit(1);
+      return row ? row.grantedBy : undefined;
+    },
+
+    /**
+     * Spec E3 / D11: the entries an owner may install on their own Waker without an administrator.
+     *
+     * Read in whatever frame the caller is in: the SELECT policy admits the platform's `system` rows to
+     * every workspace, which is the catalogue being visible.
+     */
+    async listInstallListings(): Promise<
+      Array<{
+        kind: InstallListingKind;
+        ref: string;
+        listedBy: string;
+        listedAt: string | null;
+      }>
+    > {
+      const rows = await database
+        .select({
+          kind: pluginInstallListings.kind,
+          ref: pluginInstallListings.ref,
+          listedBy: pluginInstallListings.listedBy,
+          listedAt: pluginInstallListings.listedAt,
+        })
+        .from(pluginInstallListings)
+        .where(eq(pluginInstallListings.tenantId, "system"))
+        .orderBy(
+          asc(pluginInstallListings.kind),
+          asc(pluginInstallListings.ref),
+        );
+      return rows.map((row) => ({
+        kind: row.kind as InstallListingKind,
+        ref: row.ref,
+        listedBy: row.listedBy,
+        listedAt: iso(row.listedAt),
+      }));
+    },
+
+    /** Whether an administrator has listed this entry for owners to install themselves. */
+    async isInstallListed(
+      kind: InstallListingKind,
+      ref: string,
+    ): Promise<boolean> {
+      if (!ref) return false;
+      const [row] = await database
+        .select({ ref: pluginInstallListings.ref })
+        .from(pluginInstallListings)
+        .where(
+          and(
+            eq(pluginInstallListings.tenantId, "system"),
+            eq(pluginInstallListings.kind, kind),
+            eq(pluginInstallListings.ref, ref),
+          ),
+        )
+        .limit(1);
+      return row !== undefined;
+    },
+
+    /**
+     * List an entry (上架). Written under the platform frame and stamped `system` explicitly: the
+     * write policies admit nobody else, and the CHECK constraint admits no other tenant.
+     *
+     * The trail row is written in the caller's own frame, like every other configuration change.
+     * Answers whether anything changed, so listing twice writes one row and one trail entry.
+     */
+    async addInstallListing(
+      kind: InstallListingKind,
+      ref: string,
+      by: string,
+    ): Promise<boolean> {
+      const inserted = await runAsTenant("platform", async () =>
+        database
+          .insert(pluginInstallListings)
+          .values({ tenantId: "system", kind, ref, listedBy: by })
+          .onConflictDoNothing()
+          .returning({ ref: pluginInstallListings.ref }),
+      );
+      if (inserted.length === 0) return false;
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: grantTargetType(kind),
+        targetId: ref,
+        payload: { actor: by, change: "plugin_listed", kind, ref },
+      });
+      return true;
+    },
+
+    /**
+     * Unlist an entry (下架). The grants owners already made are left alone: unlisting stops new
+     * installs, and each owner may still uninstall what they installed themselves.
+     */
+    async removeInstallListing(
+      kind: InstallListingKind,
+      ref: string,
+      by: string,
+    ): Promise<boolean> {
+      const removed = await runAsTenant("platform", async () =>
+        database
+          .delete(pluginInstallListings)
+          .where(
+            and(
+              eq(pluginInstallListings.tenantId, "system"),
+              eq(pluginInstallListings.kind, kind),
+              eq(pluginInstallListings.ref, ref),
+            ),
+          )
+          .returning({ ref: pluginInstallListings.ref }),
+      );
+      if (removed.length === 0) return false;
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: grantTargetType(kind),
+        targetId: ref,
+        payload: { actor: by, change: "plugin_unlisted", kind, ref },
+      });
+      return true;
     },
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */

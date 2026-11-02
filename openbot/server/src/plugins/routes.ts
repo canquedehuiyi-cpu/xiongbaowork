@@ -2282,6 +2282,117 @@ export function createPluginRoutes(
       : null;
 
   /**
+   * Spec E3 / D11: may the owner of this Waker install (or uninstall) this entry themselves?
+   *
+   * THE ONE NON-ADMINISTRATOR DOOR ONTO A DEPLOYMENT'S CATALOGUE. An administrator lists (上架) an
+   * app or a deployment skill; from then on the person who owns a Waker may put it on that Waker and
+   * take it off again without an administrator approving each one. The governance boundary is the
+   * listing, not each grant, and every install and uninstall still writes a trail row that says it
+   * was self-service.
+   *
+   * Answers `not-applicable` whenever this door does not open, so the caller falls through to the
+   * rules that applied before and every refusal a person saw before is word for word the same:
+   *  - an entry nobody listed is still an administrator's (`mcp`) or still refused as the
+   *    deployment's (`skill`), and a person's own skill is still decided by the owner rule;
+   *  - an uninstall is allowed while the entry is listed, and after it is unlisted only for a grant
+   *    this same person made: what an administrator granted stays the administrator's to remove.
+   */
+  async function selfInstallDecision(
+    context: { var: AppVariables },
+    kind: "mcp" | "skill",
+    ref: string,
+    agentId: string,
+    intent: "grant" | "revoke",
+  ): Promise<"allowed" | "not-applicable" | { refusal: string }> {
+    const actor = skillActor(context);
+    let listingRef = ref;
+    if (kind === "mcp") {
+      // A grant names `<app>/<tool>`; the listing names the app.
+      listingRef = ref.split("/")[0] ?? "";
+    } else if ((await store.skillOwner(ref)) !== null) {
+      // Somebody's own skill (or no skill at all) is not a catalogue entry: the owner rule decides.
+      return "not-applicable";
+    }
+    if (!listingRef) return "not-applicable";
+
+    const listed = await store.isInstallListed(kind, listingRef);
+    if (!listed && intent === "grant") return "not-applicable";
+
+    /*
+     * The Waker has to be the caller's own. One sentence for "not yours" and "no such Waker", so a
+     * refusal here says nothing about other people's private Wakers.
+     */
+    const botOwner = await store.agentOwner(agentId);
+    if (botOwner !== actor.id) {
+      return listed
+        ? { refusal: "You can only install listed entries on Bots you own." }
+        : "not-applicable";
+    }
+
+    if (intent === "revoke") {
+      if (listed) return "allowed";
+      const email = context.var.actor?.email;
+      if (!email) return "not-applicable";
+      return (await store.grantedBy(kind, ref, agentId)) === email
+        ? "allowed"
+        : "not-applicable";
+    }
+
+    // A grant that could never do anything is refused rather than stored, as for an administrator.
+    if (!(await store.agentIsRegistered(agentId))) {
+      return { refusal: "There is no such Bot." };
+    }
+    if (kind === "mcp") {
+      const tool = ref.slice(listingRef.length + 1);
+      if (!ref.startsWith(`${listingRef}/`) || !tool) {
+        return { refusal: "A tool is named as app/tool." };
+      }
+      if (!(await store.serverExists(listingRef))) {
+        return {
+          refusal: `${listingRef} is not an app this deployment has added, so there is nothing for a Bot to reach. Add it first, and its tools can be granted then.`,
+        };
+      }
+    }
+    return "allowed";
+  }
+
+  /**
+   * Whether this grant or revoke may go ahead, and whether it is an owner's self-service install.
+   *
+   * Self-service is asked first and only for somebody who is not an administrator; everything it
+   * does not decide is decided by {@link enablementRefusal} exactly as before.
+   */
+  async function enablementDecision(
+    context: { var: AppVariables },
+    kind: PluginKind,
+    ref: string,
+    agentId: string,
+    intent: "grant" | "revoke",
+  ): Promise<{ refusal: string } | { refusal: null; selfService: boolean }> {
+    if (!skillActor(context).isAdmin && (kind === "mcp" || kind === "skill")) {
+      const self = await selfInstallDecision(
+        context,
+        kind,
+        ref,
+        agentId,
+        intent,
+      );
+      if (self === "allowed") return { refusal: null, selfService: true };
+      if (self !== "not-applicable") return self;
+    }
+    const refusal = await enablementRefusal(
+      context,
+      kind,
+      ref,
+      agentId,
+      intent,
+    );
+    return refusal === null
+      ? { refusal: null, selfService: false }
+      : { refusal };
+  }
+
+  /**
    * May this person put this on that Bot?
    *
    * MCP is an administrator's, always: it reaches another company's system with a stored credential.
@@ -2462,16 +2573,24 @@ export function createPluginRoutes(
      */
     const grantRef = body.ref.trim();
     const grantAgentId = body.agentId.trim();
-    const refusal = await enablementRefusal(
+    const decision = await enablementDecision(
       context,
       kind,
       grantRef,
       grantAgentId,
       "grant",
     );
-    if (refusal) return context.json({ error: refusal }, 403);
+    if (decision.refusal !== null) {
+      return context.json({ error: decision.refusal }, 403);
+    }
 
-    await store.grant(kind, grantRef, grantAgentId, actorEmail(context));
+    if (decision.selfService) {
+      await store.grant(kind, grantRef, grantAgentId, actorEmail(context), {
+        selfService: true,
+      });
+    } else {
+      await store.grant(kind, grantRef, grantAgentId, actorEmail(context));
+    }
     return context.json({ ok: true });
   });
 
@@ -2499,16 +2618,127 @@ export function createPluginRoutes(
     }
     const trimmedRef = ref.trim();
     const trimmedAgentId = agentId.trim();
-    const refusal = await enablementRefusal(
+    const decision = await enablementDecision(
       context,
       kind,
       trimmedRef,
       trimmedAgentId,
       "revoke",
     );
-    if (refusal) return context.json({ error: refusal }, 403);
+    if (decision.refusal !== null) {
+      return context.json({ error: decision.refusal }, 403);
+    }
 
-    await store.revoke(kind, trimmedRef, trimmedAgentId, actorEmail(context));
+    if (decision.selfService) {
+      await store.revoke(
+        kind,
+        trimmedRef,
+        trimmedAgentId,
+        actorEmail(context),
+        { selfService: true },
+      );
+    } else {
+      await store.revoke(kind, trimmedRef, trimmedAgentId, actorEmail(context));
+    }
+    return context.json({ ok: true });
+  });
+
+  /**
+   * Spec E3 / D11: what an administrator has listed (上架) for owners to install themselves.
+   *
+   * Readable by any signed-in person, because the 装配页 has to know which switches an owner may
+   * flip. Listing and unlisting are an administrator's, and each writes a trail row.
+   */
+  const LISTING_KINDS = new Set<string>(["mcp", "skill"]);
+  const asListingKind = (value: unknown): "mcp" | "skill" | null =>
+    typeof value === "string" && LISTING_KINDS.has(value)
+      ? (value as "mcp" | "skill")
+      : null;
+
+  routes.get("/listings", requireUser, async (context) => {
+    const listings = await store.listInstallListings();
+    /*
+     * The listing is deployment-wide, so every workspace reads it. Which administrator listed an entry
+     * is the operator's business, not every tenant's: an owner is told what they may install and
+     * since when, and never an operator's address.
+     */
+    if (skillActor(context).isAdmin) return context.json({ listings });
+    return context.json({
+      listings: listings.map(({ kind, ref, listedAt }) => ({
+        kind,
+        ref,
+        listedAt,
+      })),
+    });
+  });
+
+  routes.post("/listings", requireUser, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+
+    const body = (await context.req.json().catch(() => null)) as {
+      kind?: unknown;
+      ref?: unknown;
+    } | null;
+    const kind = asListingKind(body?.kind);
+    const ref = typeof body?.ref === "string" ? body.ref.trim() : "";
+    if (!kind || !ref) {
+      return context.json(
+        { error: "A kind (mcp or skill) and a catalogue key are required." },
+        400,
+      );
+    }
+
+    if (kind === "mcp") {
+      // The app, never one of its tools: an owner installs the app's tools on their own Waker.
+      if (ref.includes("/")) {
+        return context.json(
+          { error: "A listing names an app, not one of its tools." },
+          400,
+        );
+      }
+      if (catalogueEntry(ref) === null && !(await store.serverExists(ref))) {
+        return context.json(
+          { error: `${ref} is not an app in this deployment's catalogue.` },
+          400,
+        );
+      }
+    } else {
+      const owner = await store.skillOwner(ref);
+      if (owner === undefined) {
+        return context.json({ error: `There is no skill called ${ref}.` }, 400);
+      }
+      // Listing somebody's own skill would put one person's instructions on everybody's Wakers.
+      if (owner !== null) {
+        return context.json(
+          {
+            error: `${ref} is somebody's own skill. Only the deployment's skills can be listed.`,
+          },
+          400,
+        );
+      }
+    }
+
+    await store.addInstallListing(kind, ref, actorEmail(context));
+    return context.json({ listings: await store.listInstallListings() });
+  });
+
+  routes.delete("/listings", requireUser, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+
+    const kind = asListingKind(context.req.query("kind"));
+    const ref = context.req.query("ref")?.trim() ?? "";
+    if (!kind || !ref) {
+      return context.json(
+        { error: "A kind (mcp or skill) and a catalogue key are required." },
+        400,
+      );
+    }
+    // Unlisting stops new installs. What owners already installed stays until they uninstall it.
+    if (!(await store.removeInstallListing(kind, ref, actorEmail(context)))) {
+      return context.json({ error: "That entry is not listed." }, 404);
+    }
     return context.json({ ok: true });
   });
 

@@ -230,6 +230,7 @@ tests/plugin-oauth.test.ts
 tests/plugin-routes.integration.test.ts
 tests/plugin-routes.test.ts
 tests/plugin-selection.test.ts
+tests/plugin-self-install.integration.test.ts
 tests/plugin-servers-validation.test.ts
 tests/plugin-share-target.test.ts
 tests/plugin-store.integration.test.ts
