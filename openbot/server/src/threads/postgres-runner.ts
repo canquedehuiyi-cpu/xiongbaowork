@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { BaseEvent, Message } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
 import {
@@ -51,6 +52,31 @@ function ownedBy(threadId: string, tenant: string): boolean {
  */
 function carriedFailure(events: readonly BaseEvent[]): boolean {
   return events.some((event) => event.type === EventType.RUN_ERROR);
+}
+
+/**
+ * The lane an unattended turn's RUNNER-filed card belongs on, for an entry that owns no card of its own.
+ *
+ * A follow-up a Bot scheduled for itself (`agents/wake-up.ts`) opens no card first, so this runner files
+ * and charges its one card exactly as it does for any entry that is not `suppressRunnerCard`ed — but
+ * nobody typed the turn, and filing it as `chat` put it under 对话触发 and outside the board's 无人值守
+ * filter (story C2). This says which lane and trigger to write instead; the card's lifecycle, its charge
+ * and its run ref stay the runner's. Proactive research is not here because it files its own card.
+ *
+ * Async local storage for the reason `threads/unattended-card.ts` gives: only server code that imports
+ * it can set it, so nothing a browser sends can move a person's conversation off the 对话触发 lane, and
+ * every turn accepted outside the frame — every person's own turn — files `chat` with no trigger.
+ */
+export type RunnerCardLane = { source: "routine"; triggerSource: "wake_up" };
+
+const runnerLane = new AsyncLocalStorage<RunnerCardLane>();
+
+/**
+ * Run `body`, and let the turns it starts file their runner card on `lane` rather than `chat`. Like
+ * `suppressRunnerCard`, wrap the region that subscribes to the run: the card is opened at subscribe time.
+ */
+export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
+  return runnerLane.run(lane, body);
 }
 
 /**
@@ -269,7 +295,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * this turn neither re-asks it nor files a second row.
      */
     const cardIsTaken = runnerCardSuppressed();
-    if (!quota || cardIsTaken) return this.stream(request, tenant, cardIsTaken);
+    // Read in the same breath and for the same reason: unset for every turn a person sends.
+    const lane = runnerLane.getStore();
+    if (!quota || cardIsTaken)
+      return this.stream(request, tenant, cardIsTaken, lane);
     /*
      * The month is asked about before the model is called, not after.
      *
@@ -283,7 +312,9 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       let inner: Subscription | undefined;
       void quota.assertCapacity(tenant, "tasksPerMonth").then(
         () => {
-          inner = this.stream(request, tenant, false).subscribe(subscriber);
+          inner = this.stream(request, tenant, false, lane).subscribe(
+            subscriber,
+          );
         },
         (thrown: unknown) => subscriber.error(thrown),
       );
@@ -298,6 +329,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     tenant: string,
     /** Filed by the caller's own card, so this turn writes the thread and nothing else. */
     cardIsTaken: boolean,
+    /** An unattended entry's lane for the card filed here; absent is a person's `chat` turn. */
+    lane?: RunnerCardLane,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
@@ -333,7 +366,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
                 tenantId: tenant,
                 title,
                 executorAgentId: agentId,
-                source: "chat",
+                source: lane?.source ?? "chat",
+                triggerSource: lane?.triggerSource ?? null,
                 channelRef: threadId,
                 runRef: runId,
                 deviceId: deviceId ?? null,
