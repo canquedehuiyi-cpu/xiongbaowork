@@ -78,8 +78,18 @@ export function createDeliveryRouter(deps: {
   queue: Pick<WorkQueue, "claim" | "renew" | "finish" | "release">;
   owner: string;
   authoriseScope(scope: DeliveryScope): Promise<boolean>;
+  /**
+   * The owner's turn. `tenantId` is the tenant of the row the turn answers for (the paired binding,
+   * or the queued inbox row), never this worker's own frame: a queued delivery is claimed on a timer
+   * that has no tenant, so the turn is told whose it is (see `TurnRunner`).
+   */
   runTurn(
-    input: DeliveryScope & { runId: string; text: string; signal: AbortSignal },
+    input: DeliveryScope & {
+      tenantId: string;
+      runId: string;
+      text: string;
+      signal: AbortSignal;
+    },
   ): Promise<{
     replyText: string;
     components?: DrawnComponent[];
@@ -327,6 +337,7 @@ export function createDeliveryRouter(deps: {
     try {
       const result = await deps.runTurn({
         ...scope,
+        tenantId: binding.tenantId,
         runId: row.id,
         text: input.text,
         signal: input.signal,
@@ -463,6 +474,7 @@ export function createDeliveryRouter(deps: {
           channelId: row.channelId,
           agentId: row.agentId,
           threadId: row.threadId,
+          tenantId: row.tenantId,
           runId: row.id,
           text: row.text,
           signal,
