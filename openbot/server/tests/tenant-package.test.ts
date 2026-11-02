@@ -17,6 +17,7 @@ import {
   skillTools,
   users,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import {
   createApplicationConfiguration,
   expandEnvironment,
@@ -26,7 +27,6 @@ import {
   validateTenantPackage,
   validateThemeCss,
 } from "../src/tenant-package";
-import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -1380,12 +1380,23 @@ describe("seeding the skills a package ships", () => {
       const created = await synchronizeTenantPackage(database, loaded);
       createdPackageIds.push(created.id);
 
+      /*
+       * Slugs are per tenant (migration 0113): the person's row shadows the platform's for that
+       * person and is left exactly as they wrote it. The package's own row, if it seeded one, is a
+       * separate `system` row and never this person's.
+       */
       const [row] = await runAsTenant(owner, () =>
         database
           .select()
           .from(skillsTable)
-          .where(eq(skillsTable.slug, shipped.slug)),
+          .where(
+            and(
+              eq(skillsTable.slug, shipped.slug),
+              eq(skillsTable.tenantId, owner),
+            ),
+          ),
       );
+      expect(row?.id).toBe(`mine-${shipped.slug}`);
       expect(row?.instructions).toBe("Do it my way.");
       expect(row?.origin).toBe("yours");
       expect(row?.ownerUserId).toBe(owner);
@@ -1570,10 +1581,12 @@ describe("pairing a package's coworkers with its skills", () => {
        */
       const slug = `pkg-${randomUUID().slice(0, 8)}`;
       const owner = await createUser();
-      // A skill a person wrote is that person's row, in their own partition.
+      // A skill a person wrote is that person's row, in their own partition. As the store does, a
+      // tenant's row takes a fresh id: only a `system` row keeps `id = slug` (migration 0113).
+      const mine = randomUUID();
       await runAsTenant(owner, () =>
         database.insert(skillsTable).values({
-          id: slug,
+          id: mine,
           ownerUserId: owner,
           slug,
           title: "Mine",
@@ -1588,7 +1601,31 @@ describe("pairing a package's coworkers with its skills", () => {
         (await synchronizeTenantPackage(database, loaded)).id,
       );
 
-      expect(await grantsFor(loaded.agents[0]?.id as string)).toHaveLength(0);
+      /*
+       * Whatever the Bot was granted under this name resolves to the package's own `system` row,
+       * never to the instruction the person wrote, which stays theirs and unchanged.
+       */
+      const granted = await grantsFor(loaded.agents[0]?.id as string);
+      for (const grant of granted) {
+        const resolved = await runAsTenant("system", () =>
+          database
+            .select({
+              id: skillsTable.id,
+              instructions: skillsTable.instructions,
+            })
+            .from(skillsTable)
+            .where(eq(skillsTable.slug, grant.ref)),
+        );
+        expect(resolved.map((skill) => skill.id)).not.toContain(mine);
+        expect(resolved.map((skill) => skill.instructions)).not.toContain(
+          "Do it my way.",
+        );
+      }
+      const [theirs] = await runAsTenant(owner, () =>
+        database.select().from(skillsTable).where(eq(skillsTable.id, mine)),
+      );
+      expect(theirs?.instructions).toBe("Do it my way.");
+      expect(theirs?.tenantId).toBe(owner);
     }));
 
   test("a coworker naming a skill the package does not ship is refused at load", () => {
