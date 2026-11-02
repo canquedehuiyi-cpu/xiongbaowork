@@ -71,6 +71,7 @@ import {
 } from "./approvals/types";
 import {
   type AuditInitiator,
+  createAgentTrailReader,
   createAuditReader,
   createAuditStore,
   DEPLOYMENT_INITIATOR,
@@ -3462,6 +3463,7 @@ await startupLifecycle.run(async (startup) => {
         wakeUps: wakeUpStore,
         profiles: agentProfileStore,
         auditStore: bootAuditStore,
+        auditTrail: createAgentTrailReader(database),
       },
     },
     // "Is this conversation still here", answered from this deployment's own `threads` table.
