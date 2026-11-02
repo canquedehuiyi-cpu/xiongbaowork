@@ -381,5 +381,6 @@ tests/voice-sessions.test.ts
 tests/voice-summary-model.test.ts
 tests/waker-groups.test.ts
 tests/wakerflow-plan.test.ts
+tests/wakerflows-store.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
