@@ -5,7 +5,6 @@ import { Hono } from "hono";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import {
   ALREADY_WAITING,
-  createApprovalService,
   DECLINED_BY_PERSON,
   WITHDRAWN_APPROVALS_OFF,
   WITHDRAWN_RULE_ALLOWS,
@@ -23,6 +22,7 @@ import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
+import { createApprovalFixtureService } from "./helpers/approval-producer-model";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -78,7 +78,9 @@ const run = (snapshot: ApprovalContinuation, actorId: string, bot = botId) => {
     signal: new AbortController().signal,
   });
 };
-const service = createApprovalService(store, undefined, (actorId, bot, snap) =>
+// Resume continues only through a producer + recovery port (fail-closed by
+// default); the CPU fixture model supplies both, as in approvals.test.ts.
+const service = createApprovalFixtureService(store, undefined, (actorId, bot, snap) =>
   run(snap, actorId, bot),
 );
 const execute = (action: ApprovalAction) =>

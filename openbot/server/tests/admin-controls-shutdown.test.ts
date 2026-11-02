@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 import type { EnterpriseDeps } from "../src/admin/controls";
 import { createStartupLifecycle } from "../src/auth/role-writer-lifecycle";
 import type { Database } from "../src/db/client";
@@ -21,6 +21,11 @@ type Fixture = {
   reenter?: () => void;
 };
 let current: Fixture;
+// Bun's module mock for "postgres" outlives this file in the shard process. Only this file's
+// fixtures get the fake driver; every later file (audit retention, queues, listeners) gets the
+// real one, captured before the mock is installed.
+let fakePostgres = false;
+const realPostgres = (await import("postgres")).default;
 const audit = await import("../src/audit");
 const settings = await import("../src/admin/settings-store");
 mock.module("../src/audit", () => ({
@@ -52,7 +57,8 @@ mock.module("../src/admin/settings-store", () => ({
   },
 }));
 mock.module("postgres", () => ({
-  default: () => {
+  default: (...args: Parameters<typeof realPostgres>) => {
+    if (!fakePostgres) return realPostgres(...args);
     const owner = current;
     owner.events.push("connect");
     if (owner.connectFailure) throw new Error("unit-driver-secret://connect");
@@ -97,8 +103,12 @@ afterEach(async () => {
     .catch(() => {});
   for (const timer of current?.timers ?? []) originalClear(timer);
 });
+afterAll(() => {
+  fakePostgres = false;
+});
 
 function fixture(options: Partial<Fixture> = {}) {
+  fakePostgres = true;
   current = {
     events: [],
     callbacks: [],

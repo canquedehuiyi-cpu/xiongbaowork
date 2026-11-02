@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createAuth } from "../src/auth";
@@ -14,6 +14,7 @@ import {
 } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * Ticket 004 acceptance: registering with an address and a password opens a tenant.
@@ -35,6 +36,14 @@ if (!databaseUrl) {
   );
 }
 const database = createDatabase(databaseUrl, TEST_POOL);
+// Sign-up seeds the new person's role through the restricted writer, as the server does.
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
+});
+afterAll(async () => {
+  await releaseRoleWriter?.();
+});
 
 const suite = randomUUID().slice(0, 8);
 const email = `signup-${suite}@acme.test`;

@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createOrganizationAuth } from "../src/auth/organization";
@@ -13,10 +13,19 @@ import {
   users,
 } from "../src/db/schema";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
+});
 afterAll(async () => {
-  await database.$client.close();
+  try {
+    await releaseRoleWriter?.();
+  } finally {
+    await database.$client.close();
+  }
 });
 
 test("verified employee keeps the same-email local account and history identity with the authority's current role", async () => {
