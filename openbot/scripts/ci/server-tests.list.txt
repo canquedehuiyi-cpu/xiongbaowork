@@ -208,6 +208,7 @@ tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
 tests/pipeline-turn-channel.test.ts
 tests/plan-model.test.ts
+tests/platform-model-pool-routes.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts

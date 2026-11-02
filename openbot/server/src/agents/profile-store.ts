@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { CredentialStore } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -7,6 +7,8 @@ import {
   agents,
   deploymentPackages,
   modelRegistry,
+  platformModelPool,
+  subscriptions,
 } from "../db/schema";
 import { teamBotPublications } from "../db/schema/team-bots";
 import {
@@ -142,6 +144,25 @@ export class ModelNotInLibraryError extends Error {
   }
 }
 
+/**
+ * A platform pool model this coworker may not be bound to (stories H1, K1): no such row, switched
+ * off, or not offered on the plan the coworker's tenant is on.
+ */
+export class PlatformModelNotAvailableError extends Error {
+  constructor() {
+    super("该平台体验模型不存在、已停用，或不在当前套餐内。");
+    this.name = "PlatformModelNotAvailableError";
+  }
+}
+
+/** A library model and a pool model named in one save: a coworker speaks with exactly one. */
+export class ModelBindingConflictError extends Error {
+  constructor() {
+    super("一个员工只能绑定一个模型：请在模型库与平台体验模型之间二选一。");
+    this.name = "ModelBindingConflictError";
+  }
+}
+
 export class ModelBindingNotApplicableError extends Error {
   constructor(id: string) {
     super(`Agent ${id} runs on another server, so its model is chosen there.`);
@@ -162,6 +183,7 @@ const joinedProjection = {
   pinnedAt: agentPreferences.pinnedAt,
   deletedAt: agentProfiles.deletedAt,
   modelRef: agentProfiles.modelRef,
+  platformModelRef: agentProfiles.platformModelRef,
   persona: agentProfiles.persona,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
@@ -219,6 +241,7 @@ function mapProfile(
     deletedAt: row.deletedAt,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
+    platformModelRef: row.platformModelRef,
     persona: (row.persona as Persona | null) ?? null,
     // Whether a key is set, never which. The form needs to show "a key is set" so a person does not
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
@@ -381,6 +404,63 @@ function requireManageable(actor: AgentActor, profile: AgentProfile) {
   if (profile.systemOwned) throw new ProtectedAgentError(profile.id);
   if (!canManageAgent(actor, profile)) {
     throw new AgentNotManageableError(profile.id);
+  }
+}
+
+/**
+ * Refuses a pool row the coworker's tenant may not bind: absent, switched off, or outside its plan.
+ *
+ * The tenant is the one stamped on the profile row, never the caller's guess or a default. The pool
+ * is platform-owned and readable by the application; the subscription is read under row-level
+ * security on the same transaction, filtered to that tenant.
+ */
+async function assertPoolModelAllowed(
+  transaction: Transaction,
+  agentId: string,
+  poolId: string,
+): Promise<void> {
+  const [record] = await transaction
+    .select({ tenantId: agentProfiles.tenantId })
+    .from(agentProfiles)
+    .where(eq(agentProfiles.agentId, agentId))
+    .limit(1);
+  if (!record) throw new AgentNotFoundError(agentId);
+  /*
+   * A coworker stamped `system` or `platform` has no tenant to meter a pool call to, so the resolver
+   * never honours its pool binding; storing one would report a binding that silently falls back.
+   */
+  if (record.tenantId === "system" || record.tenantId === "platform") {
+    throw new PlatformModelNotAvailableError();
+  }
+  const [entry] = await transaction
+    .select({ tiers: platformModelPool.tiers })
+    .from(platformModelPool)
+    .where(
+      and(
+        eq(platformModelPool.id, poolId),
+        eq(platformModelPool.enabled, true),
+      ),
+    )
+    .limit(1);
+  if (!entry) throw new PlatformModelNotAvailableError();
+  const [subscription] = await transaction
+    .select({ planId: subscriptions.planId })
+    .from(subscriptions)
+    .where(
+      and(
+        eq(subscriptions.tenantId, record.tenantId),
+        eq(subscriptions.status, "active"),
+      ),
+    )
+    .orderBy(
+      desc(subscriptions.updatedAt),
+      desc(subscriptions.createdAt),
+      desc(subscriptions.id),
+    )
+    .limit(1);
+  const plan = subscription?.planId ?? "free";
+  if (!(entry.tiers as readonly string[]).includes(plan)) {
+    throw new PlatformModelNotAvailableError();
   }
 }
 
@@ -630,6 +710,10 @@ export function createAgentProfileStore(
            * tenant's model id, and the coworker would then answer on a model this person never
            * connected and never holds a key for.
            */
+          // One model per coworker; refused before either id is looked up.
+          if (input.modelRef && input.platformModelRef) {
+            throw new ModelBindingConflictError();
+          }
           if (input.modelRef) {
             if (row?.type !== "built_in") {
               throw new ModelBindingNotApplicableError(id);
@@ -646,6 +730,22 @@ export function createAgentProfileStore(
               .limit(1);
             if (!model) throw new ModelNotInLibraryError();
           }
+          /*
+           * A platform pool binding (stories H1, K1), checked the same way: the foreign key alone
+           * would take a switched-off row, or a Pro-only row for a Free tenant. The plan is the one
+           * the RECORD's tenant is on, read on this transaction (whose session is that tenant's), and
+           * no active subscription is Free — never Pro, never "no limit".
+           */
+          if (input.platformModelRef) {
+            if (row?.type !== "built_in") {
+              throw new ModelBindingNotApplicableError(id);
+            }
+            await assertPoolModelAllowed(
+              transaction,
+              id,
+              input.platformModelRef,
+            );
+          }
           await transaction
             .update(agentProfiles)
             .set({
@@ -655,6 +755,12 @@ export function createAgentProfileStore(
               ...(input.modelRef === undefined
                 ? {}
                 : { modelRef: input.modelRef }),
+              ...(input.platformModelRef === undefined
+                ? {}
+                : { platformModelRef: input.platformModelRef }),
+              // Binding one clears the other, so the one-binding CHECK is never what refuses a save.
+              ...(input.modelRef ? { platformModelRef: null } : {}),
+              ...(input.platformModelRef ? { modelRef: null } : {}),
               // Written whole rather than merged: a persona is read as one character, and a line the
               // person deleted should stop being said on the next turn.
               ...(input.persona === undefined
