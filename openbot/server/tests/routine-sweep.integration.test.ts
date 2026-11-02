@@ -72,8 +72,10 @@ const queue = createWorkQueue(database);
 
 const testPrefix = `routine-sweep-${randomUUID()}`;
 const createdUserIds: string[] = [];
-const createdAgentIds: string[] = [];
-const createdChannelIds: string[] = [];
+// Each Bot and channel with the frame it was made in (its owner's, or `null` for the one legacy
+// unframed seed), so cleanup runs in that same frame.
+const createdAgentIds: { id: string; ownerId: string | null }[] = [];
+const createdChannelIds: { id: string; ownerId: string | null }[] = [];
 
 /** Every day at 09:00 UTC: comfortably above the floor, and one occurrence is one day. */
 const DAILY = "0 9 * * *";
@@ -95,12 +97,16 @@ const dispatch = async (routineRunId: string) => {
  * the routes create it, so its row is stamped with that person and the sweep will offer it. The
  * test's own reads and writes of rows across tenants (stamps, ages, cleanup) go as `platform`, the
  * operator's view: unframed they would run as the legacy `system` and see none of a person's rows.
+ * The offering pass itself runs as `platform`, as `scripts/fire-routines.ts` runs it.
  */
 const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
 const asOwnerOf = <T>(owner: { id: string }, fn: () => T): T =>
   runAsTenant(owner.id, fn);
 const asRoutineOwner = <T>(routine: { ownerUserId: string }, fn: () => T): T =>
   runAsTenant(routine.ownerUserId, fn);
+/** In `frame`, or with no frame at all when it is `null` (the legacy shape one test still pins). */
+const inFrame = <T>(frame: string | null, fn: () => T): T =>
+  frame === null ? fn() : runAsTenant(frame, fn);
 
 function sweepOptions(overrides: Record<string, unknown> = {}) {
   return {
@@ -127,20 +133,27 @@ afterEach(async () => {
       database.delete(routines).where(eq(routines.ownerUserId, userId)),
     );
   }
-  for (const channelId of createdChannelIds.splice(0)) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, channelId));
-    await database.delete(channels).where(eq(channels.id, channelId));
+  // A person's own channel, Bot and account, each deleted in that person's frame.
+  for (const { id: channelId, ownerId } of createdChannelIds.splice(0)) {
+    await inFrame(ownerId, async () => {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, channelId));
+      await database.delete(channels).where(eq(channels.id, channelId));
+    });
   }
-  for (const agentId of createdAgentIds.splice(0)) {
-    await database
-      .delete(agentProfiles)
-      .where(eq(agentProfiles.agentId, agentId));
-    await database.delete(agents).where(eq(agents.id, agentId));
+  for (const { id: agentId, ownerId } of createdAgentIds.splice(0)) {
+    await inFrame(ownerId, async () => {
+      await database
+        .delete(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId));
+      await database.delete(agents).where(eq(agents.id, agentId));
+    });
   }
   for (const userId of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, userId));
+    await asOwnerOf({ id: userId }, () =>
+      database.delete(users).where(eq(users.id, userId)),
+    );
   }
 });
 
@@ -153,29 +166,48 @@ afterAll(async () => {
 
 async function createUser(): Promise<AgentActor> {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Routine Sweep Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Routine Sweep Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
 
-async function createAgent(owner: AgentActor, name = "Expense Manager") {
-  const profile = await profileStore.create(owner, {
-    name,
-    title: "Finance Operations",
-    roleDescription: "Review receipts.",
-    visibility: "private",
-  });
-  createdAgentIds.push(profile.id);
+/**
+ * `frame` is the tenant the Bot and channel are made in: their owner's, except in the one test that
+ * still reproduces the legacy unframed shape (see "offering only a person's routine"), which passes
+ * `null` and so seeds with no frame, exactly as before.
+ */
+async function createAgent(
+  owner: AgentActor,
+  name = "Expense Manager",
+  frame: string | null = owner.id,
+) {
+  const profile = await inFrame(frame, () =>
+    profileStore.create(owner, {
+      name,
+      title: "Finance Operations",
+      roleDescription: "Review receipts.",
+      visibility: "private",
+    }),
+  );
+  createdAgentIds.push({ id: profile.id, ownerId: frame });
   return profile.id;
 }
 
-async function createChannel(owner: AgentActor, agentIds: string[]) {
-  const channel = await channelStore.create(owner, agentIds);
-  createdChannelIds.push(channel.id);
+async function createChannel(
+  owner: AgentActor,
+  agentIds: string[],
+  frame: string | null = owner.id,
+) {
+  const channel = await inFrame(frame, () =>
+    channelStore.create(owner, agentIds),
+  );
+  createdChannelIds.push({ id: channel.id, ownerId: frame });
   return channel;
 }
 
@@ -264,7 +296,7 @@ async function runsFor(routineId: string) {
  */
 async function offerFiring(routineId: string, due: Date, at: Date) {
   await makeDueAt(routineId, due);
-  await offerDueRoutines(sweepOptions({ now: () => at }));
+  await asPlatform(() => offerDueRoutines(sweepOptions({ now: () => at })));
 }
 
 /**
@@ -309,8 +341,8 @@ describe("offering the firings that are due", () => {
     const now = () => new Date("2001-01-01T09:26:00Z");
 
     const outcomes = await Promise.all([
-      offerDueRoutines(sweepOptions({ now })),
-      offerDueRoutines(sweepOptions({ now })),
+      asPlatform(() => offerDueRoutines(sweepOptions({ now }))),
+      asPlatform(() => offerDueRoutines(sweepOptions({ now }))),
     ]);
 
     // Both sweeps saw it as due and both offered it, which is the honest report: each did put the
@@ -336,8 +368,10 @@ describe("offering the firings that are due", () => {
     const { routine } = await makeRoutine();
     await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
 
-    await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+    await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+      ),
     );
 
     const [firing] = await firingsFor(routine.id);
@@ -361,11 +395,11 @@ describe("offering the firings that are due", () => {
     const from = await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
     const now = () => new Date("2001-01-01T09:26:00Z");
 
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
     expect(await firingsFor(routine.id)).toHaveLength(1);
 
     await makeDueAt(routine.id, from);
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
     expect(await firingsFor(routine.id)).toHaveLength(1);
 
     /*
@@ -389,7 +423,7 @@ describe("offering the firings that are due", () => {
     ).toBe(true);
 
     await makeDueAt(routine.id, from);
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
 
     const firings = await firingsFor(routine.id);
     expect(firings).toHaveLength(1);
@@ -408,8 +442,10 @@ describe("offering the firings that are due", () => {
     // The create path already put this in the future; nothing rounds it down.
     const aheadStamp = (await readRoutine(ahead.id))?.nextRunAt as Date;
 
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+      ),
     );
 
     expect(offered).not.toContain(off.id);
@@ -433,8 +469,10 @@ describe("offering the firings that are due", () => {
     await makeDueAt(second.id, new Date("2001-01-01T09:26:00Z"));
     await makeDueAt(third.id, new Date("2001-01-01T09:27:00Z"));
 
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ limit: 2, now: () => new Date("2001-01-01T09:28:00Z") }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ limit: 2, now: () => new Date("2001-01-01T09:28:00Z") }),
+      ),
     );
 
     // Oldest due first, so a backlog drains in the order it built up.
@@ -454,8 +492,11 @@ describe("offering the firings that are due", () => {
 describe("offering only a person's routine", () => {
   test("a routine stamped system or platform is never offered, and stops holding a slot", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const channel = await createChannel(owner, [agentId]);
+    // DECISION PENDING (G01-D): the unframed create below needs a Bot and channel the legacy unframed
+    // default can see, so they are seeded with no frame (`null`), exactly as this test always seeded
+    // them, until somebody decides what it should assert once the fallback goes.
+    const agentId = await createAgent(owner, undefined, null);
+    const channel = await createChannel(owner, [agentId], null);
     const input = {
       ownerUserId: owner.id,
       agentId,
@@ -485,8 +526,10 @@ describe("offering only a person's routine", () => {
     });
     let offered: string[] = [];
     try {
-      ({ offered } = await offerDueRoutines(
-        sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+      ({ offered } = await asPlatform(() =>
+        offerDueRoutines(
+          sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+        ),
       ));
     } finally {
       warn.mockRestore();
@@ -536,8 +579,10 @@ describe("draining a stale stamp instead of replaying it", () => {
     );
     await makeDueAt(fresh.id, new Date("2001-02-01T08:58:00Z"));
 
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-02-01T09:00:00Z") }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-02-01T09:00:00Z") }),
+      ),
     );
 
     expect(offered).toEqual([fresh.id]);
@@ -559,12 +604,12 @@ describe("draining a stale stamp instead of replaying it", () => {
 
     // Twenty minutes late. Outside the default window, inside a thirty-minute one.
     const now = () => new Date("2001-01-01T09:20:00Z");
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
     expect(await firingsFor(routine.id)).toHaveLength(0);
 
     await makeDueAt(routine.id, new Date("2001-01-01T09:00:00Z"));
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ now, graceMs: 30 * 60_000 }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now, graceMs: 30 * 60_000 })),
     );
     expect(offered).toContain(routine.id);
     expect(await firingsFor(routine.id)).toHaveLength(1);
@@ -605,8 +650,10 @@ describe("surviving a routine that cannot be scheduled", () => {
     });
     let offered: string[] = [];
     try {
-      ({ offered } = await offerDueRoutines(
-        sweepOptions({ now: () => new Date("2001-01-01T09:27:00Z") }),
+      ({ offered } = await asPlatform(() =>
+        offerDueRoutines(
+          sweepOptions({ now: () => new Date("2001-01-01T09:27:00Z") }),
+        ),
       ));
     } finally {
       warn.mockRestore();
@@ -663,8 +710,10 @@ describe("surviving a routine that cannot be scheduled", () => {
 
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      await offerDueRoutines(
-        sweepOptions({ now: () => new Date("2001-01-01T08:46:00Z") }),
+      await asPlatform(() =>
+        offerDueRoutines(
+          sweepOptions({ now: () => new Date("2001-01-01T08:46:00Z") }),
+        ),
       );
     } finally {
       warn.mockRestore();
@@ -930,8 +979,10 @@ describe("consuming a claimed firing", () => {
 
     // The window is still a setting, so a caller that wants the late firing can have it.
     await makeDueAt(routine.id, new Date("2001-02-01T09:25:00Z"));
-    await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-02-01T09:26:00Z") }),
+    await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-02-01T09:26:00Z") }),
+      ),
     );
     const generous = await dispatchClaimedRoutines(
       sweepOptions({
@@ -1457,25 +1508,29 @@ describe("consuming a claimed firing", () => {
 
 describe("saying that a sweep happened at all", () => {
   test("records the pass, so a deployment with no worker is not silence", async () => {
-    await database.delete(routineSweeps);
+    await asPlatform(() => database.delete(routineSweeps));
 
-    const before = await store.lastSweptAt();
+    const before = await asPlatform(() => store.lastSweptAt());
     expect(before).toBeNull();
 
-    await offerDueRoutines(sweepOptions());
+    await asPlatform(() => offerDueRoutines(sweepOptions()));
 
-    const after = await store.lastSweptAt();
+    const after = await asPlatform(() => store.lastSweptAt());
     expect(after).not.toBeNull();
     expect(Date.now() - (after as Date).getTime()).toBeLessThan(60_000);
   });
 
   test("keeps one row however many passes run, and names the last sweeper", async () => {
-    await database.delete(routineSweeps);
+    await asPlatform(() => database.delete(routineSweeps));
 
-    await offerDueRoutines(sweepOptions({ owner: "sweeper-one" }));
-    await offerDueRoutines(sweepOptions({ owner: "sweeper-two" }));
+    await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ owner: "sweeper-one" })),
+    );
+    await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ owner: "sweeper-two" })),
+    );
 
-    const rows = await database.select().from(routineSweeps);
+    const rows = await asPlatform(() => database.select().from(routineSweeps));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.owner).toBe("sweeper-two");
   });

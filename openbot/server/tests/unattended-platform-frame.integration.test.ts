@@ -114,12 +114,15 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, tenant));
     }
   });
-  for (const id of created.channels) {
+  for (const [index, id] of created.channels.entries()) {
     // One tenant's own channel, deleted in that tenant's frame — the platform may not rewrite a
-    // workspace's roster, and `channels` cascades its memberships with it.
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(sql`${intelligenceChannelMappings.channelId} = ${id}`);
+    // workspace's roster, and `channels` cascades its memberships with it. `workspace()` pushes one
+    // tenant and one channel together, so the same index names the channel's owner.
+    await runAsTenant(created.tenants[index] ?? "platform", () =>
+      database
+        .delete(intelligenceChannelMappings)
+        .where(sql`${intelligenceChannelMappings.channelId} = ${id}`),
+    );
   }
   await runAsTenant(created.tenants[0] ?? "platform", async () => {
     for (const id of created.channels) {
@@ -246,7 +249,10 @@ describe("an unattended worker against row level security", () => {
       dispatch: async () => {},
     };
 
-    const { offered } = await offerDueRoutines(options);
+    // The sweep's own question belongs to nobody, so it is asked as `platform`, explicitly.
+    const { offered } = await runAsTenant("platform", () =>
+      offerDueRoutines(options),
+    );
     expect(offered).toContain(routine.id);
 
     /*
@@ -320,7 +326,10 @@ describe("an unattended worker against row level security", () => {
       },
     };
 
-    await offerDueRoutines(options);
+    // The offer's heartbeat and due-list belong to nobody: `platform`, explicitly, as the cron script
+    // asks it. The dispatch is left as this test always called it, with no frame; each firing it
+    // claims opens its run in the claimed item's tenant, never in the caller's.
+    await runAsTenant("platform", () => offerDueRoutines(options));
     const report = await dispatchClaimedRoutines(options);
     expect(report.fired).toContain(routine.id);
 
