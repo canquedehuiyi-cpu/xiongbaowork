@@ -180,8 +180,11 @@ test("编辑 opens the saved plan in the editor and 保存修改 rewrites it in 
   ).toBe("agent-review");
   expect(view.getByText(/已经开跑的会按开跑时的步骤跑完/)).toBeDefined();
 
-  await userEvent.clear(second);
-  await userEvent.type(second, "逐行审差异");
+  // A session bound to this document: the direct `userEvent.clear(el)` ignores the element and uses the
+  // global document as it was when user-event was imported, which is before happy-dom is registered.
+  const user = userEvent.setup({ document });
+  await user.clear(second);
+  await user.type(second, "逐行审差异");
   await userEvent.click(view.getByRole("button", { name: "保存修改" }));
 
   await waitFor(() => expect(writes()).toHaveLength(1));
