@@ -25,6 +25,13 @@ const bot = `${prefix}-bot`;
 const otherBot = `${prefix}-other-bot`;
 const server = `${prefix}-connector`;
 const ref = `${server}/read_documents`;
+/**
+ * Each person's memory is reached from their own requests, so whatever one of them does here runs in
+ * their own tenant: the owner's Bot, connector, grants and facts in theirs, the other person's Bot and
+ * reads in theirs. Account rows and the sweep after the file are the deployment's, as `platform`.
+ */
+const asOwner = <T>(fn: () => Promise<T>) => runAsTenant(owner, fn);
+const asOther = <T>(fn: () => Promise<T>) => runAsTenant(other, fn);
 let vendorText =
   '[{"id":"doc1","text":"Project launch is Tuesday","title":"Roadmap"}]';
 let vendorError = false;
@@ -43,65 +50,74 @@ const plugins = createPluginStore({
 const store = createMemoryStore(database);
 const ingestion = createMemoryIngestion({ store, plugins });
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: other, email: `${other}@example.test` },
-  ]);
-  await database.insert(agents).values([
-    { id: bot, name: "Memory Bot", type: "built_in", configuration: {} },
-    {
+  await runAsTenant("platform", () =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: other, email: `${other}@example.test` },
+    ]),
+  );
+  await asOther(async () => {
+    await database.insert(agents).values({
       id: otherBot,
       name: "Other memory Bot",
       type: "remote_ag_ui",
       configuration: {},
-    },
-  ]);
-  await database.insert(agentProfiles).values([
-    {
-      agentId: bot,
-      ownerUserId: owner,
-      title: "Memory Bot",
-      roleDescription: "Assist",
-      avatarSeed: bot,
-      visibility: "private",
-    },
-    {
+    });
+    await database.insert(agentProfiles).values({
       agentId: otherBot,
       ownerUserId: other,
       title: "Other Bot",
       roleDescription: "Assist",
       avatarSeed: otherBot,
       visibility: "private",
-    },
-  ]);
-  await database.insert(mcpServers).values({
-    id: server,
-    title: "Memory connector",
-    vendor: "Fixture",
-    url: "https://memory.example.test/mcp",
-    provenance: "custom",
+    });
   });
-  await database.insert(mcpTools).values([
-    {
-      serverId: server,
-      name: "read_documents",
-      effect: "read",
-      inputSchema: {},
-    },
-    {
-      serverId: server,
-      name: "write_document",
-      effect: "write",
-      inputSchema: {},
-    },
-  ]);
-  await plugins.grant("mcp", ref, bot, owner);
-  await plugins.grant("mcp", `${server}/write_document`, bot, owner);
+  await asOwner(async () => {
+    await database.insert(agents).values({
+      id: bot,
+      name: "Memory Bot",
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: bot,
+      ownerUserId: owner,
+      title: "Memory Bot",
+      roleDescription: "Assist",
+      avatarSeed: bot,
+      visibility: "private",
+    });
+    await database.insert(mcpServers).values({
+      id: server,
+      title: "Memory connector",
+      vendor: "Fixture",
+      url: "https://memory.example.test/mcp",
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: server,
+        name: "read_documents",
+        effect: "read",
+        inputSchema: {},
+      },
+      {
+        serverId: server,
+        name: "write_document",
+        effect: "write",
+        inputSchema: {},
+      },
+    ]);
+    await plugins.grant("mcp", ref, bot, owner);
+    await plugins.grant("mcp", `${server}/write_document`, bot, owner);
+  });
 });
 afterAll(async () => {
-  await database.delete(users).where(inArray(users.id, [owner, other]));
-  await database.delete(agents).where(inArray(agents.id, [bot, otherBot]));
-  await database.delete(mcpServers).where(eq(mcpServers.id, server));
+  await runAsTenant("platform", async () => {
+    await database.delete(users).where(inArray(users.id, [owner, other]));
+    await database.delete(agents).where(inArray(agents.id, [bot, otherBot]));
+    await database.delete(mcpServers).where(eq(mcpServers.id, server));
+  });
   await database.$client.close();
 });
 async function source() {
@@ -117,248 +133,277 @@ async function source() {
     })
   ).source;
 }
-test("facts are owner scoped on list, edit and delete", async () => {
-  const fact = await store.create(owner, { content: "Private preference" });
-  expect((await store.list(other)).some((row) => row.id === fact.id)).toBe(
-    false,
-  );
-  await expect(
-    store.update(other, fact.id, { content: "stolen" }),
-  ).rejects.toBeInstanceOf(MemoryNotFoundError);
-  await expect(store.remove(other, fact.id)).rejects.toBeInstanceOf(
-    MemoryNotFoundError,
-  );
-});
-test("manual edit and disable change the next selected context", async () => {
-  const fact = await store.create(owner, { content: "Rare first fact" });
-  await store.update(owner, fact.id, { content: "Rare revised fact" });
-  expect(await ingestion.contextFor(owner, bot)).toContain("Rare revised fact");
-  await store.update(owner, fact.id, { enabled: false });
-  expect(await ingestion.contextFor(owner, bot)).not.toContain(
-    "Rare revised fact",
-  );
-});
-test("forget removes manual facts immediately", async () => {
-  const fact = await store.create(owner, { content: "Forgotten unique fact" });
-  await store.remove(owner, fact.id);
-  expect(await ingestion.contextFor(owner, bot)).not.toContain(
-    "Forgotten unique fact",
-  );
-});
-test("opted-in connector uses actual plugin authority and execution", async () => {
-  const value = await source();
-  expect(calls.at(-1)?.actorId).toBe(owner);
-  expect(calls.at(-1)?.botId).toBe(bot);
-  expect(value.syncStatus).toBe("succeeded");
-  expect(await ingestion.contextFor(owner, bot)).toContain(
-    "Project launch is Tuesday",
-  );
-  expect(await ingestion.contextFor(other, otherBot)).not.toContain(
-    "Project launch is Tuesday",
-  );
-});
-test("changed connector content updates the same row without duplicates", async () => {
-  const value = await source();
-  const before = (await store.list(owner)).find(
-    (row) => row.sourceId === value.id,
-  );
-  vendorText =
-    '[{"id":"doc1","text":"Project launch moved to Friday","title":"Roadmap"}]';
-  await ingestion.sync(owner, value.id);
-  const rows = (await store.list(owner)).filter(
-    (row) => row.sourceId === value.id,
-  );
-  expect(rows).toHaveLength(1);
-  expect(rows[0]?.id).toBe(before?.id);
-  expect(rows[0]?.content).toContain("Friday");
-});
-test("disabled source is absent even while its imported facts remain stored", async () => {
-  const value = await source();
-  await store.setSourceEnabled(owner, value.id, false);
-  expect(
-    (await ingestion.recall(owner, bot)).some(
+test("facts are owner scoped on list, edit and delete", () =>
+  asOwner(async () => {
+    const fact = await store.create(owner, { content: "Private preference" });
+    /*
+     * Two barriers, each proved on its own. From the other person's own tenant row-level security
+     * already hides the fact; from the owner's frame the row is visible, so only the store's owner
+     * check refuses it. Asked from the other tenant alone, a store that dropped that check would pass.
+     */
+    for (const frame of [asOther, asOwner]) {
+      expect(
+        (await frame(() => store.list(other))).some(
+          (row) => row.id === fact.id,
+        ),
+      ).toBe(false);
+      await expect(
+        frame(() => store.update(other, fact.id, { content: "stolen" })),
+      ).rejects.toBeInstanceOf(MemoryNotFoundError);
+      await expect(
+        frame(() => store.remove(other, fact.id)),
+      ).rejects.toBeInstanceOf(MemoryNotFoundError);
+    }
+  }));
+test("manual edit and disable change the next selected context", () =>
+  asOwner(async () => {
+    const fact = await store.create(owner, { content: "Rare first fact" });
+    await store.update(owner, fact.id, { content: "Rare revised fact" });
+    expect(await ingestion.contextFor(owner, bot)).toContain(
+      "Rare revised fact",
+    );
+    await store.update(owner, fact.id, { enabled: false });
+    expect(await ingestion.contextFor(owner, bot)).not.toContain(
+      "Rare revised fact",
+    );
+  }));
+test("forget removes manual facts immediately", () =>
+  asOwner(async () => {
+    const fact = await store.create(owner, {
+      content: "Forgotten unique fact",
+    });
+    await store.remove(owner, fact.id);
+    expect(await ingestion.contextFor(owner, bot)).not.toContain(
+      "Forgotten unique fact",
+    );
+  }));
+test("opted-in connector uses actual plugin authority and execution", () =>
+  asOwner(async () => {
+    const value = await source();
+    expect(calls.at(-1)?.actorId).toBe(owner);
+    expect(calls.at(-1)?.botId).toBe(bot);
+    expect(value.syncStatus).toBe("succeeded");
+    expect(await ingestion.contextFor(owner, bot)).toContain(
+      "Project launch is Tuesday",
+    );
+    expect(
+      await asOther(() => ingestion.contextFor(other, otherBot)),
+    ).not.toContain("Project launch is Tuesday");
+  }));
+test("changed connector content updates the same row without duplicates", () =>
+  asOwner(async () => {
+    const value = await source();
+    const before = (await store.list(owner)).find(
       (row) => row.sourceId === value.id,
-    ),
-  ).toBe(false);
-});
-test("deleted imported fact cannot resurrect during the next sync", async () => {
-  const value = await source();
-  const fact = (await store.list(owner)).find(
-    (row) => row.sourceId === value.id,
-  );
-  if (!fact) throw new Error("Expected imported memory.");
-  await store.remove(owner, fact.id);
-  vendorText = '[{"id":"doc1","text":"Updated deleted fact"}]';
-  await ingestion.sync(owner, value.id);
-  expect((await store.list(owner)).some((row) => row.id === fact.id)).toBe(
-    false,
-  );
-});
-test("a person's edit survives later connector changes", async () => {
-  const value = await source();
-  const fact = (await store.list(owner)).find(
-    (row) => row.sourceId === value.id,
-  );
-  if (!fact) throw new Error("Expected imported memory.");
-  await store.update(owner, fact.id, { content: "My corrected roadmap" });
-  vendorText = '[{"id":"doc1","text":"Vendor changed roadmap"}]';
-  await ingestion.sync(owner, value.id);
-  expect(
-    (await store.list(owner)).find((row) => row.id === fact.id)?.content,
-  ).toBe("My corrected roadmap");
-});
-test("write tools and another person's Bot cannot become ambient sources", async () => {
-  await expect(
-    ingestion.createSource(owner, {
-      agentId: bot,
-      toolRef: `${server}/write_document`,
-      title: "unsafe",
-      args: {},
-    }),
-  ).rejects.toBeInstanceOf(MemoryRefusedError);
-  await expect(
-    ingestion.createSource(owner, {
-      agentId: otherBot,
-      toolRef: ref,
-      title: "stolen",
-      args: {},
-    }),
-  ).rejects.toBeInstanceOf(MemoryRefusedError);
-});
-test("revoked grants immediately remove retrieval and expose source error", async () => {
-  const value = await source();
-  await plugins.revoke("mcp", ref, bot, owner);
-  expect(
-    (await ingestion.recall(owner, bot)).some(
+    );
+    vendorText =
+      '[{"id":"doc1","text":"Project launch moved to Friday","title":"Roadmap"}]';
+    await ingestion.sync(owner, value.id);
+    const rows = (await store.list(owner)).filter(
       (row) => row.sourceId === value.id,
-    ),
-  ).toBe(false);
-  expect((await store.getSource(owner, value.id)).syncError).toContain(
-    "no longer has access",
-  );
-  await plugins.grant("mcp", ref, bot, owner);
-});
-test("vendor failure hides stale source facts and records a visible error", async () => {
-  const value = await source();
-  vendorError = true;
-  await expect(ingestion.sync(owner, value.id)).rejects.toBeInstanceOf(
-    MemoryRefusedError,
-  );
-  expect(
-    (await ingestion.recall(owner, bot)).some(
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(before?.id);
+    expect(rows[0]?.content).toContain("Friday");
+  }));
+test("disabled source is absent even while its imported facts remain stored", () =>
+  asOwner(async () => {
+    const value = await source();
+    await store.setSourceEnabled(owner, value.id, false);
+    expect(
+      (await ingestion.recall(owner, bot)).some(
+        (row) => row.sourceId === value.id,
+      ),
+    ).toBe(false);
+  }));
+test("deleted imported fact cannot resurrect during the next sync", () =>
+  asOwner(async () => {
+    const value = await source();
+    const fact = (await store.list(owner)).find(
       (row) => row.sourceId === value.id,
-    ),
-  ).toBe(false);
-  expect((await store.getSource(owner, value.id)).syncStatus).toBe("error");
-  vendorError = false;
-});
-test("source leases prevent competing connector calls", async () => {
-  const value = await source();
-  const results = await Promise.all([
-    store.claimSync(owner, value.id),
-    store.claimSync(owner, value.id),
-  ]);
-  expect(results.filter(Boolean)).toHaveLength(1);
-  await store.failSync(owner, value.id, "Test lease released");
-});
-test("removing a source deletes its imported records", async () => {
-  const value = await source();
-  await store.removeSource(owner, value.id);
-  expect(
+    );
+    if (!fact) throw new Error("Expected imported memory.");
+    await store.remove(owner, fact.id);
+    vendorText = '[{"id":"doc1","text":"Updated deleted fact"}]';
+    await ingestion.sync(owner, value.id);
+    expect((await store.list(owner)).some((row) => row.id === fact.id)).toBe(
+      false,
+    );
+  }));
+test("a person's edit survives later connector changes", () =>
+  asOwner(async () => {
+    const value = await source();
+    const fact = (await store.list(owner)).find(
+      (row) => row.sourceId === value.id,
+    );
+    if (!fact) throw new Error("Expected imported memory.");
+    await store.update(owner, fact.id, { content: "My corrected roadmap" });
+    vendorText = '[{"id":"doc1","text":"Vendor changed roadmap"}]';
+    await ingestion.sync(owner, value.id);
+    expect(
+      (await store.list(owner)).find((row) => row.id === fact.id)?.content,
+    ).toBe("My corrected roadmap");
+  }));
+test("write tools and another person's Bot cannot become ambient sources", () =>
+  asOwner(async () => {
+    await expect(
+      ingestion.createSource(owner, {
+        agentId: bot,
+        toolRef: `${server}/write_document`,
+        title: "unsafe",
+        args: {},
+      }),
+    ).rejects.toBeInstanceOf(MemoryRefusedError);
+    await expect(
+      ingestion.createSource(owner, {
+        agentId: otherBot,
+        toolRef: ref,
+        title: "stolen",
+        args: {},
+      }),
+    ).rejects.toBeInstanceOf(MemoryRefusedError);
+  }));
+test("revoked grants immediately remove retrieval and expose source error", () =>
+  asOwner(async () => {
+    const value = await source();
+    await plugins.revoke("mcp", ref, bot, owner);
+    expect(
+      (await ingestion.recall(owner, bot)).some(
+        (row) => row.sourceId === value.id,
+      ),
+    ).toBe(false);
+    expect((await store.getSource(owner, value.id)).syncError).toContain(
+      "no longer has access",
+    );
+    await plugins.grant("mcp", ref, bot, owner);
+  }));
+test("vendor failure hides stale source facts and records a visible error", () =>
+  asOwner(async () => {
+    const value = await source();
+    vendorError = true;
+    await expect(ingestion.sync(owner, value.id)).rejects.toBeInstanceOf(
+      MemoryRefusedError,
+    );
+    expect(
+      (await ingestion.recall(owner, bot)).some(
+        (row) => row.sourceId === value.id,
+      ),
+    ).toBe(false);
+    expect((await store.getSource(owner, value.id)).syncStatus).toBe("error");
+    vendorError = false;
+  }));
+test("source leases prevent competing connector calls", () =>
+  asOwner(async () => {
+    const value = await source();
+    const results = await Promise.all([
+      store.claimSync(owner, value.id),
+      store.claimSync(owner, value.id),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    await store.failSync(owner, value.id, "Test lease released");
+  }));
+test("removing a source deletes its imported records", () =>
+  asOwner(async () => {
+    const value = await source();
+    await store.removeSource(owner, value.id);
+    expect(
+      await database
+        .select()
+        .from(personalMemories)
+        .where(
+          and(
+            eq(personalMemories.ownerUserId, owner),
+            eq(personalMemories.sourceId, value.id),
+          ),
+        ),
+    ).toHaveLength(0);
+  }));
+test("a resync of a healthy source keeps its facts in recall while it runs", () =>
+  asOwner(async () => {
+    const value = await source();
+    expect(await store.claimSync(owner, value.id)).not.toBeNull();
+    expect(
+      (await ingestion.recall(owner, bot)).some(
+        (row) => row.sourceId === value.id,
+      ),
+    ).toBe(true);
+    // A source whose last sync failed stays hidden while it retries, as above.
+    await store.failSync(owner, value.id, "Vendor unavailable");
     await database
-      .select()
+      .update(memorySources)
+      .set({ nextSyncAt: new Date(0) })
+      .where(eq(memorySources.id, value.id));
+    expect(await store.claimSync(owner, value.id)).not.toBeNull();
+    expect(
+      (await ingestion.recall(owner, bot)).some(
+        (row) => row.sourceId === value.id,
+      ),
+    ).toBe(false);
+    await store.failSync(owner, value.id, "Test lease released");
+  }));
+test("recall reaches this Bot's memories however many other Bots' are newer", () =>
+  asOwner(async () => {
+    const mine = randomUUID();
+    await database.insert(personalMemories).values({
+      id: mine,
+      ownerUserId: owner,
+      content: "The quarterly review is in the Lisbon office",
+      provenance: "Read from Docs",
+      formedBy: "bot",
+      formedByAgentId: bot,
+    });
+    // Six hundred newer memories formed by another Bot for the same person.
+    await database.insert(personalMemories).values(
+      Array.from({ length: 600 }, (_, index) => ({
+        id: randomUUID(),
+        ownerUserId: owner,
+        content: `Other Bot fact ${index}`,
+        provenance: "Read elsewhere",
+        formedBy: "bot" as const,
+        formedByAgentId: otherBot,
+        updatedAt: new Date(Date.now() + 60_000 + index),
+      })),
+    );
+    try {
+      const found = await ingestion.recall(owner, bot, "lisbon");
+      expect(found.map((row) => row.id)).toEqual([mine]);
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(
+          and(
+            eq(personalMemories.ownerUserId, owner),
+            inArray(personalMemories.formedByAgentId, [bot, otherBot]),
+          ),
+        );
+    }
+  }));
+test("the same fact formed at once by two runs is stored once", () =>
+  asOwner(async () => {
+    const content = `Concurrent fact ${randomUUID()}`;
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        store.formMemory(owner, {
+          agentId: bot,
+          content,
+          sourceApp: "Docs",
+          sourceRef: ref,
+        }),
+      ),
+    );
+    const rows = await database
+      .select({ id: personalMemories.id })
       .from(personalMemories)
       .where(
         and(
           eq(personalMemories.ownerUserId, owner),
-          eq(personalMemories.sourceId, value.id),
-        ),
-      ),
-  ).toHaveLength(0);
-});
-test("a resync of a healthy source keeps its facts in recall while it runs", async () => {
-  const value = await source();
-  expect(await store.claimSync(owner, value.id)).not.toBeNull();
-  expect(
-    (await ingestion.recall(owner, bot)).some(
-      (row) => row.sourceId === value.id,
-    ),
-  ).toBe(true);
-  // A source whose last sync failed stays hidden while it retries, as above.
-  await store.failSync(owner, value.id, "Vendor unavailable");
-  await database
-    .update(memorySources)
-    .set({ nextSyncAt: new Date(0) })
-    .where(eq(memorySources.id, value.id));
-  expect(await store.claimSync(owner, value.id)).not.toBeNull();
-  expect(
-    (await ingestion.recall(owner, bot)).some(
-      (row) => row.sourceId === value.id,
-    ),
-  ).toBe(false);
-  await store.failSync(owner, value.id, "Test lease released");
-});
-test("recall reaches this Bot's memories however many other Bots' are newer", async () => {
-  const mine = randomUUID();
-  await database.insert(personalMemories).values({
-    id: mine,
-    ownerUserId: owner,
-    content: "The quarterly review is in the Lisbon office",
-    provenance: "Read from Docs",
-    formedBy: "bot",
-    formedByAgentId: bot,
-  });
-  // Six hundred newer memories formed by another Bot for the same person.
-  await database.insert(personalMemories).values(
-    Array.from({ length: 600 }, (_, index) => ({
-      id: randomUUID(),
-      ownerUserId: owner,
-      content: `Other Bot fact ${index}`,
-      provenance: "Read elsewhere",
-      formedBy: "bot" as const,
-      formedByAgentId: otherBot,
-      updatedAt: new Date(Date.now() + 60_000 + index),
-    })),
-  );
-  try {
-    const found = await ingestion.recall(owner, bot, "lisbon");
-    expect(found.map((row) => row.id)).toEqual([mine]);
-  } finally {
-    await database
-      .delete(personalMemories)
-      .where(
-        and(
-          eq(personalMemories.ownerUserId, owner),
-          inArray(personalMemories.formedByAgentId, [bot, otherBot]),
+          eq(personalMemories.content, content),
         ),
       );
-  }
-});
-test("the same fact formed at once by two runs is stored once", async () => {
-  const content = `Concurrent fact ${randomUUID()}`;
-  const results = await Promise.all(
-    Array.from({ length: 6 }, () =>
-      store.formMemory(owner, {
-        agentId: bot,
-        content,
-        sourceApp: "Docs",
-        sourceRef: ref,
-      }),
-    ),
-  );
-  const rows = await database
-    .select({ id: personalMemories.id })
-    .from(personalMemories)
-    .where(
-      and(
-        eq(personalMemories.ownerUserId, owner),
-        eq(personalMemories.content, content),
-      ),
-    );
-  expect(rows).toHaveLength(1);
-  expect(new Set(results.map((result) => result.id)).size).toBe(1);
-  expect(results.filter((result) => !result.duplicate)).toHaveLength(1);
-});
+    expect(rows).toHaveLength(1);
+    expect(new Set(results.map((result) => result.id)).size).toBe(1);
+    expect(results.filter((result) => !result.duplicate)).toHaveLength(1);
+  }));
 
 /*
  * Migration 0115 (G01): since G01-B3 the routine sweep and memory sync refuse a row whose stamp is
