@@ -339,12 +339,14 @@ export function createTurnRunner(options: {
     userMessage,
     runId: suppliedRunId,
     runRef,
+    tenantId: suppliedTenantId,
     depth,
     onText,
   }: Parameters<TurnRunner>[0]) => {
     if (signal?.aborted) throw new Error("The headless turn was cancelled.");
     // Whose run this is, read once at the entry: the usage row below is written here and nowhere else.
-    const tenantId = currentTenant();
+    // A caller claimed off a timer names the tenant of the row it claimed; see `TurnRunner`.
+    const tenantId = suppliedTenantId ?? currentTenant();
     // Paused Bots do not start; a pause while running aborts this signal. See agents/lifecycle.ts.
     signal = await guardBotTurn({ ownerUserId, agentId, signal });
     // "Use Bots" and the model allowlist, which a browser run meets at the HTTP gate. No headless turn

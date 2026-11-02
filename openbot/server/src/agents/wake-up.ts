@@ -390,6 +390,8 @@ export function wakeUpInstruction(payload: WakeUpPayload): string {
 
 export type WakeUpTurn = (input: {
   ownerUserId: string;
+  /** The follow-up's own tenant, as stamped when it was scheduled: see `TurnRunner`. */
+  tenantId: string;
   routineId: string;
   agentId: string;
   threadId: string;
@@ -476,6 +478,7 @@ export function createWakeUpRunner(options: {
           try {
             const { replyText } = await runTurn({
               ownerUserId: payload.ownerUserId,
+              tenantId: item.tenantId,
               routineId: `follow-up:${item.key}`,
               agentId: payload.agentId,
               threadId: channel.threadId,
