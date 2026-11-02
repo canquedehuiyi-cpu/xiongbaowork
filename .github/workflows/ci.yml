@@ -103,7 +103,6 @@ jobs:
           TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
             bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
-        continue-on-error: true
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
@@ -136,7 +135,6 @@ jobs:
         continue-on-error: true
         run: bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" app "$RUNNER_TEMP/base.log"
       - name: Generate configuration and run app tests
-        continue-on-error: true
         run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
@@ -174,3 +172,158 @@ jobs:
           name: image-evidence
           path: ${{ runner.temp }}/delivery-evidence/
           if-no-files-found: error
+
+  # Packages outside the server/app suites. None of them has a test counterpart in the frozen
+  # baseline run, so the gate is head only: Bun must report Ran N > 0, 0 fail, no unhandled errors.
+  # runner/ has no tests of its own: they live in server/tests and run in the server-test shards,
+  # and its native Windows path is exercised by win1-windows below.
+  workspaces-test:
+    name: workspace tests (${{ matrix.pkg }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Own bun.lock, outside the root workspaces, so installed and typechecked on their own.
+          # supervisor's docker.integration suite runs because the hosted runner has a Docker socket.
+          - pkg: agent-computer
+            own-lockfile: true
+          - pkg: supervisor
+            own-lockfile: true
+          # No package.json: imports only bun:test, node:crypto and relative files.
+          - pkg: shared
+            own-lockfile: false
+          # Root workspace (typechecked by static); its tests import only worker/src and ../shared.
+          - pkg: worker
+            own-lockfile: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - name: Install from the package's own frozen lockfile (no lifecycle scripts)
+        id: install
+        if: matrix.own-lockfile
+        working-directory: openbot/${{ matrix.pkg }}
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Head tests
+        working-directory: openbot/${{ matrix.pkg }}
+        run: bun test > "$RUNNER_TEMP/head.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/head.log" "${{ matrix.pkg }} (head only)"
+      - name: Print head test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
+      - name: Typecheck (not covered by the root typecheck)
+        if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
+        working-directory: openbot/${{ matrix.pkg }}
+        run: bun run typecheck
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-${{ matrix.pkg }}-logs
+          path: ${{ runner.temp }}/head.log
+
+  # WIN1: the native Windows device CLI executes commands, start failures are explicit, and Stop,
+  # timeout and protocol cancel kill the whole descendant tree. The probe imports the real runner
+  # executor, agent-computer shell, bun:sqlite journal and dispatcher; any failed check throws.
+  win1-windows:
+    name: WIN1 device CLI probe (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: openbot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      # runner/src/browser imports agent-computer/src/aria-snapshot, which needs yaml from the root.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: WIN1 probe (fresh Unicode workspace with spaces, real Node child trees)
+        run: |
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          $name = 'win1 ' + [char]0x718A + [char]0x5B9D + " $env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $dir = Join-Path $env:RUNNER_TEMP $name
+          if (Test-Path -LiteralPath $dir) { throw "Workspace $dir already exists; the probe needs a fresh one." }
+          $node = (Get-Command node -CommandType Application | Select-Object -First 1).Source
+          $log = Join-Path $env:RUNNER_TEMP 'win1.log'
+          bun scripts/ci/windows-runner-probe.ts $dir $node *>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { throw "windows-runner-probe exited $code" }
+          if (-not (Select-String -LiteralPath $log -SimpleMatch -Quiet -Pattern '"platform":"win32"')) { throw 'Probe did not report win32.' }
+          if (-not (Select-String -LiteralPath $log -Quiet -Pattern '^WINDOWS_PROBE_PASS$')) { throw 'WINDOWS_PROBE_PASS missing.' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: win1-windows-log
+          path: ${{ runner.temp }}/win1.log
+
+  # Desktop shell on Windows: frontend typecheck, Bun tests and build (Tauri embeds ../dist at
+  # compile time), then the Rust regression tests. Ignored live tests stay off; no secrets used.
+  desktop-windows:
+    name: desktop tests (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: openbot/desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: openbot/desktop/src-tauri
+          key: windows
+      - name: Install desktop from its own frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Typecheck
+        run: bun run typecheck
+      # Bash (Git Bash on the runner), not pwsh: Bun writes its report to stderr, and pwsh would turn
+      # each redirected stderr line into an ErrorRecord before Tee-Object formats it into the log.
+      - name: Bun tests
+        shell: bash
+        run: bun test > "$RUNNER_TEMP/desktop-bun.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        shell: bash
+        working-directory: openbot
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-bun.log" 'desktop Bun tests on Windows (head only)'
+      - name: Print desktop Bun test diagnostics (credentials masked)
+        if: failure()
+        shell: bash
+        working-directory: openbot
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/desktop-bun.log"
+      - name: Frontend build (frontendDist for the Tauri compile)
+        run: bun run build
+      - name: Rust regression tests (lib and bins, --locked)
+        working-directory: openbot/desktop/src-tauri
+        shell: bash
+        run: |
+          cargo test --locked --lib --bins 2>&1 | tee "$RUNNER_TEMP/desktop-cargo.log"
+          # cargo exits 0 when a target has no tests; require that something actually passed.
+          passed=$(sed -nE 's/^test result: ok\. ([0-9]+) passed.*/\1/p' "$RUNNER_TEMP/desktop-cargo.log" | awk '{s+=$1} END {print s+0}')
+          echo "Rust tests passed: $passed"
+          [ "$passed" -gt 0 ] || { echo '::error::cargo test ran zero tests'; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-windows-logs
+          path: ${{ runner.temp }}/desktop-*.log
