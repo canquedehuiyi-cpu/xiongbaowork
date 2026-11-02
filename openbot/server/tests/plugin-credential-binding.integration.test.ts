@@ -79,6 +79,14 @@ const store = createPluginStore({
   } as never,
   encryptionKey: KEY,
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+  /*
+   * The vendors here are under the reserved `.example` name and never resolve, and a custom server's
+   * requests go through the outbound guard, which asks where the name points before it sends. Without
+   * an answer the guard stops at `unresolved` and nothing reaches the stubbed `fetch` below, so the
+   * accepted case would see no send at all and the refused ones would pass for the wrong reason. A
+   * public address for every name keeps the guard in the path and lets the binding rule decide.
+   */
+  outboundLookup: async () => [{ address: "93.184.216.34", family: 4 }],
 });
 
 /**

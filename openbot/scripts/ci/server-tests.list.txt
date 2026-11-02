@@ -173,6 +173,7 @@ tests/local-threads.test.ts
 tests/mastra-roster.test.ts
 tests/mcp-grant-removal.integration.test.ts
 tests/mcp-listing.test.ts
+tests/mcp-outbound.test.ts
 tests/mcp-protocol.test.ts
 tests/mcp-result.test.ts
 tests/memory-runtime.test.ts

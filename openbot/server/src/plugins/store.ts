@@ -41,6 +41,7 @@ import {
   skills,
   skillTools,
 } from "../db/schema";
+import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { currentTenant } from "../tenant/context";
 import {
@@ -77,7 +78,7 @@ import { inspectToolArguments } from "./content-governance";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
-import { transportFor } from "./transport";
+import { type TransportKind, transportFor } from "./transport";
 
 /**
  * Plugins: what this deployment has added, which Bots may use it, and the one path a call takes.
@@ -853,6 +854,24 @@ const reachedAsFor = (access: ServerAccess, actorId: string): string =>
     : DEPLOYMENT_ACTOR;
 
 /**
+ * The outbound guard, for an MCP server whose URL an administrator typed rather than the catalogue.
+ *
+ * `customUrlRefusal` judged the string when it was stored; this has every request judged by where
+ * the name resolves, and refuses redirects so the token is never carried across one. The policy is
+ * the strict default: no private-host opt-in exists for custom servers, as the static rule has none.
+ * A catalogue-pinned server keeps dialling as before. `lookup` is the resolver seam
+ * ({@link PluginStoreOptions.outboundLookup}); absent, the system resolver answers.
+ */
+function tenantChosenOutbound(
+  entry: CatalogueEntry | null,
+  transport: TransportKind,
+  lookup: OutboundLookup | undefined,
+): { outbound?: OutboundPolicy } {
+  if (entry !== null || transport !== "mcp") return {};
+  return { outbound: lookup ? { lookup } : {} };
+}
+
+/**
  * Where this server actually is, when the stored row and the catalogue disagree.
  *
  * `mcp_servers.url` is written once, when a server is added, by copying what the catalogue said at
@@ -1127,10 +1146,17 @@ export type PluginStoreOptions = {
       token?: string;
       actorId?: string;
       botId?: string;
+      outbound?: OutboundPolicy;
     },
     toolName: string,
     args: Record<string, unknown>,
   ) => Promise<{ text: string; isError: boolean }>;
+  /**
+   * The resolver the outbound guard asks where a custom server's name points. Defaults to the
+   * system resolver. Injected by tests whose vendor hosts are reserved names that never resolve, so
+   * the guarded path reaches their stubbed `fetch` instead of stopping at `unresolved`.
+   */
+  outboundLookup?: OutboundLookup;
   /** Trading a refresh token for a short-lived access token. Defaults to a real HTTP exchange. */
   exchangeRefreshToken?: (input: {
     tokenUrl: string;
@@ -1241,6 +1267,7 @@ export function createPluginStore(options: PluginStoreOptions) {
    * to assert what a call was about to go out with.
    */
   const injectedVendor = options.callVendor;
+  const outboundLookup = options.outboundLookup;
   const exchangeRefreshToken =
     options.exchangeRefreshToken ?? exchangeRefreshTokenOverHttp;
   const registerClient = options.registerClient ?? registerDynamicClient;
@@ -3849,6 +3876,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         listed = await transport.listTools({
           url: effectiveUrl(row, entry),
           token,
+          ...tenantChosenOutbound(entry, access.transport, outboundLookup),
         });
       } catch (error) {
         /*
@@ -7408,6 +7436,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             token,
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
+            ...tenantChosenOutbound(entry, access.transport, outboundLookup),
           },
           toolName,
           vendorArgs,
