@@ -272,7 +272,7 @@ import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTeamBots } from "./team-bots/team-bots";
 import { isAccessRevoked } from "./tenant/access";
-import { runAsTenant } from "./tenant/context";
+import { runAsClaimedTenant, runAsTenant } from "./tenant/context";
 import {
   createPackageStatusReader,
   loadTenantPackage,
@@ -2323,196 +2323,239 @@ await startupLifecycle.run(async (startup) => {
             limit: 1,
           });
           if (!item) return;
-          // Set once the item is understood, so its last failed try can still tell the Bot.
-          let abandon: ((reason: string) => Promise<void>) | undefined;
-          try {
-            const input = z
-              .object({
-                ownerUserId: z.string().min(1),
-                approvalId: z.string().min(1),
-              })
-              .parse(item.payload);
-            const resumeDependencies: ApprovalResumeDependencies = {
-              // Asked before the action runs: with Use Bots off, or the Bot's model off the allowlist,
-              // nothing is carried out and the refusal is final rather than retried.
-              refusal: (action) =>
-                headlessTurnRefusal({
-                  ownerUserId: action.actorId,
-                  agentId: action.botId,
-                }),
-              validate: (action) =>
-                approvalService.validateReentry(action, () =>
-                  executeApprovedAction(action),
-                ),
-              execute: executeApprovedAction,
-              continue: async ({
-                continuation: snapshot,
-                result,
-                messageId,
-                approvalId,
-              }) => {
-                const [waitingRun] = await database
-                  .select({ id: responsibilityRuns.id })
-                  .from(responsibilityRuns)
-                  .where(
-                    and(
-                      eq(responsibilityRuns.status, "waiting"),
-                      sql`${responsibilityRuns.waiting}->>'approvalId' = ${approvalId}`,
-                    ),
-                  )
-                  .limit(1);
-                if (waitingRun) {
-                  await responsibilityStore.resumeWaiting(
-                    input.ownerUserId,
-                    waitingRun.id,
-                    result,
-                  );
-                  return;
-                }
-                const request = await approvalService.store.get(
-                  input.ownerUserId,
-                  approvalId,
-                );
-                // A group turn's approval also writes the resumed reply into the shared transcript.
-                const outcome = await groupConversations.continueWaiting(
-                  approvalId,
-                  () =>
-                    approvalContinuationRunner({
-                      ownerUserId: input.ownerUserId,
-                      routineId: "approval",
-                      agentId: request.action.botId,
-                      threadId: snapshot.threadId,
-                      instruction: "",
-                      initiator: snapshot.initiator ?? PERSON_INITIATOR,
-                      continuation: { snapshot, result, messageId },
-                    }),
-                );
-                const [source] = await database
-                  .select({ channelId: intelligenceChannelMappings.channelId })
-                  .from(intelligenceChannelMappings)
-                  .where(
-                    and(
-                      eq(intelligenceChannelMappings.userId, input.ownerUserId),
-                      eq(
-                        intelligenceChannelMappings.threadId,
-                        snapshot.threadId,
-                      ),
-                    ),
-                  )
-                  .limit(1);
-                if (source && outcome.replyText)
-                  await channelStore.recordActivity(
-                    await actorFor(input.ownerUserId),
-                    source.channelId,
-                    {
-                      text: outcome.replyText,
-                      agentId: request.action.botId,
-                      at: new Date(),
-                    },
-                    { id: messageId },
-                  );
-                // A decision made in Slack, SMS or the phone gets its result back there too.
-                if (source && outcome.replyText)
-                  await deliveryNotifications(
-                    {
-                      ownerUserId: input.ownerUserId,
-                      channelId: source.channelId,
-                      agentId: request.action.botId,
-                      threadId: snapshot.threadId,
-                    },
-                    { id: messageId, text: outcome.replyText, kind: "reply" },
-                  );
-                /*
-                 * A crew's step that stopped to ask is told the answer (ticket 021, spec I3).
-                 *
-                 * The person decided in the approvals region, which knows nothing about pipelines: without
-                 * this the coworker's resumed turn would finish inside its own thread while the run it
-                 * stopped in stayed `awaiting_action`, and the rest of the plan would never be looked at.
-                 * What that turn finally said IS the step's output, so the sequence is handed the answer
-                 * rather than asking the coworker a second time for work it has just done.
-                 */
-                const parkedCrew = await pipelineStore.runHoldingApproval({
-                  approvalId,
-                });
-                if (parkedCrew) {
-                  await pipelineStore.resume({
-                    tenantId: parkedCrew.tenantId,
-                    runId: parkedCrew.runId,
-                    output: outcome.replyText,
-                  });
-                }
-                await database
-                  .update(routineRuns)
-                  .set({
-                    status: "succeeded",
-                    finishedAt: new Date(),
-                    error: null,
-                    waiting: null,
-                  })
-                  .where(
-                    and(
-                      eq(routineRuns.status, "waiting"),
-                      sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
-                    ),
-                  );
-              },
-            };
-            abandon = (reason) =>
-              approvalService.abandon(
-                input.ownerUserId,
-                input.approvalId,
-                reason,
-                resumeDependencies,
-              );
-            await approvalService.resume(
-              input.ownerUserId,
-              input.approvalId,
-              resumeDependencies,
-            );
-            if (
-              !(await approvalQueue.finish({
-                kind: item.kind,
-                key: item.key,
-                owner: approvalOwner,
-              }))
-            )
-              throw new Error(
-                "The approval work lease was lost before completion.",
-              );
-          } catch (error) {
-            const reason =
-              error instanceof Error ? error.message : String(error);
-            // The queue will not hand this item out again, so the conversation hears now or never.
-            if (abandon && item.attempts >= DEFAULT_MAX_ATTEMPTS) {
+          /*
+           * WHOSE DECISION OR ANSWER THIS IS comes from the row the queue handed out, never from
+           * the payload (G01). The route the person decided or answered through offered it inside
+           * their own frame, so the database stamped their tenant on it; the payload's owner may
+           * only agree. A row stamped as nobody's, or naming somebody else, is ended here and never
+           * runs: running it would act, and file the continued turn, the channel reply and the
+           * notifications, as whoever the payload claims.
+           */
+          const claimed = await runAsClaimedTenant(
+            item,
+            item.payload.ownerUserId,
+            async () => {
+              // Set once the item is understood, so its last failed try can still tell the Bot.
+              let abandon: ((reason: string) => Promise<void>) | undefined;
               try {
-                await abandon(reason);
-                await approvalQueue.finish({
+                const input = z
+                  .object({
+                    ownerUserId: z.string().min(1),
+                    approvalId: z.string().min(1),
+                  })
+                  .parse(item.payload);
+                const resumeDependencies: ApprovalResumeDependencies = {
+                  // Asked before the action runs: with Use Bots off, or the Bot's model off the allowlist,
+                  // nothing is carried out and the refusal is final rather than retried.
+                  refusal: (action) =>
+                    headlessTurnRefusal({
+                      ownerUserId: action.actorId,
+                      agentId: action.botId,
+                    }),
+                  validate: (action) =>
+                    approvalService.validateReentry(action, () =>
+                      executeApprovedAction(action),
+                    ),
+                  execute: executeApprovedAction,
+                  continue: async ({
+                    continuation: snapshot,
+                    result,
+                    messageId,
+                    approvalId,
+                  }) => {
+                    const [waitingRun] = await database
+                      .select({ id: responsibilityRuns.id })
+                      .from(responsibilityRuns)
+                      .where(
+                        and(
+                          eq(responsibilityRuns.status, "waiting"),
+                          sql`${responsibilityRuns.waiting}->>'approvalId' = ${approvalId}`,
+                        ),
+                      )
+                      .limit(1);
+                    if (waitingRun) {
+                      await responsibilityStore.resumeWaiting(
+                        input.ownerUserId,
+                        waitingRun.id,
+                        result,
+                      );
+                      return;
+                    }
+                    const request = await approvalService.store.get(
+                      input.ownerUserId,
+                      approvalId,
+                    );
+                    // A group turn's approval also writes the resumed reply into the shared transcript.
+                    const outcome = await groupConversations.continueWaiting(
+                      approvalId,
+                      () =>
+                        approvalContinuationRunner({
+                          ownerUserId: input.ownerUserId,
+                          routineId: "approval",
+                          agentId: request.action.botId,
+                          threadId: snapshot.threadId,
+                          instruction: "",
+                          initiator: snapshot.initiator ?? PERSON_INITIATOR,
+                          continuation: { snapshot, result, messageId },
+                        }),
+                    );
+                    const [source] = await database
+                      .select({
+                        channelId: intelligenceChannelMappings.channelId,
+                      })
+                      .from(intelligenceChannelMappings)
+                      .where(
+                        and(
+                          eq(
+                            intelligenceChannelMappings.userId,
+                            input.ownerUserId,
+                          ),
+                          eq(
+                            intelligenceChannelMappings.threadId,
+                            snapshot.threadId,
+                          ),
+                        ),
+                      )
+                      .limit(1);
+                    if (source && outcome.replyText)
+                      await channelStore.recordActivity(
+                        await actorFor(input.ownerUserId),
+                        source.channelId,
+                        {
+                          text: outcome.replyText,
+                          agentId: request.action.botId,
+                          at: new Date(),
+                        },
+                        { id: messageId },
+                      );
+                    // A decision made in Slack, SMS or the phone gets its result back there too.
+                    if (source && outcome.replyText)
+                      await deliveryNotifications(
+                        {
+                          ownerUserId: input.ownerUserId,
+                          channelId: source.channelId,
+                          agentId: request.action.botId,
+                          threadId: snapshot.threadId,
+                        },
+                        {
+                          id: messageId,
+                          text: outcome.replyText,
+                          kind: "reply",
+                        },
+                      );
+                    /*
+                     * A crew's step that stopped to ask is told the answer (ticket 021, spec I3).
+                     *
+                     * The person decided in the approvals region, which knows nothing about pipelines: without
+                     * this the coworker's resumed turn would finish inside its own thread while the run it
+                     * stopped in stayed `awaiting_action`, and the rest of the plan would never be looked at.
+                     * What that turn finally said IS the step's output, so the sequence is handed the answer
+                     * rather than asking the coworker a second time for work it has just done.
+                     */
+                    const parkedCrew = await pipelineStore.runHoldingApproval({
+                      approvalId,
+                    });
+                    if (parkedCrew) {
+                      await pipelineStore.resume({
+                        tenantId: parkedCrew.tenantId,
+                        runId: parkedCrew.runId,
+                        output: outcome.replyText,
+                      });
+                    }
+                    await database
+                      .update(routineRuns)
+                      .set({
+                        status: "succeeded",
+                        finishedAt: new Date(),
+                        error: null,
+                        waiting: null,
+                      })
+                      .where(
+                        and(
+                          eq(routineRuns.status, "waiting"),
+                          sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
+                        ),
+                      );
+                  },
+                };
+                abandon = (reason) =>
+                  approvalService.abandon(
+                    input.ownerUserId,
+                    input.approvalId,
+                    reason,
+                    resumeDependencies,
+                  );
+                await approvalService.resume(
+                  input.ownerUserId,
+                  input.approvalId,
+                  resumeDependencies,
+                );
+                if (
+                  !(await approvalQueue.finish({
+                    kind: item.kind,
+                    key: item.key,
+                    owner: approvalOwner,
+                  }))
+                )
+                  throw new Error(
+                    "The approval work lease was lost before completion.",
+                  );
+              } catch (error) {
+                const reason =
+                  error instanceof Error ? error.message : String(error);
+                // The queue will not hand this item out again, so the conversation hears now or never.
+                if (abandon && item.attempts >= DEFAULT_MAX_ATTEMPTS) {
+                  try {
+                    await abandon(reason);
+                    await approvalQueue.finish({
+                      kind: item.kind,
+                      key: item.key,
+                      owner: approvalOwner,
+                    });
+                    return;
+                  } catch (failure) {
+                    console.error(
+                      JSON.stringify({
+                        type: "approval-abandon-error",
+                        error:
+                          failure instanceof Error
+                            ? failure.message
+                            : String(failure),
+                        timestamp: new Date().toISOString(),
+                      }),
+                    );
+                  }
+                }
+                await approvalQueue.release({
                   kind: item.kind,
                   key: item.key,
                   owner: approvalOwner,
+                  delayMs: 10_000,
+                  reason,
                 });
-                return;
-              } catch (failure) {
-                console.error(
-                  JSON.stringify({
-                    type: "approval-abandon-error",
-                    error:
-                      failure instanceof Error
-                        ? failure.message
-                        : String(failure),
-                    timestamp: new Date().toISOString(),
-                  }),
-                );
+                throw error;
               }
-            }
-            await approvalQueue.release({
+            },
+          );
+          if (!claimed.ran) {
+            await approvalQueue.finish({
               kind: item.kind,
               key: item.key,
               owner: approvalOwner,
-              delayMs: 10_000,
-              reason,
             });
-            throw error;
+            /*
+             * Ended, not retried: no frame would ever make this row a person's. Every path that
+             * decides or answers runs in the owner's frame (the app's routes, and OpenTag as the
+             * binding's tenant), so this is a legacy or misfiled row, reported where an operator
+             * looks rather than run as whoever its payload names.
+             */
+            console.error(
+              JSON.stringify({
+                type: "approval-resume-untrusted-tenant",
+                key: item.key,
+                reason: claimed.reason,
+              }),
+            );
           }
         } catch (error) {
           console.error(
@@ -2890,78 +2933,113 @@ await startupLifecycle.run(async (startup) => {
             maxAttempts: 1,
           });
           if (!item) return;
-          try {
-            const payload = z
-              .object({
-                ownerUserId: z.string().min(1),
-                // The saved question, initiator included, so the answer resumes the turn that asked.
-                question: personQuestionSchema,
-                response: z.string().min(1).max(6000),
-              })
-              .parse(item.payload);
-            if (payload.ownerUserId !== payload.question.actorId)
-              throw new ApprovalRefusedError(
-                "The saved question owner does not match.",
-              );
-            await authoriseQuestion(payload.question);
-            const outcome = await resumePersonQuestion({
-              ownerUserId: payload.ownerUserId,
-              question: payload.question,
-              response: payload.response,
-              messageId: `person-response:${item.key}`,
-              runTurn: approvalContinuationRunner,
-              responsibilities: responsibilityStore,
-              responsibilityTurn: responsibilityAnswerTurn,
-            });
-            const source = await sourceForCoordinationRun({
-              ...payload.question,
-              botId: questionConversationBot(payload.question),
-              depth: 0,
-            });
-            if (source && outcome.replyText)
-              await channelStore.recordActivity(
-                await actorFor(payload.ownerUserId),
-                source.channelId,
-                {
-                  text: outcome.replyText,
-                  agentId: questionConversationBot(payload.question),
-                  at: new Date(),
-                },
-                { id: `person-response:${item.key}` },
-              );
-            if (source && outcome.replyText)
-              await deliveryNotifications(
-                {
+          /*
+           * WHOSE DECISION OR ANSWER THIS IS comes from the row the queue handed out, never from
+           * the payload (G01). The route the person decided or answered through offered it inside
+           * their own frame, so the database stamped their tenant on it; the payload's owner may
+           * only agree. A row stamped as nobody's, or naming somebody else, is ended here and never
+           * runs: running it would act, and file the continued turn, the channel reply and the
+           * notifications, as whoever the payload claims.
+           */
+          const claimed = await runAsClaimedTenant(
+            item,
+            item.payload.ownerUserId,
+            async () => {
+              try {
+                const payload = z
+                  .object({
+                    ownerUserId: z.string().min(1),
+                    // The saved question, initiator included, so the answer resumes the turn that asked.
+                    question: personQuestionSchema,
+                    response: z.string().min(1).max(6000),
+                  })
+                  .parse(item.payload);
+                if (payload.ownerUserId !== payload.question.actorId)
+                  throw new ApprovalRefusedError(
+                    "The saved question owner does not match.",
+                  );
+                await authoriseQuestion(payload.question);
+                const outcome = await resumePersonQuestion({
                   ownerUserId: payload.ownerUserId,
-                  channelId: source.channelId,
-                  agentId: questionConversationBot(payload.question),
-                  threadId: payload.question.threadId,
-                },
-                {
-                  id: `person-response:${item.key}`,
-                  text: outcome.replyText,
-                  kind: "reply",
-                },
-              );
-            if (
-              !(await approvalQueue.finish({
-                kind: item.kind,
-                key: item.key,
-                owner: personResponseOwner,
-              }))
-            )
-              throw new Error(
-                "The question response lease was lost before completion.",
-              );
-          } catch (error) {
-            await approvalQueue.release({
+                  question: payload.question,
+                  response: payload.response,
+                  messageId: `person-response:${item.key}`,
+                  runTurn: approvalContinuationRunner,
+                  responsibilities: responsibilityStore,
+                  responsibilityTurn: responsibilityAnswerTurn,
+                });
+                const source = await sourceForCoordinationRun({
+                  ...payload.question,
+                  botId: questionConversationBot(payload.question),
+                  depth: 0,
+                });
+                if (source && outcome.replyText)
+                  await channelStore.recordActivity(
+                    await actorFor(payload.ownerUserId),
+                    source.channelId,
+                    {
+                      text: outcome.replyText,
+                      agentId: questionConversationBot(payload.question),
+                      at: new Date(),
+                    },
+                    { id: `person-response:${item.key}` },
+                  );
+                if (source && outcome.replyText)
+                  await deliveryNotifications(
+                    {
+                      ownerUserId: payload.ownerUserId,
+                      channelId: source.channelId,
+                      agentId: questionConversationBot(payload.question),
+                      threadId: payload.question.threadId,
+                    },
+                    {
+                      id: `person-response:${item.key}`,
+                      text: outcome.replyText,
+                      kind: "reply",
+                    },
+                  );
+                if (
+                  !(await approvalQueue.finish({
+                    kind: item.kind,
+                    key: item.key,
+                    owner: personResponseOwner,
+                  }))
+                )
+                  throw new Error(
+                    "The question response lease was lost before completion.",
+                  );
+              } catch (error) {
+                await approvalQueue.release({
+                  kind: item.kind,
+                  key: item.key,
+                  owner: personResponseOwner,
+                  delayMs: 0,
+                  reason:
+                    error instanceof Error ? error.message : String(error),
+                });
+                throw error;
+              }
+            },
+          );
+          if (!claimed.ran) {
+            await approvalQueue.finish({
               kind: item.kind,
               key: item.key,
               owner: personResponseOwner,
-              delayMs: 0,
-              reason: error instanceof Error ? error.message : String(error),
             });
-            throw error;
+            /*
+             * Ended, not retried: no frame would ever make this row a person's. Every path that
+             * decides or answers runs in the owner's frame (the app's routes, and OpenTag as the
+             * binding's tenant), so this is a legacy or misfiled row, reported where an operator
+             * looks rather than run as whoever its payload names.
+             */
+            console.error(
+              JSON.stringify({
+                type: "person-response-untrusted-tenant",
+                key: item.key,
+                reason: claimed.reason,
+              }),
+            );
           }
         } catch (error) {
           console.error(

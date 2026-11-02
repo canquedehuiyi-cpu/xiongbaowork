@@ -1,5 +1,12 @@
 import { resolveUpdateRoute, type UpdateRoute } from "../agents/lifecycle";
 import type { DrawnComponent } from "../routines/runner";
+import {
+  assertPersonTenant,
+  isTenantFramed,
+  requireTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import type { WorkItem, WorkQueue } from "../work/queue";
 import type { ExpoPushTransport } from "./push";
 import type { DeliveryStore } from "./store";
@@ -109,6 +116,22 @@ export function createDeliveryRouter(deps: {
 }) {
   const leaseMs = 60_000;
   /**
+   * The person a stored record says it belongs to, or null (G01).
+   *
+   * `stamped` is the tenant the database wrote on the row from the frame that created it; the
+   * record's owner, when given, may only agree. A row stamped as nobody's, one naming another
+   * person, or a caller already acting for somebody else answers null, and nothing is run or sent
+   * for it.
+   */
+  function trustedTenant(stamped: unknown, owner?: string): string | null {
+    try {
+      return assertPersonTenant(stamped, owner);
+    } catch (error) {
+      if (error instanceof TenantContextError) return null;
+      throw error;
+    }
+  }
+  /**
    * Bindings with a paired chat turn open in this process. An approval or question raised during
    * that turn is shown in the turn itself (an OpenTag card, or text), so it is collected here rather
    * than also sent as a second, proactive message to the same person.
@@ -124,6 +147,29 @@ export function createDeliveryRouter(deps: {
     },
     includeBindings = true,
   ) {
+    /*
+     * Queued only from inside the owner's own frame (G01). The outbox rows and their work items are
+     * stamped with whatever tenant this runs as, and the sweep sends only items stamped as a
+     * person: a notification queued unframed (stamped `system`, which every tenant can read) or
+     * from somebody else's frame would never be sent, and its text would sit where it does not
+     * belong. Such a caller is reported here, by name, and nothing is queued.
+     */
+    if (
+      !trustedTenant(
+        isTenantFramed() ? requireTenant() : undefined,
+        scope.ownerUserId,
+      )
+    ) {
+      console.error(
+        JSON.stringify({
+          type: "delivery-notify-untrusted-tenant",
+          kind: input.kind,
+          id: input.id,
+          framed: isTenantFramed(),
+        }),
+      );
+      return;
+    }
     if (!(await deps.authoriseScope(scope)))
       throw new DeliveryRefusedError("Conversation access has been revoked.");
     // Progress/decision/question routing and the per-Bot notification preference. Fails open.
@@ -188,30 +234,41 @@ export function createDeliveryRouter(deps: {
     echo?: boolean;
   }) {
     if (input.echo) return { queued: false };
-    const binding = await deps.store.findBinding(
-      input.source,
-      input.realm,
-      input.identity,
-      input.address,
+    /*
+     * Which person a provider identity is bound to is nobody's question until it is answered, so
+     * the lookup asks as the platform. Everything after it runs as the binding's own tenant, so the
+     * inbox row and its work item are stamped with the person and run as them (G01).
+     */
+    const binding = await runAsTenant("platform", () =>
+      deps.store.findBinding(
+        input.source,
+        input.realm,
+        input.identity,
+        input.address,
+      ),
     );
-    if (!binding || !(await deps.authoriseScope(binding)))
-      return { queued: false };
-    // Opted out by STOP: their texts start no turns until they send START.
-    if (binding.optedOutAt) return { queued: false };
-    const result = await deps.store.offerInbox({
-      ownerUserId: binding.ownerUserId,
-      channelId: binding.channelId,
-      agentId: binding.agentId,
-      threadId: binding.threadId,
-      bindingId: binding.id,
-      source: input.source,
-      realm: input.realm,
-      externalId: input.externalId,
-      text: input.text,
+    if (!binding) return { queued: false };
+    const tenant = trustedTenant(binding.tenantId, binding.ownerUserId);
+    if (!tenant) return { queued: false };
+    return runAsTenant(tenant, async () => {
+      if (!(await deps.authoriseScope(binding))) return { queued: false };
+      // Opted out by STOP: their texts start no turns until they send START.
+      if (binding.optedOutAt) return { queued: false };
+      const result = await deps.store.offerInbox({
+        ownerUserId: binding.ownerUserId,
+        channelId: binding.channelId,
+        agentId: binding.agentId,
+        threadId: binding.threadId,
+        bindingId: binding.id,
+        source: input.source,
+        realm: input.realm,
+        externalId: input.externalId,
+        text: input.text,
+      });
+      // The downstream event engine deduplicates independently: a provider retry can recover an
+      // interrupted event insertion without re-running the conversational turn.
+      return result;
     });
-    // The downstream event engine deduplicates independently: a provider retry can recover an
-    // interrupted event insertion without re-running the conversational turn.
-    return result;
   }
   /**
    * One paired Slack/Teams message, run now and answered in the same AG-UI stream.
@@ -228,13 +285,26 @@ export function createDeliveryRouter(deps: {
     text: string;
     signal: AbortSignal;
   }): Promise<ConverseResult> {
-    const binding = await deps.store.findBinding(
-      input.transport,
-      input.realm,
-      input.identity,
+    // Looked up as the platform, then run as the binding's own tenant, as `receive` is.
+    const binding = await runAsTenant("platform", () =>
+      deps.store.findBinding(input.transport, input.realm, input.identity),
     );
-    if (!binding || !(await deps.authoriseScope(binding)))
-      return { kind: "unbound" };
+    if (!binding) return { kind: "unbound" };
+    const tenant = trustedTenant(binding.tenantId, binding.ownerUserId);
+    if (!tenant) return { kind: "unbound" };
+    return runAsTenant(tenant, () => converseAs(binding, input));
+  }
+  async function converseAs(
+    binding: NonNullable<Awaited<ReturnType<RouterStore["findBinding"]>>>,
+    input: {
+      transport: ChatTransport;
+      realm: string;
+      externalId: string;
+      text: string;
+      signal: AbortSignal;
+    },
+  ): Promise<ConverseResult> {
+    if (!(await deps.authoriseScope(binding))) return { kind: "unbound" };
     const scope = {
       ownerUserId: binding.ownerUserId,
       channelId: binding.channelId,
@@ -327,14 +397,25 @@ export function createDeliveryRouter(deps: {
       if (inline.get(binding.id) === extras) inline.delete(binding.id);
     }
   }
+  /**
+   * One claimed delivery, run inside `tenant`: the tenant stamped on the claimed work item. The
+   * inbox or outbox row is read in that frame, so another person's row is not even visible, and a
+   * row that is visible but is not that person's own (a `system` row, or one naming somebody else)
+   * is left alone rather than run or sent.
+   */
   async function deliver(
     item: WorkItem,
+    tenant: string,
     signal: AbortSignal,
     owns: () => Promise<boolean>,
   ) {
     if (!(await owns())) return;
     if (item.kind === "delivery.inbound") {
       const row = await deps.store.inbox(item.key);
+      if (row && (row.tenantId !== tenant || row.ownerUserId !== tenant)) {
+        untrusted(item, "inbox row is not the item tenant's");
+        return;
+      }
       if (
         !row ||
         row.state === "sent" ||
@@ -416,6 +497,10 @@ export function createDeliveryRouter(deps: {
     }
     const current = await deps.store.outbox(item.key);
     if (!current) return;
+    if (current.tenantId !== tenant || current.ownerUserId !== tenant) {
+      untrusted(item, "outbox row is not the item tenant's");
+      return;
+    }
     if (item.kind === "delivery.push-receipt") {
       if (
         current.transport !== "push" ||
@@ -579,16 +664,38 @@ export function createDeliveryRouter(deps: {
   }
   /** Twilio STOP/START for one number: record it on every binding for that number, and audit it. */
   async function smsOptOut(realm: string, identity: string, optedOut: boolean) {
-    const rows = await deps.store.setSmsOptOut(realm, identity, optedOut);
-    for (const row of rows)
-      await deps.audit?.({
-        ownerUserId: row.ownerUserId,
-        channelId: row.channelId,
-        id: row.id,
-        kind: "sms_opt_out",
-        state: optedOut ? "opted_out" : "opted_in",
-      });
-    return rows.length;
+    /*
+     * A STOP is the number's, across every person bound to it, so the mark is written as the
+     * platform; each binding's audit row is then written as that binding's own tenant, and a
+     * binding stamped as nobody's is marked but audits nothing (G01).
+     */
+    return runAsTenant("platform", async () => {
+      const rows = await deps.store.setSmsOptOut(realm, identity, optedOut);
+      for (const row of rows) {
+        const tenant = trustedTenant(row.tenantId, row.ownerUserId);
+        if (!tenant) continue;
+        await runAsTenant(tenant, async () =>
+          deps.audit?.({
+            ownerUserId: row.ownerUserId,
+            channelId: row.channelId,
+            id: row.id,
+            kind: "sms_opt_out",
+            state: optedOut ? "opted_out" : "opted_in",
+          }),
+        );
+      }
+      return rows.length;
+    });
+  }
+  function untrusted(item: WorkItem, reason: string) {
+    console.warn(
+      JSON.stringify({
+        type: "delivery-untrusted-tenant",
+        kind: item.kind,
+        id: item.key,
+        reason,
+      }),
+    );
   }
   return {
     receive,
@@ -619,6 +726,18 @@ export function createDeliveryRouter(deps: {
         limit: 1,
         maxAttempts: 5,
       })) {
+        /*
+         * WHOSE DELIVERY THIS IS comes from the claimed row (G01): the tenant the database stamped
+         * on the work item from the frame that offered it. A row stamped as nobody's is ended here
+         * without running a turn or sending anything; every other one runs, start to finish, as
+         * that tenant.
+         */
+        const tenant = trustedTenant(item.tenantId);
+        if (!tenant) {
+          untrusted(item, "work item names no person");
+          await deps.queue.finish({ kind, key: item.key, owner: deps.owner });
+          continue;
+        }
         const controller = new AbortController();
         let lost = false;
         let stopped = false;
@@ -660,7 +779,9 @@ export function createDeliveryRouter(deps: {
         };
         schedule();
         try {
-          await deliver(item, controller.signal, owns);
+          await runAsTenant(tenant, () =>
+            deliver(item, tenant, controller.signal, owns),
+          );
           if (!lost)
             await deps.queue.finish({ kind, key: item.key, owner: deps.owner });
         } catch (error) {
