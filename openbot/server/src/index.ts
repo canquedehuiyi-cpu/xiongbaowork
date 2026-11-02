@@ -459,10 +459,23 @@ await startupLifecycle.run(async (startup) => {
    * and this one already holds the vault: a binding is a row plus a key, and neither belongs in the
    * runtime wiring. Absent binding, absent model — the deployment's own answers, as before.
    */
+  /*
+   * Where a tenant's model base URL may point (audit defect #6): only the development private-host
+   * opt-in (refused in production by `config.ts`), so a developer's local provider still answers.
+   *
+   * Deliberately NOT `config.agentEndpointAllowedHosts`. Those are hosts an operator opened for agent
+   * endpoints; reusing them here would hand every tenant (model routes need only `requireUser`) a
+   * plain-http path to those internal services on any port, with the response read back as model
+   * output. A model allowlist, if one is ever wanted, is its own setting, empty by default.
+   */
+  const modelOutbound = {
+    allowPrivateHosts: config.computer?.allowPrivateHosts === true,
+  };
   const resolveAgentModel = createAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
+    modelOutbound,
   );
   const agentProfileStore = createAgentProfileStore(
     database,
@@ -3489,6 +3502,7 @@ await startupLifecycle.run(async (startup) => {
       credentialStore,
       config.keyEncryptionKey,
       quota,
+      modelOutbound,
     ),
   );
 

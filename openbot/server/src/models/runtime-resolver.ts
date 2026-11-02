@@ -8,6 +8,7 @@ import type { CredentialSecretReader } from "../credentials";
 import { decryptSecret } from "../credentials";
 import type { Database } from "../db/client";
 import { agentProfiles, modelRegistry } from "../db/schema";
+import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
 
 /**
  * Per-coworker model binding (ticket 012): the profile's `model_ref` decides
@@ -41,6 +42,12 @@ export function languageModelFor(
   baseUrl: string | null,
   modelName: string,
   apiKey: string,
+  /**
+   * Where a tenant's base URL may point (audit defect #6). Applied to every request the SDK makes to
+   * a tenant-chosen endpoint: checked, resolved, never redirected. No deadline here — a streamed
+   * answer is legitimately long, and the run's own abort signal still applies.
+   */
+  outbound: OutboundPolicy = {},
 ): LanguageModel {
   if (provider === "anthropic") {
     return createAnthropic({ apiKey })(modelName);
@@ -61,6 +68,7 @@ export function languageModelFor(
     baseURL,
     apiKey,
     includeUsage: true,
+    ...(baseUrl ? { fetch: createGuardedFetch(outbound) } : {}),
   }).chatModel(modelName);
 }
 
@@ -129,6 +137,7 @@ export function createAgentModelResolver(
   database: Database,
   credentials: CredentialSecretReader,
   encryptionKey: string,
+  outbound: OutboundPolicy = {},
 ): AgentModelResolver {
   return async (agentId) => {
     const binding = await bindingFor(database, agentId).catch(() => null);
@@ -144,6 +153,7 @@ export function createAgentModelResolver(
         binding.baseUrl,
         binding.modelName,
         apiKey,
+        outbound,
       );
     } catch {
       // A bad key costs the binding, not the conversation.

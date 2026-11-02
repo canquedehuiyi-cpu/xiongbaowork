@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -287,6 +287,124 @@ test("the board says which model answered each task", async () => {
   expect(
     secondBody.tasks.find((entry) => entry.id === other.id)?.model,
   ).toBeNull();
+});
+
+/**
+ * Audit defect #6: the probe POSTs the tenant's key to the tenant's base URL, so the address is
+ * checked when it is stored and again, with DNS, before every probe — and a refused probe sends
+ * nothing at all. The resolver and the network are stand-ins that record what they were asked.
+ */
+describe("a model endpoint inside the deployment is never sent the key", () => {
+  const sent: { url: string; init: RequestInit | undefined }[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    sent.push({ url: String(input instanceof Request ? input.url : input), init });
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof fetch;
+  const lookup = async (hostname: string) =>
+    hostname === "rebind.example.test"
+      ? [{ address: "127.0.0.1", family: 4 }]
+      : [{ address: "93.184.216.34", family: 4 }];
+  const guarded = createModelRoutes(
+    database,
+    requireUser,
+    credentialStore,
+    encryptionKey,
+    undefined,
+    { lookup, fetchImpl },
+  );
+  const callGuarded = async <T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<{ status: number; body: T }> => {
+    const response = await runAsTenant(tenant, () =>
+      guarded.request(
+        new Request(`http://openbot.test${path}`, {
+          method,
+          ...(body === undefined
+            ? {}
+            : {
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+              }),
+        }),
+      ),
+    );
+    return {
+      status: response.status,
+      body: (await response.json().catch(() => null)) as T,
+    };
+  };
+
+  test("an internal or metadata base URL is refused before it is stored", async () => {
+    for (const baseUrl of [
+      "http://169.254.169.254/latest/meta-data/",
+      "https://127.0.0.1/v1",
+      "https://[::ffff:127.0.0.1]/v1",
+      "http://api.example.com/v1",
+    ]) {
+      const created = await callGuarded<{ error: string }>("POST", "/", {
+        provider: `tpl-${suite}`,
+        modelName: "ssrf-refused",
+        apiKey: "sk-ssrf-refused-0001",
+        baseUrl,
+      });
+      expect(created.status).toBe(400);
+    }
+    const library = await callGuarded<Library>("GET", "/");
+    expect(
+      library.body.models.some((entry) => entry.modelName === "ssrf-refused"),
+    ).toBeFalse();
+    expect(sent).toHaveLength(0);
+  });
+
+  test("a name that resolves to loopback is refused at probe time, with nothing sent", async () => {
+    const created = await callGuarded<Written>("POST", "/", {
+      provider: `tpl-${suite}`,
+      modelName: "ssrf-rebind",
+      apiKey: "sk-ssrf-rebind-0002",
+      baseUrl: "https://rebind.example.test/v1",
+    });
+    expect(created.status).toBe(201);
+
+    const probed = await callGuarded<{ ok: boolean; error?: string }>(
+      "POST",
+      `/${created.body.model.id}/test`,
+    );
+    expect(probed.status).toBe(400);
+    expect(probed.body.ok).toBeFalse();
+    expect(JSON.stringify(probed.body)).not.toContain("sk-ssrf-rebind-0002");
+    expect(sent).toHaveLength(0);
+
+    await callGuarded("DELETE", `/${created.body.model.id}`);
+  });
+
+  test("a stored metadata URL from before the check is refused at probe time", async () => {
+    const created = await callGuarded<Written>("POST", "/", {
+      provider: `tpl-${suite}`,
+      modelName: "ssrf-legacy",
+      apiKey: "sk-ssrf-legacy-0003",
+      baseUrl: "https://legacy.example.test/v1",
+    });
+    expect(created.status).toBe(201);
+    // As a row written before this check existed would hold it.
+    await runAsTenant(tenant, () =>
+      database
+        .update(modelRegistry)
+        .set({ baseUrl: "http://169.254.169.254/latest" })
+        .where(eq(modelRegistry.id, created.body.model.id)),
+    );
+
+    const probed = await callGuarded<{ ok: boolean }>(
+      "POST",
+      `/${created.body.model.id}/test`,
+    );
+    expect(probed.status).toBe(400);
+    expect(probed.body.ok).toBeFalse();
+    expect(sent).toHaveLength(0);
+
+    await callGuarded("DELETE", `/${created.body.model.id}`);
+  });
 });
 
 afterAll(async () => {
