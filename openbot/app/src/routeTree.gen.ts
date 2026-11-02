@@ -48,6 +48,7 @@ import { Route as AuthedAppAgentsIndexRouteImport } from './routes/_authed/_app/
 import { Route as AuthedAppBotsIndexRouteImport } from './routes/_authed/_app/bots.index'
 import { Route as AuthedAppBotsAgentIdRouteImport } from './routes/_authed/_app/bots.$agentId'
 import { Route as AuthedAppAssembleAgentIdRouteImport } from './routes/_authed/_app/assemble.$agentId'
+import { Route as AuthedAppWakersAgentIdRouteImport } from './routes/_authed/_app/wakers_.$agentId'
 import { Route as AuthedAppChannelChannelIdRouteImport } from './routes/_authed/_app/channel/$channelId'
 import { Route as AuthedAppChannelNewRouteImport } from './routes/_authed/_app/channel/new'
 import { Route as AuthedAppGroupChannelIdRouteImport } from './routes/_authed/_app/group/$channelId'
@@ -260,6 +261,11 @@ const AuthedAppAssembleAgentIdRoute =
     path: '/assemble/$agentId',
     getParentRoute: () => AuthedAppRoute,
   } as any)
+const AuthedAppWakersAgentIdRoute = AuthedAppWakersAgentIdRouteImport.update({
+  id: '/wakers_/$agentId',
+  path: '/wakers/$agentId',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
 const AuthedAppChannelChannelIdRoute =
   AuthedAppChannelChannelIdRouteImport.update({
     id: '/channel/$channelId',
@@ -382,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof AuthedSettingsIndexRoute
   '/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
+  '/wakers/$agentId': typeof AuthedAppWakersAgentIdRoute
   '/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/channel/new': typeof AuthedAppChannelNewRoute
   '/group/$channelId': typeof AuthedAppGroupChannelIdRoute
@@ -434,6 +441,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthedSettingsIndexRoute
   '/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
+  '/wakers/$agentId': typeof AuthedAppWakersAgentIdRoute
   '/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/channel/new': typeof AuthedAppChannelNewRoute
   '/group/$channelId': typeof AuthedAppGroupChannelIdRoute
@@ -491,6 +499,7 @@ export interface FileRoutesById {
   '/_authed/settings/': typeof AuthedSettingsIndexRoute
   '/_authed/_app/bots/$agentId': typeof AuthedAppBotsAgentIdRoute
   '/_authed/_app/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
+  '/_authed/_app/wakers_/$agentId': typeof AuthedAppWakersAgentIdRoute
   '/_authed/_app/channel/$channelId': typeof AuthedAppChannelChannelIdRoute
   '/_authed/_app/channel/new': typeof AuthedAppChannelNewRoute
   '/_authed/_app/group/$channelId': typeof AuthedAppGroupChannelIdRoute
@@ -547,6 +556,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/bots/$agentId'
     | '/assemble/$agentId'
+    | '/wakers/$agentId'
     | '/channel/$channelId'
     | '/channel/new'
     | '/group/$channelId'
@@ -599,6 +609,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/bots/$agentId'
     | '/assemble/$agentId'
+    | '/wakers/$agentId'
     | '/channel/$channelId'
     | '/channel/new'
     | '/group/$channelId'
@@ -649,6 +660,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/'
     | '/_authed/settings/'
     | '/_authed/_app/bots/$agentId'
+    | '/_authed/_app/wakers_/$agentId'
     | '/_authed/_app/channel/$channelId'
     | '/_authed/_app/channel/new'
     | '/_authed/_app/group/$channelId'
@@ -949,6 +961,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAppAssembleAgentIdRouteImport
       parentRoute: typeof AuthedAppRoute
     }
+    '/_authed/_app/wakers_/$agentId': {
+      id: '/_authed/_app/wakers_/$agentId'
+      path: '/wakers/$agentId'
+      fullPath: '/wakers/$agentId'
+      preLoaderRoute: typeof AuthedAppWakersAgentIdRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
     '/_authed/_app/channel/$channelId': {
       id: '/_authed/_app/channel/$channelId'
       path: '/channel/$channelId'
@@ -1137,6 +1156,7 @@ interface AuthedAppRouteChildren {
   AuthedAppIndexRoute: typeof AuthedAppIndexRoute
   AuthedAppBotsAgentIdRoute: typeof AuthedAppBotsAgentIdRoute
   AuthedAppAssembleAgentIdRoute: typeof AuthedAppAssembleAgentIdRoute
+  AuthedAppWakersAgentIdRoute: typeof AuthedAppWakersAgentIdRoute
   AuthedAppChannelChannelIdRoute: typeof AuthedAppChannelChannelIdRoute
   AuthedAppChannelNewRoute: typeof AuthedAppChannelNewRoute
   AuthedAppGroupChannelIdRoute: typeof AuthedAppGroupChannelIdRoute
@@ -1164,6 +1184,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppIndexRoute: AuthedAppIndexRoute,
   AuthedAppBotsAgentIdRoute: AuthedAppBotsAgentIdRoute,
   AuthedAppAssembleAgentIdRoute: AuthedAppAssembleAgentIdRoute,
+  AuthedAppWakersAgentIdRoute: AuthedAppWakersAgentIdRoute,
   AuthedAppChannelChannelIdRoute: AuthedAppChannelChannelIdRoute,
   AuthedAppChannelNewRoute: AuthedAppChannelNewRoute,
   AuthedAppGroupChannelIdRoute: AuthedAppGroupChannelIdRoute,

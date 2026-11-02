@@ -1,5 +1,6 @@
 tests/admin-controls-shutdown.test.ts
 tests/admin-people-credentials-validation.test.ts
+tests/agent-audit-trail.integration.test.ts
 tests/agent-auth-header.test.ts
 tests/agent-callback-token.test.ts
 tests/agent-connection-live.test.ts
