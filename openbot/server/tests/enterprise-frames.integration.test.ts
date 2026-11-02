@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, like } from "drizzle-orm";
+import { Hono } from "hono";
 import {
   type EnterpriseControls,
   installEnterpriseControls,
 } from "../src/admin/controls";
+import { createEnterpriseGate } from "../src/admin/gate";
 import { createAuditStore } from "../src/audit";
+import type { AppVariables } from "../src/auth/guards";
 import { reconcileDirectoryState } from "../src/auth/scim";
 import type { ComputerProvider } from "../src/computer/provider";
 import { createDatabase } from "../src/db/client";
@@ -13,6 +16,7 @@ import {
   agentProfiles,
   agents,
   auditEvents,
+  modelUsage,
   revokedAccess,
   users,
 } from "../src/db/schema";
@@ -33,6 +37,7 @@ const person = {
   email: `entf-person-${suite}@acme.test`,
 };
 const bot = `entf-bot-${suite}`;
+const remoteBot = `entf-remote-${suite}`;
 const stopped: string[] = [];
 const provider: ComputerProvider = {
   name: "fake",
@@ -112,12 +117,20 @@ beforeAll(async () => {
       avatarSeed: "x",
       visibility: "private",
     });
+    await database.insert(agents).values({
+      id: remoteBot,
+      tenantId: person.id,
+      name: "Frames test remote Bot",
+      type: "remote_ag_ui",
+      configuration: {},
+    });
   });
   controls = await installEnterpriseControls({
     database,
     databaseUrl: testDatabaseUrl(),
     auditStore,
     provider,
+    builtInModel: "openai/gpt-frames",
     env: {},
     // No intervals: each sweep is driven by the test.
     clock: {
@@ -130,8 +143,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await controls?.stop();
   await runAsTenant("platform", async () => {
+    await database
+      .delete(modelUsage)
+      .where(like(modelUsage.agentId, `entf-%${suite}`));
     await database.delete(agentProfiles).where(eq(agentProfiles.agentId, bot));
     await database.delete(agents).where(eq(agents.id, bot));
+    await database.delete(agents).where(eq(agents.id, remoteBot));
     await database
       .delete(revokedAccess)
       .where(like(revokedAccess.email, `%${suite}%`));
@@ -206,5 +223,134 @@ describe("SCIM offboarding", () => {
     expect(await rowsAbout("person.reprovisioned", person.id)).toEqual([
       { tenantId: person.id },
     ]);
+  });
+});
+
+/**
+ * The HTTP gate in front of a run, with `requireUser` framing the request the way the production
+ * guard does (`runAsTenant(<session user>, next)`), and a runtime stub that streams a model name.
+ */
+function gateFor(actor: { id: string; email: string }) {
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.use(
+    "/api/*",
+    createEnterpriseGate(async (context, next) => {
+      context.set("actor", { ...actor, role: "user" });
+      await runAsTenant(actor.id, () => next());
+    }),
+  );
+  app.post(
+    "/api/copilotkit/agent/:id/run",
+    () =>
+      new Response(
+        'data: {"type":"RUN_STARTED","model":"anthropic/claude-frames"}\n\n',
+        {
+          headers: { "content-type": "text/event-stream" },
+        },
+      ),
+  );
+  return app;
+}
+
+const allowlist = (value: { enabled: boolean; models: string[] }) =>
+  runAsTenant("platform", async () => {
+    await controls.store.setSetting("modelAllowlist", value, "test");
+    await controls.refresh();
+  });
+
+/** The usage rows for one run, with the tenant each was filed under. */
+const usageFor = (runId: string) =>
+  runAsTenant("platform", () =>
+    database
+      .select({
+        tenantId: modelUsage.tenantId,
+        userId: modelUsage.userId,
+        model: modelUsage.model,
+        source: modelUsage.source,
+        allowed: modelUsage.allowed,
+      })
+      .from(modelUsage)
+      .where(eq(modelUsage.runId, runId)),
+  );
+
+describe("a governed run, inside the person's own frame", () => {
+  const gate = gateFor(person);
+  const run = (agentId: string, runId: string) =>
+    gate.request(`/api/copilotkit/agent/${agentId}/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ threadId: `t-${suite}`, runId }),
+    });
+
+  test("a built-in Bot off the allowlist is refused, and the refusal is the person's row", async () => {
+    await allowlist({ enabled: true, models: ["anthropic/claude-frames"] });
+    try {
+      const runId = `refused-${suite}`;
+      const response = await underThrow(() => run(bot, runId));
+      expect(response.status).toBe(403);
+      expect(await usageFor(runId)).toEqual([
+        {
+          tenantId: person.id,
+          userId: person.id,
+          model: "openai/gpt-frames",
+          source: "configured",
+          allowed: false,
+        },
+      ]);
+      expect(await rowsAbout("model.refused", bot)).toEqual([
+        { tenantId: person.id },
+      ]);
+    } finally {
+      await allowlist({ enabled: false, models: [] });
+    }
+  });
+
+  test("a built-in Bot on the allowlist runs, and its usage row is the person's", async () => {
+    await allowlist({ enabled: true, models: ["openai/gpt-frames"] });
+    try {
+      const runId = `allowed-${suite}`;
+      const response = await underThrow(() => run(bot, runId));
+      expect(response.status).toBe(200);
+      expect(await usageFor(runId)).toEqual([
+        {
+          tenantId: person.id,
+          userId: person.id,
+          model: "openai/gpt-frames",
+          source: "configured",
+          allowed: true,
+        },
+      ]);
+    } finally {
+      await allowlist({ enabled: false, models: [] });
+    }
+  });
+
+  test("a remote Bot's streamed model is recorded in the person's tenant after the stream is read", async () => {
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const runId = `remote-${suite}`;
+      await underThrow(async () => {
+        const response = await run(remoteBot, runId);
+        expect(response.status).toBe(200);
+        // The body is read outside any frame, as the server reads it.
+        expect(await response.text()).toContain("anthropic/claude-frames");
+        expect(await eventually(() => usageFor(runId))).toEqual([
+          {
+            tenantId: person.id,
+            userId: person.id,
+            model: "anthropic/claude-frames",
+            source: "observed",
+            allowed: true,
+          },
+        ]);
+      });
+      expect(
+        errors.mock.calls.some((call) =>
+          String(call[0]).includes("model-usage-write-failed"),
+        ),
+      ).toBe(false);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
