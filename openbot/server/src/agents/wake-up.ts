@@ -27,6 +27,7 @@ import type { GrantedTool } from "../plugins/tools";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import {
   assertPersonTenant,
+  requireTenant,
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
@@ -165,6 +166,13 @@ export function createWakeUpStore(
       channelId?: string;
       initiator?: AuditInitiator;
     }): Promise<WakeUpRecord> {
+      /*
+       * Scheduled only from inside the person's own frame (G01). The row is stamped with whatever
+       * tenant this runs as, and the sweep later runs the follow-up as exactly that tenant, so a
+       * schedule made unframed (stamped `system`, which every tenant reads), from the platform's
+       * frame, or from another person's would either never run or run for the wrong person.
+       */
+      assertPersonTenant(requireTenant(), input.ownerUserId);
       const delay = input.dueAt.getTime() - now().getTime();
       if (!Number.isFinite(delay) || delay < WAKE_UP_MIN_DELAY_MS - 1_000)
         throw new WakeUpRefusedError(
@@ -329,6 +337,8 @@ export function wakeUpTools(options: {
         } catch (error) {
           if (error instanceof WakeUpRefusedError)
             return `${REFUSAL_MARKER} ${error.message}`;
+          if (error instanceof TenantContextError)
+            return `${REFUSAL_MARKER} A follow-up can only be scheduled for the person this turn runs for.`;
           throw error;
         }
       },

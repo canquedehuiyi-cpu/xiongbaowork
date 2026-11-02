@@ -12,11 +12,15 @@
  * Idleness is read from the audit trail, which is a record of what a Bot did rather than a question
  * put to the thing that did it.
  */
-import { and, inArray, like, sql } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import type { ComputerProvider } from "../computer/provider";
 import type { Database } from "../db/client";
-import { auditEvents } from "../db/schema";
-import { runAsTenant } from "../tenant/context";
+import { agents, auditEvents } from "../db/schema";
+import {
+  isPersonTenant,
+  runAsClaimedTenant,
+  runAsTenant,
+} from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "./queue";
 
 export const CULL_KIND = "computer.suspend";
@@ -86,6 +90,58 @@ async function lastActedAt(
 }
 
 /**
+ * Whose each Bot is: the tenant stamped on its own `agents` row (G01).
+ *
+ * A computer is a Bot's, and the suspension is that Bot's owner's business, so the work item is
+ * offered and later carried out in that tenant — never in the culler's, which is nobody's. Read as
+ * `platform` because the question spans every tenant. A Bot with no row, or one stamped as nobody's
+ * (`system`, `platform`, empty), has no person to act as; its computer is still suspended, under the
+ * platform rule below, because a computer left running costs money and stopping one touches no
+ * person's data.
+ */
+async function botTenants(
+  database: Database,
+  botIds: string[],
+): Promise<Map<string, string>> {
+  if (botIds.length === 0) return new Map();
+  const rows = await runAsTenant("platform", () =>
+    database
+      .select({ id: agents.id, tenantId: agents.tenantId })
+      .from(agents)
+      .where(inArray(agents.id, botIds)),
+  );
+  return new Map(rows.map((row) => [row.id, row.tenantId] as const));
+}
+
+async function botTenant(
+  database: Database,
+  botId: string,
+): Promise<string | null> {
+  const [row] = await runAsTenant("platform", () =>
+    database
+      .select({ tenantId: agents.tenantId })
+      .from(agents)
+      .where(eq(agents.id, botId))
+      .limit(1),
+  );
+  return row?.tenantId ?? null;
+}
+
+/**
+ * THE PLATFORM RULE (G01). A computer whose Bot has no `agents` row (deleted while its computer ran)
+ * or whose row is stamped as nobody's (`system`, `platform`, empty — the shared catalogue Bots) has
+ * no person to act as. It is offered and suspended as `platform` all the same: suspending is a
+ * `provider.stop` keyed by Bot id plus queue bookkeeping, and the idleness read is already platform,
+ * so the platform frame reads and writes no person's rows on the way. Refusing would only leave the
+ * computer running forever, since nothing else stops an orphan. A platform-stamped item is acted on
+ * only while its Bot is still nobody's (or gone): once a person owns the Bot, only that person's
+ * frame may suspend it, and the platform item is ended unacted.
+ */
+function isPlatformCull(botTenant: string | null | undefined): boolean {
+  return botTenant == null || !isPersonTenant(botTenant);
+}
+
+/**
  * Offer every idle computer for suspension.
  *
  * Offering rather than suspending: the decision and the act are separated so that whichever replica
@@ -94,7 +150,7 @@ async function lastActedAt(
  */
 export async function offerIdleComputers(
   options: CullerOptions,
-): Promise<{ offered: string[] }> {
+): Promise<{ offered: string[]; offeredAsPlatform: string[] }> {
   const now = options.now?.() ?? new Date();
   const computers = await options.provider.list();
   const running = computers.filter((computer) => computer.status === "running");
@@ -102,8 +158,13 @@ export async function offerIdleComputers(
     options.database,
     running.map((computer) => computer.botId),
   );
+  const tenants = await botTenants(
+    options.database,
+    running.map((computer) => computer.botId),
+  );
 
   const offered: string[] = [];
+  const offeredAsPlatform: string[] = [];
   for (const computer of running) {
     const since =
       used.get(computer.botId) ??
@@ -112,14 +173,30 @@ export async function offerIdleComputers(
     // how somebody's session disappears mid-task. Left alone.
     if (!since) continue;
     if (now.getTime() - since.getTime() < options.idleAfterMs) continue;
-    await options.queue.offer({
-      kind: CULL_KIND,
-      key: computer.botId,
-      payload: { botId: computer.botId, idleSince: since.toISOString() },
-    });
+    const tenant = tenants.get(computer.botId);
+    // Offered in the Bot's own tenant, or as the platform under the platform rule: the stamp on the
+    // item is what the claiming replica acts as.
+    const frame = isPersonTenant(tenant) ? tenant : "platform";
+    await runAsTenant(frame, () =>
+      options.queue.offer({
+        kind: CULL_KIND,
+        key: computer.botId,
+        payload: { botId: computer.botId, idleSince: since.toISOString() },
+      }),
+    );
     offered.push(computer.botId);
+    if (frame === "platform") offeredAsPlatform.push(computer.botId);
   }
-  return { offered };
+  // Counted once per sweep rather than warned once per Bot: how many computers nobody owns.
+  if (offeredAsPlatform.length > 0)
+    console.info(
+      JSON.stringify({
+        type: "computer-cull-offered-as-platform",
+        count: offeredAsPlatform.length,
+        botIds: offeredAsPlatform,
+      }),
+    );
+  return { offered, offeredAsPlatform };
 }
 
 /**
@@ -177,30 +254,64 @@ export async function suspendClaimedComputers(
       continue;
     }
     try {
-      const now = options.now?.() ?? new Date();
-      const used = await lastActedAt(options.database, [botId]);
-      const since = used.get(botId);
-      if (since && now.getTime() - since.getTime() < options.idleAfterMs) {
-        // Somebody came back. Drop the item rather than releasing it, because the next sweep will
-        // offer it again if it goes quiet, and a released one would just be reclaimed and re-checked.
+      /*
+       * As the tenant stamped on the claimed item, which must still be the Bot's own (G01). An item
+       * stamped as nobody's is acted on as `platform` only under the platform rule — its Bot is
+       * still nobody's, or gone. Any other mismatch (a person's item whose Bot is gone or now someone
+       * else's, a platform item for a person's Bot) is ended without touching any computer:
+       * retrying cannot make it trustworthy.
+       */
+      const owner = await botTenant(options.database, botId);
+      const act = async () => {
+        const now = options.now?.() ?? new Date();
+        const used = await lastActedAt(options.database, [botId]);
+        const since = used.get(botId);
+        if (since && now.getTime() - since.getTime() < options.idleAfterMs) {
+          // Somebody came back. Drop the item rather than releasing it, because the next sweep will
+          // offer it again if it goes quiet, and a released one would just be reclaimed and re-checked.
+          await options.queue.finish({
+            kind: CULL_KIND,
+            key: item.key,
+            owner: options.owner,
+          });
+          return "used again before it was suspended" as const;
+        }
+
+        await options.provider.stop(botId);
         await options.queue.finish({
           kind: CULL_KIND,
           key: item.key,
           owner: options.owner,
         });
+        return null;
+      };
+      const outcome =
+        !isPersonTenant(item.tenantId) && isPlatformCull(owner)
+          ? { ran: true as const, value: await runAsTenant("platform", act) }
+          : await runAsClaimedTenant(item, owner, act);
+      if (!outcome.ran) {
+        await options.queue.finish({
+          kind: CULL_KIND,
+          key: item.key,
+          owner: options.owner,
+        });
+        console.warn(
+          JSON.stringify({
+            type: "computer-cull-tenant-unresolved",
+            botId,
+            reason: outcome.reason,
+          }),
+        );
         report.skipped.push({
           botId,
-          reason: "used again before it was suspended",
+          reason: `tenant unresolved: ${outcome.reason}`,
         });
         continue;
       }
-
-      await options.provider.stop(botId);
-      await options.queue.finish({
-        kind: CULL_KIND,
-        key: item.key,
-        owner: options.owner,
-      });
+      if (outcome.value) {
+        report.skipped.push({ botId, reason: outcome.value });
+        continue;
+      }
       report.suspended.push(botId);
     } catch (error) {
       /*
