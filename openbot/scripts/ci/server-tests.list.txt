@@ -156,6 +156,7 @@ tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts
 tests/enterprise-frames.integration.test.ts
 tests/entra-profile.test.ts
+tests/github-oauth-signup.test.ts
 tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
 tests/group-conversations.integration.test.ts

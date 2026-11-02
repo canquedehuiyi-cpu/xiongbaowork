@@ -26,11 +26,11 @@ import {
   users,
   verifications,
 } from "../db/schema";
+import { provisionTenant } from "../tenant/provisioning";
 import { DOMAIN_REFUSAL_MESSAGE, emailDomainAllowed } from "./email-domain";
 import { encryptSsoConfig } from "./encrypt-sso-config";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
-import { provisionTenant } from "../tenant/provisioning";
 
 /** What a person sees when SSO is required and they tried another way in. */
 /** The native app's custom scheme (mobile/app.config.ts). */
@@ -206,8 +206,8 @@ export function createAuth(
    * provider with a fixed address. The plugin is only registered when Okta is configured, so a
    * deployment that does not use it carries no extra routes.
    *
-   * They converge again at the browser: `signIn.social({ provider })` starts all three, so the
-   * sign-in screen has one code path and does not need to know which kind each provider is.
+   * They converge again at the browser: `signIn.social({ provider })` starts every one of them, so
+   * the sign-in screen has one code path and does not need to know which kind each provider is.
    */
   const scimDeps = {
     database,
@@ -483,6 +483,17 @@ export function createAuth(
             },
           }
         : {}),
+      /*
+       * GitHub, as Google is: a named provider with fixed endpoints and nothing to map.
+       *
+       * Better Auth asks GitHub for `user:email` and takes `emailVerified` from GitHub's own
+       * `verified` flag on that address (false when GitHub does not vouch for it). It is not added to
+       * any trusted-provider list, so an unverified GitHub address is never linked onto an existing
+       * account. Nor is a verified one linked onto a row whose own address is unverified, which is
+       * every password sign-up: Better Auth's `requireLocalEmailVerified` is on by default and is not
+       * turned off here. Both refusals are generic to every social provider, not GitHub's own.
+       */
+      ...(authConfig.github ? { github: authConfig.github } : {}),
     },
     databaseHooks: {
       user: {
