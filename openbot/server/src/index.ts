@@ -91,9 +91,11 @@ import { createIdentityProviderStore } from "./auth/identity-provider-store";
 import { createOrganizationAuth } from "./auth/organization";
 import { organizationUserStore } from "./auth/organization-store";
 import {
+  checkDatabaseCredential,
   checkServerReadiness,
   createRoleWriterLifecycle,
   createStartupLifecycle,
+  resolveRlsEnforcementMode,
 } from "./auth/role-writer-lifecycle";
 import {
   initializeRoleWriter,
@@ -312,6 +314,18 @@ if (!roleWriterUrl) {
     "ROLE_WRITER_DATABASE_URL is required; the application cannot write identity roles.",
   );
 }
+// Audit defect #8: decided before any connection opens, so a typo in the mode or the public 0054
+// password stops the server here. Production, as config.ts reads it: trimmed.
+const rlsEnforcement = resolveRlsEnforcementMode(process.env);
+const production = process.env.NODE_ENV?.trim() === "production";
+checkDatabaseCredential({
+  url: config.databaseUrl,
+  production,
+  report: (event) =>
+    production
+      ? console.error(JSON.stringify(event))
+      : console.warn(JSON.stringify(event)),
+});
 const database = createDatabase(config.databaseUrl);
 const roleWriterLifecycle = createRoleWriterLifecycle({
   application: database,
@@ -406,7 +420,7 @@ await startupLifecycle.run(async (startup) => {
   await startup.step(() =>
     checkServerReadiness({
       read: async () => database.execute(sql.raw(ROLE_FACTS_SQL)),
-      mode: process.env.OPENBOT_RLS_ENFORCE,
+      mode: rlsEnforcement,
       report: (event) => {
         if (event.type === "rls-role-check-unavailable")
           console.warn(JSON.stringify(event));

@@ -787,6 +787,13 @@
       "breakpoints": true
     },
     {
+      "idx": 112,
+      "version": "7",
+      "when": 1793620000000,
+      "tag": "0112_app_role_hardening",
+      "breakpoints": true
+    },
+    {
       "idx": 113,
       "version": "7",
       "when": 1793621500000,
