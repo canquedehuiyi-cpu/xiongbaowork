@@ -218,6 +218,10 @@ jobs:
       - name: Print head test diagnostics (credentials masked)
         if: failure()
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
+      - name: Root frozen install (tsc resolves @types/bun from the root node_modules)
+        if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
+        working-directory: openbot
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Typecheck (not covered by the root typecheck)
         if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
         working-directory: openbot/${{ matrix.pkg }}
