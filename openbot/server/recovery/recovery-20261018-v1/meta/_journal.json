@@ -792,6 +792,13 @@
       "when": 1793625600000,
       "tag": "0117_automation_tenant_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793628000000,
+      "tag": "0118_plugin_install_listings",
+      "breakpoints": true
     }
   ]
 }
