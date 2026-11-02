@@ -188,6 +188,32 @@ export const laneOfTask = (task: {
     ? ["finished"]
     : laneOf(task.status);
 
+/**
+ * The circuit breaker a card carries, or null (spec C3).
+ *
+ * The routine runner closes the tenth consecutive failure's card with
+ * `deliverableRef: { kind: "circuit_breaker", failures, routineId }`, written only once the routine
+ * really has been switched off. `kind` is what is asked, so a later deliverable reference of another
+ * kind is simply not a breaker; a malformed one is read as no breaker rather than a broken card.
+ */
+export type CircuitBreaker = { failures: number; routineId: string };
+
+export const breakerOf = (task: {
+  status: string;
+  deliverableRef?: unknown;
+}): CircuitBreaker | null => {
+  const ref = task.deliverableRef;
+  if (task.status !== "failed" || typeof ref !== "object" || ref === null) {
+    return null;
+  }
+  const record = ref as Record<string, unknown>;
+  if (record.kind !== "circuit_breaker") return null;
+  return {
+    failures: typeof record.failures === "number" ? record.failures : 0,
+    routineId: typeof record.routineId === "string" ? record.routineId : "",
+  };
+};
+
 /** Whether this card is a failure a person has already archived. */
 const isArchivedFailure = (task: {
   status: string;
@@ -488,6 +514,7 @@ function TaskCard({
   const executor = coworkers.data?.find(
     (coworker) => coworker.id === task.executorAgentId,
   );
+  const breaker = breakerOf(task);
 
   return (
     /*
@@ -520,6 +547,28 @@ function TaskCard({
           {statusLabelOf(task)}
         </span>
       </div>
+      {breaker ? (
+        /*
+         * Spec C3: why it failed and what happened next, on the card. The routine is already off --
+         * the runner only writes this after the switch-off -- so the way back is the page where it
+         * can be switched on again.
+         */
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+          <span
+            className="rounded bg-red-500/20 px-1.5 text-red-500"
+            data-breaker="circuit_breaker"
+            title={`连续失败 ${breaker.failures} 次`}
+          >
+            已熔断·已自动停用
+          </span>
+          <span className="opacity-70">
+            连续失败 {breaker.failures} 次，例行任务已暂停
+          </span>
+          <Link className="underline opacity-80" to="/autonomous">
+            去自主工作页处理
+          </Link>
+        </div>
+      ) : null}
       {/*
        * Wraps rather than squeezes. In a narrow lane a single line had every chip shrink until a name
        * broke one character per line; each item keeps its own line and the row takes a second one.
