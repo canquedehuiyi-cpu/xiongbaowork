@@ -1,6 +1,6 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { userRoles, users } from "../db/schema";
+import { accounts, ssoProviders, userRoles, users } from "../db/schema";
 
 export type OpenBotRole = "admin" | "user";
 
@@ -257,14 +257,37 @@ export async function setRole(
   userId: string,
   role: OpenBotRole,
 ): Promise<OpenBotRole> {
+  await writeRole(database, userId, role, true);
+  return role;
+}
+
+/**
+ * The write behind `setRole`. `exclusive` removes every other role; without it the role is only
+ * added when the account holds none, which is what seeding a newcomer needs.
+ */
+async function writeRole(
+  database: Database,
+  userId: string,
+  role: OpenBotRole,
+  exclusive: boolean,
+): Promise<void> {
   const state = roleWriters.get(database);
   if (!state) throw new Error("The database role writer is not initialized.");
   if (state.closing) throw new Error("The database role writer is closing.");
   const work = state.writer.transaction(async (tx) => {
     await lockRoleAuthority(tx, userId);
-    await tx
-      .delete(userRoles)
-      .where(and(eq(userRoles.userId, userId), ne(userRoles.role, role)));
+    if (exclusive) {
+      await tx
+        .delete(userRoles)
+        .where(and(eq(userRoles.userId, userId), ne(userRoles.role, role)));
+    } else {
+      const held = await tx
+        .select({ role: userRoles.role })
+        .from(userRoles)
+        .where(eq(userRoles.userId, userId))
+        .limit(1);
+      if (held.length > 0) return;
+    }
     await tx.insert(userRoles).values({ userId, role }).onConflictDoNothing();
   });
   state.pending.add(work);
@@ -273,7 +296,28 @@ export async function setRole(
   } finally {
     state.pending.delete(work);
   }
-  return role;
+}
+
+/**
+ * Whether an account's address is one the configured list may be honoured for.
+ *
+ * `emailVerified` alone is not enough. Better Auth links a provider that reports a verified address
+ * onto an existing row with that address and flips the row to verified, so a password sign-up made
+ * first by whoever guessed a listed address would become "verified" the moment the real person signed
+ * in with Google or Okta, and the squatter's password would still open it. So a row that holds a
+ * password (`credential`) never qualifies: nothing here ever verified who set that password.
+ *
+ * Otherwise either the stored flag, or an arrival through an identity provider an administrator
+ * registered (SAML and OIDC through the SSO plugin do not always report the flag, and registering one
+ * is already admin-only).
+ */
+export function holdsTrustedAddress(identity: {
+  emailVerified: boolean;
+  providerIds: readonly string[];
+  viaRegisteredProvider: boolean;
+}): boolean {
+  if (identity.providerIds.includes("credential")) return false;
+  return identity.emailVerified === true || identity.viaRegisteredProvider;
 }
 
 /**
@@ -281,23 +325,36 @@ export async function setRole(
  *
  * The only moment configuration decides somebody who is not on the list: from here on that person's
  * role belongs to whoever administers the deployment.
+ *
+ * The list is honoured only for a verified address. Local sign-up does not verify email, so an
+ * unverified account carrying a listed address is whoever registered it first, not the person the
+ * deployment named; it starts as a user. A provider that does not report the flag is promoted by
+ * `applyConfiguredAdmin` at the sign-in that follows instead.
+ *
+ * Never demotes: "user" is only added when the account has no role yet, so a provisioning hook that
+ * runs for somebody already here cannot take away a role the admin screen gave them.
  */
 export async function seedRole(
   database: Database,
   userId: string,
   email: string,
+  emailVerified: boolean,
   initialAdminEmails: readonly string[],
 ): Promise<OpenBotRole> {
-  return setRole(database, userId, roleForEmail(email, initialAdminEmails));
+  if (emailVerified === true && isConfiguredAdmin(email, initialAdminEmails)) {
+    return setRole(database, userId, "admin");
+  }
+  await writeRole(database, userId, "user", false);
+  return "user";
 }
 
 /**
  * Re-apply the configured floor, on every sign-in.
  *
- * Only ever promotes, and only for an address the deployment names. Somebody added to the list
- * after they first signed in becomes an administrator at their next sign-in, which is the trap this
- * exists to close: the role used to be written once at account creation, so editing the list did
- * nothing at all and no screen could fix it.
+ * Only ever promotes, and only for a trusted address the deployment names (`holdsTrustedAddress`).
+ * Somebody added to the list after they first signed in becomes an administrator at their next
+ * sign-in, which is the trap this exists to close: the role used to be written once at account
+ * creation, so editing the list did nothing at all and no screen could fix it.
  *
  * Everybody else is left exactly as they are, because their role is the admin screen's to decide and
  * a sign-in that overwrote it would make that screen lie the moment they came back.
@@ -310,12 +367,18 @@ export async function applyConfiguredAdmin(
   database: Database,
   userId: string,
   initialAdminEmails: readonly string[],
+  /**
+   * Providers this deployment vouches for even when they do not report the address as verified,
+   * such as a single-tenant Entra directory. Anything an administrator registered through the SSO
+   * plugin counts without being listed here.
+   */
+  trustedProviderIds: readonly string[] = [],
 ): Promise<boolean> {
   // Nothing configured cannot promote anybody, so there is no reason to read the user back.
   if (initialAdminEmails.length === 0) return false;
 
   const [user] = await database
-    .select({ email: users.email })
+    .select({ email: users.email, emailVerified: users.emailVerified })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -325,6 +388,26 @@ export async function applyConfiguredAdmin(
   if (!user) return false;
 
   if (!isConfiguredAdmin(user.email, initialAdminEmails)) return false;
+
+  // An address the list names proves nothing about who holds this row: see `holdsTrustedAddress`.
+  const arrivals = await database
+    .select({
+      providerId: accounts.providerId,
+      registered: ssoProviders.providerId,
+    })
+    .from(accounts)
+    .leftJoin(ssoProviders, eq(ssoProviders.providerId, accounts.providerId))
+    .where(eq(accounts.userId, userId));
+  const trusted = holdsTrustedAddress({
+    emailVerified: user.emailVerified === true,
+    providerIds: arrivals.map((arrival) => arrival.providerId),
+    viaRegisteredProvider: arrivals.some(
+      (arrival) =>
+        arrival.registered !== null ||
+        trustedProviderIds.includes(arrival.providerId),
+    ),
+  });
+  if (!trusted) return false;
 
   const [already] = await database
     .select({ role: userRoles.role })
