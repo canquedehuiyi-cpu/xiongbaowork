@@ -134,10 +134,12 @@ const stepsOf = (tenant: string) => [
  * would delete the very line this demonstration is about.
  */
 for (const tenant of tenants) {
-  await database.insert(users).values({
-    id: tenant,
-    email: `${tenant}@example.test`,
-  });
+  await runAsTenant(tenant, () =>
+    database.insert(users).values({
+      id: tenant,
+      email: `${tenant}@example.test`,
+    }),
+  );
   const groupId = randomUUID();
   groupOf.set(tenant, groupId);
   // The plan, the seat-free 分身 and the rest of what a real workspace is born with. A workspace
@@ -242,7 +244,10 @@ afterAll(async () => {
       );
     });
   }
-  await database.delete(users).where(inArray(users.id, tenants));
+  // Three people's rows in one statement: a fixture across tenants, so the platform's frame.
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, tenants)),
+  );
 });
 
 /**
