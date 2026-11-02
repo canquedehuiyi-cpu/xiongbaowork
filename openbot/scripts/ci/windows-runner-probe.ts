@@ -21,8 +21,12 @@ if (existsSync(marker))
   throw new Error("Use a fresh disposable workspace for each run.");
 writeFileSync(marker, "Windows runner acceptance\n", { flag: "wx" });
 const execute = createRunnerExecutor(root);
-const assert = (ok: unknown, label: string) => {
-  if (!ok) throw new Error(label);
+const assert = (ok: unknown, label: string, seen?: unknown) => {
+  // Say what came back, so a red probe names its cause instead of only its check.
+  if (!ok)
+    throw new Error(
+      seen === undefined ? label : `${label}: ${JSON.stringify(seen)}`,
+    );
   console.log(JSON.stringify({ check: label, passed: true }));
 };
 const successfulOutput = (outcome: ActionOutcome): Record<string, unknown> => {
@@ -40,6 +44,7 @@ assert(
   String(successfulOutput(result).stdout).includes("runner-marker") &&
     successfulOutput(result).exitCode === 0,
   "native command produces the marker",
+  result,
 );
 const unicode = await execute({
   action: "exec",
@@ -48,6 +53,7 @@ const unicode = await execute({
 assert(
   String(successfulOutput(unicode).stdout).includes("熊宝员工"),
   "Unicode output is preserved",
+  unicode,
 );
 const code = await execute({ action: "exec", payload: { command: "exit 7" } });
 assert(successfulOutput(code).exitCode === 7, "nonzero exit code is preserved");
