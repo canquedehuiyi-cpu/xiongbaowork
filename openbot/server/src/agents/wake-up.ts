@@ -86,15 +86,50 @@ const scheduleSchema = z
 const keyPrefix = (ownerUserId: string, agentId: string) =>
   `wake:${JSON.stringify([ownerUserId, agentId])}:`;
 
-const owned = (ownerUserId: string, agentId: string) =>
+/**
+ * The row's payload as an object, in SQL.
+ *
+ * `settle` once appended its outcome as a JSON string rather than merging it, which turned the
+ * payload into an array: `[{...payload}, "{\"outcome\":...}"]`. Those rows are finished and reaped
+ * within a week, so they are read through rather than migrated: the first element is the payload.
+ */
+const payloadObject = sql`(case when jsonb_typeof(${workItems.payload}) = 'array' then ${workItems.payload}->0 else ${workItems.payload} end)`;
+
+/** Follow-ups that belong to this person and this Bot. */
+export const wakeUpsOwnedBy = (ownerUserId: string, agentId: string) =>
   and(
     eq(workItems.kind, WAKE_UP_KIND),
-    sql`${workItems.payload}->>'ownerUserId' = ${ownerUserId}`,
-    sql`${workItems.payload}->>'agentId' = ${agentId}`,
+    sql`${payloadObject}->>'ownerUserId' = ${ownerUserId}`,
+    sql`${payloadObject}->>'agentId' = ${agentId}`,
   );
 
+const owned = wakeUpsOwnedBy;
+
+/**
+ * A stored payload as an object, including the array shape the old `settle` wrote (see
+ * `payloadObject`): the object first, then each outcome it appended as a JSON string, later ones
+ * winning.
+ */
+export function readWakeUpPayload(raw: unknown): WakeUpPayload {
+  if (!Array.isArray(raw)) return raw as WakeUpPayload;
+  let merged: Record<string, unknown> = {};
+  for (const part of raw) {
+    let value: unknown = part;
+    if (typeof part === "string") {
+      try {
+        value = JSON.parse(part);
+      } catch {
+        continue;
+      }
+    }
+    if (value && typeof value === "object" && !Array.isArray(value))
+      merged = { ...merged, ...(value as Record<string, unknown>) };
+  }
+  return merged as WakeUpPayload;
+}
+
 function toRecord(row: typeof workItems.$inferSelect): WakeUpRecord {
-  const payload = row.payload as WakeUpPayload;
+  const payload = readWakeUpPayload(row.payload);
   const running =
     !row.finishedAt &&
     row.claimedBy !== null &&
@@ -286,7 +321,13 @@ export function createWakeUpStore(
       await database
         .update(workItems)
         .set({
-          payload: sql`${workItems.payload} || ${JSON.stringify({ outcome })}::jsonb`,
+          /*
+           * Merged as an object, so the payload stays one and a second settle replaces `outcome`
+           * rather than nesting it. Not `JSON.stringify(...)`: the driver encodes a string parameter
+           * as a JSON string, and `object || string` is an array. A row already in that array shape
+           * is folded back to its object first.
+           */
+          payload: sql`${payloadObject} || ${{ outcome }}::jsonb`,
           updatedAt: sql`now()`,
         })
         .where(and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, id)));
@@ -445,7 +486,7 @@ export function createWakeUpRunner(options: {
         maxAttempts: 1,
       });
       for (const item of claimed) {
-        const payload = item.payload as unknown as WakeUpPayload;
+        const payload = readWakeUpPayload(item.payload);
         const at = () => new Date().toISOString();
         const done = async (
           outcome: NonNullable<WakeUpPayload["outcome"]>["status"],

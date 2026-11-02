@@ -360,6 +360,7 @@ tests/voice-session-routes.test.ts
 tests/voice-session-store.integration.test.ts
 tests/voice-sessions.test.ts
 tests/voice-summary-model.test.ts
+tests/wake-up-settle.integration.test.ts
 tests/waker-groups.test.ts
 tests/wakerflow-plan.test.ts
 tests/work-loop.test.ts
