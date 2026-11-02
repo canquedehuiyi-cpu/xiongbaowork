@@ -260,6 +260,7 @@ tests/recovery-import-proactive-token-foundations.test.ts
 tests/recovery-knowledge-foundations.test.ts
 tests/recovery-knowledge-write-foundations.test.ts
 tests/recovery-outbox-knowledge-heads.test.ts
+tests/recovery-overlay-journal.test.ts
 tests/recovery-plugin-assembly-foundations.test.ts
 tests/recovery-resource-project-foundations.test.ts
 tests/recovery-role-foundations.test.ts

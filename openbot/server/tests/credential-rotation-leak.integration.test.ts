@@ -144,7 +144,7 @@ describe("a rotation the database refuses", () => {
   test("keeps a unique violation's constraint name while dropping the row it was bound to", async () => {
     // The inverse, on the failure an operator most often has to act on. Produced by a real
     // duplicate insert rather than described, because `duplicate key value violates unique
-    // constraint "credentials_active_key_idx"` is a sentence Postgres writes and this file does not.
+    // constraint "credentials_tenant_active_key_idx"` is a sentence Postgres writes and this file does not.
     const keyId = `duplicate-key-sentinel-${randomUUID()}`;
     await liveCredential(keyId, "first-openai-secret");
 
@@ -156,7 +156,7 @@ describe("a rotation the database refuses", () => {
     expect(failure).toBeInstanceOf(Error);
     const sentence = deploymentFaultSentence(failure as Error);
     expect(sentence).toContain(
-      'duplicate key value violates unique constraint "credentials_active_key_idx"',
+      'duplicate key value violates unique constraint "credentials_tenant_active_key_idx"',
     );
     expect(sentence).not.toContain(keyId);
     expect(sentence).not.toContain("ciphertext");
