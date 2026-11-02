@@ -1,6 +1,6 @@
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
-import { currentTenant, runAsTenant } from "../tenant/context";
+import { currentTenant, runAsTenant, tenantFrame } from "../tenant/context";
 import * as schema from "./schema";
 
 /**
@@ -154,7 +154,7 @@ export function createDatabase(
   });
 
   /*
-   * Every query carries the tenant from AsyncLocalStorage.
+   * Every query carries a tenant onto its session.
    *
    * Bun 1.3.14 has no `SQL#set` on this platform, so the mechanism is a reserved connection:
    * `set_config` and the statement run on the same session, and releasing resets it -- verified
@@ -163,13 +163,19 @@ export function createDatabase(
    * The intercepted names are the ones drizzle's bun-sql session actually calls: `unsafe` for
    * statements, `begin` and `savepoint` for transactions. A transaction carries its tenant on the
    * session it opened — see the interception below — rather than borrowing a second connection.
+   *
+   * `tenantOf` answers which tenant that is. For a client pinned to a tenant (see `clientFor`) it is
+   * that tenant, whatever frame happens to be current when the statement runs; for the unpinned
+   * client it is the frame current at that moment. It is asked synchronously, before the first await.
    */
   const withTenant = async <T>(
+    tenantOf: () => string,
     run: (scoped: SQL) => Promise<T>,
   ): Promise<T> => {
+    const tenant = tenantOf();
     const conn = await raw.reserve();
     try {
-      await conn`select set_config('app.tenant_id', ${currentTenant()}, false)`;
+      await conn`select set_config('app.tenant_id', ${tenant}, false)`;
       return await run(conn as unknown as SQL);
     } finally {
       conn.release();
@@ -182,9 +188,9 @@ export function createDatabase(
    * so the await path and the values path are wrapped together.
    */
   type UnsafeCall = (query: string, params?: unknown[]) => unknown;
-  const tenantUnsafe = (): UnsafeCall => {
+  const tenantUnsafe = (tenantOf: () => string): UnsafeCall => {
     const run = (query: string, params?: unknown[]) =>
-      withTenant(async (scoped) => {
+      withTenant(tenantOf, async (scoped) => {
         const result = await (
           scoped.unsafe as (
             q: string,
@@ -209,16 +215,16 @@ export function createDatabase(
       return {
         // biome-ignore lint/suspicious/noThenProperty: this arm IS awaited; `then` is the hook that carries the tenant frame
         then: (onF?: (v: unknown) => unknown, onR?: (e: unknown) => unknown) =>
-// biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
+          // biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
           (objectRun ??= run(query, params)).then(onF, onR),
         catch: (onR?: (e: unknown) => unknown) =>
-// biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
+          // biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
           (objectRun ??= run(query, params)).catch(onR),
         finally: (onF?: () => void) =>
-// biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
+          // biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
           (objectRun ??= run(query, params)).finally(onF),
         values: () =>
-          (valuesRun ??= withTenant(async (scoped) => {
+          (valuesRun ??= withTenant(tenantOf, async (scoped) => {
             const rows = await (
               scoped.unsafe as (
                 q: string,
@@ -235,68 +241,92 @@ export function createDatabase(
     };
   };
 
-  const client = new Proxy(raw, {
-    get(target, property, receiver) {
-      if (property === "unsafe") {
-        return tenantUnsafe();
-      }
-      if (property === "begin" || property === "savepoint") {
-        const method = (
-          target as unknown as Record<
-            string,
-            (fn: (tx: Transaction) => unknown) => Promise<unknown>
-          >
-        )[property as string];
-        return (fn: (tx: Transaction) => unknown) => {
-          /*
-           * The tenant is read HERE, before the transaction opens, not inside its callback: Bun runs
-           * that callback from its own connection machinery, a turn after the caller's scope, and by
-           * then the frame is gone. Measured rather than assumed — read late, every write inside a
-           * transaction landed in the `system` partition, which row-level security shows to everybody.
-           *
-           * It is set on the transaction's own session rather than by reserving a connection here and
-           * running `begin` on that: `begin` takes a connection of its own, so a transaction held two
-           * — one idle while the other worked — and a pool of two deadlocked on the second concurrent
-           * write. Awaiting the rejection that shape produced ALSO reported it as an unhandled
-           * rejection, so every error thrown inside a transaction — a protected coworker, a model from
-           * somebody else's library — reached the person as a refusal and as a server fault at once.
-           *
-           * `is_local = true` lasts exactly the transaction, so the pooled connection carries no
-           * tenant into whatever the next caller runs on it.
-           */
-          const tenant = currentTenant();
-          return method.call(target, async (tx) => {
-            await tx`select set_config('app.tenant_id', ${tenant}, true)`;
-            return fn(tx);
-          });
-        };
-      }
-      return Reflect.get(target, property, receiver);
-    },
-  });
-
-  const base = drizzle({ client, schema });
+  /*
+   * The pool as drizzle sees it, pinned to `pinned` when there is one.
+   *
+   * Pinning is the root of the fix for a frame lost between building a statement and running it.
+   * drizzle builders are lazy: `.from()`, `.where()`, `.returning()` each make a NEW object whose
+   * `then` nobody wrapped, and the statement only reaches `unsafe` when that `then` is called. Bun
+   * 1.3.14 calls it OUTSIDE the caller's AsyncLocalStorage frame when an async function has already
+   * awaited something and then returns the builder unawaited
+   * (`runAsTenant(t, async () => { await x; return db.select().from(t) })`), so a client that read
+   * the frame at that moment ran the statement as `system`: row-level security answered with
+   * nothing, and a write leaning on the `tenant_id` default would have landed in the partition every
+   * tenant reads. Every builder, prepared statement, relational query and transaction drizzle makes
+   * reaches the database through the session of the instance it was made on, so pinning the
+   * instance's client to the tenant it was made for carries that tenant into execution with nothing
+   * wrapped -- no builder, table or SQL chunk changes identity, and `instanceof`, `.as()`, subquery
+   * embedding, `.toSQL()` and `.prepare()` behave exactly as drizzle wrote them.
+   */
+  const clientFor = (pinned: string | undefined) => {
+    const tenantOf = pinned === undefined ? currentTenant : () => pinned;
+    return new Proxy(raw, {
+      get(target, property, receiver) {
+        if (property === "unsafe") {
+          return tenantUnsafe(tenantOf);
+        }
+        if (property === "begin" || property === "savepoint") {
+          const method = (
+            target as unknown as Record<
+              string,
+              (fn: (tx: Transaction) => unknown) => Promise<unknown>
+            >
+          )[property as string];
+          return (fn: (tx: Transaction) => unknown) => {
+            /*
+             * The tenant is read HERE, before the transaction opens, not inside its callback: Bun runs
+             * that callback from its own connection machinery, a turn after the caller's scope, and by
+             * then the frame is gone. Measured rather than assumed — read late, every write inside a
+             * transaction landed in the `system` partition, which row-level security shows to everybody.
+             *
+             * It is set on the transaction's own session rather than by reserving a connection here and
+             * running `begin` on that: `begin` takes a connection of its own, so a transaction held two
+             * — one idle while the other worked — and a pool of two deadlocked on the second concurrent
+             * write. Awaiting the rejection that shape produced ALSO reported it as an unhandled
+             * rejection, so every error thrown inside a transaction — a protected coworker, a model from
+             * somebody else's library — reached the person as a refusal and as a server fault at once.
+             *
+             * `is_local = true` lasts exactly the transaction, so the pooled connection carries no
+             * tenant into whatever the next caller runs on it.
+             */
+            const tenant = tenantOf();
+            return method.call(target, async (tx) => {
+              await tx`select set_config('app.tenant_id', ${tenant}, true)`;
+              return fn(tx);
+            });
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  };
 
   /*
-   * One drizzle instance per tenant, over one pool.
+   * One drizzle instance per tenant frame, over one pool.
    *
    * drizzle caches prepared statements and their results by query text on the instance. Under RLS
    * the same statement answers differently per tenant, so a shared instance would let tenant B
    * receive tenant A's cached rows -- a leak no policy can stop. Separate instances keep the
    * caches apart while the connection pool stays common.
+   *
+   * Each instance's client is pinned to its tenant (see `clientFor`). The one instance made outside
+   * every frame is not pinned and runs as whichever frame executes its statements, which is what a
+   * statement built at module scope or before a frame was entered has always done -- `system` when
+   * no frame executes it either.
    */
-  const byTenant = new Map<string, typeof base>();
-  const instanceFor = () => {
-    const tenant = currentTenant();
-    let instance = byTenant.get(tenant);
+  const unframed = drizzle({ client: clientFor(undefined), schema });
+  const byTenant = new Map<string, typeof unframed>();
+  const instanceFor = (frame: string | undefined) => {
+    if (frame === undefined) return unframed;
+    let instance = byTenant.get(frame);
     if (!instance) {
-      instance = drizzle({ client, schema });
-      byTenant.set(tenant, instance);
+      instance = drizzle({ client: clientFor(frame), schema });
+      byTenant.set(frame, instance);
     }
     return instance;
   };
 
-  return new Proxy(base, {
+  return new Proxy(unframed, {
     get(_target, property) {
       /*
        * The pool itself, unwrapped.
@@ -308,8 +338,9 @@ export function createDatabase(
        * not in the object, so handing it out opens no door that `unsafe` did not already.
        */
       if (property === "$client") return raw;
+      const frame = tenantFrame();
       const tenant = currentTenant();
-      const instance = instanceFor() as unknown as Record<
+      const instance = instanceFor(frame) as unknown as Record<
         string | symbol,
         unknown
       >;
@@ -317,10 +348,10 @@ export function createDatabase(
       if (typeof value !== "function") return value;
       const bound = value.bind(instance);
       /*
-       * drizzle builders execute lazily -- `runAsTenant(t, () => db.select(...))` returns a
-       * builder whose query runs after the scope has ended. Capturing the tenant here and
-       * re-entering it at call time is what keeps that pattern on the right tenant instead of
-       * silently falling back to `system` and reading nothing.
+       * The call itself also runs inside the captured frame, and a thenable it returns directly
+       * (`db.execute(...)`, `db.delete(...)`) has its `then` re-entered there too. The pinned client
+       * above is what actually decides the tenant a statement runs as; this keeps anything drizzle
+       * reads from the frame while BUILDING a statement on the same tenant.
        */
       return (...args: unknown[]) => runAsTenant(tenant, () => bound(...args));
     },
