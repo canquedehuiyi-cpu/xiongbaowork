@@ -31,6 +31,8 @@ import {
   auditQueryFromUrl,
   DEPLOYMENT_INITIATOR,
   recordAuditEvent,
+  recordPersonAuditEvent,
+  recordPlatformAuditEvent,
 } from "./audit";
 import { createDevRequireUser } from "./auth/dev-actor";
 import {
@@ -517,6 +519,16 @@ export function createApp(
     "/api/auth/sso/delete-provider": "identity_provider.removed",
   };
 
+  /*
+   * The identity layer is the deployment's, not any one person's, and these routes are reached before
+   * anybody is signed in. Its tables (users, sessions, accounts, SSO, SCIM) carry no tenant, so the
+   * handler and every hook it calls run as `platform` (G01) rather than in no frame at all; each hook
+   * that writes a person's own rows or trail names that person itself (`provisionTenant`, the audit
+   * rows in `auth/index.ts` and `auth/scim.ts`).
+   */
+  const asIdentityLayer = <T>(work: () => T): T =>
+    runAsTenant("platform", work);
+
   app.on(["GET", "POST"], "/api/auth/*", async (context) => {
     if (
       context.req.method === "GET" &&
@@ -536,13 +548,17 @@ export function createApp(
     }
 
     if (ADMIN_ONLY_AUTH_ROUTES.has(new URL(context.req.url).pathname)) {
-      const session = await auth.api.getSession({
-        headers: context.req.raw.headers,
-        // Fresh, not the cookie cache: a role changed a moment ago has to apply to this request.
-        query: { disableCookieCache: true },
-      });
+      const session = await asIdentityLayer(() =>
+        auth.api.getSession({
+          headers: context.req.raw.headers,
+          // Fresh, not the cookie cache: a role changed a moment ago has to apply to this request.
+          query: { disableCookieCache: true },
+        }),
+      );
       const roles = session?.user
-        ? ((await roleRepository?.rolesForUser(session.user.id)) ?? [])
+        ? ((await asIdentityLayer(() =>
+            roleRepository?.rolesForUser(session.user.id),
+          )) ?? [])
         : [];
       if (!roles.includes("admin")) {
         return context.json(
@@ -565,14 +581,17 @@ export function createApp(
             .catch(() => null)) as { providerId?: unknown } | null)
         : null;
 
-    const answer = await auth.handler(context.req.raw);
+    const answer = await asIdentityLayer(() => auth.handler(context.req.raw));
 
     if (auditStore && eventType && answer.ok) {
-      const session = await auth.api.getSession({
-        headers: context.req.raw.headers,
-        query: { disableCookieCache: true },
-      });
-      await recordAuditEvent(auditStore, {
+      const session = await asIdentityLayer(() =>
+        auth.api.getSession({
+          headers: context.req.raw.headers,
+          query: { disableCookieCache: true },
+        }),
+      );
+      // The administrator's own act, filed in their trail like every other admin route's rows.
+      const identityProviderEvent = {
         eventType,
         targetType: "identity_provider",
         ...(typeof named?.providerId === "string"
@@ -585,7 +604,14 @@ export function createApp(
             : {}),
           ...(session?.user?.email ? { by: session.user.email } : {}),
         },
-      });
+      };
+      await (session?.user
+        ? recordPersonAuditEvent(
+            auditStore,
+            session.user.id,
+            identityProviderEvent,
+          )
+        : recordPlatformAuditEvent(auditStore, identityProviderEvent));
     }
 
     return answer;
@@ -608,7 +634,7 @@ export function createApp(
   app.route("/api/admin/enterprise", createEnterpriseAdminRoutes(requireUser));
   app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
     auth
-      ? auth.handler(context.req.raw)
+      ? asIdentityLayer(() => auth.handler(context.req.raw))
       : context.json({ error: "No identity provider is configured." }, 503),
   );
 
