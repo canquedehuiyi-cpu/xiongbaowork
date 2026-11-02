@@ -52,6 +52,14 @@ export type TurnRunner = (input: {
   /** Durable inbound delivery id; reused by lock, runner and emitted events. */
   runId?: string;
   /**
+   * The board card this turn answers for, when the caller keyed it by something other than `runId`.
+   *
+   * A routine firing files its card under the firing's own id (`routine_run_…`) and lets the turn mint
+   * a fresh run id for the lock, so the usage row that names the model has to be told which card it
+   * belongs to — the card reads the model back by exactly this reference. Absent, it is `runId`.
+   */
+  runRef?: string;
+  /**
    * The caller has opened, and will close, this turn's card on the task board.
    *
    * Set it at the entry, not at the runner. `PostgresAgentRunner` files a `chat` card for every turn it
@@ -314,6 +322,8 @@ export function createRoutineRunner(options: {
         agentId,
         threadId: channel.threadId,
         instruction,
+        // The card's key, so the model this turn ran on is read back onto the card.
+        runRef: routineRunId,
         // The card opened above is this firing's record; the runner files nothing. When that write
         // failed, the runner's own card is the only mark the month's work leaves.
         cardOwnedByCaller: carded,

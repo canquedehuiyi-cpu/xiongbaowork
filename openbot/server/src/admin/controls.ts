@@ -44,6 +44,7 @@ import { agentProfiles, agents, auditEvents } from "../db/schema";
 import { boundModelName } from "../models/runtime-resolver";
 import { createOtelEventExporter, type EventExporter } from "../telemetry/otel";
 import { scrubCommand } from "../telemetry/scrub";
+import { runAsTenant } from "../tenant/context";
 import {
   type Capability,
   type CapabilityRow,
@@ -80,6 +81,13 @@ export type EnterpriseDeps = {
   computerToken?: string;
   /** `provider/model` the built-in Bot runs on, for the model allowlist and usage view. */
   builtInModel?: string;
+  /**
+   * The library model a built-in Bot's run will actually speak, named by the same resolver that builds
+   * it — `null` when the run falls back to {@link builtInModel} (no binding, or a binding whose key is
+   * revoked or will not decrypt). Absent, the rows alone are read ({@link boundModelName}), which
+   * cannot tell a key that will not decrypt.
+   */
+  agentModelName?: (agentId: string) => Promise<string | null>;
   /** Offboarding: ends sessions and deny-lists, and retires what a person granted. */
   people?: {
     revoke: (userId: string, by: string) => Promise<void>;
@@ -1015,9 +1023,7 @@ export async function headlessTurnRefusal(input: {
      * spoke.
      */
     const builtIn = row?.type === "built_in";
-    const bound = builtIn
-      ? await boundModelName(controls.deps.database, input.agentId)
-      : null;
+    const bound = builtIn ? await modelBoundFor(controls, input.agentId) : null;
     const model = builtIn ? (bound ?? controls.deps.builtInModel) : undefined;
     if (!model || allowlist.models.includes(model)) return null;
     await controls.store
@@ -1052,5 +1058,107 @@ export async function headlessTurnRefusal(input: {
       }),
     );
     return "This deployment's enterprise controls could not be checked, so the Bot did not run.";
+  }
+}
+
+/** See {@link EnterpriseDeps.agentModelName}: the bound model this Bot's run will speak, or null. */
+async function modelBoundFor(
+  controls: EnterpriseControls,
+  agentId: string,
+): Promise<string | null> {
+  if (!controls.deps.agentModelName)
+    return boundModelName(controls.deps.database, agentId);
+  return controls.deps.agentModelName(agentId).catch(() => null);
+}
+
+/** The first model an AG-UI stream names, the way the HTTP gate reads a remote Bot's. */
+const MODEL_IN_EVENT = /"model"\s*:\s*"([^"]{1,200})"/;
+
+/** The model a stream event names, if any — for a remote Bot, which chooses its own. */
+export function modelNamedIn(event: unknown): string | undefined {
+  try {
+    return MODEL_IN_EVENT.exec(JSON.stringify(event) ?? "")?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The usage row for a headless run that answered — the row the HTTP gate writes for a browser run.
+ *
+ * A routine firing, a crew's step, a responsibility run or a hop never crosses that gate, so without
+ * this its card on the board names no model and the usage view never counts it. `runId` is the run
+ * reference the task card is keyed by, which is what the board reads the model back with.
+ *
+ * The model is the one that ran: a built-in Bot's bound model only when the resolver actually built
+ * it (see {@link EnterpriseDeps.agentModelName}), the deployment's otherwise; a remote Bot's is what
+ * its stream named, or `unknown`. Written in the run's own tenant, and never in `system` or
+ * `platform`, where the person whose card it is could not read it. Never throws: a usage row that
+ * cannot be written must not turn an answered turn into a failed one.
+ */
+export async function recordHeadlessModelUsage(input: {
+  tenantId: string;
+  ownerUserId: string;
+  agentId: string;
+  threadId: string | null;
+  runId: string;
+  observedModel?: string;
+}): Promise<void> {
+  const controls = installed;
+  if (!controls) return;
+  if (input.tenantId === "system" || input.tenantId === "platform") {
+    console.error(
+      JSON.stringify({
+        type: "model-usage-without-tenant",
+        agentId: input.agentId,
+      }),
+    );
+    return;
+  }
+  try {
+    await runAsTenant(input.tenantId, async () => {
+      const [row] = await controls.deps.database
+        .select({ type: agents.type })
+        .from(agents)
+        .where(eq(agents.id, input.agentId))
+        .limit(1);
+      const builtIn = row?.type === "built_in";
+      const bound = builtIn
+        ? await modelBoundFor(controls, input.agentId)
+        : null;
+      const configured = builtIn
+        ? (bound ?? controls.deps.builtInModel)
+        : undefined;
+      const model =
+        configured ?? input.observedModel ?? `remote:${input.agentId}`;
+      const source = builtIn
+        ? bound
+          ? "bound"
+          : "configured"
+        : input.observedModel
+          ? "observed"
+          : "unknown";
+      if (builtIn && !configured) return;
+      // Judged as the gate judges it; a built-in Bot off the list never got this far.
+      const allowlist = controls.snapshot()?.settings.modelAllowlist;
+      const allowed = !allowlist?.enabled || allowlist.models.includes(model);
+      return await controls.store.recordModelUsage({
+        userId: input.ownerUserId,
+        agentId: input.agentId,
+        threadId: input.threadId,
+        runId: input.runId,
+        model,
+        source,
+        allowed,
+      });
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "model-usage-write-failed",
+        agentId: input.agentId,
+        error: String(error),
+      }),
+    );
   }
 }
