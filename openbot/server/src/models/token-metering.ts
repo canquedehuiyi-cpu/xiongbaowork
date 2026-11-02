@@ -348,7 +348,7 @@ export function meteredLanguageModel(
     };
     const stream = new ReadableStream<StreamPart>({
       async pull(controller) {
-        let next: ReadableStreamReadResult<StreamPart>;
+        let next: Awaited<ReturnType<typeof reader.read>>;
         try {
           next = await reader.read();
         } catch (error) {
