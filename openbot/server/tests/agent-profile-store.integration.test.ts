@@ -476,7 +476,8 @@ describe("agent profile store integration", () => {
       // reaches here already validated by the same check that guards creation.
       endpoint: "https://moved.example.test/ag-ui",
       ownerUserId: "forged-owner",
-      avatarSeed: "forged-avatar",
+      // Editable since D07 D2 (the route has already checked it against the seed pattern).
+      avatarSeed: "chosen-avatar",
       packageId: deploymentPackage.id,
       deletedAt: new Date(),
     } as unknown as CreateAgentInput);
@@ -488,7 +489,7 @@ describe("agent profile store integration", () => {
       roleDescription: "Updated role description.",
       visibility: "public",
       ownerUserId: owner.id,
-      avatarSeed: source.avatarSeed,
+      avatarSeed: "chosen-avatar",
       systemOwned: false,
       deletedAt: null,
     });
@@ -511,7 +512,7 @@ describe("agent profile store integration", () => {
       ownerUserId: owner.id,
       title: "Updated Title",
       roleDescription: "Updated role description.",
-      avatarSeed: source.avatarSeed,
+      avatarSeed: "chosen-avatar",
       visibility: "public",
       deletedAt: null,
     });
