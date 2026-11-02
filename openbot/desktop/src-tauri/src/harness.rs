@@ -552,39 +552,60 @@ mod tests {
         let named: Vec<String> = catalogue()
             .into_iter()
             .filter_map(|row| row.image)
-            .map(|image| {
-                format!(
-                    "\"{image}\": {{ \"repository\": \"ghcr.io/copilotkit/openbot-{image}\", \
-                     \"digest\": \"sha256:abc\", \
-                     \"reference\": \"ghcr.io/copilotkit/openbot-{image}@sha256:abc\" }}"
-                )
-            })
             .collect();
-        std::fs::write(
-            crate::deployment::images_path(&root),
-            format!(
-                "{{ \"version\": \"v1.2.3\", \"images\": {{ {} }} }}",
-                named.join(", ")
-            ),
-        )
-        .unwrap();
+        installed_release(&root, "v1.2.3", named.iter().map(String::as_str));
         root
+    }
+
+    /// The digest every fixture image is pinned to: the full 64 hex digits a release publishes.
+    fn fixture_digest() -> String {
+        format!("sha256:{}", "a".repeat(64))
+    }
+
+    fn fixture_reference(image: &str) -> String {
+        format!("ghcr.io/copilotkit/openbot-{image}@{}", fixture_digest())
+    }
+
+    /// Lay down what a finished fetch leaves: a manifest naming the stack's required images plus
+    /// `extra`, and the success stamp for the same version.
+    ///
+    /// Resolution reads through the deployment's runtime boundary, which refuses a manifest without
+    /// a matching stamp, one that omits a required stack image, or one whose references are not
+    /// digest-pinned. A manifest alone is what an interrupted fetch leaves, not a release.
+    fn installed_release<'a>(
+        root: &std::path::Path,
+        version: &str,
+        extra: impl IntoIterator<Item = &'a str>,
+    ) {
+        let mut images = std::collections::BTreeMap::new();
+        for name in crate::deployment::IMAGE_VARIABLES
+            .iter()
+            .map(|(published, _)| *published)
+            .chain(extra)
+        {
+            images.insert(
+                name.to_string(),
+                crate::deployment::Image {
+                    reference: fixture_reference(name),
+                },
+            );
+        }
+        let manifest = crate::deployment::Images {
+            version: version.to_string(),
+            images,
+        };
+        std::fs::write(
+            crate::deployment::images_path(root),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .expect("manifest is written");
+        crate::deployment::record(root, version).expect("stamp is written");
     }
 
     fn scratch(label: &str) -> std::path::PathBuf {
         let root = temp_root(&format!("harness-{label}"));
         std::fs::create_dir_all(&root).expect("scratch root is made");
         root
-    }
-
-    fn write_crewai_manifest(root: &std::path::Path) {
-        std::fs::write(
-            crate::deployment::images_path(root),
-            "{ \"version\": \"v9.9.9\", \"images\": { \
-             \"agent-crewai\": { \
-             \"reference\": \"ghcr.io/copilotkit/openbot-agent-crewai@sha256:abc\" } } }",
-        )
-        .expect("manifest is written");
     }
 
     fn choice(id: &str) -> HarnessChoice {
@@ -606,9 +627,8 @@ mod tests {
             &root,
             Some(&choice("crewai")),
             || async {
-                write_crewai_manifest(&root);
-                crate::deployment::record(&root, "v9.9.9")
-                    .map_err(|error| format!("could not record deployment: {error}"))
+                installed_release(&root, "v9.9.9", ["agent-crewai"]);
+                Ok::<(), String>(())
             },
         ));
 
@@ -617,7 +637,7 @@ mod tests {
         let crate::env::PickedHarness::Installed { image, .. } = picked else {
             panic!("crewai should install a harness image");
         };
-        assert_eq!(image, "ghcr.io/copilotkit/openbot-agent-crewai@sha256:abc");
+        assert_eq!(image, fixture_reference("agent-crewai"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -752,7 +772,7 @@ mod tests {
         else {
             panic!("crewai should install a harness image");
         };
-        assert_eq!(image, "ghcr.io/copilotkit/openbot-agent-crewai@sha256:abc");
+        assert_eq!(image, fixture_reference("agent-crewai"));
         assert_eq!(port, 4202);
         assert!(!mastra);
         assert!(remote_agent_id.is_empty());
@@ -817,11 +837,8 @@ mod tests {
     fn a_bot_this_release_does_not_publish_is_named_rather_than_pulled() {
         let root = temp_root("empty");
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(
-            crate::deployment::images_path(&root),
-            "{ \"version\": \"v1.2.3\", \"images\": {} }",
-        )
-        .unwrap();
+        // A whole release (the stack's own images, stamped), just not this Bot's image.
+        installed_release(&root, "v1.2.3", []);
 
         let refused = picked(Some(&choice("crewai")), &root).expect_err("it should be refused");
         assert!(refused.contains("agent-crewai"), "{refused}");
