@@ -21,7 +21,12 @@
  * A second half-right copy grown next to it is the duplicated firing mechanism #235 exists to
  * prevent.
  */
-import { runAsTenant } from "../tenant/context";
+import {
+  assertPersonTenant,
+  runAsClaimedTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { RoutineRefusedError, type RoutineStore } from "./store";
 
@@ -175,8 +180,40 @@ export async function offerDueRoutines(
      * from here on, and the run row `markUnschedulable` leaves behind is that person's announcement.
      * From a timer with no context they are both written under `system`, where nobody is looking.
      */
+    /*
+     * AND ONLY A PERSON'S FRAME (G01). The stamp on the routine row is the one trusted answer to
+     * whose routine this is, and it has to name the person the row says owns it. A routine stamped
+     * `system`, `platform` or nothing was written outside any person's frame (a legacy row, or
+     * background work that forgot its frame): offering it would queue a firing every worker then
+     * runs as nobody, or as everybody. It is never offered. Its clock is still moved to now, as
+     * the operator's write the store already makes, so the row cannot sit at the head of every
+     * pass for ever burning one of the `limit` slots — the wedge the catch below exists to stop.
+     */
+    let tenant: string;
+    try {
+      tenant = assertPersonTenant(routine.tenantId, routine.ownerUserId);
+    } catch (error) {
+      if (!(error instanceof TenantContextError)) throw error;
+      console.warn(
+        JSON.stringify({
+          type: "routine-sweep-untrusted-tenant",
+          routineId: routine.id,
+          reason: error.message,
+        }),
+      );
+      try {
+        await options.routineStore.advanceNextRun(
+          routine.id,
+          routine.nextRunAt,
+          now,
+        );
+      } catch {
+        // Best-effort: an unadvanced row is only a wasted slot, and it is warned about above.
+      }
+      continue;
+    }
     const asOwner = <Result>(body: () => Promise<Result>) =>
-      runAsTenant(routine.tenantId, body);
+      runAsTenant(tenant, body);
 
     try {
       /*
@@ -426,20 +463,29 @@ export async function dispatchClaimedRoutines(
       }
 
       /*
+       * THE CLAIMED ITEM'S STAMP MUST BE THE ROUTINE'S OWN (G01). The item's tenant is what the
+       * firing runs as from here on, and the routine row is the record that says whose firing it
+       * is: an item stamped `system`, `platform` or nothing, or stamped with somebody other than the
+       * routine's owner, names no trusted tenant for this routine. It is finished without opening a
+       * run or dispatching — re-delivery cannot change a stamp — and never fired as anybody.
+       */
+      const untrusted =
+        routine.tenantId !== item.tenantId
+          ? "the firing's tenant is not the routine's"
+          : undefined;
+      /*
        * The run row first, then the dispatch, because the dispatch is told a run id and nothing else.
        * From the moment it resolves the run row owns the outcome: the queue's retries are for
        * DISPATCH failures only, and a turn that failed is final for this firing — the fatigue rule
        * owns that, not this loop.
        *
-       * OPENED IN THE CLAIMED ITEM'S TENANT, which the queue now hands back for exactly this. The row
-       * is that person's run history, and its tenant comes from the context it is written in: as the
-       * sweep's own `system` it would be invisible to the page that lists it, to the `finishRun` the
-       * turn writes back, and to the fatigue rule that counts its failures.
-       */
-      const { runId } = await runAsTenant(item.tenantId, () =>
-        options.routineStore.insertRun(routineId),
-      );
-      /*
+       * OPENED IN THE CLAIMED ITEM'S TENANT (the `runAsClaimedTenant` call below), once that stamp
+       * has been checked against the routine. The row is that person's run history, and its tenant
+       * comes from the context it is written in: as the sweep's own `system` it would be invisible to
+       * the page that lists it, to the `finishRun` the turn writes back, and to the fatigue rule that
+       * counts its failures.
+       *
+       * And about the dispatch made in that same frame:
        * A dispatch that throws leaves the row this attempt opened with no status, AND NOTHING HERE
        * CLOSES IT — the reaper above does, once the row is older than any turn could still be
        * running. That restraint is deliberate: a dispatch that timed out is not a dispatch that
@@ -451,7 +497,29 @@ export async function dispatchClaimedRoutines(
        * Age is the only signal the sweep has that no server is coming back for a row, so age is the
        * scope the closing uses.
        */
-      await options.dispatch(runId);
+      const firing = untrusted
+        ? ({ ran: false, reason: untrusted } as const)
+        : await runAsClaimedTenant(item, routine.ownerUserId, async () => {
+            const { runId } = await options.routineStore.insertRun(routineId);
+            await options.dispatch(runId);
+            return runId;
+          });
+      if (!firing.ran) {
+        const reason = `refused: ${firing.reason}`;
+        console.warn(
+          JSON.stringify({
+            type: "routine-fire-untrusted-tenant",
+            routineId,
+            key: item.key,
+            reason,
+          }),
+        );
+        await finishOrSay(options, item.key, routineId, reason);
+        report.skipped.push({ routineId, reason });
+        continue;
+      }
+      const runId = firing.value;
+
       if (
         !(await options.queue.finish({
           kind: ROUTINE_FIRE_KIND,
