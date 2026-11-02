@@ -117,6 +117,13 @@ const CURATED = [
   "lib/voice/archive.ts",
   "lib/bot-lifecycle/mutations.ts",
   "lib/agents/queries.ts",
+  "lib/dictation/recording.ts",
+  "lib/auth/client.ts",
+  "lib/auth/queries.ts",
+  "lib/channels/mutations.ts",
+  "lib/channels/queries.ts",
+  "lib/models/mutations.ts",
+  "lib/models/queries.ts",
 ] as const;
 
 /** English copy that previously reached people from the files above. */
@@ -156,6 +163,31 @@ const FORMER_ENGLISH = [
   "Could not load this coworker",
   "Could not load which Bots",
   "could not be tested",
+  "Dictation requires a supported browser",
+  "cannot record a supported audio format",
+  "Recording is too large",
+  "The microphone stopped recording",
+  "Recording was interrupted",
+  "Recording stopped before audio",
+  "The recording is empty or unsupported",
+  "No speech was detected",
+  "sign-in.`",
+  "No identity provider is registered",
+  "did not sign you in",
+  "Could not create the account",
+  "Could not load sign-in",
+  "Could not load the current user",
+  "Could not start a channel",
+  "Could not pin this channel",
+  "Could not mark this channel read",
+  "Could not delete this channel",
+  "Could not load channels",
+  "Could not load this channel",
+  "could not be done with this model",
+  "model could not be connected",
+  "connectivity test could not be run",
+  "using this model could not be loaded",
+  "model library could not be loaded",
 ] as const;
 
 /** Comments may say anything; only code is copy. Block comments, JSX comments and `//` lines go. */
@@ -189,12 +221,13 @@ describe("curated person-facing files carry no English copy", () => {
         expect(english && !HAN.test(text), `${path}: ${text}`).toBeFalse();
       }
       // Error copy a screen shows when a request or the microphone fails: the `fallback`, `error`,
-      // `saveError` and `reason` a person reads, a shared `FALLBACK`-style constant, and the message
-      // of an `Error` thrown to a screen.
+      // `saveError` and `reason` a person reads, a shared `FALLBACK`-style constant, the message of
+      // an `Error` thrown to a screen, and the default after `??` or `||`. Template literals count
+      // too: a provider name or a status code spliced into English is still English.
       for (const match of source.matchAll(
-        /(?:\b(?:fallback|error|saveError|reason):|\bconst\s+[A-Z_]+\s*=|new Error\(|\?\?|(?:^|\s)[?:])\s*"([^"]*)"/gm,
+        /(?:\b(?:fallback|error|saveError|reason):|\bconst\s+[A-Z_]+\s*=|new Error\(|\?\?|\|\||(?:^|\s)[?:])\s*(?:"([^"]*)"|`([^`]*)`)/gm,
       )) {
-        const value = match[1] ?? "";
+        const value = match[1] ?? match[2] ?? "";
         // Two or more plain English words ("Load failed.") read as copy. Class lists
         // (`line-clamp-2`) are hyphenated tokens and do not count.
         const english =
