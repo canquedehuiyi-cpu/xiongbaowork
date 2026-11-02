@@ -110,30 +110,36 @@ async function clean() {
 
 beforeEach(async () => {
   await clean();
-  for (const [id, name] of [
-    [ASKER, "Asker"],
-    [TARGET, "Target"],
-  ]) {
+  // Built-in Bots are the deployment's catalogue (`system`), which every person's run must read.
+  await runAsTenant("system", async () => {
+    for (const [id, name] of [
+      [ASKER, "Asker"],
+      [TARGET, "Target"],
+    ]) {
+      await database
+        .insert(agents)
+        .values({ id, name, type: "built_in", configuration: {} })
+        .onConflictDoNothing();
+      await database
+        .insert(agentProfiles)
+        .values({
+          agentId: id,
+          name,
+          title: "",
+          roleDescription: "",
+          avatarSeed: id,
+          visibility: "public",
+        })
+        .onConflictDoNothing();
+    }
+  });
+  // The grant is configuration made in the person's own tenant, where every hop here is asked.
+  await runAsTenant(ACTOR, async () => {
     await database
-      .insert(agents)
-      .values({ id, name, type: "built_in", configuration: {} })
+      .insert(pluginGrants)
+      .values({ kind: "bot", ref: TARGET, agentId: ASKER, grantedBy: "test" })
       .onConflictDoNothing();
-    await database
-      .insert(agentProfiles)
-      .values({
-        agentId: id,
-        name,
-        title: "",
-        roleDescription: "",
-        avatarSeed: id,
-        visibility: "public",
-      })
-      .onConflictDoNothing();
-  }
-  await database
-    .insert(pluginGrants)
-    .values({ kind: "bot", ref: TARGET, agentId: ASKER, grantedBy: "test" })
-    .onConflictDoNothing();
+  });
 });
 
 afterAll(async () => {
