@@ -866,9 +866,15 @@ function tenantChosenOutbound(
   entry: CatalogueEntry | null,
   transport: TransportKind,
   lookup: OutboundLookup | undefined,
+  allowPrivateHosts = false,
 ): { outbound?: OutboundPolicy } {
   if (entry !== null || transport !== "mcp") return {};
-  return { outbound: lookup ? { lookup } : {} };
+  return {
+    outbound: {
+      ...(lookup ? { lookup } : {}),
+      ...(allowPrivateHosts ? { allowPrivateHosts: true } : {}),
+    },
+  };
 }
 
 /**
@@ -1157,6 +1163,11 @@ export type PluginStoreOptions = {
    * the guarded path reaches their stubbed `fetch` instead of stopping at `unresolved`.
    */
   outboundLookup?: OutboundLookup;
+  /**
+   * Let custom MCP servers live on a private or loopback address and plain http (a local mock in
+   * tests, a developer's own server). Off unless set; production never sets it.
+   */
+  customServerPrivateHosts?: boolean;
   /** Trading a refresh token for a short-lived access token. Defaults to a real HTTP exchange. */
   exchangeRefreshToken?: (input: {
     tokenUrl: string;
@@ -1268,6 +1279,7 @@ export function createPluginStore(options: PluginStoreOptions) {
    */
   const injectedVendor = options.callVendor;
   const outboundLookup = options.outboundLookup;
+  const customServerPrivateHosts = options.customServerPrivateHosts === true;
   const exchangeRefreshToken =
     options.exchangeRefreshToken ?? exchangeRefreshTokenOverHttp;
   const registerClient = options.registerClient ?? registerDynamicClient;
@@ -3876,7 +3888,12 @@ export function createPluginStore(options: PluginStoreOptions) {
         listed = await transport.listTools({
           url: effectiveUrl(row, entry),
           token,
-          ...tenantChosenOutbound(entry, access.transport, outboundLookup),
+          ...tenantChosenOutbound(
+            entry,
+            access.transport,
+            outboundLookup,
+            customServerPrivateHosts,
+          ),
         });
       } catch (error) {
         /*
@@ -7436,7 +7453,12 @@ export function createPluginStore(options: PluginStoreOptions) {
             token,
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
-            ...tenantChosenOutbound(entry, access.transport, outboundLookup),
+            ...tenantChosenOutbound(
+              entry,
+              access.transport,
+              outboundLookup,
+              customServerPrivateHosts,
+            ),
           },
           toolName,
           vendorArgs,
