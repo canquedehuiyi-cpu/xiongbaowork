@@ -663,12 +663,19 @@ describe("group conversations in PostgreSQL", () => {
       replies: {
         [ada]: async (input) => {
           input.onText?.("From your notes: the launch slipped.");
-          await new Promise((resolve) => setTimeout(resolve, 30));
+          // The partial text is written asynchronously, so wait (bounded) until the owner's view
+          // shows it; only then is the teammate's view a meaningful check that it is withheld.
+          const deadline = Date.now() + 2000;
+          for (;;) {
+            ownerMidRun = JSON.stringify(
+              await conversations.list(owner.id, channelId),
+            );
+            if (ownerMidRun.includes("launch slipped")) break;
+            if (Date.now() > deadline) break;
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
           teammateMidRun = JSON.stringify(
             await conversations.list(teammate.id, channelId),
-          );
-          ownerMidRun = JSON.stringify(
-            await conversations.list(owner.id, channelId),
           );
           return "From your notes: the launch slipped.";
         },
