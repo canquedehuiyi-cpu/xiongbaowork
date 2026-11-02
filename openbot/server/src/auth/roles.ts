@@ -27,6 +27,7 @@ export async function initializeRoleWriter(
   }
   roleWriterInitializations.add(application);
   try {
+    // MAINTAIN exists from PostgreSQL 17; the embedded image runs 16, which rejects the word outright.
     const factsQuery = sql`
     SELECT current_user AS role, session_user AS session_role,
       (SELECT a.usename FROM pg_catalog.pg_stat_activity a WHERE a.pid = pg_backend_pid()) AS login_role,
@@ -61,10 +62,10 @@ export async function initializeRoleWriter(
       has_table_privilege(current_user, 'public.user_roles', 'SELECT') AS reads_roles,
       has_table_privilege(current_user, 'public.user_roles', 'INSERT') AS inserts_roles,
       has_table_privilege(current_user, 'public.user_roles', 'DELETE') AS deletes_roles,
-      has_table_privilege(current_user, 'public.user_roles', 'UPDATE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') AS other_role_rights,
+      (CASE WHEN current_setting('server_version_num')::int >= 170000 THEN has_table_privilege(current_user, 'public.user_roles', 'UPDATE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') ELSE has_table_privilege(current_user, 'public.user_roles', 'UPDATE,TRUNCATE,REFERENCES,TRIGGER') END) AS other_role_rights,
       has_table_privilege(current_user, 'public.user_roles', 'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,DELETE WITH GRANT OPTION') AS role_grant_options,
       has_any_column_privilege(current_user, 'public.user_roles', 'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION') AS role_column_grant_options,
-      has_table_privilege(current_user, 'public.user_roles', 'UPDATE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION,MAINTAIN WITH GRANT OPTION') AS other_role_grant_options,
+      (CASE WHEN current_setting('server_version_num')::int >= 170000 THEN has_table_privilege(current_user, 'public.user_roles', 'UPDATE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION,MAINTAIN WITH GRANT OPTION') ELSE has_table_privilege(current_user, 'public.user_roles', 'UPDATE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION') END) AS other_role_grant_options,
       has_any_column_privilege(current_user, 'public.user_roles', 'UPDATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION') AS other_role_column_grant_options,
       has_schema_privilege(current_user, 'public', 'CREATE WITH GRANT OPTION,USAGE WITH GRANT OPTION') AS schema_grant_options,
       has_database_privilege(current_user, current_database(), 'CREATE WITH GRANT OPTION,CONNECT WITH GRANT OPTION,TEMPORARY WITH GRANT OPTION') AS database_grant_options,
@@ -72,7 +73,7 @@ export async function initializeRoleWriter(
         SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND c.oid <> 'public.user_roles'::regclass
           AND CASE WHEN c.relkind IN ('r','p','v','m','f') THEN (
-              has_table_privilege(current_user, c.oid, 'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,DELETE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION,MAINTAIN WITH GRANT OPTION')
+              (CASE WHEN current_setting('server_version_num')::int >= 170000 THEN has_table_privilege(current_user, c.oid, 'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,DELETE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION,MAINTAIN WITH GRANT OPTION') ELSE has_table_privilege(current_user, c.oid, 'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,DELETE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION') END)
               OR has_any_column_privilege(current_user, c.oid, 'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION')
             )
             WHEN c.relkind = 'S' THEN has_sequence_privilege(current_user, c.oid, 'USAGE WITH GRANT OPTION,SELECT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
@@ -90,7 +91,7 @@ export async function initializeRoleWriter(
         WHERE n.nspname = 'public' AND c.relkind IN ('r','p','v','m','f')
           AND c.oid <> 'public.user_roles'::regclass
           AND (
-            has_table_privilege(current_user, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+            (CASE WHEN current_setting('server_version_num')::int >= 170000 THEN has_table_privilege(current_user, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') ELSE has_table_privilege(current_user, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') END)
             OR has_any_column_privilege(current_user, c.oid, 'SELECT,INSERT,UPDATE,REFERENCES')
           )
       ) AS other_public_rights
