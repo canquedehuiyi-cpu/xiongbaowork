@@ -552,6 +552,8 @@ describe("G01: whose work a sweep is doing", () => {
     ]);
     const [row] = await runAsTenant(ACTOR, () => outcomeOf(scheduled.id));
     expect(row?.tenantId).toBe(ACTOR);
+    // Settling merges into the payload object; a double-encoded outcome would turn it into an array.
+    expect(Array.isArray(row?.payload)).toBe(false);
     expect(
       (row?.payload as { outcome?: { status: string } } | undefined)?.outcome
         ?.status,
