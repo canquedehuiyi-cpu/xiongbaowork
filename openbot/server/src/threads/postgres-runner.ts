@@ -9,7 +9,7 @@ import {
   type InMemoryThread,
   ɵGLOBAL_STORE,
 } from "@copilotkit/runtime/v2";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   EMPTY,
   from,
@@ -30,7 +30,12 @@ import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
-import { currentTenant, isTenantFramed, runAsTenant } from "../tenant/context";
+import {
+  currentTenant,
+  isPersonTenant,
+  isTenantFramed,
+  runAsTenant,
+} from "../tenant/context";
 import { runnerCardSuppressed } from "./unattended-card";
 
 /**
@@ -46,6 +51,21 @@ import { runnerCardSuppressed } from "./unattended-card";
  * over one store need one ownership table.
  */
 const threadOwners = new Map<string, string>();
+
+/**
+ * Per tenant, the one load of that tenant's stored threads into the store (G01-E P18).
+ *
+ * After a restart the store and the index above are empty while the rows are not, so every thread
+ * read would answer as if the person had never talked to anybody. Each tenant's rows are loaded the
+ * first time that tenant reaches a thread, in that tenant's own frame, and once: every later access
+ * (and every concurrent first one) awaits the same promise. Module-level for the reason the index is.
+ */
+const tenantLoads = new Map<string, Promise<void>>();
+
+/** How many of one tenant's threads a load brings back: the newest, its own ahead of `system`'s. */
+const LOAD_LIMIT = 500;
+/** Threads read per round trip while loading, so one tenant's history is never one huge result. */
+const LOAD_CHUNK = 50;
 
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
@@ -81,13 +101,12 @@ function carriedFailure(events: readonly BaseEvent[]): boolean {
  *
  * The in-memory runner keeps live run semantics (SSE mode, local thread
  * endpoints); this subclass writes every finalized run through to PostgreSQL
- * and replays stored threads back into the shared store at boot, so a restart
- * loses nothing. `ɵGLOBAL_STORE` is the same bounded store the parent commits
- * finalized runs to, and `appendRun` is how a finished run enters it.
+ * and replays a tenant's stored threads back into the shared store the first
+ * time that tenant reaches one (see {@link PostgresAgentRunner.hydrate}), so a
+ * restart loses nothing. `ɵGLOBAL_STORE` is the same bounded store the parent
+ * commits finalized runs to, and `appendRun` is how a finished run enters it.
  */
 export class PostgresAgentRunner extends InMemoryAgentRunner {
-  private hydration: Promise<void> | null = null;
-
   constructor(
     private readonly database: Database,
     private readonly board?: TaskProjector,
@@ -317,6 +336,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       let closed = false;
       void (async () => {
         if (ceiling) await ceiling.assertCapacity(tenant, "tasksPerMonth");
+        // The thread's stored history goes into the store before this run is appended after it.
+        await this.hydrate();
         await this.claim(request, tenant);
       })().then(
         () => {
@@ -534,86 +555,138 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   }
 
   /**
-   * Load stored threads back into the live store. Lazy and idempotent: the
-   * wiring calls it once before the first request is served.
+   * Load the calling tenant's stored threads back into the live store, once per tenant per process.
    *
-   * Scoped to the caller's tenant — the same `threads` read every other query takes, so row-level
-   * security decides what is replayed and a hydration run as the wrong tenant loads nothing.
+   * Nothing calls this at boot: there is no frame at boot, and no single tenant whose threads they
+   * are. It is awaited wherever a tenant first reaches a thread — every signed-in runtime request
+   * (`mountCopilotRuntime`), a run, and the local platform's history read — in that tenant's frame,
+   * and the reads below are re-entered in that frame explicitly. Row-level security decides what
+   * loads, and the query asks for the caller's own stamp and `system`'s besides, so even a frame that
+   * reads across tenants (`platform`) could not load somebody else's here; a frame that is not a
+   * person's loads nothing at all.
+   *
+   * Idempotent per tenant and safe under concurrent first requests: the promise is shared, so a
+   * tenant's rows are read once. A load that fails is forgotten, so the next access tries again, and
+   * a thread already holding runs in the store is never appended to a second time.
    */
   hydrate(): Promise<void> {
-    this.hydration ??= this.loadStored();
-    return this.hydration;
+    const tenant = currentTenant();
+    if (!isPersonTenant(tenant)) return Promise.resolve();
+    const pending = tenantLoads.get(tenant);
+    if (pending) return pending;
+    const load: Promise<void> = runAsTenant(tenant, () =>
+      this.loadStored(tenant),
+    ).catch((error: unknown) => {
+      if (tenantLoads.get(tenant) === load) tenantLoads.delete(tenant);
+      console.error("thread hydration failed", error);
+    });
+    tenantLoads.set(tenant, load);
+    return load;
   }
 
-  private async loadStored(): Promise<void> {
-    try {
-      const stored = await this.database
+  private async loadStored(tenant: string): Promise<void> {
+    const stored = await this.database
+      .select({
+        id: threads.id,
+        tenantId: threads.tenantId,
+        messages: threads.messagesSnapshot,
+      })
+      .from(threads)
+      .where(
+        or(eq(threads.tenantId, tenant), eq(threads.tenantId, SYSTEM_TENANT)),
+      )
+      .orderBy(
+        desc(sql`${threads.tenantId} = ${tenant}`),
+        desc(threads.updatedAt),
+      )
+      .limit(LOAD_LIMIT);
+    // Oldest first into the store, so its LRU order ends with the conversations used last.
+    const loadable = stored
+      .filter(
+        (row) => row.tenantId === tenant || row.tenantId === SYSTEM_TENANT,
+      )
+      .reverse();
+    for (let at = 0; at < loadable.length; at += LOAD_CHUNK) {
+      const chunk = loadable.slice(at, at + LOAD_CHUNK);
+      const ids = chunk.map((row) => row.id);
+      const runs = await this.database
         .select({
-          id: threads.id,
-          tenantId: threads.tenantId,
-          agentId: threads.agentId,
-          name: threads.name,
-          createdAt: threads.createdAt,
+          id: threadRuns.id,
+          threadId: threadRuns.threadId,
+          agentId: threadRuns.agentId,
+          createdAt: threadRuns.createdAt,
         })
-        .from(threads)
-        .orderBy(asc(threads.createdAt))
-        .limit(500);
-      for (const thread of stored) {
-        threadOwners.set(thread.id, thread.tenantId);
-        const runs = await this.database
-          .select({
-            id: threadRuns.id,
-            agentId: threadRuns.agentId,
-            createdAt: threadRuns.createdAt,
-          })
-          .from(threadRuns)
-          .where(eq(threadRuns.threadId, thread.id))
-          .orderBy(asc(threadRuns.createdAt));
-        const eventRows = await this.database
-          .select({
-            runId: threadRunEvents.runId,
-            event: threadRunEvents.event,
-          })
-          .from(threadRunEvents)
-          .where(eq(threadRunEvents.threadId, thread.id))
-          .orderBy(asc(threadRunEvents.runId), asc(threadRunEvents.seq));
-        const byRun = new Map<string, BaseEvent[]>();
-        for (const row of eventRows) {
-          const list = byRun.get(row.runId) ?? [];
-          list.push(row.event as BaseEvent);
-          byRun.set(row.runId, list);
-        }
-        const [meta] = await this.database
-          .select({ messages: threads.messagesSnapshot })
-          .from(threads)
-          .where(eq(threads.id, thread.id))
-          .limit(1);
-        const snapshot = (meta?.messages as Message[] | undefined) ?? [];
-        runs.forEach((run, index) => {
-          ɵGLOBAL_STORE.appendRun(thread.id, {
-            threadId: thread.id,
-            runId: run.id,
-            agentId: run.agentId,
-            parentRunId: null,
-            events: byRun.get(run.id) ?? [],
-            // appendRun hoists the LAST run's messages to the thread level;
-            // earlier runs carry none, matching how a live run commits.
-            messages: index === runs.length - 1 ? snapshot : [],
-            createdAt: run.createdAt.getTime(),
-          });
-        });
+        .from(threadRuns)
+        .where(inArray(threadRuns.threadId, ids))
+        .orderBy(asc(threadRuns.createdAt), asc(threadRuns.id));
+      const eventRows = await this.database
+        .select({
+          runId: threadRunEvents.runId,
+          event: threadRunEvents.event,
+        })
+        .from(threadRunEvents)
+        .where(inArray(threadRunEvents.threadId, ids))
+        .orderBy(asc(threadRunEvents.runId), asc(threadRunEvents.seq));
+      const eventsOf = new Map<string, BaseEvent[]>();
+      for (const row of eventRows) {
+        const list = eventsOf.get(row.runId) ?? [];
+        list.push(row.event as BaseEvent);
+        eventsOf.set(row.runId, list);
       }
-    } catch (error) {
-      console.error("thread hydration failed", error);
+      const runsOf = new Map<string, typeof runs>();
+      for (const run of runs) {
+        const list = runsOf.get(run.threadId) ?? [];
+        list.push(run);
+        runsOf.set(run.threadId, list);
+      }
+      // No await from here to the end of the chunk: each thread is checked and filled in one go.
+      for (const thread of chunk)
+        this.replay(thread, runsOf.get(thread.id) ?? [], eventsOf);
     }
+  }
+
+  /**
+   * One stored thread into the store and the index, unless this process already holds it.
+   *
+   * The entry is created before the runs are appended: the store's `appendRun` drops a run for a
+   * thread it holds no entry for. A thread already holding runs (another tenant's load brought a
+   * `system` thread in, or a turn landed first) is left as it is, so nothing is ever appended twice;
+   * and one the index gives somebody else is not touched.
+   */
+  private replay(
+    thread: { id: string; tenantId: string; messages: unknown[] },
+    runs: readonly { id: string; agentId: string; createdAt: Date }[],
+    eventsOf: ReadonlyMap<string, BaseEvent[]>,
+  ): void {
+    const owner = threadOwners.get(thread.id);
+    if (owner !== undefined && owner !== thread.tenantId) return;
+    threadOwners.set(thread.id, thread.tenantId);
+    if (runs.length === 0) return;
+    if ((ɵGLOBAL_STORE.peek(thread.id)?.historicRuns.length ?? 0) > 0) return;
+    ɵGLOBAL_STORE.getOrCreate(thread.id);
+    const snapshot = thread.messages as Message[];
+    runs.forEach((run, index) => {
+      ɵGLOBAL_STORE.appendRun(thread.id, {
+        threadId: thread.id,
+        runId: run.id,
+        agentId: run.agentId,
+        parentRunId: runs[index - 1]?.id ?? null,
+        events: eventsOf.get(run.id) ?? [],
+        // appendRun hoists the LAST run's messages to the thread level;
+        // earlier runs carry none, matching how a live run commits.
+        messages: index === runs.length - 1 ? snapshot : [],
+        createdAt: run.createdAt.getTime(),
+      });
+    });
   }
 
   /**
    * The thread's stored header, or null when this tenant holds no such thread.
    *
    * A database read rather than the in-memory store, because "does this conversation exist" is
-   * asked across a restart: the store is cold until a run or a hydration puts the thread in it, while
-   * the row is the record. Row-level security is the scope, so another tenant's thread answers null.
+   * asked across a restart: the store is cold until a run or the tenant's first access (`hydrate`)
+   * puts the thread in it, while the row is the record. Row-level security is the scope, so another
+   * tenant's thread answers null.
    */
   async storedThread(
     threadId: string,
