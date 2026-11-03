@@ -208,6 +208,9 @@ import {
   HostAccessRefusedError,
 } from "./host-access/broker";
 import { hostAccessTools } from "./host-access/tools";
+import { createKnowledgeRoutes } from "./knowledge/routes";
+import { createKnowledgeStore } from "./knowledge/store";
+import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
@@ -1362,6 +1365,8 @@ await startupLifecycle.run(async (startup) => {
   // server-dispatched: the selected Bot and the signed-in owner are bound here, then the desktop worker
   // receives only opaque grant ids and relative paths.
   const personalMemoryStore = createMemoryStore(database);
+  // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
+  const knowledgeStore = createKnowledgeStore(database);
   const demonstrationStore = createDemonstrationStore(database);
   const demonstrationRecorder = createDemonstrationRecorder({
     store: demonstrationStore,
@@ -1433,6 +1438,11 @@ await startupLifecycle.run(async (startup) => {
         ownerUserId: actorId,
         agentId: botId,
       }),
+      ...(await knowledgeTools({
+        store: knowledgeStore,
+        ownerUserId: actorId,
+        agentId: botId,
+      })),
       ...(await grantedTools({
         store: pluginStore,
         botId,
@@ -3734,6 +3744,20 @@ await startupLifecycle.run(async (startup) => {
         const text = await memory.execute(args);
         return { text, isError: text.startsWith(REFUSAL_MARKER) };
       }
+      if (KNOWLEDGE_TOOL_NAMES.has(name)) {
+        // Offered only to a Waker its owner bound a notebook to; anything else is a refusal.
+        const knowledge = (
+          await knowledgeTools({
+            store: knowledgeStore,
+            ownerUserId: actorId,
+            agentId: botId,
+          })
+        ).find((candidate) => candidate.name === name);
+        const text = knowledge
+          ? await knowledge.execute(args)
+          : `${REFUSAL_MARKER} No knowledge notebook is shared with this Waker.`;
+        return { text, isError: text.startsWith(REFUSAL_MARKER) };
+      }
       if (!name.startsWith("host_")) return null;
       const tool = hostAccessTools({
         broker: hostAccessBroker,
@@ -3982,6 +4006,17 @@ await startupLifecycle.run(async (startup) => {
     "/api/personas",
     createPersonaRoutes(
       createPersonaTemplateStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // A person's knowledge base (D08, story RES1): notebooks, text sources and read-only Waker bindings.
+  app.route(
+    "/api/knowledge",
+    createKnowledgeRoutes(
+      knowledgeStore,
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
