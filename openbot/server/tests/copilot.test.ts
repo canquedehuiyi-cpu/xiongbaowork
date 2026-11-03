@@ -2583,6 +2583,9 @@ describe("each coworker runs on the model it was bound to", () => {
         process.env.OPENAI_BASE_URL,
         "gpt-6",
         "synthetic-binding-key",
+        // The recorder listens on loopback over http, which a tenant endpoint may only use where the
+        // deployment opted into private hosts (audit defect #6).
+        { allowPrivateHosts: true },
       );
       const agents = await build(async (agentId) =>
         agentId === developer.id ? bound : null,
@@ -2646,6 +2649,9 @@ describe("each coworker runs on the model it was bound to", () => {
         process.env.OPENAI_BASE_URL,
         "gpt-6",
         "synthetic-binding-key",
+        // The recorder listens on loopback over http, which a tenant endpoint may only use where the
+        // deployment opted into private hosts (audit defect #6).
+        { allowPrivateHosts: true },
       );
       const factory = createRequestAgents(
         async () => ({ id: "user-9", role: "user" as const }),

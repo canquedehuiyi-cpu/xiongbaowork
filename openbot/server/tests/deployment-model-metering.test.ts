@@ -190,6 +190,9 @@ describe("the deployment default model is metered", () => {
         base,
         "gpt-6",
         "synthetic-binding-key",
+        // The recorder listens on loopback over http, which a tenant endpoint may only use where the
+        // deployment opted into private hosts (audit defect #6).
+        { allowPrivateHosts: true },
       );
       const agents = await runAsTenant("meter-default-bound", () =>
         build(
