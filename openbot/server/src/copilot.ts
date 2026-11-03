@@ -2408,14 +2408,24 @@ export function mountCopilotRuntime(
     // A preflight carries no session and reads nothing: the runtime's CORS answer, unframed.
     if (request.method === "OPTIONS") return runtimeRoutes.fetch(request);
     const actor = await actorOf(request);
+    const describesItself =
+      request.method === "GET" &&
+      new URL(request.url).pathname === `${basePath}/info`;
     if (actor.id === NOBODY) {
-      const describesItself =
-        request.method === "GET" &&
-        new URL(request.url).pathname === `${basePath}/info`;
       if (!describesItself)
         return context.json({ error: "Sign in to use the chat." }, 401);
+      return runAsRuntimeActor(actor, () => runtimeRoutes.fetch(request));
     }
-    return runAsRuntimeActor(actor, () => runtimeRoutes.fetch(request));
+    /*
+     * A person's threads are back in memory before the runtime reads any (G01-E P18). The thread
+     * endpoints and connect replay answer synchronously out of the in-memory store, which a restart
+     * empties while the rows stay; so the person's first request that can touch a thread loads their
+     * stored threads, in their frame, and every later one finds that load done. `/info` touches none.
+     */
+    return runAsRuntimeActor(actor, async () => {
+      if (!describesItself) await runner.hydrate();
+      return runtimeRoutes.fetch(request);
+    });
   });
 
   return {
@@ -2468,7 +2478,10 @@ export function mountCopilotRuntime(
      * a second view of it that could disagree. The tenant guard on `getThreadMessages` is what makes
      * that read safe to hand to a hop.
      */
-    history: async (input: { threadId: string; actorId: string }) =>
-      runner.getThreadMessages(input.threadId),
+    history: async (input: { threadId: string; actorId: string }) => {
+      // After a restart the store is cold until this tenant's threads are loaded (G01-E P18).
+      await runner.hydrate();
+      return runner.getThreadMessages(input.threadId);
+    },
   };
 }

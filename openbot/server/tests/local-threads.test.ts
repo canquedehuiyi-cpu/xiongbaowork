@@ -36,7 +36,12 @@ type StoredRun = {
 /** The stand-in store: one Map, because the real one is a process singleton too. */
 const stored = new Map<
   string,
-  { runs: StoredRun[]; messages: unknown[]; createdAt: number }
+  {
+    historicRuns: StoredRun[];
+    messages: unknown[];
+    createdAt: number | null;
+    isRunning: boolean;
+  }
 >();
 
 // Keep the module's other exports (BuiltInAgent, CopilotRuntime, …): Bun's module mock outlives this
@@ -45,17 +50,29 @@ const realRuntime = { ...(await import("@copilotkit/runtime/v2")) };
 mock.module("@copilotkit/runtime/v2", () => ({
   ...realRuntime,
   ɵGLOBAL_STORE: {
-    appendRun(threadId: string, run: StoredRun) {
+    getOrCreate(threadId: string) {
       const entry = stored.get(threadId) ?? {
-        runs: [],
+        historicRuns: [],
         messages: [],
-        createdAt: run.createdAt,
+        createdAt: null,
+        isRunning: false,
       };
-      entry.runs.push(run);
+      stored.set(threadId, entry);
+      return entry;
+    },
+    peek(threadId: string) {
+      return stored.get(threadId);
+    },
+    appendRun(threadId: string, run: StoredRun) {
+      // `BoundedThreadStore.appendRun` drops a run for a thread it holds no entry for (G01-E P18):
+      // a replay that does not create the entry first loads nothing, so this stand-in drops it too.
+      const entry = stored.get(threadId);
+      if (!entry) return;
+      entry.createdAt ??= run.createdAt;
+      entry.historicRuns.push(run);
       // `BoundedThreadStore.appendRun` hoists the LAST run's messages to the thread level, which is
       // what `getThreadMessages` then answers from; the replay depends on that, so this does too.
       if (run.messages.length > 0) entry.messages = run.messages;
-      stored.set(threadId, entry);
     },
   },
   InMemoryAgentRunner: class {
@@ -63,19 +80,21 @@ mock.module("@copilotkit/runtime/v2", () => ({
       return [...stored.entries()].map(([id, entry]) => ({
         id,
         name: null,
-        agentId: entry.runs[0]?.agentId ?? "unknown",
+        agentId: entry.historicRuns[0]?.agentId ?? "unknown",
         organizationId: "",
         createdById: "",
         archived: false,
-        createdAt: new Date(entry.createdAt).toISOString(),
-        updatedAt: new Date(entry.createdAt).toISOString(),
+        createdAt: new Date(entry.createdAt ?? 0).toISOString(),
+        updatedAt: new Date(entry.createdAt ?? 0).toISOString(),
       }));
     }
     getThreadMessages(threadId: string) {
       return stored.get(threadId)?.messages ?? [];
     }
     getThreadEvents(threadId: string) {
-      return stored.get(threadId)?.runs.flatMap((run) => run.events) ?? [];
+      return (
+        stored.get(threadId)?.historicRuns.flatMap((run) => run.events) ?? []
+      );
     }
     run() {
       return { pipe: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }) };
@@ -272,9 +291,11 @@ test("hydrate replays the calling tenant's thread, and the other tenant's stays 
   await runAsTenant(tenantA, () => runnerA.hydrate());
 
   const replayed = stored.get(threadA);
-  expect(replayed?.runs.map((run) => run.runId)).toEqual([`${threadA}-run`]);
-  expect(replayed?.runs[0]?.events).toHaveLength(2);
-  expect(replayed?.runs[0]?.agentId).toBe(`${marker}-bot`);
+  expect(replayed?.historicRuns.map((run) => run.runId)).toEqual([
+    `${threadA}-run`,
+  ]);
+  expect(replayed?.historicRuns[0]?.events).toHaveLength(2);
+  expect(replayed?.historicRuns[0]?.agentId).toBe(`${marker}-bot`);
 
   expect(
     idsFor(await runAsTenant(tenantA, () => runnerA.listThreads())),
