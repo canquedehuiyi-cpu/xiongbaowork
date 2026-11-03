@@ -185,6 +185,7 @@ test("each Slack event is re-checked against the owner's channel membership (fai
   const now = Math.floor(Date.now() / 1000);
   const trigger = {
     id: TRIGGER_ID,
+    tenantId: "owner-1",
     ownerUserId: "owner-1",
     responsibilityId: "goal-1",
     responsibilityStatus: "active" as const,

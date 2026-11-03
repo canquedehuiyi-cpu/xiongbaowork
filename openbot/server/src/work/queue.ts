@@ -165,11 +165,14 @@ export type WorkQueue = {
   }) => Promise<boolean>;
   /**
    * Done. False means the lease had already gone to somebody else, so this was not ours to finish.
+   * `reason` is kept on the row (as `release` keeps one) for work that ended without all of it
+   * succeeding, where a retry could not do better.
    */
   finish: (input: {
     kind: string;
     key: string;
     owner: string;
+    reason?: string;
   }) => Promise<boolean>;
   /** Not done, and worth another go after `delayMs`. False means it was no longer ours. */
   release: (input: {
@@ -393,7 +396,7 @@ export function createWorkQueue(database: Database): WorkQueue {
       return Boolean(renewed);
     },
 
-    async finish({ kind, key, owner }) {
+    async finish({ kind, key, owner, reason }) {
       const [finished] = await runAsTenant("platform", () =>
         database
           .update(workItems)
@@ -407,6 +410,7 @@ export function createWorkQueue(database: Database): WorkQueue {
             claimedBy: null,
             leaseUntil: null,
             updatedAt: sql`now()`,
+            ...(reason === undefined ? {} : { lastError: reason }),
           })
           .where(ours(kind, key, owner))
           .returning({ key: workItems.key }),

@@ -142,9 +142,16 @@ helm dependency build charts/openbot
 helm upgrade --install openbot charts/openbot \
   --namespace openbot --create-namespace \
   --set postgresql.enabled=true \
+  --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
+  --set config.extraEnv[0].value=warn \
   --set config.initialAdminEmails=you@example.com \
   --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)"
 ```
+
+The two `extraEnv` lines are the bundled database's price: it connects the API as the superuser
+`postgres`, which row-level security does not bind, and the server refuses that in production unless
+told otherwise. The chart refuses to render without them rather than leave the API crash-looping. See
+[the RLS upgrade note](#coming-from-a-release-that-only-warned-the-server-now-refuses-a-superuser).
 
 `secrets.keyEncryptionKey` encrypts the credential vault. Generate it once, keep it, and do not put
 it in a file anybody commits. The chart marks the Secret it creates `helm.sh/resource-policy: keep`,
@@ -290,6 +297,7 @@ installing on somebody's bare-metal cluster.
 ## Refused at install, not in a crash loop
 
 The chart fails the install, naming the value to change, when: there is no database or two of them;
+the bundled database's `postgres` superuser is used with no `OPENBOT_RLS_ENFORCE` in `config.extraEnv`;
 nobody could sign in or nobody would be an administrator; an identity provider is configured without
 `secrets.betterAuthSecret` or `config.publicUrl`; `singleUser` is combined with a public URL or a
 public LoadBalancer; `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; there is no
@@ -500,6 +508,27 @@ upper-cased and anything unusual replaced. Naming a proxy the policy provably bl
 install rather than found as a browser that fails on every page.
 
 ## Upgrades
+
+### Coming from a release that only warned: the server now refuses a superuser
+
+Unset, `OPENBOT_RLS_ENFORCE` used to mean `warn`. It now means `refuse` under this chart's
+`NODE_ENV=production`: an API whose `DATABASE_URL` names a superuser or a `BYPASSRLS` role exits at
+boot with `{"type":"rls-not-enforced", …}`, because PostgreSQL applies no row-level security to
+either and tenant isolation would rest on the application alone.
+
+- **Bundled database** (`postgresql.enabled`): it is `postgres`, a superuser, so the chart refuses to
+  render until `config.extraEnv` names `OPENBOT_RLS_ENFORCE`. `--reuse-values` does not add it; pass
+  `--set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE --set config.extraEnv[0].value=warn`.
+- **Your own database, with a superuser in the URL** (the usual way to make the migrations pass on a
+  self-hosted server): the chart renders and the API pods then refuse to start. The migrations Job and
+  the API share one `DATABASE_URL`, so the chart has no way yet to migrate as the owner and serve as
+  `openbot_app`. Until it does, either point the URL at a role that owns the schema without being a
+  superuser or `BYPASSRLS`, or set the same `extraEnv` entry and accept the warning on every boot.
+- **RDS, Cloud SQL, Azure Database**: unaffected. Their administrative roles are neither superuser
+  nor `BYPASSRLS`.
+
+`config.extraEnv` renders after the chart's own variables, so it is the value the pods get. See
+[configuration](../../docs/configuration.md#the-database-role-and-openbot_rls_enforce).
 
 ### Coming from a release before 0.0.14: a computer now runs as uid 1001
 

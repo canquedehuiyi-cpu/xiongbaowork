@@ -289,6 +289,16 @@ describe("OpenBot database schema", () => {
         primary: false,
       },
       /*
+       * Or a platform pool model instead (stories H1, K1, migration 0120). Null means none; the
+       * database refuses a row that sets both this and `model_ref`.
+       */
+      {
+        name: "platform_model_ref",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
+      /*
        * Nullable, and that is the security property.
        *
        * Null means this agent holds no credential and may not call a tool back, which is what a URL
@@ -416,6 +426,15 @@ describe("OpenBot database schema", () => {
         targetTable: "model_registry",
         targetColumns: ["id"],
         onDelete: "set null",
+        onUpdate: "no action",
+      },
+      {
+        // A platform pool row still bound to a coworker cannot be deleted from under it (0120):
+        // the operator disables it instead.
+        sourceColumns: ["platform_model_ref"],
+        targetTable: "platform_model_pool",
+        targetColumns: ["id"],
+        onDelete: "restrict",
         onUpdate: "no action",
       },
       {

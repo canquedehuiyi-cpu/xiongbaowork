@@ -23,6 +23,23 @@ This template renders nothing.
 {{- fail "The bundled database needs a password you can supply again on upgrade. Set postgresql.auth.password, or postgresql.auth.existingSecret to name one you made. Generate one with: openssl rand -hex 24" }}
 {{- end }}
 
+{{- /*
+  The bundled database's superuser, which row-level security does not bind.
+
+  `postgresql.auth.username: postgres` is how the bundled database migrates at all (see values.yaml),
+  and the chart hands the API the same URL as the migrations Job. Under NODE_ENV=production the
+  server refuses to start on a superuser unless OPENBOT_RLS_ENFORCE says otherwise (audit defect #8),
+  so without this the install succeeds and every API pod crash-loops. Asked for here instead, so the
+  choice to run without tenant isolation in the database is written by the operator, not the chart.
+*/}}
+{{- $rlsModeNamed := false -}}
+{{- range .Values.config.extraEnv }}
+{{- if eq (toString .name) "OPENBOT_RLS_ENFORCE" }}{{- $rlsModeNamed = true }}{{- end }}
+{{- end }}
+{{- if and .Values.postgresql.enabled (eq .Values.postgresql.auth.username "postgres") (not $rlsModeNamed) }}
+{{- fail "The bundled database connects the API as the superuser postgres, which row-level security does not bind, and the server refuses that in production. To run it anyway, knowing tenant isolation then rests on the application alone, say so: config.extraEnv: [{name: OPENBOT_RLS_ENFORCE, value: warn}]. For isolation in the database, use your own database (database.existingSecret) with a URL naming openbot_app." }}
+{{- end }}
+
 {{- if and .Values.postgresql.enabled (or .Values.database.url .Values.database.existingSecret) }}
 {{- fail "Two databases. postgresql.enabled is true and database.url is also set, so it is not clear which one is meant. Pick one." }}
 {{- end }}

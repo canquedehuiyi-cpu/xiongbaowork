@@ -184,6 +184,11 @@ export function abandonedWorkPhases(input: {
     reapAbandonedRuns: (olderThanMs: number, error: string) => Promise<number>;
   };
   reapPipelineRuns: (input: { olderThanMs: number }) => Promise<number>;
+  /**
+   * WakerFlow runs (WF-F, `wakerflows/recovery.ts`), closed first so they carry the Flow's own
+   * restart sentence; the generic crew reaper then finds them already failed.
+   */
+  recoverFlowRuns?: (input: { olderThanMs: number }) => Promise<number>;
   board: {
     reclaimAbandoned: (input: { olderThanMs: number }) => Promise<number>;
   };
@@ -191,7 +196,25 @@ export function abandonedWorkPhases(input: {
   return {
     routineRuns: (olderThanMs) =>
       input.routineStore.reapAbandonedRuns(olderThanMs, REAPED_ROUTINE_RUN),
-    pipelineRuns: (olderThanMs) => input.reapPipelineRuns({ olderThanMs }),
+    pipelineRuns: async (olderThanMs) => {
+      /*
+       * Flow runs are crew runs too, so they share this phase (and its count). A failure closing them
+       * must not keep the generic reaper from running: it closes them as well, with its own sentence,
+       * and the error is still reported.
+       */
+      let flows = 0;
+      let flowError: unknown = null;
+      if (input.recoverFlowRuns) {
+        try {
+          flows = await input.recoverFlowRuns({ olderThanMs });
+        } catch (error) {
+          flowError = error;
+        }
+      }
+      const crews = await input.reapPipelineRuns({ olderThanMs });
+      if (flowError) throw flowError;
+      return flows + crews;
+    },
     cards: (olderThanMs) => input.board.reclaimAbandoned({ olderThanMs }),
   };
 }
