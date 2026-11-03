@@ -1566,7 +1566,7 @@ export function createApp(
   if (coworker?.lifecycle)
     app.route(
       "/api/bots",
-      createBotLifecycleRoutes(coworker.lifecycle, requireUser),
+      createBotLifecycleRoutes(coworker.lifecycle, requireUser, adminScope),
     );
   if (coworker?.groups)
     app.route("/api/groups", createGroupRoutes(coworker.groups, requireUser));

@@ -389,14 +389,14 @@ function CoworkerTab({
                   装配
                 </Link>
                 {/*
-                  The detail editor is the roster's own dialog, deep-linked rather than rebuilt here.
-                  A second copy would fork where a persona, a model binding and an assembly are set,
-                  and the two would drift the first time one of them gained a field.
+                  Spec D5: the coworker's own detail page — its duties, running tasks, skill grants
+                  and recent audit trail. That page only reads; changing what it holds stays on the
+                  assembly screen linked beside this one, so neither forks where a setting is made.
                 */}
                 <Link
                   className="text-muted-foreground text-xs underline-offset-2 hover:underline"
-                  search={{ agent: agent.id }}
-                  to="/agents"
+                  params={{ agentId: agent.id }}
+                  to="/wakers/$agentId"
                 >
                   打开
                 </Link>

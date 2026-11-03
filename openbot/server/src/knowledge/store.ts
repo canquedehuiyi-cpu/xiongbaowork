@@ -683,13 +683,25 @@ export function createKnowledgeStore(database: Database) {
       );
     },
 
+    /**
+     * Delete one source. With `revision`, only the copy the caller saw: a newer one saved elsewhere
+     * is a 409, as it is for an edit, rather than erased. Without one it removes whatever is there,
+     * the same default `deleteNotebook` keeps.
+     */
     async removeSource(
       actorId: string,
       notebookId: string,
       sourceId: string,
+      input: unknown = {},
     ): Promise<void> {
       assertFrame(actorId);
+      const body: Record<string, unknown> =
+        input === undefined || input === null ? {} : record(input);
+      const expected =
+        body.revision === undefined ? undefined : revisionOf(body.revision);
       const current = await sourceOf(actorId, notebookId, sourceId);
+      if (expected !== undefined && current.revision !== expected)
+        throw new KnowledgeConflictError();
       await commitOwnerAssembly(
         database,
         audit(
@@ -712,11 +724,17 @@ export function createKnowledgeStore(database: Database) {
                 eq(knowledgeSources.notebookId, notebookId),
                 eq(knowledgeSources.tenantId, actorId),
                 eq(knowledgeSources.ownerUserId, actorId),
+                ...(expected === undefined
+                  ? []
+                  : [eq(knowledgeSources.revision, expected)]),
               ),
             )
             .returning({ id: knowledgeSources.id });
+          // Gone since the read above: an edit that raced in is a conflict, a delete that did is not.
           if (removed.length === 0)
-            throw new KnowledgeNotFoundError("找不到这份资料。");
+            throw expected === undefined
+              ? new KnowledgeNotFoundError("找不到这份资料。")
+              : new KnowledgeConflictError();
           return { value: undefined, changed: true };
         },
       );

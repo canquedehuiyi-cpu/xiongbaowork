@@ -6,7 +6,9 @@ import {
   gt,
   inArray,
   lt,
+  notInArray,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
@@ -975,83 +977,216 @@ function matchesRequested(column: PgColumn, values: string[] | undefined) {
   return inArray(column, [first, ...rest]);
 }
 
+/**
+ * One keyset page of the trail under the given conditions, newest first.
+ *
+ * Shared by the admin reader and the per-agent trail so that both page the same way: on
+ * `(created_at, id)` descending, with a cursor that keeps the row's microseconds.
+ */
+async function readAuditPage(
+  database: Database,
+  conditions: (SQL | undefined)[],
+  rawCursor: string | undefined,
+  limit: number,
+): Promise<{ events: AuditEvent[]; nextCursor?: string }> {
+  const cursor = rawCursor ? decodeCursor(rawCursor) : undefined;
+  const where = [...conditions];
+
+  if (cursor) {
+    // Bound as text and cast by PostgreSQL, not as a `Date`, which would drop the microseconds
+    // the cursor below carries.
+    const createdAt = sql`${cursor.createdAt}::timestamptz`;
+    where.push(
+      or(
+        lt(auditEvents.createdAt, createdAt),
+        and(
+          eq(auditEvents.createdAt, createdAt),
+          lt(auditEvents.id, cursor.id),
+        ),
+      ),
+    );
+  }
+
+  const rows = await database
+    .select({
+      ...getTableColumns(auditEvents),
+      /*
+       * The row's own timestamp to the microsecond, for the cursor only.
+       *
+       * `created_at` keeps microseconds and a `Date` keeps milliseconds, so a cursor made from
+       * `createdAt` named a moment just before the row it came from. The rows the next page
+       * should have started with, written earlier in that same millisecond or at the same
+       * instant, then compared as newer than the cursor and were on no page at all.
+       */
+      cursorCreatedAt: sql<string>`to_char(${auditEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+    })
+    .from(auditEvents)
+    .where(and(...where))
+    .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+    .limit(limit + 1);
+  const hasNextPage = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+
+  return {
+    events: page.map(({ cursorCreatedAt: _cursorOnly, ...event }) => ({
+      ...event,
+      createdAt: event.createdAt.toISOString(),
+      payload: event.payload as Record<string, unknown>,
+    })),
+    nextCursor:
+      hasNextPage && last
+        ? encodeCursor({
+            id: last.id,
+            createdAt: last.cursorCreatedAt,
+          })
+        : undefined,
+  };
+}
+
 export function createAuditReader(database: Database): AuditReader {
   return {
-    list: async (query) => {
-      const conditions = [
-        matchesRequested(
-          auditEvents.eventType,
-          requestedValues(query.eventType),
-        ),
-        query.actorUserId
-          ? eq(auditEvents.actorUserId, query.actorUserId)
-          : undefined,
-        matchesRequested(
-          auditEvents.initiatorKind,
-          requestedValues(query.initiatorKind),
-        ),
-        query.targetType
-          ? eq(auditEvents.targetType, query.targetType)
-          : undefined,
-        query.targetId ? eq(auditEvents.targetId, query.targetId) : undefined,
-        query.from
-          ? gt(auditEvents.createdAt, new Date(query.from))
-          : undefined,
-        query.to ? lt(auditEvents.createdAt, new Date(query.to)) : undefined,
-      ];
-      const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
-
-      if (cursor) {
-        // Bound as text and cast by PostgreSQL, not as a `Date`, which would drop the microseconds
-        // the cursor below carries.
-        const createdAt = sql`${cursor.createdAt}::timestamptz`;
-        conditions.push(
-          or(
-            lt(auditEvents.createdAt, createdAt),
-            and(
-              eq(auditEvents.createdAt, createdAt),
-              lt(auditEvents.id, cursor.id),
-            ),
+    list: async (query) =>
+      readAuditPage(
+        database,
+        [
+          matchesRequested(
+            auditEvents.eventType,
+            requestedValues(query.eventType),
           ),
-        );
-      }
-
-      const rows = await database
-        .select({
-          ...getTableColumns(auditEvents),
-          /*
-           * The row's own timestamp to the microsecond, for the cursor only.
-           *
-           * `created_at` keeps microseconds and a `Date` keeps milliseconds, so a cursor made from
-           * `createdAt` named a moment just before the row it came from. The rows the next page
-           * should have started with, written earlier in that same millisecond or at the same
-           * instant, then compared as newer than the cursor and were on no page at all.
-           */
-          cursorCreatedAt: sql<string>`to_char(${auditEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
-        })
-        .from(auditEvents)
-        .where(and(...conditions))
-        .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
-        .limit(query.limit + 1);
-      const hasNextPage = rows.length > query.limit;
-      const page = rows.slice(0, query.limit);
-      const last = page.at(-1);
-
-      return {
-        events: page.map(({ cursorCreatedAt: _cursorOnly, ...event }) => ({
-          ...event,
-          createdAt: event.createdAt.toISOString(),
-          payload: event.payload as Record<string, unknown>,
-        })),
-        nextCursor:
-          hasNextPage && last
-            ? encodeCursor({
-                id: last.id,
-                createdAt: last.cursorCreatedAt,
-              })
+          query.actorUserId
+            ? eq(auditEvents.actorUserId, query.actorUserId)
             : undefined,
+          matchesRequested(
+            auditEvents.initiatorKind,
+            requestedValues(query.initiatorKind),
+          ),
+          query.targetType
+            ? eq(auditEvents.targetType, query.targetType)
+            : undefined,
+          query.targetId ? eq(auditEvents.targetId, query.targetId) : undefined,
+          query.from
+            ? gt(auditEvents.createdAt, new Date(query.from))
+            : undefined,
+          query.to ? lt(auditEvents.createdAt, new Date(query.to)) : undefined,
+        ],
+        query.cursor,
+        query.limit,
+      ),
+  };
+}
+
+/**
+ * Events that record one person's own relationship with a Bot rather than the Bot itself.
+ *
+ * Pausing, resuming, resetting, muting, hiding or pinning a Bot acts only for the person who did it
+ * (see agents/lifecycle-routes.ts), and so does a follow-up it scheduled in their conversation or a
+ * delegated task they stopped. These rows say what one colleague does with a shared coworker, which
+ * is theirs alone: the agent trail shows them to the person who caused them and to nobody else, the
+ * Bot's owner and an administrator included.
+ */
+export const PERSONAL_AGENT_EVENT_TYPES = [
+  "bot.paused",
+  "bot.resumed",
+  "bot.reset",
+  "bot.notifications_changed",
+  "bot.hidden",
+  "bot.unhidden",
+  "bot.pinned",
+  "bot.unpinned",
+  "bot.follow_up_scheduled",
+  "bot.follow_up_cancelled",
+  "bot.handoff_stopped",
+] as const satisfies readonly AuditEventType[];
+
+/** A page of one agent's trail, as the person viewing it may see it. */
+export type AgentTrailQuery = {
+  agentId: string;
+  /** The signed-in person reading the trail. */
+  viewerUserId: string;
+  /**
+   * Whether the viewer may see what OTHER people and the system did to this agent: its owner, or
+   * an administrator. Anybody else sees only the rows they are the actor of.
+   */
+  seesEveryone: boolean;
+  cursor?: string;
+  limit: number;
+};
+
+export type AgentTrailReader = {
+  listAgentTrail: (query: AgentTrailQuery) => Promise<{
+    events: AuditEvent[];
+    nextCursor?: string;
+  }>;
+};
+
+/**
+ * One agent's audit trail: the rows written with `target_type = 'agent'` and its id.
+ *
+ * Served by `audit_events_target_time_idx` (`target_type, target_id, created_at desc, id desc`),
+ * so it needs no index of its own. Read in the caller's tenant frame, so row-level security keeps it
+ * to the tenant the request belongs to; nothing here names a tenant. Only an administrator's request
+ * reads it across tenants, by calling it inside `asAdminPlatform` (agents/lifecycle-routes.ts).
+ *
+ * Payloads were redacted when written and are redacted again on the way out, so a row written by a
+ * path that bypassed `recordAuditEvent` still never hands a secret to the employee page.
+ */
+export function createAgentTrailReader(database: Database): AgentTrailReader {
+  return {
+    listAgentTrail: async (query) => {
+      const own = eq(auditEvents.actorUserId, query.viewerUserId);
+      const visible = query.seesEveryone
+        ? or(
+            notInArray(auditEvents.eventType, [...PERSONAL_AGENT_EVENT_TYPES]),
+            own,
+          )
+        : own;
+      const page = await readAuditPage(
+        database,
+        [
+          eq(auditEvents.targetType, "agent"),
+          eq(auditEvents.targetId, query.agentId),
+          visible,
+        ],
+        query.cursor,
+        query.limit,
+      );
+      return {
+        ...page,
+        // Exactly the documented fields: the row also carries its tenant columns, which are the
+        // deployment's bookkeeping and nothing an employee page needs to be handed.
+        events: page.events.map((event) => ({
+          id: event.id,
+          eventType: event.eventType,
+          actorUserId: event.actorUserId,
+          initiatorKind: event.initiatorKind,
+          initiatorId: event.initiatorId,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          payload: redactAuditPayload(event.payload) as Record<string, unknown>,
+          createdAt: event.createdAt,
+        })),
       };
     },
+  };
+}
+
+/** The page an agent-trail request asks for: `?limit=` (1..100, default 50) and `?cursor=`. */
+export function agentTrailPageFromUrl(url: URL): {
+  cursor?: string;
+  limit: number;
+} {
+  const parsedLimit = parsePageLimit(url.searchParams.get("limit"), 100);
+  if (!parsedLimit.ok) {
+    throw new AuditQueryError(parsedLimit.error);
+  }
+  const cursor = url.searchParams.get("cursor") ?? undefined;
+  if (cursor !== undefined) {
+    decodeCursor(cursor);
+  }
+  return {
+    ...(cursor !== undefined ? { cursor } : {}),
+    limit: parsedLimit.limit ?? 50,
   };
 }
 
