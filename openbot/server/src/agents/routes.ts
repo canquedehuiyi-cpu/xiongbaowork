@@ -16,9 +16,11 @@ import {
   AgentNotManageableError,
   type AgentProfileStore,
   ManagedAgentUnavailableError,
+  ModelBindingConflictError,
   ModelBindingNotApplicableError,
   ModelNotInLibraryError,
   OwnerlessBotPrivateError,
+  PlatformModelNotAvailableError,
   ProtectedAgentError,
 } from "./profile-store";
 import type {
@@ -40,6 +42,7 @@ type AgentInputObject = {
   endpoint?: unknown;
   auth?: unknown;
   modelRef?: unknown;
+  platformModelRef?: unknown;
   persona?: unknown;
 };
 
@@ -140,20 +143,24 @@ export function parseAgentInput(
   const persona = parsePersona(input.persona);
   if (typeof persona === "string") return { ok: false, error: persona };
 
-  let modelRef: string | null | undefined;
-  if (input.modelRef !== undefined) {
-    if (input.modelRef === null || input.modelRef === "") {
-      modelRef = null;
-    } else if (
-      typeof input.modelRef === "string" &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        input.modelRef,
-      )
-    ) {
-      modelRef = input.modelRef;
-    } else {
-      return { ok: false, error: "Pick a model from your model library." };
-    }
+  const modelRef = parseModelReference(input.modelRef);
+  if (modelRef === INVALID_REFERENCE) {
+    return { ok: false, error: "Pick a model from your model library." };
+  }
+  /*
+   * The platform pool (stories H1, K1), with the same three-way. Whether the row is enabled and the
+   * tenant's plan may use it is decided in the store, under the record's own tenant.
+   */
+  const platformModelRef = parseModelReference(input.platformModelRef);
+  if (platformModelRef === INVALID_REFERENCE) {
+    return { ok: false, error: "请从平台体验模型中选择一个模型。" };
+  }
+  // One model per coworker: naming both is a form that does not know which one it meant.
+  if (modelRef && platformModelRef) {
+    return {
+      ok: false,
+      error: "一个员工只能绑定一个模型：请在模型库与平台体验模型之间二选一。",
+    };
   }
 
   return {
@@ -166,11 +173,34 @@ export function parseAgentInput(
       endpoint,
       auth,
       modelRef,
+      platformModelRef,
       // Only sent when the form knew about it, so a save that never touched the persona boxes leaves
       // the stored one where it is.
       ...(persona === undefined ? {} : { persona }),
     },
   };
+}
+
+const INVALID_REFERENCE = Symbol("invalid model reference");
+
+/**
+ * A model id from the form: absent leaves the binding alone, null or empty clears it, a uuid binds.
+ * Anything else is refused rather than guessed at.
+ */
+function parseModelReference(
+  value: unknown,
+): string | null | undefined | typeof INVALID_REFERENCE {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  ) {
+    return value;
+  }
+  return INVALID_REFERENCE;
 }
 
 /**
@@ -962,6 +992,8 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     endpoint: agent.endpoint,
     // Which entry of this person's model library the coworker answers on. Null is the deployment's.
     modelRef: agent.modelRef,
+    // Which platform pool model it answers on instead, if any. Never both.
+    platformModelRef: agent.platformModelRef,
     persona: agent.persona,
     hasAuth: agent.hasAuth,
     // Whether one exists, never what it is.
@@ -996,6 +1028,12 @@ function mapStoreError(context: Context, error: unknown): Response {
     return context.json({ error: error.message }, 400);
   }
   if (error instanceof ModelBindingNotApplicableError) {
+    return context.json({ error: error.message }, 400);
+  }
+  if (error instanceof PlatformModelNotAvailableError) {
+    return context.json({ error: error.message }, 400);
+  }
+  if (error instanceof ModelBindingConflictError) {
     return context.json({ error: error.message }, 400);
   }
   if (error instanceof AgentAssignedError) {

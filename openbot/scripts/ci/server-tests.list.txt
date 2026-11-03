@@ -229,6 +229,7 @@ tests/pipeline-run.test.ts
 tests/pipeline-turn-channel.test.ts
 tests/plan-change-audit.integration.test.ts
 tests/plan-model.test.ts
+tests/platform-model-pool-routes.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
@@ -265,6 +266,7 @@ tests/provider-oauth.test.ts
 tests/qoderwake-package.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
+tests/quota-token-usage.integration.test.ts
 tests/quota.test.ts
 tests/recovery-ap2-parent-schema-reconcile.test.ts
 tests/recovery-approval-direct-execution-domains.test.ts
