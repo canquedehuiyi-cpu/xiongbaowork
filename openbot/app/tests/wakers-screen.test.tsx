@@ -14,6 +14,11 @@ import userEvent from "@testing-library/user-event";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { agentKeys } from "@/lib/agents/queries";
 import {
+  type BotAttention,
+  botLifecycleKeys,
+} from "@/lib/bot-lifecycle/queries";
+import { deviceKeys } from "@/lib/devices/queries";
+import {
   runningTasksQueryOptions,
   type WakerGroup,
   wakerGroupKeys,
@@ -90,6 +95,18 @@ const parked: AgentProfile = {
   hidden: true,
 };
 
+/** One row of `GET /api/bots/attention`, which names every coworker the person paused. */
+const attentionRow = (agent: AgentProfile, paused: boolean): BotAttention => ({
+  agentId: agent.id,
+  name: agent.name,
+  questions: 0,
+  approvals: 0,
+  handoffs: 0,
+  unread: 0,
+  paused,
+  notify: "all",
+});
+
 const crew: WakerGroup = {
   id: "crew-1",
   name: "编程小组",
@@ -106,6 +123,7 @@ function seed(
   agents: AgentProfile[],
   crews: WakerGroup[],
   runningIds: string[],
+  pausedIds: string[] = [],
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -124,6 +142,13 @@ function seed(
     agents.filter((agent) => agent.hidden),
   );
   queryClient.setQueryData(wakerGroupKeys.list(), crews);
+  // 暂停 is bot_lifecycle paused (spec D4), which the attention read answers -- not `hidden`.
+  queryClient.setQueryData(
+    botLifecycleKeys.attention,
+    agents
+      .filter((agent) => pausedIds.includes(agent.id))
+      .map((agent) => attentionRow(agent, true)),
+  );
   queryClient.setQueryData(
     runningTasksQueryOptions().queryKey,
     runningIds.map((id) => ({
@@ -145,11 +170,24 @@ function draw() {
         getParentRoute: () => root,
         path: "/wakers",
       } as never),
-      // The card's "Open" is a deep link into the roster's editor, and a Link needs its address to
-      // resolve. The generator's options are wider than this literal; the tree only needs the path.
+      // The header's 新建员工 is a deep link into the roster's create dialog, and a Link needs its
+      // address to resolve. The generator's options are wider than this literal; the tree only needs
+      // the path.
       createRoute({
         getParentRoute: () => root,
         path: "/agents",
+        component: () => null,
+      } as never),
+      // Spec D7: each card links to the coworker's own assembly screen.
+      createRoute({
+        getParentRoute: () => root,
+        path: "/assemble/$agentId",
+        component: () => null,
+      } as never),
+      // Spec D5: each card opens the coworker's own detail page.
+      createRoute({
+        getParentRoute: () => root,
+        path: "/wakers/$agentId",
         component: () => null,
       } as never),
     ]),
@@ -161,27 +199,248 @@ function draw() {
   );
 }
 
-test("the status line says what the board says, and the roster's own switch for the rest", async () => {
-  queryClientForDraw = seed([base, reviewer, parked], [crew], ["agent-1"]);
+/** The status badge each card wears, by coworker name. */
+function badgeOf(screen: ReturnType<typeof draw>, name: string) {
+  const title = screen.getByText(name).closest("[data-slot=item-title]");
+  return title?.querySelector("[data-status]")?.getAttribute("data-status");
+}
+
+/** A fetch fake that records every call and answers each read with its own envelope. */
+function serve(answer: (path: string, method: string) => unknown) {
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const method = init?.method ?? "GET";
+    calls.push({
+      method,
+      path: String(input),
+      body: init?.body ? JSON.parse(String(init.body)) : null,
+    });
+    return Response.json(answer(String(input), method));
+  }) as typeof fetch;
+}
+
+/*
+ * SEMANTICS CORRECTION. This test used to assert that a hidden coworker reads 暂停 ("Paused is the
+ * roster's hidden flag"). Spec D4 defines 暂停 as bot_lifecycle paused, and `hidden` only decides
+ * whether a coworker is listed. The assertion is replaced, not dropped: the stricter version below
+ * pins that a hidden-but-running coworker reads 在线 with a separate 已隐藏 tag, and that 暂停 comes
+ * from `GET /api/bots/attention` alone.
+ */
+test("the status line says what the board says, and 暂停 is the bot lifecycle, not the hidden flag", async () => {
+  // Night Auditor is hidden AND running; Code Reviewer is listed AND paused.
+  queryClientForDraw = seed(
+    [base, reviewer, qa, parked],
+    [crew],
+    ["agent-1", "agent-4"],
+    ["agent-2"],
+  );
   const screen = draw();
 
   await waitFor(() =>
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
-  // Working because a task card is running now, not because a status column said so.
+  // Working because a task card is running now, not because a status column said so; the crew it
+  // belongs to is named on the card.
   expect(screen.getByText("正在处理一个任务。 · 编程小组")).toBeTruthy();
-  // The crew it belongs to is named on the card, which is what makes a group filter worth having.
-  expect(screen.getByText("当前没有运行中的任务。 · 编程小组")).toBeTruthy();
-  // Paused is the roster's hidden flag — the only pause this deployment has.
-  expect(screen.getByText("在花名册里已停用。")).toBeTruthy();
+  // Paused because the person paused it, and the card says who did.
+  expect(screen.getByText(/你已暂停它/)).toBeTruthy();
+  expect(screen.getByText("当前没有运行中的任务。")).toBeTruthy();
+
+  expect(badgeOf(screen, "Backend Engineer")).toBe("working");
+  expect(badgeOf(screen, "Code Reviewer")).toBe("paused");
+  expect(badgeOf(screen, "QA Engineer")).toBe("resting");
+  // Hidden is not paused: it runs, so it is 在线, and wears its own 已隐藏 tag.
+  expect(badgeOf(screen, "Night Auditor")).toBe("working");
+  const hiddenTags = screen.getAllByText("已隐藏");
+  expect(hiddenTags).toHaveLength(1);
+  expect(
+    hiddenTags[0]?.closest("[data-slot=item-title]")?.textContent,
+  ).toContain("Night Auditor");
+
   // Spec D1/D4: one vocabulary on the card and on the filter -- 在线 / 休息 / 暂停 (CONTEXT.md).
-  expect(screen.getByRole("button", { name: "在线 (1)" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "暂停 (1)" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "全部 (4)" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "在线 (2)" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "休息 (1)" })).toBeTruthy();
-  // And each card wears its own word, not only a sentence a person has to read to the end of.
-  expect(screen.getByText("在线")).toBeTruthy();
-  expect(screen.getByText("休息")).toBeTruthy();
-  expect(screen.getByText("暂停")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "暂停 (1)" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "状态未知 (0)" })).toBeTruthy();
+});
+
+test("each card shows its avatar, its role, and links to its assembly and detail screens; the header creates one", async () => {
+  queryClientForDraw = seed([base, reviewer], [], []);
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+
+  // Spec D1: the avatar is announced once, by the coworker's name.
+  expect(screen.getByRole("img", { name: "Backend Engineer" })).toBeTruthy();
+  expect(screen.getByRole("img", { name: "Code Reviewer" })).toBeTruthy();
+  expect(screen.getAllByText("Writes the migration")).toHaveLength(2);
+
+  // Spec D7: one tap from the card to the coworker's own assembly screen.
+  const assemble = screen
+    .getAllByText("装配")
+    .map((node) => node.closest("a")?.getAttribute("href"));
+  expect(assemble).toEqual(["/assemble/agent-1", "/assemble/agent-2"]);
+
+  // Spec D5: 打开 is the coworker's detail page, not the roster's editor dialog.
+  const open = screen
+    .getAllByText("打开")
+    .map((node) => node.closest("a")?.getAttribute("href"));
+  expect(open).toEqual(["/wakers/agent-1", "/wakers/agent-2"]);
+
+  // Spec D2: creating a coworker is the roster's own create dialog, deep-linked.
+  const create = screen.getByText("新建员工").closest("a");
+  expect(create?.getAttribute("href")).toBe("/agents?new=true");
+});
+
+test("the status filter narrows the wall to the coworkers in that state", async () => {
+  queryClientForDraw = seed([base, reviewer, qa], [], ["agent-1"], ["agent-2"]);
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "暂停 (1)" }));
+  expect(screen.getByText("Code Reviewer")).toBeTruthy();
+  expect(screen.queryByText("Backend Engineer")).toBeNull();
+  expect(screen.queryByText("QA Engineer")).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "在线 (1)" }));
+  expect(screen.getByText("Backend Engineer")).toBeTruthy();
+  expect(screen.queryByText("Code Reviewer")).toBeNull();
+
+  // An empty filter says nothing matches, not that the workspace is empty.
+  await userEvent.click(screen.getByRole("button", { name: "状态未知 (0)" }));
+  expect(screen.getByText("没有符合这个筛选条件的员工。")).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "全部 (3)" }));
+  expect(screen.getByText("QA Engineer")).toBeTruthy();
+});
+
+test("pause and resume go to the bot lifecycle, and the card follows the answer", async () => {
+  queryClientForDraw = seed([base, reviewer], [], [], ["agent-2"]);
+  let pausedNow = ["agent-2"];
+  serve((path, method) => {
+    if (method === "POST") {
+      const [, , , id, verb] = path.split("/");
+      pausedNow =
+        verb === "pause"
+          ? [...pausedNow, String(id)]
+          : pausedNow.filter((agentId) => agentId !== id);
+      return {
+        lifecycle: {
+          agentId: id,
+          paused: verb === "pause",
+          pausedAt: null,
+          notify: "all",
+        },
+      };
+    }
+    if (path.includes("/api/bots/attention"))
+      return {
+        bots: [base, reviewer]
+          .filter((agent) => pausedNow.includes(agent.id))
+          .map((agent) => attentionRow(agent, true)),
+      };
+    return {};
+  });
+
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  // Each card offers the one action that is its next step.
+  expect(
+    screen.getByRole("button", { name: "暂停 Backend Engineer" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "恢复 Code Reviewer" }),
+  ).toBeTruthy();
+
+  await userEvent.click(
+    screen.getByRole("button", { name: "暂停 Backend Engineer" }),
+  );
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  expect(writes()[0]?.method).toBe("POST");
+  expect(writes()[0]?.path).toBe("/api/bots/agent-1/pause");
+  // The attention read is refetched, so the badge moves with the server, not with a guess.
+  await waitFor(() =>
+    expect(badgeOf(screen, "Backend Engineer")).toBe("paused"),
+  );
+  expect(
+    screen.getByRole("button", { name: "恢复 Backend Engineer" }),
+  ).toBeTruthy();
+
+  await userEvent.click(
+    screen.getByRole("button", { name: "恢复 Code Reviewer" }),
+  );
+  await waitFor(() => expect(writes()).toHaveLength(2));
+  expect(writes()[1]?.method).toBe("POST");
+  expect(writes()[1]?.path).toBe("/api/bots/agent-2/resume");
+  await waitFor(() => expect(badgeOf(screen, "Code Reviewer")).toBe("resting"));
+});
+
+test("a pause the server refuses is said on the screen, and the card keeps its state", async () => {
+  queryClientForDraw = seed([base], [], []);
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const method = init?.method ?? "GET";
+    calls.push({ method, path: String(input), body: null });
+    return method === "POST"
+      ? Response.json({ error: "这个员工你够不到。" }, { status: 404 })
+      : Response.json({ bots: [] });
+  }) as typeof fetch;
+
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "暂停 Backend Engineer" }),
+  );
+  expect(
+    await screen.findByText("没能暂停「Backend Engineer」：这个员工你够不到。"),
+  ).toBeTruthy();
+  expect(writes()[0]?.path).toBe("/api/bots/agent-1/pause");
+  expect(badgeOf(screen, "Backend Engineer")).toBe("resting");
+});
+
+test("a pause read that fails is said as 状态未知, and no pause button guesses", async () => {
+  globalThis.fetch = (async (
+    _input: string | URL | Request,
+    _init?: RequestInit,
+  ): Promise<Response> =>
+    Response.json({ error: "nope" }, { status: 500 })) as typeof fetch;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  queryClient.setQueryData(agentKeys.list(false), [base, reviewer]);
+  queryClient.setQueryData(agentKeys.list(true), []);
+  queryClient.setQueryData(wakerGroupKeys.list(), []);
+  // The board answers -- agent-1 is running -- but the attention key is left to fail.
+  queryClient.setQueryData(runningTasksQueryOptions().queryKey, [
+    { id: "task-1", executorAgentId: "agent-1", status: "running" },
+  ]);
+  queryClientForDraw = queryClient;
+
+  const screen = draw();
+  await waitFor(() => expect(screen.getByText(/暂停状态读不到/)).toBeTruthy());
+  // A running coworker could still be one the person paused, so even it is unknown.
+  expect(badgeOf(screen, "Backend Engineer")).toBe("unknown");
+  expect(badgeOf(screen, "Code Reviewer")).toBe("unknown");
+  expect(screen.getAllByText(/读不到它是否被暂停/)).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "状态未知 (2)" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "暂停 (0)" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /^暂停 Backend/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^恢复 / })).toBeNull();
+  // The wall still renders, avatar and assembly link included.
+  expect(screen.getByRole("img", { name: "Backend Engineer" })).toBeTruthy();
+  expect(screen.getAllByText("装配")).toHaveLength(2);
 });
 
 test("the groups tab edits a crew by sending the whole roster", async () => {
@@ -316,6 +575,10 @@ test("a board that cannot be read is said as unknown, not as idle", async () => 
   queryClient.setQueryData(agentKeys.list(false), [base, reviewer]);
   queryClient.setQueryData(agentKeys.list(true), [parked]);
   queryClient.setQueryData(wakerGroupKeys.list(), [crew]);
+  // The pause read answers: Night Auditor is paused, which the failed board read cannot undo.
+  queryClient.setQueryData(botLifecycleKeys.attention, [
+    attentionRow(parked, true),
+  ]);
   queryClientForDraw = queryClient;
 
   const screen = draw();
@@ -326,8 +589,8 @@ test("a board that cannot be read is said as unknown, not as idle", async () => 
    * The banner alone was never the answer, and this is why: a page-wide line explains the screen,
    * while the cards go on claiming "当前没有运行中的任务。" for every coworker — a statement the
    * screen had just admitted it could not see. So the cards themselves have to say they do not know,
-   * and none of them may keep asserting the one thing the failed read removed. A switched-off
-   * coworker is excluded on purpose: that answer comes from the roster, not from the board.
+   * and none of them may keep asserting the one thing the failed read removed. A paused coworker is
+   * excluded on purpose: that answer comes from the bot lifecycle, not from the board.
    */
   expect(
     screen.getAllByText(/现在有没有在跑不确定/).length,
@@ -336,8 +599,82 @@ test("a board that cannot be read is said as unknown, not as idle", async () => 
   // The badge says the same: unknown, never dressed up as 休息. The paused one keeps its own word.
   expect(screen.getAllByText("状态未知").length).toBeGreaterThanOrEqual(2);
   expect(screen.queryByText("休息")).toBeNull();
-  expect(screen.getByText("暂停")).toBeTruthy();
+  expect(badgeOf(screen, "Backend Engineer")).toBe("unknown");
+  expect(badgeOf(screen, "Code Reviewer")).toBe("unknown");
+  expect(badgeOf(screen, "Night Auditor")).toBe("paused");
   // The roster still renders: not knowing who is busy is not the same as showing nothing.
   expect(screen.getByText("Backend Engineer")).toBeTruthy();
   expect(screen.getByText("Night Auditor")).toBeTruthy();
+});
+
+/*
+ * Spec F4: a coworker card says whether the machine its work runs on is online. A running task bound
+ * to a machine names that machine (the task's own deviceId); without one there is no binding to
+ * read, so the card says how many of the owner's machines are online, and says that is what it is.
+ * Not the owner's coworker, or nobody paired: no line at all.
+ */
+test("each card says whether the machine its work runs on is online", async () => {
+  const shared: AgentProfile = {
+    ...base,
+    id: "agent-9",
+    name: "Shared Helper",
+    mine: false,
+  };
+  queryClientForDraw = seed([base, reviewer, shared], [], ["agent-1"]);
+  queryClientForDraw.setQueryData(runningTasksQueryOptions().queryKey, [
+    {
+      id: "task-agent-1",
+      executorAgentId: "agent-1",
+      status: "running",
+      deviceId: "d-2",
+    },
+  ]);
+  const machine = (deviceId: string, name: string, online: boolean) => ({
+    id: `row-${deviceId}`,
+    deviceId,
+    name,
+    platform: "macos",
+    lastSeenAt: new Date().toISOString(),
+    online,
+  });
+  queryClientForDraw.setQueryData(deviceKeys.list(), [
+    machine("d-1", "studio", true),
+    machine("d-2", "laptop", false),
+  ]);
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  const lineOf = (name: string) =>
+    screen
+      .getByText(name)
+      .closest("[data-slot=item]")
+      ?.querySelector("[data-device-line]");
+
+  // Its running task is bound to the laptop, which is away.
+  const bound = lineOf("Backend Engineer");
+  expect(bound?.getAttribute("data-device-line")).toBe("task");
+  expect(bound?.getAttribute("data-device-online")).toBe("false");
+  expect(bound?.textContent).toBe("设备：laptop · 离线");
+
+  // Nothing running, so no binding: the owner's machines, said as such.
+  const owner = lineOf("Code Reviewer");
+  expect(owner?.getAttribute("data-device-line")).toBe("owner");
+  expect(owner?.getAttribute("data-device-online")).toBe("true");
+  expect(owner?.textContent).toBe(
+    "你的设备：1/2 台在线（没有进行中的任务绑定到具体设备）",
+  );
+
+  // Somebody else's coworker would not run on this person's machines: no line.
+  expect(lineOf("Shared Helper")).toBeNull();
+});
+
+test("with no paired machine, no card has a device line", async () => {
+  queryClientForDraw = seed([base], [], []);
+  queryClientForDraw.setQueryData(deviceKeys.list(), []);
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  expect(screen.container.querySelector("[data-device-line]")).toBeNull();
 });

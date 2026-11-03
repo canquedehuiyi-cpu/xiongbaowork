@@ -9,7 +9,10 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { attachmentModality } from "@/components/channels/chat-messages";
-import { toAgentOptions } from "@/components/channels/composer";
+import {
+  toGroupOptions,
+  withGroupMembers,
+} from "@/components/channels/composer";
 import { ConversationView } from "@/components/channels/conversation-view";
 import {
   seedMessage,
@@ -20,6 +23,11 @@ import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { attachmentUrl } from "@/lib/channels/attachments";
+import {
+  dispatchedNotice,
+  mentionRoster,
+  sendChannelDraft,
+} from "@/lib/channels/dispatch";
 import {
   recordChannelActivityMutationOptions,
   setChannelBusy,
@@ -34,9 +42,10 @@ import { observeApprovalAgent } from "@/lib/copilot/approval-context";
 import { ConversationProvider } from "@/lib/copilot/conversation";
 import { afterMs, joinWithin } from "@/lib/copilot/join-thread";
 import { repairUnansweredToolCalls } from "@/lib/copilot/repair-history";
-import { stoppedReason } from "@/lib/copilot/stopped-turn";
+import { runErrorReason, stoppedReason } from "@/lib/copilot/stopped-turn";
 import { readThreadMessages } from "@/lib/copilot/thread-messages";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
+import { reportIfQuotaError } from "@/lib/quota/guidance";
 import {
   askChannelAgent,
   messageText,
@@ -51,6 +60,7 @@ import {
   withVoiceChats,
 } from "@/lib/voice/archive";
 import { useVoiceCall } from "@/lib/voice/use-voice-call";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
 import { newId } from "../../lib/new-id";
 
@@ -253,6 +263,9 @@ export function ChannelChat({
   const { copilotkit } = useCopilotKit();
   // Mentions are scoped to the channel's permitted agents.
   const { data: agentProfiles } = useQuery(agentListQueryOptions());
+  // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
+  const { data: wakerGroups } = useQuery(wakerGroupsQueryOptions());
+  const roster = mentionRoster(agentProfiles, channel.agentIds);
   const channelAgentId = `channel:${channel.id}`;
   const { agent, isReady } = useAgent({
     agentId: channelAgentId,
@@ -523,6 +536,15 @@ export function ChannelChat({
 
   // Run failures arrive as events and are reported only for turns started in this mount.
   const [runError, setRunError] = useState<string | null>(null);
+  /**
+   * What became of the last `@` dispatch from this conversation (spec B2): accepted, with where the
+   * answer will appear, or refused in the server's own words. The reply itself arrives through the
+   * authored-activity refresh below, like a relayed handoff.
+   */
+  const [dispatchStatus, setDispatchStatus] = useState<{
+    tone: "status" | "alert";
+    text: string;
+  } | null>(null);
   const awaitingReply = useRef(false);
   /**
    * WHY THIS TURN ENDED WITHOUT AN ANSWER, KEPT WHERE `deliver` CAN STILL SEE IT — because the one
@@ -813,7 +835,8 @@ export function ChannelChat({
     const subscription = agent.subscribe?.({
       // Both surfaces fall back to the same sentence, from the same place, so a person who uses
       // both is not told two different things about the same silence.
-      onRunErrorEvent: ({ event }) => fail(stoppedReason(event?.message)),
+      // A quota refusal also opens the guidance dialog (story K4); see `runErrorReason`.
+      onRunErrorEvent: ({ event }) => fail(runErrorReason(event)),
       onRunFailed: ({ error }) => fail(stoppedReason(error)),
       onRunFinishedEvent: () => {
         const wasOurs = awaitingReply.current;
@@ -931,11 +954,15 @@ export function ChannelChat({
                   }
                 : undefined
             }
-            agents={
-              channel.agentIds.length > 1
-                ? toAgentOptions(agentProfiles, channel.agentIds)
-                : []
-            }
+            /*
+             * In a 1:1 conversation `@` names any coworker this person can see: naming the pinned one is
+             * an ordinary message, naming anybody else hands them the work (see `onSubmit`). A Group's
+             * members are listed under it and picked as the same coworker, so they take the same path.
+             */
+            agents={withGroupMembers(
+              roster,
+              toGroupOptions(wakerGroups, roster),
+            )}
             channelId={channel.id}
             /*
              * THE TURN, not the run. `say` waits for the runtime agent and the join before a run starts,
@@ -975,6 +1002,18 @@ export function ChannelChat({
                     语音对话没能加载，请刷新后重试。
                   </p>
                 )}
+                {dispatchStatus && (
+                  <p
+                    className={
+                      dispatchStatus.tone === "alert"
+                        ? "pb-2 text-sm text-destructive"
+                        : "pb-2 text-sm text-muted-foreground"
+                    }
+                    role={dispatchStatus.tone}
+                  >
+                    {dispatchStatus.text}
+                  </p>
+                )}
                 {voiceContextNotice && (
                   <p
                     className="pb-2 text-sm text-muted-foreground"
@@ -1002,10 +1041,10 @@ export function ChannelChat({
               </>
             }
             onSubmit={async (draft) => {
-              // `draft.agentId` is not read here, and the composer above no longer offers a way to
-              // set one: this channel is pinned to one `runtimeAgentId` for the life of its thread, so
-              // honouring a per-message mention would be a change to that binding, not to the composer.
-              // A conversation with more than one coworker is the group screen, which does route on it.
+              // `draft.agentId` never re-pins this channel: it is bound to one `runtimeAgentId` for the
+              // life of its thread. A mention of that coworker is an ordinary message; a mention of
+              // anybody else is handed to them through `/dispatch` (spec B2), and their answer lands in
+              // this thread. A conversation with more than one coworker is the group screen.
               //
               // `commandIds` are the `/` chips that survived into the send, in the order they were
               // typed. Resolved against the same list the menu was built from, so a chip left over from
@@ -1020,7 +1059,45 @@ export function ChannelChat({
                   Boolean(instruction),
                 );
 
-              await say(draft.text, skillInstructions, draft.attachments);
+              setDispatchStatus(null);
+              try {
+                const sent = await sendChannelDraft(draft, {
+                  channel,
+                  pinnedAgentId: runtimeAgentId,
+                  newId,
+                  say: () =>
+                    say(draft.text, skillInstructions, draft.attachments),
+                });
+                if (sent.kind === "dispatched") {
+                  const name =
+                    agentProfiles?.find(
+                      (profile) => profile.id === sent.agentId,
+                    )?.name ?? "这位员工";
+                  setDispatchStatus({
+                    tone: "status",
+                    text: dispatchedNotice(name),
+                  });
+                }
+              } catch (error) {
+                // A dispatch refused for quota is a 402 from `/dispatch`: the same guidance (K4).
+                reportIfQuotaError(error);
+                // Only a refused dispatch is said here; a failed turn has its own line (`runError`).
+                if (
+                  draft.agentId !== null &&
+                  draft.agentId !== runtimeAgentId &&
+                  channel.agentIds.length === 1
+                ) {
+                  setDispatchStatus({
+                    tone: "alert",
+                    text:
+                      error instanceof Error
+                        ? error.message
+                        : "没能把这条消息派给这位员工。",
+                  });
+                }
+                // Rethrown so the composer gives the words back.
+                throw error;
+              }
             }}
             /**
              * Stop through the core so the abort signal reaches frontend tools; `say` repairs any

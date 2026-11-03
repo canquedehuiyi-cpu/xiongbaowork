@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, gte, inArray, like, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNull,
+  like,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
@@ -10,11 +22,23 @@ import {
   groupTaskRuns,
   intelligenceChannelMappings,
   modelUsage,
+  taskSource,
   tasks,
+  wakerFlows,
+  wakerGroupMembers,
 } from "../db/schema";
+import { taskArchives } from "../db/schema/task-archives";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
+
+/**
+ * What may be asked of `tasks.source`, and nothing else. The column is a Postgres enum, so a value
+ * outside it would reach the database as `22P02` and come back as a 500 on input anyone can type.
+ */
+type TaskSource = (typeof taskSource.enumValues)[number];
+const isTaskSource = (value: string): value is TaskSource =>
+  (taskSource.enumValues as readonly string[]).includes(value);
 
 const PERIODS: Record<string, number> = {
   week: 7 * 86400000,
@@ -26,11 +50,12 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Where a card's "打开" lands, in the three shapes the board's screens take: a one-coworker
- * conversation, a group conversation, or a crew run.
+ * Where a card's "打开" lands, in the four shapes the board's screens take: a one-coworker
+ * conversation, a group conversation, a crew run, or the WakerFlow a crew run was started from
+ * (spec D10, story WF4: a Flow's run is reviewed from the Flow, where its inputs, steps and 停止 are).
  */
 export type TaskOpenTarget = {
-  kind: "channel" | "group" | "pipeline";
+  kind: "channel" | "group" | "pipeline" | "wakerflow";
   id: string;
 };
 
@@ -197,18 +222,36 @@ async function openTargetsFor(
         .filter((id) => id !== ""),
     ),
   ];
-  const runsAboard = new Set<string>();
+  /*
+   * Which of those runs are this workspace's, and which WakerFlow started each one. `flow_id` is read
+   * in the same tenant-scoped query as the run itself, so a Flow id is only ever the run row's own and
+   * never something a card claimed: the card carries a run reference, nothing more.
+   *
+   * The Flow is joined, not just named: only a Flow this workspace can still open (its own, a plan
+   * Flow, not deleted) is a target. A deleted Flow's page answers 404, so its runs' cards keep opening
+   * the run's pipeline panel, which still reads the run itself.
+   */
+  const runsAboard = new Map<string, string | null>();
   if (runIds.length > 0) {
     for (const row of await database
-      .select({ id: groupTaskRuns.id })
+      .select({ id: groupTaskRuns.id, flowId: wakerFlows.id })
       .from(groupTaskRuns)
+      .leftJoin(
+        wakerFlows,
+        and(
+          eq(wakerFlows.id, groupTaskRuns.flowId),
+          eq(wakerFlows.tenantId, tenantId),
+          eq(wakerFlows.definitionMode, "json-plan-v1"),
+          isNull(wakerFlows.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(groupTaskRuns.tenantId, tenantId),
           inArray(groupTaskRuns.id, runIds),
         ),
       )) {
-      runsAboard.add(row.id);
+      runsAboard.set(row.id, row.flowId ?? null);
     }
   }
 
@@ -217,9 +260,18 @@ async function openTargetsFor(
       const runId = row.parentTaskId
         ? (parentRunRef.get(row.parentTaskId) ?? null)
         : (row.runRef ?? null);
+      if (!runId || !runsAboard.has(runId)) {
+        targets.set(row.id, null);
+        continue;
+      }
+      // A Flow's run opens the Flow; a crew run started from the pipelines screen (or whose Flow is
+      // gone) keeps its panel.
+      const flowId = runsAboard.get(runId) ?? null;
       targets.set(
         row.id,
-        runId && runsAboard.has(runId) ? { kind: "pipeline", id: runId } : null,
+        flowId
+          ? { kind: "wakerflow", id: flowId }
+          : { kind: "pipeline", id: runId },
       );
       continue;
     }
@@ -301,8 +353,37 @@ export function createTaskRoutes(
      * has.
      */
     const executors = context.req.query("executors");
+    /*
+     * Spec A4's Group choice, by the crew's own id. Its roster alone is not the crew's work: a crew
+     * run's parent card names no coworker (`tasks.executor_agent_id` is null on it, see the schema), so
+     * an `executors=` roster filter drops exactly the card that stands for the whole run. A group is
+     * therefore its members' cards, the parent card of every run of this crew, and those runs' step
+     * cards (a step whose coworker has since left the crew is still part of that run). Read under the
+     * caller's own scope like the rest; a malformed id names no crew and matches nothing.
+     */
+    const group = context.req.query("group");
     if (status) conditions.push(eq(tasks.status, status as never));
-    if (source) conditions.push(eq(tasks.source, source as never));
+    /*
+     * Spec A4/C2: 触发方式 is one choice on the screen and more than one value here — 自主工作 is a
+     * routine OR a responsibility firing, and that pair is also the board's 无人值守 filter. So the
+     * parameter is a comma list. Values the enum does not know are dropped rather than sent on, and a
+     * list left with nothing in it (`?source=`, or only unknown words) matches nothing — the same rule
+     * `executors=` keeps below: a filter that was asked for and names nothing is an answer, not the
+     * absence of a filter.
+     */
+    if (source !== undefined) {
+      const sources = [
+        ...new Set(
+          source
+            .split(",")
+            .map((value) => value.trim())
+            .filter(isTaskSource),
+        ),
+      ];
+      conditions.push(
+        sources.length > 0 ? inArray(tasks.source, sources) : sql`false`,
+      );
+    }
     if (executor) conditions.push(eq(tasks.executorAgentId, executor));
     // `!== undefined` rather than truthiness: `?executors=` with nothing after it is a crew that has
     // nobody in it, which is an answer — no work — and not the same as never being asked.
@@ -311,6 +392,29 @@ export function createTaskRoutes(
       conditions.push(
         ids.length > 0 ? inArray(tasks.executorAgentId, ids) : sql`false`,
       );
+    }
+    if (group !== undefined) {
+      if (!UUID_PATTERN.test(group)) {
+        conditions.push(sql`false`);
+      } else {
+        const runParents = database
+          .select({ id: groupTaskRuns.parentTaskId })
+          .from(groupTaskRuns)
+          .where(eq(groupTaskRuns.groupId, group));
+        conditions.push(
+          or(
+            inArray(
+              tasks.executorAgentId,
+              database
+                .select({ id: wakerGroupMembers.agentId })
+                .from(wakerGroupMembers)
+                .where(eq(wakerGroupMembers.groupId, group)),
+            ),
+            inArray(tasks.id, runParents),
+            inArray(tasks.parentTaskId, runParents),
+          ),
+        );
+      }
     }
     if (search) conditions.push(like(tasks.title, `%${search}%`));
     if (deviceId) conditions.push(eq(tasks.deviceId, deviceId));
@@ -322,9 +426,27 @@ export function createTaskRoutes(
 
   routes.get("/", requireUser, async (context) => {
     const where = filters(context);
+    /*
+     * `archivedAt` rides beside each card (spec A5/A7): a failure somebody filed away still reads
+     * `failed`, and this stamp is what moves it from 需要关注 to 已结束 on the screen. Joined on the
+     * tenant too, so a stamp can only ever describe a card of the same workspace -- and only while
+     * it is current: the projector writes the stamp and the card's `updatedAt` at one instant, so a
+     * card that moved again since (a re-run that failed afresh) no longer counts as filed away.
+     */
     const rows = await database
-      .select()
+      .select({
+        ...getTableColumns(tasks),
+        archivedAt: taskArchives.archivedAt,
+      })
       .from(tasks)
+      .leftJoin(
+        taskArchives,
+        and(
+          eq(taskArchives.taskId, tasks.id),
+          eq(taskArchives.tenantId, tasks.tenantId),
+          gte(taskArchives.archivedAt, tasks.updatedAt),
+        ),
+      )
       .where(where)
       .orderBy(desc(tasks.updatedAt))
       .limit(200);
@@ -406,7 +528,11 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) {
       return context.json({ error: "No such task here." }, 404);
     }
-    const ok = await projector.archived({ tenantId, taskId });
+    const ok = await projector.archived({
+      tenantId,
+      taskId,
+      archivedBy: context.var.actor.id,
+    });
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Cannot archive from this state." }, 409);

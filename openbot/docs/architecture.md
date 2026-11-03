@@ -320,7 +320,7 @@ This narrows the offer. It is not a boundary, and it never substitutes for one. 
 
 ## Tenant package and knowledge
 
-`TENANT_PACKAGE_DIR` points at the tenant package. The default is `../examples/fintech`.
+`TENANT_PACKAGE_DIR` points at the tenant package. The default is `../examples/qoderwake`, the 熊宝数字员工 package; `examples/fintech` is the upstream example and is loaded only when named.
 
 Required package files:
 

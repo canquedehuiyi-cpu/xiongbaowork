@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   PageRows,
   PageSection,
@@ -14,10 +15,19 @@ import {
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
+import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
+import {
+  ownerPresence,
+  presenceOf,
+  presenceWord,
+} from "@/lib/devices/presence";
+import { devicesQueryOptions } from "@/lib/devices/queries";
 import {
   createCrewMutationOptions,
   retireCrewMutationOptions,
@@ -36,38 +46,38 @@ export const Route = createFileRoute("/_authed/_app/wakers")({
 /**
  * Three states, each read from a fact that already exists — never a stored status column.
  *
- * `working` is a task card running right now. `paused` is the roster's own `hidden` flag: the
- * coworker is switched off, which is the only kind of pause this deployment has, so the screen says
- * "paused" about that and not about a run somebody stopped. Everything else rests.
- */
-/**
- * The fourth one is not a status, it is this screen admitting it is blind.
+ * `working` is a task card running right now. `paused` is the bot_lifecycle pause (spec D4): the
+ * signed-in person switched this coworker off from `/api/bots/:id/pause`, which the attention read
+ * (`GET /api/bots/attention`) reports per coworker. Everything else rests.
  *
- * `running` says whether a coworker has a card moving on the board right now, and when that read
- * fails the answer is not `resting` — it is unknown, per card. A page-wide banner over three-state
- * cards let each row keep claiming something ("当前没有运行中的任务") that the screen had just
- * said it could not see, and the banner scrolls away while the cards do not.
+ * `paused` used to be read off the roster's `hidden` flag. That flag only decides whether a
+ * coworker is listed; a hidden coworker still runs, and a paused one can still be listed, so the
+ * two are shown apart: hidden is its own 已隐藏 tag beside whichever of the states is true.
  *
- * `paused` still wins: that comes from the roster's own `hidden` flag, a fact this screen holds
- * independently of the failed read. A switched-off coworker is switched off whether or not the
- * board answers.
+ * The fourth one is not a status, it is this screen admitting it is blind. When the pause read
+ * fails (or has not answered yet) the screen cannot tell 暂停 from anything else, and when the board
+ * read fails it cannot tell 在线 from 休息; either way each card says 状态未知 rather than guessing.
+ * A coworker the pause read does name as paused stays paused even when the board is unreadable.
  */
 type WakerStatus = "working" | "resting" | "paused" | "unknown";
 
 function statusFor(
   agent: AgentProfile,
   running: Set<string>,
-  statusUnknown = false,
+  pausedIds: Set<string> | null,
+  runningUnknown: boolean,
 ): WakerStatus {
-  if (agent.hidden) return "paused";
-  if (statusUnknown) return "unknown";
+  if (pausedIds === null) return "unknown";
+  if (pausedIds.has(agent.id)) return "paused";
+  if (runningUnknown) return "unknown";
   return running.has(agent.id) ? "working" : "resting";
 }
 
 /**
  * Spec D1's three words, on the card itself and on the filter that sorts by them (D4) — one
  * vocabulary for both, the one CONTEXT.md fixes: 在线 / 休息 / 暂停. The fourth is the screen saying
- * it could not read the board, and it looks nothing like 休息 on purpose: a failed read is not rest.
+ * it could not read the board or the pause, and it looks nothing like 休息 on purpose: a failed read
+ * is not rest.
  */
 export const STATUS_WORD: Record<WakerStatus, string> = {
   working: "在线",
@@ -90,27 +100,68 @@ function RouteComponent() {
   const [filter, setFilter] = useState<"all" | WakerStatus>("all");
   const agents = useQuery(agentListQueryOptions());
   /*
-   * The switched-off ones, which `GET /api/agents` leaves out: `?hidden=true` answers only them. Read
-   * apart and shown together, because 暂停 is one of the three states this screen promises (D1/D4)
-   * and a roster without the paused coworkers can only ever count zero of them. If this read fails the
-   * active roster still renders -- an absent paused list hides nobody who is working.
+   * The coworkers switched out of the list, which `GET /api/agents` leaves out: `?hidden=true`
+   * answers only them. Read apart and shown together, each with an 已隐藏 tag, because hidden is
+   * about whether a coworker is listed and says nothing about whether it is paused. If this read
+   * fails the active roster still renders.
    */
-  const paused = useQuery(agentListQueryOptions(true));
+  const hidden = useQuery(agentListQueryOptions(true));
   const groups = useQuery(wakerGroupsQueryOptions());
   const running = useQuery(runningTasksQueryOptions());
+  /** Spec D4's 暂停 = bot_lifecycle paused, which this read carries for every paused coworker. */
+  const attention = useQuery(botAttentionQueryOptions());
+  /** Spec F4: this person's machines and whether each is online, for the device line on each card. */
+  const devices = useQuery(devicesQueryOptions());
+  /*
+   * Spec F4's device line on a coworker's card. A running task bound to a machine names THAT machine
+   * and whether it is online (the task's own `deviceId`). Without one there is no binding to read, so
+   * the line says what this person's machines are doing and says that this is what it is -- and only
+   * on their own coworkers, whose work would run on those machines. Cloud mode, or nobody paired:
+   * nothing to say, no line.
+   */
+  const deviceLineOf = (agent: AgentProfile): DeviceLine | null => {
+    const bound = (running.data ?? []).find(
+      (task) => task.executorAgentId === agent.id && task.deviceId,
+    );
+    const machine = presenceOf(bound?.deviceId, devices.data);
+    if (machine)
+      return {
+        kind: "task",
+        online: machine.online,
+        text: `设备：${machine.name} · ${presenceWord(machine.online)}`,
+      };
+    const owner = agent.mine ? ownerPresence(devices.data) : null;
+    if (!owner) return null;
+    return {
+      kind: "owner",
+      online: owner.online > 0,
+      text: `你的设备：${owner.online}/${owner.total} 台在线（没有进行中的任务绑定到具体设备）`,
+    };
+  };
 
   const roster = useMemo(
-    () => [...(agents.data ?? []), ...(paused.data ?? [])],
-    [agents.data, paused.data],
+    () => [...(agents.data ?? []), ...(hidden.data ?? [])],
+    [agents.data, hidden.data],
   );
   const workingIds = useMemo(
     () => new Set((running.data ?? []).map((task) => task.executorAgentId)),
     [running.data],
   );
+  const pausedIds = useMemo(
+    () =>
+      attention.data
+        ? new Set(
+            attention.data
+              .filter((bot) => bot.paused)
+              .map((bot) => bot.agentId),
+          )
+        : null,
+    [attention.data],
+  );
+  const status = (agent: AgentProfile) =>
+    statusFor(agent, workingIds, pausedIds, running.isError);
   const visible = roster.filter(
-    (agent) =>
-      filter === "all" ||
-      statusFor(agent, workingIds, running.isError) === filter,
+    (agent) => filter === "all" || status(agent) === filter,
   );
   const counts = {
     working: 0,
@@ -119,11 +170,22 @@ function RouteComponent() {
     unknown: 0,
   } as Record<WakerStatus, number>;
   for (const agent of roster) {
-    counts[statusFor(agent, workingIds, running.isError)] += 1;
+    counts[status(agent)] += 1;
   }
 
   return (
     <PageShell
+      action={
+        <Button
+          render={(props) => (
+            <Link search={{ new: true }} to="/agents" {...props} />
+          )}
+          size="sm"
+          variant="outline"
+        >
+          新建员工
+        </Button>
+      }
       description="这个工作空间里的每一位员工、它此刻是否在干活，以及一组员工可以被叫成的名字。"
       title="数字员工"
     >
@@ -169,13 +231,16 @@ function RouteComponent() {
 
       {running.isError ? (
         /*
-         * Said once, above everything, rather than quietly showing empty sets: without this line the
-         * cards below would read "nothing running" as fact when the board could not be read at all.
-         * Recorded as a rough edge in the ticket — the honest end state is a fourth state on each
-         * card, not a banner over three.
+         * Said once, above everything, as well as on each card: without this line the cards below
+         * would read "nothing running" as fact when the board could not be read at all.
          */
         <p className="text-destructive pb-2 text-sm" role="alert">
           看板读不到，所以下面显示的状态无法确认。
+        </p>
+      ) : null}
+      {attention.isError ? (
+        <p className="text-destructive pb-2 text-sm" role="alert">
+          暂停状态读不到，所以下面的员工是否被暂停无法确认。
         </p>
       ) : null}
 
@@ -183,10 +248,14 @@ function RouteComponent() {
         <CoworkerTab
           agents={agents.isPending}
           failed={agents.isError}
+          filtered={filter !== "all"}
           groups={groups.data ?? []}
+          pauseKnown={pausedIds !== null}
+          pauseUnreadable={attention.isError}
+          queryClient={queryClient}
           roster={visible}
-          runningIds={workingIds}
-          statusUnknown={running.isError}
+          deviceLineOf={deviceLineOf}
+          statusOf={status}
         />
       ) : (
         <CrewTab
@@ -201,22 +270,63 @@ function RouteComponent() {
   );
 }
 
+/** The sentence under a card's name, which says why the badge says what it says. */
+function statusSentence(
+  status: WakerStatus,
+  pauseKnown: boolean,
+  pauseUnreadable: boolean,
+) {
+  switch (status) {
+    case "working":
+      return "正在处理一个任务。";
+    case "paused":
+      return "你已暂停它，恢复之前它不会再替你开工。";
+    case "resting":
+      return "当前没有运行中的任务。";
+    case "unknown":
+      if (pauseUnreadable) return "读不到它是否被暂停，现在的状态不确定。";
+      if (!pauseKnown) return "正在确认它是否被暂停。";
+      return "看板读不到，现在有没有在跑不确定。";
+  }
+}
+
+/** One line on a coworker's card about the machine its work runs on (spec F4). */
+type DeviceLine = {
+  /** `task`: a running task's own machine. `owner`: no binding, so the owner's machines. */
+  kind: "task" | "owner";
+  online: boolean | null;
+  text: string;
+};
+
 function CoworkerTab({
   agents,
+  deviceLineOf,
   failed,
+  filtered,
   groups,
+  pauseKnown,
+  pauseUnreadable,
+  queryClient,
   roster,
-  runningIds,
-  statusUnknown,
+  statusOf,
 }: {
   agents: boolean;
+  deviceLineOf: (agent: AgentProfile) => DeviceLine | null;
   failed: boolean;
+  /** A status filter is on, so an empty wall means "none match", not "none exist". */
+  filtered: boolean;
   groups: WakerGroup[];
+  /** The pause read answered, so the card can offer the one action that is actually its next. */
+  pauseKnown: boolean;
+  /** The pause read failed, which is a different blindness from the board's. */
+  pauseUnreadable: boolean;
+  queryClient: ReturnType<typeof useQueryClient>;
   roster: AgentProfile[];
-  runningIds: Set<string>;
-  /** The board read failed, so the cards must say they do not know. */
-  statusUnknown: boolean;
+  statusOf: (agent: AgentProfile) => WakerStatus;
 }) {
+  const lifecycle = useMutation(setBotPausedMutationOptions(queryClient));
+  const [problem, setProblem] = useState<string | null>(null);
+
   if (agents && !failed) {
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -231,67 +341,137 @@ function CoworkerTab({
       <Empty>
         <EmptyHeader>
           <EmptyTitle>
-            {groups.length > 0
-              ? "没有符合这个筛选条件的员工。"
-              : "这里还没有员工。"}
+            {filtered ? "没有符合这个筛选条件的员工。" : "这里还没有员工。"}
           </EmptyTitle>
         </EmptyHeader>
       </Empty>
     );
   }
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {roster.map((agent) => {
-        const status = statusFor(agent, runningIds, statusUnknown);
-        const crews = groups.filter((group) =>
-          group.members.some((member) => member.agentId === agent.id),
-        );
-        return (
-          <Item key={agent.id} size="sm" variant="outline">
-            <ItemContent>
-              <ItemTitle>
-                {agent.name}
-                <span
-                  className={`rounded px-1.5 py-0.5 text-xs font-normal ${STATUS_BADGE_STYLE[status]}`}
-                  data-status={status}
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {roster.map((agent) => {
+          const status = statusOf(agent);
+          const device = deviceLineOf(agent);
+          const crews = groups.filter((group) =>
+            group.members.some((member) => member.agentId === agent.id),
+          );
+          const paused = status === "paused";
+          const busy =
+            lifecycle.isPending && lifecycle.variables?.agentId === agent.id;
+          return (
+            <Item key={agent.id} size="sm" variant="outline">
+              <ItemMedia>
+                <AbstractAvatar
+                  name={agent.name}
+                  seed={agent.avatarSeed}
+                  size={36}
+                />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>
+                  {agent.name}
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-xs font-normal ${STATUS_BADGE_STYLE[status]}`}
+                    data-status={status}
+                  >
+                    {STATUS_WORD[status]}
+                  </span>
+                  {agent.hidden ? (
+                    <span
+                      className="rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
+                      data-hidden="true"
+                    >
+                      已隐藏
+                    </span>
+                  ) : null}
+                </ItemTitle>
+                <ItemDescription>
+                  {agent.title || agent.roleDescription || "还没写职责。"}
+                </ItemDescription>
+                <p className="text-muted-foreground text-xs">
+                  {statusSentence(status, pauseKnown, pauseUnreadable)}
+                  {crews.length > 0
+                    ? ` · ${crews.map((crew) => crew.name).join(", ")}`
+                    : ""}
+                </p>
+                {device ? (
+                  <p
+                    className={`text-xs ${
+                      device.online === false
+                        ? "text-red-500"
+                        : "text-muted-foreground"
+                    }`}
+                    data-device-line={device.kind}
+                    data-device-online={
+                      device.online === null ? "unknown" : String(device.online)
+                    }
+                  >
+                    {device.text}
+                  </p>
+                ) : null}
+              </ItemContent>
+              <ItemActions>
+                {/*
+                  Pause and resume are offered only once the pause read answered: without it the
+                  screen does not know which of the two is the next step, and guessing would send
+                  a resume to a coworker that was never paused.
+                */}
+                {pauseKnown ? (
+                  <Button
+                    aria-label={`${paused ? "恢复" : "暂停"} ${agent.name}`}
+                    disabled={busy}
+                    onClick={() => {
+                      setProblem(null);
+                      lifecycle.mutate(
+                        { agentId: agent.id, paused: !paused },
+                        {
+                          // The server's own reason, after a sentence that says which card failed:
+                          // the shared fallback is English and names no coworker.
+                          onError: (thrown: Error) =>
+                            setProblem(
+                              `没能${paused ? "恢复" : "暂停"}「${agent.name}」：${thrown.message}`,
+                            ),
+                        },
+                      );
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {paused ? "恢复" : "暂停"}
+                  </Button>
+                ) : null}
+                {/* Spec D7: the coworker's own assembly screen, one tap from its card. */}
+                <Link
+                  className="text-muted-foreground text-xs underline-offset-2 hover:underline"
+                  params={{ agentId: agent.id }}
+                  to="/assemble/$agentId"
                 >
-                  {STATUS_WORD[status]}
-                </span>
-              </ItemTitle>
-              <ItemDescription>
-                {agent.title || agent.roleDescription || "还没写职责。"}
-              </ItemDescription>
-              <p className="text-muted-foreground text-xs">
-                {status === "working"
-                  ? "正在处理一个任务。"
-                  : status === "paused"
-                    ? "在花名册里已停用。"
-                    : status === "unknown"
-                      ? "看板读不到，现在有没有在跑不确定。"
-                      : "当前没有运行中的任务。"}
-                {crews.length > 0
-                  ? ` · ${crews.map((crew) => crew.name).join(", ")}`
-                  : ""}
-              </p>
-            </ItemContent>
-            <ItemActions>
-              {/*
-                The detail editor is the roster's own dialog, deep-linked rather than rebuilt here.
-                A second copy would fork where a persona, a model binding and an assembly are set,
-                and the two would drift the first time one of them gained a field.
-              */}
-              <Link
-                className="text-muted-foreground text-xs underline-offset-2 hover:underline"
-                search={{ agent: agent.id }}
-                to="/agents"
-              >
-                打开
-              </Link>
-            </ItemActions>
-          </Item>
-        );
-      })}
-    </div>
+                  装配
+                </Link>
+                {/*
+                  Spec D5: the coworker's own detail page — its duties, running tasks, skill grants
+                  and recent audit trail. That page only reads; changing what it holds stays on the
+                  assembly screen linked beside this one, so neither forks where a setting is made.
+                */}
+                <Link
+                  className="text-muted-foreground text-xs underline-offset-2 hover:underline"
+                  params={{ agentId: agent.id }}
+                  to="/wakers/$agentId"
+                >
+                  打开
+                </Link>
+              </ItemActions>
+            </Item>
+          );
+        })}
+      </div>
+      {problem ? (
+        <p className="mt-4 text-destructive text-sm" role="alert">
+          {problem}
+        </p>
+      ) : null}
+    </>
   );
 }
 

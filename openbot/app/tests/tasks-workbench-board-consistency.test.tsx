@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { laneOf, Route as TasksRoute } from "@/routes/_authed/_app/tasks";
@@ -175,7 +175,9 @@ const resultRows = (view: ReturnType<typeof render>) => {
 };
 
 const titlesIn = (rows: Element[], titles: string[]) =>
-  titles.filter((title) => rows.some((li) => (li.textContent ?? "").includes(title)));
+  titles.filter((title) =>
+    rows.some((li) => (li.textContent ?? "").includes(title)),
+  );
 
 /** The status a card says it has, read off the badge rather than inferred from its colour. */
 const badgeOf = (view: ReturnType<typeof render>, title: string) => {
@@ -183,11 +185,15 @@ const badgeOf = (view: ReturnType<typeof render>, title: string) => {
     (li.textContent ?? "").includes(title),
   );
   if (hits.length !== 1) {
-    throw new Error(`expected one result row titled ${title}, found ${hits.length}`);
+    throw new Error(
+      `expected one result row titled ${title}, found ${hits.length}`,
+    );
   }
   const badge = hits[0].querySelector("[data-status]");
   if (!badge) {
-    throw new Error(`the result row titled ${title} carries no status attribute`);
+    throw new Error(
+      `the result row titled ${title} carries no status attribute`,
+    );
   }
   return badge;
 };
@@ -233,7 +239,8 @@ const resultsShouldShow = (view: ReturnType<typeof render>, title: string) =>
     /* without exactly one region present, excluding it above would prove nothing */
     expect(view.container.querySelectorAll(ATTENTION_SELECTOR).length).toBe(1);
     expect(
-      resultRows(view).filter((li) => (li.textContent ?? "").includes(title)).length,
+      resultRows(view).filter((li) => (li.textContent ?? "").includes(title))
+        .length,
     ).toBe(1);
   });
 
@@ -313,7 +320,9 @@ test("the bar's own read is asked without the status and without the words", asy
 test("a full window says 200+ while the running count stays exact", async () => {
   const requests: string[] = [];
   const many = [
-    ...Array.from({ length: 199 }, (_unused, index) => row("t" + index, "running")),
+    ...Array.from({ length: 199 }, (_unused, index) =>
+      row("t" + index, "running"),
+    ),
     row("full", "failed"),
   ];
   controlFetch(requests, many);
@@ -334,7 +343,9 @@ test("the bar partitions the batch the way the board defines it", async () => {
   expect(statValue(view, "进行中")).toBe("1");
   expect(statValue(view, "需要操作")).toBe("1");
   expect(statValue(view, "已结束")).toBe("3");
-  expect((badgeOf(view, "odd card").textContent ?? "").trim()).toBe("scheduling");
+  expect((badgeOf(view, "odd card").textContent ?? "").trim()).toBe(
+    "scheduling",
+  );
 });
 
 test("the lanes hold exactly what their own columns claim", async () => {
@@ -343,7 +354,7 @@ test("the lanes hold exactly what their own columns claim", async () => {
   const { view } = draw("/tasks?period=all&view=lanes", requests, ALL_ROWS);
   await resultsShouldShow(view, "done card");
   expect(laneTitles(view, "进行中")).toEqual(["running card"]);
-  expect(laneTitles(view, "需要关注").sort()).toEqual([
+  expect(laneTitles(view, "需要操作").sort()).toEqual([
     "failed card",
     "needs card",
     "review card",
@@ -362,7 +373,9 @@ test("an unknown status keeps its own value and belongs to no column", async () 
   const first = draw("/tasks?period=all&view=list", listReads, ALL_ROWS);
   await resultsShouldShow(first.view, "odd card");
   expect(statusSaidBy(first.view, "odd card")).toBe("scheduling");
-  expect((badgeOf(first.view, "odd card").textContent ?? "").trim()).toBe("scheduling");
+  expect((badgeOf(first.view, "odd card").textContent ?? "").trim()).toBe(
+    "scheduling",
+  );
   expect(titlesIn(resultRows(first.view), ALL_TITLES).length).toBe(6);
   /* one tree at a time: the list shape is released before the lane shape mounts */
   first.view.unmount();
@@ -372,7 +385,7 @@ test("an unknown status keeps its own value and belongs to no column", async () 
   await resultsShouldShow(second.view, "done card");
   const inLanes = [
     ...laneTitles(second.view, "进行中"),
-    ...laneTitles(second.view, "需要关注"),
+    ...laneTitles(second.view, "需要操作"),
     ...laneTitles(second.view, "已结束"),
   ];
   expect(inLanes.includes("odd card")).toBe(false);
@@ -408,8 +421,148 @@ test("both reads carry their own polling contract, read from the live cache", as
     "d-1",
     "c-1",
   ]);
-  expect(summaryQuery?.queryKey).toEqual(["tasks-summary", "week", "d-1", "c-1"]);
+  expect(summaryQuery?.queryKey).toEqual([
+    "tasks-summary",
+    "week",
+    "d-1",
+    "c-1",
+  ]);
   /* these are the intervals react-query was configured with, not an observed refire */
   expect(configuredRefetchInterval(tasksQuery?.options)).toBe(5000);
   expect(configuredRefetchInterval(summaryQuery?.options)).toBe(30000);
+});
+
+/*
+ * Spec A4/C2 through the page itself: a 触发方式 in the address reaches both reads as the server's
+ * source list (自主工作 = routine + responsibility, the 无人值守 filter), and gives both reads keys of
+ * their own, so an unattended board never answers from an unfiltered board's cache.
+ */
+test("a chosen 触发方式 rides both reads and keys them apart from the unfiltered board", async () => {
+  const requests: string[] = [];
+  controlFetch(requests, ALL_ROWS);
+  const { queryClient, view } = draw(
+    "/tasks?machineId=d-1&crew=c-1&status=failed&q=weekly&period=week&view=list&source=autonomous",
+    requests,
+    ALL_ROWS,
+  );
+  await resultsShouldShow(view, "failed card");
+  const urls = taskRequests(requests);
+  const list = urls.filter((url) => url.includes("status=failed"));
+  const window = urls.filter((url) => !url.includes("status="));
+  expect(list.length).toBeGreaterThan(0);
+  expect(window.length).toBeGreaterThan(0);
+  for (const url of [...list, ...window]) {
+    expect(new URLSearchParams(url.split("?")[1]).get("source")).toBe(
+      "routine,responsibility",
+    );
+  }
+  const keys = queryClient
+    .getQueryCache()
+    .getAll()
+    .map((query) => query.queryKey)
+    .filter((key) => key[0] === "tasks" || key[0] === "tasks-summary");
+  expect(keys).toContainEqual([
+    "tasks",
+    "week",
+    "failed",
+    "weekly",
+    "d-1",
+    "c-1",
+    "autonomous",
+  ]);
+  expect(keys).toContainEqual([
+    "tasks-summary",
+    "week",
+    "d-1",
+    "c-1",
+    "autonomous",
+  ]);
+  // Nothing was cached under the unfiltered keys: those belong to a board without the filter.
+  expect(keys).not.toContainEqual([
+    "tasks",
+    "week",
+    "failed",
+    "weekly",
+    "d-1",
+    "c-1",
+  ]);
+  expect(keys).not.toContainEqual(["tasks-summary", "week", "d-1", "c-1"]);
+});
+
+/*
+ * Spec A4's Waker/Group dropdown, through the real page: a coworker is asked for by its whole id
+ * (`executor=`, so an id with a comma in it is not split into two), and a crew by its id (`group=`,
+ * which the server answers with the crew's run cards too -- their parent names no coworker, so a
+ * roster could never find it). Both reads -- the list and the bar's -- carry the same choice.
+ */
+test("the Waker/Group dropdown asks for one coworker as executor and a crew as group, on both reads", async () => {
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    requests.push(`${init?.method ?? "GET"} ${path}`);
+    const body = path.startsWith("/api/tasks")
+      ? { tasks: ALL_ROWS }
+      : path.startsWith("/api/devices")
+        ? { devices: [DEVICE] }
+        : path.startsWith("/api/waker-groups")
+          ? {
+              groups: [
+                {
+                  id: "group-1",
+                  name: "编程小组",
+                  members: [{ agentId: "pkg,agent", position: "0" }],
+                },
+              ],
+            }
+          : { agents: [] };
+    return new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  }) as typeof fetch;
+  const { queryClient, view } = draw("/tasks?period=all", requests, ALL_ROWS);
+  queryClient.setQueryData(agentKeys.list(false), [
+    { id: "pkg,agent", name: "包里的员工" },
+  ] as never);
+  await resultsShouldShow(view, "failed card");
+  const select = () =>
+    view.container.querySelector(
+      'select[aria-label="Waker/Group"]',
+    ) as HTMLSelectElement;
+  await waitFor(() => {
+    expect(select().querySelectorAll("option").length).toBe(3);
+  });
+
+  const askedSince = (from: number) =>
+    taskRequests(requests.slice(from)).map(
+      (url) => new URLSearchParams(url.split("?")[1]),
+    );
+
+  let mark = requests.length;
+  fireEvent.change(select(), { target: { value: "waker:pkg,agent" } });
+  await waitFor(() => {
+    const reads = askedSince(mark);
+    // The list and the bar both asked, each for the one whole id.
+    expect(
+      reads.filter((read) => read.get("executor") === "pkg,agent").length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+  for (const read of askedSince(mark)) {
+    expect(read.has("executors")).toBe(false);
+    expect(read.has("group")).toBe(false);
+  }
+
+  mark = requests.length;
+  fireEvent.change(select(), { target: { value: "group:group-1" } });
+  await waitFor(() => {
+    const reads = askedSince(mark);
+    expect(
+      reads.filter((read) => read.get("group") === "group-1").length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+  for (const read of askedSince(mark)) {
+    expect(read.has("executors")).toBe(false);
+    expect(read.has("executor")).toBe(false);
+  }
+  view.unmount();
 });

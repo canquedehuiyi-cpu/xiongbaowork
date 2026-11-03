@@ -31,16 +31,32 @@ single most common reason a first install comes up with a pod stuck `Pending` an
 why.
 
 **A database, and the Secret that names it**, unless you are using the bundled one. The chart reads
-a URL out of a Secret you make; it never writes your database credentials into a values file:
+three URLs out of a Secret you make; it never writes your database credentials into a values file.
+The migrations Job connects as the database **owner**; the API as `openbot_app`, which cannot
+migrate; and the API also as `openbot_role_writer` (migration 0109), the only login allowed to write
+identity roles. The API refuses to start without the last (`ROLE_WRITER_DATABASE_URL is required`).
+After the first migration, give `openbot_app` and `openbot_role_writer` their own passwords as the
+owner (`ALTER ROLE ... PASSWORD`); the ones the migrations leave are public or absent.
 
 ```sh
 kubectl create namespace openbot
 kubectl -n openbot create secret generic openbot-database \
-  --from-literal=database-url='postgresql://USER:PASSWORD@HOST:5432/openbot?sslmode=require'
+  --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/openbot?sslmode=require' \
+  --from-literal=database-url='postgresql://openbot_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
+  --from-literal=role-writer-database-url='postgresql://openbot_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
 ```
 
-Then `--set database.existingSecret=openbot-database`. The key must be `database-url`, or name a
-different one with `database.existingSecretKey`. See
+Then `--set database.existingSecret=openbot-database`. The keys must be `migration-database-url`,
+`database-url` and `role-writer-database-url`, or name different ones with
+`database.migrationExistingSecretKey`, `database.existingSecretKey` and
+`database.roleWriterExistingSecretKey` (or a separate Secret with `database.roleWriterExistingSecret`).
+A Secret without `migration-database-url` still upgrades: the Job logs that it is migrating with
+`database-url` as it used to, which only works if that URL is the owner's. With `database.url`
+instead of a Secret, `database.migrationUrl` and `database.roleWriterUrl` are required too, and the
+install is refused without them (`migrationUrl` only while `migrations.enabled`). Before migrating,
+the Job checks that the owner's URL and the API's reach the same database (by name and server start
+time) and fails if they do not; on a first install, before `openbot_app` has a password, it says it
+could not check and migrates. See
 [Your own database](#your-own-database-which-is-what-a-real-deployment-uses) for `sslmode` and the
 `vector` extension, both of which a managed database will otherwise fail on in a way that names the
 wrong problem.
@@ -142,9 +158,29 @@ helm dependency build charts/openbot
 helm upgrade --install openbot charts/openbot \
   --namespace openbot --create-namespace \
   --set postgresql.enabled=true \
+  --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
+  --set config.extraEnv[0].value=warn \
   --set config.initialAdminEmails=you@example.com \
   --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)"
 ```
+
+The bundled database needs no role-writer setup: the chart keeps a random password for
+`openbot_role_writer` in its own `<release>-openbot-database-roles` Secret (read back on upgrade, so
+it stays the same), the migrations Job sets it on the role as the owner after migrating, and the API
+gets `ROLE_WRITER_DATABASE_URL` with it. The API pods carry a `checksum/role-writer` annotation, so a
+changed password rolls them rather than leaving them on the old one.
+
+**GitOps (Argo CD, Flux, `helm template`): set the password yourself.** A render without cluster
+access cannot read the Secret back, so it generates a new password on every sync, and every sync then
+re-sets the role and rolls the API. Set `database.roleWriterPassword` (letters and digits, at least
+16: `openssl rand -hex 24`), or name a Secret you manage with `database.roleWriterPasswordExistingSecret`
+(key `role-writer-password`, or `database.roleWriterPasswordExistingSecretKey`); the chart then
+writes none of its own.
+
+The two `extraEnv` lines are the bundled database's price: it connects the API as the superuser
+`postgres`, which row-level security does not bind, and the server refuses that in production unless
+told otherwise. The chart refuses to render without them rather than leave the API crash-looping. See
+[the RLS upgrade note](#coming-from-a-release-that-only-warned-the-server-now-refuses-a-superuser).
 
 `secrets.keyEncryptionKey` encrypts the credential vault. Generate it once, keep it, and do not put
 it in a file anybody commits. The chart marks the Secret it creates `helm.sh/resource-policy: keep`,
@@ -169,7 +205,7 @@ and asking for it with more than one replica is refused at install time.
 
 ```sh
 --set postgresql.enabled=false \
---set database.existingSecret=openbot-database   # key: database-url
+--set database.existingSecret=openbot-database   # keys: migration-database-url, database-url, role-writer-database-url
 ```
 
 `postgresql.enabled` is **off by default and not production-grade**. A database on a pod goes away
@@ -290,12 +326,14 @@ installing on somebody's bare-metal cluster.
 ## Refused at install, not in a crash loop
 
 The chart fails the install, naming the value to change, when: there is no database or two of them;
+the bundled database's `postgres` superuser is used with no `OPENBOT_RLS_ENFORCE` in `config.extraEnv`;
 nobody could sign in or nobody would be an administrator; an identity provider is configured without
 `secrets.betterAuthSecret` or `config.publicUrl`; `singleUser` is combined with a public URL or a
 public LoadBalancer; `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; there is no
 `secrets.computerToken`; `computers.mode` is `external` with no `computers.url`, or `sandbox` on a
 cluster with no Sandbox CRD; both an Ingress and an HTTPRoute are enabled; both `externalSecrets` and
-an existing Secret are named; a Bot endpoint is named with no token to call it with; a browser is
+an existing Secret are named; an external `database.url` is given without `database.roleWriterUrl` or
+without `database.migrationUrl`; a Bot endpoint is named with no token to call it with; a browser is
 asked for inside more than one API replica; `networkPolicy.enabled` is set with an external database
 and no `networkPolicy.extraEgress`, or with `computers.mode: sandbox` and no
 `networkPolicy.kubernetesApiCidr`; a computer proxy is named that the network policy blocks; or
@@ -500,6 +538,27 @@ upper-cased and anything unusual replaced. Naming a proxy the policy provably bl
 install rather than found as a browser that fails on every page.
 
 ## Upgrades
+
+### Coming from a release that only warned: the server now refuses a superuser
+
+Unset, `OPENBOT_RLS_ENFORCE` used to mean `warn`. It now means `refuse` under this chart's
+`NODE_ENV=production`: an API whose `DATABASE_URL` names a superuser or a `BYPASSRLS` role exits at
+boot with `{"type":"rls-not-enforced", …}`, because PostgreSQL applies no row-level security to
+either and tenant isolation would rest on the application alone.
+
+- **Bundled database** (`postgresql.enabled`): it is `postgres`, a superuser, so the chart refuses to
+  render until `config.extraEnv` names `OPENBOT_RLS_ENFORCE`. `--reuse-values` does not add it; pass
+  `--set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE --set config.extraEnv[0].value=warn`.
+- **Your own database, with a superuser in the URL** (the usual way to make the migrations pass on a
+  self-hosted server): the chart renders and the API pods then refuse to start. The migrations Job and
+  the API share one `DATABASE_URL`, so the chart has no way yet to migrate as the owner and serve as
+  `openbot_app`. Until it does, either point the URL at a role that owns the schema without being a
+  superuser or `BYPASSRLS`, or set the same `extraEnv` entry and accept the warning on every boot.
+- **RDS, Cloud SQL, Azure Database**: unaffected. Their administrative roles are neither superuser
+  nor `BYPASSRLS`.
+
+`config.extraEnv` renders after the chart's own variables, so it is the value the pods get. See
+[configuration](../../docs/configuration.md#the-database-role-and-openbot_rls_enforce).
 
 ### Coming from a release before 0.0.14: a computer now runs as uid 1001
 

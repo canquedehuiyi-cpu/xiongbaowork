@@ -1,4 +1,6 @@
 import {
+  queryOptions,
+  type UseQueryResult,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -6,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";
+import { AutomationsSection } from "@/components/automations/automations-section";
 import {
   PageRows,
   PageSection,
@@ -25,12 +28,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import {
+  setProactiveEnabledMutationOptions,
+  setResponsibilityEnabledMutationOptions,
+} from "@/lib/autonomous/mutations";
+import {
+  type AutonomousSummary,
   autonomousKeys,
   autonomousQueryOptions,
   type LastRun,
 } from "@/lib/autonomous/queries";
 import { channelListQueryOptions } from "@/lib/channels/queries";
-import { RequestError } from "@/lib/client";
+import { client, RequestError } from "@/lib/client";
 import { relativeTime } from "@/lib/relative-time";
 import {
   cronFor,
@@ -50,6 +58,34 @@ export const Route = createFileRoute("/_authed/_app/autonomous")({
 });
 
 /**
+ * Spec C1's 全部员工: every coworker's unattended work in one read (`GET /api/agents/autonomous/all`),
+ * keyed under `autonomousKeys.all` so every write on this page that refreshes one coworker refreshes
+ * the overview too.
+ */
+const overviewQueryOptions = (enabled: boolean) =>
+  queryOptions({
+    // An object, not a string: `autonomousKeys.forAgent(id)` is `["autonomous", id]`, and a
+    // coworker whose id happened to be "overview" would otherwise share this cache entry.
+    queryKey: [...autonomousKeys.all, { overview: true }] as const,
+    enabled,
+    queryFn: () =>
+      client<AutonomousSummary[]>("/api/agents/autonomous/all", "autonomous", {
+        fallback: "Could not load what the coworkers do on their own.",
+      }),
+    refetchInterval: 300_000,
+  });
+
+/**
+ * A schedule's newest firings, newest first (at most five), as the server sends them beside `lastRun`.
+ * Read defensively: a server from before the field sends none, and that is an empty strip, not a crash.
+ */
+function recentRunsOf(row: object): LastRun[] {
+  return "recentRuns" in row && Array.isArray(row.recentRuns)
+    ? (row.recentRuns as LastRun[])
+    : [];
+}
+
+/**
  * What one coworker does with nobody asking (ticket 020, spec C1), and where a schedule can be made
  * (spec C4, decision D-2).
  *
@@ -62,16 +98,21 @@ function RouteComponent() {
   const queryClient = useQueryClient();
   const agents = useQuery(agentListQueryOptions());
   const [pinned, setPinned] = useState<string | null>(null);
+  const [everyone, setEveryone] = useState(false);
   const [creating, setCreating] = useState(false);
   const roster = agents.data ?? [];
-  const agentId = pinned ?? roster[0]?.id ?? null;
+  const agentId = everyone ? null : (pinned ?? roster[0]?.id ?? null);
   const summary = useQuery(autonomousQueryOptions(agentId));
+  const overview = useQuery(overviewQueryOptions(everyone));
   const toggle = useMutation(setRoutineEnabledMutationOptions(queryClient));
   const runNow = useMutation(runRoutineNowMutationOptions(queryClient));
   const remove = useMutation(deleteRoutineMutationOptions(queryClient));
   const deleting = useRef(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteProblem, setDeleteProblem] = useState<{ id: string; message: string } | null>(null);
+  const [deleteProblem, setDeleteProblem] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
 
   const after = () =>
     queryClient.invalidateQueries({ queryKey: autonomousKeys.all });
@@ -86,8 +127,13 @@ function RouteComponent() {
       await remove.mutateAsync(id); // The shared mutation invalidates routine caches.
       await after(); // Keep the row until the server summary actually removes it.
     } catch (thrown) {
-      setDeleteProblem({ id, message: thrown instanceof Error && thrown.message
-        ? thrown.message : "这条定时任务没能删除，请重试。" });
+      setDeleteProblem({
+        id,
+        message:
+          thrown instanceof Error && thrown.message
+            ? thrown.message
+            : "这条定时任务没能删除，请重试。",
+      });
     } finally {
       deleting.current = false;
       setDeletingId(null);
@@ -114,10 +160,24 @@ function RouteComponent() {
         </p>
       ) : null}
       <div className="flex flex-wrap gap-1 pb-4">
+        {roster.length > 0 ? (
+          <Button
+            aria-pressed={everyone}
+            onClick={() => setEveryone(true)}
+            size="sm"
+            variant={everyone ? "default" : "outline"}
+          >
+            全部员工
+          </Button>
+        ) : null}
         {roster.map((agent) => (
           <Button
+            aria-pressed={agent.id === agentId}
             key={agent.id}
-            onClick={() => setPinned(agent.id)}
+            onClick={() => {
+              setEveryone(false);
+              setPinned(agent.id);
+            }}
             size="sm"
             variant={agent.id === agentId ? "default" : "outline"}
           >
@@ -125,6 +185,22 @@ function RouteComponent() {
           </Button>
         ))}
       </div>
+
+      {everyone ? (
+        <Overview
+          manageable={
+            new Set(
+              roster
+                .filter((agent) => agent.canManage)
+                .map((agent) => agent.id),
+            )
+          }
+          names={new Map(roster.map((agent) => [agent.id, agent.name]))}
+          onChanged={() => void after()}
+          query={overview}
+        />
+      ) : null}
+      {everyone ? <AutomationsSection /> : null}
 
       {agentId && summary.isPending ? <Skeleton className="h-24" /> : null}
       {summary.isError ? (
@@ -181,6 +257,7 @@ function RouteComponent() {
                         {describe(routine.lastRun, true)} ·{" "}
                         {routine.enabled ? "已开启" : "已关闭"}
                       </ItemDescription>
+                      <RunStrip runs={recentRunsOf(routine)} />
                       {deleteProblem?.id === routine.id ? (
                         <p className="text-destructive text-sm" role="alert">
                           删除失败：{deleteProblem.message}
@@ -240,8 +317,17 @@ function RouteComponent() {
                       <ItemDescription>
                         {statusWord(goal.status)} · {describe(goal.lastRun)}
                       </ItemDescription>
+                      <RunStrip runs={recentRunsOf(goal)} />
                     </ItemContent>
                     <ItemActions>
+                      <WorkSwitch
+                        canManage={selected.canManage}
+                        enabled={goal.status === "active"}
+                        id={goal.id}
+                        kind="responsibility"
+                        name={goal.title}
+                        status={goal.status}
+                      />
                       <Link
                         className="text-muted-foreground text-xs underline-offset-2 hover:underline"
                         to="/responsibilities"
@@ -273,15 +359,31 @@ function RouteComponent() {
                           : "从未运行过"}{" "}
                         · {setting.enabled ? "已开启" : "已关闭"}
                         {setting.enabled ? (
-                          <> · 下次计划{" "}
+                          <>
+                            {" "}
+                            · 下次计划{" "}
                             {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: autonomous-screen.test.tsx locates this element by its label and the handoff keeps original test bodies unchanged; replace with a supported labelling pattern together with that test. */}
-                            <time aria-label="主动巡检下次计划" dateTime={setting.nextRunAt} title={setting.nextRunAt}>
+                            <time
+                              aria-label="主动巡检下次计划"
+                              dateTime={setting.nextRunAt}
+                              title={setting.nextRunAt}
+                            >
                               {relativeTime(setting.nextRunAt)}
-                            </time>（仅为计划）
+                            </time>
+                            （仅为计划）
                           </>
                         ) : null}
                       </ItemDescription>
                     </ItemContent>
+                    <ItemActions>
+                      <WorkSwitch
+                        canManage={selected.canManage}
+                        enabled={setting.enabled}
+                        id={setting.id}
+                        kind="proactive"
+                        name={setting.focus || "未填写重点"}
+                      />
+                    </ItemActions>
                   </Item>
                 ))}
               </PageRows>
@@ -297,6 +399,264 @@ function RouteComponent() {
         </>
       ) : null}
     </PageShell>
+  );
+}
+
+/**
+ * 全部员工 (spec C1): every coworker's routines, goals and check-ins on one page, each schedule with
+ * its next firing, its switch and its last five results. Pausing here is the same write the
+ * single-coworker view makes, through the routine store and its rules.
+ */
+function Overview({
+  query,
+  names,
+  manageable,
+  onChanged,
+}: {
+  query: UseQueryResult<AutonomousSummary[]>;
+  names: ReadonlyMap<string, string>;
+  /** The coworkers whose switches this person may move, as the server decided (`canManage`). */
+  manageable: ReadonlySet<string>;
+  onChanged: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const toggle = useMutation(setRoutineEnabledMutationOptions(queryClient));
+
+  if (query.isError) {
+    return (
+      <QueryError
+        error={query.error}
+        label="全部员工的自主工作加载失败"
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
+    );
+  }
+  if (!query.data) return <Skeleton className="h-24" />;
+  if (query.data.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        还没有哪位员工在无人值守地工作。选一位员工，给它排一条定时任务。
+      </p>
+    );
+  }
+  return (
+    <>
+      {query.data.map((entry) => (
+        <PageSection
+          description={
+            entry.lastActivityAt
+              ? `最近一次无人值守的工作在 ${relativeTime(entry.lastActivityAt)}`
+              : "还没有无人值守地工作过"
+          }
+          key={entry.agentId}
+          title={names.get(entry.agentId) ?? entry.agentId.slice(0, 8)}
+        >
+          <PageRows>
+            {entry.routines.map((routine) => (
+              <Item key={routine.id} size="sm" variant="outline">
+                <ItemContent>
+                  <ItemTitle>定时任务 · {routine.instruction}</ItemTitle>
+                  <ItemDescription>
+                    下次 {relativeTime(routine.nextRunAt)} ·{" "}
+                    {routine.enabled ? "开" : "关"}
+                  </ItemDescription>
+                  <RunStrip runs={recentRunsOf(routine)} />
+                </ItemContent>
+                <ItemActions>
+                  <Button
+                    aria-label={`${routine.enabled ? "暂停" : "恢复"}：${routine.instruction}`}
+                    disabled={toggle.isPending}
+                    onClick={() =>
+                      toggle.mutate(
+                        { id: routine.id, enabled: !routine.enabled },
+                        { onSuccess: onChanged },
+                      )
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    {routine.enabled ? "暂停" : "恢复"}
+                  </Button>
+                </ItemActions>
+              </Item>
+            ))}
+            {entry.responsibilities.map((goal) => (
+              <Item key={goal.id} size="sm" variant="outline">
+                <ItemContent>
+                  <ItemTitle>长期职责 · {goal.title}</ItemTitle>
+                  <ItemDescription>{statusWord(goal.status)}</ItemDescription>
+                  <RunStrip runs={recentRunsOf(goal)} />
+                </ItemContent>
+                <ItemActions>
+                  <WorkSwitch
+                    canManage={manageable.has(entry.agentId)}
+                    enabled={goal.status === "active"}
+                    id={goal.id}
+                    kind="responsibility"
+                    name={goal.title}
+                    status={goal.status}
+                  />
+                </ItemActions>
+              </Item>
+            ))}
+            {entry.proactive.map((setting) => (
+              <Item key={setting.id} size="sm" variant="outline">
+                <ItemContent>
+                  <ItemTitle>
+                    主动巡检 · {setting.focus || "未填写重点"}
+                  </ItemTitle>
+                  <ItemDescription>
+                    每隔 {setting.intervalMinutes} 分钟 ·{" "}
+                    {setting.lastRunAt
+                      ? `上次 ${relativeTime(setting.lastRunAt)}（${statusWord(setting.lastStatus)}）`
+                      : "尚未巡检"}{" "}
+                    ·{" "}
+                    {setting.enabled
+                      ? `开 · 下次计划 ${relativeTime(setting.nextRunAt)}（仅为计划）`
+                      : "关"}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <WorkSwitch
+                    canManage={manageable.has(entry.agentId)}
+                    enabled={setting.enabled}
+                    id={setting.id}
+                    kind="proactive"
+                    name={setting.focus || "未填写重点"}
+                  />
+                </ItemActions>
+              </Item>
+            ))}
+          </PageRows>
+        </PageSection>
+      ))}
+    </>
+  );
+}
+
+const SWITCH_NOUN = {
+  responsibility: "长期职责",
+  proactive: "主动巡检",
+} as const;
+
+/**
+ * The 启停开关 of spec C1 for one responsibility or one proactive check-in.
+ *
+ * It moves at once and moves back if the server refuses, with the server's sentence shown under it as
+ * it was said. A person who cannot manage this coworker sees the switch but cannot move it, and a
+ * completed responsibility has nothing left to switch on. Routines keep their 暂停/恢复 press, which
+ * goes through the routine store and its floor.
+ *
+ * A native `<button role="switch">` drawn like `ui/switch`, not the Base UI one: this page draws a
+ * switch on every row, and with a Base UI root per row a single failed DOM assertion took bun several
+ * seconds to print (measured: ~4 s per element), enough to time out the page's existing tests.
+ */
+function WorkSwitch({
+  kind,
+  id,
+  name,
+  enabled,
+  canManage,
+  status,
+}: {
+  kind: keyof typeof SWITCH_NOUN;
+  id: string;
+  name: string;
+  enabled: boolean;
+  canManage: boolean;
+  /** A responsibility's own status; only `active` and `paused` can be switched. */
+  status?: string;
+}) {
+  const queryClient = useQueryClient();
+  const toggle = useMutation(
+    kind === "responsibility"
+      ? setResponsibilityEnabledMutationOptions(queryClient)
+      : setProactiveEnabledMutationOptions(queryClient),
+  );
+  const [problem, setProblem] = useState<string | null>(null);
+  const finished = kind === "responsibility" && status === "completed";
+  const reason = !canManage
+    ? "只有能管理这位员工的人才能开关"
+    : finished
+      ? "这条职责已经完成，不能再开启"
+      : undefined;
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        aria-checked={enabled}
+        aria-label={`${SWITCH_NOUN[kind]}开关：${name}`}
+        className="group/switch relative inline-flex h-[14px] w-[24px] shrink-0 items-center rounded-full border border-transparent bg-input outline-none transition-[background-color,box-shadow] duration-150 ease-out focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-checked:bg-primary dark:bg-input/80 dark:aria-checked:bg-primary"
+        disabled={reason !== undefined || toggle.isPending}
+        onClick={() => {
+          setProblem(null);
+          toggle.mutate(
+            { id, enabled: !enabled },
+            {
+              onError: (thrown: Error) =>
+                setProblem(thrown.message || "没能切换，请重试。"),
+            },
+          );
+        }}
+        role="switch"
+        title={reason}
+        type="button"
+      >
+        <span className="pointer-events-none block size-3 rounded-full bg-background transition-transform duration-150 ease-out group-aria-checked/switch:translate-x-[calc(100%-2px)] dark:bg-foreground dark:group-aria-checked/switch:bg-primary-foreground" />
+      </button>
+      {problem ? (
+        <p className="text-destructive text-xs" role="alert">
+          {problem}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+const RUN_TONE: Record<string, string> = {
+  succeeded: "bg-emerald-500",
+  failed: "bg-red-500",
+  running: "bg-sky-500",
+  waiting: "bg-amber-500",
+  waiting_for_input: "bg-amber-500",
+  skipped: "bg-foreground/30",
+  queued: "bg-foreground/30",
+};
+
+/**
+ * The last few firings, newest on the left, one mark each (spec C1: 最近 N 次运行结果). Each mark
+ * names its outcome and time for a screen reader and on hover; nothing is drawn for a schedule that
+ * has never fired, which its own line already says.
+ */
+function RunStrip({ runs }: { runs: LastRun[] }) {
+  if (runs.length === 0) return null;
+  const marks = runs.map((run, ordinal) => ({
+    run,
+    id: `${ordinal}`,
+    label: `${run.status ? statusWord(run.status) : "结果未知"}${run.at ? ` · ${relativeTime(run.at)}` : ""}`,
+  }));
+  return (
+    <div className="flex items-center gap-1.5 pt-1 text-muted-foreground text-xs">
+      <span>近 {runs.length} 次</span>
+      <ol aria-label="近几次运行" className="flex list-none items-center gap-1">
+        {marks.map((mark) => (
+          <li
+            className="flex items-center"
+            data-run-status={mark.run.status ?? "unknown"}
+            key={mark.id}
+            title={mark.label}
+          >
+            <span
+              className={`inline-block size-2.5 rounded-sm ${
+                RUN_TONE[mark.run.status ?? ""] ?? "bg-foreground/30"
+              }`}
+            />
+            <span className="sr-only">{mark.label}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -559,10 +919,18 @@ function NewRoutineForm({
  */
 function describe(run: LastRun | null, routine = false): string {
   if (!run) return "从未触发过";
-  if (run.status === "running" || (routine && run.status === null && run.at !== null && Number.isFinite(Date.parse(run.at))))
+  if (
+    run.status === "running" ||
+    (routine &&
+      run.status === null &&
+      run.at !== null &&
+      Number.isFinite(Date.parse(run.at)))
+  )
     return run.at ? `正在进行（开始于 ${relativeTime(run.at)}）` : "正在进行";
   if (!run.at)
-    return run.status ? `${statusWord(run.status)}（无开始时间）` : "结果未知（无开始时间）";
+    return run.status
+      ? `${statusWord(run.status)}（无开始时间）`
+      : "结果未知（无开始时间）";
   return `上一次${run.status ? statusWord(run.status) : "结果未知"} ${relativeTime(run.at)}`;
 }
 

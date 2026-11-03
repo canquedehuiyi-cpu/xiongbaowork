@@ -30,8 +30,8 @@ import type { AuditInitiator } from "../audit";
 import type { ChannelStore } from "../channels/routes";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
-import type { TaskProjector } from "../tasks/projector";
-import { runAsTenant } from "../tenant/context";
+import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
+import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import type { RoutineRunContext, RoutineStore } from "./store";
 
 /** Everything a headless turn needs, injectable so tests never dial a model. */
@@ -52,6 +52,23 @@ export type TurnRunner = (input: {
   /** Durable inbound delivery id; reused by lock, runner and emitted events. */
   runId?: string;
   /**
+   * The board card this turn answers for, when the caller keyed it by something other than `runId`.
+   *
+   * A routine firing files its card under the firing's own id (`routine_run_…`) and lets the turn mint
+   * a fresh run id for the lock, so the usage row that names the model has to be told which card it
+   * belongs to — the card reads the model back by exactly this reference. Absent, it is `runId`.
+   */
+  runRef?: string;
+  /**
+   * Whose run this is, when the caller does its work outside that tenant's frame.
+   *
+   * A follow-up, a delivery, a proactive run and a resumed question are each claimed by a worker on a
+   * timer, which has no tenant of its own, so the turn's own frame would file the usage row that names
+   * its model under nobody. Such a caller names the tenant of the row it claimed instead. Absent, the
+   * turn's own frame decides, which is right for every caller that already runs inside one.
+   */
+  tenantId?: string;
+  /**
    * The caller has opened, and will close, this turn's card on the task board.
    *
    * Set it at the entry, not at the runner. `PostgresAgentRunner` files a `chat` card for every turn it
@@ -70,7 +87,12 @@ export type TurnRunner = (input: {
   depth?: number;
   /** The reply so far, each time more of it arrives, for a surface that shows a turn in progress. */
   onText?: (text: string) => void;
-}) => Promise<{ replyText: string; components?: DrawnComponent[] }>;
+}) => Promise<{
+  replyText: string;
+  components?: DrawnComponent[];
+  /** Attachment ids the Bot's own messages carried in this turn. */
+  attachments?: string[];
+}>;
 
 /** A display component the Bot drew in a turn and the server allowed, with the props it drew. */
 export type DrawnComponent = { name: string; args: Record<string, unknown> };
@@ -89,6 +111,18 @@ const MAX_NOTIFIED_REASON = 160;
 
 /** Consecutive failed firings after which a routine stops being fired at all. */
 const FATIGUE_LIMIT = 10;
+
+/**
+ * What a card closed by the fatigue rule carries in `tasks.deliverable_ref` (spec C3).
+ *
+ * `kind` discriminates it from any other deliverable reference the column may hold later.
+ */
+export type CircuitBreakerRef = {
+  kind: "circuit_breaker";
+  /** The consecutive failures that tripped it, this firing included. */
+  failures: number;
+  routineId: string;
+};
 
 const SWITCHED_OFF =
   "This routine has failed ten times in a row, so I have switched it off. Ask me to turn it back on when whatever it needs is working.";
@@ -126,7 +160,7 @@ export function createRoutineRunner(options: {
    */
   accessRevokedOf?: (userId: string) => Promise<boolean>;
   /** Which of the owner's machines this coworker's actions run on, in device mode. */
-  deviceIdOf?: (agentId: string) => Promise<string | null>;
+  deviceIdOf?: (agentId: string, taskRef?: string) => Promise<string | null>;
 }): RoutineRunner {
   const {
     routineStore,
@@ -157,8 +191,31 @@ export function createRoutineRunner(options: {
      * routine rather than from the run id's owner column, because a runner told whose rows they were
      * by an id alone could be told the wrong answer.
      */
-    return runAsTenant(context.tenantId, () =>
+    /*
+     * And only when that tenant is the owner's (G01-C). A routine stamped `system`, `platform` or
+     * nothing, or stamped with somebody other than its owner, names nobody to act as: it is not run,
+     * and its run row is closed from the platform frame, which is the one that can reach a row the
+     * routine's stamp does not admit. The sweep refuses such a routine before it is ever offered;
+     * this is the same guard on the worker and Run-now entries, which arrive with an id alone.
+     */
+    const ran = await runAsClaimedTenant(context, context.ownerUserId, () =>
       runAsOwner(routineRunId, context),
+    );
+    if (ran.ran) return;
+    console.warn(
+      JSON.stringify({
+        type: "routine-run-untrusted-tenant",
+        routineId: context.routineId,
+        routineRunId,
+        reason: ran.reason,
+      }),
+    );
+    await runAsTenant("platform", () =>
+      routineStore.finishRun(
+        routineRunId,
+        "failed",
+        "This routine has no owner to run as. Create it again.",
+      ),
     );
   }
 
@@ -271,19 +328,21 @@ export function createRoutineRunner(options: {
      * The run row stays the ledger: a board that cannot be written is logged and the turn goes ahead,
      * because the person asked for the job, not for the card. `finished` matches on the same run ref,
      * so a card that was never opened leaves that update matching nothing rather than mis-filing
-     * somebody else's row.
+     * somebody else's row. Opened and closed in the tenant read off the routine (`context.tenantId`),
+     * the one this whole firing runs in, never one inferred from who owns it.
      */
     let carded = false;
     if (board) {
       try {
         await board.opened({
-          tenantId: ownerUserId,
+          tenantId: context.tenantId,
           title: instruction,
           executorAgentId: agentId,
           source: "routine",
+          triggerSource: "routine",
           channelRef: channelId,
           runRef: routineRunId,
-          deviceId: (await deviceIdOf?.(agentId)) ?? null,
+          deviceId: (await deviceIdOf?.(agentId, routineRunId)) ?? null,
         });
         carded = true;
       } catch (error) {
@@ -307,13 +366,19 @@ export function createRoutineRunner(options: {
       }
     }
     let replyText: string;
+    let produced: Pick<
+      Awaited<ReturnType<TurnRunner>>,
+      "components" | "attachments"
+    > = {};
     try {
-      ({ replyText } = await runTurn({
+      ({ replyText, ...produced } = await runTurn({
         ownerUserId,
         routineId,
         agentId,
         threadId: channel.threadId,
         instruction,
+        // The card's key, so the model this turn ran on is read back onto the card.
+        runRef: routineRunId,
         // The card opened above is this firing's record; the runner files nothing. When that write
         // failed, the runner's own card is the only mark the month's work leaves.
         cardOwnedByCaller: carded,
@@ -336,7 +401,7 @@ export function createRoutineRunner(options: {
          */
         if (carded && board) {
           await board
-            .finished({ tenantId: ownerUserId, runRef: routineRunId })
+            .finished({ tenantId: context.tenantId, runRef: routineRunId })
             .catch((boardError) =>
               console.error(
                 JSON.stringify({
@@ -353,12 +418,53 @@ export function createRoutineRunner(options: {
       }
       const reason = reasonOf(error);
       await routineStore.finishRun(routineRunId, "failed", reason);
+
+      /*
+       * THE FATIGUE RULE, read after the failure is recorded — the count has to include this
+       * firing, or the tenth failure in a row reads as the ninth and the routine keeps going.
+       *
+       * Read before the card is closed, because the card is where the breaker is shown (spec C3): the
+       * tenth failure's card closes failed carrying `circuit_breaker`, which is what the board draws as
+       * 已熔断·已自动停用. Its own try/catch, around the read and the switching-off: all of it happens
+       * after `finishRun`, and nothing in it is allowed to throw its way out of a firing whose failure
+       * is already on the row — nor to keep the card from closing.
+       */
+      let failures: number | null = null;
+      let switchedOff = false;
+      try {
+        failures = await routineStore.consecutiveFailures(routineId);
+        if (failures >= FATIGUE_LIMIT) {
+          // A dead integration should not burn model spend for ever.
+          await routineStore.setEnabled(ownerUserId, routineId, false);
+          switchedOff = true;
+        }
+      } catch (fatigueError) {
+        console.error(
+          JSON.stringify({
+            type: "routine-fatigue-rule-failed",
+            routineId,
+            routineRunId,
+            reason: reasonOf(fatigueError),
+          }),
+        );
+      }
+
       if (carded && board) {
+        /*
+         * The breaker rides the card only once the routine really is off: the badge says 已自动停用,
+         * and a switch-off that failed must not be drawn as one that happened. A discriminated `kind`,
+         * so a later deliverable ref (`{ kind: "deliverable", ... }`) can share the column.
+         */
+        const breaker: CircuitBreakerRef | null =
+          switchedOff && failures !== null
+            ? { kind: "circuit_breaker", failures, routineId }
+            : null;
         await board
           .finished({
-            tenantId: ownerUserId,
+            tenantId: context.tenantId,
             runRef: routineRunId,
             failed: true,
+            ...(breaker ? { deliverableRef: breaker } : {}),
           })
           .catch((boardError) =>
             console.error(
@@ -372,38 +478,16 @@ export function createRoutineRunner(options: {
           );
       }
 
-      /*
-       * THE FATIGUE RULE, read after the failure is recorded — the count has to include this
-       * firing, or the tenth failure in a row reads as the ninth and the routine keeps going.
-       *
-       * Its own try/catch, around the read and the switching-off as well as the message: this all
-       * happens after `finishRun`, and nothing in it is allowed to throw its way out of a firing
-       * whose failure is already on the row.
-       */
-      try {
-        const failures = await routineStore.consecutiveFailures(routineId);
-        if (failures === 1) {
-          // Only the first failure after a success. A routine that fails every night at three has
-          // one line in the channel, not one line a night for a month.
-          await say(`This routine failed: ${shorten(reason)}`);
-        } else if (failures >= FATIGUE_LIMIT) {
-          // A dead integration should not burn model spend for ever. Switched off, and said out
-          // loud, because a routine that goes quiet without explaining itself is worse than one
-          // that fails.
-          await routineStore.setEnabled(ownerUserId, routineId, false);
-          await say(SWITCHED_OFF);
-        }
-        // In between, nothing is said. The run rows carry it, and the routines page reads them.
-      } catch (fatigueError) {
-        console.error(
-          JSON.stringify({
-            type: "routine-fatigue-rule-failed",
-            routineId,
-            routineRunId,
-            reason: reasonOf(fatigueError),
-          }),
-        );
+      if (failures === 1) {
+        // Only the first failure after a success. A routine that fails every night at three has
+        // one line in the channel, not one line a night for a month.
+        await say(`This routine failed: ${shorten(reason)}`);
+      } else if (switchedOff) {
+        // Said out loud, because a routine that goes quiet without explaining itself is worse than
+        // one that fails.
+        await say(SWITCHED_OFF);
       }
+      // In between, nothing is said. The run rows carry it, and the routines page reads them.
       return;
     }
 
@@ -416,7 +500,12 @@ export function createRoutineRunner(options: {
     await routineStore.finishRun(routineRunId, "succeeded");
     if (carded && board) {
       await board
-        .finished({ tenantId: ownerUserId, runRef: routineRunId })
+        .finished({
+          tenantId: context.tenantId,
+          runRef: routineRunId,
+          // What the firing drew or handed over, for the person who opens 查收结果 (spec A9).
+          deliverableRef: deliverableRefOf(produced),
+        })
         .catch((boardError) =>
           console.error(
             JSON.stringify({

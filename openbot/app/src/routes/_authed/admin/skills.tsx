@@ -31,15 +31,30 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
+  crewMembers,
+  crewSummary,
+  grantToMembers,
+} from "@/lib/plugins/crew-grant";
+import {
   removeSkillMutationOptions,
   saveSkillMutationOptions,
+  setListingMutationOptions,
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
-import { pluginsPageQueryOptions } from "@/lib/plugins/queries";
+import {
+  installListingsQueryOptions,
+  listedRefs,
+  pluginsPageQueryOptions,
+} from "@/lib/plugins/queries";
+import {
+  type WakerGroup,
+  wakerGroupsQueryOptions,
+} from "@/lib/waker-groups/queries";
 
 /**
  * The deployment's skills: named instructions a person invokes with `/` and a Bot follows.
@@ -61,10 +76,22 @@ function RouteComponent() {
   const plugins = useQuery(pluginsPageQueryOptions());
   const { data: agents } = useQuery(agentListQueryOptions());
   const nameFor = useBotNames();
+  /*
+   * The workspace's crews, as a way to say WHICH coworkers get a deployment skill (spec E2). A crew
+   * never holds the skill itself: a press writes one grant per member, as `crew-grant.ts` explains.
+   */
+  const crews = useQuery(wakerGroupsQueryOptions());
 
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  /** The last group press's sentence, on the row of the skill it was about. */
+  const [batch, setBatch] = useState<{
+    slug: string;
+    text: string;
+    failed: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const report = { onError: (thrown: Error) => setError(thrown.message) };
   const saveSkill = useMutation({
@@ -79,12 +106,48 @@ function RouteComponent() {
     ...setPluginGrantMutationOptions(queryClient),
     ...report,
   });
+  /*
+   * Spec E3: which deployment skills owners may install on their own Wakers. Only a deployment
+   * skill (no owner) gets the switch: the server refuses to list somebody's own skill.
+   */
+  const listings = useQuery(installListingsQueryOptions());
+  const setListing = useMutation({
+    ...setListingMutationOptions(queryClient),
+    ...report,
+  });
+  const listedSkills = listedRefs(listings.data, "skill");
 
   const bots = (agents ?? []).map((agent: { id: string }) => ({
     id: agent.id,
     name: nameFor(agent.id),
   }));
   const skills = plugins.data?.skills ?? [];
+  const known = new Set(bots.map((bot) => bot.id));
+
+  async function grantToCrew(
+    slug: string,
+    crew: WakerGroup,
+    agentIds: string[],
+  ) {
+    setBatch(null);
+    setBusy(true);
+    try {
+      const outcome = await grantToMembers({
+        queryClient,
+        kind: "skill",
+        refs: [slug],
+        agentIds,
+      });
+      setBatch({
+        slug,
+        ...crewSummary(outcome, { label: crew.name, what: `/${slug}` }),
+      });
+    } catch (thrown) {
+      setError((thrown as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <PageShell
@@ -104,7 +167,7 @@ function RouteComponent() {
       ) : null}
 
       <PageSection
-        description="为整个部署写的。个人在自己的技能页里写自己的。"
+        description="为整个部署写的。个人在自己的技能页里写自己的。打开「上架」后，员工的主人可以在装配页里自己给员工装上或卸下这个技能。"
         title="已安装"
       >
         {/* A read that failed says so; `isPending` goes false on it too, and it is not "none". */}
@@ -116,6 +179,12 @@ function RouteComponent() {
           <PageEmpty>还没有技能。</PageEmpty>
         ) : (
           <PageRows>
+            {listings.error &&
+            skills.some((skill) => skill.ownerUserId === null) ? (
+              <p className="text-destructive text-sm" role="alert">
+                读不到上架目录，所以上架开关暂时不能切换。
+              </p>
+            ) : null}
             {skills.map((skill, index) => (
               <React.Fragment key={skill.slug}>
                 <Item size="sm">
@@ -131,7 +200,7 @@ function RouteComponent() {
                     </ItemTitle>
                     <ItemDescription>{skill.summary}</ItemDescription>
                     {/* A set, so it wraps onto its own line rather than crowding the title. */}
-                    <ItemFooter>
+                    <ItemFooter className="flex-col items-start">
                       <div className="flex flex-wrap gap-2">
                         {bots.map((bot) => {
                           const held = skill.grantedTo.includes(bot.id);
@@ -155,9 +224,74 @@ function RouteComponent() {
                           );
                         })}
                       </div>
+                      {(crews.data ?? []).length === 0 ? null : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-muted-foreground text-xs">
+                            或者交给一个小组：
+                          </span>
+                          {(crews.data ?? []).map((crew) => {
+                            /* The chip's number is the writes it will make: members not holding it yet. */
+                            const missing = crewMembers(
+                              crew,
+                              (agentId) =>
+                                known.has(agentId) &&
+                                !skill.grantedTo.includes(agentId),
+                            );
+                            return (
+                              <Button
+                                aria-label={`把 /${skill.slug} 交给${crew.name}`}
+                                disabled={busy || missing.length === 0}
+                                key={crew.id}
+                                onClick={() =>
+                                  void grantToCrew(skill.slug, crew, missing)
+                                }
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                {crew.name} · {missing.length}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {batch && batch.slug === skill.slug ? (
+                        <p
+                          className={
+                            batch.failed
+                              ? "text-destructive text-xs"
+                              : "text-muted-foreground text-xs"
+                          }
+                          role={batch.failed ? "alert" : "status"}
+                        >
+                          {batch.text}
+                        </p>
+                      ) : null}
                     </ItemFooter>
                   </ItemContent>
                   <ItemActions>
+                    {skill.ownerUserId === null ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Switch
+                          aria-label={`上架 /${skill.slug}`}
+                          checked={listedSkills.has(skill.slug)}
+                          disabled={
+                            !listings.data ||
+                            (setListing.isPending &&
+                              setListing.variables?.ref === skill.slug)
+                          }
+                          onCheckedChange={(next) => {
+                            setError(null);
+                            setListing.mutate({
+                              kind: "skill",
+                              listed: next,
+                              ref: skill.slug,
+                            });
+                          }}
+                        />
+                        <span aria-hidden="true">上架</span>
+                      </div>
+                    ) : null}
                     <Button
                       onClick={() => removeSkill.mutate(skill.slug)}
                       size="sm"

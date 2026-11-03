@@ -151,7 +151,7 @@ config:
     okta:
       clientId: ""
       issuer: ""
-  tenantPackageDir: /app/examples/fintech
+  tenantPackageDir: /app/examples/qoderwake
 
   # How far one Bot may hand work to another.
   #
@@ -439,9 +439,51 @@ database:
   #   postgres://user:password@host:5432/openbot?sslmode=require
   #
   # Keep it in a Secret rather than here: `url` is readable by anybody who can read the release.
+  #
+  # NOT A SUPERUSER, AND NOT `BYPASSRLS`. The migrations Job and the API both use this URL, and the
+  # API refuses to start on a role row-level security does not bind (OPENBOT_RLS_ENFORCE, unset,
+  # means refuse in production; it used to mean warn). A managed database's administrative role is
+  # neither, so RDS, Cloud SQL and Azure are unaffected. A self-hosted server's superuser is: give
+  # the URL a non-superuser owner, or set `config.extraEnv: [{name: OPENBOT_RLS_ENFORCE, value:
+  # warn}]` and accept that isolation rests on the application. See README, Upgrades.
   url: ""
   existingSecret: ""
   existingSecretKey: "database-url"
+  # THE SECOND URL: the role writer. The API refuses to start without ROLE_WRITER_DATABASE_URL
+  # ("ROLE_WRITER_DATABASE_URL is required"), because `openbot_role_writer` (migration 0109) is the
+  # only login allowed to write identity roles, and the API role above may only read them. Two URLs,
+  # two roles, two passwords, as in the delivery manual's external-database section:
+  #
+  #   url:           postgres://openbot_app:<password>@host:5432/openbot?sslmode=require
+  #   roleWriterUrl: postgres://openbot_role_writer:<other password>@host:5432/openbot?sslmode=require
+  #
+  # Set both roles' passwords yourself after the first migration (the migration's are public).
+  # Only the API server reads it; the migrations Job and the sweeps do not get it. With the bundled
+  # database the chart makes this role's password itself (see templates/database-roles-secret.yaml).
+  #
+  # With `existingSecret`, the role-writer URL is read from the same Secret under
+  # `roleWriterExistingSecretKey`, so a Secret made for this chart carries both keys. Name another
+  # Secret with `roleWriterExistingSecret`, or put the URL here as `roleWriterUrl` (readable by
+  # anybody who can read the release, like `url`). Not used with the bundled database.
+  roleWriterUrl: ""
+  roleWriterExistingSecret: ""
+  roleWriterExistingSecretKey: "role-writer-database-url"
+  # THE MIGRATION URL: the database OWNER, used by the migrations Job only and never by the API.
+  # The API's role (`url` above, openbot_app) cannot run migrations: the grants and roles they make
+  # are the owner's. Inline as `migrationUrl` (required with an inline `url`), or with
+  # `existingSecret` under `migrationExistingSecretKey` in the same Secret. A Secret without that key
+  # still upgrades: the Job logs that it is migrating with `database-url` as it used to, which works
+  # only when that URL is itself the owner's.
+  migrationUrl: ""
+  migrationExistingSecretKey: "migration-database-url"
+  # BUNDLED DATABASE ONLY: the role writer's password. Empty, the chart generates one and reads it
+  # back from the cluster on each upgrade. A tool that renders without cluster access (GitOps,
+  # `helm template`) cannot read it back and generates a new one every render, which also rolls the
+  # API pods each sync: SET ONE HERE (alphanumeric, e.g. `openssl rand -hex 24`), or name a Secret
+  # you manage with `roleWriterPasswordExistingSecret` (key `roleWriterPasswordExistingSecretKey`).
+  roleWriterPassword: ""
+  roleWriterPasswordExistingSecret: ""
+  roleWriterPasswordExistingSecretKey: "role-writer-password"
 
 # The bundled database. Off by default in favour of a managed one.
 # The bundled database.
@@ -465,6 +507,9 @@ postgresql:
     # This is the shape `docker-compose.yml` already ships, where the app user is the cluster
     # superuser, and it is safe for the same reason: this database exists for this release alone and
     # nothing else can reach it.
+    #
+    # IT IS ALSO A ROLE ROW-LEVEL SECURITY DOES NOT BIND, and the API refuses it in production, so
+    # the chart refuses to render until `config.extraEnv` names OPENBOT_RLS_ENFORCE. See README.
     #
     # A MANAGED DATABASE IS NOT THIS. On RDS, Cloud SQL or Azure there is no superuser to hand out,
     # so create the extension once as the administrative role and grant the migrating role ownership

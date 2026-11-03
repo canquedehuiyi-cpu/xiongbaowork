@@ -196,12 +196,14 @@ describe("agent input parser", () => {
         visibility: " private ",
         id: "forged-agent",
         ownerUserId: "attacker",
-        avatarSeed: "forged-avatar",
         deletedAt: "now",
         systemOwned: true,
         // `endpoint` is a real field for BYO-agent; validation protects it rather than refusing it
         // as a forged field. See agent-endpoint.test.ts.
         endpoint: "https://agents.example.com/ag-ui",
+        // So is `avatarSeed` since D07 D2 (the create dialog's chosen avatar), guarded by the seed
+        // pattern; an invalid one is refused in the avatarSeed cases above.
+        avatarSeed: "chosen-avatar",
       }),
     ).toEqual({
       ok: true,
@@ -211,6 +213,7 @@ describe("agent input parser", () => {
         roleDescription: "Reviews receipts.",
         visibility: "private",
         endpoint: "https://agents.example.com/ag-ui",
+        avatarSeed: "chosen-avatar",
       },
     });
   });
@@ -452,11 +455,12 @@ describe("agent lifecycle routes", () => {
       visibility: " private ",
       id: "forged-agent",
       ownerUserId: "attacker",
-      avatarSeed: "forged-avatar",
       deletedAt: "now",
       systemOwned: true,
-      // A real field now, not a forged one; the rest of this list still is.
+      // Real fields now, not forged ones (endpoint: BYO-agent; avatarSeed: D07 D2); the rest of
+      // this list still is.
       endpoint: "https://agents.example.com/ag-ui",
+      avatarSeed: "chosen-avatar",
     };
 
     for (const [path, method] of [
@@ -471,10 +475,12 @@ describe("agent lifecycle routes", () => {
       expect(response.status).toBe(method === "POST" ? 201 : 200);
     }
 
-    // The endpoint reaches the store because it is a real field; everything else forged does not.
+    // The endpoint and the avatar seed reach the store because they are real fields; everything
+    // else forged does not.
     const expected = {
       ...validInput,
       endpoint: "https://agents.example.com/ag-ui",
+      avatarSeed: "chosen-avatar",
     };
     expect(store.calls).toEqual([
       ["create", actor, expected],

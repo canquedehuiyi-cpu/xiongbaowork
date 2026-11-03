@@ -29,7 +29,10 @@ export function packageChannelId(tenantId: string, channelId: string): string {
  * their 分身, the personal coworker the onboarding then asks to configure.
  *
  * Called from Better Auth's user-create hook, so every arrival path — password sign-up, OAuth,
- * SSO — provisions the same way. It must be idempotent against a retry: one agent row per user.
+ * SSO — provisions the same way; and from the paths that never pass through that hook, the
+ * organization store (enterprise sign-in against a pinned authority) and the single-user actor at
+ * start-up, so no tenant is left without a subscription row an administrator can switch. It must be
+ * idempotent against a retry and a repeat: one subscription row and one agent row per user.
  */
 export async function provisionTenant(
   database: Database,
@@ -38,10 +41,15 @@ export async function provisionTenant(
   // The rows name a tenant that does not exist yet, so the write has to run
   // inside that tenant's scope; RLS will not admit another scope's stamp.
   await runAsTenant(user.id, async () => {
+    // One subscription row per tenant (`subscriptions_tenant_unique`, 0129). Callers that run on
+    // every sign-in (the organization store) and at every start (the single-user actor) call this
+    // repeatedly, and two first calls can race; the conflict on the tenant makes every call after the
+    // first a no-op, so an existing row, active or canceled, is the plan someone chose and is left
+    // alone.
     await database
       .insert(subscriptions)
       .values({ tenantId: user.id, planId: "free" })
-      .onConflictDoNothing();
+      .onConflictDoNothing({ target: subscriptions.tenantId });
 
     // One 分身 per tenant, keyed by a deterministic id so a retried hook cannot make a second.
     const avatarId = avatarAgentId(user.id);

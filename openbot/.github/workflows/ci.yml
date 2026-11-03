@@ -176,6 +176,39 @@ jobs:
       # question: every secret key a container demands has to be one the chart actually writes.
       # Getting that wrong is invisible until a pod starts, and every shipped target had it wrong.
       - run: bun scripts/check-rendered-chart.ts rendered.yaml
+      # The API refuses to start without ROLE_WRITER_DATABASE_URL against an external database, and
+      # the chart never set it, so every install crash-looped. Every external target here reads both
+      # URLs from its database Secret; the bundled target gets it from the chart's own password Secret.
+      - name: Role writer reaches the API
+        run: |
+          set -euo pipefail
+          if grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/openbot/ci/${{ matrix.target }}-values.yaml); then
+            grep -A1 'name: ROLE_WRITER_DATABASE_URL$' rendered.yaml | grep -q 'openbot_role_writer:$(ROLE_WRITER_PASSWORD)@' || {
+              echo "::error::The bundled database render does not give the API the role writer from the chart's password Secret."
+              exit 1
+            }
+            echo "bundled database: role-writer URL from the chart's password Secret"
+          else
+            grep -A4 'name: ROLE_WRITER_DATABASE_URL' rendered.yaml | grep -q 'key: role-writer-database-url' || {
+              echo "::error::An external-database render does not give the API ROLE_WRITER_DATABASE_URL from the database Secret."
+              exit 1
+            }
+            # An inline database URL with an inline role-writer URL renders, and carries it.
+            helm template ci charts/openbot \
+              --values charts/openbot/ci/${{ matrix.target }}-values.yaml \
+              --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)" \
+              --api-versions agents.x-k8s.io/v1beta1/Sandbox \
+              --api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate \
+              --set-string database.existingSecret= \
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
+              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/openbot \
+              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/openbot \
+              | grep -A1 'name: ROLE_WRITER_DATABASE_URL' | grep -q 'openbot_role_writer:y@db.internal' || {
+              echo "::error::An inline database.roleWriterUrl did not reach the API."
+              exit 1
+            }
+            echo "external database: role-writer URL from the Secret, and inline"
+          fi
       # And that the refusals are load-bearing rather than decorative. A chart full of `fail`
       # messages nothing ever triggers is a chart that has never been shown to refuse anything, and
       # every one of these describes a state that shipped in a values file at some point.
@@ -208,6 +241,14 @@ jobs:
           # secret is this chart's or a store's, because the key list is readable either way.
           refuses "a managed agent URL with no token" \
             --set-string config.managedAgent.url=http://agent.default:8000/ag-ui
+          # The bundled superuser with nobody having said RLS may go unenforced. Only armed where the
+          # target runs the bundled database.
+          if grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/openbot/ci/${{ matrix.target }}-values.yaml); then
+            refuses "the bundled superuser with OPENBOT_RLS_ENFORCE unsaid" \
+              --set config.extraEnv=null
+          else
+            echo "skipped: the bundled-superuser refusal is only armed with postgresql.enabled"
+          fi
           # A browser inside every replica of a replicated API.
           refuses "an embedded browser across several replicas" \
             --set server.embeddedComputer=true --set server.replicaCount=2
@@ -221,6 +262,20 @@ jobs:
           # A delivery or directory switch with no secret behind it. Armed on every target: the chart
           # requires the value when it holds the secret, and requires the store to name the key when
           # a store does.
+          # An inline external database URL with no role writer: the API would refuse to start. The
+          # positive half (the same values plus database.roleWriterUrl render) is asserted above.
+          if ! grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/openbot/ci/${{ matrix.target }}-values.yaml); then
+            refuses "an external database URL with no role-writer URL" \
+              --set-string database.existingSecret= \
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
+              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/openbot
+            refuses "an external database URL with no owner URL for migrations" \
+              --set-string database.existingSecret= \
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
+              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/openbot
+          else
+            echo "skipped: the role-writer refusal is only armed for an external database"
+          fi
           refuses "OpenTag switched on with no shared secret" \
             --set config.opentag.enabled=true
           refuses "SCIM switched on with no bearer token" \

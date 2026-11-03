@@ -20,21 +20,20 @@ import { users } from "../src/db/schema/core";
 import { deliveryOutbox } from "../src/db/schema/delivery";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // No DATABASE_URL fallback, DDL, automatic migrations, or provider invocation.
 // Root must provision an EMPTY disposable database with canonical schema/RLS.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw)
-  throw new Error(
-    "BLOCKED_TEST_DATABASE_URL: PG tests NOT RUN; explicit disposable test DB required",
-  );
+// The shared helper clones the migrated template into a fresh one-time database.
+const disposable = await createDisposableTestDatabase({ role: "bypass" });
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !/^postgres(?:ql)?:$/.test(url.protocol) ||
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
   !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-  process.env.TEST_DATABASE_DISPOSABLE !== databaseName
+  disposable.databaseName !== databaseName
 )
   throw new Error(
     "BLOCKED_NOT_DISPOSABLE: loopback one-time DB name and explicit disposable acknowledgment required",
@@ -91,7 +90,8 @@ afterAll(async () => {
   }
   await dbA.$client.close();
   await dbB.$client.close();
-});
+  await disposable.drop();
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 async function provision(origin: ContinuationProvision["origin"] = "current") {
   const id = randomUUID();

@@ -1506,7 +1506,15 @@ async fn start_stack_inner<R: tauri::Runtime>(
             picked.as_ref(),
             // What a previous start of this deployment already minted. Without it every Start writes a
             // new KEY_ENCRYPTION_KEY and orphans everything the server had encrypted under the old one.
-            &existing_secrets,
+            // Plus the settings a previous start chose and the next one keeps (the tenant package).
+            &{
+                let mut kept = existing_secrets.clone();
+                kept.extend(openbot_env::already_set(
+                    &root.join(".env"),
+                    &openbot_env::CARRIED_SETTINGS[..],
+                ));
+                kept
+            },
         );
         if let Some(authority) = organization_auth_url {
             settings.insert("OPENBOT_ORGANIZATION_AUTH_URL".into(), authority);
@@ -7290,22 +7298,12 @@ fn main() {
         }
         let root = temp_root("openbot-harness-start-ipc");
         write_installed_deployment(&root);
-        let mut images: deployment::Images =
-            serde_json::from_str(&std::fs::read_to_string(deployment::images_path(&root)).unwrap())
-                .unwrap();
-        for name in ["agent-langgraph-agui", "agent-claude-sdk"] {
-            images.images.insert(
-                name.into(),
-                deployment::Image {
-                    reference: format!("localhost/{name}@sha256:00"),
-                },
-            );
-        }
-        std::fs::write(
-            deployment::images_path(&root),
-            serde_json::to_string(&images).unwrap(),
-        )
-        .unwrap();
+        // The same stamped release, also publishing the harness images these cases pick.
+        test_support::installed_release(
+            &root,
+            "v0.0.8",
+            ["agent-langgraph-agui", "agent-claude-sdk"],
+        );
         let _path = SerializedPath::set_only_with("docker", "harness");
         let _cleanup = Cleanup(vec![root.clone(), _path.bin().to_path_buf()]);
         let record = root.join("commands.log");
@@ -7440,7 +7438,7 @@ fn main() {
         .unwrap();
         assert_eq!(
             settings.get("TENANT_PACKAGE_DIR").map(String::as_str),
-            Some("../examples/fintech")
+            Some(openbot_env::DEFAULT_TENANT_PACKAGE_DIR)
         );
         let bundled_url = settings
             .get("MANAGED_AGENT_AG_UI_URL")
@@ -7481,7 +7479,7 @@ fn main() {
         } else if let Some(image) = expected_image {
             assert_eq!(
                 settings.get("PICKED_HARNESS_IMAGE"),
-                Some(&format!("localhost/{image}@sha256:00"))
+                Some(&test_support::fixture_reference(image))
             );
             assert_ne!(settings.get("PICKED_HARNESS_URL"), Some(&remote));
         } else {
@@ -7492,7 +7490,7 @@ fn main() {
             serde_json::json!({
                 "case":case, "composeUp":up, "commands":commands, "intentionalMigrationBarrier":true,
                 "publicSettings":settings,
-                "defaultPackage":"../examples/fintech", "remoteEndpointPersistedAndConsumed":asked,
+                "defaultPackage":openbot_env::DEFAULT_TENANT_PACKAGE_DIR, "remoteEndpointPersistedAndConsumed":asked,
                 "actualAskIpcResponse":asked.then_some("D53-BYO-REMOTE-ANSWER"),
                 "noHostStartup":true, "nativeGui":false, "realEngineOrDatabase":false,
             })
@@ -8208,47 +8206,8 @@ fn main() {
             r#"{"scripts":{"serve":"vite preview"}}"#,
         )
         .unwrap();
-        let images = deployment::Images {
-            version: DEPLOYMENT_VERSION.into(),
-            images: std::collections::BTreeMap::from([
-                (
-                    "server".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-server@sha256:00".into(),
-                    },
-                ),
-                (
-                    "supervisor".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-supervisor@sha256:00".into(),
-                    },
-                ),
-                (
-                    "agent-computer".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-agent-computer@sha256:00".into(),
-                    },
-                ),
-                (
-                    "agent-bot".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-agent-bot@sha256:00".into(),
-                    },
-                ),
-                (
-                    "agent-langgraph".into(),
-                    deployment::Image {
-                        reference: "localhost/openbot-agent-langgraph@sha256:00".into(),
-                    },
-                ),
-            ]),
-        };
-        std::fs::write(
-            deployment::images_path(root),
-            serde_json::to_string(&images).unwrap(),
-        )
-        .unwrap();
-        deployment::record(root, DEPLOYMENT_VERSION).unwrap();
+        // A finished fetch: all five stack images, digest-pinned, with the success stamp.
+        test_support::installed_release(root, DEPLOYMENT_VERSION, []);
         for package in ["", "server", "worker"] {
             std::fs::write(root.join(package).join("package.json"), "{}").unwrap();
         }

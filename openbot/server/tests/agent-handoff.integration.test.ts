@@ -12,6 +12,7 @@ import {
   pluginGrants,
   workItems,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -53,40 +54,47 @@ const desk = createHandoffDesk({
 });
 
 async function clean() {
-  // By the suite's own actor, which every hop's payload carries. A hop's key is `hop:<hash>:<hash>`,
-  // so a key prefix matches nothing, and a hop left queued is claimed by the next suite's sweep.
-  await database
-    .delete(workItems)
-    .where(sql`${workItems.payload}->>'actorId' = ${ACTOR}`);
-  for (const id of [ASKER, TARGET]) {
-    await database.delete(pluginGrants).where(eq(pluginGrants.agentId, id));
-    await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
-    await database.delete(agents).where(eq(agents.id, id));
-  }
+  // As `platform`: the hops are the person's rows and the Bots the catalogue's, and a tear-down
+  // from one tenant would see only its own.
+  await runAsTenant("platform", async () => {
+    // By the suite's own actor, which every hop's payload carries. A hop's key is `hop:<hash>:<hash>`,
+    // so a key prefix matches nothing, and a hop left queued is claimed by the next suite's sweep.
+    await database
+      .delete(workItems)
+      .where(sql`${workItems.payload}->>'actorId' = ${ACTOR}`);
+    for (const id of [ASKER, TARGET]) {
+      await database.delete(pluginGrants).where(eq(pluginGrants.agentId, id));
+      await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
+      await database.delete(agents).where(eq(agents.id, id));
+    }
+  });
 }
 
 beforeEach(async () => {
   await clean();
-  for (const [id, name] of [
-    [ASKER, "Asker"],
-    [TARGET, "Target"],
-  ]) {
-    await database
-      .insert(agents)
-      .values({ id, name, type: "built_in", configuration: {} })
-      .onConflictDoNothing();
-    await database
-      .insert(agentProfiles)
-      .values({
-        agentId: id,
-        name,
-        title: "",
-        roleDescription: "",
-        avatarSeed: id,
-        visibility: "public",
-      })
-      .onConflictDoNothing();
-  }
+  // Built-in Bots are the deployment's catalogue (`system`), which every person's run must read.
+  await runAsTenant("system", async () => {
+    for (const [id, name] of [
+      [ASKER, "Asker"],
+      [TARGET, "Target"],
+    ]) {
+      await database
+        .insert(agents)
+        .values({ id, name, type: "built_in", configuration: {} })
+        .onConflictDoNothing();
+      await database
+        .insert(agentProfiles)
+        .values({
+          agentId: id,
+          name,
+          title: "",
+          roleDescription: "",
+          avatarSeed: id,
+          visibility: "public",
+        })
+        .onConflictDoNothing();
+    }
+  });
 });
 
 afterAll(async () => {
@@ -103,30 +111,37 @@ const from = (over: Partial<{ runId: string; depth: number }> = {}) => ({
   ...over,
 });
 
+/** Granted in the person's own tenant, which is where every hop here is asked. */
 async function grantTarget() {
-  await database
-    .insert(pluginGrants)
-    .values({ kind: "bot", ref: TARGET, agentId: ASKER, grantedBy: "test" })
-    .onConflictDoNothing();
+  await runAsTenant(ACTOR, async () => {
+    await database
+      .insert(pluginGrants)
+      .values({ kind: "bot", ref: TARGET, agentId: ASKER, grantedBy: "test" })
+      .onConflictDoNothing();
+  });
 }
 
 describe("a hop, against the database", () => {
   test("an ungranted Bot is refused, and granting it now is enough", async () => {
-    const before = await desk.send({
-      from: from(),
-      target: "Target",
-      envelope: { task: "have a look" },
-    });
+    const before = await runAsTenant(ACTOR, () =>
+      desk.send({
+        from: from(),
+        target: "Target",
+        envelope: { task: "have a look" },
+      }),
+    );
     expect(before.ok).toBe(false);
 
     // Read per hop and never held, so this applies to the very next one rather than after a restart.
     await grantTarget();
 
-    const after = await desk.send({
-      from: from(),
-      target: "Target",
-      envelope: { task: "have a look" },
-    });
+    const after = await runAsTenant(ACTOR, () =>
+      desk.send({
+        from: from(),
+        target: "Target",
+        envelope: { task: "have a look" },
+      }),
+    );
     expect(after).toMatchObject({ ok: true, to: TARGET });
   });
 
@@ -137,11 +152,13 @@ describe("a hop, against the database", () => {
   test("the same hop offered twice leaves one row", async () => {
     await grantTarget();
     const send = () =>
-      desk.send({
-        from: from(),
-        target: "Target",
-        envelope: { task: "have a look" },
-      });
+      runAsTenant(ACTOR, () =>
+        desk.send({
+          from: from(),
+          target: "Target",
+          envelope: { task: "have a look" },
+        }),
+      );
 
     await send();
     await send();
@@ -151,10 +168,12 @@ describe("a hop, against the database", () => {
      * on the request, and written in raw a run calling itself `notice` aliased the prefix every
      * failure notice is keyed under — so a test that greps for the raw id is asserting the bug.
      */
-    const rows = await database
-      .select({ key: workItems.key, payload: workItems.payload })
-      .from(workItems)
-      .where(eq(workItems.kind, HANDOFF_KIND));
+    const rows = await runAsTenant(ACTOR, () =>
+      database
+        .select({ key: workItems.key, payload: workItems.payload })
+        .from(workItems)
+        .where(eq(workItems.kind, HANDOFF_KIND)),
+    );
     const mine = rows.filter(
       (row) => (row.payload as { runId?: string }).runId === `run-${suite}-1`,
     );
@@ -173,29 +192,35 @@ describe("a hop, against the database", () => {
 
     expect(
       (
-        await desk.send({
-          from: from({ runId }),
-          target: "Target",
-          envelope: { task: "first" },
-        })
+        await runAsTenant(ACTOR, () =>
+          desk.send({
+            from: from({ runId }),
+            target: "Target",
+            envelope: { task: "first" },
+          }),
+        )
       ).ok,
     ).toBe(true);
     expect(
       (
-        await desk.send({
-          from: from({ runId }),
-          target: "Target",
-          envelope: { task: "second" },
-        })
+        await runAsTenant(ACTOR, () =>
+          desk.send({
+            from: from({ runId }),
+            target: "Target",
+            envelope: { task: "second" },
+          }),
+        )
       ).ok,
     ).toBe(true);
 
     // Two is the cap for this suite, so the third is refused whichever replica asks.
-    const third = await desk.send({
-      from: from({ runId }),
-      target: "Target",
-      envelope: { task: "third" },
-    });
+    const third = await runAsTenant(ACTOR, () =>
+      desk.send({
+        from: from({ runId }),
+        target: "Target",
+        envelope: { task: "third" },
+      }),
+    );
     expect(third.ok).toBe(false);
   });
 
@@ -203,17 +228,21 @@ describe("a hop, against the database", () => {
     await grantTarget();
     const runId = `run-${suite}-3`;
 
-    const outcome = await desk.send({
-      from: from({ runId, depth: 2 }),
-      target: "Target",
-      envelope: { task: "keep going" },
-    });
+    const outcome = await runAsTenant(ACTOR, () =>
+      desk.send({
+        from: from({ runId, depth: 2 }),
+        target: "Target",
+        envelope: { task: "keep going" },
+      }),
+    );
 
     expect(outcome.ok).toBe(false);
-    const rows = await database
-      .select({ payload: auditEvents.payload })
-      .from(auditEvents)
-      .where(eq(auditEvents.eventType, "agent.handoff_refused"));
+    const rows = await runAsTenant(ACTOR, () =>
+      database
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(eq(auditEvents.eventType, "agent.handoff_refused")),
+    );
     expect(
       rows.some(
         (row) =>
@@ -227,16 +256,20 @@ describe("a hop, against the database", () => {
     await grantTarget();
     const runId = `run-${suite}-4`;
 
-    await desk.send({
-      from: from({ runId, depth: 1 }),
-      target: "Target",
-      envelope: { task: "have a look", expecting: "a date range" },
-    });
+    await runAsTenant(ACTOR, () =>
+      desk.send({
+        from: from({ runId, depth: 1 }),
+        target: "Target",
+        envelope: { task: "have a look", expecting: "a date range" },
+      }),
+    );
 
-    const rows = await database
-      .select({ payload: workItems.payload })
-      .from(workItems)
-      .where(eq(workItems.kind, HANDOFF_KIND));
+    const rows = await runAsTenant(ACTOR, () =>
+      database
+        .select({ payload: workItems.payload })
+        .from(workItems)
+        .where(eq(workItems.kind, HANDOFF_KIND)),
+    );
     const row = rows.find(
       (candidate) => (candidate.payload as { runId?: string }).runId === runId,
     );

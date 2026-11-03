@@ -80,6 +80,16 @@ spec:
             - /bin/sh
             - -ec
             - |
+              {{- if not .Values.postgresql.enabled }}
+              # The owner migrates (0054's grants and 0109's roles are the owner's to make); the API's
+              # own role cannot. See database.migrationUrl in values.yaml.
+              if [ -n "${MIGRATION_DATABASE_URL:-}" ]; then
+                export APP_DATABASE_URL="${APP_DATABASE_URL:-$DATABASE_URL}"
+                export DATABASE_URL="$MIGRATION_DATABASE_URL"
+              elif [ -n "${MIGRATION_URL_EXPECTED:-}" ]; then
+                echo "migrate: no ${MIGRATION_URL_EXPECTED} key in the database Secret, so migrating with database-url as before. Add the owner's URL under that key: the API's role cannot run migrations." >&2
+              fi
+              {{- end }}
               # Bounded, so a database that is never coming back fails the install rather than
               # holding it open until somebody notices. `pg_isready` reads the same DATABASE_URL the
               # migration is about to use, so this cannot wait on the wrong server.
@@ -91,9 +101,42 @@ spec:
                 fi
                 sleep 2
               done
-              exec /usr/local/bin/bun scripts/migrate.ts
+              {{- if not .Values.postgresql.enabled }}
+              # The owner's URL and the API's must reach the SAME database, or this migrates one the API
+              # never reads and still succeeds. Compared by name and by when that server started (as an epoch,
+              # so neither role's DateStyle or timezone can make one server read as two), which
+              # both roles can read. On a first install openbot_app has no password yet (it is set after
+              # migrating), so a failed API connection is reported and the check skipped.
+              if [ -n "${APP_DATABASE_URL:-}" ] && [ "$APP_DATABASE_URL" != "$DATABASE_URL" ]; then
+                identity="SELECT current_database() || ' started ' || extract(epoch FROM pg_postmaster_start_time())"
+                owner_reaches="$(psql "$DATABASE_URL" -XAtq -v ON_ERROR_STOP=1 -c "$identity")"
+                if api_reaches="$(psql "$APP_DATABASE_URL" -XAtq -v ON_ERROR_STOP=1 -c "$identity" 2>/dev/null)"; then
+                  if [ "$owner_reaches" != "$api_reaches" ]; then
+                    echo "migrate: refusing to migrate. The migration URL reaches '$owner_reaches' but the API's URL reaches '$api_reaches': database.migrationUrl (or the Secret's migration key) points at a different database than the API uses." >&2
+                    exit 1
+                  fi
+                  echo "migrate: the owner's and the API's URLs reach the same database"
+                else
+                  echo "migrate: could not connect with the API's URL to confirm it reaches the same database as the migration URL (expected on a first install, before openbot_app has a password); migrating without that check" >&2
+                fi
+              fi
+              {{- end }}
+              /usr/local/bin/bun scripts/migrate.ts
+              {{- if .Values.postgresql.enabled }}
+              # The role writer's password, as the embedded image's migrate.sh sets it: after the
+              # migrations that create the role, as the owner. Alphanumeric by construction; checked
+              # anyway before it goes into a SQL literal.
+              case "$ROLE_WRITER_PASSWORD" in ''|*[!A-Za-z0-9]*) echo "migrate: invalid role writer password" >&2; exit 1 ;; esac
+              printf "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "$ROLE_WRITER_PASSWORD" |
+                psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q >/dev/null
+              echo "migrate: openbot_role_writer password installed"
+              {{- end }}
           env:
-{{ include "openbot.databaseUrlEnv" . | indent 12 }}
+{{ include "openbot.migrationDatabaseUrlEnv" . | indent 12 }}
+            {{- if and (not .Values.postgresql.enabled) (not (.Values.database).migrationUrl) .Values.database.existingSecret }}
+            - name: MIGRATION_URL_EXPECTED
+              value: {{ (.Values.database).migrationExistingSecretKey | default "migration-database-url" | quote }}
+            {{- end }}
             - name: EMBEDDED_POSTGRES
               value: "off"
             - name: EMBEDDED_COMPUTER

@@ -8,6 +8,7 @@ import {
   frameFiring,
   sanitizeSeededHistory,
 } from "../src/routines/run-turn";
+import { runAsTenant } from "../src/tenant/context";
 
 /**
  * A headless turn, asserted without a gateway, without a database and without a model.
@@ -211,14 +212,17 @@ function harness(options: {
       : { lockTtlSeconds: options.lockTtlSeconds }),
   });
 
+  // In the owner's frame, as every production caller runs a turn: the pause guard reads it.
   const run = () =>
-    runTurn({
-      ownerUserId: OWNER,
-      routineId: ROUTINE_ID,
-      agentId: AGENT_ID,
-      threadId: THREAD_ID,
-      instruction: INSTRUCTION,
-    });
+    runAsTenant(OWNER, () =>
+      runTurn({
+        ownerUserId: OWNER,
+        routineId: ROUTINE_ID,
+        agentId: AGENT_ID,
+        threadId: THREAD_ID,
+        instruction: INSTRUCTION,
+      }),
+    );
 
   return { run, agent, calls, order, builtFor };
 }

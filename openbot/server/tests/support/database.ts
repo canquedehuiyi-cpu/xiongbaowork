@@ -1,3 +1,6 @@
+import { randomBytes } from "node:crypto";
+import { SQL } from "bun";
+
 /**
  * The database integration suite must never fall back to the developer's application database.
  * `createDatabase` deliberately removes `process.env.DATABASE_URL` after opening a connection so Bun
@@ -59,3 +62,154 @@ export function testDatabaseUrlFrom(
  * so. A test that wants the deadlock that pinning to one exposes asks for `{ max: 1 }` itself.
  */
 export const TEST_POOL = { max: 2 } as const;
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const DISPOSABLE_NAME = /^openbot_continuation_test_[0-9a-f]{16}$/;
+const TEMPLATE_NAME = /^openbot_continuation_template$/;
+
+/**
+ * The timeout for an `afterAll` that calls `drop()`, instead of Bun's 5 s hook default.
+ *
+ * `DROP DATABASE` requests an immediate checkpoint and waits for it (the drop bumps
+ * `pg_stat_bgwriter.checkpoints_req`), so it lasts as long as flushing every dirty buffer in the
+ * cluster takes, not as long as this suite's own work: on a CI shard, after the baseline run and the
+ * shard's other suites have written to the same server, that has exceeded 5 s and failed a suite
+ * whose tests had all passed. `WITH (FORCE)` may also wait up to 5 s more for terminated backends.
+ */
+export const DISPOSABLE_DROP_TIMEOUT_MS = 30_000;
+
+export interface DisposableTestDatabase {
+  /** Same credentials as the chosen role, pointed at the new one-time database. */
+  readonly url: string;
+  readonly databaseName: string;
+  /**
+   * The same one-time database through the BYPASSRLS fixture role, when `TEST_DATABASE_BYPASS_URL`
+   * is configured: for a suite whose code under test must run as the app role but whose fixture
+   * writes the closed continuation ledger, which no app-role policy admits.
+   */
+  readonly bypassUrl?: string;
+  /** Drops the one-time database. Call after every pool on `url` (and `bypassUrl`) is closed. */
+  drop(): Promise<void>;
+}
+
+function loopbackPostgresUrl(raw: string | undefined, name: string): URL {
+  if (!raw?.trim()) {
+    throw new Error(`BLOCKED_NOT_DISPOSABLE: ${name} is not configured`);
+  }
+  const url = new URL(raw.trim());
+  if (!/^postgres(?:ql)?:$/.test(url.protocol) || !LOOPBACK_HOSTS.has(url.hostname)) {
+    throw new Error(`BLOCKED_NOT_DISPOSABLE: ${name} must be a loopback postgres:// URL`);
+  }
+  return url;
+}
+
+/**
+ * A one-time, empty, fully migrated database for suites that must own every row they see (the D06
+ * continuation suites check `users` is empty and that the database name is
+ * `openbot_continuation_test_<16hex>`).
+ *
+ * It is cloned from `TEST_DATABASE_TEMPLATE` (migrated by the owner and never connected to) through
+ * `TEST_DATABASE_ADMIN_URL`, so the test itself applies no migration and no grant. The suite connects
+ * as `openbot_app` (from `TEST_DATABASE_URL`, via `testDatabaseUrl`) or, for `role: "bypass"`, with
+ * the credentials of `TEST_DATABASE_BYPASS_URL`: a NOSUPERUSER BYPASSRLS fixture role needed to read
+ * and write the closed (FORCE RLS, zero-policy) approval continuation ledger. Every URL must be
+ * loopback; the name is generated here, which is the disposable acknowledgment.
+ */
+export async function createDisposableTestDatabase(
+  options: { role?: "app" | "bypass" } = {},
+  environment: Record<string, string | undefined> = process.env,
+): Promise<DisposableTestDatabase> {
+  const app = loopbackPostgresUrl(
+    environment === process.env ? testDatabaseUrl() : testDatabaseUrlFrom(environment),
+    "TEST_DATABASE_URL",
+  );
+  const admin = loopbackPostgresUrl(environment.TEST_DATABASE_ADMIN_URL, "TEST_DATABASE_ADMIN_URL");
+  const credentials =
+    options.role === "bypass"
+      ? loopbackPostgresUrl(environment.TEST_DATABASE_BYPASS_URL, "TEST_DATABASE_BYPASS_URL")
+      : app;
+  const bypass = environment.TEST_DATABASE_BYPASS_URL
+    ? loopbackPostgresUrl(environment.TEST_DATABASE_BYPASS_URL, "TEST_DATABASE_BYPASS_URL")
+    : undefined;
+  const template = environment.TEST_DATABASE_TEMPLATE?.trim() ?? "";
+  if (!TEMPLATE_NAME.test(template)) {
+    throw new Error("BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_TEMPLATE must be openbot_continuation_template");
+  }
+  const databaseName = `openbot_continuation_test_${randomBytes(8).toString("hex")}`;
+  if (!DISPOSABLE_NAME.test(databaseName)) throw new Error("BLOCKED_NOT_DISPOSABLE");
+
+  // Bun prefers $DATABASE_URL over explicit parts (see createDatabase); never let it pick the target.
+  delete process.env.DATABASE_URL;
+  const client = new SQL({
+    adapter: "postgres",
+    hostname: admin.hostname,
+    port: admin.port ? Number(admin.port) : 5432,
+    username: decodeURIComponent(admin.username),
+    password: decodeURIComponent(admin.password),
+    database: decodeURIComponent(admin.pathname.replace(/^\//, "")) || "postgres",
+    max: 1,
+  });
+  try {
+    // The suite's own role is never a superuser, and only the explicit fixture role may bypass RLS:
+    // the app role must stay bound by the policies these suites exercise.
+    const roleName = decodeURIComponent(credentials.username);
+    const [facts] = await client`
+      select rolsuper as super, rolbypassrls as bypass
+      from pg_catalog.pg_roles where rolname = ${roleName}
+    `;
+    if (
+      facts?.super !== false ||
+      facts.bypass !== (options.role === "bypass")
+    ) {
+      throw new Error(
+        "BLOCKED_NOT_DISPOSABLE: the suite role must be NOSUPERUSER, and BYPASSRLS only for role \"bypass\"",
+      );
+    }
+    // The separate fixture connection, when one is configured, must itself be BYPASSRLS and never a
+    // superuser, whatever role the suite runs as.
+    if (bypass) {
+      const [fixture] = await client`
+        select rolsuper as super, rolbypassrls as bypass
+        from pg_catalog.pg_roles where rolname = ${decodeURIComponent(bypass.username)}
+      `;
+      if (fixture?.super !== false || fixture.bypass !== true) {
+        throw new Error(
+          "BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_BYPASS_URL must name a NOSUPERUSER BYPASSRLS role",
+        );
+      }
+    }
+    // Both names are fixed-shape identifiers checked above; CREATE DATABASE takes no parameters.
+    await client.unsafe(`CREATE DATABASE "${databaseName}" TEMPLATE "${template}"`);
+  } catch (error) {
+    await client.close();
+    throw error;
+  }
+
+  const url = new URL(credentials.toString());
+  url.pathname = `/${databaseName}`;
+  let bypassUrl: string | undefined;
+  if (bypass) {
+    const fixture = new URL(bypass.toString());
+    fixture.pathname = `/${databaseName}`;
+    bypassUrl = fixture.toString();
+  }
+  let dropped = false;
+  return {
+    url: url.toString(),
+    databaseName,
+    bypassUrl,
+    async drop() {
+      if (dropped) return;
+      dropped = true;
+      const started = Date.now();
+      try {
+        await client.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+        const ms = Date.now() - started;
+        // Said only when slow, so a hook close to its timeout shows where the time went.
+        if (ms > 1_000) console.log(JSON.stringify({ type: "disposable-drop-slow", databaseName, ms }));
+      } finally {
+        await client.close();
+      }
+    },
+  };
+}

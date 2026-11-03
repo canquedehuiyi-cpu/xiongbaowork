@@ -14,19 +14,20 @@ import { createDatabase } from "../src/db/client";
 import { approvalRequests, approvalRules } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { runAsTenant } from "../src/tenant/context";
-import { testDatabaseUrl } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // SOURCE_ONLY: definitions, zero executions. Real PG17 only; never a CPU import.
 // Reuse the repository's explicit TEST_DATABASE_URL resolver, then tighten to
 // the existing AP disposable-name/acknowledgment convention. No DATABASE_URL
 // fallback, DDL, migration, auto-creation, provider or alternate PG engine.
-const raw = testDatabaseUrl();
+const disposable = await createDisposableTestDatabase();
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
   !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-  process.env.TEST_DATABASE_DISPOSABLE !== databaseName
+  disposable.databaseName !== databaseName
 )
   throw new Error("BLOCKED_NOT_DISPOSABLE: explicit one-time PG17 fixture required");
 
@@ -40,14 +41,15 @@ type ApprovalTransaction = Parameters<typeof openStoredApprovalInTransaction>[0]
 let initialized = false;
 
 beforeAll(async () => {
-  const [identity] = await database
+  // Which database and schema this is belongs to no tenant: asked as the platform.
+  const [identity] = await runAsTenant("platform", () => database
     .select({
       name: sql<string>`current_database()`,
       version: sql<number>`current_setting('server_version_num')::int`,
       approvals: sql<string | null>`to_regclass('public.approval_requests')::text`,
       rules: sql<string | null>`to_regclass('public.approval_rules')::text`,
     })
-    .from(sql`(select 1) as fixture_identity`);
+    .from(sql`(select 1) as fixture_identity`));
   if (
     !identity || identity.name !== databaseName ||
     identity.version < 170_000 || identity.version >= 180_000 ||
@@ -72,8 +74,9 @@ afterAll(async () => {
     }
   } finally {
     await database.$client.close();
+    await disposable.drop();
   }
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 function action(scopeName = "tx-fixture"): ApprovalAction {
   const args = { path: "notes.txt", content: "fixture content" };

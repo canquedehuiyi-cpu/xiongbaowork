@@ -6,6 +6,7 @@ import type { ActionPolicy } from "../src/computer/policy";
 import { encryptSecret } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
+  agentProfiles,
   agents,
   credentials,
   mcpServers,
@@ -15,6 +16,8 @@ import {
   users,
 } from "../src/db/schema";
 import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -37,6 +40,8 @@ const suite = randomUUID().slice(0, 8);
 const botId = `agent_oauth_bot_${suite}`;
 const askerId = `user_oauth_asker_${suite}`;
 const otherId = `user_oauth_other_${suite}`;
+/** The administrator who added the server and registered its OAuth client (G01-E P10). */
+const adminId = `user_oauth_admin_${suite}`;
 const serverId = "google-drive";
 const toolName = "search_files";
 const ref = `${serverId}/${toolName}`;
@@ -91,6 +96,31 @@ let clientBefore: string | null = null;
 let toolWasAlreadyAdvertised = false;
 const credentialIds: string[] = [];
 
+/*
+ * THREE FRAMES, by whose row it is (G01, G01-E P10).
+ *
+ * A person's own rows — their user row, the refresh token they granted and the connection pointing
+ * at it — are written and read back in that person's frame. The deployment's server rows — the Drive
+ * server, its tool and its OAuth client — are the team's, stamped `team`, and written by an
+ * administrator holding the admin capability, as the admin routes write them. The Bot is a public
+ * team Bot, so each person's frame may run it and see its grant. Calls run in the asker's own frame,
+ * as a person's chat turn runs them; the same calls are also asked as `platform` (background work),
+ * which reads every tenant's rows. The cross-person questions (the retirements, the cleanup) run as
+ * `platform`. Which person's grant a call spends is still decided by `actorId` alone, and a person's
+ * frame can spend nobody's but their own: that is what these tests are about.
+ */
+function asPerson<T>(userId: string, work: () => Promise<T>) {
+  return runAsTenant(userId, work);
+}
+function asPlatform<T>(work: () => Promise<T>) {
+  return runAsTenant("platform", work);
+}
+const adminRequest = createAdminRequest(database);
+function asAdmin<T>(work: () => Promise<T>) {
+  return adminRequest(adminId, work);
+}
+let releaseAdmin: (() => Promise<void>) | undefined;
+
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
@@ -100,6 +130,10 @@ const store = createPluginStore({
         .select({
           encryptedValue: credentials.encryptedValue,
           revokedAt: credentials.revokedAt,
+          // What the vault's own reader reports, which the store checks a server's secret against.
+          id: credentials.id,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
         })
         .from(credentials)
         .where(eq(credentials.id, id));
@@ -169,128 +203,189 @@ async function retireLive(
   keyId: string,
 ) {
   const revokedAt = new Date();
-  await database
-    .update(credentials)
-    .set({ revokedAt, updatedAt: revokedAt })
-    .where(
-      and(
-        eq(credentials.kind, kind),
-        eq(credentials.provider, serverId),
-        eq(credentials.keyId, keyId),
-        isNull(credentials.revokedAt),
+  // A person's token is theirs; the OAuth client is the team's, retired by an administrator.
+  const retire =
+    kind === "mcp_user_token" ? asPerson.bind(null, keyId) : asAdmin;
+  await retire(() =>
+    database
+      .update(credentials)
+      .set({ revokedAt, updatedAt: revokedAt })
+      .where(
+        and(
+          eq(credentials.kind, kind),
+          eq(credentials.provider, serverId),
+          eq(credentials.keyId, keyId),
+          isNull(credentials.revokedAt),
+        ),
       ),
-    );
+  );
 }
 
 /** Register the deployment's OAuth client, which is what `mcp_servers.credential_id` holds. */
 async function registerClient() {
   await retireLive("mcp_oauth_client", "oauth-client");
-  const [credential] = await database
-    .insert(credentials)
-    .values({
-      kind: "mcp_oauth_client",
-      provider: serverId,
-      keyId: "oauth-client",
-      metadata: { clientId: CLIENT.clientId },
-      encryptedValue: await encryptSecret(
-        ENCRYPTION_KEY,
-        JSON.stringify(CLIENT),
-      ),
-    })
-    .returning({ id: credentials.id });
+  const encryptedValue = await encryptSecret(
+    ENCRYPTION_KEY,
+    JSON.stringify(CLIENT),
+  );
+  // Sealed to `team`, beside its `team` server, by an administrator (G01-E P10, Q3).
+  const [credential] = await asAdmin(() =>
+    database
+      .insert(credentials)
+      .values({
+        tenantId: "team",
+        kind: "mcp_oauth_client",
+        provider: serverId,
+        keyId: "oauth-client",
+        metadata: { clientId: CLIENT.clientId },
+        encryptedValue,
+      })
+      .returning({ id: credentials.id }),
+  );
   if (!credential) throw new Error("client was not stored");
   credentialIds.push(credential.id);
-  await database
-    .update(mcpServers)
-    .set({ credentialId: credential.id })
-    .where(eq(mcpServers.id, serverId));
+  await asAdmin(() =>
+    database
+      .update(mcpServers)
+      .set({ credentialId: credential.id })
+      .where(eq(mcpServers.id, serverId)),
+  );
   return credential.id;
 }
 
 async function connect(userId: string, refreshToken: string) {
   await retireLive("mcp_user_token", userId);
-  const [credential] = await database
-    .insert(credentials)
-    .values({
-      kind: "mcp_user_token",
-      provider: serverId,
-      keyId: userId,
-      metadata: {},
-      encryptedValue: await encryptSecret(ENCRYPTION_KEY, refreshToken),
-    })
-    .returning({ id: credentials.id });
+  const encryptedValue = await encryptSecret(ENCRYPTION_KEY, refreshToken);
+  const [credential] = await asPerson(userId, () =>
+    database
+      .insert(credentials)
+      .values({
+        kind: "mcp_user_token",
+        provider: serverId,
+        keyId: userId,
+        metadata: {},
+        encryptedValue,
+      })
+      .returning({ id: credentials.id }),
+  );
   if (!credential) throw new Error("credential was not stored");
   credentialIds.push(credential.id);
 
-  await database
-    .insert(mcpUserCredentials)
-    .values({
-      serverId,
-      userId,
-      credentialId: credential.id,
-      scope: "https://www.googleapis.com/auth/drive.readonly",
-    })
-    .onConflictDoUpdate({
-      target: [mcpUserCredentials.serverId, mcpUserCredentials.userId],
-      set: { credentialId: credential.id },
-    });
+  await asPerson(userId, () =>
+    database
+      .insert(mcpUserCredentials)
+      .values({
+        serverId,
+        userId,
+        credentialId: credential.id,
+        scope: "https://www.googleapis.com/auth/drive.readonly",
+      })
+      .onConflictDoUpdate({
+        target: [mcpUserCredentials.serverId, mcpUserCredentials.userId],
+        set: { credentialId: credential.id },
+      }),
+  );
   return credential.id;
 }
 
 beforeAll(async () => {
-  await database
-    .insert(agents)
-    .values({ id: botId, name: botId, type: "remote_ag_ui", configuration: {} })
-    .onConflictDoNothing();
-
+  releaseAdmin = await seedAdministrator(database, adminId);
   for (const [id, email] of [
     [askerId, `${askerId}@openbot.test`],
     [otherId, `${otherId}@openbot.test`],
   ]) {
-    await database
-      .insert(users)
-      .values({ id, email, name: id, emailVerified: false })
-      .onConflictDoNothing();
+    await asPerson(id, () =>
+      database
+        .insert(users)
+        .values({ id, email, name: id, emailVerified: false })
+        .onConflictDoNothing(),
+    );
   }
 
-  const [existing] = await database
-    .select({ id: mcpServers.id, credentialId: mcpServers.credentialId })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, serverId));
+  /*
+   * A public team Bot (G01-E P8b), owned by the other person: the asker runs it as a teammate, and
+   * both people's frames see it and its grant. Written as `platform`, as a fixture across people.
+   */
+  await asPlatform(async () => {
+    await database
+      .insert(agents)
+      .values({
+        id: botId,
+        tenantId: "team",
+        name: "Drive Desk",
+        type: "remote_ag_ui",
+        configuration: {},
+      })
+      .onConflictDoNothing();
+    await database
+      .insert(agentProfiles)
+      .values({
+        agentId: botId,
+        tenantId: "team",
+        ownerUserId: otherId,
+        title: "Research",
+        roleDescription: "Finds documents.",
+        avatarSeed: "seed",
+        visibility: "public",
+      })
+      .onConflictDoNothing();
+  });
+
+  const [existing] = await asPlatform(() =>
+    database
+      .select({ id: mcpServers.id, credentialId: mcpServers.credentialId })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, serverId)),
+  );
   serverWasAlreadyConfigured = existing !== undefined;
   toolWasAlreadyAdvertised =
     (
-      await database
-        .select({ name: mcpTools.name })
-        .from(mcpTools)
-        .where(
-          and(eq(mcpTools.serverId, serverId), eq(mcpTools.name, toolName)),
-        )
+      await asPlatform(() =>
+        database
+          .select({ name: mcpTools.name })
+          .from(mcpTools)
+          .where(
+            and(eq(mcpTools.serverId, serverId), eq(mcpTools.name, toolName)),
+          ),
+      )
     ).length > 0;
   clientBefore = existing?.credentialId ?? null;
 
   // Written directly, so the test needs no vendor to be reachable. What is under test is which
-  // credential gets chosen, not the listing.
-  await database
-    .insert(mcpServers)
-    .values({
-      id: serverId,
-      title: "Google Drive",
-      vendor: "Google",
-      url: "https://www.googleapis.com/drive/v3",
-      provenance: "first-party",
-    })
-    .onConflictDoNothing();
-  await database
-    .insert(mcpTools)
-    .values({ serverId, name: toolName, description: "Search files." })
-    .onConflictDoNothing();
+  // credential gets chosen, not the listing. The team's rows, by an administrator (G01-E P10).
+  await asAdmin(() =>
+    database
+      .insert(mcpServers)
+      .values({
+        id: serverId,
+        tenantId: "team",
+        title: "Google Drive",
+        vendor: "Google",
+        url: "https://www.googleapis.com/drive/v3",
+        provenance: "first-party",
+      })
+      .onConflictDoNothing(),
+  );
+  await asAdmin(() =>
+    database
+      .insert(mcpTools)
+      .values({
+        serverId,
+        tenantId: "team",
+        name: toolName,
+        description: "Search files.",
+      })
+      .onConflictDoNothing(),
+  );
 
-  // The Bot holds the tool throughout. Everything here is about the person, not the grant.
-  await database
-    .insert(pluginGrants)
-    .values({ kind: "mcp", ref, agentId: botId })
-    .onConflictDoNothing();
+  // The Bot holds the tool throughout, a team Bot's grant stamped `team` by an administrator.
+  // Everything here is about the person, not the grant.
+  await asAdmin(() =>
+    database
+      .insert(pluginGrants)
+      .values({ kind: "mcp", ref, agentId: botId, tenantId: "team" })
+      .onConflictDoNothing(),
+  );
 });
 
 afterAll(async () => {
@@ -302,14 +397,16 @@ afterAll(async () => {
    * their consent had succeeded. The user ids carry this run's random suffix, so nothing outside it
    * can match.
    */
-  await database
-    .delete(mcpUserCredentials)
-    .where(
-      and(
-        eq(mcpUserCredentials.serverId, serverId),
-        inArray(mcpUserCredentials.userId, [askerId, otherId]),
+  await asPlatform(() =>
+    database
+      .delete(mcpUserCredentials)
+      .where(
+        and(
+          eq(mcpUserCredentials.serverId, serverId),
+          inArray(mcpUserCredentials.userId, [askerId, otherId]),
+        ),
       ),
-    );
+  );
   /*
    * Put the client pointer back before deleting anything, so a suite that borrowed live
    * configuration leaves it as it found it. Ordered first on purpose: the deletes below remove the
@@ -326,34 +423,53 @@ afterAll(async () => {
    * it is right in both cases: `clientBefore` is null when there was no server to borrow from, which
    * is what the column should say.
    */
-  await database
-    .update(mcpServers)
-    .set({ credentialId: clientBefore })
-    .where(eq(mcpServers.id, serverId));
+  await asPlatform(() =>
+    database
+      .update(mcpServers)
+      .set({ credentialId: clientBefore })
+      .where(eq(mcpServers.id, serverId)),
+  );
   for (const id of credentialIds) {
-    await database.delete(credentials).where(eq(credentials.id, id));
+    await asPlatform(() =>
+      database.delete(credentials).where(eq(credentials.id, id)),
+    );
   }
   /*
    * Scoped to this suite's own Bot, never to the ref alone. `ref` is `google-drive/search_files`,
    * a real server and a real tool, so a delete by ref alone removes an administrator's grants for
    * Bots people use. See the same note in plugin-store.integration.test.ts, which this shares.
    */
-  await database
-    .delete(pluginGrants)
-    .where(and(eq(pluginGrants.ref, ref), eq(pluginGrants.agentId, botId)));
+  await asPlatform(() =>
+    database
+      .delete(pluginGrants)
+      .where(and(eq(pluginGrants.ref, ref), eq(pluginGrants.agentId, botId))),
+  );
   // The fixture tool goes whether or not this suite owns the server, but only if it put it there.
   if (!toolWasAlreadyAdvertised) {
-    await database
-      .delete(mcpTools)
-      .where(and(eq(mcpTools.serverId, serverId), eq(mcpTools.name, toolName)));
+    await asPlatform(() =>
+      database
+        .delete(mcpTools)
+        .where(
+          and(eq(mcpTools.serverId, serverId), eq(mcpTools.name, toolName)),
+        ),
+    );
   }
   if (!serverWasAlreadyConfigured) {
-    await database.delete(mcpTools).where(eq(mcpTools.serverId, serverId));
-    await database.delete(mcpServers).where(eq(mcpServers.id, serverId));
+    await asPlatform(() =>
+      database.delete(mcpTools).where(eq(mcpTools.serverId, serverId)),
+    );
+    await asPlatform(() =>
+      database.delete(mcpServers).where(eq(mcpServers.id, serverId)),
+    );
   }
-  await database.delete(agents).where(eq(agents.id, botId));
-  await database.delete(users).where(eq(users.id, askerId));
-  await database.delete(users).where(eq(users.id, otherId));
+  await asPlatform(() => database.delete(agents).where(eq(agents.id, botId)));
+  await asPerson(askerId, () =>
+    database.delete(users).where(eq(users.id, askerId)),
+  );
+  await asPerson(otherId, () =>
+    database.delete(users).where(eq(users.id, otherId)),
+  );
+  await releaseAdmin?.();
 });
 
 describe("a person who has not connected", () => {
@@ -361,7 +477,9 @@ describe("a person who has not connected", () => {
     // A refusal, not an error. Nothing is wrong: they simply have not granted access yet, and the
     // sentence they get should be one they can act on.
     expect(
-      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      asPlatform(() =>
+        store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      ),
     ).rejects.toThrow(PluginRefusedError);
   });
 
@@ -377,16 +495,20 @@ describe("a person who has not connected", () => {
     const deploymentCredential = await registerClient();
 
     await expect(
-      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      asPlatform(() =>
+        store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      ),
     ).rejects.toThrow(PluginRefusedError);
     expect(decrypted).toEqual([]);
 
     // Repointed away before the credential is left behind, because the foreign key is `restrict`:
     // the row cannot be deleted while this column addresses it, which is the point of the key.
-    await database
-      .update(mcpServers)
-      .set({ credentialId: null })
-      .where(eq(mcpServers.id, serverId));
+    await asPlatform(() =>
+      database
+        .update(mcpServers)
+        .set({ credentialId: null })
+        .where(eq(mcpServers.id, serverId)),
+    );
     expect(deploymentCredential).toBeTruthy();
   });
 });
@@ -399,7 +521,7 @@ describe("nobody in particular", () => {
     // The anonymous actor is the empty string, and an empty string must never match a row. A lookup
     // that let it through would hand a run nobody is attributable for whichever grant sorted first.
     await expect(
-      store.callTool({ ref, args: {}, botId, actorId: "" }),
+      asPlatform(() => store.callTool({ ref, args: {}, botId, actorId: "" })),
     ).rejects.toThrow(PluginRefusedError);
     expect(decrypted).toEqual([]);
   });
@@ -410,13 +532,17 @@ describe("a person who has connected", () => {
     // The person did their part and cannot fix this one, so the refusal names the administrator's
     // job rather than sending them back to try connecting again.
     await connect(askerId, askerRefreshToken);
-    await database
-      .update(mcpServers)
-      .set({ credentialId: null })
-      .where(eq(mcpServers.id, serverId));
+    await asPlatform(() =>
+      database
+        .update(mcpServers)
+        .set({ credentialId: null })
+        .where(eq(mcpServers.id, serverId)),
+    );
 
     await expect(
-      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      asPlatform(() =>
+        store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      ),
     ).rejects.toThrow(/OAuth client/);
   });
 
@@ -427,13 +553,17 @@ describe("a person who has connected", () => {
     decrypted.length = 0;
     exchanged.length = 0;
 
-    await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    await asPlatform(() =>
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    );
     expect(exchanged).toEqual([askerRefreshToken]);
     expect(decrypted).toEqual([accessTokenFrom(askerRefreshToken)]);
 
     decrypted.length = 0;
     exchanged.length = 0;
-    await store.callTool({ ref, args: {}, botId, actorId: otherId });
+    await asPlatform(() =>
+      store.callTool({ ref, args: {}, botId, actorId: otherId }),
+    );
     expect(exchanged).toEqual([otherRefreshToken]);
     expect(decrypted).toEqual([accessTokenFrom(otherRefreshToken)]);
   });
@@ -445,7 +575,9 @@ describe("a person who has connected", () => {
     await connect(askerId, askerRefreshToken);
     decrypted.length = 0;
 
-    await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    await asPlatform(() =>
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    );
     expect(decrypted).not.toContain(askerRefreshToken);
   });
 
@@ -453,10 +585,12 @@ describe("a person who has connected", () => {
     const credentialId = await connect(askerId, askerRefreshToken);
     decrypted.length = 0;
 
-    await database
-      .update(credentials)
-      .set({ revokedAt: new Date() })
-      .where(eq(credentials.id, credentialId));
+    await asPerson(askerId, () =>
+      database
+        .update(credentials)
+        .set({ revokedAt: new Date() })
+        .where(eq(credentials.id, credentialId)),
+    );
 
     /*
      * A refusal rather than a thrown vendor error.
@@ -466,7 +600,9 @@ describe("a person who has connected", () => {
      * withdrawn grant is not a fault, and the sentence should say what to do about it.
      */
     await expect(
-      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      asPlatform(() =>
+        store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      ),
     ).rejects.toThrow(PluginRefusedError);
     expect(decrypted).toEqual([]);
   });
@@ -476,18 +612,82 @@ describe("a person who has connected", () => {
     await connect(askerId, askerRefreshToken);
     decrypted.length = 0;
 
-    await database
-      .delete(mcpUserCredentials)
-      .where(
-        and(
-          eq(mcpUserCredentials.serverId, serverId),
-          inArray(mcpUserCredentials.userId, [askerId, otherId]),
+    await asPlatform(() =>
+      database
+        .delete(mcpUserCredentials)
+        .where(
+          and(
+            eq(mcpUserCredentials.serverId, serverId),
+            inArray(mcpUserCredentials.userId, [askerId, otherId]),
+          ),
         ),
-      );
+    );
 
     await expect(
-      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      asPlatform(() =>
+        store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      ),
     ).rejects.toThrow(PluginRefusedError);
+    expect(decrypted).toEqual([]);
+  });
+});
+
+/*
+ * The same selection asked from the asker's OWN frame, which is how a person's chat turn calls a tool
+ * (G01-E P10). The team's OAuth client is sealed to `team` and no person's frame may read it by id:
+ * it reaches the call through the `openbot_team_server_secret` broker. A person's frame reads only
+ * that person's own connection, so it can never spend anybody else's grant, whoever it names.
+ */
+describe("in the asker's own frame", () => {
+  test("each person goes out with their own token and nobody else's", async () => {
+    const clientId = await registerClient();
+    await connect(askerId, askerRefreshToken);
+    await connect(otherId, otherRefreshToken);
+    decrypted.length = 0;
+    exchanged.length = 0;
+
+    await asPerson(askerId, () =>
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    );
+    expect(exchanged).toEqual([askerRefreshToken]);
+    expect(decrypted).toEqual([accessTokenFrom(askerRefreshToken)]);
+
+    decrypted.length = 0;
+    exchanged.length = 0;
+    await asPerson(otherId, () =>
+      store.callTool({ ref, args: {}, botId, actorId: otherId }),
+    );
+    expect(exchanged).toEqual([otherRefreshToken]);
+    expect(decrypted).toEqual([accessTokenFrom(otherRefreshToken)]);
+
+    // The client came through the broker: neither frame can read it by id.
+    for (const person of [askerId, otherId]) {
+      expect(
+        await asPerson(person, () =>
+          database
+            .select({ id: credentials.id })
+            .from(credentials)
+            .where(eq(credentials.id, clientId)),
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  test("naming another person spends nothing of theirs", async () => {
+    await registerClient();
+    await connect(askerId, askerRefreshToken);
+    await connect(otherId, otherRefreshToken);
+    decrypted.length = 0;
+    exchanged.length = 0;
+
+    // The asker's frame, claiming to act for the other person: their connection is not this frame's
+    // to read, so the call is refused as one nobody connected, before any token is exchanged.
+    await expect(
+      asPerson(askerId, () =>
+        store.callTool({ ref, args: {}, botId, actorId: otherId }),
+      ),
+    ).rejects.toThrow(PluginRefusedError);
+    expect(exchanged).toEqual([]);
     expect(decrypted).toEqual([]);
   });
 });
@@ -511,16 +711,18 @@ describe("retiring the credentials a person owns", () => {
    */
   const unrevokedTokensFor = async (userId: string) =>
     (
-      await database
-        .select({ id: credentials.id })
-        .from(credentials)
-        .where(
-          and(
-            eq(credentials.kind, "mcp_user_token"),
-            eq(credentials.keyId, userId),
-            isNull(credentials.revokedAt),
+      await asPerson(userId, () =>
+        database
+          .select({ id: credentials.id })
+          .from(credentials)
+          .where(
+            and(
+              eq(credentials.kind, "mcp_user_token"),
+              eq(credentials.keyId, userId),
+              isNull(credentials.revokedAt),
+            ),
           ),
-        )
+      )
     ).length;
 
   test("the vault stops holding a usable secret, and the connection is gone", async () => {
@@ -528,24 +730,32 @@ describe("retiring the credentials a person owns", () => {
     const credentialId = await connect(askerId, askerRefreshToken);
 
     // Reachable first, so what follows is an assertion about the retirement and not about setup.
-    await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    await asPlatform(() =>
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    );
     expect(exchanged.at(-1)).toBe(askerRefreshToken);
 
-    await store.retireConnectionsFor(askerId, "admin@openbot.local");
+    await asPlatform(() =>
+      store.retireConnectionsFor(askerId, "admin@openbot.local"),
+    );
 
-    const [credential] = await database
-      .select({ revokedAt: credentials.revokedAt })
-      .from(credentials)
-      .where(eq(credentials.id, credentialId));
+    const [credential] = await asPerson(askerId, () =>
+      database
+        .select({ revokedAt: credentials.revokedAt })
+        .from(credentials)
+        .where(eq(credentials.id, credentialId)),
+    );
     expect(credential?.revokedAt).not.toBeNull();
     expect(await unrevokedTokensFor(askerId)).toBe(0);
 
     // The join row goes too, so no page claims a connection this deployment can no longer use.
-    expect(await store.connectionsFor(askerId)).toEqual([]);
+    expect(await asPlatform(() => store.connectionsFor(askerId))).toEqual([]);
 
     // And a call is refused rather than answered from a revoked credential.
     await expect(
-      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      asPlatform(() =>
+        store.callTool({ ref, args: {}, botId, actorId: askerId }),
+      ),
     ).rejects.toBeInstanceOf(PluginRefusedError);
   });
 
@@ -560,16 +770,22 @@ describe("retiring the credentials a person owns", () => {
     const credentialId = await connect(otherId, otherRefreshToken);
 
     // Exactly what the cascade leaves behind.
-    await database
-      .delete(mcpUserCredentials)
-      .where(eq(mcpUserCredentials.userId, otherId));
+    await asPerson(otherId, () =>
+      database
+        .delete(mcpUserCredentials)
+        .where(eq(mcpUserCredentials.userId, otherId)),
+    );
 
-    await store.retireConnectionsFor(otherId, "admin@openbot.local");
+    await asPlatform(() =>
+      store.retireConnectionsFor(otherId, "admin@openbot.local"),
+    );
 
-    const [credential] = await database
-      .select({ revokedAt: credentials.revokedAt })
-      .from(credentials)
-      .where(eq(credentials.id, credentialId));
+    const [credential] = await asPerson(otherId, () =>
+      database
+        .select({ revokedAt: credentials.revokedAt })
+        .from(credentials)
+        .where(eq(credentials.id, credentialId)),
+    );
     expect(credential?.revokedAt).not.toBeNull();
     expect(await unrevokedTokensFor(otherId)).toBe(0);
   });
@@ -579,17 +795,27 @@ describe("retiring the credentials a person owns", () => {
     await connect(askerId, askerRefreshToken);
 
     expect(
-      (await store.retireConnectionsFor(askerId, "admin@openbot.local"))
-        .retired,
+      (
+        await asPlatform(() =>
+          store.retireConnectionsFor(askerId, "admin@openbot.local"),
+        )
+      ).retired,
     ).toBeGreaterThan(0);
     // Already revoked is something an administrator can legitimately do twice.
     expect(
-      (await store.retireConnectionsFor(askerId, "admin@openbot.local"))
-        .retired,
+      (
+        await asPlatform(() =>
+          store.retireConnectionsFor(askerId, "admin@openbot.local"),
+        )
+      ).retired,
     ).toBe(0);
     // The empty actor is ANONYMOUS_ACTOR. It owns nothing, and must not match rows by being empty.
     expect(
-      (await store.retireConnectionsFor("", "admin@openbot.local")).retired,
+      (
+        await asPlatform(() =>
+          store.retireConnectionsFor("", "admin@openbot.local"),
+        )
+      ).retired,
     ).toBe(0);
   });
 });

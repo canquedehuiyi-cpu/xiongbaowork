@@ -34,6 +34,11 @@ export type AgentProfile = {
    */
   modelRef: string | null;
   /**
+   * Which platform pool model this coworker runs on instead (stories H1, K1): the experience models
+   * the platform keys itself. Never set together with `modelRef`; null means it is not on the pool.
+   */
+  platformModelRef: string | null;
+  /**
    * Who this coworker is, as its owner wrote it.
    *
    * Null means nothing was ever written, which is not the same as three empty boxes: only the first
@@ -79,8 +84,22 @@ export type CreateAgentInput = Pick<
    */
   modelRef?: string | null;
   /**
+   * Which platform pool model this coworker runs on (stories H1, K1), with the same three-way as
+   * `modelRef`. Binding one clears the other, and naming both is refused. Validated against the
+   * pool's enabled rows and the record tenant's plan, never trusted from the form.
+   */
+  platformModelRef?: string | null;
+  /**
    * The coworker's persona. Absent on an update leaves it where it is; an object writes it, and the
    * server decides which parts are worth sending to a model at all.
    */
   persona?: Persona;
+  /**
+   * The seed the coworker's abstract avatar is drawn from.
+   *
+   * Absent on a create means the new id, which is what every coworker got before the seed could be
+   * chosen; absent on an update leaves the stored one where it is. Never a picture, only the string
+   * boring-avatars turns into one, so the parser keeps it to a short run of safe characters.
+   */
+  avatarSeed?: string;
 };
