@@ -251,7 +251,8 @@ async function holdBack(
 ) {
   await database
     .insert(groupMessagePrivate)
-    .values(row)
+    // Stamped with the sender, never left to the writer's frame: only the sender reads it.
+    .values({ ...row, tenantId: row.ownerUserId })
     .onConflictDoUpdate({
       target: groupMessagePrivate.messageId,
       set: { text: row.text, details: row.details, updatedAt: new Date() },
@@ -427,9 +428,10 @@ export function createGroupStore(
     },
     async progress(id, text) {
       // Into the sender's private row, and only while the shared row is still running.
+      // Stamped with the sender, as `holdBack` stamps a held reply, whatever frame writes it.
       await database.execute(sql`
-        insert into ${groupMessagePrivate} (message_id, owner_user_id, text)
-        select ${groupMessages.id}, ${groupMessages.ownerUserId}, ${text}
+        insert into ${groupMessagePrivate} (message_id, owner_user_id, tenant_id, text)
+        select ${groupMessages.id}, ${groupMessages.ownerUserId}, ${groupMessages.ownerUserId}, ${text}
           from ${groupMessages}
          where ${groupMessages.id} = ${id} and ${groupMessages.status} = 'running'
         on conflict (message_id) do update set text = excluded.text, updated_at = now()`);
@@ -1454,6 +1456,38 @@ export function createGroupConversations(deps: {
       }
       try {
         const outcome = await run();
+        /*
+         * The resumed reply is a reply like any other: with other people in the group, it waits on
+         * the owner's permission before they read it, exactly as `runBot` holds one. Its words come
+         * from a run as the owner, which an approval in the middle does not make any less private.
+         */
+        const gate = await shareGate({
+          ownerUserId: row.ownerUserId,
+          channelId: row.channelId,
+          agentId,
+          threadId: row.threadId ?? "",
+          rowId: row.id,
+          runId: runIdFor(row.id),
+          text: outcome.replyText,
+        });
+        if (gate.status === "pending") {
+          // Held for the owner; the card stays where the share ask parked it (see `runBot`).
+          await deps.store.finish(row.id, "", "waiting", {
+            ...gate.details,
+            ...chainFrom(row.details),
+          });
+          return { replyText: "" };
+        }
+        if (gate.status === "denied") {
+          await deps.store.finish(row.id, gate.message, "failed");
+          await closeCard(
+            { ownerUserId: row.ownerUserId, channelId: row.channelId },
+            agentId,
+            runIdFor(row.id),
+            true,
+          );
+          return { replyText: "" };
+        }
         await deps.store.finish(row.id, outcome.replyText, "completed");
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },

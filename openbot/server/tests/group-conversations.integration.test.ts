@@ -991,6 +991,149 @@ describe("group conversations in PostgreSQL", () => {
     });
   });
 
+  test("a reply resumed after an approval waits on the owner's permission before the group sees it", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    let decision: "pending" | "approved" = "pending";
+    const opened: unknown[] = [];
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async (action) => {
+          opened.push(action);
+          return { id: `${prefix}-resumed-share`, status: decision } as never;
+        },
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: () => {
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId: `${prefix}-resumed-tool`,
+          });
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-resumed`,
+        text: "check my calendar",
+        agentId: ada,
+      }),
+    );
+    await runAsTenant("platform", () => drain(conversations));
+    expect(opened).toHaveLength(0);
+
+    // The owner allows the tool; the resumed turn answers from their private notes.
+    const resumed = await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-resumed-tool`, async () => ({
+        replyText: "From your notes: the hearing is on Tuesday.",
+      })),
+    );
+    // Held like a reply that finished in one go, and nothing is reported shown.
+    expect(opened).toHaveLength(1);
+    expect(resumed).toEqual({ replyText: "" });
+    const seen = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(seen.messages.at(-1)).toMatchObject({
+      agentId: ada,
+      status: "waiting",
+      text: "",
+    });
+    expect(JSON.stringify(seen)).not.toContain("hearing is on Tuesday");
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "hearing is on Tuesday",
+    );
+    expect(await rawTranscript(owner, channel.id)).toContain(
+      "hearing is on Tuesday",
+    );
+
+    decision = "approved";
+    await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-resumed-share`, async () => {
+        throw new Error("a held reply is shown, not re-run");
+      }),
+    );
+    const after = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(after.messages.at(-1)).toMatchObject({
+      agentId: ada,
+      status: "completed",
+      text: "From your notes: the hearing is on Tuesday.",
+    });
+  });
+  test("a held reply and a reply in progress are stamped with their sender, whatever frame writes them", async () => {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({ replies: {} });
+    const { store } = conversations;
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const turn = {
+      ownerUserId: owner.id,
+      channelId: channel.id,
+      messageId: `${prefix}-stamped`,
+      agentIds: [ada, grace],
+      text: "hello",
+    };
+    await as(owner, async () => {
+      await store.submit(turn);
+      await store.start(turn, ada, null);
+      await store.start(turn, grace, null);
+    });
+    // Written from the platform frame (admin or background work) rather than the sender's own.
+    await runAsTenant("platform", async () => {
+      await store.progress(`${turn.messageId}:${ada}`, "Half an answer");
+      await store.finish(
+        `${turn.messageId}:${grace}`,
+        "Held answer",
+        "waiting",
+        {
+          approvalId: `${prefix}-stamped-approval`,
+        },
+      );
+    });
+    const stamps = await runAsTenant("platform", () =>
+      database.execute(
+        sql`select message_id as "messageId", tenant_id as "tenantId" from group_message_private where message_id like ${`${turn.messageId}:%`} order by message_id`,
+      ),
+    );
+    expect(
+      Array.from(stamps as ArrayLike<{ messageId: string; tenantId: string }>)
+        .map((row) => [row.messageId, row.tenantId])
+        .sort(),
+    ).toEqual(
+      [
+        [`${turn.messageId}:${ada}`, owner.id],
+        [`${turn.messageId}:${grace}`, owner.id],
+      ].sort(),
+    );
+    // So the sender finds both in their own frame.
+    const listed = await as(owner, () => store.list(channel.id));
+    expect(
+      listed.find((row) => row.id === `${turn.messageId}:${ada}`)?.text,
+    ).toBe("Half an answer");
+    expect(
+      (await as(owner, () => store.waitingFor(`${prefix}-stamped-approval`)))
+        ?.id,
+    ).toBe(`${turn.messageId}:${grace}`);
+  });
   test("a Team Bot's consent card in a group turn is a line in the shared transcript", async () => {
     const owner = await person();
     const teammate = await person();
