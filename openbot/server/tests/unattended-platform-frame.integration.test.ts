@@ -43,9 +43,9 @@ import { expectUnframedRefused } from "./support/frame-guard";
  * queries on has no tenant in its async-local context, and `currentTenant()` used to answer that
  * with `system`. Row-level security then does exactly what it was built to do and shows that worker
  * only the platform's own rows: not one due routine, not one queued turn. Nothing errors. The queue
- * is healthy, the cron runs on schedule, and no work is ever done. (G01-E: with the frame guard at
- * `throw` the unframed statement is now refused outright; the first test asserts that, and asks the
- * old fallback frame, `system`, explicitly.)
+ * is healthy, the cron runs on schedule, and no work is ever done. (G01-E: there is no unframed
+ * fallback any more, so the unframed statement is refused outright; the first test asserts that, and
+ * asks the old fallback frame, `system`, explicitly.)
  *
  * Until the delivery image connects as a role that can be governed, a superuser with `BYPASSRLS`
  * answers those same queries with every row and the whole defect is invisible — which is why this file
@@ -218,8 +218,8 @@ describe("an unattended worker against row level security", () => {
     /*
      * THE NEGATIVE HALF. This is the statement the sweep issues — one select on one table, one
      * connection — with nothing in its context, which is what a timer looks like to the database.
-     * G01-E: such a statement no longer quietly runs as `system`; with the frame guard at `throw`
-     * (what G01-D makes the only behaviour) it is refused before it reaches the database.
+     * G01-E: such a statement no longer quietly runs as `system`; with the unframed fallback gone,
+     * `currentTenant()` refuses it before it reaches the database.
      */
     await expectUnframedRefused(sweepSelect);
 
