@@ -52,8 +52,26 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   secret only for that server. Secrets stored before cannot be moved, because each one is
   cryptographically bound to where it was stored, so the migration revokes the token or OAuth client
   each moved server pointed at, and such a server answers "needs a credential this deployment no
-  longer holds" until an administrator stores its token again on the credentials screen and re-adds
-  the server with it, or registers its OAuth client again. Model and connector keys are unchanged.
+  longer holds" until an administrator gives it its secret again. Model and connector keys are
+  unchanged. An OAuth client is registered again on the server's page under **Admin → Plugins**. A
+  server's own token is **not** entered on **Admin → Credentials**: that screen stores model and
+  connector keys only, and a server refuses any credential that is not an MCP token minted for it.
+  Until the Plugins page can replace the token of a server that is already added, an administrator
+  sends two requests, signed in (the token is stored for the team because its kind is `mcp`):
+
+  ```
+  POST /api/admin/credentials
+       {"kind":"mcp","provider":"<name>","keyId":"mcp-<name>","plaintext":"<token>","metadata":{}}
+       -> {"credential":{"id":"<credential id>",...}}
+  POST /api/plugins/servers         {"key":"<name>","credentialId":"<credential id>"}
+       (a catalogue server; add "instanceHost" for one that has an instance address)
+  POST /api/plugins/servers/custom  {"id":"<name>","title":"<title>","url":"<its url>","credentialId":"<credential id>"}
+       (a server added by URL, with the url it already has)
+  ```
+
+  `<name>` is the catalogue entry's key for a catalogue server and the server's id for one added by
+  URL, exactly, or the server refuses the token.
+
   Only rows somebody could legitimately have written move: a server stamped with a current
   administrator (or the platform), and a tool carrying its server's stamp. A server or tool row any
   other person had written for themselves is deleted (with the people's connections to that server),
