@@ -1,4 +1,11 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -141,6 +148,8 @@ type Answers = {
   plugins: Answer;
   /** Keyed by the cursor asked for; "" is the first page. */
   audit: Record<string, Answer>;
+  /** `GET /api/models`; absent answers 404 like any unfaked path. */
+  models?: Answer;
 };
 
 const fullAnswers = (): Answers => ({
@@ -218,6 +227,7 @@ function serve(answers: Answers) {
       answer = answers.plugins;
     else if (url.pathname === `/api/bots/${agentId}/audit`)
       answer = answers.audit[url.searchParams.get("cursor") ?? ""];
+    else if (url.pathname === "/api/models") answer = answers.models;
     if (answer === "hang") return new Promise<Response>(() => {});
     if (!answer) return Response.json({ error: "not faked" }, { status: 404 });
     return Response.json(answer.body, { status: answer.status });
@@ -493,4 +503,85 @@ test("a coworker the person cannot reach is said as not found, not as an empty p
   expect(screen.queryByRole("heading", { name: "最近审计" })).toBeNull();
   // Nothing about the coworker is read before the coworker itself is known to be reachable.
   expect(gets(`/api/bots/${agentId}/audit`)).toHaveLength(0);
+});
+
+describe("the coworker's model (H4)", () => {
+  const library = ok({
+    models: [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        provider: "openai",
+        baseUrl: null,
+        modelName: "gpt-6",
+        label: "GPT-6",
+        enabled: true,
+        updatedAt: "2026-11-01T00:00:00.000Z",
+        coworkers: 1,
+      },
+    ],
+    templates: [],
+    pool: [
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        provider: "zhipu",
+        modelName: "glm-4.6",
+        label: "GLM-4.6",
+        coworkers: 1,
+        available: true,
+      },
+    ],
+    customModels: true,
+  });
+
+  async function modelShown(agent: Partial<AgentProfile>) {
+    const answers = fullAnswers();
+    answers.agent = ok({ agent: { ...profile, ...agent } });
+    answers.models = library;
+    const screen = draw(answers);
+    await waitFor(() =>
+      expect(screen.getByTestId("coworker-model").textContent).not.toContain(
+        "正在读取",
+      ),
+    );
+    return screen.getByTestId("coworker-model").textContent;
+  }
+
+  test("an unbound coworker runs on the deployment's model, and the library is not asked", async () => {
+    expect(await modelShown({})).toBe("模型：部署默认模型");
+    expect(gets("/api/models")).toEqual([]);
+  });
+
+  test("a library binding is named the way the assembly page names it", async () => {
+    expect(
+      await modelShown({ modelRef: "11111111-1111-4111-8111-111111111111" }),
+    ).toBe("模型：GPT-6 · OpenAI");
+  });
+
+  test("a platform pool binding is named and said to be a platform experience model", async () => {
+    expect(
+      await modelShown({
+        platformModelRef: "22222222-2222-4222-8222-222222222222",
+      }),
+    ).toBe("模型：GLM-4.6 · 智谱 GLM（平台体验模型）");
+  });
+
+  test("a binding outside the viewer's own library says whose library it is in, not an id", async () => {
+    const shown = await modelShown({
+      modelRef: "33333333-3333-4333-8333-333333333333",
+      canManage: false,
+      mine: false,
+    });
+    expect(shown).toBe("模型：主人模型库里的一个模型");
+    expect(shown).not.toContain("3333");
+  });
+
+  test("a remote coworker's model is hosted elsewhere", async () => {
+    expect(
+      await modelShown({
+        builtIn: false,
+        endpoint: "https://agents.example.test/ag-ui",
+        modelRef: null,
+      }),
+    ).toBe("模型：外部托管模型");
+  });
 });
