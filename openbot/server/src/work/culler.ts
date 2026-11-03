@@ -12,10 +12,11 @@
  * Idleness is read from the audit trail, which is a record of what a Bot did rather than a question
  * put to the thing that did it.
  */
-import { and, eq, inArray, like, sql } from "drizzle-orm";
+import { and, inArray, like, sql } from "drizzle-orm";
+import { ownerTenantOfBot, ownerTenantsOfBots } from "../agents/bot-owner";
 import type { ComputerProvider } from "../computer/provider";
 import type { Database } from "../db/client";
-import { agents, auditEvents } from "../db/schema";
+import { auditEvents } from "../db/schema";
 import {
   isPersonTenant,
   runAsClaimedTenant,
@@ -90,41 +91,28 @@ async function lastActedAt(
 }
 
 /**
- * Whose each Bot is: the tenant stamped on its own `agents` row (G01).
+ * Whose each Bot is: its owner (G01, G01-E) — the tenant stamped on its own `agents` row, or for a
+ * team Bot (stamped `team`, which is nobody) the person its profile names. See `agents/bot-owner.ts`.
  *
  * A computer is a Bot's, and the suspension is that Bot's owner's business, so the work item is
  * offered and later carried out in that tenant — never in the culler's, which is nobody's. Read as
- * `platform` because the question spans every tenant. A Bot with no row, or one stamped as nobody's
- * (`system`, `platform`, empty), has no person to act as; its computer is still suspended, under the
- * platform rule below, because a computer left running costs money and stopping one touches no
- * person's data.
+ * `platform` because the question spans every tenant. A Bot with no row, or one that is nobody's
+ * (`system`, `platform`, empty, or a team Bot whose profile names no person), has no person to act
+ * as; its computer is still suspended, under the platform rule below, because a computer left
+ * running costs money and stopping one touches no person's data.
  */
 async function botTenants(
   database: Database,
   botIds: string[],
-): Promise<Map<string, string>> {
-  if (botIds.length === 0) return new Map();
-  const rows = await runAsTenant("platform", () =>
-    database
-      .select({ id: agents.id, tenantId: agents.tenantId })
-      .from(agents)
-      .where(inArray(agents.id, botIds)),
-  );
-  return new Map(rows.map((row) => [row.id, row.tenantId] as const));
+): Promise<Map<string, string | null>> {
+  return ownerTenantsOfBots(database, botIds);
 }
 
 async function botTenant(
   database: Database,
   botId: string,
 ): Promise<string | null> {
-  const [row] = await runAsTenant("platform", () =>
-    database
-      .select({ tenantId: agents.tenantId })
-      .from(agents)
-      .where(eq(agents.id, botId))
-      .limit(1),
-  );
-  return row?.tenantId ?? null;
+  return ownerTenantOfBot(database, botId);
 }
 
 /**
