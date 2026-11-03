@@ -2,9 +2,11 @@ import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AuditEventType, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
+import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import type { QuotaService } from "../quota/limits";
 import { QuotaExceeded } from "../quota/limits";
+import { capabilityFor, isPersonTenant } from "../tenant/context";
 import { testAgentConnection } from "./connection-test";
 import { checkAgentEndpoint } from "./endpoint";
 import { canManageAgent } from "./profile-policy";
@@ -371,6 +373,18 @@ export function createAgentRoutes(
    * holding a tenant lock until commit; concurrent requests cannot spend the same remaining seat.
    */
   quota?: QuotaService,
+  /**
+   * How an administrator reaches somebody else's Bot (G01-E P8b, Q1, R10). Their own frame shows them
+   * what it shows anyone: their own Bots, the team's and the catalogue. On the Bot's own read, edit
+   * and delete routes, an administrator holding the capability also finds another person's Bot as
+   * `platform`, and changes it in its OWNER's frame (`adminActAsOwner`), so the write is the owner's
+   * as far as the team policies are concerned and the trail row lands with the owner. Absent, those
+   * routes answer an administrator exactly as they answer anyone.
+   */
+  adminScope?: Pick<
+    AdminScope,
+    "adminCapability" | "adminActAsOwner" | "asAdminPlatform"
+  >,
 ) {
   /** The plan's refusal as a response, or null when there is room. A create and a duplicate answer alike. */
   const overPlan = async (tenantId: string): Promise<Response | null> => {
@@ -391,6 +405,51 @@ export function createAgentRoutes(
       typeof agent.endpoint === "string" && agent.endpoint === managedEndpoint,
   });
   const routes = new Hono<{ Variables: AppVariables }>();
+
+  /*
+   * Signed in, and for an administrator the request-scoped capability the admin doors below demand.
+   * `adminCapability` re-reads the role, so a role removed since sign-in holds nothing here.
+   */
+  const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminScope?.adminCapability ?? ((_context, next) => next());
+  const signedInAsAdmin: MiddlewareHandler<{
+    Variables: AppVariables;
+  }> = (context, next) =>
+    requireUser(context, async () => {
+      await adminCapability(context, next);
+    });
+  /** The admin doors, only for an administrator who holds the capability in this request. */
+  const adminDoors = (actor: AgentActor) =>
+    adminScope && actor.role === "admin" && capabilityFor(actor.id) === "admin"
+      ? adminScope
+      : undefined;
+  /**
+   * The person whose frame an administrator's write on this Bot must run in, or `undefined` for the
+   * caller's own frame: not an administrator with the capability, their own Bot, or a Bot nobody owns.
+   * Read as `platform`, because the Bot may be one the administrator's own frame cannot see.
+   */
+  const ownerToActFor = async (
+    actor: AgentActor,
+    agentId: string,
+  ): Promise<string | undefined> => {
+    const doors = adminDoors(actor);
+    if (!doors) return undefined;
+    const found = await doors.asAdminPlatform(actor, () =>
+      store.get(actor, agentId),
+    );
+    const owner = found?.ownerUserId;
+    return isPersonTenant(owner) && owner !== actor.id ? owner : undefined;
+  };
+  /** `work` in the owner's frame when an administrator acts on another person's Bot, else here. */
+  const asOwnerWhereAdmin = async <T>(
+    actor: AgentActor,
+    agentId: string,
+    work: () => Promise<T>,
+  ): Promise<T> => {
+    const owner = await ownerToActFor(actor, agentId);
+    const doors = adminDoors(actor);
+    return owner && doors ? doors.adminActAsOwner(actor, owner, work) : work();
+  };
 
   /**
    * The Bot declined something, and says so.
@@ -477,17 +536,22 @@ export function createAgentRoutes(
     context.json({ capabilities: { builtInAvailable } }),
   );
 
-  routes.get("/:agentId", requireUser, async (context) => {
+  routes.get("/:agentId", signedInAsAdmin, async (context) => {
     // A whitespace id would reach the store query and answer 500 on some backends instead of a
     // 400 for a malformed call. Existence stays a 404; shape is checked here.
     if (!context.req.param("agentId").trim()) {
       return context.json({ error: "A Bot id is required." }, 400);
     }
     try {
-      const agent = await store.get(
-        context.var.actor,
-        context.req.param("agentId"),
-      );
+      const actor = context.var.actor;
+      const agentId = context.req.param("agentId");
+      const doors = adminDoors(actor);
+      const agent =
+        (await store.get(actor, agentId)) ??
+        // Somebody else's private Bot is reached from the admin pages only, as `platform` (Q1).
+        (doors
+          ? await doors.asAdminPlatform(actor, () => store.get(actor, agentId))
+          : null);
       if (!agent) {
         return context.json({ error: "Agent not found." }, 404);
       }
@@ -626,7 +690,7 @@ export function createAgentRoutes(
     }
   });
 
-  routes.patch("/:agentId", requireUser, async (context) => {
+  routes.patch("/:agentId", signedInAsAdmin, async (context) => {
     // Malformed JSON is a recoverable client-input error and is validated by the same parser.
     const parsed = parseAgentInput(
       await context.req.json().catch(() => null),
@@ -636,31 +700,33 @@ export function createAgentRoutes(
     if (!parsed.ok) return context.json({ error: parsed.error }, 400);
 
     try {
-      const agent = await store.update(
-        context.var.actor,
-        context.req.param("agentId"),
-        parsed.value,
-      );
-      /*
-       * What changed, not the new values. Repointing the endpoint is the dangerous edit and is worth
-       * naming; a replaced key is worth knowing about and is never worth recording.
-       *
-       * `visibility` is carried the way `name` is — on every row, whether or not this edit moved it —
-       * because it is the second dangerous edit and the route has no before to compare against.
-       * Public admits every signed-in person to this coworker, and `canRunAgent` is `canAccessAgent`,
-       * so it hands them the right to act as it and spend what it was granted. Without the value on
-       * each row, an edit that opened a coworker to the whole deployment is byte-identical to one
-       * that corrected its title, and the trail cannot say when it was opened or by whom. Recorded on
-       * every row rather than only on the row that changed it, so reading the trail forward tells you
-       * what was reachable at any point, which is what an incident asks.
-       */
-      await record(context, "bot.updated", agent.id, {
-        name: parsed.value.name,
-        visibility: parsed.value.visibility,
-        ...(parsed.value.endpoint ? { endpoint: parsed.value.endpoint } : {}),
-        ...(parsed.value.auth ? { keyReplaced: true } : {}),
+      const actor = context.var.actor;
+      const agentId = context.req.param("agentId");
+      // The write and its trail row together, in the owner's frame when an administrator acts.
+      const agent = await asOwnerWhereAdmin(actor, agentId, async () => {
+        const updated = await store.update(actor, agentId, parsed.value);
+        /*
+         * What changed, not the new values. Repointing the endpoint is the dangerous edit and is worth
+         * naming; a replaced key is worth knowing about and is never worth recording.
+         *
+         * `visibility` is carried the way `name` is — on every row, whether or not this edit moved it —
+         * because it is the second dangerous edit and the route has no before to compare against.
+         * Public admits every signed-in person to this coworker, and `canRunAgent` is `canAccessAgent`,
+         * so it hands them the right to act as it and spend what it was granted. Without the value on
+         * each row, an edit that opened a coworker to the whole deployment is byte-identical to one
+         * that corrected its title, and the trail cannot say when it was opened or by whom. Recorded on
+         * every row rather than only on the row that changed it, so reading the trail forward tells you
+         * what was reachable at any point, which is what an incident asks.
+         */
+        await record(context, "bot.updated", updated.id, {
+          name: parsed.value.name,
+          visibility: parsed.value.visibility,
+          ...(parsed.value.endpoint ? { endpoint: parsed.value.endpoint } : {}),
+          ...(parsed.value.auth ? { keyReplaced: true } : {}),
+        });
+        return updated;
       });
-      return context.json({ agent: dto(context.var.actor, agent) });
+      return context.json({ agent: dto(actor, agent) });
     } catch (error) {
       return mapStoreError(context, error);
     }
@@ -798,13 +864,17 @@ export function createAgentRoutes(
     }
   });
 
-  routes.delete("/:agentId", requireUser, async (context) => {
+  routes.delete("/:agentId", signedInAsAdmin, async (context) => {
     if (!context.req.param("agentId").trim()) {
       return context.json({ error: "A Bot id is required." }, 400);
     }
     try {
-      await store.softDelete(context.var.actor, context.req.param("agentId"));
-      await record(context, "bot.deleted", context.req.param("agentId"));
+      const actor = context.var.actor;
+      const agentId = context.req.param("agentId");
+      await asOwnerWhereAdmin(actor, agentId, async () => {
+        await store.softDelete(actor, agentId);
+        await record(context, "bot.deleted", agentId);
+      });
       return context.body(null, 204);
     } catch (error) {
       return mapStoreError(context, error);

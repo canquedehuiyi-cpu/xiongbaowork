@@ -198,8 +198,26 @@ test("a coworker public inside its own tenant is still invisible to a stranger",
    * widest possible read grant this table offers. Cross-tenant invisibility is therefore not the
    * application's doing here: the row-level policy is what refuses, and this is the case that says so.
    * If the two layers were ever collapsed into one another, this is the test that would notice.
+   *
+   * Since G01-E P8b a public coworker made through the store is moved to the shared `team` tenant
+   * (decision 2) and is meant to be seen by everybody; the next test pins that. This one keeps the
+   * row-level claim by building the case the store no longer produces: a profile that SAYS public but
+   * is still stamped with its owner's tenant. Row security must refuse it whatever the column says.
    */
-  const coworker = await makeCoworker("public");
+  const coworker = await makeCoworker("private");
+  await runAsTenant(owner, () =>
+    database
+      .update(agentProfiles)
+      .set({ visibility: "public" })
+      .where(eq(agentProfiles.agentId, coworker.id)),
+  );
+  const [stamped] = await runAsTenant(owner, () =>
+    database
+      .select({ tenantId: agentProfiles.tenantId, visibility: agentProfiles.visibility })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, coworker.id)),
+  );
+  expect(stamped).toEqual({ tenantId: owner, visibility: "public" });
 
   const ownRead = await call(owner, coworker.id);
   expect(ownRead.status).toBe(200);
@@ -210,4 +228,26 @@ test("a coworker public inside its own tenant is still invisible to a stranger",
   const strangerList = await call(stranger, "");
   const listed = (await strangerList.json()) as { agents: { id: string }[] };
   expect(listed.agents.map((entry) => entry.id)).not.toContain(coworker.id);
+});
+
+test("a coworker made public through the store is shared with every person (team tenant)", async () => {
+  // Decision 2: public rows live in the shared `team` tenant, which every person may read.
+  const coworker = await makeCoworker("public");
+  const [stamped] = await runAsTenant(owner, () =>
+    database
+      .select({ tenantId: agentProfiles.tenantId })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, coworker.id)),
+  );
+  expect(stamped?.tenantId).toBe("team");
+
+  const strangerRead = await call(stranger, coworker.id);
+  expect(strangerRead.status).toBe(200);
+  const strangerList = await call(stranger, "");
+  const listed = (await strangerList.json()) as { agents: { id: string }[] };
+  expect(listed.agents.map((entry) => entry.id)).toContain(coworker.id);
+
+  // Visible is not writable: the stranger still cannot edit or delete it.
+  expect([403, 404]).toContain((await call(stranger, coworker.id, "PATCH", edit)).status);
+  expect([403, 404]).toContain((await call(stranger, coworker.id, "DELETE")).status);
 });

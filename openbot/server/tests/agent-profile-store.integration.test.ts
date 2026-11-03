@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
+import { Hono, type MiddlewareHandler } from "hono";
 import { authFromConfiguration } from "../src/agents/auth-header";
 import {
   AgentNotFoundError,
@@ -8,6 +9,7 @@ import {
   type AgentProfileStore,
   createAgentProfileStore,
   ManagedAgentUnavailableError,
+  moveToTeam,
   ProtectedAgentError,
 } from "../src/agents/profile-store";
 import type {
@@ -15,12 +17,17 @@ import type {
   AgentProfile,
   CreateAgentInput,
 } from "../src/agents/profile-types";
+import { createAgentRoutes } from "../src/agents/routes";
+import { createAuditStore } from "../src/audit";
+import { createAdminScope } from "../src/auth/admin-scope";
+import type { AppVariables } from "../src/auth/guards";
 import { DEPLOYMENT_ROUTES } from "../src/computer/deployment-routes";
 import { createDatabase } from "../src/db/client";
 import {
   agentPreferences,
   agentProfiles,
   agents,
+  auditEvents,
   channelAgents,
   channels,
   deploymentPackages,
@@ -47,6 +54,89 @@ const createdPackageIds: string[] = [];
 const as = <T>(actor: AgentActor, fn: () => T): T => runAsTenant(actor.id, fn);
 /** Deployment rows, and the cleanup that spans every tenant a test wrote to. */
 const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
+
+/*
+ * The admin pages (G01-E Q1). An administrator reaches another person's Bot only through the agent
+ * routes' admin doors: the capability `adminCapability` grants after re-reading the role, a read as
+ * `platform` (`asAdminPlatform`), and a write in the owner's frame (`adminActAsOwner`). Their own
+ * frame, which their chat runtime and roster read in, shows them what it shows anybody.
+ */
+const adminScope = createAdminScope({
+  roleRepository: { rolesForUser: async () => ["admin"] as never },
+});
+const auditStore = createAuditStore(database);
+
+function signedInAs(
+  actor: AgentActor,
+): MiddlewareHandler<{ Variables: AppVariables }> {
+  return async (context, next) => {
+    context.set("actor", { ...actor, email: `${actor.id}@example.test` });
+    await runAsTenant(actor.id, () => next());
+  };
+}
+
+/** One request to the agent routes, signed in as `actor`, with the admin doors mounted. */
+function agentRequest(
+  actor: AgentActor,
+  method: "GET" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+) {
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.route(
+    "/",
+    createAgentRoutes(
+      store,
+      signedInAs(actor),
+      false,
+      auditStore,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      adminScope,
+    ),
+  );
+  return app.request(`http://test${path}`, {
+    method,
+    ...(body === undefined
+      ? {}
+      : {
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json" },
+        }),
+  });
+}
+
+/** `work` as the routes' admin read runs it: inside the request, holding the capability, as `platform`. */
+async function onAdminPage<T>(
+  admin: AgentActor,
+  work: () => Promise<T>,
+): Promise<T> {
+  let value: T | undefined;
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.use("*", signedInAs(admin), adminScope.adminCapability);
+  app.get("/", async (context) => {
+    value = await adminScope.asAdminPlatform(admin, work);
+    return context.body(null, 204);
+  });
+  const response = await app.request("http://test/");
+  expect(response.status).toBe(204);
+  return value as T;
+}
+
+/** The stamps on a Bot's two rows, as `platform` sees them. */
+async function stampsOf(agentId: string) {
+  const [row] = await asPlatform(() =>
+    database
+      .select({ agent: agents.tenantId, profile: agentProfiles.tenantId })
+      .from(agents)
+      .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+      .where(eq(agents.id, agentId)),
+  );
+  return row;
+}
 
 afterEach(async () => {
   await asPlatform(async () => {
@@ -113,7 +203,24 @@ async function createProfileFixture(options: {
   roleDescription?: string;
   avatarSeed?: string;
   configuration?: Record<string, unknown>;
+  /**
+   * The frame to write in. The owner's frame for a person's Bot; a public one is then moved to
+   * `team` by the owner, as the store moves it (G01-E P8b). Absent, the caller's frame.
+   */
+  frame?: string;
 }) {
+  if (options.frame !== undefined) {
+    const { frame, ...rest } = options;
+    return runAsTenant(frame, async () => {
+      const seeded = await createProfileFixture(rest);
+      if (rest.visibility === "public" && rest.owner?.id === frame) {
+        await database.transaction((transaction) =>
+          moveToTeam(transaction, seeded.agentId),
+        );
+      }
+      return seeded;
+    });
+  }
   const agentId = id("seed-agent");
   const name = options.name ?? `Seed ${randomUUID()}`;
   const title = options.title ?? "Seed Assistant";
@@ -140,8 +247,12 @@ async function createProfileFixture(options: {
   return { agentId, name, title, roleDescription, avatarSeed };
 }
 
-async function profileById(actor: AgentActor, agentId: string) {
-  const profile = await store.get(actor, agentId);
+async function profileById(
+  actor: AgentActor,
+  agentId: string,
+  frame = actor.id,
+) {
+  const profile = await runAsTenant(frame, () => store.get(actor, agentId));
   if (!profile) throw new Error(`Expected visible profile ${agentId}.`);
   return profile;
 }
@@ -371,86 +482,155 @@ describe("agent profile store integration", () => {
     });
   });
 
-  test("lets an owner and admin get and list a private profile but hides it from another user", async () => {
+  test("lets an owner get and list a private profile, and an admin on the admin pages only, but hides it from another user", async () => {
     const owner = await createUser();
     const other = await createUser();
     const admin = await createUser("admin");
-    const source = await createProfileFixture({ owner, visibility: "private" });
+    const source = await createProfileFixture({
+      owner,
+      visibility: "private",
+      frame: owner.id,
+    });
 
     expect((await profileById(owner, source.agentId)).id).toBe(source.agentId);
-    expect((await profileById(admin, source.agentId)).id).toBe(source.agentId);
-    expect(await store.get(other, source.agentId)).toBeNull();
-    expectListed(await store.list(owner), source.agentId, true);
-    expectListed(await store.list(admin), source.agentId, true);
-    expectListed(await store.list(other), source.agentId, false);
+    // The admin pages: the route's own read, and the same read through the route helper.
+    const response = await agentRequest(admin, "GET", `/${source.agentId}`);
+    expect(response.status).toBe(200);
+    expect(
+      ((await response.json()) as { agent: { id: string } }).agent.id,
+    ).toBe(source.agentId);
+    expect(
+      (await onAdminPage(admin, () => store.get(admin, source.agentId)))?.id,
+    ).toBe(source.agentId);
+    expectListed(
+      await onAdminPage(admin, () => store.list(admin)),
+      source.agentId,
+      true,
+    );
+    // The admin's own frame, which their chat runtime and roster read in, does not show it (Q1).
+    expect(await as(admin, () => store.get(admin, source.agentId))).toBeNull();
+    expectListed(
+      await as(admin, () => store.list(admin)),
+      source.agentId,
+      false,
+    );
+    expect(await as(other, () => store.get(other, source.agentId))).toBeNull();
+    expectListed(
+      await as(owner, () => store.list(owner)),
+      source.agentId,
+      true,
+    );
+    expectListed(
+      await as(other, () => store.list(other)),
+      source.agentId,
+      false,
+    );
+    expect(await stampsOf(source.agentId)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+    });
   });
 
   test("stores hiding per user and moves the caller between default and hidden lists", async () => {
     const owner = await createUser();
     const other = await createUser();
-    const source = await createProfileFixture({ owner, visibility: "public" });
+    const source = await createProfileFixture({
+      owner,
+      visibility: "public",
+      frame: owner.id,
+    });
+    expect(await stampsOf(source.agentId)).toEqual({
+      agent: "team",
+      profile: "team",
+    });
+    // Each person in their own frame, as their requests run.
+    const listOf = (actor: AgentActor, hidden?: boolean) =>
+      as(actor, () => store.list(actor, hidden));
 
-    expectListed(await store.list(owner), source.agentId, true);
-    expectListed(await store.list(owner, true), source.agentId, false);
-    expectListed(await store.list(other), source.agentId, true);
+    expectListed(await listOf(owner), source.agentId, true);
+    expectListed(await listOf(owner, true), source.agentId, false);
+    expectListed(await listOf(other), source.agentId, true);
 
-    await store.setHidden(owner, source.agentId, true);
-    expectListed(await store.list(owner), source.agentId, false);
-    expectListed(await store.list(owner, true), source.agentId, true);
-    expectListed(await store.list(other), source.agentId, true);
-    expectListed(await store.list(other, true), source.agentId, false);
+    await as(owner, () => store.setHidden(owner, source.agentId, true));
+    expectListed(await listOf(owner), source.agentId, false);
+    expectListed(await listOf(owner, true), source.agentId, true);
+    expectListed(await listOf(other), source.agentId, true);
+    expectListed(await listOf(other, true), source.agentId, false);
 
-    await store.setHidden(owner, source.agentId, false);
-    expectListed(await store.list(owner), source.agentId, true);
-    expectListed(await store.list(owner, true), source.agentId, false);
-    const [preference] = await database
-      .select()
-      .from(agentPreferences)
-      .where(
-        and(
-          eq(agentPreferences.userId, owner.id),
-          eq(agentPreferences.agentId, source.agentId),
-        ),
-      );
+    await as(owner, () => store.setHidden(owner, source.agentId, false));
+    expectListed(await listOf(owner), source.agentId, true);
+    expectListed(await listOf(owner, true), source.agentId, false);
+    const preferenceOf = () =>
+      database
+        .select()
+        .from(agentPreferences)
+        .where(
+          and(
+            eq(agentPreferences.userId, owner.id),
+            eq(agentPreferences.agentId, source.agentId),
+          ),
+        );
+    const [preference] = await as(owner, preferenceOf);
     expect(preference?.hiddenAt).toBeNull();
+    // The preference is the person's own, even on a team Bot, and nobody else reads it.
+    expect(preference?.tenantId).toBe(owner.id);
+    expect(await as(other, preferenceOf)).toEqual([]);
   });
 
   test("stores pinning per user, independently of hiding", async () => {
     const owner = await createUser();
     const other = await createUser();
-    const source = await createProfileFixture({ owner, visibility: "public" });
+    const source = await createProfileFixture({
+      owner,
+      visibility: "public",
+      frame: owner.id,
+    });
+    expect(await stampsOf(source.agentId)).toEqual({
+      agent: "team",
+      profile: "team",
+    });
+    // `profileById` reads in the actor's own frame.
     const pinnedFor = async (actor: AgentActor) =>
       (await profileById(actor, source.agentId)).pinned;
+    const asOwner = <T>(fn: () => T) => as(owner, fn);
 
     expect(await pinnedFor(owner)).toBe(false);
 
-    await store.setPinned(owner, source.agentId, true);
+    await asOwner(() => store.setPinned(owner, source.agentId, true));
     expect(await pinnedFor(owner)).toBe(true);
     expect(await pinnedFor(other)).toBe(false);
 
     // The same preference row as hiding: each write must leave the other column alone.
-    await store.setHidden(owner, source.agentId, true);
-    const [hiddenWhilePinned] = await store.list(owner, true);
+    await asOwner(() => store.setHidden(owner, source.agentId, true));
+    const [hiddenWhilePinned] = await asOwner(() => store.list(owner, true));
     expect(hiddenWhilePinned?.pinned).toBe(true);
-    await store.setPinned(owner, source.agentId, false);
-    await store.setPinned(owner, source.agentId, true);
-    expectListed(await store.list(owner, true), source.agentId, true);
+    await asOwner(() => store.setPinned(owner, source.agentId, false));
+    await asOwner(() => store.setPinned(owner, source.agentId, true));
+    expectListed(
+      await asOwner(() => store.list(owner, true)),
+      source.agentId,
+      true,
+    );
 
-    await store.setHidden(owner, source.agentId, false);
+    await asOwner(() => store.setHidden(owner, source.agentId, false));
     expect(await pinnedFor(owner)).toBe(true);
-    await store.setPinned(owner, source.agentId, false);
+    await asOwner(() => store.setPinned(owner, source.agentId, false));
     expect(await pinnedFor(owner)).toBe(false);
-    const [preference] = await database
-      .select()
-      .from(agentPreferences)
-      .where(
-        and(
-          eq(agentPreferences.userId, owner.id),
-          eq(agentPreferences.agentId, source.agentId),
-        ),
-      );
+    const preferenceOf = () =>
+      database
+        .select()
+        .from(agentPreferences)
+        .where(
+          and(
+            eq(agentPreferences.userId, owner.id),
+            eq(agentPreferences.agentId, source.agentId),
+          ),
+        );
+    const [preference] = await asOwner(preferenceOf);
     expect(preference?.pinnedAt).toBeNull();
     expect(preference?.hiddenAt).toBeNull();
+    expect(preference?.tenantId).toBe(owner.id);
+    expect(await as(other, preferenceOf)).toEqual([]);
   });
 
   test("refuses to pin a coworker the caller cannot see", async () => {
@@ -556,10 +736,12 @@ describe("agent profile store integration", () => {
     const publicSource = await createProfileFixture({
       owner,
       visibility: "public",
+      frame: owner.id,
     });
     const privateSource = await createProfileFixture({
       owner,
       visibility: "private",
+      frame: owner.id,
     });
     const input: CreateAgentInput = {
       name: "Other Name",
@@ -567,19 +749,68 @@ describe("agent profile store integration", () => {
       roleDescription: "Other role.",
       visibility: "public",
     };
+    const asOther = <T>(fn: () => T) => as(other, fn);
 
     await expect(
-      store.update(other, publicSource.agentId, input),
+      asOther(() => store.update(other, publicSource.agentId, input)),
     ).rejects.toBeInstanceOf(AgentNotManageableError);
-    await store.setHidden(other, publicSource.agentId, true);
-    expectListed(await store.list(other), publicSource.agentId, false);
-    expectListed(await store.list(other, true), publicSource.agentId, true);
+    await asOther(() => store.setHidden(other, publicSource.agentId, true));
+    expectListed(
+      await asOther(() => store.list(other)),
+      publicSource.agentId,
+      false,
+    );
+    expectListed(
+      await asOther(() => store.list(other, true)),
+      publicSource.agentId,
+      true,
+    );
     await expect(
-      store.update(other, privateSource.agentId, input),
+      asOther(() => store.update(other, privateSource.agentId, input)),
     ).rejects.toBeInstanceOf(AgentNotFoundError);
     await expect(
-      store.setHidden(other, privateSource.agentId, true),
+      asOther(() => store.setHidden(other, privateSource.agentId, true)),
     ).rejects.toBeInstanceOf(AgentNotFoundError);
+
+    // Past the store, straight at the table: the other person's frame changes neither Bot.
+    for (const agentId of [publicSource.agentId, privateSource.agentId]) {
+      const written = await asOther(() =>
+        database
+          .update(agentProfiles)
+          .set({ title: "Taken" })
+          .where(eq(agentProfiles.agentId, agentId))
+          .returning({ agentId: agentProfiles.agentId }),
+      );
+      expect(written).toEqual([]);
+    }
+    // Nor may the owner re-stamp their team Bot by hand: only the explicit move does that.
+    let restamp: unknown;
+    try {
+      await as(owner, () =>
+        database
+          .update(agentProfiles)
+          .set({ tenantId: other.id })
+          .where(eq(agentProfiles.agentId, publicSource.agentId)),
+      );
+    } catch (error) {
+      restamp = error;
+    }
+    expect(restamp).toBeDefined();
+    expect(await stampsOf(publicSource.agentId)).toEqual({
+      agent: "team",
+      profile: "team",
+    });
+    expect(await stampsOf(privateSource.agentId)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+    });
+    const titles = await asPlatform(() =>
+      database
+        .select({ title: agentProfiles.title })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.ownerUserId, owner.id)),
+    );
+    expect(titles.map((row) => row.title)).not.toContain("Taken");
   });
 
   test("rejects update and soft delete for a package-backed profile", async () => {
@@ -688,22 +919,78 @@ describe("agent profile store integration", () => {
   test("allows an admin to update and soft delete a user-owned profile", async () => {
     const owner = await createUser();
     const admin = await createUser("admin");
-    const source = await createProfileFixture({ owner });
-
-    const updated = await store.update(admin, source.agentId, {
+    const source = await createProfileFixture({ owner, frame: owner.id });
+    const input: CreateAgentInput = {
       name: "Admin Rename",
       title: "Admin Title",
       roleDescription: "Admin role update.",
       visibility: "private",
-    });
+    };
+
+    // In their own frame, the admin cannot even find it (Q1).
+    await expect(
+      as(admin, () => store.update(admin, source.agentId, input)),
+    ).rejects.toBeInstanceOf(AgentNotFoundError);
+
+    // The admin page: found as `platform`, changed in the owner's frame (`adminActAsOwner`).
+    const response = await agentRequest(
+      admin,
+      "PATCH",
+      `/${source.agentId}`,
+      input,
+    );
+    expect(response.status).toBe(200);
+    const { agent: updated } = (await response.json()) as {
+      agent: Record<string, unknown>;
+    };
     expect(updated).toMatchObject({
       name: "Admin Rename",
+      title: "Admin Title",
+      mine: false,
+    });
+    const [profile] = await asPlatform(() =>
+      database
+        .select()
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, source.agentId)),
+    );
+    expect(profile).toMatchObject({
       ownerUserId: owner.id,
       title: "Admin Title",
+      tenantId: owner.id,
     });
+    // The trail row is the owner's, written in the owner's frame, naming the admin who acted.
+    const trail = async (eventType: string) =>
+      asPlatform(() =>
+        database
+          .select({
+            tenantId: auditEvents.tenantId,
+            actorUserId: auditEvents.actorUserId,
+          })
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.targetId, source.agentId),
+              eq(auditEvents.eventType, eventType),
+            ),
+          ),
+      );
+    expect(await trail("bot.updated")).toEqual([
+      { tenantId: owner.id, actorUserId: admin.id },
+    ]);
 
-    await store.softDelete(admin, source.agentId);
-    expect(await store.get(admin, source.agentId)).toBeNull();
+    const deleted = await agentRequest(admin, "DELETE", `/${source.agentId}`);
+    expect(deleted.status).toBe(204);
+    expect(await trail("bot.deleted")).toEqual([
+      { tenantId: owner.id, actorUserId: admin.id },
+    ]);
+    expect(
+      await onAdminPage(admin, () => store.get(admin, source.agentId)),
+    ).toBeNull();
+    expect(await as(owner, () => store.get(owner, source.agentId))).toBeNull();
+    expect(
+      (await agentRequest(admin, "GET", `/${source.agentId}`)).status,
+    ).toBe(404);
   });
 
   test("duplicates a profile as a caller-owned private agent with copied presentation fields", async () => {

@@ -1431,6 +1431,9 @@ export function createApp(
         // stores as running at this address — can be told apart from one a person hosts.
         config.managedAgent?.endpoint?.toString(),
         quota,
+        // An administrator reaches another person's Bot here as `platform`, and changes it in the
+        // owner's frame (G01-E P8b).
+        adminScope,
       ),
     );
     // Choosing a coworker for an untagged message needs the same permission-filtered roster the
