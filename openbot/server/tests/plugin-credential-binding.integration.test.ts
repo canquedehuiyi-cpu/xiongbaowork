@@ -431,6 +431,11 @@ const swapStore = createPluginStore({
   credentials: vault,
   encryptionKey: KEY,
   policy,
+  // The refresh after a replacement dials `swap.vendor.example`, a reserved name that never resolves:
+  // the same public-address answer as the store above, so the outbound guard stays in the path and
+  // the stubbed `fetch` records what it sent (without it the guard stops at `unresolved` wherever no
+  // egress proxy is configured, as in CI, and nothing is sent at all).
+  outboundLookup: async () => [{ address: "93.184.216.34", family: 4 }],
 });
 /** The credentials screen's own service, for the token the server starts with. */
 const admin = createCredentialAdminService(KEY, vault, auditStore);
