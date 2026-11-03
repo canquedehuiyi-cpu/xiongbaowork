@@ -766,7 +766,17 @@ pub fn compose(
 
     // Which package the deployment runs. Without it the server falls back rather than using the one
     // that came with the deployment, and the Bots somebody was given are not the Bots they get.
-    env.insert("TENANT_PACKAGE_DIR".into(), "../examples/fintech".into());
+    //
+    // A new install runs the 熊宝 package, the server's own default (audit defect #14). An install
+    // that already wrote one keeps it: the package decides which Bots and channels a person's
+    // existing data belongs to, so an upgrade must not swap the upstream `fintech` set out from
+    // under somebody who has been using it. Moving such an install is a decision, not a default.
+    let package = kept
+        .get("TENANT_PACKAGE_DIR")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_TENANT_PACKAGE_DIR);
+    env.insert("TENANT_PACKAGE_DIR".into(), package.into());
 
     // The one person, named. `OPENBOT_SINGLE_USER` says there is nobody else; this says who that
     // somebody is, so the routes that ask what an actor may do have an actor to answer about.
@@ -929,6 +939,14 @@ pub const NO_KEY_NEEDED: &str = "no-key-needed";
 /// Named rather than written inline, because `write` has to recognise its own from a previous start
 /// as well as put one down.
 const BANNER: &str = "# Written by OpenBot Desktop. Anything else in this file is left alone.";
+
+/// The package a new install runs, relative to `server/`: the same default the server, the image and
+/// the Helm chart use.
+pub const DEFAULT_TENANT_PACKAGE_DIR: &str = "../examples/qoderwake";
+
+/// Settings a previous Start wrote that the next one carries over rather than resetting. Read back
+/// from `.env` and handed to [`compose`] alongside the minted secrets.
+pub const CARRIED_SETTINGS: [&str; 1] = ["TENANT_PACKAGE_DIR"];
 
 /// The secrets this deployment mints for itself, once.
 pub const MINTED: [&str; 6] = [
@@ -1547,7 +1565,43 @@ HTTPS_PROXY=http://proxy:8080
         );
         assert_eq!(
             env.get("TENANT_PACKAGE_DIR").map(String::as_str),
+            Some("../examples/qoderwake")
+        );
+    }
+
+    #[test]
+    fn an_install_that_already_runs_a_package_keeps_it() {
+        let kept = BTreeMap::from([(
+            "TENANT_PACKAGE_DIR".to_string(),
+            " ../examples/fintech ".to_string(),
+        )]);
+        let env = compose(
+            &intelligence(),
+            &Model::default(),
+            &engine_status(None),
+            &Ports::default(),
+            &pinned(),
+            None,
+            &kept,
+        );
+        assert_eq!(
+            env.get("TENANT_PACKAGE_DIR").map(String::as_str),
             Some("../examples/fintech")
+        );
+        // Blank is not a choice: the default stands.
+        let blank = BTreeMap::from([("TENANT_PACKAGE_DIR".to_string(), "  ".to_string())]);
+        let env = compose(
+            &intelligence(),
+            &Model::default(),
+            &engine_status(None),
+            &Ports::default(),
+            &pinned(),
+            None,
+            &blank,
+        );
+        assert_eq!(
+            env.get("TENANT_PACKAGE_DIR").map(String::as_str),
+            Some(DEFAULT_TENANT_PACKAGE_DIR)
         );
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import {
   buildCacheManifestPath,
   isReusableBuild,
   readBuildCacheManifest,
+  tenantPackageDir,
   writeBuildCacheManifest,
 } from "../scripts/build-cache";
 
@@ -99,6 +100,32 @@ describe("production build cache", () => {
       });
     },
   );
+
+  test("with no TENANT_PACKAGE_DIR it hashes the package the build brands from: qoderwake", async () => {
+    expect(tenantPackageDir("/repo", {})).toBe(
+      join("/repo", "examples", "qoderwake"),
+    );
+    const generator = await readFile(
+      new URL("../../scripts/generate-app-config.ts", import.meta.url),
+      "utf8",
+    );
+    expect(generator).toContain('"examples/qoderwake"');
+    await withProject(async (paths) => {
+      await mkdir(join(paths.rootDir, "examples/qoderwake"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(paths.rootDir, "examples/qoderwake/brand.yaml"),
+        "name: A\n",
+      );
+      await writeBuildCacheManifest(paths, {});
+      await writeFile(
+        join(paths.rootDir, "examples/qoderwake/brand.yaml"),
+        "name: B\n",
+      );
+      expect(await isReusableBuild(paths, {})).toBe(false);
+    });
+  });
 
   test("rejects a build when Vite-exposed environment changes", async () => {
     await withProject(async (paths) => {
