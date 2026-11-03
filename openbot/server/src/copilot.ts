@@ -52,6 +52,7 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
+import { withQuotaRunErrors } from "./quota/limits";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
   latestUserText,
@@ -2420,7 +2421,11 @@ export function mountCopilotRuntime(
    * `/threads/:id/messages`) for free — the runtime hands them to any runner declaring
    * `ɵsupportsLocalThreadEndpoints`, which `PostgresAgentRunner` inherits.
    */
-  const runtime = new CopilotRuntime({ ...sharedRuntimeOptions, runner });
+  // A turn refused for quota is said on its stream, not dropped with it (story K4).
+  const runtime = new CopilotRuntime({
+    ...sharedRuntimeOptions,
+    runner: withQuotaRunErrors(runner),
+  });
   const runtimeRoutes = createCopilotHonoHandler({ runtime, basePath });
 
   /*
