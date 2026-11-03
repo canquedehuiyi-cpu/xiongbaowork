@@ -3,6 +3,7 @@ import {
   assertResolvesPublic,
   type OutboundLookup,
   OutboundRefusedError,
+  untilAborted,
 } from "../net/outbound-guard";
 
 /**
@@ -343,7 +344,9 @@ export function createAgentFetch(
     let carried = init;
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-      await resolvesAllowed(target);
+      // Under the caller's signal (the connection test's deadline, a run's abort): a resolver that
+      // never answers must not hold the request past it.
+      await untilAborted(resolvesAllowed(target), carried?.signal ?? undefined);
       // `manual` is what makes this a check rather than a comment: the caller sees the redirect, and
       // the underlying fetch cannot quietly follow one on its own.
       const response = await doFetch(target, {

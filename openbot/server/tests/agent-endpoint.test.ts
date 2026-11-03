@@ -939,6 +939,21 @@ describe("where a hop's name resolves", () => {
     expect(calls).toHaveLength(1);
   });
 
+  test("a resolver that never answers is bounded by the caller's signal, and nothing is dialled", async () => {
+    const { calls, impl } = recorder(() => new Response("ok"));
+    const dial = createAgentFetch({
+      fetchImpl: impl,
+      lookup: () => new Promise<never>(() => undefined),
+    });
+
+    const refusal = await dial("https://stalled.example.com/ag-ui", {
+      ...keyed,
+      signal: AbortSignal.timeout(50),
+    }).catch((error: unknown) => error);
+    expect((refusal as Error).name).toBe("TimeoutError");
+    expect(calls).toHaveLength(0);
+  });
+
   test("a name that does not resolve is not dialled, and is not reported as a policy refusal", async () => {
     const refusals: Array<{ address: string; reason: string }> = [];
     const { calls, impl } = recorder(() => new Response("ok"));
