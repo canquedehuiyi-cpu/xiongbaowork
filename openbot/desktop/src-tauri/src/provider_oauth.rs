@@ -846,6 +846,11 @@ mod tests {
                         let _ = send.send("locked".into());
                         return;
                     }
+                    // The Bun owner says this once started, right before its attempt.
+                    Ok(_) if line.trim() == "waiting" => {
+                        let _ = send.send("waiting".into());
+                        line.clear();
+                    }
                     Ok(_) => line.clear(),
                     Err(error) => {
                         let _ = send.send(error.to_string());
@@ -876,15 +881,33 @@ mod tests {
                 .spawn()
                 .unwrap(),
         );
+        let spawned = std::time::Instant::now();
         let ready = lock_child_ready(&mut child);
+        // Bun's own start is not what this measures. On a loaded Windows runner the start plus the
+        // lock (PowerShell, then Add-Type) once took more than the 15 s the whole thing had, so the
+        // fixture's start gets its own bound and the lock keeps 15 s from its attempt.
+        assert_eq!(
+            ready.recv_timeout(Duration::from_secs(60)).unwrap(),
+            "waiting"
+        );
+        let started_ms = spawned.elapsed().as_millis();
+        // From here "no lock yet" is about exclusion, not about a process still starting. Shorter
+        // than the 5 s Bun keeps retrying a held lock, so the attempt is still pending at the drop.
         assert!(matches!(
-            ready.recv_timeout(Duration::from_millis(150)),
+            ready.recv_timeout(Duration::from_millis(500)),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout)
         ));
         drop(native);
+        let dropped = std::time::Instant::now();
+        // 15 s: Bun's own Windows lock helper gives up 15 s after it started, before the drop, so
+        // a lock that fails says so ("child exited without a lock") before this times out.
         assert_eq!(
             ready.recv_timeout(Duration::from_secs(15)).unwrap(),
             "locked"
+        );
+        eprintln!(
+            "{{\"lockFixtureStartupMs\":{started_ms},\"lockedAfterDropMs\":{}}}",
+            dropped.elapsed().as_millis()
         );
         let other_path = path.clone();
         let (send, receive) = std::sync::mpsc::channel();

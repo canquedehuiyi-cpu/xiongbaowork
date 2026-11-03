@@ -127,18 +127,24 @@ function doorCounts(files: Parsed[]): Record<string, Record<string, number>> {
  *
  * Beside the identity layer (`auth/guards.ts`, `index.ts`'s runtime actor lookup, `app.ts`'s auth
  * handler) and the refusal rows `app.ts` files as nobody's for a bad worker secret or callback token,
- * three doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
+ * four doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
  * `delivery/store.ts` (`registerDevice`'s platform lookup of who already holds a device token, plan
  * (d)) and `agents/profile-store.ts` (the callback route's `asPlatform` read of {id, tenantId} by
- * token hash, PCB), which both hand the work back to a person's frame; and `app.ts`'s
+ * token hash, PCB), which both hand the work back to a person's frame; `app.ts`'s
  * `/api/capabilities` count of identity providers, which signed-out requests reach too (P16a): it
- * reads deployment rows and only the count leaves.
+ * reads deployment rows and only the count leaves; and `automations/ingress-routes.ts`'s public
+ * hook (D06 AUT2, signed out): one read of a webhook trigger by id — its owner, secret hash and the
+ * automation's limits — after which the secret is checked and the queue offer and audit row run in
+ * the owner's frame the trigger row names, never in one the request could choose.
  */
 const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/admin/controls.ts": { 'runAsTenant("platform"': 6 },
   "src/admin/routes.ts": { "asAdminPlatform(": 1, 'runAsTenant("platform"': 1 },
   "src/agents/bot-owner.ts": { "asPlatform(": 2 },
   "src/agents/handoff-runner.ts": { 'runAsTenant("platform"': 1 },
+  // A Bot's audit trail for an administrator holding the capability (D07): finding another person's
+  // private Bot as `platform` (as GET /api/agents/:agentId does), and reading its rows across tenants.
+  "src/agents/lifecycle-routes.ts": { "asAdminPlatform(": 2 },
   "src/agents/profile-store.ts": { "asPlatform(": 1 },
   "src/agents/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 3 },
   "src/agents/wake-up.ts": { 'runAsTenant("platform"': 2 },
@@ -153,6 +159,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
     "set_config('app.tenant_id', 'platform'": 1,
   },
   "src/audit.ts": { 'runAsTenant("platform"': 1 },
+  // The signed-out automation hook's trigger lookup by id (see the header); the rest is the owner's.
+  "src/automations/ingress-routes.ts": { 'runAsTenant("platform"': 1 },
   // The scheduler's background statements across every tenant: `dueTriggers` (which triggers are
   // due) and `reapAbandonedFirings` (firings a dead server left running are marked failed).
   "src/automations/store.ts": { 'runAsTenant("platform"': 2 },

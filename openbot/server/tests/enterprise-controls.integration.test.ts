@@ -801,21 +801,38 @@ describe("action recording", () => {
         }),
       );
     await write("echo off");
-    await put(asAdmin, "/api/admin/enterprise/settings/actionRecording", {
-      value: true,
-    });
-    await write("curl -H 'Authorization: Bearer s3cr3t' https://x.test");
-    await Bun.sleep(100);
-    const rows = await asPlatform(() =>
-      database
-        .select()
-        .from(actionRecords)
-        .where(inArray(actionRecords.botId, [bot])),
+    const switched = await put(
+      asAdmin,
+      "/api/admin/enterprise/settings/actionRecording",
+      { value: true },
     );
+    expect(switched.status).toBe(200);
+    await write("curl -H 'Authorization: Bearer s3cr3t' https://x.test");
+    /*
+     * The audit tap records without awaiting (streaming a row must never hold up writing it), so
+     * the row lands some time after `write` returns: under load that has been more than the 100 ms
+     * this used to sleep. Wait for it, bounded, and then compare the whole list. An "echo off" row,
+     * had one been recorded, was sent before the switch and so before the curl row; it would be
+     * there by now, and the exact list refuses it.
+     */
+    const recorded = () =>
+      asPlatform(() =>
+        database
+          .select()
+          .from(actionRecords)
+          .where(inArray(actionRecords.botId, [bot])),
+      );
+    const deadline = Date.now() + 5_000;
+    let rows = await recorded();
+    while (rows.length === 0 && Date.now() < deadline) {
+      await Bun.sleep(25);
+      rows = await recorded();
+    }
     expect(rows.map((row) => row.command)).toEqual([
       "curl -H 'Authorization: Bearer [REDACTED]' https://x.test",
     ]);
-  });
+    // Past Bun's 5 s default, so a row that never arrives fails the assertion above, not the clock.
+  }, 15_000);
 });
 
 describe("OpenTelemetry export", () => {

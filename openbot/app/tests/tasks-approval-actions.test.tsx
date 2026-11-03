@@ -108,6 +108,10 @@ function installServer(
     questions?: { id: string; question: string }[];
     /** The first inbox read predates the questions: they were asked after the inbox was cached. */
     questionsAfterFirstRead?: boolean;
+    /** Approvals the inbox leaves out (past its newest hundred); served only by their own id. */
+    unlisted?: string[];
+    /** Hold each single-request read until `releaseRead` answers it. */
+    holdReads?: boolean;
   } = {},
 ) {
   let rows = [
@@ -122,6 +126,24 @@ function installServer(
     decision: string;
     resolve: (response: Response) => void;
   }[] = [];
+  const heldReads: (() => void)[] = [];
+  const pendingRequest = (id: string) => ({
+    id,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    action: {
+      botId: "bot",
+      toolRef: "computer_write_file",
+      effect: "write",
+      scope: "project",
+      threadId: "thread",
+      args: {},
+      target: {},
+      policy: options.handOff?.includes(id)
+        ? { behaviour: "hand_off", source: "rule", reason: "交给你" }
+        : { behaviour: "ask", source: "rule", reason: "先问" },
+    },
+  });
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     const method = init?.method ?? "GET";
@@ -145,6 +167,19 @@ function installServer(
         held.push({ approvalId, decision: chosen, resolve });
       });
     }
+    const single = /^\/api\/approvals\/([^/]+)$/.exec(path);
+    if (method === "GET" && single) {
+      const id = decodeURIComponent(single[1] ?? "");
+      const answer = () =>
+        new Response(JSON.stringify(pendingRequest(id)), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      if (!options.holdReads) return answer();
+      return new Promise<Response>((resolve) => {
+        heldReads.push(() => resolve(answer()));
+      });
+    }
     const inboxReads = requests.filter(
       (entry) => entry.method === "GET" && entry.path === "/api/approvals",
     ).length;
@@ -153,23 +188,9 @@ function installServer(
       : path === "/api/approvals"
         ? {
             enabled: true,
-            requests: ["ap-shared", "ap-other"].map((id) => ({
-              id,
-              status: "pending",
-              createdAt: new Date().toISOString(),
-              action: {
-                botId: "bot",
-                toolRef: "computer_write_file",
-                effect: "write",
-                scope: "project",
-                threadId: "thread",
-                args: {},
-                target: {},
-                policy: options.handOff?.includes(id)
-                  ? { behaviour: "hand_off", source: "rule", reason: "交给你" }
-                  : { behaviour: "ask", source: "rule", reason: "先问" },
-              },
-            })),
+            requests: ["ap-shared", "ap-other"]
+              .filter((id) => !options.unlisted?.includes(id))
+              .map(pendingRequest),
             rules: [],
             teamRules: [],
             // An answered question leaves the inbox, the way `questions.list` drops finished rows.
@@ -221,7 +242,13 @@ function installServer(
       ),
     );
   };
-  return { requests, held, release };
+  /** Answer the oldest held single-request read. */
+  const releaseRead = () => {
+    const next = heldReads.shift();
+    if (!next) throw new Error("no read is waiting");
+    next();
+  };
+  return { requests, held, release, heldReads, releaseRead };
 }
 
 const root = createRootRoute({ component: Outlet });
@@ -557,6 +584,64 @@ test("an action handed to the person offers 已处理 instead of 批准, and sen
   ]);
   server.release(200);
   await waitFor(() => expect(server.held).toHaveLength(0));
+  view.unmount();
+});
+
+test("a hand-off the inbox does not list offers no 批准: nothing until its own read says 已处理", async () => {
+  // Past the inbox's newest hundred: the card has to ask for this request by id.
+  const server = installServer({
+    handOff: ["ap-shared"],
+    unlisted: ["ap-shared"],
+    holdReads: true,
+  });
+  const view = draw();
+  await waitFor(() => {
+    expect(server.heldReads.length).toBeGreaterThan(0);
+    // A listed ordinary ask is unaffected.
+    expect(buttonIn(view, "other", "批准")).toBeDefined();
+  });
+  // The policy is not known yet, so no answer whose kind cannot be vouched for is offered.
+  expect(labels(view, "parent")).toEqual([]);
+  expect(
+    server.requests.filter(
+      (entry) =>
+        entry.method === "GET" && entry.path === "/api/approvals/ap-shared",
+    ).length,
+  ).toBeGreaterThan(0);
+
+  while (server.heldReads.length > 0) server.releaseRead();
+  await waitFor(() => {
+    expect(buttonIn(view, "parent", "已处理")).toBeDefined();
+  });
+  expect(labels(view, "parent")).not.toContain("批准");
+
+  await userEvent.click(buttonIn(view, "parent", "已处理") as HTMLElement);
+  await waitFor(() => {
+    expect(badge(view, "parent")?.getAttribute("data-status")).toBe("running");
+  });
+  expect(decisions(server.requests)).toEqual([
+    '/api/approvals/ap-shared/decision {"decision":"handled"}',
+  ]);
+  server.release(200);
+  await waitFor(() => expect(server.held).toHaveLength(0));
+  while (server.heldReads.length > 0) server.releaseRead();
+  view.unmount();
+});
+
+test("an ordinary ask the inbox does not list offers 批准 once its own read answers", async () => {
+  const server = installServer({ unlisted: ["ap-other"] });
+  const view = draw();
+  await waitFor(() => {
+    expect(buttonIn(view, "other", "批准")).toBeDefined();
+  });
+  expect(labels(view, "other")).toEqual(["批准", "拒绝"]);
+  // The listed approval never needed the extra read.
+  expect(
+    server.requests.filter(
+      (entry) =>
+        entry.method === "GET" && entry.path === "/api/approvals/ap-shared",
+    ),
+  ).toEqual([]);
   view.unmount();
 });
 

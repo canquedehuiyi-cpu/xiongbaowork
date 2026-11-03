@@ -10,6 +10,7 @@ import {
   type ApprovalDecision,
   answerPersonQuestion,
   approvalInboxOptions,
+  approvalRequestOptions,
   decideApproval,
 } from "@/lib/approvals";
 
@@ -266,11 +267,16 @@ function QuestionAnswer({
 
 /**
  * The buttons on one card. Nothing at all for a card that is not parked on an approval or a question,
- * and nothing for one whose approval the inbox already reports as decided elsewhere (the board catches
- * up on its next read). Whether the card waits on a question, and whether an action was handed to the
- * person, is read from the same owner-scoped inbox the 审批 page reads. Until that read answers, the
- * card offers nothing -- a question's card must not offer 批准 -- and if the read fails, the ordinary
- * 批准/拒绝 are offered, which the server answers either way.
+ * and nothing for one whose approval is reported as decided elsewhere (the board catches up on its next
+ * read). Whether the card waits on a question, and whether an action was handed to the person, is read
+ * from the same owner-scoped inbox the 审批 page reads.
+ *
+ * The affirmative button depends on the request's policy -- 批准, or 已处理 for an action handed to the
+ * person -- and the server refuses the wrong one, so it is offered only once that policy is KNOWN. The
+ * inbox lists only the newest hundred requests, so a card whose id the inbox does not know (even after
+ * the re-read below), or an inbox that could not be read, asks for that one request by its id. Until an
+ * answer arrives the card offers nothing; an id the server does not know as a request (gone, or a
+ * question past the inbox's list) offers nothing either, rather than a guess.
  */
 export function ApprovalActions({
   task,
@@ -293,18 +299,17 @@ export function ApprovalActions({
   const requests =
     inboxData && Array.isArray(inboxData.requests) ? inboxData.requests : [];
   const question = questions.find((entry) => entry.id === approvalId);
-  const request = requests.find((entry) => entry.id === approvalId);
+  const listed = requests.find((entry) => entry.id === approvalId);
   /*
    * A card can be parked on something newer than the cached inbox (it is polled, the board is pushed):
-   * a question asked a moment ago is in neither list yet, and the fallback below would offer 批准 on
-   * it. So an id the loaded inbox does not know is read again once, and the card offers nothing until
-   * that read answers; only an id still unknown after it gets the ordinary 批准/拒绝.
+   * a question asked a moment ago is in neither list yet. So an id the loaded inbox does not know is
+   * read again once before anything else is tried.
    */
   const unknown =
     approvalId !== null &&
     inboxData !== undefined &&
     question === undefined &&
-    request === undefined;
+    listed === undefined;
   const [recheckedId, setRecheckedId] = useState<string | null>(null);
   const { refetch } = inbox;
   useEffect(() => {
@@ -312,9 +317,17 @@ export function ApprovalActions({
     setRecheckedId(approvalId);
     void refetch();
   }, [unknown, approvalId, recheckedId, refetch]);
+  const stillUnknown =
+    unknown && recheckedId === approvalId && !inbox.isFetching;
+  const single = useQuery({
+    ...approvalRequestOptions(approvalId ?? ""),
+    enabled:
+      approvalId !== null &&
+      (stillUnknown || (inboxData === undefined && inbox.isError)),
+  });
   if (approvalId === null) return null;
   if (inboxData === undefined && !inbox.isError) return null;
-  if (unknown && (recheckedId !== approvalId || inbox.isFetching)) return null;
+  if (unknown && !stillUnknown) return null;
   if (question)
     return (
       <QuestionAnswer
@@ -324,8 +337,10 @@ export function ApprovalActions({
         questionId={approvalId}
       />
     );
-  if (request && request.status !== "pending") return null;
-  const handOff = request?.action.policy?.behaviour === "hand_off";
+  const request = listed ?? single.data;
+  // Not known (still being read, gone, or unreadable): no answer whose kind cannot be vouched for.
+  if (request?.status !== "pending") return null;
+  const handOff = request.action.policy?.behaviour === "hand_off";
   const busy = pending.has(approvalId);
   return (
     <>
