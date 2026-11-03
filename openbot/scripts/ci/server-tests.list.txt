@@ -168,6 +168,7 @@ tests/duplicate-run.test.ts
 tests/egress-policy-on-wake.test.ts
 tests/email-domain.test.ts
 tests/email-signup.test.ts
+tests/employee-tool-permissions-migration.integration.test.ts
 tests/encrypt-sso-config.test.ts
 tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts

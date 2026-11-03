@@ -70,6 +70,8 @@ export const approvalTeamSettings = pgTable(
       .$type<HostCommandPolicy>()
       .notNull()
       .default("allow"),
+    /** SEC1 D10 (0131): every Bot asks before a dangerous command, whatever its own switch says. */
+    enforceDangerousCommands: boolean("enforce_dangerous_commands").notNull().default(false),
     updatedBy: text("updated_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -153,7 +155,7 @@ export const approvalRules = pgTable(
     index("approval_rules_owner_idx").on(table.ownerUserId),
     check(
       "approval_rules_behaviour_check",
-      sql`${table.behaviour} IN ('allow', 'pre_approved', 'ask', 'hand_off')`,
+      sql`${table.behaviour} IN ('allow', 'pre_approved', 'ask', 'hand_off', 'deny')`,
     ),
   ],
 );
@@ -184,7 +186,7 @@ export const approvalTeamRules = pgTable(
   (table) => [
     check(
       "approval_team_rules_behaviour_check",
-      sql`${table.behaviour} IN ('allow', 'pre_approved', 'ask', 'hand_off')`,
+      sql`${table.behaviour} IN ('allow', 'pre_approved', 'ask', 'hand_off', 'deny')`,
     ),
   ],
 );

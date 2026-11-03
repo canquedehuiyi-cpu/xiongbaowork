@@ -911,6 +911,13 @@
       "when": 1793631600000,
       "tag": "0130_avatar_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1793631900000,
+      "tag": "0131_employee_tool_permissions",
+      "breakpoints": true
     }
   ]
 }
