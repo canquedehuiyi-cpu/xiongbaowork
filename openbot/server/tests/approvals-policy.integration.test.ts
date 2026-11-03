@@ -1,12 +1,17 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { Hono } from "hono";
+import type { AppVariables } from "../src/app-variables";
 import {
   createApprovalService,
   HANDLED_BY_PERSON,
 } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import type { ApprovalCandidate } from "../src/approvals/types";
+import { createAdminScope } from "../src/auth/admin-scope";
+import { createRoleRepository } from "../src/auth/guards";
+import { setRole } from "../src/auth/roles";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
 import {
@@ -18,6 +23,7 @@ import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * Rules, team settings, hand-offs and the audit trail, against real tables. Needs a database with
@@ -33,18 +39,46 @@ const store = createApprovalStore(database);
 const service = createApprovalService(store);
 const teamRuleIds: string[] = [];
 let priorTeam: typeof approvalTeamSettings.$inferSelect | undefined;
+const scope = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
+let releaseRoleWriter: (() => Promise<void>) | undefined;
 
 /*
  * Every call runs in an explicit frame. The member's own requests, rules and preferences are hers, so
- * they run as her. The team layer is the one set of rows every member's gate must read, so it is
- * written as `system`, the frame whose rows every tenant can see. The user rows, the saved team row
- * and the audit reads that span both are the deployment's own, so they run as `platform`.
+ * they run as her. The team layer is the one set of rows every member's gate must read: it is
+ * stamped `team` from the admin's own frame, inside an admin request that holds the capability
+ * (G01-E "team-rules"), exactly as the team routes write it. The user rows, the saved team row and
+ * the audit reads that span both are the deployment's own, so they run as `platform`.
  */
 const asOwner = <T>(work: () => Promise<T>) => runAsTenant(owner, work);
-const asTeam = <T>(work: () => Promise<T>) => runAsTenant("system", work);
+const asTeam = async <T>(work: () => Promise<T>): Promise<T> => {
+  let outcome: { value: T } | { error: unknown } | undefined;
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.use(
+    "*",
+    async (context, next) => {
+      context.set("actor", { id: admin, role: "admin" });
+      await runAsTenant(admin, () => next());
+    },
+    scope.adminCapability,
+  );
+  app.get("/", async (context) => {
+    outcome = await work().then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    return context.body(null, 204);
+  });
+  await app.request("http://openbot.test/");
+  if (!outcome) throw new Error("The admin request never ran its work.");
+  if ("error" in outcome) throw outcome.error;
+  return outcome.value;
+};
 const asPlatform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 
 beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
   await asPlatform(async () => {
     await database.insert(users).values([
       { id: owner, email: `${owner}@example.test` },
@@ -54,6 +88,7 @@ beforeAll(async () => {
       .select()
       .from(approvalTeamSettings)
       .where(eq(approvalTeamSettings.id, "team"));
+    await setRole(database, admin, "admin");
   });
 });
 afterAll(async () => {
@@ -83,6 +118,7 @@ afterAll(async () => {
   await asPlatform(async () => {
     await database.delete(users).where(inArray(users.id, [owner, admin]));
   });
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 

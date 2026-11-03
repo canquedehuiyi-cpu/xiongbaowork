@@ -21,6 +21,7 @@ import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
 import { createApprovalRoutes } from "./approvals/routes";
+import { createAdminScope } from "./auth/admin-scope";
 import type { ApprovalService } from "./approvals/service";
 import {
   type AuditEventType,
@@ -628,6 +629,10 @@ export function createApp(
     : auth && roleRepository
       ? createRequireUser(auth, roleRepository)
       : authenticationUnavailable;
+  // The admin capability (G01-E I10), switched on per route for the writes that need it.
+  const adminScope = roleRepository
+    ? createAdminScope({ roleRepository })
+    : undefined;
   // Enterprise controls: capability switches and the model allowlist in front of the routes they
   // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
   app.use("/api/*", createEnterpriseGate(requireUser));
@@ -1516,7 +1521,11 @@ export function createApp(
   if (coworker?.approvals)
     app.route(
       "/api/approvals",
-      createApprovalRoutes(coworker.approvals, requireUser),
+      createApprovalRoutes(
+        coworker.approvals,
+        requireUser,
+        adminScope?.adminCapability,
+      ),
     );
   if (coworker?.passwords) {
     app.route(

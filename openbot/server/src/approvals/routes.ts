@@ -38,9 +38,20 @@ import { HeadlessToolSuspension } from "../computer/headless-tools";
 export function createApprovalRoutes(
   service: ApprovalService,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
+  /**
+   * `createAdminScope(...).adminCapability`. Team rules and the team settings row are stamped
+   * `team`, and row-level security admits those writes only with the admin capability (G01-E I10),
+   * so without it an admin's change is refused by the database: fail closed, never wider.
+   */
+  adminCapability?: MiddlewareHandler<{ Variables: AppVariables }>,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   routes.use("*", requireUser);
+  if (adminCapability) {
+    // Only the admin-only team writes carry the capability; every other route runs without it.
+    // `/team/*` matches `/team` itself as well.
+    routes.use("/team/*", adminCapability);
+  }
   routes.onError((error, context) =>
     // A body that is not JSON is the caller's mistake, as the delivery routes answer it, not a
     // 500 carrying the parser's message.

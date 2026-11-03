@@ -855,6 +855,13 @@
       "when": 1793629200000,
       "tag": "0122_team_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793629500000,
+      "tag": "0123_team_approval_rows",
+      "breakpoints": true
     }
   ]
 }
