@@ -53,7 +53,10 @@ Then `--set database.existingSecret=openbot-database`. The keys must be `migrati
 A Secret without `migration-database-url` still upgrades: the Job logs that it is migrating with
 `database-url` as it used to, which only works if that URL is the owner's. With `database.url`
 instead of a Secret, `database.migrationUrl` and `database.roleWriterUrl` are required too, and the
-install is refused without them. See
+install is refused without them (`migrationUrl` only while `migrations.enabled`). Before migrating,
+the Job checks that the owner's URL and the API's reach the same database (by name and server start
+time) and fails if they do not; on a first install, before `openbot_app` has a password, it says it
+could not check and migrates. See
 [Your own database](#your-own-database-which-is-what-a-real-deployment-uses) for `sslmode` and the
 `vector` extension, both of which a managed database will otherwise fail on in a way that names the
 wrong problem.
@@ -164,9 +167,15 @@ helm upgrade --install openbot charts/openbot \
 The bundled database needs no role-writer setup: the chart keeps a random password for
 `openbot_role_writer` in its own `<release>-openbot-database-roles` Secret (read back on upgrade, so
 it stays the same), the migrations Job sets it on the role as the owner after migrating, and the API
-gets `ROLE_WRITER_DATABASE_URL` with it. A tool that renders without a cluster (`helm template`, some
-GitOps setups) cannot read it back and makes a new one each render; the Job sets each new one, so the
-API still connects, but the role's password changes on every sync.
+gets `ROLE_WRITER_DATABASE_URL` with it. The API pods carry a `checksum/role-writer` annotation, so a
+changed password rolls them rather than leaving them on the old one.
+
+**GitOps (Argo CD, Flux, `helm template`): set the password yourself.** A render without cluster
+access cannot read the Secret back, so it generates a new password on every sync, and every sync then
+re-sets the role and rolls the API. Set `database.roleWriterPassword` (letters and digits, at least
+16: `openssl rand -hex 24`), or name a Secret you manage with `database.roleWriterPasswordExistingSecret`
+(key `role-writer-password`, or `database.roleWriterPasswordExistingSecretKey`); the chart then
+writes none of its own.
 
 The two `extraEnv` lines are the bundled database's price: it connects the API as the superuser
 `postgres`, which row-level security does not bind, and the server refuses that in production unless

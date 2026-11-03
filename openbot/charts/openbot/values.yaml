@@ -476,6 +476,14 @@ database:
   # only when that URL is itself the owner's.
   migrationUrl: ""
   migrationExistingSecretKey: "migration-database-url"
+  # BUNDLED DATABASE ONLY: the role writer's password. Empty, the chart generates one and reads it
+  # back from the cluster on each upgrade. A tool that renders without cluster access (GitOps,
+  # `helm template`) cannot read it back and generates a new one every render, which also rolls the
+  # API pods each sync: SET ONE HERE (alphanumeric, e.g. `openssl rand -hex 24`), or name a Secret
+  # you manage with `roleWriterPasswordExistingSecret` (key `roleWriterPasswordExistingSecretKey`).
+  roleWriterPassword: ""
+  roleWriterPasswordExistingSecret: ""
+  roleWriterPasswordExistingSecretKey: "role-writer-password"
 
 # The bundled database. Off by default in favour of a managed one.
 # The bundled database.
