@@ -198,6 +198,8 @@ tests/memory-store.integration.test.ts
 tests/memory.test.ts
 tests/migration-journal.test.ts
 tests/mobile-links.test.ts
+tests/model-e2e-reconcile.test.ts
+tests/model-e2e-workflow.test.ts
 tests/model-library-routes.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
