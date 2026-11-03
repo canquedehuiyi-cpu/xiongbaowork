@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { laneOf, Route as TasksRoute } from "@/routes/_authed/_app/tasks";
@@ -487,4 +487,82 @@ test("a chosen 触发方式 rides both reads and keys them apart from the unfilt
     "c-1",
   ]);
   expect(keys).not.toContainEqual(["tasks-summary", "week", "d-1", "c-1"]);
+});
+
+/*
+ * Spec A4's Waker/Group dropdown, through the real page: a coworker is asked for by its whole id
+ * (`executor=`, so an id with a comma in it is not split into two), and a crew by its id (`group=`,
+ * which the server answers with the crew's run cards too -- their parent names no coworker, so a
+ * roster could never find it). Both reads -- the list and the bar's -- carry the same choice.
+ */
+test("the Waker/Group dropdown asks for one coworker as executor and a crew as group, on both reads", async () => {
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    requests.push(`${init?.method ?? "GET"} ${path}`);
+    const body = path.startsWith("/api/tasks")
+      ? { tasks: ALL_ROWS }
+      : path.startsWith("/api/devices")
+        ? { devices: [DEVICE] }
+        : path.startsWith("/api/waker-groups")
+          ? {
+              groups: [
+                {
+                  id: "group-1",
+                  name: "编程小组",
+                  members: [{ agentId: "pkg,agent", position: "0" }],
+                },
+              ],
+            }
+          : { agents: [] };
+    return new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  }) as typeof fetch;
+  const { queryClient, view } = draw("/tasks?period=all", requests, ALL_ROWS);
+  queryClient.setQueryData(agentKeys.list(false), [
+    { id: "pkg,agent", name: "包里的员工" },
+  ] as never);
+  await resultsShouldShow(view, "failed card");
+  const select = () =>
+    view.container.querySelector(
+      'select[aria-label="Waker/Group"]',
+    ) as HTMLSelectElement;
+  await waitFor(() => {
+    expect(select().querySelectorAll("option").length).toBe(3);
+  });
+
+  const askedSince = (from: number) =>
+    taskRequests(requests.slice(from)).map(
+      (url) => new URLSearchParams(url.split("?")[1]),
+    );
+
+  let mark = requests.length;
+  fireEvent.change(select(), { target: { value: "waker:pkg,agent" } });
+  await waitFor(() => {
+    const reads = askedSince(mark);
+    // The list and the bar both asked, each for the one whole id.
+    expect(
+      reads.filter((read) => read.get("executor") === "pkg,agent").length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+  for (const read of askedSince(mark)) {
+    expect(read.has("executors")).toBe(false);
+    expect(read.has("group")).toBe(false);
+  }
+
+  mark = requests.length;
+  fireEvent.change(select(), { target: { value: "group:group-1" } });
+  await waitFor(() => {
+    const reads = askedSince(mark);
+    expect(
+      reads.filter((read) => read.get("group") === "group-1").length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+  for (const read of askedSince(mark)) {
+    expect(read.has("executors")).toBe(false);
+    expect(read.has("executor")).toBe(false);
+  }
+  view.unmount();
 });

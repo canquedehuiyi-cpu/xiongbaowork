@@ -38,7 +38,12 @@ export type Trigger = "" | "chat" | "autonomous" | "handoff";
 
 type BoardSearch = {
   machineId: string;
+  /** A roster, comma-joined, as a /wakers link writes it. Sent as `executors=`. */
   crew: string;
+  /** One coworker chosen in the Waker/Group dropdown, by its whole id (it may contain a comma). */
+  executor: string;
+  /** One crew chosen in the Waker/Group dropdown, by the crew's id: its runs' cards come with it. */
+  group: string;
   status: string;
   q: string;
   period: Period;
@@ -80,6 +85,8 @@ export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
   return {
     machineId: text("machineId"),
     crew: text("crew"),
+    executor: text("executor"),
+    group: text("group"),
     status: text("status"),
     q: text("q"),
     period: period === "week" || period === "all" ? period : "month",
@@ -103,6 +110,9 @@ export const boardQuery = (
   if (search.machineId)
     scope.push(`deviceId=${encodeURIComponent(search.machineId)}`);
   if (search.crew) scope.push(`executors=${encodeURIComponent(search.crew)}`);
+  if (search.executor)
+    scope.push(`executor=${encodeURIComponent(search.executor)}`);
+  if (search.group) scope.push(`group=${encodeURIComponent(search.group)}`);
   const trigger = TRIGGERS.find((entry) => entry.key === search.source);
   if (trigger) scope.push(`source=${trigger.sources.join(",")}`);
   const list = [...scope];
@@ -975,27 +985,53 @@ export function AttentionRegion({
 type Period = "week" | "month" | "all";
 
 /**
- * Spec A4's Waker/Group dropdown, as options whose value is the `crew` the address carries: one
- * coworker's id, or a crew's roster joined with commas. A crew with nobody in it is left out — its
- * roster is empty, and an empty `crew` already means "everyone".
+ * Spec A4's Waker/Group dropdown. Each option's value says which axis of the address it writes: a
+ * coworker is `executor` by its whole id (sent as `executor=`, never split, so an id with a comma in it
+ * still names one coworker), and a crew is `group` by the crew's id (sent as `group=`, which the server
+ * answers with the members' cards AND the crew's run cards, whose parent names no coworker). A crew
+ * with nobody in it is still offered: its runs are still its work.
  */
 export const executorOptions = (
   coworkers: { id: string; name: string }[],
-  crews: { id: string; name: string; members: { agentId: string }[] }[],
+  crews: { id: string; name: string }[],
 ): { kind: "waker" | "group"; value: string; label: string }[] => [
   ...coworkers.map((coworker) => ({
     kind: "waker" as const,
-    value: coworker.id,
+    value: `waker:${coworker.id}`,
     label: coworker.name,
   })),
-  ...crews
-    .filter((group) => group.members.length > 0)
-    .map((group) => ({
-      kind: "group" as const,
-      value: group.members.map((member) => member.agentId).join(","),
-      label: `小组 · ${group.name}`,
-    })),
+  ...crews.map((group) => ({
+    kind: "group" as const,
+    value: `group:${group.id}`,
+    label: `小组 · ${group.name}`,
+  })),
 ];
+
+/** The dropdown's value for an address: whichever of the three "who" axes it carries. */
+export const whoValue = (
+  search: Pick<BoardSearch, "crew" | "executor" | "group">,
+): string =>
+  search.group
+    ? `group:${search.group}`
+    : search.executor
+      ? `waker:${search.executor}`
+      : search.crew
+        ? `crew:${search.crew}`
+        : "";
+
+/** The address a dropdown value writes: one "who" axis set, the other two cleared. */
+export const whoAddress = (
+  value: string,
+): Pick<BoardSearch, "crew" | "executor" | "group"> => {
+  const cut = value.indexOf(":");
+  const kind = cut < 0 ? "" : value.slice(0, cut);
+  const id = cut < 0 ? "" : value.slice(cut + 1);
+  return {
+    crew: kind === "crew" ? id : "",
+    executor: kind === "waker" ? id : "",
+    group: kind === "group" ? id : "",
+  };
+};
 
 const PERIODS: { label: string; value: Period }[] = [
   { label: "一周", value: "week" },
@@ -1009,6 +1045,8 @@ function TasksPage() {
   const {
     machineId,
     crew,
+    executor,
+    group,
     status,
     q: search,
     period,
@@ -1043,19 +1081,24 @@ function TasksPage() {
   const setPeriod = (next: Period) => patch({ period: next });
   const wire = boardQuery(address);
   /*
-   * Spec A4's two dropdowns read the coworkers and crews this person already has. A crew is offered as
-   * its roster, which is what `crew` has always carried (a /wakers link writes the same list), so a
-   * choice made here and a link from there are one address.
+   * Spec A4's two dropdowns read the coworkers and crews this person already has. A choice made here
+   * is one coworker (`executor`) or one crew (`group`); a /wakers link still arrives as a roster
+   * (`crew`) and is shown as the filter it is.
    */
   const coworkers = useQuery(agentListQueryOptions());
   const crews = useQuery(wakerGroupsQueryOptions());
   const crewOptions = executorOptions(coworkers.data ?? [], crews.data ?? []);
+  const who = whoValue(address);
   /*
    * The 触发方式 axis joins both keys only when it is chosen. An unfiltered board keeps the exact keys
    * it always had, which other screens and suites address by value; a chosen trigger makes a longer,
    * still distinct key, and `["tasks"]` / `["tasks-summary"]` prefix invalidation reaches both.
    */
-  const byTrigger = trigger ? [trigger] : [];
+  const byTrigger = [
+    ...(trigger ? [trigger] : []),
+    ...(executor ? [`executor:${executor}`] : []),
+    ...(group ? [`group:${group}`] : []),
+  ];
   const tasks = useQuery({
     queryKey: ["tasks", period, status, search, machineId, crew, ...byTrigger],
     queryFn: () =>
@@ -1321,16 +1364,16 @@ function TasksPage() {
         <select
           aria-label="Waker/Group"
           className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onChange={(event) => patch({ crew: event.target.value })}
-          value={crew}
+          onChange={(event) => patch(whoAddress(event.target.value))}
+          value={who}
         >
           <option value="">全部 Waker/Group</option>
-          {crew && !crewOptions.some((option) => option.value === crew) ? (
+          {who && !crewOptions.some((option) => option.value === who) ? (
             // A link from elsewhere may name a roster no option spells; it is still what is applied.
-            <option value={crew}>当前筛选的员工</option>
+            <option value={who}>当前筛选的员工</option>
           ) : null}
           {crewOptions.map((option) => (
-            <option key={`${option.kind}:${option.value}`} value={option.value}>
+            <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
@@ -1445,7 +1488,7 @@ function TasksPage() {
             <li className="py-10 text-center text-sm opacity-50">
               {boardEmptySentence({
                 machineId,
-                crew,
+                crew: crew || executor || group,
                 status,
                 q: search,
                 source: trigger,
@@ -1500,7 +1543,7 @@ function TasksPage() {
                 ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
                 : boardEmptySentence({
                     machineId,
-                    crew,
+                    crew: crew || executor || group,
                     status,
                     q: search,
                     source: trigger,
