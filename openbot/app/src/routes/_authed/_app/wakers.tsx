@@ -23,6 +23,12 @@ import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
 import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
 import {
+  ownerPresence,
+  presenceOf,
+  presenceWord,
+} from "@/lib/devices/presence";
+import { devicesQueryOptions } from "@/lib/devices/queries";
+import {
   createCrewMutationOptions,
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
@@ -104,6 +110,34 @@ function RouteComponent() {
   const running = useQuery(runningTasksQueryOptions());
   /** Spec D4's 暂停 = bot_lifecycle paused, which this read carries for every paused coworker. */
   const attention = useQuery(botAttentionQueryOptions());
+  /** Spec F4: this person's machines and whether each is online, for the device line on each card. */
+  const devices = useQuery(devicesQueryOptions());
+  /*
+   * Spec F4's device line on a coworker's card. A running task bound to a machine names THAT machine
+   * and whether it is online (the task's own `deviceId`). Without one there is no binding to read, so
+   * the line says what this person's machines are doing and says that this is what it is -- and only
+   * on their own coworkers, whose work would run on those machines. Cloud mode, or nobody paired:
+   * nothing to say, no line.
+   */
+  const deviceLineOf = (agent: AgentProfile): DeviceLine | null => {
+    const bound = (running.data ?? []).find(
+      (task) => task.executorAgentId === agent.id && task.deviceId,
+    );
+    const machine = presenceOf(bound?.deviceId, devices.data);
+    if (machine)
+      return {
+        kind: "task",
+        online: machine.online,
+        text: `设备：${machine.name} · ${presenceWord(machine.online)}`,
+      };
+    const owner = agent.mine ? ownerPresence(devices.data) : null;
+    if (!owner) return null;
+    return {
+      kind: "owner",
+      online: owner.online > 0,
+      text: `你的设备：${owner.online}/${owner.total} 台在线（没有进行中的任务绑定到具体设备）`,
+    };
+  };
 
   const roster = useMemo(
     () => [...(agents.data ?? []), ...(hidden.data ?? [])],
@@ -220,6 +254,7 @@ function RouteComponent() {
           pauseUnreadable={attention.isError}
           queryClient={queryClient}
           roster={visible}
+          deviceLineOf={deviceLineOf}
           statusOf={status}
         />
       ) : (
@@ -255,8 +290,17 @@ function statusSentence(
   }
 }
 
+/** One line on a coworker's card about the machine its work runs on (spec F4). */
+type DeviceLine = {
+  /** `task`: a running task's own machine. `owner`: no binding, so the owner's machines. */
+  kind: "task" | "owner";
+  online: boolean | null;
+  text: string;
+};
+
 function CoworkerTab({
   agents,
+  deviceLineOf,
   failed,
   filtered,
   groups,
@@ -267,6 +311,7 @@ function CoworkerTab({
   statusOf,
 }: {
   agents: boolean;
+  deviceLineOf: (agent: AgentProfile) => DeviceLine | null;
   failed: boolean;
   /** A status filter is on, so an empty wall means "none match", not "none exist". */
   filtered: boolean;
@@ -307,6 +352,7 @@ function CoworkerTab({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {roster.map((agent) => {
           const status = statusOf(agent);
+          const device = deviceLineOf(agent);
           const crews = groups.filter((group) =>
             group.members.some((member) => member.agentId === agent.id),
           );
@@ -349,6 +395,21 @@ function CoworkerTab({
                     ? ` · ${crews.map((crew) => crew.name).join(", ")}`
                     : ""}
                 </p>
+                {device ? (
+                  <p
+                    className={`text-xs ${
+                      device.online === false
+                        ? "text-red-500"
+                        : "text-muted-foreground"
+                    }`}
+                    data-device-line={device.kind}
+                    data-device-online={
+                      device.online === null ? "unknown" : String(device.online)
+                    }
+                  >
+                    {device.text}
+                  </p>
+                ) : null}
               </ItemContent>
               <ItemActions>
                 {/*

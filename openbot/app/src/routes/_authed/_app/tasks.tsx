@@ -715,8 +715,11 @@ function TaskCard({
   decidingIds,
 }: {
   task: Task;
-  /** Which of the tenant's machines did it, already named — or its id if the machine is gone. */
-  machine: string | null;
+  /**
+   * Which of the tenant's machines did it, already named — or its id if the machine is gone — and
+   * whether that machine is online now (spec F4).
+   */
+  machine: DevicePresence | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
@@ -857,8 +860,24 @@ function TaskCard({
          * machine, and a lane that mixes a laptop's task with a desktop's has to say which is which
          * without making somebody count chips at the top.
          */}
+        {/*
+         * Spec F4: and whether that machine is there right now. Work bound to an offline machine
+         * waits for it (the device queue), so 离线 on the card is why such a card is not moving.
+         */}
         {machine ? (
-          <span className="rounded bg-foreground/5 px-1.5">{machine}</span>
+          <span
+            className={`rounded px-1.5 ${
+              machine.online === false
+                ? "bg-red-500/10 text-red-500"
+                : "bg-foreground/5"
+            }`}
+            data-device-online={
+              machine.online === null ? "unknown" : String(machine.online)
+            }
+            title={`设备${presenceWord(machine.online)}`}
+          >
+            {machine.name} · {presenceWord(machine.online)}
+          </span>
         ) : null}
         {/*
          * What there is to 查收 (spec A9): the components it drew and the files it handed over, so the
@@ -906,6 +925,11 @@ function TaskCard({
   );
 }
 
+import {
+  type DevicePresence,
+  presenceOf,
+  presenceWord,
+} from "@/lib/devices/presence";
 import { devicesQueryOptions } from "@/lib/devices/queries";
 
 /**
@@ -939,7 +963,7 @@ export function AttentionRegion({
   decidingIds,
 }: {
   tasks: Task[];
-  machineLabel: (deviceId: string | null) => string | null;
+  machineLabel: (deviceId: string | null) => DevicePresence | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
@@ -1203,15 +1227,11 @@ function TasksPage() {
   /*
    * Named from the machines this person owns, and the id when the machine is not among them: work
    * that happened on a laptop which has since been unpaired still happened there, and a card that
-   * goes quiet about it reads as work that happened nowhere.
+   * goes quiet about it reads as work that happened nowhere. With it, whether that machine is online
+   * (spec F4), from the same device list.
    */
-  const machineLabel = (deviceId: string | null) => {
-    if (!deviceId) return null;
-    const known = (machines.data ?? []).find(
-      (machine) => machine.deviceId === deviceId,
-    );
-    return known?.name ?? deviceId.slice(0, 8);
-  };
+  const machineLabel = (deviceId: string | null) =>
+    presenceOf(deviceId, machines.data);
   const dropLane = (laneKey: string, taskId: string) => {
     const task = list.find((entry) => entry.id === taskId);
     if (task && archivesOnDrop(laneKey, task.status, task.archivedAt)) {
@@ -1460,7 +1480,8 @@ function TasksPage() {
                 }`}
               >
                 {machine.name}
-                {!machine.online ? " · 休眠" : ""}
+                {/* Spec F4: each machine says whether it is there, not only when it is away. */}
+                {` · ${presenceWord(machine.online)}`}
                 {machine.needsAttention
                   ? ` · 需要你 (${machine.queued})`
                   : machine.queued
