@@ -13,7 +13,14 @@ import { join } from "node:path";
 import { MCPMock, type MCPToolDefinition } from "@copilotkit/aimock/mcp";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
+import { TOOL_DISABLED } from "../src/approvals/policy";
+import {
+  type ApprovalCandidate,
+  type ApprovalGate,
+  ApprovalRefusedError,
+} from "../src/approvals/types";
 import { createAuditStore } from "../src/audit";
+import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import type { ActionPolicy } from "../src/computer/policy";
 import {
   type CredentialStoreValue,
@@ -4193,7 +4200,9 @@ async function freshDatabase(): Promise<void> {
  * `options` is spread over the defaults rather than read field by field, so a test that needs one
  * more seam — a broker, today — adds it at the call and nothing here has to learn its name.
  */
-async function freshStore(options: { broker?: ComposioBroker } = {}) {
+async function freshStore(
+  options: { broker?: ComposioBroker; approvalGate?: ApprovalGate } = {},
+) {
   await freshDatabase();
   const persisting = createAuditStore(database);
   const events: Parameters<typeof persisting.insert>[0][] = [];
@@ -4983,6 +4992,59 @@ test("an identity a model puts in the arguments does not change whose account th
         },
       },
     ]);
+  }));
+
+/*
+ * SEC1 (docs/specs/2026-11-02-sec1-employee-tool-permissions.md): the MCP call site honours the
+ * approval gate's answer. A tool the gate refuses (disabled) or holds (waiting for approval) never
+ * reaches the vendor; the gate is asked after the grant and the policy, before the call.
+ */
+test("SEC1: a connector call the gate refuses or holds never reaches the vendor", () =>
+  asPlatform(async () => {
+    const asked: ApprovalCandidate[] = [];
+    let answer: "refuse" | "hold" | "allow" = "refuse";
+    const { store, database, auditStore } = await freshStore({
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        if (answer === "refuse") throw new ApprovalRefusedError(TOOL_DISABLED);
+        if (answer === "hold")
+          throw new HeadlessToolSuspension("This action is waiting for your approval.", {
+            kind: "approval",
+          });
+        return undefined;
+      },
+    });
+    let executed = 0;
+    useComposioClient({
+      listActions: async () => [],
+      execute: async () => {
+        executed += 1;
+        return vendorAnswered({ messages: [] });
+      },
+    });
+    await seedComposioGmail(database, store);
+    const call = () =>
+      store.callTool({
+        ref: "gmail/GMAIL_FETCH_EMAILS",
+        args: {},
+        botId: "bot_helper",
+        actorId: "user_asker",
+      });
+
+    await expect(call()).rejects.toThrow(TOOL_DISABLED);
+    answer = "hold";
+    await expect(call()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    expect(executed).toBe(0);
+    expect(
+      auditStore.recorded().filter((event) => event.eventType === "mcp.call_succeeded"),
+    ).toEqual([]);
+    expect(asked.map((candidate) => candidate.toolRef)).toEqual([
+      "gmail/GMAIL_FETCH_EMAILS",
+      "gmail/GMAIL_FETCH_EMAILS",
+    ]);
+    answer = "allow";
+    await call();
+    expect(executed).toBe(1);
   }));
 
 test("a Composio call is recorded as reaching the vendor as the person, not as the deployment", () =>
