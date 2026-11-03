@@ -1,7 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import type { AgentChannel } from "../src/channels/routes";
 import {
   type AutomationFiring,
   createAutomationStore,
@@ -15,6 +14,7 @@ import {
   createWakerAutomationExecutor,
   type WakerAutomationExecutorDeps,
 } from "../src/automations/waker-executor";
+import type { AgentChannel } from "../src/channels/routes";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
 import {

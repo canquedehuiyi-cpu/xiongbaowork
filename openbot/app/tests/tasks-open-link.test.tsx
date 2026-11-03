@@ -14,7 +14,7 @@ import { AttentionRegion, cardLinkOf } from "@/routes/_authed/_app/tasks";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Spec A6 on the card: 打开 lands on the screen that holds the work (audit N1).
+ * Spec A6 on the card: 查看详情 lands on the screen that holds the work (audit N1).
  *
  * The server says where with `open` (`openbot/docs/contracts/tasks-open-field.md`); the screen only
  * has to draw it. Before this, every conversation's card linked its THREAD id as a channel id and
@@ -138,7 +138,7 @@ test("the board draws the server's answer: three links that land, and one senten
 
   await view.findByText("chat card");
   const hrefs = view
-    .getAllByRole("link", { name: "打开" })
+    .getAllByRole("link", { name: "查看详情" })
     .map((link) => link.getAttribute("href"));
   expect(hrefs).toEqual([
     "/channel/channel_abc",

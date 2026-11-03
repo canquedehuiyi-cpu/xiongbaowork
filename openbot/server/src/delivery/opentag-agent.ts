@@ -5,6 +5,12 @@
  * context, then the person's authenticated delivery binding. Only a bound sender reaches a turn, and
  * only their own Bot in their own canonical thread. Everyone else is told how to link, and nothing
  * runs.
+ *
+ * WHOSE TURN THIS IS (G01). The route itself is nobody's: OpenTag's secret names no person. The
+ * binding (or, for `link`, the challenge) is looked up as the platform, and everything after it --
+ * the turn, the answer to a question, an approval decision, the private notifications, the new
+ * binding -- runs as the tenant the database stamped on that row, which may only agree with its
+ * owner. A row stamped as nobody's is treated as no binding at all.
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -14,6 +20,11 @@ import {
   type SlackTriggerEvent,
 } from "../responsibilities/slack";
 import type { DrawnComponent } from "../routines/runner";
+import {
+  assertPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import {
   agUiStream,
   approvalFields,
@@ -236,8 +247,33 @@ async function answer(
     type: sender.mentioned ? "app_mention" : "message",
     text: message.text,
   });
-  const bound = await ownedBinding(deps, sender);
-  if (!bound) return { text: linkInstructions(sender.transport) };
+  const owned = await ownedBinding(deps, sender);
+  if (!owned) return { text: linkInstructions(sender.transport) };
+  return runAsTenant(owned.tenant, () =>
+    answerAsBinding(
+      deps,
+      input,
+      sender,
+      { id: message.id, text: message.text },
+      owned.binding,
+      signal,
+    ),
+  );
+}
+
+/** The bound sender's message, run inside the binding's own tenant. */
+async function answerAsBinding(
+  deps: OpenTagAgentDeps,
+  input: OpenTagRunInput,
+  sender: NonNullable<ReturnType<typeof senderFromContext>>,
+  message: { id?: string | undefined; text: string },
+  bound: DeliveryBinding,
+  signal: AbortSignal,
+): Promise<{
+  text: string;
+  interrupt?: unknown;
+  components?: DrawnComponent[];
+}> {
   const answered = await answerOpenQuestion(deps, bound, message.text);
   if (answered) {
     const bot = await deps.store.botIdentity(bound.agentId);
@@ -355,11 +391,27 @@ async function link(
   sender: { transport: ChatTransport; realm: string; identity: string },
   code: string,
 ) {
-  const challenge = await deps.store.readChallenge(code);
-  if (!challenge || challenge.transport !== sender.transport)
+  // The code is the only thing that names a person here, so it is read as the platform; the rest
+  // runs as the tenant stamped on the challenge, so the binding is filed as that person's (G01).
+  const challenge = await runAsTenant("platform", () =>
+    deps.store.readChallenge(code),
+  );
+  const tenant = challenge
+    ? trustedTenant(challenge.tenantId, challenge.ownerUserId)
+    : null;
+  if (!challenge || !tenant || challenge.transport !== sender.transport)
     return {
       text: "That link code expired, was already used, or is for another app. Create a new one in OpenBot.",
     };
+  return runAsTenant(tenant, () => linkAs(deps, sender, code, challenge));
+}
+
+async function linkAs(
+  deps: OpenTagAgentDeps,
+  sender: { transport: ChatTransport; realm: string; identity: string },
+  code: string,
+  challenge: NonNullable<Awaited<ReturnType<DeliveryStore["readChallenge"]>>>,
+) {
   const scope = await deps.scopeFor(
     challenge.ownerUserId,
     challenge.channelId,
@@ -439,10 +491,28 @@ async function decideFromCard(
     };
   // The clicker is mapped exactly like a message sender; OpenTag already refused anyone but the
   // named approver, and OpenBot then decides only as that binding's owner.
-  const binding = await ownedBinding(deps, person);
-  if (!binding)
+  const owned = await ownedBinding(deps, person);
+  if (!owned)
     return {
       text: "You are not linked to this approval's owner, so nothing was decided.",
+    };
+  // Decided as the binding's own tenant, so the approval's resume is stamped as that person (G01).
+  return runAsTenant(owned.tenant, () =>
+    decideAsBinding(deps, resume, owned.binding),
+  );
+}
+
+async function decideAsBinding(
+  deps: OpenTagAgentDeps,
+  resume: Extract<
+    NonNullable<ReturnType<typeof resumeFromInput>>,
+    { invalid: false }
+  >,
+  binding: DeliveryBinding,
+): Promise<{ text: string }> {
+  if (!deps.approvals)
+    return {
+      text: "Approvals from chat are unavailable on this deployment. Decide in your OpenBot approval inbox.",
     };
   let record: Awaited<ReturnType<PairedApprovals["store"]["get"]>>;
   try {
@@ -524,21 +594,37 @@ async function feedSlackTriggers(
   }
 }
 
-/** The sender's enabled binding, only while its owner still has that conversation and Bot. */
+/**
+ * The person a stored row says it belongs to, or null (G01): the tenant the database stamped on it,
+ * which its owner may only agree with. A row stamped as nobody's (`system`, `platform`) answers
+ * null, and is treated as if it did not exist.
+ */
+function trustedTenant(stamped: unknown, owner: string): string | null {
+  try {
+    return assertPersonTenant(stamped, owner);
+  } catch (error) {
+    if (error instanceof TenantContextError) return null;
+    throw error;
+  }
+}
+
+/**
+ * The sender's enabled binding and the tenant to act as for it, only while its owner still has
+ * that conversation and Bot. Which person an identity is bound to is looked up as the platform;
+ * the conversation check already runs as the binding's own tenant.
+ */
 async function ownedBinding(
   deps: OpenTagAgentDeps,
   person: { transport: ChatTransport; realm: string; identity: string },
-) {
-  const binding = await deps.store.findBinding(
-    person.transport,
-    person.realm,
-    person.identity,
+): Promise<{ binding: DeliveryBinding; tenant: string } | null> {
+  const binding = await runAsTenant("platform", () =>
+    deps.store.findBinding(person.transport, person.realm, person.identity),
   );
   if (!binding) return null;
-  const scope = await deps.scopeFor(
-    binding.ownerUserId,
-    binding.channelId,
-    binding.agentId,
+  const tenant = trustedTenant(binding.tenantId, binding.ownerUserId);
+  if (!tenant) return null;
+  const scope = await runAsTenant(tenant, () =>
+    deps.scopeFor(binding.ownerUserId, binding.channelId, binding.agentId),
   );
-  return scope?.threadId === binding.threadId ? binding : null;
+  return scope?.threadId === binding.threadId ? { binding, tenant } : null;
 }

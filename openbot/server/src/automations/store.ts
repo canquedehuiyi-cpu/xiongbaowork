@@ -40,7 +40,7 @@ import {
   automations,
   automationTriggers,
 } from "../db/schema";
-import { SYSTEM_TENANT } from "../db/schema/tenant";
+import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import { nextOccurrence, ScheduleRefusedError } from "../routines/schedule";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import {
@@ -54,10 +54,10 @@ import {
   type AutomationTrigger,
   type AutomationTriggerConfig,
   type AutomationTriggerKind,
+  type AutomationUpdateInput,
   automationCreateSchema,
   automationTargetSchema,
   automationTriggerConfigSchema,
-  type AutomationUpdateInput,
   automationUpdateSchema,
   createAutomationTargetRegistry,
   MAX_ACTIVE_TRIGGERS,
@@ -349,7 +349,9 @@ export function createAutomationStore(
   /**
    * AUT3: a target is accepted only if something can carry it out for this tenant. Runs outside any
    * transaction, in the caller's frame, so the agent read is scoped by row security to what this
-   * tenant can see (its own Wakers and the platform's built-in ones).
+   * tenant can see: its own Wakers, the platform's built-in ones, and team Wakers (G01-E). A `team`
+   * row comes back only when `team_read` — `openbot_team_bot_visible` — already let this person see
+   * it, so the stamp alone is enough here; a team Bot this person may not use never reaches the check.
    */
   async function verifyTarget(target: AutomationTarget, tenant: string) {
     if (target.kind === "waker") {
@@ -360,7 +362,9 @@ export function createAutomationStore(
         .limit(1);
       if (
         !agent ||
-        (agent.tenantId !== tenant && agent.tenantId !== SYSTEM_TENANT)
+        (agent.tenantId !== tenant &&
+          agent.tenantId !== SYSTEM_TENANT &&
+          agent.tenantId !== TEAM_TENANT)
       ) {
         throw new AutomationRefusedError(WAKER_NOT_VISIBLE);
       }

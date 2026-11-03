@@ -34,8 +34,8 @@ const OWNER: AgentActor = { id: "user_owner", role: "user" };
 const CONTEXT: RoutineRunContext = {
   routineId: "routine_1",
   ownerUserId: "user_owner",
-  // Deliberately not the owner's id: the card's tenant must be the one read off the routine.
-  tenantId: "tenant_of_routine",
+  // The routine's own stamp: its owner's, which is the only one the runner will act as (G01-C).
+  tenantId: "user_owner",
   agentId: "bot_helper",
   channelId: "channel_1",
   instruction: "Post the standup summary.",
@@ -212,6 +212,8 @@ describe("createRoutineRunner", () => {
         agentId: CONTEXT.agentId,
         threadId: CHANNEL.threadId,
         instruction: CONTEXT.instruction,
+        // The card's own key, so the model this turn ran on is read back onto that card (story H4).
+        runRef: RUN_ID,
         // The firing opened this run's card above, so it tells the runner not to file a second one
         // (and not to charge the month twice) — audit N10, ticket WP-1.2.
         cardOwnedByCaller: true,
@@ -416,7 +418,7 @@ describe("the board a headless firing leaves", () => {
 
     expect(recorded.board.opened).toEqual([
       {
-        tenantId: "tenant_of_routine",
+        tenantId: "user_owner",
         title: "Post the standup summary.",
         executorAgentId: "bot_helper",
         source: "routine",
