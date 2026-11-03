@@ -18,7 +18,6 @@ import {
   type CredentialSecretReader,
   type CredentialStore,
   CredentialUnusableError,
-  decryptCredentialForUse,
   openCredential,
   sealCredential,
 } from "../credentials";
@@ -1513,21 +1512,45 @@ export function createPluginStore(options: PluginStoreOptions) {
    * this one did not even need the rewording.
    */
   async function secretFor(
-    credentialId: string,
+    server: { tenantId: string; credentialId: string },
     onRevoked: string,
   ): Promise<string> {
     try {
-      return await decryptCredentialForUse(
-        encryptionKey,
-        credentials,
-        credentialId,
-      );
+      return await serverCredentialById(server);
     } catch (error) {
       if (error instanceof CredentialUnusableError) {
         throw new PluginRefusedError(onRevoked, null);
       }
       throw error;
     }
+  }
+
+  /**
+   * A server's own secret read by id, where the broker is not the door (`platform`, or a server that
+   * is not `team`): only a server secret's kind (`mcp`, `mcp_oauth_client`) carrying the server's own
+   * stamp, so a `team` server's secret is a `team` row (G01-E P10). Without this a pointer re-aimed at
+   * any row the frame can read (somebody's `mcp_user_token` under `platform`, a person's own model key
+   * from a catalogue server) was decrypted and sent as the server's token. Anything else is
+   * {@link CredentialUnusableError}, the same as a row that is gone: there is nothing here to spend.
+   */
+  async function serverCredentialById(server: {
+    tenantId: string;
+    credentialId: string;
+  }): Promise<string> {
+    const stored = await credentials.readSecret(server.credentialId);
+    if (!stored) throw new CredentialUnusableError("Credential was not found");
+    if (stored.revokedAt) {
+      throw new CredentialUnusableError("Credential is revoked");
+    }
+    if (
+      (stored.kind !== "mcp" && stored.kind !== "mcp_oauth_client") ||
+      stored.tenantId !== server.tenantId
+    ) {
+      throw new CredentialUnusableError(
+        "Credential is not this server's own secret",
+      );
+    }
+    return openCredential(encryptionKey, stored);
   }
 
   /**
@@ -1613,7 +1636,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     onRevoked: string,
   ): Promise<{ secret: string; storedAt?: Date | null }> {
     if (!throughBroker(server)) {
-      return { secret: await secretFor(server.credentialId, onRevoked) };
+      return { secret: await secretFor(server, onRevoked) };
     }
     const held = await brokeredSecret(database, server.id);
     if (!held || held.revokedAt) throw new PluginRefusedError(onRevoked, null);
@@ -2503,6 +2526,19 @@ export function createPluginStore(options: PluginStoreOptions) {
     if (!target) {
       throw new CatalogueEntryUnknownError(input.serverId);
     }
+    /*
+     * Only the team's row or the frame's own: a client sealed beside any other row (the catalogue's,
+     * read through `system`, or somebody's under `platform`) would carry a stamp that row's readers do
+     * not, so no read could ever return it. Refused before anything is stored.
+     */
+    if (
+      target.tenantId !== TEAM_TENANT &&
+      target.tenantId !== currentTenant()
+    ) {
+      throw new CustomServerRefusedError(
+        `${input.serverId} is not a server this deployment's OAuth client can be stored for here.`,
+      );
+    }
     const shared: { target?: typeof TEAM_TENANT } =
       target.tenantId === TEAM_TENANT ? { target: TEAM_TENANT } : {};
 
@@ -2532,15 +2568,26 @@ export function createPluginStore(options: PluginStoreOptions) {
      *
      * Resolved rather than matched with an OR, because an UPDATE cannot order-and-limit: the same
      * preference the read applies (this workspace's row before the platform's shared one) has to be the
-     * one this write uses, or the client is stored on one row and read from another. When the row the
-     * caller may only read is not one they may write, this raises on the row-level security check
-     * instead of quietly touching zero rows, which is the loud answer an operator can act on. The row
-     * was resolved at the top, by the same rule.
+     * one this write uses, or the client is stored on one row and read from another. The row was
+     * resolved at the top, by the same rule. When the row the caller may only read is not one they may
+     * write, row security filters it out of the UPDATE, which touches zero rows without raising: so
+     * the count is checked below, which is the loud answer an operator can act on.
      */
-    await transaction
+    const pointed = await transaction
       .update(mcpServers)
       .set({ credentialId: stored.id, updatedAt: new Date() })
-      .where(eq(mcpServers.id, target.id));
+      .where(eq(mcpServers.id, target.id))
+      .returning({ id: mcpServers.id });
+    /*
+     * An UPDATE that row security filters touches nothing and says nothing (I9): a client stored with
+     * no row pointing at it is the "there is none" the paragraph above describes. Thrown inside the
+     * caller's transaction, so the client just stored goes with it.
+     */
+    if (pointed.length === 0) {
+      throw new PluginInvariantError(
+        `${input.serverId}: the OAuth client was stored but the server row could not be pointed at it, so nothing was kept.`,
+      );
+    }
 
     return { replaced: live !== null };
   }
@@ -2647,11 +2694,10 @@ export function createPluginStore(options: PluginStoreOptions) {
       const parsed: unknown = JSON.parse(
         brokered
           ? await openCredential(encryptionKey, brokered)
-          : await decryptCredentialForUse(
-              encryptionKey,
-              credentials,
-              row.credentialId,
-            ),
+          : await serverCredentialById({
+              tenantId: row.tenantId,
+              credentialId: row.credentialId,
+            }),
       );
       // A client that parsed and is not one is as unusable as the revoked or missing row the catch
       // below answers for, and is the same none to every caller — see {@link isUsableClient}.

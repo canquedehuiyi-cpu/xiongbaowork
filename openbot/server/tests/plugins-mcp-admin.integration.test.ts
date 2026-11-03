@@ -15,6 +15,7 @@ import {
   createCredentialAdminService,
   createCredentialStore,
   openCredential,
+  sealCredential,
 } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
@@ -1132,6 +1133,255 @@ describe("nobody but an administrator holding the capability takes a connector's
       await asPlatform(() =>
         database.delete(mcpServers).where(eq(mcpServers.id, shelf)),
       );
+    }
+  });
+});
+
+describe("a server's own secret read by id is a server secret carrying the server's stamp", () => {
+  /** A credential row sealed for real, so a refusal below is the check's and not the envelope's. */
+  async function sealedRow(input: {
+    tenantId: string;
+    kind: "mcp" | "mcp_user_token";
+    provider: string;
+    plaintext: string;
+  }): Promise<string> {
+    const id = randomUUID();
+    const encryptedValue = await sealCredential(
+      ENCRYPTION_KEY,
+      { id, tenantId: input.tenantId, kind: input.kind },
+      input.plaintext,
+    );
+    await asPlatform(() =>
+      database.insert(credentials).values({
+        id,
+        tenantId: input.tenantId,
+        kind: input.kind,
+        provider: input.provider,
+        keyId: `${input.provider}-${id}`,
+        encryptedValue,
+        metadata: {},
+      }),
+    );
+    return id;
+  }
+  const pointAt = (server: string, credentialId: string) =>
+    asPlatform(() =>
+      database
+        .update(mcpServers)
+        .set({ credentialId })
+        .where(eq(mcpServers.id, server)),
+    );
+  const call = (frame: string, ref: string) =>
+    runAsTenant(frame, () =>
+      store.callTool({ ref, args: {}, botId: memberBot, actorId: member }),
+    );
+
+  test("under platform, a team server re-pointed at a person's token or a non-team key spends neither", async () => {
+    const current = tokens.at(-1);
+    const personal = await sealedRow({
+      tenantId: member,
+      kind: "mcp_user_token",
+      provider: serverId,
+      plaintext: `${suite}-member-own-token`,
+    });
+    const untethered = await sealedRow({
+      tenantId: "platform",
+      kind: "mcp",
+      provider: serverId,
+      plaintext: `${suite}-platform-key`,
+    });
+    try {
+      for (const pointer of [personal, untethered]) {
+        await pointAt(serverId, pointer);
+        sent.length = 0;
+        await expect(call("platform", toolRef)).rejects.toThrow();
+        expect(sent).toEqual([]);
+      }
+      // Pointed back at the team's own token, the same call goes out with it.
+      await pointAt(serverId, current?.id ?? "");
+      sent.length = 0;
+      await call("platform", toolRef);
+      expect(sent).toEqual([current?.plaintext]);
+    } finally {
+      await pointAt(serverId, current?.id ?? "");
+      await asPlatform(() =>
+        database
+          .delete(credentials)
+          .where(inArray(credentials.id, [personal, untethered])),
+      );
+    }
+  });
+
+  test("in a person's frame, a catalogue server pointed at that person's own key does not spend it", async () => {
+    const shelf = `${suite}-key-shelf`;
+    const own = await sealedRow({
+      tenantId: member,
+      kind: "mcp",
+      provider: shelf,
+      plaintext: `${suite}-member-own-key`,
+    });
+    // The member's frame reads its own row by id, which is what made this reachable.
+    expect(await as(member, () => vault.readSecret(own))).not.toBeNull();
+    await runAsTenant("system", async () => {
+      await database.insert(mcpServers).values({
+        id: shelf,
+        title: "Catalogue",
+        vendor: "vendor.example",
+        url: "https://key-shelf.vendor.example/mcp",
+        provenance: "custom",
+      });
+      await database.insert(mcpTools).values({ serverId: shelf, name: "peek" });
+    });
+    try {
+      await pointAt(shelf, own);
+      await as(member, () =>
+        store.grant(
+          "mcp",
+          `${shelf}/peek`,
+          memberBot,
+          `${member}@example.test`,
+        ),
+      );
+      sent.length = 0;
+      await expect(call(member, `${shelf}/peek`)).rejects.toThrow();
+      expect(sent).toEqual([]);
+    } finally {
+      await asPlatform(async () => {
+        await database
+          .delete(pluginGrants)
+          .where(
+            and(
+              eq(pluginGrants.agentId, memberBot),
+              eq(pluginGrants.ref, `${shelf}/peek`),
+            ),
+          );
+        await database.delete(mcpServers).where(eq(mcpServers.id, shelf));
+        await database.delete(credentials).where(eq(credentials.id, own));
+      });
+    }
+  });
+});
+
+describe("an OAuth client is stored only beside a row that will read it, and only once its pointer lands", () => {
+  const drive = "google-drive";
+  const clientRows = (server: string) =>
+    asPlatform(() =>
+      database
+        .select({ id: credentials.id })
+        .from(credentials)
+        .where(
+          and(
+            eq(credentials.kind, "mcp_oauth_client"),
+            eq(credentials.provider, server),
+          ),
+        ),
+    );
+
+  test("a catalogue row the administrator can read but not write is refused before anything is stored", async () => {
+    const shelf = `${suite}-drive-shelf`;
+    await runAsTenant("system", () =>
+      database.insert(mcpServers).values({
+        id: shelf,
+        catalogueKey: drive,
+        title: "Google Drive",
+        vendor: "Google",
+        url: "https://www.googleapis.com/drive/v3",
+        provenance: "first-party",
+      }),
+    );
+    try {
+      await expect(
+        adminRequest(adminA, () =>
+          store.registerOAuthClient({
+            serverId: shelf,
+            client: { clientId: `${suite}-client`, clientSecret: "secret" },
+            by: `${adminA}@example.test`,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(CustomServerRefusedError);
+      expect(await clientRows(shelf)).toEqual([]);
+    } finally {
+      await asPlatform(() =>
+        database.delete(mcpServers).where(eq(mcpServers.id, shelf)),
+      );
+    }
+  });
+
+  test("a pointer write that row security filters to nothing raises, and the client stored with it is rolled back", async () => {
+    const own = `${suite}-drive-own`;
+    // The administrator's own row (legacy shape), which their frame may write.
+    await asPlatform(() =>
+      database.insert(mcpServers).values({
+        id: own,
+        tenantId: adminA,
+        catalogueKey: drive,
+        title: "Google Drive",
+        vendor: "Google",
+        url: "https://www.googleapis.com/drive/v3",
+        provenance: "first-party",
+      }),
+    );
+    /*
+     * The vault's create, then the frame moved to somebody who cannot write the row: the UPDATE that
+     * points the row at the new client is filtered to zero rows, which is the silent miss to refuse.
+     */
+    const filtered = createPluginStore({
+      database,
+      auditStore,
+      credentials: {
+        ...vault,
+        create: async (value, executor) => {
+          const stored = await vault.create(value, executor);
+          await (executor as Pick<typeof database, "execute">).execute(
+            sql`select set_config('app.tenant_id', ${member}, true)`,
+          );
+          return stored;
+        },
+      },
+      encryptionKey: ENCRYPTION_KEY,
+      policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+    });
+    try {
+      const message = await refusal(() =>
+        adminRequest(adminA, () =>
+          filtered.registerOAuthClient({
+            serverId: own,
+            client: { clientId: `${suite}-client`, clientSecret: "secret" },
+            by: `${adminA}@example.test`,
+          }),
+        ),
+      );
+      expect(message).toContain("could not be pointed at it");
+      expect(await clientRows(own)).toEqual([]);
+      // And unfiltered, the same write lands: the row names the client just stored.
+      await adminRequest(adminA, () =>
+        store.registerOAuthClient({
+          serverId: own,
+          client: { clientId: `${suite}-client`, clientSecret: "secret" },
+          by: `${adminA}@example.test`,
+        }),
+      );
+      const stored = await clientRows(own);
+      expect(stored).toHaveLength(1);
+      const [row] = await asPlatform(() =>
+        database
+          .select({ credentialId: mcpServers.credentialId })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, own)),
+      );
+      expect(row?.credentialId).toBe(stored[0]?.id ?? "");
+    } finally {
+      await asPlatform(async () => {
+        await database.delete(mcpServers).where(eq(mcpServers.id, own));
+        await database
+          .delete(credentials)
+          .where(
+            and(
+              eq(credentials.kind, "mcp_oauth_client"),
+              eq(credentials.provider, own),
+            ),
+          );
+      });
     }
   });
 });
