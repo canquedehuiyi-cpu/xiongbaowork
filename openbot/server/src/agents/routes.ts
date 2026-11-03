@@ -18,6 +18,7 @@ import {
   ManagedAgentUnavailableError,
   ModelBindingNotApplicableError,
   ModelNotInLibraryError,
+  OwnerlessBotPrivateError,
   ProtectedAgentError,
 } from "./profile-store";
 import type {
@@ -998,6 +999,9 @@ function mapStoreError(context: Context, error: unknown): Response {
     return context.json({ error: error.message }, 400);
   }
   if (error instanceof AgentAssignedError) {
+    return context.json({ error: error.message }, 409);
+  }
+  if (error instanceof OwnerlessBotPrivateError) {
     return context.json({ error: error.message }, 409);
   }
   throw error;
