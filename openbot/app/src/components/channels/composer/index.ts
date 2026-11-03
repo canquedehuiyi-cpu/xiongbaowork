@@ -20,4 +20,10 @@ export {
 } from "./queue";
 export { PLACEHOLDER_COMMANDS } from "./sources";
 export type { CrewOption } from "./triggers";
-export { type AgentOption, toAgentOptions } from "./triggers";
+export {
+  type AgentOption,
+  type GroupOption,
+  toAgentOptions,
+  toGroupOptions,
+  withGroupMembers,
+} from "./triggers";
