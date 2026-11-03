@@ -12,7 +12,7 @@ import {
   subscriptions,
   users,
 } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
 
@@ -108,6 +108,12 @@ const auth = createAuth(
   async () => false,
 );
 
+/**
+ * Better Auth's handler and the identity tables it owns run in the identity layer's `platform` frame,
+ * the same frame `app.ts` opens around `/api/auth/*`.
+ */
+const handle = (request: Request) => asPlatform(() => auth.handler(request));
+
 function cookieHeader(response: Response): string {
   return response.headers
     .getSetCookie()
@@ -120,7 +126,7 @@ function cookieHeader(response: Response): string {
  * Answers with where the callback sent the browser.
  */
 async function signInWithGithub(): Promise<string> {
-  const start = await auth.handler(
+  const start = await handle(
     new Request(`${BASE}/api/auth/sign-in/social`, {
       method: "POST",
       headers: { "content-type": "application/json", origin: BASE },
@@ -134,7 +140,7 @@ async function signInWithGithub(): Promise<string> {
   const state = authorize.searchParams.get("state");
   expect(state).toBeString();
 
-  const callback = await auth.handler(
+  const callback = await handle(
     new Request(
       `${BASE}/api/auth/callback/github?code=stub-code&state=${encodeURIComponent(state ?? "")}`,
       { method: "GET", headers: { cookie: cookieHeader(start), origin: BASE } },
@@ -147,10 +153,12 @@ async function signInWithGithub(): Promise<string> {
 const createdUserIds: string[] = [];
 
 async function userByEmail(email: string) {
-  const [row] = await database
-    .select({ id: users.id, emailVerified: users.emailVerified })
-    .from(users)
-    .where(eq(users.email, email));
+  const [row] = await asPlatform(() =>
+    database
+      .select({ id: users.id, emailVerified: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, email)),
+  );
   return row;
 }
 
@@ -168,13 +176,15 @@ afterAll(async () => {
     });
   }
   if (createdUserIds.length > 0) {
-    await database
-      .delete(accounts)
-      .where(inArray(accounts.userId, createdUserIds));
-    await database
-      .delete(sessions)
-      .where(inArray(sessions.userId, createdUserIds));
-    await database.delete(users).where(inArray(users.id, createdUserIds));
+    await asPlatform(async () => {
+      await database
+        .delete(accounts)
+        .where(inArray(accounts.userId, createdUserIds));
+      await database
+        .delete(sessions)
+        .where(inArray(sessions.userId, createdUserIds));
+      await database.delete(users).where(inArray(users.id, createdUserIds));
+    });
   }
   await releaseRoleWriter?.();
 });
@@ -199,12 +209,14 @@ describe("GitHub sign-in", () => {
     // GitHub vouched for the address, and only then is it recorded as verified.
     expect(user?.emailVerified).toBe(true);
 
-    const [account] = await database
-      .select({ accountId: accounts.accountId })
-      .from(accounts)
-      .where(
-        and(eq(accounts.userId, userId), eq(accounts.providerId, "github")),
-      );
+    const [account] = await asPlatform(() =>
+      database
+        .select({ accountId: accounts.accountId })
+        .from(accounts)
+        .where(
+          and(eq(accounts.userId, userId), eq(accounts.providerId, "github")),
+        ),
+    );
     expect(account?.accountId).toBe(String(githubPerson.id));
 
     const owned = await runAsTenant(userId, async () => ({
@@ -252,7 +264,7 @@ describe("GitHub sign-in", () => {
    * exactly one of the two, so each refusal is that rule's and not the other's.
    */
   async function passwordAccount(email: string, verified: boolean) {
-    const signUp = await auth.handler(
+    const signUp = await handle(
       new Request(`${BASE}/api/auth/sign-up/email`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: BASE },
@@ -269,21 +281,25 @@ describe("GitHub sign-in", () => {
     expect(holderId).not.toBe("");
     createdUserIds.push(holderId);
     if (verified) {
-      await database
-        .update(users)
-        .set({ emailVerified: true })
-        .where(eq(users.id, holderId));
+      await asPlatform(() =>
+        database
+          .update(users)
+          .set({ emailVerified: true })
+          .where(eq(users.id, holderId)),
+      );
     }
     return holderId;
   }
 
   async function githubAccountsOf(userId: string) {
-    return await database
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(
-        and(eq(accounts.userId, userId), eq(accounts.providerId, "github")),
-      );
+    return await asPlatform(() =>
+      database
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(
+          and(eq(accounts.userId, userId), eq(accounts.providerId, "github")),
+        ),
+    );
   }
 
   test("a verified GitHub address is not linked onto an unverified password account", async () => {

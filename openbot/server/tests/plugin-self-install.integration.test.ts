@@ -16,7 +16,7 @@ import {
 import { pluginInstallListings } from "../src/db/schema/plugin-install-listings";
 import { createPluginRoutes } from "../src/plugins/routes";
 import { createPluginStore } from "../src/plugins/store";
-import { runAsTenant } from "../src/tenant/context";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -158,16 +158,19 @@ const listingRows = async (scope: string) =>
   );
 
 beforeAll(async () => {
-  for (const [id, email] of [
-    [alice, aliceEmail],
-    [bob, bobEmail],
-    [adminUser, adminEmail],
-  ] as const) {
-    await database
-      .insert(users)
-      .values({ id, email, name: id })
-      .onConflictDoNothing();
-  }
+  // People are identity rows: written and removed by the platform frame.
+  await asPlatform(async () => {
+    for (const [id, email] of [
+      [alice, aliceEmail],
+      [bob, bobEmail],
+      [adminUser, adminEmail],
+    ] as const) {
+      await database
+        .insert(users)
+        .values({ id, email, name: id })
+        .onConflictDoNothing();
+    }
+  });
 
   await runAsTenant(tenant, async () => {
     for (const [id, owner] of [
@@ -256,9 +259,9 @@ afterAll(async () => {
     await database.delete(mcpTools).where(eq(mcpTools.serverId, appKey));
     await database.delete(mcpServers).where(eq(mcpServers.id, appKey));
   });
-  await database
-    .delete(users)
-    .where(inArray(users.id, [alice, bob, adminUser]));
+  await asPlatform(() =>
+    database.delete(users).where(inArray(users.id, [alice, bob, adminUser])),
+  );
 });
 
 describe("before anything is listed", () => {

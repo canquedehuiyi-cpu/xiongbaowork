@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { asc, eq, like } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import {
+  runAsTenant,
+  TenantContextError,
+  tenantFrameGuard,
+} from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -213,7 +217,8 @@ test("the shapes that always worked still do", async () => {
   });
   expect(inTransaction).toEqual([{ id: seeded, tenant: tenantA }]);
 
-  // The isolation itself: another tenant, and a caller with no frame at all, see nothing.
+  // The isolation itself: another tenant, the platform's own `system` frame, and a caller with no
+  // frame at all, see nothing.
   const fromB = await runAsTenant(tenantB, async () => {
     await precheck();
     return database
@@ -222,14 +227,39 @@ test("the shapes that always worked still do", async () => {
       .where(eq(agents.id, seeded));
   });
   expect(fromB).toEqual([]);
-  const unscoped = await database
-    .select({ id: agents.id })
-    .from(agents)
-    .where(eq(agents.id, seeded));
-  expect(unscoped).toEqual([]);
+  const fromSystem = await runAsTenant("system", async () => {
+    await precheck();
+    return database
+      .select({ id: agents.id })
+      .from(agents)
+      .where(eq(agents.id, seeded));
+  });
+  expect(fromSystem).toEqual([]);
+  if (tenantFrameGuard() === "throw") {
+    // With the guard on, a caller with no frame is refused before it reaches any row.
+    expect(() =>
+      database
+        .select({ id: agents.id })
+        .from(agents)
+        .where(eq(agents.id, seeded)),
+    ).toThrow(TenantContextError);
+  } else {
+    const unscoped = await database
+      .select({ id: agents.id })
+      .from(agents)
+      .where(eq(agents.id, seeded));
+    expect(unscoped).toEqual([]);
+  }
 });
 
 test("a builder made outside every frame still runs as the frame that awaits it", async () => {
+  if (tenantFrameGuard() === "throw") {
+    // With the guard on there is no builder made outside every frame: making one is refused.
+    expect(() => database.select({ id: agents.id }).from(agents)).toThrow(
+      TenantContextError,
+    );
+    return;
+  }
   const unframed = database.select({ id: agents.id }).from(agents);
   const rows = await runAsTenant(tenantA, async () =>
     unframed.where(eq(agents.id, seeded)),

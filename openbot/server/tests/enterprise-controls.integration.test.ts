@@ -114,29 +114,26 @@ beforeAll(async () => {
     ]),
   );
   /*
-   * NEEDS A HUMAN DECISION (G01-D): left UNFRAMED on purpose, exactly as before. The member's Bot is
-   * a person's row and belongs in the member's tenant, but two cases here ("models > a built-in Bot
-   * on a model off the allowlist ..." and "the model allowlist also governs a run reached through
-   * extra segments") only pass because this unframed insert files it as `system`: the HTTP gate's
-   * model allowlist (`governRun`, src/admin/gate.ts:234/:240, usage rows :261/:280, audit :281) runs
-   * after `requireUser`'s frame has closed, so it reads in no frame and the legacy `system` answer
-   * sees only `system` Bots. Seeded as the member's, both cases fail with the guard off too: a
-   * member-owned built-in Bot is not held to the allowlist over HTTP. Do not frame this seed (and
-   * never as `system`) until the gate is framed; then seed it with runAsTenant(member.id).
+   * The member's Bot is a person's row, so it is seeded in the member's own frame. The HTTP gate's
+   * model allowlist (`governRun`, src/admin/gate.ts) now runs inside the frame `requireUser` opens
+   * (G01-D), so it finds the Bot under the member's tenant and holds a member-owned built-in Bot to
+   * the allowlist.
    */
-  await database.insert(agents).values({
-    id: bot,
-    name: "Enterprise test Bot",
-    type: "built_in",
-    configuration: {},
-  });
-  await database.insert(agentProfiles).values({
-    agentId: bot,
-    ownerUserId: member.id,
-    title: "Test",
-    roleDescription: "Test",
-    avatarSeed: "x",
-    visibility: "private",
+  await asMemberTenant(async () => {
+    await database.insert(agents).values({
+      id: bot,
+      name: "Enterprise test Bot",
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: bot,
+      ownerUserId: member.id,
+      title: "Test",
+      roleDescription: "Test",
+      avatarSeed: "x",
+      visibility: "private",
+    });
   });
   controls = await installEnterpriseControls({
     database,
