@@ -5,6 +5,9 @@ mod credential_lock;
 use std::io::{self, Write};
 fn main() {
     let path = std::env::args_os().nth(1).expect("credential path");
+    // As the Bun owner does: started, and about to try.
+    println!("waiting");
+    io::stdout().flush().unwrap();
     let _lock = credential_lock::acquire(std::path::Path::new(&path)).unwrap();
     println!("locked");
     io::stdout().flush().unwrap();
