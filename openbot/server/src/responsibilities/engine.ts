@@ -39,7 +39,7 @@ export function createResponsibilityEngine(options: {
   /** The plan's monthly ceiling, asked before the model is dialled. */
   quota?: QuotaService;
   /** Which of the owner's machines this coworker's actions run on, in device mode. */
-  deviceIdOf?: (agentId: string) => Promise<string | null>;
+  deviceIdOf?: (agentId: string, taskRef?: string) => Promise<string | null>;
   /**
    * Whether an administrator has revoked this workspace's access (spec J5). A ban freezes the queue;
    * an event that arrives for a banned account must not be spent on that account's models.
@@ -162,7 +162,7 @@ export function createResponsibilityEngine(options: {
               source: "responsibility",
               channelRef: context.channelId,
               runRef: runId,
-              deviceId: (await deviceIdOf?.(context.agentId)) ?? null,
+              deviceId: (await deviceIdOf?.(context.agentId, runId)) ?? null,
             });
             carded = true;
           } catch (error) {
