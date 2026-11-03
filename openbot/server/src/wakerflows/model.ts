@@ -4,7 +4,7 @@ import {
   type FlowModelChoice,
   PLATFORM_FLOW_MODEL_ID,
 } from "../../../shared/wakerflows";
-import { decryptSecret } from "../credentials";
+import { openCredential } from "../credentials";
 import type { Database } from "../db/client";
 import { credentials, modelRegistry } from "../db/schema";
 import { languageModelFor } from "../models/runtime-resolver";
@@ -90,6 +90,10 @@ export function createFlowModelResolver(options: {
           modelName: modelRegistry.modelName,
           label: modelRegistry.label,
           encryptedValue: credentials.encryptedValue,
+          // The envelope's binding: a v2 (audit #9) key opens only with the row it was sealed for.
+          credentialId: credentials.id,
+          credentialTenantId: credentials.tenantId,
+          credentialKind: credentials.kind,
         })
         .from(modelRegistry)
         .innerJoin(
@@ -149,7 +153,17 @@ export function createFlowModelResolver(options: {
       const [row] = await usable(tenantId, modelRef);
       if (!row) throw new FlowModelUnavailableError();
       try {
-        const apiKey = await decryptSecret(encryptionKey, row.encryptedValue);
+        /*
+         * `openCredential`, not `decryptSecret`: the model library seals every key it stores as a
+         * bound v2 envelope, which a bare AES-GCM decrypt without the binding can never open — so
+         * every row connected through 能力与资源 read as "unavailable" here. v1 rows still open.
+         */
+        const apiKey = await openCredential(encryptionKey, {
+          id: row.credentialId,
+          tenantId: row.credentialTenantId,
+          kind: row.credentialKind,
+          encryptedValue: row.encryptedValue,
+        });
         return {
           modelRef: row.id,
           name: `${row.provider}/${row.modelName}`,

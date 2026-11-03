@@ -7,7 +7,11 @@ import {
   WAKERFLOW_PLAN_FORMAT_MESSAGE,
   type WakerFlowPlan,
 } from "../../shared/wakerflows";
-import { createCredentialStore, encryptSecret } from "../src/credentials";
+import {
+  createCredentialStore,
+  encryptSecret,
+  sealCredential,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
@@ -653,5 +657,57 @@ test("another tenant can neither plan, read nor cancel this tenant's Flow or req
     expect(
       (await f.store.getRequest(f.tenantId, f.input.requestId))?.flowId,
     ).toBe(f.flow.id);
+  });
+});
+
+/*
+ * G4 found this: the model library (`models/routes.ts`) seals every key as a bound v2 envelope
+ * (audit #9), and the planning picker opened it with a bare decrypt, so a model connected through the
+ * product itself was always "所选模型不可用" and no Flow could ever be planned with it.
+ */
+test("a model connected the way the library stores it (sealed v2 key) plans", async () => {
+  await withMock("", async (mock, baseUrl) => {
+    const f = await fixture(baseUrl);
+    mock.clearFixtures();
+    mock.onMessage(/.*/, { content: JSON.stringify(f.plan) });
+    const sealed = await runAsTenant(f.tenantId, async () => {
+      const credential = await credentialStore.create({
+        kind: "model",
+        provider: "openai",
+        keyId: `${f.tenantId}-sealed`,
+        seal: (binding) =>
+          sealCredential(encryptionKey, binding, "synthetic-sealed-key"),
+        metadata: {},
+      });
+      const [row] = await database
+        .insert(modelRegistry)
+        .values({
+          tenantId: f.tenantId,
+          provider: "openai",
+          baseUrl,
+          modelName: "sealed-planner",
+          credentialId: credential.id,
+        })
+        .returning({ id: modelRegistry.id });
+      if (!row) throw new Error("Fixture model not inserted.");
+      return row;
+    });
+    const [stored] = await runAsTenant(f.tenantId, () =>
+      database
+        .select({ value: credentials.encryptedValue })
+        .from(credentials)
+        .where(eq(credentials.keyId, `${f.tenantId}-sealed`)),
+    );
+    expect(JSON.parse(stored?.value ?? "{}").version).toBe(2);
+
+    const resolved = await f.options.models.resolve(f.tenantId, sealed.id);
+    expect(resolved.modelRef).toBe(sealed.id);
+    const request = await f.store.generate(f.tenantId, f.tenantId, f.flow.id, {
+      ...f.input,
+      modelRef: sealed.id,
+    });
+    expect(request.status).toBe("completed");
+    expect(request.result?.plan).toEqual(f.plan);
+    expect(mock.getRequests()).toHaveLength(1);
   });
 });
