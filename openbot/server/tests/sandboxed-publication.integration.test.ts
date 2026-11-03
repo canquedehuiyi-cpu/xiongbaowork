@@ -562,7 +562,9 @@ describe("sandboxed components are the team's", () => {
         .where(eq(sandboxedComponents.name, name))
         .returning({ name: sandboxedComponents.name });
       expect(updated).toEqual([]);
-      // The new draft is not visible without the capability, so a publish has nothing to publish.
+      // The published row IS readable here (team_read admits every person frame), but publish locks
+      // it with SELECT ... FOR UPDATE, which must also pass the UPDATE policy's USING clause, and that
+      // needs the admin capability. So the lock matches no row and the publish is refused.
       await expect(sandboxedStore.publish(name, ADMIN.email)).rejects.toThrow(
         SandboxedPublicationRefusedError,
       );
