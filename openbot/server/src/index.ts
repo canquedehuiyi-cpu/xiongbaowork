@@ -221,6 +221,7 @@ import {
   createNamedAgentModelResolver,
   modelOf,
 } from "./models/runtime-resolver";
+import { databaseTokenCallSink } from "./models/token-metering";
 import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
@@ -517,14 +518,18 @@ await startupLifecycle.run(async (startup) => {
    *
    * Built here rather than inside `copilot.ts`, because that module has never held the database handle
    * and this one already holds the vault: a binding is a row plus a key, and neither belongs in the
-   * runtime wiring. Absent binding, absent model — the deployment's own answers, as before.
+   * runtime wiring. Absent binding, absent model — the deployment's own answers, as before, but
+   * metered now (audit defect #11): the runtime hands the resolver the deployment model it would have
+   * spoken, and the resolver wraps it with the same meter a bound model gets.
    */
+  const tokenCallSink = databaseTokenCallSink(database);
   const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
+    tokenCallSink,
   );
-  const resolveAgentModel = modelOf(resolveNamedAgentModel);
+  const resolveAgentModel = modelOf(resolveNamedAgentModel, tokenCallSink);
   const agentProfileStore = createAgentProfileStore(
     database,
     config.managedAgent?.endpoint,

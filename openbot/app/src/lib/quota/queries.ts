@@ -19,7 +19,9 @@ export type QuotaUsage = {
 };
 
 /**
- * Model tokens this billing period, counted from the calls made through bound models (spec K2).
+ * Model tokens this billing period, counted from every model call a coworker's run makes, on a bound
+ * model or on the deployment's default model (spec K2). Internal routing and titling calls are not
+ * counted.
  *
  * A sum is null when no call reported a number for it: unknown, which is not the same as zero, and
  * nothing on screen may turn one into the other. `complete` is false while any call is unreported,
@@ -27,7 +29,7 @@ export type QuotaUsage = {
  */
 export type TokenUsage = {
   period: string;
-  scope: "bound-models";
+  scope: "coworker-calls";
   calls: number;
   reportedCalls: number;
   partialCalls: number;
@@ -48,7 +50,8 @@ export type Quota = {
 };
 
 /** What the token meter can see, said wherever its number is shown. */
-export const TOKEN_SCOPE_CAPTION = "仅统计绑定模型的调用";
+export const TOKEN_SCOPE_CAPTION =
+  "统计员工的全部模型调用（含部署默认模型），不含内部路由与命名调用";
 
 /**
  * The token line as text.
