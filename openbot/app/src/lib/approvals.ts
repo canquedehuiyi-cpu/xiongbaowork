@@ -5,7 +5,12 @@ export type ApprovalDecision =
   | "allow_always"
   | "deny"
   | "handled";
-export type RuleBehaviour = "allow" | "pre_approved" | "ask" | "hand_off";
+export type RuleBehaviour =
+  | "allow"
+  | "pre_approved"
+  | "ask"
+  | "hand_off"
+  | "deny";
 export type HostCommandPolicy = "ask" | "allow" | "never";
 export type ApprovalRuleInput = {
   botId: string;
@@ -20,6 +25,20 @@ export const BEHAVIOUR_LABELS: Record<RuleBehaviour, string> = {
   pre_approved: "预先批准过才做",
   ask: "做之前先问",
   hand_off: "交给你来做",
+  deny: "禁用",
+};
+/** Which layer settled a request, as the inbox names it. */
+export const POLICY_SOURCE_LABELS: Record<string, string> = {
+  safety: "安全底线",
+  team_rule: "管理员设定",
+  owner_rule: "员工所有者设定",
+  personal_rule: "你的规则",
+  dangerous_command: "危险命令",
+  sensitive_path: "敏感文件",
+  host_command_cap: "团队命令上限",
+  auto_review: "自动审查",
+  default: "你的偏好",
+  person_declined: "你已拒绝过",
 };
 export type ApprovalInboxData = {
   enabled: boolean;
@@ -54,6 +73,8 @@ export type ApprovalInboxData = {
     enforceAutoReview: boolean;
     customRulesEnabled: boolean;
     hostCommandsCap: HostCommandPolicy;
+    /** Every Bot asks before a dangerous command (SEC1 D10). */
+    enforceDangerousCommands?: boolean;
   };
   /** The member's command policy after the team cap. */
   hostCommands?: HostCommandPolicy;
@@ -129,6 +150,7 @@ export const setTeamApprovalSettings = (input: {
   enforceAutoReview?: boolean;
   customRulesEnabled?: boolean;
   hostCommandsCap?: HostCommandPolicy;
+  enforceDangerousCommands?: boolean;
 }) =>
   client("/api/approvals/team", {
     method: "PATCH",
@@ -170,3 +192,92 @@ export const updateTeamApprovalRule = (
     body: input,
     fallback: "这条团队规则没能修改。",
   });
+
+/** A tool's mode on a Bot's permissions page (SEC1 §4.5): 直接, 询问 or 禁用. */
+export type EmployeeToolMode = "direct" | "ask" | "disabled";
+export const TOOL_MODE_LABELS: Record<EmployeeToolMode, string> = {
+  direct: "直接",
+  ask: "询问",
+  disabled: "禁用",
+};
+/** The rule behaviour each mode is saved as, read back the same way. */
+export const MODE_OF_BEHAVIOUR: Partial<Record<RuleBehaviour, EmployeeToolMode>> = {
+  allow: "direct",
+  ask: "ask",
+  deny: "disabled",
+};
+export type FloorMode = "off" | "ask";
+export type EmployeeSecurity = {
+  dangerousCommands: FloorMode;
+  sensitivePaths: FloorMode;
+  extraSensitivePaths: string[];
+  disabledDefaultPaths: string[];
+};
+export type EmployeePermissions = {
+  botId: string;
+  /** Only the Bot's owner changes these. */
+  editable: boolean;
+  /** Somebody else owns this Bot, and their settings apply to the person reading them (D9). */
+  ownedByAnother: boolean;
+  modes: { id: string; toolRef: string; behaviour: RuleBehaviour }[];
+  teamRules: (ApprovalRuleRow & { effect: string; scope: string })[];
+  security: EmployeeSecurity;
+  defaultSensitivePaths: string[];
+  enforceDangerousCommands: boolean;
+  customRulesEnabled: boolean;
+};
+export const employeePermissionsOptions = (botId: string) =>
+  queryOptions({
+    queryKey: ["approvals", "employee", botId],
+    queryFn: async (): Promise<EmployeePermissions> => {
+      const response = await client(
+        `/api/approvals/employees/${encodeURIComponent(botId)}`,
+        { fallback: "读不到这位员工的权限。" },
+      );
+      return response.json();
+    },
+  });
+export const setEmployeeToolMode = (
+  botId: string,
+  input: { toolRef: string; mode: EmployeeToolMode | "default" },
+) =>
+  client(`/api/approvals/employees/${encodeURIComponent(botId)}/tools`, {
+    method: "PUT",
+    body: input,
+    fallback: "这个工具的权限没能保存。",
+  });
+export const setEmployeeSecurity = (
+  botId: string,
+  input: Partial<EmployeeSecurity>,
+) =>
+  client(`/api/approvals/employees/${encodeURIComponent(botId)}/security`, {
+    method: "PATCH",
+    body: input,
+    fallback: "这位员工的安全设置没能保存。",
+  });
+/**
+ * The tools a Bot's permissions disable outright: a 禁用 mode, or a team row disabling the tool for
+ * every action and target. The server leaves them out of what the model is offered and refuses them
+ * at the gate; the browser's own tools use this to hide themselves too (SEC1 D4).
+ */
+export function disabledToolRefs(permissions: EmployeePermissions | undefined) {
+  const refs = new Set<string>();
+  if (!permissions) return refs;
+  for (const mode of permissions.modes)
+    if (mode.behaviour === "deny") refs.add(mode.toolRef);
+  for (const rule of permissions.teamRules)
+    if (rule.behaviour === "deny" && rule.effect === "*" && rule.scope === "*")
+      refs.add(rule.toolRef);
+  return refs;
+}
+/** Whether `ref` falls under a disabled pattern; `*` matches any run of characters. */
+export function toolIsDisabled(disabled: ReadonlySet<string>, ref: string) {
+  for (const pattern of disabled) {
+    const source = pattern
+      .split("*")
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+      .join(".*");
+    if (new RegExp(`^${source}$`, "s").test(ref)) return true;
+  }
+  return false;
+}

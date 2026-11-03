@@ -76,6 +76,7 @@ const inbox = {
     enforceAutoReview: true,
     customRulesEnabled: true,
     hostCommandsCap: "ask",
+    enforceDangerousCommands: false,
   },
   hostCommands: "ask",
   questions: [],
@@ -304,4 +305,80 @@ test("in the real transcript shape a waiting click is folded into browser activi
   // Only the waiting call gets a card; the finished navigate does not.
   expect(view.getAllByRole("region", { name: "等你批准" })).toHaveLength(1);
   expect(view.getByRole("button", { name: "我自己做了" })).toBeTruthy();
+});
+
+/** A change the Bot's owner asked to be asked about (SEC1 D9), added for the one test below. */
+const ownerAsked = {
+      id: "request-2",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      action: {
+        botId: "Desk",
+        toolRef: "computer_run_command",
+        effect: "write",
+        scope: "workspace",
+        threadId: "thread",
+        args: { command: "rm -rf build" },
+        target: {},
+        toolCallId: "rm-call",
+        policy: {
+          behaviour: "ask",
+          source: "owner_rule",
+          reason: "A rule asks before this kind of action.",
+        },
+      },
+    };
+
+test("SEC1: 禁用 is shown as its own behaviour, and a request set by the Bot's owner names that layer", async () => {
+  inbox.requests.push(ownerAsked as unknown as (typeof inbox.requests)[number]);
+  inbox.teamRules.unshift({
+    id: "locked-off",
+    botId: "*",
+    toolRef: "host/*",
+    effect: "*",
+    scope: "*",
+    behaviour: "deny",
+  });
+  try {
+    await ownerLayerShown();
+  } finally {
+    inbox.requests.pop();
+    inbox.teamRules.shift();
+  }
+});
+async function ownerLayerShown() {
+  const view = draw();
+  await view.findByText("禁用（团队规则）");
+  expect(view.getByText(/（来源：员工所有者设定）/)).toBeTruthy();
+  // A member can choose 禁用 for a rule of their own.
+  const mine = view.getByRole("combobox", {
+    name: "「mcp/gmail/*」的处理方式",
+  });
+  fireEvent.change(mine, { target: { value: "deny" } });
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      path: "/api/approvals/rules/mine",
+      method: "PATCH",
+      body: { behaviour: "deny" },
+    }),
+  );
+  expect(view.queryByText("强制危险命令审批")).toBeNull();
+}
+
+test("SEC1: only an administrator sees and sets the team's 强制危险命令审批 switch (D10)", async () => {
+  role = "admin";
+  try {
+    const view = draw();
+    const toggle = await view.findByRole("switch", { name: "强制危险命令审批" });
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(sent).toContainEqual({
+        path: "/api/approvals/team",
+        method: "PATCH",
+        body: { enforceDangerousCommands: true },
+      }),
+    );
+  } finally {
+    role = "user";
+  }
 });
