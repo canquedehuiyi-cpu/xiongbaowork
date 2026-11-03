@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { DictationSession } from "@/lib/dictation/session";
 import type { Recording } from "@/lib/dictation/recording";
+import { DictationSession } from "@/lib/dictation/session";
 
 const audio = new Blob(["recorded audio"], { type: "audio/webm" });
 
@@ -112,7 +112,6 @@ test("permission errors have an actionable recovery", async () => {
   expect(session.getSnapshot()).toMatchObject({
     phase: "error",
     canRetry: false,
-    error:
-      "Microphone access was denied. Allow it in your browser and try again.",
+    error: "麦克风权限被拒绝。请在浏览器中允许后再试一次。",
   });
 });

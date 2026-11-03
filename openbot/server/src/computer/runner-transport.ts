@@ -1,5 +1,6 @@
 import {
   type DeviceChannel,
+  DeviceOfflineError,
   type DispatchTarget,
   parseRunnerAddress,
 } from "../devices/channel";
@@ -119,6 +120,14 @@ export function createRunnerTransport(
         idempotencyKey,
         caller,
       );
+    }
+    /*
+     * A browser action is about the page on screen right now. Queued while the machine is away, it
+     * would run later against whatever page is open then, so it is refused instead; only exec and
+     * file work waits in the device queue for the runner to come back (audit defect #12).
+     */
+    if (!channel.isReachable(target)) {
+      return Promise.reject(new DeviceOfflineError(target.deviceId));
     }
     const body = withIdentity(target, botId, payload);
     if (typeof body === "string") {

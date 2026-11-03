@@ -28,6 +28,7 @@ import {
 import { createMemoryPasswordStore } from "../src/passwords/store";
 import { originOf, type SignInRequestRecord } from "../src/passwords/types";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
+import { runAsTenant } from "../src/tenant/context";
 
 /**
  * The private sign-in request and the Passwords vault, as properties:
@@ -562,13 +563,16 @@ describe("an unattended turn that needs a sign-in", () => {
         signIn: context.service,
       }).filter((tool) => tool.definition.name === "computer_request_sign_in");
     const { persisted, run } = harness(remote.agent, tools);
-    const paused = await run({
-      ownerUserId: "owner",
-      routineId: "routine",
-      agentId: "bot",
-      threadId: "thread",
-      instruction: "Check the dashboard",
-    }).catch((error: unknown) => error);
+    // A headless turn runs as the person it is for, as the routine dispatcher frames it.
+    const paused = await runAsTenant("owner", () =>
+      run({
+        ownerUserId: "owner",
+        routineId: "routine",
+        agentId: "bot",
+        threadId: "thread",
+        instruction: "Check the dashboard",
+      }),
+    ).catch((error: unknown) => error);
     expect(paused).toBeInstanceOf(HeadlessToolSuspension);
     const waiting = (paused as HeadlessToolSuspension).waiting;
     expect(waiting.kind).toBe("computer_sign_in");
@@ -584,18 +588,20 @@ describe("an unattended turn that needs a sign-in", () => {
     if (!done?.continuation) throw new Error("no continuation saved");
     const snapshot = parseApprovalContinuation(done.continuation);
     expect(snapshot.toolCallId).toBe("sign-in-call");
-    const resumed = await run({
-      ownerUserId: "owner",
-      routineId: "routine",
-      agentId: "bot",
-      threadId: "thread",
-      instruction: "",
-      continuation: {
-        snapshot,
-        result: { content: JSON.stringify(signInToolResult(done)) },
-        messageId: `sign-in-result:${done.id}`,
-      },
-    } as never);
+    const resumed = await runAsTenant("owner", () =>
+      run({
+        ownerUserId: "owner",
+        routineId: "routine",
+        agentId: "bot",
+        threadId: "thread",
+        instruction: "",
+        continuation: {
+          snapshot,
+          result: { content: JSON.stringify(signInToolResult(done)) },
+          messageId: `sign-in-result:${done.id}`,
+        },
+      } as never),
+    );
     expect(resumed).toEqual({ replyText: "I am in." });
     expect(context.computer.fills[0]?.password).toBe(PASSWORD);
     const toolMessage = remote.requests[1]?.messages.find(

@@ -11,7 +11,7 @@ import { createDatabase, type Database } from "../src/db/client";
 import { approvalContinuations as ledger, approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { runAsTenant } from "../src/tenant/context";
-import { createDisposableTestDatabase } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // SOURCE_ONLY: real PG17 definitions, zero executions. Import opens the existing
 // DB module; this file is never a CPU-only import or an authorization artifact.
@@ -42,13 +42,13 @@ const baseOptions: ContinuationStoreOptions = {
 };
 
 beforeAll(async () => {
-  const [identity] = await database.select({
+  const [identity] = await runAsTenant("platform", () => database.select({
     name: sql<string>`current_database()`,
     version: sql<number>`current_setting('server_version_num')::int`,
     parent: sql<string | null>`to_regclass('public.approval_requests')::text`,
     ledger: sql<string | null>`to_regclass('public.approval_continuations')::text`,
     fixturePrivilege: sql<boolean>`exists(select 1 from pg_roles where rolname = current_user and (rolsuper or rolbypassrls))`,
-  }).from(sql`(select 1) as fixture_identity`);
+  }).from(sql`(select 1) as fixture_identity`));
   if (!identity || identity.name !== databaseName || identity.version < 170_000 ||
       identity.version >= 180_000 || !identity.parent || !identity.ledger ||
       !identity.fixturePrivilege)
@@ -70,7 +70,7 @@ afterAll(async () => {
     await database.$client.close();
     await disposable.drop();
   }
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 async function fixture(origin: ContinuationProvision["origin"] = "current") {
   const id = randomUUID();

@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
+import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
 
 /**
@@ -74,7 +75,10 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
  * raw ref sent every chat card to "Could not load this channel." (audit N1), so the server now says
  * which screen holds the work and this file only draws it.
  */
-export type OpenTarget = { kind: "channel" | "group" | "pipeline"; id: string };
+export type OpenTarget = {
+  kind: "channel" | "group" | "pipeline" | "wakerflow";
+  id: string;
+};
 
 type Task = {
   id: string;
@@ -91,8 +95,11 @@ type Task = {
   deliverableRef: unknown;
   /** Which model answered this task's run, or null when it has not answered yet. */
   model: string | null;
-  /** Which of the tenant's machines the work happened on, in device mode. */
-  device: string | null;
+  /**
+   * Which of the tenant's machines the work happened on, in device mode. The server sends the row's
+   * own column, `deviceId`; reading a `device` field that never arrives drew no machine on any card.
+   */
+  deviceId: string | null;
   /**
    * When a person filed this card away (spec A5/A7), or null. Only a failure carries one: it keeps
    * reading `failed`, and this is what moves it from 需要关注 to 已结束. Absent from an older server.
@@ -298,8 +305,21 @@ export const boardEmptySentence = (filters: {
   crew: string;
   status: string;
   q: string;
+  /**
+   * Whether `machineId` names one of this person's registered devices: `false` only once the device
+   * list has answered and the id is not on it. While that list is loading or has failed the answer
+   * is unknown (`undefined`), and an unknown answer must not be spoken as "nobody is here".
+   */
+  machineRegistered?: boolean;
 }): string => {
   const narrowed = Boolean(filters.status || filters.q || filters.crew);
+  /*
+   * Spec F5: an address naming a machine this person does not have is not an idle machine -- there
+   * is no machine. No filter can bring work back from it, so this answer comes before the others.
+   */
+  if (filters.machineId && filters.machineRegistered === false) {
+    return "Waker 们正在休息——这台设备不在你的设备列表里，到 /tasks 看全部设备。";
+  }
   /*
    * Which scopes are in play decides which sentence is true. A device and a filter together are not
    * the same question as either one alone: idle in this window is a different claim from hidden by
@@ -389,18 +409,59 @@ function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
 }
 
-/** What a card's 打开 does: one of three screens, a sentence saying the place is gone, or nothing. */
+/**
+ * What a card says its run produced, or null when there is nothing to say (spec A9).
+ *
+ * Only a `deliverable` record is read. `deliverable_ref` is a column other writers may also use for
+ * other facts, and a card that called one of those an output would invite a person to 查收 nothing.
+ */
+export function deliverableSummary(ref: unknown): string | null {
+  if (!ref || typeof ref !== "object") return null;
+  const { kind, components, attachments } = ref as {
+    kind?: unknown;
+    components?: unknown;
+    attachments?: unknown;
+  };
+  if (kind !== "deliverable") return null;
+  const titles = Array.isArray(components)
+    ? [
+        ...new Set(
+          components
+            .map((component: unknown) =>
+              component &&
+              typeof component === "object" &&
+              typeof (component as { name?: unknown }).name === "string"
+                ? componentDisplayTitle({
+                    name: (component as { name: string }).name,
+                    title: (component as { name: string }).name,
+                  })
+                : null,
+            )
+            .filter((title): title is string => title !== null),
+        ),
+      ]
+    : [];
+  const files = Array.isArray(attachments) ? attachments.length : 0;
+  const parts = [
+    ...(titles.length > 0 ? [titles.join("、")] : []),
+    ...(files > 0 ? [`${files} 个附件`] : []),
+  ];
+  return parts.length > 0 ? `产出：${parts.join(" · ")}` : null;
+}
+
+/** What a card's 查看详情 does: one of four screens, a sentence saying the place is gone, or nothing. */
 export type CardLink =
   | { to: "/channel/$channelId"; params: { channelId: string } }
   | { to: "/group/$channelId"; params: { channelId: string } }
   | { to: "/pipelines"; search: { run: string } }
+  | { to: "/wakerflows/$flowId"; params: { flowId: string } }
   | "gone"
   | null;
 
 /**
  * Spec A6 ("查看详情 enters the run's own conversation"), decided from the server's `open` field.
  *
- * A server without the field gets the old link back rather than none: hiding every 打开 the moment
+ * A server without the field gets the old link back rather than none: hiding every 查看详情 the moment
  * the screen ships ahead of its server would trade a link that sometimes lands for one that never
  * appears. An unknown kind draws nothing — the enum is server-owned, and a guessed route is the dead
  * link this exists to stop drawing.
@@ -419,6 +480,9 @@ export function cardLinkOf(task: Pick<Task, "open" | "channelRef">): CardLink {
       return { to: "/group/$channelId", params: { channelId: task.open.id } };
     case "pipeline":
       return { to: "/pipelines", search: { run: task.open.id } };
+    // A WakerFlow's run (parent or step card) is reviewed on the Flow, where its runs are listed.
+    case "wakerflow":
+      return { to: "/wakerflows/$flowId", params: { flowId: task.open.id } };
     default:
       return null;
   }
@@ -435,7 +499,18 @@ function CardOpenLink({ task }: { task: Task }) {
         search={link.search}
         className="underline opacity-80"
       >
-        打开
+        查看详情
+      </Link>
+    );
+  }
+  if (link.to === "/wakerflows/$flowId") {
+    return (
+      <Link
+        to="/wakerflows/$flowId"
+        params={link.params}
+        className="underline opacity-80"
+      >
+        查看详情
       </Link>
     );
   }
@@ -446,7 +521,7 @@ function CardOpenLink({ task }: { task: Task }) {
         params={link.params}
         className="underline opacity-80"
       >
-        打开
+        查看详情
       </Link>
     );
   }
@@ -456,7 +531,7 @@ function CardOpenLink({ task }: { task: Task }) {
       params={link.params}
       className="underline opacity-80"
     >
-      打开
+      查看详情
     </Link>
   );
 }
@@ -489,6 +564,7 @@ function TaskCard({
   const executor = coworkers.data?.find(
     (coworker) => coworker.id === task.executorAgentId,
   );
+  const deliverable = deliverableSummary(task.deliverableRef);
 
   return (
     /*
@@ -566,6 +642,18 @@ function TaskCard({
          */}
         {machine ? (
           <span className="rounded bg-foreground/5 px-1.5">{machine}</span>
+        ) : null}
+        {/*
+         * What there is to 查收 (spec A9): the components it drew and the files it handed over, so the
+         * button beside it is a decision about something named rather than a guess.
+         */}
+        {deliverable ? (
+          <span
+            className="rounded bg-amber-500/10 px-1.5 text-amber-600 dark:text-amber-400"
+            data-deliverable
+          >
+            {deliverable}
+          </span>
         ) : null}
         <span>{relative(task.updatedAt)}</span>
         <CardOpenLink task={task} />
@@ -683,7 +771,7 @@ export function AttentionRegion({
             <TaskCard
               decidingIds={decidingIds}
               key={task.id}
-              machine={machineLabel(task.device)}
+              machine={machineLabel(task.deviceId)}
               onArchive={onArchive}
               onDecide={onDecide}
               onReview={onReview}
@@ -717,6 +805,15 @@ function TasksPage() {
   } = boardSearch(Route.useSearch());
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
+  /*
+   * F5: whether the address's machine is one of this person's own. Asked only of a list that has
+   * answered -- loading or failed leaves it unknown, so the board never says the Wakers are resting
+   * on the strength of a read that has not come back.
+   */
+  const machineRegistered =
+    machineId && machines.isSuccess
+      ? machines.data.some((machine) => machine.deviceId === machineId)
+      : undefined;
   /*
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
@@ -1081,7 +1178,7 @@ function TasksPage() {
             <TaskCard
               key={task.id}
               task={task}
-              machine={machineLabel(task.device)}
+              machine={machineLabel(task.deviceId)}
               onReview={(id) => runAction(id, "review")}
               onArchive={(id) => runAction(id, "archive")}
               pendingIds={pendingIds}
@@ -1095,7 +1192,13 @@ function TasksPage() {
            */}
           {list.length === 0 && !readFailed ? (
             <li className="py-10 text-center text-sm opacity-50">
-              {boardEmptySentence({ machineId, crew, status, q: search })}
+              {boardEmptySentence({
+                machineId,
+                crew,
+                status,
+                q: search,
+                machineRegistered,
+              })}
             </li>
           ) : null}
         </ul>
@@ -1127,7 +1230,7 @@ function TasksPage() {
                       <TaskCard
                         key={task.id}
                         task={task}
-                        machine={machineLabel(task.device)}
+                        machine={machineLabel(task.deviceId)}
                         onReview={(id) => runAction(id, "review")}
                         onArchive={(id) => runAction(id, "archive")}
                         pendingIds={pendingIds}
@@ -1143,7 +1246,13 @@ function TasksPage() {
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)
                 ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
-                : boardEmptySentence({ machineId, crew, status, q: search })}
+                : boardEmptySentence({
+                    machineId,
+                    crew,
+                    status,
+                    q: search,
+                    machineRegistered,
+                  })}
             </p>
           ) : null}
         </>
