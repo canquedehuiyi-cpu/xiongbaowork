@@ -14,11 +14,14 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { switchPlanMutationOptions } from "@/lib/quota/mutations";
 import {
   meter,
   quotaQueryOptions,
+  TOKEN_SCOPE_CAPTION,
   tiersQueryOptions,
+  tokenReadout,
 } from "@/lib/quota/queries";
 
 export const Route = createFileRoute("/_authed/_app/plans")({
@@ -31,20 +34,25 @@ export const Route = createFileRoute("/_authed/_app/plans")({
  * No checkout: this deployment takes no payment, so the page says "switch" and moves the subscription
  * row. Naming that plainly matters, because a person who expects a payment flow and finds none assumes
  * the product is broken rather than that it is deliberately not selling anything yet.
+ *
+ * The switch is a platform administrator's: the server refuses everybody else with a 403, so the page
+ * shows them the tiers without a button that could only fail.
  */
 function RouteComponent() {
   const queryClient = useQueryClient();
   const quota = useQuery(quotaQueryOptions());
   const tiers = useQuery(tiersQueryOptions());
   const switchPlan = useMutation(switchPlanMutationOptions(queryClient));
+  const isAdmin = useQuery(currentUserQueryOptions()).data?.role === "admin";
   const [problem, setProblem] = useState<string | null>(null);
 
   const current = quota.data?.plan?.id;
   const usage = quota.data?.usage;
+  const tokens = quota.data?.tokens;
 
   return (
     <PageShell
-      description="每个套餐允许什么、这个月已经用了多少，以及它们之间怎么切换。这里不收钱：选一个档，对这个工作空间立刻生效。"
+      description="每个套餐允许什么、这个月已经用了多少，以及它们之间怎么切换。这里不收钱：套餐由平台管理员切换，对这个工作空间立刻生效。"
       title="套餐"
     >
       <PageSection title="本工作空间">
@@ -85,6 +93,17 @@ function RouteComponent() {
                 </ItemContent>
               </Item>
             ))}
+            {tokens ? (
+              <Item size="sm" variant="outline">
+                <ItemContent>
+                  <ItemTitle>本月模型 token</ItemTitle>
+                  <ItemDescription>{tokenReadout(tokens)}</ItemDescription>
+                  <ItemDescription className="text-xs">
+                    {TOKEN_SCOPE_CAPTION}
+                  </ItemDescription>
+                </ItemContent>
+              </Item>
+            ) : null}
           </PageRows>
         ) : null}
       </PageSection>
@@ -106,24 +125,31 @@ function RouteComponent() {
                     : "只用部署自带的模型"}
                 </ItemDescription>
               </ItemContent>
-              <ItemActions>
-                <Button
-                  disabled={tier.id === current || switchPlan.isPending}
-                  onClick={() => {
-                    setProblem(null);
-                    switchPlan.mutate(tier.id, {
-                      onError: (thrown: Error) => setProblem(thrown.message),
-                    });
-                  }}
-                  size="sm"
-                  variant={tier.id === current ? "outline" : "default"}
-                >
-                  {tier.id === current ? "使用中" : "切换"}
-                </Button>
-              </ItemActions>
+              {isAdmin ? (
+                <ItemActions>
+                  <Button
+                    disabled={tier.id === current || switchPlan.isPending}
+                    onClick={() => {
+                      setProblem(null);
+                      switchPlan.mutate(tier.id, {
+                        onError: (thrown: Error) => setProblem(thrown.message),
+                      });
+                    }}
+                    size="sm"
+                    variant={tier.id === current ? "outline" : "default"}
+                  >
+                    {tier.id === current ? "使用中" : "切换"}
+                  </Button>
+                </ItemActions>
+              ) : null}
             </Item>
           ))}
         </PageRows>
+        {isAdmin ? null : (
+          <p className="mt-4 text-muted-foreground text-sm">
+            套餐由平台管理员调整。需要切换时，请联系管理员。
+          </p>
+        )}
         {problem ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
             {problem}

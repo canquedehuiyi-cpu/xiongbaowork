@@ -8,6 +8,7 @@ import {
 import type { AuditStore } from "../src/audit";
 import { createDatabase } from "../src/db/client";
 import { workItems } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -24,14 +25,30 @@ const kind = "bot.message";
 
 const silent: AuditStore = { insert: async () => {} };
 
+/*
+ * As `platform`: the hops are offered in their person's tenant (below), and a tear-down from no
+ * frame would see only `system` rows and leave every one of them behind.
+ */
+const clear = () =>
+  runAsTenant("platform", () =>
+    database.delete(workItems).where(eq(workItems.kind, kind)),
+  );
+
 afterAll(async () => {
-  await database.delete(workItems).where(eq(workItems.kind, kind));
+  await clear();
   await database.$client.close();
 });
 
 beforeEach(async () => {
-  await database.delete(workItems).where(eq(workItems.kind, kind));
+  await clear();
 });
+
+/**
+ * Offered from inside the person's own tenant, which is where a hop always comes from: a Bot's run.
+ * Offered from no frame it would be stamped `system`, and the runner refuses to act for nobody.
+ */
+const offerAsPerson = (input: Parameters<typeof queue.offer>[0]) =>
+  runAsTenant("user-1", () => queue.offer(input));
 
 function hop(run: string, n: number): HandoffWork {
   return {
@@ -55,7 +72,7 @@ describe("a batch of hops and a lease that can run out", () => {
   test("the tail of a batch is not delivered twice while its head is running", async () => {
     const run = randomUUID();
     for (const n of [1, 2, 3]) {
-      await queue.offer({
+      await offerAsPerson({
         kind,
         key: `${run}:${n}`,
         payload: hop(run, n) as unknown as Record<string, unknown>,
@@ -116,7 +133,7 @@ describe("a batch of hops and a lease that can run out", () => {
   test("a hop whose lease went elsewhere is not run again by its old owner", async () => {
     const run = randomUUID();
     for (const n of [1, 2]) {
-      await queue.offer({
+      await offerAsPerson({
         kind,
         key: `${run}:${n}`,
         payload: hop(run, n) as unknown as Record<string, unknown>,

@@ -6,10 +6,10 @@ import { sso } from "@better-auth/sso";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { genericOAuth, okta } from "better-auth/plugins";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createEnterpriseStore } from "../admin/settings-store";
 import type { AuditEventInput, AuditStore } from "../audit";
-import { recordAuditEvent } from "../audit";
+import { recordPersonAuditEvent, recordPlatformAuditEvent } from "../audit";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
 import {
@@ -26,11 +26,15 @@ import {
   users,
   verifications,
 } from "../db/schema";
+import { provisionTenant } from "../tenant/provisioning";
 import { DOMAIN_REFUSAL_MESSAGE, emailDomainAllowed } from "./email-domain";
 import { encryptSsoConfig } from "./encrypt-sso-config";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
-import { provisionTenant } from "../tenant/provisioning";
+
+/** Answered when a provider sign-in would join an unverified password account with the same address. */
+export const LINK_REFUSAL_MESSAGE =
+  "该邮箱已有一个未验证的密码账号，不能直接用第三方登录接管。请用密码登录，或联系管理员处理。";
 
 /** What a person sees when SSO is required and they tried another way in. */
 /** The native app's custom scheme (mobile/app.config.ts). */
@@ -76,14 +80,22 @@ export async function decideSignInMethod(input: {
  * These run inside Better Auth's own hooks, where a thrown error becomes a refused sign-in. A trail
  * that is briefly unavailable must not lock everybody out of the deployment, so the failure is
  * logged where an operator will see it and the sign-in continues.
+ *
+ * Every row says whose it is (G01). `person` is the user id of the account Better Auth itself
+ * resolved (a session's `userId`), and the row goes in that person's trail. Without one — a refusal
+ * before any account is proven, keyed only on the address somebody typed — the row is the
+ * deployment's, `platform`. Unframed, these were all `system`, so every tenant's trail listed every
+ * refused sign-in in the deployment, address included.
  */
 async function record(
   auditStore: AuditStore | undefined,
   event: AuditEventInput,
+  person?: string,
 ): Promise<void> {
   if (!auditStore) return;
   try {
-    await recordAuditEvent(auditStore, event);
+    if (person === undefined) await recordPlatformAuditEvent(auditStore, event);
+    else await recordPersonAuditEvent(auditStore, person, event);
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -198,8 +210,8 @@ export function createAuth(
    * provider with a fixed address. The plugin is only registered when Okta is configured, so a
    * deployment that does not use it carries no extra routes.
    *
-   * They converge again at the browser: `signIn.social({ provider })` starts all three, so the
-   * sign-in screen has one code path and does not need to know which kind each provider is.
+   * They converge again at the browser: `signIn.social({ provider })` starts every one of them, so
+   * the sign-in screen has one code path and does not need to know which kind each provider is.
    */
   const scimDeps = {
     database,
@@ -306,6 +318,11 @@ export function createAuth(
      * `provisionUser` runs when somebody arrives through one of them. Their role has to be written
      * here or they land with no role at all and the request guard refuses them with a 403, which
      * reads as a broken deployment rather than a first sign-in.
+     *
+     * Only a role, never the administrator one: this hook can run for a row that already existed
+     * and was linked to, which may hold a password somebody else set. A listed address is promoted
+     * by `applyConfiguredAdmin` at the session instead, which checks that and trusts an identity
+     * provider an administrator registered even when SAML reports no verified flag.
      */
     sso({
       provisionUser: async ({ user }) => {
@@ -313,11 +330,28 @@ export function createAuth(
           database,
           user.id,
           user.email,
+          false,
           authConfig.initialAdminEmails,
         );
       },
     }),
   ];
+
+  /*
+   * Providers whose address the configured administrator list may trust without a verified flag.
+   *
+   * Entra omits `email_verified` by default, so on an Entra-only deployment the list would otherwise
+   * promote nobody and leave nobody able to promote anyone. A single-tenant directory is the
+   * deployment's own, so its address is its administrator's word; `common`, `organizations` and
+   * `consumers` admit any tenant, whose administrator can write any address, so they are not.
+   * Providers registered through the SSO plugin are trusted in `applyConfiguredAdmin` itself.
+   */
+  const microsoftTenant = authConfig.microsoft?.tenantId.trim().toLowerCase();
+  const addressVouchingProviders: string[] =
+    microsoftTenant &&
+    !["common", "organizations", "consumers"].includes(microsoftTenant)
+      ? ["microsoft"]
+      : [];
 
   return betterAuth({
     user: {
@@ -453,8 +487,70 @@ export function createAuth(
             },
           }
         : {}),
+      /*
+       * GitHub, as Google is: a named provider with fixed endpoints and nothing to map.
+       *
+       * Better Auth asks GitHub for `user:email` and takes `emailVerified` from GitHub's own
+       * `verified` flag on that address (false when GitHub does not vouch for it). It is not added to
+       * any trusted-provider list, so an unverified GitHub address is never linked onto an existing
+       * account. Nor is a verified one linked onto a row whose own address is unverified, which is
+       * every password sign-up: Better Auth's `requireLocalEmailVerified` is on by default and is not
+       * turned off here. Both refusals are generic to every social provider, not GitHub's own.
+       */
+      ...(authConfig.github ? { github: authConfig.github } : {}),
     },
     databaseHooks: {
+      account: {
+        create: {
+          /*
+           * Refuse to attach a provider to a row somebody else may hold the password to.
+           *
+           * Better Auth links a provider that reports a verified address onto the existing row with
+           * that address. Sign-up does not verify email, so the row may have been registered with
+           * a password by whoever typed the address first; linking would hand the real person's
+           * provider sign-in the squatter's account and leave the squatter's password working. A
+           * row whose address nobody verified and which holds a password is therefore not joined:
+           * the person signs in with the password they set, or an administrator removes the row.
+           */
+          before: async (account) => {
+            if (account.providerId === "credential") return;
+            const [holder] = await database
+              .select({
+                email: users.email,
+                emailVerified: users.emailVerified,
+              })
+              .from(users)
+              .where(eq(users.id, account.userId))
+              .limit(1);
+            if (!holder || holder.emailVerified === true) return;
+            const [password] = await database
+              .select({ id: accounts.id })
+              .from(accounts)
+              .where(
+                and(
+                  eq(accounts.userId, account.userId),
+                  eq(accounts.providerId, "credential"),
+                ),
+              )
+              .limit(1);
+            if (!password) return;
+            await record(auditStore, {
+              eventType: "session.refused",
+              targetType: "person",
+              targetId: account.userId,
+              payload: {
+                email: holder.email,
+                provider: account.providerId,
+                reason:
+                  "an unverified password account already holds this address; the provider was not linked to it",
+              },
+            });
+            throw new APIError("FORBIDDEN", {
+              message: LINK_REFUSAL_MESSAGE,
+            });
+          },
+        },
+      },
       user: {
         create: {
           /*
@@ -513,12 +609,14 @@ export function createAuth(
             /*
              * Who is an administrator is decided by email, not by which provider signed them in. A
              * deployment mid-migration has the same person arriving through Entra one week and
-             * Okta the next, and they are the same person to this list.
+             * Okta the next, and they are the same person to this list. Only a verified address
+             * counts: a password sign-up is unverified, so naming its address grants nothing.
              */
             await seedRole(
               database,
               user.id,
               user.email,
+              user.emailVerified === true,
               authConfig.initialAdminEmails,
             );
             // Every arrival path gets its tenant: a Free subscription and its 分身.
@@ -550,31 +648,39 @@ export function createAuth(
               user &&
               !emailDomainAllowed(user.email, authConfig.allowedEmailDomains)
             ) {
-              await record(auditStore, {
-                eventType: "session.refused",
-                targetType: "person",
-                targetId: session.userId,
-                actorUserId: session.userId,
-                payload: {
-                  email: user.email,
-                  reason: "email domain not admitted by this deployment",
+              await record(
+                auditStore,
+                {
+                  eventType: "session.refused",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user.email,
+                    reason: "email domain not admitted by this deployment",
+                  },
                 },
-              });
+                session.userId,
+              );
               throw new APIError("FORBIDDEN", {
                 message: DOMAIN_REFUSAL_MESSAGE,
               });
             }
             if (user && (await isRevoked?.(user.email))) {
-              await record(auditStore, {
-                eventType: "session.refused",
-                targetType: "person",
-                targetId: session.userId,
-                actorUserId: session.userId,
-                payload: {
-                  email: user.email,
-                  reason: "access removed by an administrator",
+              await record(
+                auditStore,
+                {
+                  eventType: "session.refused",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user.email,
+                    reason: "access removed by an administrator",
+                  },
                 },
-              });
+                session.userId,
+              );
               throw new APIError("FORBIDDEN", {
                 message: "Your access to this deployment has been removed.",
               });
@@ -597,13 +703,14 @@ export function createAuth(
             /*
              * The configured floor, re-applied on every sign-in. Editing the list has to mean
              * something for people already in the table, or adding yourself after you first signed
-             * in silently does nothing. Only promotes, and only addresses the list names: everybody
-             * else's role belongs to the admin screen.
+             * in silently does nothing. Only promotes, and only verified addresses the list names:
+             * everybody else's role belongs to the admin screen.
              */
             const promoted = await applyConfiguredAdmin(
               database,
               session.userId,
               authConfig.initialAdminEmails,
+              addressVouchingProviders,
             );
 
             const [user] = await database
@@ -621,26 +728,34 @@ export function createAuth(
              * produce one of these on every sign-in.
              */
             if (promoted) {
-              await record(auditStore, {
-                eventType: "person.admin_by_configuration",
+              await record(
+                auditStore,
+                {
+                  eventType: "person.admin_by_configuration",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user?.email,
+                    reason:
+                      "this address is named in INITIAL_ADMIN_EMAILS, so the configuration granted it",
+                  },
+                },
+                session.userId,
+              );
+            }
+
+            await record(
+              auditStore,
+              {
+                eventType: "session.signed_in",
                 targetType: "person",
                 targetId: session.userId,
                 actorUserId: session.userId,
-                payload: {
-                  email: user?.email,
-                  reason:
-                    "this address is named in INITIAL_ADMIN_EMAILS, so the configuration granted it",
-                },
-              });
-            }
-
-            await record(auditStore, {
-              eventType: "session.signed_in",
-              targetType: "person",
-              targetId: session.userId,
-              actorUserId: session.userId,
-              payload: { email: user?.email },
-            });
+                payload: { email: user?.email },
+              },
+              session.userId,
+            );
           },
         },
       },

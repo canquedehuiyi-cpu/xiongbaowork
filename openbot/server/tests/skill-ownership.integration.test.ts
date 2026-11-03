@@ -7,6 +7,7 @@ import { createDatabase } from "../src/db/client";
 import { agentProfiles, agents, skills, users } from "../src/db/schema";
 import { createPluginRoutes } from "../src/plugins/routes";
 import { createPluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -39,36 +40,54 @@ const aliceSkill = `alice-skill-${suite}`;
 const bobSkill = `bob-skill-${suite}`;
 const deploymentSkill = `deployment-skill-${suite}`;
 
+/**
+ * The one tenant Alice, Bob and their administrator share. What this file proves is the ownership
+ * column inside it — whose a skill is, and which Bots that person may put it on — so every person's
+ * row and request is in this frame, as the route would run it. What the deployment publishes for
+ * everybody (the shared Bot, the deployment's skill) is catalogue every tenant reads, and is written
+ * as `system`; account rows and the sweep after the file are the deployment's, as `platform`.
+ */
+const workspace = `tenant_skill_ownership_${suite}`;
+const inWorkspace = <T>(fn: () => Promise<T>) => runAsTenant(workspace, fn);
+
 beforeAll(async () => {
   for (const [id, email] of [
     [alice, `alice-${suite}@example.test`],
     [bob, `bob-${suite}@example.test`],
   ]) {
-    await database
-      .insert(users)
-      .values({ id: id as string, email: email as string, name: id as string })
-      .onConflictDoNothing();
+    await runAsTenant("platform", () =>
+      database
+        .insert(users)
+        .values({
+          id: id as string,
+          email: email as string,
+          name: id as string,
+        })
+        .onConflictDoNothing(),
+    );
   }
-  for (const [id, owner] of [
-    [aliceBot, alice],
+  for (const [id, owner, tenant] of [
+    [aliceBot, alice, workspace],
     // Unowned Bots are deployment-published Bots visible to every user.
-    [sharedBot, null],
+    [sharedBot, null, "system"],
   ] as const) {
-    await database
-      .insert(agents)
-      .values({ id, name: id, type: "remote_ag_ui", configuration: {} })
-      .onConflictDoNothing();
-    await database
-      .insert(agentProfiles)
-      .values({
-        agentId: id,
-        ownerUserId: owner,
-        title: id,
-        roleDescription: "For a test.",
-        avatarSeed: id,
-        visibility: "private",
-      })
-      .onConflictDoNothing();
+    await runAsTenant(tenant, async () => {
+      await database
+        .insert(agents)
+        .values({ id, name: id, type: "remote_ag_ui", configuration: {} })
+        .onConflictDoNothing();
+      await database
+        .insert(agentProfiles)
+        .values({
+          agentId: id,
+          ownerUserId: owner,
+          title: id,
+          roleDescription: "For a test.",
+          avatarSeed: id,
+          visibility: "private",
+        })
+        .onConflictDoNothing();
+    });
   }
 
   const write = (slug: string, ownerUserId: string | null) =>
@@ -80,88 +99,97 @@ beforeAll(async () => {
       ownerUserId,
       by: `${ownerUserId ?? "an administrator"}`,
     });
-  await write(aliceSkill, alice);
-  await write(bobSkill, bob);
-  await write(deploymentSkill, null);
+  await inWorkspace(() => write(aliceSkill, alice));
+  await inWorkspace(() => write(bobSkill, bob));
+  await runAsTenant("system", () => write(deploymentSkill, null));
 });
 
-afterAll(async () => {
-  await database
-    .delete(skills)
-    .where(
-      inArray(skills.slug, [
-        aliceSkill,
-        bobSkill,
-        deploymentSkill,
-        `written-${suite}`,
-      ]),
-    );
-  await database
-    .delete(agents)
-    .where(inArray(agents.id, [aliceBot, sharedBot]));
-  await database.delete(users).where(inArray(users.id, [alice, bob]));
-});
+afterAll(() =>
+  runAsTenant("platform", async () => {
+    await database
+      .delete(skills)
+      .where(
+        inArray(skills.slug, [
+          aliceSkill,
+          bobSkill,
+          deploymentSkill,
+          `written-${suite}`,
+        ]),
+      );
+    await database
+      .delete(agents)
+      .where(inArray(agents.id, [aliceBot, sharedBot]));
+    await database.delete(users).where(inArray(users.id, [alice, bob]));
+  }),
+);
 
 describe("what a person sees", () => {
-  test("their own skills and the deployment's, and nobody else's", async () => {
-    const slugs = (await store.listSkills({ id: alice, isAdmin: false })).map(
-      (skill) => skill.slug,
-    );
+  test("their own skills and the deployment's, and nobody else's", () =>
+    inWorkspace(async () => {
+      const slugs = (await store.listSkills({ id: alice, isAdmin: false })).map(
+        (skill) => skill.slug,
+      );
 
-    expect(slugs).toContain(aliceSkill);
-    expect(slugs).toContain(deploymentSkill);
-    // The property the whole design rests on: one person's skill is not another person's business.
-    expect(slugs).not.toContain(bobSkill);
-  });
+      expect(slugs).toContain(aliceSkill);
+      expect(slugs).toContain(deploymentSkill);
+      // The property the whole design rests on: one person's skill is not another person's business.
+      expect(slugs).not.toContain(bobSkill);
+    }));
 
-  test("an administrator sees every skill, including other people's", async () => {
-    const slugs = (await store.listSkills({ id: alice, isAdmin: true })).map(
-      (skill) => skill.slug,
-    );
+  test("an administrator sees every skill, including other people's", () =>
+    inWorkspace(async () => {
+      const slugs = (await store.listSkills({ id: alice, isAdmin: true })).map(
+        (skill) => skill.slug,
+      );
 
-    expect(slugs).toContain(aliceSkill);
-    expect(slugs).toContain(bobSkill);
-    expect(slugs).toContain(deploymentSkill);
-  });
+      expect(slugs).toContain(aliceSkill);
+      expect(slugs).toContain(bobSkill);
+      expect(slugs).toContain(deploymentSkill);
+    }));
 });
 
 describe("who owns what", () => {
-  test("a skill written by a person belongs to that person", async () => {
-    expect(await store.skillOwner(aliceSkill)).toBe(alice);
-  });
+  test("a skill written by a person belongs to that person", () =>
+    inWorkspace(async () => {
+      expect(await store.skillOwner(aliceSkill)).toBe(alice);
+    }));
 
-  test("a skill written for the deployment belongs to nobody", async () => {
-    expect(await store.skillOwner(deploymentSkill)).toBeNull();
-  });
+  test("a skill written for the deployment belongs to nobody", () =>
+    inWorkspace(async () => {
+      expect(await store.skillOwner(deploymentSkill)).toBeNull();
+    }));
 
-  test("a skill nobody wrote is absent rather than unowned", async () => {
-    // Told apart from the line above, because "no such skill" and "the deployment's" are different
-    // answers and a route that confuses them would let anybody edit a name nobody has taken.
-    expect(await store.skillOwner(`nothing-${suite}`)).toBeUndefined();
-  });
+  test("a skill nobody wrote is absent rather than unowned", () =>
+    inWorkspace(async () => {
+      // Told apart from the line above, because "no such skill" and "the deployment's" are different
+      // answers and a route that confuses them would let anybody edit a name nobody has taken.
+      expect(await store.skillOwner(`nothing-${suite}`)).toBeUndefined();
+    }));
 
-  test("a Bot somebody made belongs to them, and a published one to nobody", async () => {
-    expect(await store.agentOwner(aliceBot)).toBe(alice);
-    expect(await store.agentOwner(sharedBot)).toBeNull();
-    expect(await store.agentOwner(`nothing_${suite}`)).toBeUndefined();
-  });
+  test("a Bot somebody made belongs to them, and a published one to nobody", () =>
+    inWorkspace(async () => {
+      expect(await store.agentOwner(aliceBot)).toBe(alice);
+      expect(await store.agentOwner(sharedBot)).toBeNull();
+      expect(await store.agentOwner(`nothing_${suite}`)).toBeUndefined();
+    }));
 });
 
 describe("editing keeps ownership", () => {
-  test("saving a skill again does not change whose it is", async () => {
-    await store.installSkill({
-      slug: aliceSkill,
-      title: "Edited",
-      summary: "",
-      instructions: "Do the thing differently.",
-      // What a route would send for somebody else. The insert must not honour it: whose a skill is
-      // cannot be changed by re-saving it, or taking one would be a matter of typing the name.
-      ownerUserId: bob,
-      by: bob,
-    });
+  test("saving a skill again does not change whose it is", () =>
+    inWorkspace(async () => {
+      await store.installSkill({
+        slug: aliceSkill,
+        title: "Edited",
+        summary: "",
+        instructions: "Do the thing differently.",
+        // What a route would send for somebody else. The insert must not honour it: whose a skill is
+        // cannot be changed by re-saving it, or taking one would be a matter of typing the name.
+        ownerUserId: bob,
+        by: bob,
+      });
 
-    expect(await store.skillOwner(aliceSkill)).toBe(alice);
-  });
+      expect(await store.skillOwner(aliceSkill)).toBe(alice);
+    }));
 });
 
 /**
@@ -198,111 +226,119 @@ const grantBody = (ref: string, agentId: string) => ({
 });
 
 describe("what a person may do over HTTP", () => {
-  test("writes their own skill", async () => {
-    const response = await asAlice().request("/skills", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        slug: `written-${suite}`,
-        title: "Written",
-        instructions: "Do it.",
-      }),
-    });
+  test("writes their own skill", () =>
+    inWorkspace(async () => {
+      const response = await asAlice().request("/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slug: `written-${suite}`,
+          title: "Written",
+          instructions: "Do it.",
+        }),
+      });
 
-    expect(response.status).toBe(200);
-    expect(await store.skillOwner(`written-${suite}`)).toBe(alice);
-  });
+      expect(response.status).toBe(200);
+      expect(await store.skillOwner(`written-${suite}`)).toBe(alice);
+    }));
 
-  test("cannot write one for the whole deployment", async () => {
-    const response = await asAlice().request("/skills", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        slug: `global-${suite}`,
-        title: "Global",
-        instructions: "Do it.",
-        global: true,
-      }),
-    });
+  test("cannot write one for the whole deployment", () =>
+    inWorkspace(async () => {
+      const response = await asAlice().request("/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slug: `global-${suite}`,
+          title: "Global",
+          instructions: "Do it.",
+          global: true,
+        }),
+      });
 
-    expect(response.status).toBe(403);
-    expect(await store.skillOwner(`global-${suite}`)).toBeUndefined();
-  });
+      expect(response.status).toBe(403);
+      expect(await store.skillOwner(`global-${suite}`)).toBeUndefined();
+    }));
 
-  test("cannot edit or delete somebody else's", async () => {
-    const edit = await asAlice().request("/skills", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        slug: bobSkill,
-        title: "Taken",
-        instructions: "Mine now.",
-      }),
-    });
-    const remove = await asAlice().request(`/skills/${bobSkill}`, {
-      method: "DELETE",
-    });
+  test("cannot edit or delete somebody else's", () =>
+    inWorkspace(async () => {
+      const edit = await asAlice().request("/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slug: bobSkill,
+          title: "Taken",
+          instructions: "Mine now.",
+        }),
+      });
+      const remove = await asAlice().request(`/skills/${bobSkill}`, {
+        method: "DELETE",
+      });
 
-    expect(edit.status).toBe(403);
-    expect(remove.status).toBe(403);
-    expect(await store.skillOwner(bobSkill)).toBe(bob);
-  });
+      expect(edit.status).toBe(403);
+      expect(remove.status).toBe(403);
+      expect(await store.skillOwner(bobSkill)).toBe(bob);
+    }));
 
-  test("cannot edit the deployment's, which is an administrator's to keep", async () => {
-    const response = await asAlice().request(`/skills/${deploymentSkill}`, {
-      method: "DELETE",
-    });
+  test("cannot edit the deployment's, which is an administrator's to keep", () =>
+    inWorkspace(async () => {
+      const response = await asAlice().request(`/skills/${deploymentSkill}`, {
+        method: "DELETE",
+      });
 
-    expect(response.status).toBe(403);
-    expect(await store.skillOwner(deploymentSkill)).toBeNull();
-  });
+      expect(response.status).toBe(403);
+      expect(await store.skillOwner(deploymentSkill)).toBeNull();
+    }));
 
-  test("puts their own skill on a Bot they own", async () => {
-    const response = await asAlice().request(
-      "/grants",
-      grantBody(aliceSkill, aliceBot),
-    );
+  test("puts their own skill on a Bot they own", () =>
+    inWorkspace(async () => {
+      const response = await asAlice().request(
+        "/grants",
+        grantBody(aliceSkill, aliceBot),
+      );
 
-    expect(response.status).toBe(200);
-    const held = await store.listForAgent(aliceBot);
-    expect(held.skills.map((skill) => skill.slug)).toContain(aliceSkill);
-  });
+      expect(response.status).toBe(200);
+      const held = await store.listForAgent(aliceBot);
+      expect(held.skills.map((skill) => skill.slug)).toContain(aliceSkill);
+    }));
 
-  test("cannot put it on a Bot the deployment shares", async () => {
-    // The one that matters most: a skill one person wrote would otherwise change how a Bot that
-    // everybody uses answers everybody.
-    const response = await asAlice().request(
-      "/grants",
-      grantBody(aliceSkill, sharedBot),
-    );
+  test("cannot put it on a Bot the deployment shares", () =>
+    inWorkspace(async () => {
+      // The one that matters most: a skill one person wrote would otherwise change how a Bot that
+      // everybody uses answers everybody.
+      const response = await asAlice().request(
+        "/grants",
+        grantBody(aliceSkill, sharedBot),
+      );
 
-    expect(response.status).toBe(403);
-    expect((await store.listForAgent(sharedBot)).skills).toEqual([]);
-  });
+      expect(response.status).toBe(403);
+      expect((await store.listForAgent(sharedBot)).skills).toEqual([]);
+    }));
 
-  test("cannot enable an MCP tool on anything", async () => {
-    const response = await asAlice().request("/grants", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        kind: "mcp",
-        ref: "slack/slack_search_public",
-        agentId: aliceBot,
-      }),
-    });
+  test("cannot enable an MCP tool on anything", () =>
+    inWorkspace(async () => {
+      const response = await asAlice().request("/grants", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "mcp",
+          ref: "slack/slack_search_public",
+          agentId: aliceBot,
+        }),
+      });
 
-    expect(response.status).toBe(403);
-    expect((await store.listForAgent(aliceBot)).tools).toEqual([]);
-  });
+      expect(response.status).toBe(403);
+      expect((await store.listForAgent(aliceBot)).tools).toEqual([]);
+    }));
 
-  test("sees the deployment's skills and their own, and not somebody else's", async () => {
-    const body = (await (await asAlice().request("/")).json()) as {
-      skills: { slug: string }[];
-    };
-    const slugs = body.skills.map((skill) => skill.slug);
+  test("sees the deployment's skills and their own, and not somebody else's", () =>
+    inWorkspace(async () => {
+      const body = (await (await asAlice().request("/")).json()) as {
+        skills: { slug: string }[];
+      };
+      const slugs = body.skills.map((skill) => skill.slug);
 
-    expect(slugs).toContain(aliceSkill);
-    expect(slugs).toContain(deploymentSkill);
-    expect(slugs).not.toContain(bobSkill);
-  });
+      expect(slugs).toContain(aliceSkill);
+      expect(slugs).toContain(deploymentSkill);
+      expect(slugs).not.toContain(bobSkill);
+    }));
 });

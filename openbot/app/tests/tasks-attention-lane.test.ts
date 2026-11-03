@@ -4,6 +4,8 @@ import {
   attentionGroups,
   LANES,
   laneOf,
+  laneOfTask,
+  statusLabelOf,
 } from "@/routes/_authed/_app/tasks";
 
 /**
@@ -134,5 +136,56 @@ describe("dragging a card (A5 / D7)", () => {
         expect(archivesOnDrop(lane.key, status)).toBe(false);
       }
     }
+  });
+});
+
+describe("an archived failure (A5 / A7)", () => {
+  const ARCHIVED_AT = "2026-11-01T08:00:00.000Z";
+  type Card = Parameters<typeof attentionGroups>[0][number];
+  const card = (status: string, archivedAt?: string | null) =>
+    ({ status, archivedAt }) as Card;
+
+  test("moves to 已结束 and still reads as a failure", () => {
+    expect(laneOfTask(card("failed", ARCHIVED_AT))).toEqual(["finished"]);
+    expect(statusLabelOf(card("failed", ARCHIVED_AT))).toBe("已结束-失败");
+  });
+
+  test("an unarchived failure stays in 需要关注, whatever shape the stamp's absence takes", () => {
+    expect(laneOfTask(card("failed"))).toEqual(["attention"]);
+    expect(laneOfTask(card("failed", null))).toEqual(["attention"]);
+  });
+
+  test("every other status keeps its status's lane, stamped or not", () => {
+    for (const status of STATUSES.filter((entry) => entry !== "failed")) {
+      expect(laneOfTask(card(status))).toEqual(laneOf(status));
+      expect(laneOfTask(card(status, ARCHIVED_AT))).toEqual(laneOf(status));
+    }
+  });
+
+  test("lands in exactly one lane", () => {
+    for (const status of STATUSES) {
+      for (const archivedAt of [null, ARCHIVED_AT]) {
+        expect(laneOfTask(card(status, archivedAt))).toHaveLength(1);
+      }
+    }
+  });
+
+  test("is no longer asked for in either attention tab", () => {
+    const groups = attentionGroups([
+      card("failed", ARCHIVED_AT),
+      card("failed"),
+      card("needs_action"),
+    ]);
+    expect(groups.needsYou).toHaveLength(2);
+    expect(
+      groups.needsYou.filter((task) => task.archivedAt === ARCHIVED_AT),
+    ).toEqual([]);
+    expect(groups.review).toEqual([]);
+  });
+
+  test("cannot be archived again by dragging it into 已结束", () => {
+    expect(archivesOnDrop("finished", "failed", ARCHIVED_AT)).toBe(false);
+    expect(archivesOnDrop("finished", "failed", null)).toBe(true);
+    expect(archivesOnDrop("finished", "awaiting_review", null)).toBe(true);
   });
 });

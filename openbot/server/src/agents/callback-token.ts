@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
 import { sign, verify } from "../auth/signed-value";
+import { isPersonTenant } from "../tenant/context";
 
 /**
  * What an agent presents when it calls a tool back, and on whose behalf.
@@ -231,6 +232,15 @@ function readInitiator(value: unknown): AuditInitiator {
   return typeof id === "string" && id ? { kind, id } : PERSON_INITIATOR;
 }
 
+/**
+ * The Bot a callback token was issued to, as the token lookup answers it.
+ *
+ * `tenantId` is the stamp on that Bot's profile: a person's tenant for a private Bot, `team` for a
+ * published or public one, `system` for the catalogue. Absent where the caller authenticated with
+ * the deployment-wide token, which names no Bot of its own.
+ */
+export type CallbackTokenHolder = { id: string; tenantId?: string };
+
 export type CallVerdict =
   | {
       ok: true;
@@ -238,6 +248,8 @@ export type CallVerdict =
       actorId: string;
       initiator?: AuditInitiator;
       run: RunAssertion;
+      /** The token holder's stamp, when a Bot's own token proved the call; see {@link callbackFrameFor}. */
+      botTenant?: string;
     }
   | { ok: false; status: 401 | 403; reason: string };
 
@@ -325,8 +337,8 @@ export async function authoriseAgentCall(options: {
    * to spend another Bot's grants or to write somebody else's name into the trail. Empty disables it.
    */
   legacyToken?: string;
-  /** Which agent holds a token hash, if any. */
-  lookup: (hash: string) => Promise<{ id: string } | null>;
+  /** Which agent holds a token hash, if any, and its profile's stamp. */
+  lookup: (hash: string) => Promise<CallbackTokenHolder | null>;
   now?: number;
 }): Promise<CallVerdict> {
   const { presented, run, encryptionKey, legacyToken, lookup, now } = options;
@@ -342,7 +354,7 @@ export async function authoriseAgentCall(options: {
    */
   if (!assertion) return { ok: false, status: 401, reason: "Not authorised." };
 
-  const caller = looksLikeCallbackToken(presented)
+  const caller: CallbackTokenHolder | null = looksLikeCallbackToken(presented)
     ? await lookup(hashCallbackToken(presented))
     : legacyToken && sameToken(presented, legacyToken)
       ? { id: assertion.botId }
@@ -370,7 +382,39 @@ export async function authoriseAgentCall(options: {
     actorId: assertion.actorId,
     initiator: assertion.initiator,
     run: assertion,
+    ...(caller.tenantId !== undefined ? { botTenant: caller.tenantId } : {}),
   };
+}
+
+/**
+ * The tenant frame an authorised callback runs its call in, or null for a refusal (G01-E PCB).
+ *
+ * Pure, beside {@link authoriseAgentCall}, because it is the second half of the same decision: the
+ * token said which Bot, the assertion said which person, and this says whose frame the grants are
+ * read in and the trail is written to.
+ *
+ *   - The person the signed run names must be a person. A run naming nobody (`system`, `platform`,
+ *     `team`, empty) is refused rather than run as the platform or as `system`.
+ *   - A person's private Bot runs in that person's tenant, which is its stamp, and only for that
+ *     person: a run for anybody else on somebody's private Bot is refused, never run in either frame.
+ *     No signed run can legitimately name anybody else — only the owner's frame sees the Bot to start
+ *     one — so the refusal costs no real caller anything.
+ *   - A `team` Bot runs in the frame of the person asking. `team` is a stamp, never a frame, and the
+ *     owner's frame is not the asker's to borrow: an in-process turn for a teammate runs this same
+ *     `callTool` in the teammate's own frame (`loadToolsForActor`), where `team_read` shows the Bot's
+ *     `team` grants only while the Bot is visible to them, and the trail row is theirs.
+ *   - A catalogue Bot (`system`), and a caller holding the deployment-wide token (no stamp at all),
+ *     run in the asker's frame, as they always have.
+ */
+export function callbackFrameFor(verdict: {
+  actorId: string;
+  botTenant?: string;
+}): string | null {
+  if (!isPersonTenant(verdict.actorId)) return null;
+  const stamp = verdict.botTenant;
+  if (isPersonTenant(stamp)) return stamp === verdict.actorId ? stamp : null;
+  // `team`, the catalogue's `system`, or no stamp at all: the asker's own frame.
+  return verdict.actorId;
 }
 
 /**

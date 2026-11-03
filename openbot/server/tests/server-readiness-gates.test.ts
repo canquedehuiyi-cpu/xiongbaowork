@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  checkDatabaseCredential,
   checkServerReadiness,
   createRoleWriterLifecycle,
   createStartupLifecycle,
   type ReadinessDiagnostic,
+  resolveRlsEnforcementMode,
+  usesPublicDefaultDatabasePassword,
 } from "../src/auth/role-writer-lifecycle";
 
 function barrier() {
@@ -315,5 +318,149 @@ describe("real readiness gate before startup admission (injected CPU read)", () 
     noConsumers(events);
     expect(events).toContain("writer-close");
     expect(events.at(-1)).toBe("database-close");
+  });
+});
+
+/**
+ * Audit defect #8: the RLS gate used to default to "warn", so a server misconfigured to connect as a
+ * superuser or BYPASSRLS role logged one line and served with row level security doing nothing.
+ */
+describe("the RLS enforcement mode a deployment runs with", () => {
+  test.each([
+    { name: "NODE_ENV=production", environment: { NODE_ENV: "production" } },
+    {
+      name: "NODE_ENV=production with stray whitespace",
+      environment: { NODE_ENV: "production " },
+    },
+    // Unset is what a hand-written server env file looks like, so it is not a development signal.
+    { name: "NODE_ENV unset", environment: {} },
+    { name: "NODE_ENV=staging", environment: { NODE_ENV: "staging" } },
+  ])("defaults to refuse with $name", ({ environment }) => {
+    expect(resolveRlsEnforcementMode(environment)).toBe("refuse");
+  });
+
+  test.each([
+    { name: "development", environment: { NODE_ENV: "development" } },
+    { name: "test", environment: { NODE_ENV: "test" } },
+  ])("defaults to warn only when NODE_ENV says $name", ({ environment }) => {
+    expect(resolveRlsEnforcementMode(environment)).toBe("warn");
+  });
+
+  test("an explicit refuse holds in development", () => {
+    expect(
+      resolveRlsEnforcementMode({
+        NODE_ENV: "development",
+        OPENBOT_RLS_ENFORCE: "refuse",
+      }),
+    ).toBe("refuse");
+  });
+
+  test("an explicit warn is the written-down opt-out, honoured as written", () => {
+    expect(
+      resolveRlsEnforcementMode({
+        NODE_ENV: "production",
+        OPENBOT_RLS_ENFORCE: " warn ",
+      }),
+    ).toBe("warn");
+  });
+
+  test.each(["off", "false", "0", "refuze", "warning"])(
+    "an unrecognised value %p refuses to start instead of silently warning",
+    (value) => {
+      expect(() =>
+        resolveRlsEnforcementMode({
+          NODE_ENV: "development",
+          OPENBOT_RLS_ENFORCE: value,
+        }),
+      ).toThrow("OPENBOT_RLS_ENFORCE");
+    },
+  );
+
+  test("an empty value is the same as unset", () => {
+    expect(
+      resolveRlsEnforcementMode({ NODE_ENV: "production", OPENBOT_RLS_ENFORCE: "  " }),
+    ).toBe("refuse");
+  });
+
+  test("the readiness gate itself refuses when no mode reaches it", async () => {
+    const diagnostics: ReadinessDiagnostic[] = [];
+    await expect(
+      checkServerReadiness({
+        read: async () => [{ role: "owner", super: true, bypass: false }],
+        mode: undefined,
+        report: (event) => diagnostics.push(event),
+      }),
+    ).rejects.toThrow("refused");
+    expect(diagnostics[0]?.type).toBe("rls-not-enforced");
+  });
+});
+
+/**
+ * `0054_app_role.sql` creates `openbot_app` with the password `openbot`, printed in this repository.
+ * A migration cannot tell whether an operator changed it (PostgreSQL does not hand back passwords),
+ * so the server checks the one credential it does hold: its own connection string.
+ */
+describe("the public default database password", () => {
+  const appUrl = (password: string) =>
+    `postgres://openbot_app:${password}@db.example.com:5432/openbot`;
+
+  test.each([
+    appUrl("openbot"),
+    "postgres://openbot:openbot@db.example.com:5432/openbot",
+    "postgresql://openbot_app:%6Fpenbot@db.example.com/openbot",
+  ])("is recognised in %p", (url) => {
+    expect(usesPublicDefaultDatabasePassword(url)).toBeTrue();
+  });
+
+  test.each([
+    appUrl("a-real-secret"),
+    appUrl("openbot2"),
+    "postgres://openbot_app@db.example.com/openbot",
+    "not a url",
+    undefined,
+  ])("is not claimed for %p", (url) => {
+    expect(usesPublicDefaultDatabasePassword(url)).toBeFalse();
+  });
+
+  test("production refuses to start on it and never echoes the URL", () => {
+    const diagnostics: ReadinessDiagnostic[] = [];
+    let thrown: unknown;
+    try {
+      checkDatabaseCredential({
+        url: appUrl("openbot"),
+        production: true,
+        report: (event) => diagnostics.push(event),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect(diagnostics.map((event) => event.type)).toEqual([
+      "database-password-public-default",
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("db.example.com");
+    expect(String(thrown)).not.toContain("db.example.com");
+  });
+
+  test("development is told and keeps running", () => {
+    const diagnostics: ReadinessDiagnostic[] = [];
+    checkDatabaseCredential({
+      url: appUrl("openbot"),
+      production: false,
+      report: (event) => diagnostics.push(event),
+    });
+    expect(diagnostics.map((event) => event.type)).toEqual([
+      "database-password-public-default",
+    ]);
+  });
+
+  test("a changed password says nothing", () => {
+    const diagnostics: ReadinessDiagnostic[] = [];
+    checkDatabaseCredential({
+      url: appUrl("a-real-secret"),
+      production: true,
+      report: (event) => diagnostics.push(event),
+    });
+    expect(diagnostics).toEqual([]);
   });
 });

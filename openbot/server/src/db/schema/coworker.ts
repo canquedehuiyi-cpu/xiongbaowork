@@ -4,8 +4,10 @@
  * Split by owner so two people can add tables all day without touching the same lines. Add tables
  * here; never edit core.ts or computer.ts to do it.
  */
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   pgEnum,
   pgTable,
@@ -18,7 +20,7 @@ import {
 import type { Persona } from "../../../../shared/persona";
 import { agents, users } from "./core";
 import { jsonb } from "./json";
-import { modelRegistry } from "./model";
+import { modelRegistry, platformModelPool } from "./model";
 import { tenantId } from "./tenant";
 
 const createdAt = () =>
@@ -53,6 +55,15 @@ export const agentProfiles = pgTable(
     modelRef: uuid("model_ref").references(() => modelRegistry.id, {
       onDelete: "set null",
     }),
+    /**
+     * A platform pool model this coworker speaks with instead (stories H1, K1, migration 0120): the
+     * experience models a Free tenant has before connecting a key. Never set together with
+     * `modelRef`; a pool row still bound here cannot be deleted, only disabled.
+     */
+    platformModelRef: uuid("platform_model_ref").references(
+      () => platformModelPool.id,
+      { onDelete: "restrict" },
+    ),
     /*
      * The credential this Bot's agent presents when it calls a tool back.
      *
@@ -82,6 +93,10 @@ export const agentProfiles = pgTable(
     index("agent_profiles_visibility_deleted_idx").on(
       table.visibility,
       table.deletedAt,
+    ),
+    check(
+      "agent_profiles_single_model_binding",
+      sql`${table.modelRef} IS NULL OR ${table.platformModelRef} IS NULL`,
     ),
   ],
 );
