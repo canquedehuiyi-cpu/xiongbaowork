@@ -25,6 +25,7 @@ import {
   offerDueRoutines,
   type RoutineSweepOptions,
 } from "../../server/src/routines/sweep";
+import { runAsTenant } from "../../server/src/tenant/context";
 import { createWorkQueue } from "../../server/src/work/queue";
 import { loadWorkerEnv, routineRunUrl } from "./env";
 import { workerStatus } from "./status";
@@ -118,8 +119,20 @@ async function runOneTick(): Promise<void> {
    * in `../../server/src/routines/sweep.ts`).
    */
   try {
-    const { offered } = await offerDueRoutines(options);
-    const report = await dispatchClaimedRoutines(options);
+    /*
+     * As the platform, explicitly (G01). A tick belongs to no person: what is due and what is
+     * claimable are every tenant's rows, asked by nobody. Each routine it offers is offered in its
+     * owner's frame and each claimed firing opens its run in the claimed item's tenant — the sweep
+     * takes both from the row it read (`routines/sweep.ts`), never from this frame, which only says
+     * the tick itself is the operator's. Unframed it would fall through to the legacy `system`
+     * default, which writes rows every tenant can read.
+     */
+    const { offered } = await runAsTenant("platform", () =>
+      offerDueRoutines(options),
+    );
+    const report = await runAsTenant("platform", () =>
+      dispatchClaimedRoutines(options),
+    );
     console.info(
       JSON.stringify({
         type: "routine-sweep",
@@ -144,10 +157,12 @@ async function runOneTick(): Promise<void> {
   // to tick 120, and would never reap.
   if (tick === 1 || tick % PURGE_EVERY_N_TICKS === 0) {
     try {
-      const purged = await queue.purge({
-        kind: ROUTINE_FIRE_KIND,
-        olderThanMs: PURGE_OLDER_THAN_MS,
-      });
+      const purged = await runAsTenant("platform", () =>
+        queue.purge({
+          kind: ROUTINE_FIRE_KIND,
+          olderThanMs: PURGE_OLDER_THAN_MS,
+        }),
+      );
       console.info(JSON.stringify({ type: "routine-sweep-purge", purged }));
     } catch (error) {
       console.warn(

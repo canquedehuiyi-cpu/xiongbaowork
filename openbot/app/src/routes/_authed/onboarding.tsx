@@ -8,6 +8,7 @@ import AgentOrb from "@/components/agents/orb/agent-orb";
 import { Composer } from "@/components/channels/composer";
 import { DesktopIllustration } from "@/components/computer/desktop-illustration";
 import { ComputerPlaceholder } from "@/components/computer/placeholder";
+import { ModelLibraryGuide } from "@/components/onboarding/model-library-guide";
 import { Button } from "@/components/ui/button";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions, needsOnboarding } from "@/lib/auth/queries";
@@ -172,6 +173,8 @@ function RouteComponent() {
   const [direction, setDirection] = React.useState(1);
   // The way out: set once the completion is saved, it fades the whole page and then navigates.
   const [leaving, setLeaving] = React.useState(false);
+  // Where the fade lands. The model guide's way out goes to the resources screen's model zone.
+  const [destination, setDestination] = React.useState<"/" | "/resources">("/");
   const [ref, bounds] = useMeasure();
 
   const last = step === STEPS.length - 1;
@@ -192,7 +195,7 @@ function RouteComponent() {
       initial={false}
       onAnimationComplete={() => {
         if (leaving) {
-          navigate({ to: "/" });
+          navigate({ to: destination });
         }
       }}
       transition={{ duration: 0.5, ease: "easeInOut" }}
@@ -221,6 +224,21 @@ function RouteComponent() {
                   {STEPS[step]()}
                 </motion.div>
               </AnimatePresence>
+
+              {/*
+               * The empty-library nudge. Finishing onboarding comes first, because every screen
+               * behind it sends somebody who has not finished straight back here.
+               */}
+              <ModelLibraryGuide
+                connecting={complete.isPending && destination === "/resources"}
+                onConnect={() => {
+                  setDestination("/resources");
+                  complete.mutate(undefined, {
+                    onSuccess: () => setLeaving(true),
+                    onError: () => setDestination("/"),
+                  });
+                }}
+              />
 
               {complete.error ? (
                 <p className="mt-4 text-destructive text-sm" role="alert">

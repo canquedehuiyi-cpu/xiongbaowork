@@ -5,6 +5,7 @@ import type { AppVariables } from "../src/auth/guards";
 import { createRoutineRoutes } from "../src/routines/routes";
 import { createRoutineRunner } from "../src/routines/runner";
 import { RoutineRefusedError, type RoutineStore } from "../src/routines/store";
+import { isTenantFramed, requireTenant } from "../src/tenant/context";
 
 const actor = { id: "user-1", email: "m@openbot.test", role: "user" } as const;
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -127,6 +128,7 @@ test("the runner fails closed: a paused routine's run is skipped without a turn"
         return {
           routineId: "routine-1",
           ownerUserId: "user-1",
+          tenantId: "user-1",
           agentId: "bot-1",
           channelId: "channel-1",
           instruction: "x",
@@ -148,4 +150,78 @@ test("the runner fails closed: a paused routine's run is skipped without a turn"
   expect(finished).toEqual([
     ["routine_run_1", "skipped", "the routine is paused"],
   ]);
+});
+
+/*
+ * The worker and Run-now entries hand the runner a run id alone (G01-C). The routine's stamp is the
+ * only answer to whose firing it is, and it must be its owner's: a routine stamped as nobody's, or
+ * with somebody else, is never run — no turn, nothing in any person's frame — and its run row is
+ * closed from the platform frame.
+ */
+test("the runner refuses a routine whose stamp names nobody, or somebody other than its owner", async () => {
+  for (const tenantId of ["system", "platform", "", "user-2"]) {
+    const finished: unknown[][] = [];
+    const frames: string[] = [];
+    let turns = 0;
+    const runner = createRoutineRunner({
+      routineStore: {
+        async runContext() {
+          return {
+            routineId: "routine-1",
+            ownerUserId: "user-1",
+            tenantId,
+            agentId: "bot-1",
+            channelId: "channel-1",
+            instruction: "x",
+            enabled: true,
+          };
+        },
+        async finishRun(...args: unknown[]) {
+          frames.push(isTenantFramed() ? requireTenant() : "none");
+          finished.push(args);
+        },
+      } as unknown as RoutineStore,
+      channelStore: {} as never,
+      runTurn: async () => {
+        turns += 1;
+        return { replyText: "" };
+      },
+    });
+    await runner.run("routine_run_1");
+    expect(turns).toBe(0);
+    expect(finished).toEqual([
+      [
+        "routine_run_1",
+        "failed",
+        "This routine has no owner to run as. Create it again.",
+      ],
+    ]);
+    expect(frames).toEqual(["platform"]);
+  }
+});
+
+test("a paused routine's run is closed in its owner's own frame", async () => {
+  const frames: string[] = [];
+  const runner = createRoutineRunner({
+    routineStore: {
+      async runContext() {
+        return {
+          routineId: "routine-1",
+          ownerUserId: "user-1",
+          tenantId: "user-1",
+          agentId: "bot-1",
+          channelId: "channel-1",
+          instruction: "x",
+          enabled: false,
+        };
+      },
+      async finishRun() {
+        frames.push(isTenantFramed() ? requireTenant() : "none");
+      },
+    } as unknown as RoutineStore,
+    channelStore: {} as never,
+    runTurn: async () => ({ replyText: "" }),
+  });
+  await runner.run("routine_run_1");
+  expect(frames).toEqual(["user-1"]);
 });

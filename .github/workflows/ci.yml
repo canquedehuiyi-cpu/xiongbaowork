@@ -103,6 +103,10 @@ jobs:
           TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
             bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
+        # No continue-on-error: a failing head test fails this step and the job. The report step
+        # below runs anyway (if: always()) for the baseline comparison.
+        # G01-E P15: no OPENBOT_TENANT_FRAME_GUARD here. scripts/test-preload.ts defaults it to
+        # `throw`, so a database read or write with no tenant frame fails the test that made it.
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
@@ -110,7 +114,7 @@ jobs:
       - name: Print head test diagnostics (credentials masked)
         if: failure()
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: server-${{ matrix.shard }}-logs
@@ -139,7 +143,7 @@ jobs:
       - name: Failure name multiset difference and zero-fail gate
         if: always()
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: app-logs
@@ -166,7 +170,7 @@ jobs:
           for f in startup owner auth recreated; do
             bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/delivery-evidence/$f.log" || true
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: image-evidence
@@ -226,7 +230,7 @@ jobs:
         if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
         working-directory: openbot/${{ matrix.pkg }}
         run: bun run typecheck
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: workspace-${{ matrix.pkg }}-logs
@@ -266,7 +270,7 @@ jobs:
           if ($code -ne 0) { throw "windows-runner-probe exited $code" }
           if (-not (Select-String -LiteralPath $log -SimpleMatch -Quiet -Pattern '"platform":"win32"')) { throw 'Probe did not report win32.' }
           if (-not (Select-String -LiteralPath $log -Quiet -Pattern '^WINDOWS_PROBE_PASS$')) { throw 'WINDOWS_PROBE_PASS missing.' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: win1-windows-log
@@ -326,7 +330,7 @@ jobs:
           passed=$(sed -nE 's/^test result: ok\. ([0-9]+) passed.*/\1/p' "$RUNNER_TEMP/desktop-cargo.log" | awk '{s+=$1} END {print s+0}')
           echo "Rust tests passed: $passed"
           [ "$passed" -gt 0 ] || { echo '::error::cargo test ran zero tests'; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: desktop-windows-logs

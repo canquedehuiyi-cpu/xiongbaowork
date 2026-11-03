@@ -17,14 +17,19 @@ import { workOwner } from "../../shared/work-owner";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { reapAbandonedPipelineRuns } from "../src/pipeline/reap";
+import {
+  abandonedWorkPhases,
+  sweepAbandonedWork,
+} from "../src/recovery/abandoned-work";
 import { createRoutineStore } from "../src/routines/store";
 import {
-  ABANDONED_RUN_MS,
   dispatchClaimedRoutines,
   offerDueRoutines,
   ROUTINE_FIRE_KIND,
 } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
+import { runAsTenant } from "../src/tenant/context";
+import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWorkQueue } from "../src/work/queue";
 
 const config = loadConfig(process.env);
@@ -98,6 +103,17 @@ async function dispatch(routineRunId: string): Promise<void> {
   }
 }
 
+/*
+ * THE SWEEP RUNS AS THE PLATFORM, explicitly (G01). It belongs to no person: what is due, what is
+ * claimable, what is stranded and what is stale are every tenant's rows, asked by nobody. Each
+ * routine is offered in its owner's frame and each claimed firing opens its run in the claimed item's
+ * tenant — `routines/sweep.ts` takes both from the row it read, never from this frame — and the
+ * reapers close each row as its own tenant. Unframed, anything a phase forgot to frame would fall
+ * through to the legacy `system` default, which files rows where every tenant can read them.
+ */
+const asPlatform = <T>(phase: () => Promise<T>) =>
+  runAsTenant("platform", phase);
+
 try {
   const options = { routineStore, queue, dispatch, owner };
   /*
@@ -105,55 +121,46 @@ try {
    * the consume below, so a routine due right now fires in this sweep rather than in the next one.
    * Neither half needs the other to have run — another replica's offer is claimed here just the same.
    */
-  const { offered } = await offerDueRoutines(options);
-  const report = await dispatchClaimedRoutines(options);
+  const { offered } = await asPlatform(() => offerDueRoutines(options));
+  const report = await asPlatform(() => dispatchClaimedRoutines(options));
   /*
-   * The same stranded-row problem one table over (ticket 021).
-   *
-   * A crew's run advances inside an HTTP request, so a server that restarted mid-step leaves a run row
-   * reading `running` with nothing left to write it — and the board counts that as work. It is not
-   * replayed here: every step is a turn that spent the month's ceiling and may have written to the
-   * world. Best-effort with its own catch, for the reason this sweep already states: a reaper that
-   * cannot run must not stop the routines that are due from firing.
+   * Restart recovery: crew runs and unattended cards a dead server left at `running` (ticket 021,
+   * audit defect #10). The same sweep, lease and phases the API server runs on its own timer
+   * (`src/recovery/abandoned-work.ts`), so there is one implementation; whichever process takes this
+   * five-minute bucket's lease does the work and the other finds nothing to do. Nothing is replayed.
+   * Best-effort with its own catch: a recovery pass that cannot run must not stop due routines firing.
    */
   try {
-    const runs = await reapAbandonedPipelineRuns(
-      database,
-      createTaskProjector(database),
-      { olderThanMs: ABANDONED_RUN_MS },
-    );
-    if (runs > 0) {
-      console.warn(JSON.stringify({ type: "pipeline-runs-reaped", runs }));
-    }
-  } catch (error) {
-    console.warn(
-      JSON.stringify({
-        type: "pipeline-run-reap-failed",
-        reason: String(error),
+    const board = createTaskProjector(database);
+    const recovered = await asPlatform(() =>
+      sweepAbandonedWork({
+      queue,
+      owner,
+      phases: abandonedWorkPhases({
+        routineStore,
+        reapPipelineRuns: (input) =>
+          reapAbandonedPipelineRuns(database, board, input),
+        recoverFlowRuns: (input) =>
+          recoverInterruptedFlowRuns(database, board, input),
+        board,
+      }),
       }),
     );
-  }
-  /*
-   * The cards the two unattended engines left at `running`, on the same clock as the runs above and
-   * for the same reason: a reaper nobody calls is why the board still shows work that died with the
-   * process that opened it. The pass reads the ledgers before closing anything (`tasks/reclaim.ts`),
-   * so a card whose run row is still open — a device that has been offline for longer than the
-   * horizon, one legitimately slow turn — is left alone however stale its own row looks.
-   *
-   * Best-effort with its own catch, the same shape as the crew reaper beside it: cards are the display,
-   * and a sweep that cannot tidy the display must still fire the routines that are due.
-   */
-  try {
-    const cards = await createTaskProjector(database).reclaimAbandoned({
-      olderThanMs: ABANDONED_RUN_MS,
-    });
-    if (cards > 0) {
-      console.warn(JSON.stringify({ type: "task-cards-reclaimed", cards }));
+    if (
+      recovered.won &&
+      (recovered.routineRuns ||
+        recovered.pipelineRuns ||
+        recovered.cards ||
+        recovered.failed.length)
+    ) {
+      console.warn(
+        JSON.stringify({ type: "restart-recovery-sweep", ...recovered }),
+      );
     }
   } catch (error) {
     console.warn(
       JSON.stringify({
-        type: "task-card-reclaim-failed",
+        type: "restart-recovery-sweep-failed",
         reason: String(error),
       }),
     );
@@ -168,10 +175,12 @@ try {
    * be offered for that minute again. `server/src/work/queue.ts:262-274` documents that bug at
    * length; the culler pays the same rent at `cull-idle-computers.ts:71-74`.
    */
-  const purged = await queue.purge({
-    kind: ROUTINE_FIRE_KIND,
-    olderThanMs: 24 * 60 * 60 * 1000,
-  });
+  const purged = await asPlatform(() =>
+    queue.purge({
+      kind: ROUTINE_FIRE_KIND,
+      olderThanMs: 24 * 60 * 60 * 1000,
+    }),
+  );
   console.info(
     JSON.stringify({
       type: "routine-sweep",
