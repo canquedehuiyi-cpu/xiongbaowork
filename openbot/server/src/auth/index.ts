@@ -515,7 +515,10 @@ export function createAuth(
           before: async (account) => {
             if (account.providerId === "credential") return;
             const [holder] = await database
-              .select({ email: users.email, emailVerified: users.emailVerified })
+              .select({
+                email: users.email,
+                emailVerified: users.emailVerified,
+              })
               .from(users)
               .where(eq(users.id, account.userId))
               .limit(1);
