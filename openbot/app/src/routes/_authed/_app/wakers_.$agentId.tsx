@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
+import { AvatarSourcesPanel } from "@/components/avatar/avatar-sources";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
+import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { agentRunningTasksQueryOptions } from "@/lib/bot-lifecycle/queries";
 import { RequestError } from "@/lib/client";
 import {
@@ -141,6 +143,7 @@ function WakerDetailPage() {
       </div>
       <ModelLine profile={profile} />
 
+      <AvatarSourcesSection profile={profile} />
       <DutiesSection profile={profile} />
       <RunningTasksSection agentId={profile.id} />
       <SkillGrantsSection agentId={profile.id} />
@@ -152,6 +155,29 @@ function WakerDetailPage() {
         <AgentAuditTrail agentId={profile.id} />
       </PageSection>
     </PageShell>
+  );
+}
+
+/**
+ * The 分身's information sources (story F1, spec D3): where a person who skipped the onboarding step
+ * configures it, and where anybody lists, adds and removes them later.
+ *
+ * Shown on the person's own 分身 only, which is the one id `GET /api/me/avatar/sources` names; every
+ * other coworker's page, and anybody else's 分身, has no such section.
+ */
+function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
+  const sources = useQuery({
+    ...avatarSourcesQueryOptions(),
+    enabled: profile.mine,
+  });
+  if (!profile.mine || sources.data?.agentId !== profile.id) return null;
+  return (
+    <PageSection
+      description="告诉分身你的资料放在哪里、是什么。这里只登记文字说明，分身不会因此读取任何文件。"
+      title="信息来源"
+    >
+      <AvatarSourcesPanel />
+    </PageSection>
   );
 }
 
