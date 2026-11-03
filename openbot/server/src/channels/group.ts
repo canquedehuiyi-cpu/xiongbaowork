@@ -83,6 +83,20 @@ const turnSchema = z.object({
   fromAgentId: z.string().min(1).optional(),
 });
 
+/**
+ * The ids a person may give their own message.
+ *
+ * Every id the server derives in a group contains ':' -- a Bot's reply `<message>:<bot>`, a hand-off
+ * `<reply>><peer>` (whose reply is one), a consent card `<reply>:consent:<server>`, a relayed answer
+ * `handoff:<hash>` -- and message ids are global and readable by every member. So a person's own id
+ * may contain neither ':' nor '>': otherwise a member who read another member's message id could
+ * send under that message's Bot reply, hand-off or consent card id first, and the real one would
+ * find its place taken (or its hand-off "already" queued) and never be written. The ids the app
+ * mints are UUIDs, which contain neither.
+ */
+const PERSON_MESSAGE_ID = /^[^:>]+$/;
+const PERSON_MESSAGE_ID_REFUSED = "A message id cannot contain ':' or '>'.";
+
 /** Not a member, not a group, or gone. One answer for all three, so membership cannot be probed. */
 export class GroupNotFoundError extends Error {
   constructor() {
@@ -105,12 +119,17 @@ export type GroupStore = {
     channelId: string,
     agentId: string,
   ): Promise<string>;
+  /** A person's message, and its turn. Refuses an id a person may not choose (PERSON_MESSAGE_ID). */
   submit(turn: GroupTurn): Promise<void>;
+  /**
+   * The Bot's reply row for this turn, or what became of it: `taken` when the id is held by a row
+   * that is not this turn's, so nothing about this Bot's answer is known or can be written.
+   */
   start(
     turn: GroupTurn,
     agentId: string,
     threadId: string | null,
-  ): Promise<"run" | "done" | "unknown">;
+  ): Promise<"run" | "done" | "unknown" | "taken">;
   /**
    * The outcome of this turn's own Bot row. The shared row gets the status and the details every
    * member may read; a `waiting` row's text and other details are held for its sender alone
@@ -232,7 +251,8 @@ async function holdBack(
 ) {
   await database
     .insert(groupMessagePrivate)
-    .values(row)
+    // Stamped with the sender, never left to the writer's frame: only the sender reads it.
+    .values({ ...row, tenantId: row.ownerUserId })
     .onConflictDoUpdate({
       target: groupMessagePrivate.messageId,
       set: { text: row.text, details: row.details, updatedAt: new Date() },
@@ -296,6 +316,8 @@ export function createGroupStore(
       return row.threadId;
     },
     async submit(turn) {
+      if (!PERSON_MESSAGE_ID.test(turn.messageId))
+        throw new GroupRefusedError(PERSON_MESSAGE_ID_REFUSED);
       await database.transaction(async (tx) => {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtext(${`group:${turn.messageId}`}))`,
@@ -362,9 +384,9 @@ export function createGroupStore(
         .limit(1);
       /*
        * The id is taken. Only this turn's own row says what happened to it: a row this frame cannot
-       * see, or one that is somebody else's, means another person occupied the id (an id is
-       * readable by every member, and a row names its writer), and nothing about this Bot's answer
-       * is known. Never "done": that would drop the reply without a word.
+       * see, or one that is somebody else's, means another person occupied the id (written before
+       * PERSON_MESSAGE_ID, or past the service), and nothing about this Bot's answer is known.
+       * Never "done": that would drop the reply without a word.
        */
       if (
         !row ||
@@ -372,9 +394,7 @@ export function createGroupStore(
         row.channelId !== turn.channelId ||
         row.agentId !== agentId
       )
-        throw new Error(
-          "This Bot's reply could not be recorded: its place in the conversation is taken by another row.",
-        );
+        return "taken";
       return row.status === "running" ? "unknown" : "done";
     },
     async finish(id, text, status, details = {}) {
@@ -408,9 +428,10 @@ export function createGroupStore(
     },
     async progress(id, text) {
       // Into the sender's private row, and only while the shared row is still running.
+      // Stamped with the sender, as `holdBack` stamps a held reply, whatever frame writes it.
       await database.execute(sql`
-        insert into ${groupMessagePrivate} (message_id, owner_user_id, text)
-        select ${groupMessages.id}, ${groupMessages.ownerUserId}, ${text}
+        insert into ${groupMessagePrivate} (message_id, owner_user_id, tenant_id, text)
+        select ${groupMessages.id}, ${groupMessages.ownerUserId}, ${groupMessages.ownerUserId}, ${text}
           from ${groupMessages}
          where ${groupMessages.id} = ${id} and ${groupMessages.status} = 'running'
         on conflict (message_id) do update set text = excluded.text, updated_at = now()`);
@@ -1074,7 +1095,15 @@ export function createGroupConversations(deps: {
     }
   }
 
-  async function runBot(turn: GroupTurn, agentId: string) {
+  /**
+   * One Bot's part of a turn. Returns why that Bot's answer could not be recorded at all, when its
+   * reply row's place is held by a row that is not this turn's: that Bot's failure, kept on the
+   * queued item, and not the turn's -- the other Bots of the turn, and the queue, go on.
+   */
+  async function runBot(
+    turn: GroupTurn,
+    agentId: string,
+  ): Promise<string | undefined> {
     const id = `${turn.messageId}:${agentId}`;
     const bots = await orderedRoster(turn.ownerUserId, turn.channelId);
     const bot = bots?.find((candidate) => candidate.id === agentId);
@@ -1083,6 +1112,19 @@ export function createGroupConversations(deps: {
       : null;
     const started = await deps.store.start(turn, agentId, threadId);
     if (started === "done") return;
+    if (started === "taken") {
+      const reason = `${agentId}: This Bot's reply could not be recorded: its place in the conversation is taken by another row.`;
+      console.error(
+        JSON.stringify({
+          type: "group-turn-reply-taken",
+          channelId: turn.channelId,
+          agentId,
+          rowId: id,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+      return reason;
+    }
     if (started === "unknown") {
       await deps.store.finish(
         id,
@@ -1414,6 +1456,38 @@ export function createGroupConversations(deps: {
       }
       try {
         const outcome = await run();
+        /*
+         * The resumed reply is a reply like any other: with other people in the group, it waits on
+         * the owner's permission before they read it, exactly as `runBot` holds one. Its words come
+         * from a run as the owner, which an approval in the middle does not make any less private.
+         */
+        const gate = await shareGate({
+          ownerUserId: row.ownerUserId,
+          channelId: row.channelId,
+          agentId,
+          threadId: row.threadId ?? "",
+          rowId: row.id,
+          runId: runIdFor(row.id),
+          text: outcome.replyText,
+        });
+        if (gate.status === "pending") {
+          // Held for the owner; the card stays where the share ask parked it (see `runBot`).
+          await deps.store.finish(row.id, "", "waiting", {
+            ...gate.details,
+            ...chainFrom(row.details),
+          });
+          return { replyText: "" };
+        }
+        if (gate.status === "denied") {
+          await deps.store.finish(row.id, gate.message, "failed");
+          await closeCard(
+            { ownerUserId: row.ownerUserId, channelId: row.channelId },
+            agentId,
+            runIdFor(row.id),
+            true,
+          );
+          return { replyText: "" };
+        }
         await deps.store.finish(row.id, outcome.replyText, "completed");
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },
@@ -1582,7 +1656,11 @@ export function createGroupConversations(deps: {
     async send(owner: string, channel: string, input: unknown) {
       const body = z
         .strictObject({
-          id: z.string().min(1).max(160),
+          id: z
+            .string()
+            .min(1)
+            .max(160)
+            .regex(PERSON_MESSAGE_ID, PERSON_MESSAGE_ID_REFUSED),
           text: z.string().trim().min(1).max(16000),
           agentId: z.string().min(1).nullable().optional(),
         })
@@ -1642,6 +1720,8 @@ export function createGroupConversations(deps: {
         async () => {
           try {
             await deps.busy?.(turn, true).catch(() => {});
+            // The Bots whose answer could not be recorded at all; the rest still answer.
+            const unrecorded: string[] = [];
             // One Bot after another, so each later Bot reads what the earlier ones said.
             for (const agentId of turn.agentIds) {
               if (
@@ -1653,12 +1733,18 @@ export function createGroupConversations(deps: {
                 }))
               )
                 throw new Error("The group turn lease was lost.");
-              await runBot(turn, agentId);
+              const failed = await runBot(turn, agentId);
+              if (failed) unrecorded.push(failed);
             }
+            /*
+             * Ended either way: a place another row holds stays held, so a retry could only fail the
+             * same way (and hold up the sweep behind it). The reason is kept on the item.
+             */
             await deps.queue.finish({
               kind: item.kind,
               key: item.key,
               owner: deps.owner,
+              ...(unrecorded.length ? { reason: unrecorded.join("\n") } : {}),
             });
           } catch (error) {
             /*

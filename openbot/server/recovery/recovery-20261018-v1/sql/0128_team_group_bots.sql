@@ -66,14 +66,23 @@ ALTER POLICY team_write_update ON public.channel_agents
  * Rows already written that break the rule are deleted first: they can only be squats (the person
  * they name can never read a row stamped with somebody else) or pre-P11 leftovers of the same shape,
  * and either one blocks the named person's real row.
+ *
+ * PRE-P11 INVITATIONS ARE DROPPED. Before P11, adding a person to a group wrote their membership and
+ * their mapping in the INVITER's frame, stamped with the inviter and naming the invitee: exactly
+ * this shape. Those rows are deleted here, so everybody who was added to somebody else's group
+ * before P11 is no longer in it (the creator's own rows stay, and the group stays the creator's
+ * private channel; P11 does not backfill old groups into `team`). How many rows each table lost is
+ * raised as a NOTICE, so the deployment's migration log says what was dropped.
  */
-DO $$ DECLARE t text; col text; BEGIN
+DO $$ DECLARE t text; col text; n bigint; BEGIN
   FOR t, col IN SELECT * FROM (VALUES ('intelligence_channel_mappings', 'user_id'),
                                       ('channel_memberships', 'user_id'),
                                       ('group_bot_threads', 'owner_user_id'),
                                       ('group_messages', 'owner_user_id')) AS v(t, col) LOOP
     EXECUTE format('DELETE FROM public.%1$I WHERE %2$I IS DISTINCT FROM tenant_id
                      AND EXISTS (SELECT 1 FROM public.users u WHERE u.id = %1$I.tenant_id)', t, col);
+    GET DIAGNOSTICS n = ROW_COUNT;
+    RAISE NOTICE '0128: deleted % row(s) from % stamped with one person and naming another (pre-P11 invitations and squats)', n, t;
   END LOOP;
 END $$;
 --> statement-breakpoint
@@ -125,16 +134,39 @@ CREATE POLICY tenant_isolation_delete ON public.group_message_private AS PERMISS
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.group_message_private TO openbot_app;
 --> statement-breakpoint
 /*
+ * Defence in depth, as on every table 0122 shares: a `team` frame is nobody (I3), so it does
+ * nothing here either, per command; and the stamp and the row's link to its message are frozen
+ * outside `platform` (the 0122 row guard). No code moves either: a hold is rewritten in place.
+ */
+CREATE POLICY team_frame_refused_select ON public.group_message_private AS RESTRICTIVE FOR SELECT TO public
+  USING (current_setting('app.tenant_id', true) IS DISTINCT FROM 'team');
+--> statement-breakpoint
+CREATE POLICY team_frame_refused_insert ON public.group_message_private AS RESTRICTIVE FOR INSERT TO public
+  WITH CHECK (current_setting('app.tenant_id', true) IS DISTINCT FROM 'team');
+--> statement-breakpoint
+CREATE POLICY team_frame_refused_update ON public.group_message_private AS RESTRICTIVE FOR UPDATE TO public
+  USING (current_setting('app.tenant_id', true) IS DISTINCT FROM 'team')
+  WITH CHECK (current_setting('app.tenant_id', true) IS DISTINCT FROM 'team');
+--> statement-breakpoint
+CREATE POLICY team_frame_refused_delete ON public.group_message_private AS RESTRICTIVE FOR DELETE TO public
+  USING (current_setting('app.tenant_id', true) IS DISTINCT FROM 'team');
+--> statement-breakpoint
+CREATE TRIGGER openbot_team_row_guard BEFORE UPDATE ON public.group_message_private
+  FOR EACH ROW EXECUTE FUNCTION public.openbot_team_row_guard('message_id', 'owner_user_id');
+--> statement-breakpoint
+/*
  * Rows written before this table existed keep their private part in the shared row: a waiting
  * reply's approval id, held text and continuation, a running reply's partial text. Moved here, so
  * the sender's decision still finds its row (`waitingFor` reads the approval id from this table) and
  * the shared row keeps only what every member may read (the same keys as SHARED_DETAILS in
- * src/channels/group.ts). The private row carries the sender's stamp: the row's own, or the sender
- * for a `team` row.
+ * src/channels/group.ts). The private row carries the sender's stamp: the row's own when that is a
+ * person, and otherwise (`team`, or a `system` or `platform` stamp the unframed fallback or a
+ * background write left) the sender, so the sender's own frame still reads their wait.
  */
 INSERT INTO public.group_message_private (message_id, owner_user_id, tenant_id, text, details)
 SELECT m.id, m.owner_user_id,
-       CASE WHEN m.tenant_id = 'team' THEN m.owner_user_id ELSE m.tenant_id END,
+       CASE WHEN EXISTS (SELECT 1 FROM public.users u WHERE u.id = m.tenant_id) THEN m.tenant_id
+            ELSE m.owner_user_id END,
        m.text,
        m.details - ARRAY['agentIds', 'answeredBy', 'consent', 'message', 'via']
   FROM public.group_messages m
@@ -181,6 +213,13 @@ ALTER POLICY team_write_delete ON public.channel_agents
  *    a group today; summaries skip team groups, Q11);
  *  - nobody changes anything else (`package_id`, `override`, `allowed_groups`, `created_at`, `id`,
  *    and any column added later).
+ *
+ * A LATER DATA MIGRATION that rewrites team group rows must run in the `platform` frame (start with
+ * `SELECT set_config('app.tenant_id', 'platform', true);`, end by resetting it to ''): this guard and
+ * the 0122 row guard admit only `platform` for such changes, and they refuse the unset ('') frame
+ * the migrator runs in, and `system`, whatever the role. Triggers are not row security, so a
+ * superuser or BYPASSRLS migrator is refused all the same. This file's own data statements above
+ * change no guarded column and need no frame.
  */
 CREATE FUNCTION public.openbot_team_channel_guard() RETURNS trigger
   LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
