@@ -10,6 +10,7 @@ import {
   deliveryChallenges,
   deliveryInbox,
   deliveryOutbox,
+  pushDevices,
 } from "../src/db/schema/delivery";
 import { workItems } from "../src/db/schema/work";
 import { createDeliveryStore } from "../src/delivery/store";
@@ -392,17 +393,12 @@ test("a push token registered by one person cannot be moved to another person's 
 });
 
 /*
- * KNOWN PRODUCT GAP, kept as an expected failure (not skipped): after the owner signs out on the
- * phone, the next person to sign in there should take the token. Production runs that
- * registration in the new person's own frame, and there the ON CONFLICT (token) update of a row
- * stamped with the previous owner's tenant is refused by row security ("new row violates
- * row-level security policy" on push_devices). Asserting it from the previous owner's frame
- * would pass only because of a frame no production path opens, and would leave the row with the
- * new person's owner_user_id but the old tenant_id, invisible to the new person. The fix belongs
- * in src (registerDevice needs an explicit, audited cross-tenant handover); once it lands this
- * test starts passing, `test.failing` then reports it, and it must become a plain `test`.
+ * After the owner signs out on the phone, the next person to sign in there takes its push token.
+ * Both people act in their own frames, as production does: the previous owner's row is stamped with
+ * their tenant, so registerDevice retires that disabled row in the platform frame and writes the new
+ * person's row in their own frame, stamped with their tenant.
  */
-test.failing("after the owner signs out on a phone, the next person to sign in there takes its push token", async () => {
+test("after the owner signs out on a phone, the next person to sign in there takes its push token", async () => {
   const token = `ExponentPushToken[${prefix.replace(/[^A-Za-z0-9]/g, "")}handover]`;
   const projectId = randomUUID();
   const ownersDevice = randomUUID();
@@ -430,6 +426,29 @@ test.failing("after the owner signs out on a phone, the next person to sign in t
     expect.objectContaining({ id: next, token }),
   ]);
   expect(await asOwner(() => store.devices(owner))).toEqual([]);
+  // The moved row is the new person's in the database too, not a row of the old tenant's.
+  const rows = await asPlatform(() =>
+    db
+      .select({
+        tenantId: pushDevices.tenantId,
+        ownerUserId: pushDevices.ownerUserId,
+      })
+      .from(pushDevices)
+      .where(eq(pushDevices.token, token)),
+  );
+  expect(rows).toEqual([{ tenantId: stranger, ownerUserId: stranger }]);
+  // And while the new person is signed in, the previous owner cannot take it back.
+  await expect(
+    asOwner(() =>
+      store.registerDevice({
+        id: randomUUID(),
+        ownerUserId: owner,
+        token,
+        projectId,
+        platform: "ios",
+      }),
+    ),
+  ).rejects.toThrow("already registered to another account");
 });
 
 /*
