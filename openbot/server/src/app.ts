@@ -1136,7 +1136,13 @@ export function createApp(
     },
   );
 
-  app.get("/api/admin/credentials", requireUser, async (context) => {
+  /*
+   * The credentials screen holds the admin capability (G01-E P10): an MCP server's own token is sealed
+   * to `team` (Q3), which only an administrator holding it may write, rotate, revoke or list. Model
+   * and connector keys stay in the administrator's own frame, as they were.
+   */
+  const CREDENTIALS = "/api/admin/credentials";
+  app.get(CREDENTIALS, requireUser, adminCapability, async (context) => {
     const denied = requireAdmin(context);
     if (denied) {
       return denied;
@@ -1150,7 +1156,7 @@ export function createApp(
 
     return context.json({ credentials: await credentialService.list() });
   });
-  app.post("/api/admin/credentials", requireUser, async (context) => {
+  app.post(CREDENTIALS, requireUser, adminCapability, async (context) => {
     const denied = requireAdmin(context);
     if (denied) {
       return denied;
@@ -1168,14 +1174,23 @@ export function createApp(
       return context.json({ error: "Credential input is invalid." }, 400);
     }
 
-    return context.json(
-      { credential: await credentialService.create(input) },
-      201,
-    );
+    try {
+      return context.json(
+        { credential: await credentialService.create(input) },
+        201,
+      );
+    } catch (error) {
+      // A team server token without the capability (a role removed since sign-in).
+      if (error instanceof CredentialRefusedError) {
+        return context.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
   });
   app.post(
     "/api/admin/credentials/:credentialId/rotate",
     requireUser,
+    adminCapability,
     async (context) => {
       const denied = requireAdmin(context);
       if (denied) {
@@ -1212,6 +1227,7 @@ export function createApp(
   app.post(
     "/api/admin/credentials/:credentialId/revoke",
     requireUser,
+    adminCapability,
     async (context) => {
       const denied = requireAdmin(context);
       if (denied) {
@@ -1707,8 +1723,12 @@ export function createApp(
           appUrl: config.appUrl,
         },
         composio,
-        // A team Bot's grants are `team`; an administrator writes them with the capability (G01-E).
-        adminScope?.adminCapability,
+        /*
+         * A team Bot's grants are `team`, and an MCP server, its tools and its secret are `team` too:
+         * an administrator writes them with the capability, and acts on somebody else's Bot in its
+         * owner's frame (G01-E P8b, P10).
+         */
+        adminScope,
       ),
     );
   }

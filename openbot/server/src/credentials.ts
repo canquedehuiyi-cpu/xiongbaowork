@@ -488,13 +488,24 @@ const TEAM_CREDENTIAL_KINDS = [
 ] as const satisfies readonly CredentialKind[];
 
 /**
+ * Whether a credential of this kind is a shared MCP server's secret, which is always sealed to
+ * `team` (G01-E P10, Q3): the server it belongs to is `team`, and a member reaches it only through
+ * the `openbot_team_server_secret` broker, which returns `team` rows alone.
+ */
+export function isTeamServerSecretKind(kind: CredentialKind): boolean {
+  return (TEAM_CREDENTIAL_KINDS as readonly CredentialKind[]).includes(kind);
+}
+
+/**
  * Which tenant a credential write is sealed to and filtered by (G01-E).
  *
  * Without `target` it is the caller's own frame, as it always was. With `target: "team"` it is the
  * shared tenant a team MCP server's secret lives in, and that is allowed only to an administrator
- * holding the admin capability in this very frame (see `auth/admin-scope.ts`) and only for a server
- * secret's kind: a person's own token or an agent key is never sealed where anybody else's frame
- * could reach it (I8). Anything else is refused before a row is read or written.
+ * holding the admin capability in this very frame (see `auth/admin-scope.ts`), or to `platform`
+ * (P10: an operator path or the deployment's own background work, which row security already lets
+ * write any stamp), and only for a server secret's kind: a person's own token or an agent key is
+ * never sealed where anybody else's frame could reach it (I8). Anything else is refused before a row
+ * is read or written.
  */
 function credentialTenant(
   kind: CredentialKind | undefined,
@@ -505,16 +516,13 @@ function credentialTenant(
   if (target !== TEAM_TENANT) {
     throw new CredentialRefusedError("Unknown credential target", 403);
   }
-  if (capabilityFor(tenant) !== "admin") {
+  if (tenant !== "platform" && capabilityFor(tenant) !== "admin") {
     throw new CredentialRefusedError(
       "Only an administrator may write a shared credential",
       403,
     );
   }
-  if (
-    kind !== undefined &&
-    !(TEAM_CREDENTIAL_KINDS as readonly CredentialKind[]).includes(kind)
-  ) {
+  if (kind !== undefined && !isTeamServerSecretKind(kind)) {
     throw new CredentialRefusedError(
       "Only an MCP server's credential may be shared",
       403,
@@ -856,6 +864,15 @@ export type CredentialAdminService = CredentialStatusReader & {
   }>;
 };
 
+/**
+ * Where an administrator's credential is sealed: a shared MCP server's own token goes to `team`
+ * (G01-E P10, Q3), so the team server it is attached to can hand it to a member through the broker.
+ * Model and connector keys stay in the administrator's own frame, as they were (Q3).
+ */
+function adminTarget(kind: CredentialKind): CredentialTarget | undefined {
+  return isTeamServerSecretKind(kind) ? TEAM_TENANT : undefined;
+}
+
 async function persistCredential(
   service: CredentialService,
   input: CredentialInput,
@@ -865,6 +882,7 @@ async function persistCredential(
     provider: input.provider,
     keyId: input.keyId,
     metadata: input.metadata,
+    target: adminTarget(input.kind),
     seal: (binding) =>
       sealCredential(service.encryptionKey, binding, input.plaintext),
   });
@@ -901,6 +919,7 @@ export async function createCredential(
     kind: input.kind,
     provider: input.provider,
     keyId: input.keyId,
+    target: adminTarget(input.kind),
   });
   if (existing) {
     return rotateCredential(service, {
@@ -943,6 +962,7 @@ export async function rotateCredential(
       provider: input.provider,
       keyId: input.keyId,
       metadata: input.metadata,
+      target: adminTarget(input.kind),
       seal: (binding) =>
         sealCredential(service.encryptionKey, binding, input.plaintext),
     });

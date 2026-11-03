@@ -1,0 +1,756 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import type { MiddlewareHandler } from "hono";
+import { agentAuthHeaders } from "../src/agents/auth-header";
+import { createAuditStore } from "../src/audit";
+import type { AppVariables } from "../src/auth/guards";
+import { createAdminScope } from "../src/auth/admin-scope";
+import { createRoleRepository } from "../src/auth/guards";
+import {
+  CredentialRefusedError,
+  createCredentialAdminService,
+  createCredentialStore,
+  openCredential,
+} from "../src/credentials";
+import { createDatabase } from "../src/db/client";
+import {
+  agentProfiles,
+  agents,
+  auditEvents,
+  credentials,
+  mcpServers,
+  mcpTools,
+  pluginGrants,
+  users,
+} from "../src/db/schema";
+import { createPluginRoutes } from "../src/plugins/routes";
+import {
+  CustomServerRefusedError,
+  createPluginStore,
+} from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
+
+/**
+ * G01-E P10: an administrator's MCP server, its tools and its secret are the team's.
+ *
+ * An administrator holding the capability adds a server and its token, both stamped `team`; a member's
+ * Bot is granted the tool and calls it from the member's own frame, and the token reaches the call
+ * through the `openbot_team_server_secret` broker, never by id: the member's frame cannot select the
+ * credential row, and `readSecret(id)` answers null there. A second administrator rotates the token
+ * twice (R15). A member, or an administrator without the capability, cannot write a team server or a
+ * team secret; the `system` frame sees no team server; a team-sealed envelope fails its tag once its
+ * row is re-stamped; and `agentAuthHeaders` never sends a team server's token.
+ *
+ * Carried forward from P8b: a grant row stamped with anybody but the Bot's own stamp can no longer be
+ * written outside `platform` (0127 `grant_stamp_insert`), so a stranger cannot squat a Bot's grant key;
+ * 0127 settles the rows already in the way; and an administrator's grant on somebody else's Bot runs in
+ * that owner's frame (`adminActAsOwner`), stamped and trailed as the owner's.
+ *
+ * No vendor is reached: `callVendor` records what a call would have gone out with, and `fetch` is
+ * stubbed for the add path's tool refresh.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+const suite = `pma-${randomUUID().slice(0, 8)}`;
+const adminA = `${suite}-admin-a`;
+const adminB = `${suite}-admin-b`;
+const member = `${suite}-member`;
+const stranger = `${suite}-stranger`;
+const owner = `${suite}-owner`;
+const people = [member, stranger, owner];
+
+const serverId = `${suite}-server`;
+const toolName = "lookup";
+const toolRef = `${serverId}/${toolName}`;
+/** The member's private Bot, which the member calls the tool through. */
+const memberBot = `${suite}-member-bot`;
+/** The owner's public team Bot and private Bot, for the grant-stamp rules. */
+const teamBot = `${suite}-team-bot`;
+const privateBot = `${suite}-private-bot`;
+const bots = [memberBot, teamBot, privateBot];
+
+const auditStore = createAuditStore(database);
+const vault = createCredentialStore(database);
+const credentialAdmin = createCredentialAdminService(
+  ENCRYPTION_KEY,
+  vault,
+  auditStore,
+);
+/** Every token a call was about to go out with. */
+const sent: (string | undefined)[] = [];
+const store = createPluginStore({
+  database,
+  auditStore,
+  credentials: vault,
+  encryptionKey: ENCRYPTION_KEY,
+  policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+  callVendor: async (connection) => {
+    sent.push(connection.token);
+    return { text: "[vendor not reached in tests]", isError: false };
+  },
+});
+
+const adminRequest = createAdminRequest(database);
+const adminScope = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
+const asPlatform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
+const as = <T>(person: string, work: () => Promise<T>) =>
+  runAsTenant(person, work);
+
+let releaseAdmins: (() => Promise<void>) | undefined;
+const realFetch = globalThis.fetch;
+/** The token the server holds at each stage, and its plaintext. */
+const tokens: { id: string; plaintext: string }[] = [];
+
+/** The message of a refused statement, wherever the query builder put the driver's error. */
+async function refusal(work: () => Promise<unknown>): Promise<string> {
+  try {
+    await work();
+  } catch (error) {
+    const messages: string[] = [];
+    for (
+      let current: unknown = error;
+      current instanceof Error;
+      current = (current as Error & { cause?: unknown }).cause
+    )
+      messages.push(current.message);
+    return messages.join(" / ");
+  }
+  return "not refused";
+}
+
+/** The plugin routes as a signed-in person, the way `createRequireUser` frames a request. */
+function routesAs(actor: { id: string; role: "admin" | "user" }) {
+  const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", { ...actor, email: `${actor.id}@example.test` });
+    await runAsTenant(actor.id, () => next());
+  };
+  return createPluginRoutes(
+    store,
+    requireUser,
+    async () => true,
+    undefined,
+    undefined,
+    adminScope,
+  );
+}
+
+const grantRows = (agentId: string) =>
+  asPlatform(() =>
+    database
+      .select({
+        ref: pluginGrants.ref,
+        tenantId: pluginGrants.tenantId,
+      })
+      .from(pluginGrants)
+      .where(eq(pluginGrants.agentId, agentId))
+      .orderBy(pluginGrants.ref),
+  );
+
+beforeAll(async () => {
+  globalThis.fetch = (async () =>
+    new Response("{}", { status: 500 })) as unknown as typeof fetch;
+  releaseAdmins = await seedAdministrator(database, adminA, adminB);
+  await asPlatform(async () => {
+    await database
+      .insert(users)
+      .values(people.map((id) => ({ id, email: `${id}@example.test` })));
+    // The owner's public team Bot and private Bot; the member's private Bot.
+    await database.insert(agents).values([
+      {
+        id: teamBot,
+        tenantId: "team",
+        name: "Ledger Desk",
+        type: "built_in",
+        configuration: {},
+      },
+      {
+        id: privateBot,
+        tenantId: owner,
+        name: "Ledger Desk",
+        type: "built_in",
+        configuration: {},
+      },
+      {
+        id: memberBot,
+        tenantId: member,
+        name: "Ledger Desk",
+        type: "built_in",
+        configuration: {},
+      },
+    ]);
+    await database.insert(agentProfiles).values([
+      {
+        agentId: teamBot,
+        tenantId: "team",
+        ownerUserId: owner,
+        title: "Finance",
+        roleDescription: "Answers ledger questions.",
+        avatarSeed: "seed",
+        visibility: "public",
+      },
+      {
+        agentId: privateBot,
+        tenantId: owner,
+        ownerUserId: owner,
+        title: "Finance",
+        roleDescription: "Answers ledger questions.",
+        avatarSeed: "seed",
+        visibility: "private",
+      },
+      {
+        agentId: memberBot,
+        tenantId: member,
+        ownerUserId: member,
+        title: "Finance",
+        roleDescription: "Answers ledger questions.",
+        avatarSeed: "seed",
+        visibility: "private",
+      },
+    ]);
+  });
+});
+
+afterAll(async () => {
+  globalThis.fetch = realFetch;
+  await asPlatform(async () => {
+    await database.delete(agents).where(inArray(agents.id, bots));
+    await database.delete(mcpTools).where(eq(mcpTools.serverId, serverId));
+    await database.delete(mcpServers).where(eq(mcpServers.id, serverId));
+    await database
+      .delete(credentials)
+      .where(
+        and(
+          eq(credentials.provider, serverId),
+          inArray(sql`${credentials.kind}::text`, ["mcp", "mcp_oauth_client"]),
+        ),
+      );
+    await database.delete(users).where(inArray(users.id, people));
+  });
+  await releaseAdmins?.();
+});
+
+describe("an administrator's server is the team's, and its secret reaches a member only through the broker", () => {
+  test("administrator A adds the server and its token, both stamped team", async () => {
+    const plaintext = `sk-${suite}-1`;
+    const created = await adminRequest(adminA, () =>
+      credentialAdmin.create({
+        kind: "mcp",
+        provider: serverId,
+        keyId: `mcp-${serverId}`,
+        metadata: {},
+        plaintext,
+        actorUserId: adminA,
+      }),
+    );
+    tokens.push({ id: created.id, plaintext });
+
+    await adminRequest(adminA, () =>
+      store.addCustomServer({
+        id: serverId,
+        title: "Ledger API",
+        url: "https://ledger.vendor.example/mcp",
+        credentialId: created.id,
+        by: `${adminA}@example.test`,
+      }),
+    );
+    // The add refreshed against a vendor that does not exist; the tool row is written the way a
+    // successful refresh writes it, as the administrator.
+    await adminRequest(adminA, () =>
+      database.insert(mcpTools).values({
+        serverId,
+        tenantId: "team",
+        name: toolName,
+        description: "Look a ledger up.",
+      }),
+    );
+
+    const [server] = await asPlatform(() =>
+      database
+        .select({
+          tenantId: mcpServers.tenantId,
+          credentialId: mcpServers.credentialId,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, serverId)),
+    );
+    expect(server).toEqual({ tenantId: "team", credentialId: created.id });
+    const [secret] = await asPlatform(() =>
+      database
+        .select({ tenantId: credentials.tenantId })
+        .from(credentials)
+        .where(eq(credentials.id, created.id)),
+    );
+    expect(secret?.tenantId).toBe("team");
+  });
+
+  test("an administrator grants the tool on the member's private Bot in the member's frame", async () => {
+    // Through the route, which mounts `adminCapability` itself: nothing here hands it the capability.
+    const response = await routesAs({ id: adminA, role: "admin" }).request(
+      "/grants",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "mcp", ref: toolRef, agentId: memberBot }),
+      },
+    );
+    expect(response.status).toBe(200);
+    // Stamped with the Bot's owner, which is what the member's runtime reads (I6), not the admin.
+    expect(await grantRows(memberBot)).toEqual([
+      { ref: toolRef, tenantId: member },
+    ]);
+    // And the trail row is the owner's, naming the administrator who acted.
+    const trail = await asPlatform(() =>
+      database
+        .select({
+          tenantId: auditEvents.tenantId,
+          actor: sql<string>`${auditEvents.payload} ->> 'actor'`,
+        })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.targetId, toolRef),
+            sql`${auditEvents.payload} ->> 'bot' = ${memberBot}`,
+          ),
+        ),
+    );
+    expect(trail).toEqual([
+      { tenantId: member, actor: `${adminA}@example.test` },
+    ]);
+  });
+
+  test("the member's runtime lists the tool and calls it with the token, read through the broker", async () => {
+    const offered = await as(member, () => store.listForAgent(memberBot));
+    expect(offered.tools.map((tool) => tool.ref)).toEqual([toolRef]);
+
+    sent.length = 0;
+    const answer = await as(member, () =>
+      store.callTool({
+        ref: toolRef,
+        args: {},
+        botId: memberBot,
+        actorId: member,
+      }),
+    );
+    expect(answer.isError).toBe(false);
+    expect(sent).toEqual([tokens[0]?.plaintext]);
+  });
+
+  test("the member's frame cannot select the credential, and readSecret answers null there", async () => {
+    const id = tokens[0]?.id ?? "";
+    expect(
+      await as(member, () =>
+        database
+          .select({ id: credentials.id })
+          .from(credentials)
+          .where(eq(credentials.id, id)),
+      ),
+    ).toEqual([]);
+    expect(await as(member, () => vault.readSecret(id))).toBeNull();
+    // The broker hands over exactly the one secret the named team server points at.
+    const brokered = Array.from(
+      (await as(member, () =>
+        database.execute(
+          sql`select id from public.openbot_team_server_secret(${serverId})`,
+        ),
+      )) as unknown as ArrayLike<{ id: string }>,
+    );
+    expect(brokered.map((row) => row.id)).toEqual([id]);
+  });
+
+  test("administrator B rotates the token twice, and the server spends the newest", async () => {
+    for (const stage of [2, 3]) {
+      const previous = tokens.at(-1);
+      const plaintext = `sk-${suite}-${stage}`;
+      const rotated = await adminRequest(adminB, () =>
+        credentialAdmin.rotate({
+          kind: "mcp",
+          provider: serverId,
+          keyId: `mcp-${serverId}`,
+          metadata: {},
+          plaintext,
+          actorUserId: adminB,
+          previousCredentialId: previous?.id ?? "",
+        }),
+      );
+      tokens.push({ id: rotated.id, plaintext });
+    }
+    const rows = await asPlatform(() =>
+      database
+        .select({
+          id: credentials.id,
+          tenantId: credentials.tenantId,
+          revokedAt: credentials.revokedAt,
+        })
+        .from(credentials)
+        .where(
+          and(
+            eq(credentials.provider, serverId),
+            eq(credentials.keyId, `mcp-${serverId}`),
+          ),
+        ),
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.tenantId === "team")).toBeTrue();
+    expect(
+      rows.filter((row) => row.revokedAt === null).map((row) => row.id),
+    ).toEqual([tokens[2]?.id]);
+
+    // Re-attached by re-adding the server with the new token, then spent by the member.
+    await adminRequest(adminB, () =>
+      store.addCustomServer({
+        id: serverId,
+        title: "Ledger API",
+        url: "https://ledger.vendor.example/mcp",
+        credentialId: tokens[2]?.id,
+        by: `${adminB}@example.test`,
+      }),
+    );
+    sent.length = 0;
+    await as(member, () =>
+      store.callTool({
+        ref: toolRef,
+        args: {},
+        botId: memberBot,
+        actorId: member,
+      }),
+    );
+    expect(sent).toEqual([tokens[2]?.plaintext]);
+  });
+});
+
+describe("only an administrator holding the capability writes a team server or its secret", () => {
+  test("a member's insert, or an administrator's without the capability, is refused by row security", async () => {
+    for (const frame of [member, adminA]) {
+      expect(
+        await refusal(() =>
+          as(frame, () =>
+            database.insert(credentials).values({
+              tenantId: "team",
+              kind: "mcp",
+              provider: `${serverId}-forged`,
+              keyId: `${frame}-forged`,
+              encryptedValue: "{}",
+              metadata: {},
+            }),
+          ),
+        ),
+      ).toContain("row-level security");
+      expect(
+        await refusal(() =>
+          as(frame, () =>
+            database.insert(mcpServers).values({
+              id: `${serverId}-forged-${frame}`,
+              tenantId: "team",
+              title: "Forged",
+              vendor: "attacker.example",
+              url: "https://attacker.example/mcp",
+              provenance: "custom",
+            }),
+          ),
+        ),
+      ).toContain("row-level security");
+    }
+    // And the store says so before it writes anything, rather than meeting row security.
+    await expect(
+      as(member, () =>
+        store.addCustomServer({
+          id: `${serverId}-member`,
+          title: "Mine",
+          url: "https://mine.vendor.example/mcp",
+          by: `${member}@example.test`,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(CustomServerRefusedError);
+    // A team target for the vault is the capability's, too.
+    await expect(
+      as(adminA, () =>
+        vault.create({
+          kind: "mcp",
+          provider: `${serverId}-vault`,
+          keyId: `${serverId}-vault`,
+          metadata: {},
+          encryptedValue: "{}",
+          target: "team",
+        }),
+      ),
+    ).rejects.toBeInstanceOf(CredentialRefusedError);
+    expect(
+      await asPlatform(() =>
+        database
+          .select({ id: mcpServers.id })
+          .from(mcpServers)
+          .where(sql`${mcpServers.id} like ${`${serverId}-%`}`),
+      ),
+    ).toEqual([]);
+  });
+
+  test("the system frame sees no team server, and the broker answers nobody but a person", async () => {
+    expect(
+      await runAsTenant("system", () =>
+        database
+          .select({ id: mcpServers.id })
+          .from(mcpServers)
+          .where(eq(mcpServers.id, serverId)),
+      ),
+    ).toEqual([]);
+    for (const frame of ["system", "platform"]) {
+      const rows = Array.from(
+        (await runAsTenant(frame, () =>
+          database.execute(
+            sql`select id from public.openbot_team_server_secret(${serverId})`,
+          ),
+        )) as unknown as ArrayLike<{ id: string }>,
+      );
+      expect(rows).toEqual([]);
+    }
+  });
+
+  test("a team-sealed credential fails the AAD check once its row is re-stamped", async () => {
+    const id = tokens.at(-1)?.id ?? "";
+    const read = () =>
+      asPlatform(async () => {
+        const [row] = await database
+          .select({
+            id: credentials.id,
+            tenantId: credentials.tenantId,
+            kind: credentials.kind,
+            encryptedValue: credentials.encryptedValue,
+          })
+          .from(credentials)
+          .where(eq(credentials.id, id));
+        if (!row) throw new Error("the credential is gone");
+        return row;
+      });
+    expect(await openCredential(ENCRYPTION_KEY, await read())).toBe(
+      tokens.at(-1)?.plaintext,
+    );
+    await asPlatform(() =>
+      database
+        .update(credentials)
+        .set({ tenantId: adminA })
+        .where(eq(credentials.id, id)),
+    );
+    try {
+      await expect(
+        openCredential(ENCRYPTION_KEY, await read()),
+      ).rejects.toThrow();
+    } finally {
+      await asPlatform(() =>
+        database
+          .update(credentials)
+          .set({ tenantId: "team" })
+          .where(eq(credentials.id, id)),
+      );
+    }
+  });
+
+  test("agentAuthHeaders never sends a team server's token, even where it can be read", async () => {
+    const id = tokens.at(-1)?.id ?? "";
+    // The administrator holding the capability can read the row, so the refusal is the kind's.
+    expect(
+      await adminRequest(adminA, () => vault.readSecret(id)),
+    ).not.toBeNull();
+    expect(
+      await adminRequest(adminA, () =>
+        agentAuthHeaders({
+          reader: vault,
+          encryptionKey: ENCRYPTION_KEY,
+          auth: { header: "Authorization", credentialId: id },
+        }),
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("a grant carries its Bot's own stamp, so nobody can squat a Bot's grant key", () => {
+  const squatRef = `${serverId}/squatted`;
+
+  test("a stranger's own-tenant grant naming a team Bot or somebody's private Bot is refused", async () => {
+    for (const agentId of [teamBot, privateBot]) {
+      expect(
+        await refusal(() =>
+          as(stranger, () =>
+            database.insert(pluginGrants).values({
+              kind: "mcp",
+              ref: squatRef,
+              agentId,
+              grantedBy: stranger,
+            }),
+          ),
+        ),
+      ).toContain("row-level security");
+    }
+    expect(await grantRows(teamBot)).toEqual([]);
+    expect(await grantRows(privateBot)).toEqual([]);
+
+    // So the key is free: the owner's own grants of the same ref land, each with its Bot's stamp.
+    await as(owner, () =>
+      store.grant("mcp", squatRef, teamBot, `${owner}@example.test`),
+    );
+    await as(owner, () =>
+      store.grant("mcp", squatRef, privateBot, `${owner}@example.test`),
+    );
+    expect(await grantRows(teamBot)).toEqual([
+      { ref: squatRef, tenantId: "team" },
+    ]);
+    expect(await grantRows(privateBot)).toEqual([
+      { ref: squatRef, tenantId: owner },
+    ]);
+    // An administrator's grant on the owner's team Bot runs as the owner and is `team` too.
+    const response = await routesAs({ id: adminA, role: "admin" }).request(
+      "/grants",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "mcp", ref: toolRef, agentId: teamBot }),
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(
+      (await grantRows(teamBot)).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
+    ).toEqual(
+      [
+        { ref: squatRef, tenantId: "team" },
+        { ref: toolRef, tenantId: "team" },
+      ].sort((a, b) => (a.ref < b.ref ? -1 : 1)),
+    );
+    await asPlatform(() =>
+      database
+        .delete(pluginGrants)
+        .where(inArray(pluginGrants.agentId, [teamBot, privateBot])),
+    );
+  });
+
+  test("an administrator without the capability cannot reach somebody else's Bot through the route", async () => {
+    // Not an administrator in `user_roles`, so `adminCapability` grants nothing: the request stays in
+    // their own frame, which cannot see the member's Bot.
+    const response = await (async () =>
+      routesAs({ id: stranger, role: "admin" }).request("/grants", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "mcp",
+          ref: `${serverId}/other`,
+          agentId: memberBot,
+        }),
+      }))();
+    expect(response.status).toBe(403);
+    expect(await grantRows(memberBot)).toEqual([
+      { ref: toolRef, tenantId: member },
+    ]);
+  });
+});
+
+/**
+ * 0127's data statements, run as this NOBYPASSRLS application role from the empty frame a migrator
+ * arrives with, inside a transaction that is rolled back (the same shape as the 0125 and 0126 cases
+ * in team-bots-migration.integration.test.ts). The role check, the policies and the definer functions
+ * belong to the migrator and are already in place here.
+ */
+test("0127 moves servers and tools to team, and settles every grant whose stamp is not its Bot's", async () => {
+  const migration = readFileSync(
+    join(
+      import.meta.dir,
+      "..",
+      "recovery",
+      "recovery-20261018-v1",
+      "sql",
+      "0127_team_connectors.sql",
+    ),
+    "utf8",
+  );
+  const statements = migration
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.replace(/\/\*[\s\S]*?\*\//g, "").trim());
+  const data = statements.filter((statement) =>
+    /^(SELECT set_config|UPDATE|DELETE)\b/.test(statement),
+  );
+  // The re-stamps and deletes, framed: set, two moves, the grant re-stamp, the grant delete, reset.
+  expect(data).toHaveLength(6);
+
+  const legacyServer = `${suite}-legacy`;
+  const catalogueServer = `${suite}-catalogue`;
+  const systemBot = `${suite}-system-bot`;
+  const migrationBots = [
+    `${suite}-mig-team`,
+    `${suite}-mig-private`,
+    systemBot,
+  ];
+  const [migTeam, migPrivate] = migrationBots;
+  const rollback = new Error("rollback the migration fixture");
+  type Row = Record<string, unknown>;
+  let seen:
+    | { frame: unknown; servers: Row[]; tools: Row[]; grants: Row[] }
+    | undefined;
+  await expect(
+    database.$client.begin(async (tx) => {
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      // A server an administrator added before P10, stamped with them, and the catalogue's own.
+      await tx`insert into mcp_servers (tenant_id, id, title, vendor, url, provenance) values (${adminA}, ${legacyServer}, 'Legacy', 'vendor.example', 'https://legacy.vendor.example/mcp', 'custom'), ('system', ${catalogueServer}, 'Catalogue', 'vendor.example', 'https://catalogue.vendor.example/mcp', 'custom')`;
+      await tx`insert into mcp_tools (tenant_id, server_id, name, description) values (${adminA}, ${legacyServer}, 'one', ''), ('system', ${catalogueServer}, 'two', '')`;
+      // A team Bot, a private Bot and a catalogue Bot, each with grants of every stamp.
+      await tx`insert into agents (tenant_id, id, name, type, configuration) values ('team', ${migTeam}, 'Desk', 'built_in', '{}'::jsonb), (${owner}, ${migPrivate}, 'Desk', 'built_in', '{}'::jsonb), ('system', ${systemBot}, 'Desk', 'built_in', '{}'::jsonb)`;
+      await tx`insert into agent_profiles (tenant_id, agent_id, owner_user_id, title, role_description, avatar_seed, visibility) values ('team', ${migTeam}, ${owner}, 'Finance', 'Answers.', 'seed', 'public'), (${owner}, ${migPrivate}, ${owner}, 'Finance', 'Answers.', 'seed', 'private')`;
+      await tx`insert into plugin_grants (tenant_id, kind, ref, agent_id, granted_by) values
+        ('team', 'mcp', 'own/tool', ${migTeam}, ${owner}),
+        (${stranger}, 'mcp', 'stranger/tool', ${migTeam}, ${stranger}),
+        (${adminA}, 'mcp', 'admin/tool', ${migTeam}, ${adminA}),
+        (${owner}, 'mcp', 'own/tool', ${migPrivate}, ${owner}),
+        (${stranger}, 'mcp', 'stranger/tool', ${migPrivate}, ${stranger}),
+        (${adminA}, 'mcp', 'admin/tool', ${migPrivate}, ${adminA}),
+        (${stranger}, 'mcp', 'stranger/tool', ${systemBot}, ${stranger})`;
+
+      await tx`select set_config('app.tenant_id', '', true)`;
+      for (const statement of data) await tx.unsafe(statement);
+      const [frame] =
+        await tx`select current_setting('app.tenant_id', true) as tenant`;
+
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      const read = async (query: Promise<unknown>) =>
+        Array.from((await query) as ArrayLike<Row>);
+      seen = {
+        frame: (frame as Row).tenant,
+        servers: await read(
+          tx`select id, tenant_id from mcp_servers where id in ${tx([legacyServer, catalogueServer])} order by id`,
+        ),
+        tools: await read(
+          tx`select name, tenant_id from mcp_tools where server_id in ${tx([legacyServer, catalogueServer])} order by name`,
+        ),
+        grants: await read(
+          tx`select agent_id, ref, tenant_id from plugin_grants where agent_id in ${tx(migrationBots)} order by agent_id, ref`,
+        ),
+      };
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
+
+  expect(seen?.frame).toBe("");
+  expect(seen?.servers).toEqual([
+    { id: catalogueServer, tenant_id: "system" },
+    { id: legacyServer, tenant_id: "team" },
+  ]);
+  expect(seen?.tools).toEqual([
+    { name: "one", tenant_id: "team" },
+    { name: "two", tenant_id: "system" },
+  ]);
+  // A stranger's grant is gone from the team Bot and the private Bot; an administrator's takes the
+  // Bot's own stamp; a catalogue Bot's grants are not judged.
+  expect(seen?.grants).toEqual([
+    { agent_id: migPrivate, ref: "admin/tool", tenant_id: owner },
+    { agent_id: migPrivate, ref: "own/tool", tenant_id: owner },
+    { agent_id: migTeam, ref: "admin/tool", tenant_id: "team" },
+    { agent_id: migTeam, ref: "own/tool", tenant_id: "team" },
+    { agent_id: systemBot, ref: "stranger/tool", tenant_id: stranger },
+  ]);
+});

@@ -244,6 +244,7 @@ tests/plugin-share-target.test.ts
 tests/plugin-store.integration.test.ts
 tests/plugin-tenant-catalogue-row.test.ts
 tests/plugin-user-credential.integration.test.ts
+tests/plugins-mcp-admin.integration.test.ts
 tests/policy-dry-run.test.ts
 tests/policy-durability.integration.test.ts
 tests/policy-fanout.integration.test.ts
