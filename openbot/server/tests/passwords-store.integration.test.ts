@@ -7,6 +7,7 @@ import { users } from "../src/db/schema/core";
 import { savedLogins, signInRequests } from "../src/db/schema/passwords";
 import { createSignInService } from "../src/passwords/service";
 import { createPasswordStore } from "../src/passwords/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -42,64 +43,91 @@ const service = createSignInService({
   },
 });
 const actor = { id: owner, userId: owner };
+/** The owner's own requests and logins are filed and read in the owner's tenant, as the routes run them. */
+const asOwner = <T>(work: () => T): T => runAsTenant(owner, work);
+/**
+ * The identity rows, and every check that must see across tenants: a probe for the stranger or a
+ * read of both people's rows is asked where every row is visible, so an empty answer is the store's
+ * own owner check and not row-level security hiding the row.
+ */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
 
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: stranger, email: `${stranger}@example.test` },
-  ]);
+  await asPlatform(() =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: stranger, email: `${stranger}@example.test` },
+    ]),
+  );
 });
 afterAll(async () => {
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+  await asPlatform(() =>
+    database.delete(users).where(inArray(users.id, [owner, stranger])),
+  );
   await database.$client.close();
 });
 
 test("a request and a saved login are their owner's alone, and only the envelope is stored", async () => {
-  const request = await service.request({
-    ownerUserId: owner,
-    botId: `${prefix}-bot`,
-    site: "https://example.com/login",
-    actor,
-  });
-  expect(await store.request(stranger, request.id)).toBeNull();
-  expect((await service.pending(owner)).map((row) => row.id)).toEqual([
-    request.id,
-  ]);
+  const request = await asOwner(() =>
+    service.request({
+      ownerUserId: owner,
+      botId: `${prefix}-bot`,
+      site: "https://example.com/login",
+      actor,
+    }),
+  );
+  expect(
+    await asPlatform(() => store.request(stranger, request.id)),
+  ).toBeNull();
+  expect(
+    (await asOwner(() => service.pending(owner))).map((row) => row.id),
+  ).toEqual([request.id]);
 
-  const first = service.submit(owner, request.id, actor, {
-    username: "alice",
-    password: PASSWORD,
-    save: true,
-  });
-  // The second submit arrives while the first is still being typed, and is refused.
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  await expect(
+  const first = asOwner(() =>
     service.submit(owner, request.id, actor, {
       username: "alice",
       password: PASSWORD,
+      save: true,
     }),
+  );
+  // The second submit arrives while the first is still being typed, and is refused.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await expect(
+    asOwner(() =>
+      service.submit(owner, request.id, actor, {
+        username: "alice",
+        password: PASSWORD,
+      }),
+    ),
   ).rejects.toThrow(/already being entered/);
   releaseFill?.();
   expect((await first).status).toBe("signed_in");
 
-  const rows = await database
-    .select()
-    .from(savedLogins)
-    .where(inArray(savedLogins.ownerUserId, [owner, stranger]));
+  const rows = await asPlatform(() =>
+    database
+      .select()
+      .from(savedLogins)
+      .where(inArray(savedLogins.ownerUserId, [owner, stranger])),
+  );
   expect(rows).toHaveLength(1);
   expect(rows[0]?.encryptedPassword).not.toContain(PASSWORD);
   expect(JSON.parse(rows[0]?.encryptedPassword ?? "{}")).toMatchObject({
     version: 1,
   });
-  const [stored] = await database
-    .select()
-    .from(signInRequests)
-    .where(inArray(signInRequests.id, [request.id]));
+  const [stored] = await asPlatform(() =>
+    database
+      .select()
+      .from(signInRequests)
+      .where(inArray(signInRequests.id, [request.id])),
+  );
   expect(JSON.stringify(stored)).not.toContain(PASSWORD);
   expect(JSON.stringify(audit)).not.toContain(PASSWORD);
 
-  expect(await store.deleteLogin(stranger, rows[0]?.id ?? "")).toBe(false);
   expect(
-    (await service.deleteLogin(owner, rows[0]?.id ?? "", actor)).deleted,
+    await asPlatform(() => store.deleteLogin(stranger, rows[0]?.id ?? "")),
+  ).toBe(false);
+  expect(
+    (await asOwner(() => service.deleteLogin(owner, rows[0]?.id ?? "", actor)))
+      .deleted,
   ).toBe(true);
 });

@@ -540,8 +540,9 @@ function readsAsCredential(name: string): boolean {
  * No address literals, localhost or internal suffixes, because those point at the deployment rather
  * than a vendor service.
  *
- * This is static URL validation: it checks the literal host string and scheme before storage. DNS
- * resolution and per-request network policy are separate deployment controls.
+ * This is static URL validation: it checks the literal host string and scheme before storage. Where
+ * the name resolves is checked on every request instead, by the outbound guard the store attaches to
+ * a custom server's connection (see `tenantChosenOutbound` in store.ts), which also refuses redirects.
  */
 export function customUrlRefusal(raw: string): string | null {
   let url: URL;

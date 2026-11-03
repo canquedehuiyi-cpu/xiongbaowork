@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import { createGithubResponsibilityRoutes } from "../src/responsibilities/github";
+import {
+  createGithubResponsibilityRoutes,
+  type GithubResponsibilityBinding,
+} from "../src/responsibilities/github";
 import type { ResponsibilityEvent } from "../src/responsibilities/types";
+import { isTenantFramed, requireTenant } from "../src/tenant/context";
 
 const secret = "fixture-only-github-secret";
 function request(
@@ -19,20 +23,28 @@ function request(
     body,
   });
 }
-function fixture() {
+function fixture(tenantId = "owner-1") {
   const events: ResponsibilityEvent[] = [];
+  const frames: string[] = [];
   const routes = createGithubResponsibilityRoutes({
-    async bindingFor(id) {
+    async bindingFor(id): Promise<GithubResponsibilityBinding | null> {
+      frames.push(`binding:${requireTenant()}`);
       return id === "binding-1"
-        ? { ownerUserId: "owner-1", repository: "openbot/demo", secret }
+        ? {
+            tenantId,
+            ownerUserId: "owner-1",
+            repository: "openbot/demo",
+            secret,
+          }
         : null;
     },
     async ingest(event) {
+      frames.push(`ingest:${isTenantFramed() ? requireTenant() : "none"}`);
       events.push(event);
       return { eventId: "event-1", duplicate: false, runIds: ["run-1"] };
     },
   });
-  return { routes, events };
+  return { routes, events, frames };
 }
 
 test("signed GitHub event binds actor from owned repository registration", async () => {
@@ -90,4 +102,34 @@ test("the same signed event replayed with a fresh X-GitHub-Delivery dedupes", as
   }
   expect(events).toHaveLength(2);
   expect(events[0]?.externalId).toBe(events[1]?.externalId as string);
+});
+test("the binding is read as platform and the event ingested in the binding's own tenant (G01)", async () => {
+  const { routes, events, frames } = fixture();
+  const response = await routes.fetch(
+    request(
+      JSON.stringify({
+        action: "opened",
+        tenantId: "attacker",
+        repository: { full_name: "openbot/demo" },
+      }),
+    ),
+  );
+  expect(response.status).toBe(202);
+  expect(frames).toEqual(["binding:platform", "ingest:owner-1"]);
+  expect(events).toHaveLength(1);
+});
+test("a binding stamped as nobody's, or with somebody other than its owner, is unknown and ingests nothing", async () => {
+  for (const stamp of ["system", "platform", "", "owner-2"]) {
+    const { routes, events } = fixture(stamp);
+    const response = await routes.fetch(
+      request(
+        JSON.stringify({
+          action: "opened",
+          repository: { full_name: "openbot/demo" },
+        }),
+      ),
+    );
+    expect(response.status).toBe(404);
+    expect(events).toHaveLength(0);
+  }
 });

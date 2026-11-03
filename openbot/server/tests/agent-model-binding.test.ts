@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { generateText } from "ai";
 import { eq } from "drizzle-orm";
 import {
   createAgentProfileStore,
@@ -20,7 +21,13 @@ import {
   createAgentModelResolver,
   languageModelFor,
 } from "../src/models/runtime-resolver";
-import { runAsTenant } from "../src/tenant/context";
+import type { OutboundPolicy } from "../src/net/outbound-guard";
+import {
+  asPlatform,
+  runAsTenant,
+  TenantContextError,
+} from "../src/tenant/context";
+import { createFlowModelResolver } from "../src/wakerflows/model";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -50,6 +57,7 @@ async function connectModel(
   provider: string,
   modelName: string,
   apiKey = "sk-live",
+  baseUrl: string | null = null,
 ): Promise<string> {
   return runAsTenant(tenant, async () => {
     const credential = await credentialStore.create({
@@ -63,7 +71,7 @@ async function connectModel(
     });
     const [row] = await db
       .insert(modelRegistry)
-      .values({ provider, modelName, credentialId: credential.id })
+      .values({ provider, modelName, baseUrl, credentialId: credential.id })
       .returning({ id: modelRegistry.id });
     return row.id;
   });
@@ -192,12 +200,37 @@ test("a switched-off model or a withdrawn key costs the binding, not the turn", 
   await cleanup();
 });
 
-/** A read with no tenant frame sees the platform's own partition, which holds none of this. */
-test("a binding is not read outside a tenant scope", async () => {
+/**
+ * Which frames read a binding (G01-E P4, decision-tests).
+ *
+ * A read with no frame at all is a bug, not "unbound": every access needs a frame, so it rejects
+ * with `TenantContextError` instead of quietly falling back to the deployment's model. The catalogue
+ * frame `system` and a stranger's frame hold none of this; the owner's frame does; and `platform`
+ * (an admin's controls, background work) reads the owner's binding but still refuses a model row
+ * that belongs to another tenant.
+ */
+test("a binding is read only in a frame that can see it", async () => {
   const bound = await connectModel(tenantA, "openai", "gpt-6");
   const coworker = await newCoworker(tenantA, `${marker}-scope`, bound);
+  const foreign = await connectModel(tenantB, "openai", "gpt-6");
+  const thief = await newCoworker(tenantA, `${marker}-scope-thief`, foreign);
 
-  expect(await resolveModel(coworker)).toBeNull();
+  // (a) No frame: refused out loud.
+  await expect(resolveModel(coworker)).rejects.toBeInstanceOf(
+    TenantContextError,
+  );
+  // (b) The catalogue frame sees the platform's own partition, which holds none of this.
+  expect(await runAsTenant("system", () => resolveModel(coworker))).toBeNull();
+  // (c) A stranger's frame does not see tenantA's coworker.
+  expect(await runAsTenant(tenantB, () => resolveModel(coworker))).toBeNull();
+  // (d) Positive control: the owner's frame resolves the binding.
+  expect(
+    modelId(await runAsTenant(tenantA, () => resolveModel(coworker))),
+  ).toBe("gpt-6");
+  // (e) `platform` sees across tenants, so it resolves tenantA's binding, and the tenancy
+  // comparison still refuses a pointer into tenantB's library.
+  expect(modelId(await asPlatform(() => resolveModel(coworker)))).toBe("gpt-6");
+  expect(await asPlatform(() => resolveModel(thief))).toBeNull();
 
   await cleanup();
 });
@@ -214,6 +247,106 @@ test("the provider shape decides the endpoint the model is dialled at", () => {
   expect(
     (custom as unknown as { modelId: string; provider: string }).modelId,
   ).toBe("local-1");
+});
+
+/**
+ * Audit defect #6 at the two runtime paths that dial a tenant's library row: a coworker's run (the
+ * resolver the server wires) and WakerFlow planning. Both must hand the deployment's outbound policy
+ * to the provider client, so a row whose base URL resolves inside the deployment is never sent the
+ * tenant's key. The network and the resolver are stand-ins; nothing leaves the process. The public
+ * row is the control: its one recorded request proves the policy's network is the one in use, so
+ * "nothing was sent" for the inside row cannot pass by the request going somewhere else.
+ */
+function recordedNetwork(): { policy: OutboundPolicy; calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    policy: {
+      lookup: async (hostname: string) => [
+        {
+          address: hostname.includes("inside") ? "10.0.0.5" : "93.184.216.34",
+          family: 4,
+        },
+      ],
+      fetchImpl: (async (input: RequestInfo | URL) => {
+        calls.push(String(input instanceof Request ? input.url : input));
+        return new Response("{}", { status: 500 });
+      }) as unknown as typeof fetch,
+    },
+  };
+}
+
+async function insideAndPublicRows(): Promise<{
+  inside: string;
+  outside: string;
+}> {
+  const inside = await connectModel(
+    tenantA,
+    "openai",
+    "gpt-inside",
+    "sk-inside-secret",
+    "https://llm.inside.example.test/v1",
+  );
+  const outside = await connectModel(
+    tenantA,
+    "openai",
+    "gpt-public",
+    "sk-public-secret",
+    "https://llm.example.test/v1",
+  );
+  return { inside, outside };
+}
+
+async function attempt(model: unknown): Promise<void> {
+  await expect(
+    generateText({
+      model: model as Parameters<typeof generateText>[0]["model"],
+      prompt: "ping",
+      maxRetries: 0,
+    }),
+  ).rejects.toBeDefined();
+}
+
+test("a coworker bound to an endpoint inside the deployment never sends it the key", async () => {
+  const network = recordedNetwork();
+  const guarded = createAgentModelResolver(
+    db,
+    credentialStore,
+    encryptionKey,
+    async () => undefined,
+    { outbound: network.policy },
+  );
+  const { inside, outside } = await insideAndPublicRows();
+  const insideBot = await newCoworker(tenantA, `${marker}-inside`, inside);
+  const publicBot = await newCoworker(tenantA, `${marker}-public`, outside);
+
+  await attempt(await runAsTenant(tenantA, () => guarded(publicBot)));
+  expect(network.calls).toEqual([
+    "https://llm.example.test/v1/chat/completions",
+  ]);
+  await attempt(await runAsTenant(tenantA, () => guarded(insideBot)));
+  expect(network.calls).toHaveLength(1);
+
+  await cleanup();
+});
+
+test("a WakerFlow planned on a library row inside the deployment never sends it the key", async () => {
+  const network = recordedNetwork();
+  const flows = createFlowModelResolver({
+    database: db,
+    encryptionKey,
+    outbound: network.policy,
+  });
+  const { inside, outside } = await insideAndPublicRows();
+
+  await attempt((await flows.resolve(tenantA, outside)).model);
+  expect(network.calls).toEqual([
+    "https://llm.example.test/v1/chat/completions",
+  ]);
+  await attempt((await flows.resolve(tenantA, inside)).model);
+  expect(network.calls).toHaveLength(1);
+
+  await cleanup();
 });
 
 async function cleanup(): Promise<void> {

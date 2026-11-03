@@ -1,4 +1,6 @@
-import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
+import { type BaseEvent, EventType } from "@ag-ui/client";
+import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { catchError, type Observable, of, throwError } from "rxjs";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
@@ -39,6 +41,18 @@ export type QuotaTransaction = Parameters<
 type QuotaReader = Pick<Database, "select"> | Pick<QuotaTransaction, "select">;
 
 export type Plan = { id: string; name: string; limits: PlanLimits };
+
+/**
+ * The Free tier as migration 0068 seeds it, used only when the catalogue row itself is missing.
+ *
+ * A tenant with no active subscription is held to Free (fail closed, audit #7); this constant keeps
+ * that true even on a database whose `plans` table was never seeded, so no path reads as unlimited.
+ */
+export const FREE_PLAN_FALLBACK: Plan = {
+  id: "free",
+  name: "Free",
+  limits: { wakers: 2, tasksPerMonth: 50, devices: 1, customModels: false },
+};
 
 export type QuotaUsage = {
   period: string;
@@ -89,6 +103,62 @@ export class QuotaExceeded extends Error {
   }
 }
 
+/**
+ * The `code` a chat turn refused for quota carries on its run stream (story K4).
+ *
+ * A turn is not a JSON request: the runtime answers it with an event stream, and a runner that fails
+ * that stream with `QuotaExceeded` reaches the browser as a stream that simply closes, because the
+ * runtime logs the error and ends the response without writing an event. The person saw the composer
+ * unlock and nothing else. The refusal therefore goes on the stream as the event every chat surface
+ * already reads, `RUN_ERROR`, with this stable code and the same 402 body the JSON routes send in
+ * `rawEvent`, so the browser can show the same guidance it shows for a refused request.
+ */
+export const QUOTA_RUN_ERROR_CODE = "quota_exceeded";
+
+/** One refused turn as the `RUN_ERROR` that says so: message, stable code, and the 402 body. */
+export function quotaRunError(refusal: QuotaExceeded): BaseEvent {
+  return {
+    type: EventType.RUN_ERROR,
+    message: refusal.message,
+    code: QUOTA_RUN_ERROR_CODE,
+    rawEvent: refusal.body,
+  } as BaseEvent;
+}
+
+/** A quota refusal on a turn's stream becomes a `RUN_ERROR` and a normal close; anything else passes. */
+export function quotaRefusalAsRunError(
+  stream: Observable<BaseEvent>,
+): Observable<BaseEvent> {
+  return stream.pipe(
+    catchError((error: unknown) =>
+      error instanceof QuotaExceeded
+        ? of(quotaRunError(error))
+        : throwError(() => error),
+    ),
+  );
+}
+
+/**
+ * The runner as the chat runtime is given it: every `run` it answers says a quota refusal on the
+ * stream. Everything else (thread endpoints, hydration, the runner's own methods) is the runner's.
+ *
+ * Only the runtime the browser talks to gets this. A hop or an unattended turn drives the runner
+ * directly and still sees `QuotaExceeded` thrown, which is how those callers record a skipped turn.
+ */
+export function withQuotaRunErrors<
+  T extends { run: (request: never) => Observable<BaseEvent> },
+>(runner: T): T {
+  return new Proxy(runner, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (property === "run")
+        return (request: Parameters<T["run"]>[0]) =>
+          quotaRefusalAsRunError(target.run(request));
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 const METRIC_WORDS: Record<QuotaMetric, string> = {
   wakers: "coworkers",
   tasksPerMonth: "tasks per month",
@@ -97,8 +167,8 @@ const METRIC_WORDS: Record<QuotaMetric, string> = {
 };
 
 export type QuotaService = {
-  /** null means the tenant was never given a plan, which means nothing is intercepted. */
-  planFor: (tenantId: string) => Promise<Plan | null>;
+  /** Always a plan: a tenant with no active subscription is on Free, never unlimited. */
+  planFor: (tenantId: string) => Promise<Plan>;
   usageFor: (tenantId: string) => Promise<QuotaUsage>;
   /** Throws `QuotaExceeded` when the tenant is at the plan's ceiling for one metric. */
   assertCapacity: (
@@ -123,10 +193,7 @@ export type QuotaService = {
 };
 
 export function createQuotaService(database: Database): QuotaService {
-  const readPlan = (
-    executor: QuotaReader,
-    tenantId: string,
-  ): Promise<Plan | null> =>
+  const readPlan = (executor: QuotaReader, tenantId: string): Promise<Plan> =>
     runAsTenant(tenantId, async () => {
       const [row] = await executor
         .select({
@@ -142,12 +209,27 @@ export function createQuotaService(database: Database): QuotaService {
             eq(subscriptions.status, "active"),
           ),
         )
+        // One row per tenant since 0129 (`subscriptions_tenant_unique`). The order is kept so the
+        // read stays deterministic whatever the table holds, and it is the order 0129 de-duplicated
+        // by, so the row it kept is the row this read had already been answering with.
+        .orderBy(
+          desc(subscriptions.updatedAt),
+          desc(subscriptions.createdAt),
+          desc(subscriptions.id),
+        )
         .limit(1);
-      // No active subscription is not a Free tenant. Provisioning writes the row for every person who
-      // signs up, so an absent one is the deployment's own operator or a workspace older than the
-      // catalogue — and intercepting those would refuse the person who runs the server.
-      if (!row) return null;
-      return { id: row.id, name: row.name, limits: row.limits };
+      if (row) return { id: row.id, name: row.name, limits: row.limits };
+      // No active subscription fails closed to Free (audit #7). A workspace whose provisioning failed,
+      // one older than the catalogue, or one signed in by a path that does not provision, is still a
+      // tenant — and an absent row read as "no limit" would let it past every ceiling.
+      const [free] = await executor
+        .select({ id: plans.id, name: plans.name, limits: plans.limits })
+        .from(plans)
+        .where(eq(plans.id, FREE_PLAN_FALLBACK.id))
+        .limit(1);
+      return free
+        ? { id: free.id, name: free.name, limits: free.limits }
+        : FREE_PLAN_FALLBACK;
     });
 
   const readUsage = (
@@ -206,7 +288,6 @@ export function createQuotaService(database: Database): QuotaService {
     if (!Number.isSafeInteger(units) || units < 1)
       throw new TypeError("Quota units must be a positive integer");
     const plan = await readPlan(executor, tenantId);
-    if (!plan) return;
     const used = USED_BY[metric](await readUsage(executor, tenantId));
     const limit = plan.limits[metric];
     const ceiling =

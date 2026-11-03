@@ -64,7 +64,7 @@ describe("deployment configuration", () => {
       endpoint: new URL("http://localhost:4200/ag-ui"),
       token: "managed-agent-token",
     });
-    expect(config.tenantPackageDirectory).toBe("../examples/fintech");
+    expect(config.tenantPackageDirectory).toBe("../examples/qoderwake");
   });
 
   test("allows deployment without an authentication provider, when asked to", () => {
@@ -428,6 +428,72 @@ describe("deployment configuration", () => {
     ).toThrow("OKTA_OAUTH_CLIENT_ID");
   });
 
+  test("leaves GitHub off, and out of the provider list, when it is not configured", () => {
+    const config = loadConfig(baseEnvironment);
+
+    expect(config.auth?.github).toBeUndefined();
+    expect(configuredAuthProviders(config.auth)).toEqual(["google"]);
+  });
+
+  test("enables GitHub, and lists it, when both its credentials are set", () => {
+    const config = loadConfig({
+      ...withoutSignIn,
+      ...SESSION,
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+    });
+
+    expect(config.auth?.github).toEqual({
+      clientId: "github-client-id",
+      clientSecret: "github-client-secret",
+    });
+    expect(configuredAuthProviders(config.auth)).toEqual(["github"]);
+  });
+
+  test("refuses GitHub with only half its credentials", () => {
+    expect(() =>
+      loadConfig({
+        ...withoutSignIn,
+        ...SESSION,
+        GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      }),
+    ).toThrow(
+      "GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET must be set together",
+    );
+    expect(() =>
+      loadConfig({
+        ...withoutSignIn,
+        ...SESSION,
+        GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      }),
+    ).toThrow(
+      "GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET must be set together",
+    );
+  });
+
+  test("puts GitHub after the three company providers", () => {
+    const config = loadConfig({
+      ...withoutSignIn,
+      ...SESSION,
+      GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
+      MICROSOFT_OAUTH_CLIENT_ID: "entra-client-id",
+      MICROSOFT_OAUTH_CLIENT_SECRET: "entra-client-secret",
+      OKTA_OAUTH_CLIENT_ID: "okta-client-id",
+      OKTA_OAUTH_CLIENT_SECRET: "okta-client-secret",
+      OKTA_OAUTH_ISSUER: "https://example.okta.com/oauth2/default",
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+    });
+
+    expect(configuredAuthProviders(config.auth)).toEqual([
+      "google",
+      "microsoft",
+      "okta",
+      "github",
+    ]);
+  });
+
   test("carries all three at once, in a fixed order", () => {
     const config = loadConfig({
       ...withoutSignIn,
@@ -756,6 +822,26 @@ describe("deployment configuration", () => {
         ...productionEnvironment,
         NODE_ENV: "production ",
         AGENT_COMPUTER_URL: "http://localhost:4100",
+        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+      }),
+    ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
+  });
+
+  // A local model provider (audit defect #6) is reached under the same switch, and needs no Bot
+  // computer: read through `computer`, the switch did nothing for a laptop that had none configured.
+  test("opens model endpoints to private hosts locally, with or without a computer", () => {
+    const withoutComputer = loadConfig({
+      ...baseEnvironment,
+      AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+    });
+    expect(withoutComputer.computer).toBeUndefined();
+    expect(withoutComputer.modelEndpointsAllowPrivateHosts).toBe(true);
+    expect(loadConfig(baseEnvironment).modelEndpointsAllowPrivateHosts).toBe(
+      false,
+    );
+    expect(() =>
+      loadConfig({
+        ...productionEnvironment,
         AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
       }),
     ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");

@@ -1,4 +1,10 @@
 import { checkNavigationTarget } from "../computer/target";
+import {
+  assertResolvesPublic,
+  type OutboundLookup,
+  OutboundRefusedError,
+  untilAborted,
+} from "../net/outbound-guard";
 
 /**
  * Where an external agent lives, and whether we are willing to talk to it.
@@ -74,7 +80,7 @@ export function checkAgentEndpoint(
   } = {},
 ): EndpointVerdict {
   if (typeof raw !== "string" || !raw.trim()) {
-    return { allowed: false, reason: "An agent needs a web address." };
+    return { allowed: false, reason: "请填写员工端点的网址。" };
   }
 
   const verdict = checkNavigationTarget(raw.trim(), options);
@@ -180,7 +186,7 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
   if (body === null || body === undefined) return {};
   if (typeof body !== "string") {
     throw new EndpointNotAllowedError(
-      "That address redirected to another host, and this deployment will not forward the run to it.",
+      "该地址重定向到了另一台主机，本部署不会把这次运行转发过去。",
     );
   }
 
@@ -190,7 +196,7 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
   } catch {
     // Not ours to sanitise and not ours to leak. The same reasoning as the non-string case.
     throw new EndpointNotAllowedError(
-      "That address redirected to another host, and this deployment will not forward the run to it.",
+      "该地址重定向到了另一台主机，本部署不会把这次运行转发过去。",
     );
   }
   if (parsed === null || typeof parsed !== "object") return { body };
@@ -242,6 +248,14 @@ export function createAgentFetch(
     allowedHosts?: ReadonlySet<string>;
     fetchImpl?: typeof fetch;
     /**
+     * Resolves each hop's name before it is dialled. Defaults to the system resolver, except when
+     * `fetchImpl` is injected without one: a substituted fetch opens no socket, so there is no
+     * address to check, and a test that replaces the network should not reach a real resolver.
+     */
+    lookup?: OutboundLookup;
+    /** Injected by tests; defaults to reading HTTP(S)_PROXY, as the outbound guard does. */
+    viaProxy?: (url: URL) => boolean;
+    /**
      * Told about every address this refused to dial, and why.
      *
      * A refusal is the one thing on this path an operator cannot otherwise learn. The person who
@@ -276,14 +290,47 @@ export function createAgentFetch(
         : {}),
       ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
     });
+  const resolveHops =
+    options.lookup !== undefined || options.fetchImpl === undefined;
+
+  /**
+   * Where this hop's NAME resolves, judged before it is dialled.
+   *
+   * `check` reads the URL as written, so `https://agent.example.com` passes it whatever its A record
+   * says. The outbound guard resolves it and refuses the hop if ANY answer is internal, with the
+   * operator's settings meaning what they mean at registration: the development opt-in, or this
+   * exact host being named in `agentEndpointAllowedHosts`, admits an internal answer. Nothing admits
+   * the metadata service. Same-resolver races remain the guard's KNOWN LIMIT — DNS REBINDING.
+   *
+   * A name that does not resolve is not dialled either (a resolver that fails first and answers
+   * inward second is the cheap form of that race), but it is not reported as a refusal: it is
+   * "unreachable", and counting it would bury the rows that matter.
+   */
+  const resolvesAllowed = async (address: string) => {
+    if (!resolveHops) return;
+    try {
+      await assertResolvesPublic(address, {
+        allowPrivateHosts:
+          options.allowPrivateHosts === true ||
+          namedAsAllowed(address, options.allowedHosts),
+        ...(options.lookup ? { lookup: options.lookup } : {}),
+        ...(options.viaProxy ? { viaProxy: options.viaProxy } : {}),
+      });
+    } catch (error) {
+      if (
+        error instanceof OutboundRefusedError &&
+        error.kind === "destination"
+      ) {
+        throw refuse(address, `本部署不会连接 ${address}：${error.message}`);
+      }
+      throw error;
+    }
+  };
 
   return async function guardedFetch(url: string, init?: RequestInit) {
     const stored = check(url);
     if (!stored.allowed) {
-      throw refuse(
-        url,
-        `This deployment will not dial ${url}: ${stored.reason.charAt(0).toLowerCase()}${stored.reason.slice(1)}`,
-      );
+      throw refuse(url, `本部署不会连接 ${url}：${stored.reason}`);
     }
 
     const origin = stored.url;
@@ -291,6 +338,9 @@ export function createAgentFetch(
     let carried = init;
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+      // Under the caller's signal (the connection test's deadline, a run's abort): a resolver that
+      // never answers must not hold the request past it.
+      await untilAborted(resolvesAllowed(target), carried?.signal ?? undefined);
       // `manual` is what makes this a check rather than a comment: the caller sees the redirect, and
       // the underlying fetch cannot quietly follow one on its own.
       const response = await doFetch(target, {
@@ -307,10 +357,7 @@ export function createAgentFetch(
       const next = new URL(location, target).toString();
       const verdict = check(next);
       if (!verdict.allowed) {
-        throw refuse(
-          next,
-          `That address redirected to ${next}, and ${verdict.reason.charAt(0).toLowerCase()}${verdict.reason.slice(1)}`,
-        );
+        throw refuse(next, `该地址重定向到了 ${next}：${verdict.reason}`);
       }
       if (!sameCredentialScope(origin, verdict.url)) {
         // A body this cannot strip refuses the hop rather than forwarding it, and that refusal is
@@ -332,7 +379,7 @@ export function createAgentFetch(
     // failing in a way only the trail can show is happening repeatedly.
     throw refuse(
       target,
-      `That address redirected more than ${MAX_REDIRECTS} times without arriving anywhere.`,
+      `该地址重定向超过 ${MAX_REDIRECTS} 次，仍未到达目标。`,
     );
   };
 }

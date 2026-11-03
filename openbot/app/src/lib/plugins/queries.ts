@@ -190,7 +190,101 @@ export const pluginKeys = {
   connections: () => ["plugins", "connections"] as const,
   composioApps: (query: string) =>
     ["plugins", "composio", "apps", query] as const,
+  listings: () => ["plugins", "listings"] as const,
+  installedByMe: (agentId: string) =>
+    ["plugins", "installed-by-me", agentId] as const,
 };
+
+/**
+ * Spec E3: one catalogue entry an administrator has listed (上架) for owners to install themselves.
+ *
+ * `ref` is an app's key for `mcp` (the listing covers every tool that app offers, and a grant still
+ * names `<key>/<tool>`) and a deployment skill's slug for `skill`. `listedBy` is sent to an
+ * administrator only: which operator listed an entry is not every workspace's business.
+ */
+export type InstallListing = {
+  kind: "mcp" | "skill";
+  ref: string;
+  listedAt: string | null;
+  listedBy?: string;
+};
+
+/**
+ * What an administrator has listed, read on its own from `GET /api/plugins/listings`.
+ *
+ * Under the `plugins` key, so every plugin write's refetch (including listing and unlisting) redraws
+ * it. A body without a list reads as nothing listed, which is the same answer the server gives for
+ * a deployment where nobody has listed anything; a request that fails is still an error.
+ */
+export function installListingsQueryOptions() {
+  return queryOptions({
+    queryKey: pluginKeys.listings(),
+    queryFn: async (): Promise<InstallListing[]> => {
+      const response = await client("/api/plugins/listings", {
+        fallback: "读不到上架目录。",
+      });
+      const body = (await response.json()) as { listings?: unknown };
+      return Array.isArray(body.listings)
+        ? (body.listings as InstallListing[])
+        : [];
+    },
+  });
+}
+
+/** The refs of one kind that are listed, for the screens that only ask "is this one listed?". */
+export function listedRefs(
+  listings: InstallListing[] | undefined,
+  kind: InstallListing["kind"],
+): Set<string> {
+  return new Set(
+    (listings ?? [])
+      .filter((listing) => listing.kind === kind)
+      .map((listing) => listing.ref),
+  );
+}
+
+/**
+ * The name grants and listings call this app by.
+ *
+ * Not `server.id`. Since G01-E a curated connector is the team's row `team:<catalogue key>`, while a
+ * grant ref (`<app>/<tool>`), a listing and the self-install check all name the catalogue key; a row
+ * that is not a catalogue entry is called by its own id. Read off the refs the server composed for
+ * this row, which are the names `plugin_grants` stores, and only without any from the row id itself.
+ */
+export function appKeyOf(server: PluginServer): string {
+  const ref = server.tools[0]?.ref ?? server.withdrawn[0]?.ref;
+  const slash = ref?.indexOf("/") ?? -1;
+  if (ref && slash > 0) return ref.slice(0, slash);
+  return server.id.startsWith("team:") ? server.id.slice(5) : server.id;
+}
+
+/**
+ * The tools and skills on one Waker that this person installed themselves (spec E3).
+ *
+ * What they may still take off after an administrator unlists the entry: the server lets the person
+ * who installed a grant remove it, and nobody else but an administrator.
+ */
+export function installedByMeQueryOptions(agentId: string) {
+  return queryOptions({
+    queryKey: pluginKeys.installedByMe(agentId),
+    enabled: agentId.length > 0,
+    queryFn: async (): Promise<{ tools: string[]; skills: string[] }> => {
+      const response = await client(
+        `/api/plugins/for/${encodeURIComponent(agentId)}/installed-by-me`,
+        { fallback: "读不到你自己装上的工具。" },
+      );
+      const body = (await response.json()) as {
+        tools?: unknown;
+        skills?: unknown;
+      };
+      const strings = (value: unknown) =>
+        Array.isArray(value)
+          ? value.filter((item): item is string => typeof item === "string")
+          : [];
+      return { tools: strings(body.tools), skills: strings(body.skills) };
+    },
+  });
+}
 
 /**
  * One account this person has connected, from their own point of view.

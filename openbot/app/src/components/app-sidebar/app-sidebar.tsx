@@ -1,5 +1,6 @@
 import {
   IconBolt,
+  IconBook,
   IconBox,
   IconBoxSeam,
   IconBrain,
@@ -49,6 +50,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -354,7 +356,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <EmptyHeader>
                     <EmptyTitle>你还没有会话</EmptyTitle>
                     <EmptyDescription className="text-pretty">
-                      开始和员工对话，你的会话就会出现在这里 here.
+                      开始和员工对话，你的会话就会出现在这里。
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -384,6 +386,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
          * person reads just before something is refused, and it has to be somewhere they already look.
          */}
         <UsagePanel />
+        {/*
+         * Spec A1: "工作管理 > 任务看板". The heading names the group the board opens, so the way in
+         * reads the same as the spec and the reference product's navigation.
+         */}
+        <SidebarGroupLabel>工作管理</SidebarGroupLabel>
         <SidebarMenu className="gap-px">
           <SidebarMenuItem>
             {/* The board first: it is the way in from "things", not from "chats". */}
@@ -625,6 +632,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <IconBrain />
               </div>
               <span className="text-sm">记忆</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="hover:bg-foreground/5 h-10"
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/knowledge"
+                  activeProps={{ className: "bg-foreground/5" }}
+                />
+              )}
+            >
+              <div className="size-[28px] flex items-center justify-center">
+                <IconBook />
+              </div>
+              <span className="text-sm">知识库</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

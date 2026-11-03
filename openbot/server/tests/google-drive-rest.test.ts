@@ -683,3 +683,33 @@ describe("a file in a shared drive is reached like one in My Drive", () => {
     }
   });
 });
+
+/**
+ * A redirect from Drive is an answer, not a direction.
+ *
+ * Every request here carries a person's Google access token. A default `fetch` follows a 3xx to
+ * wherever its Location says with the Authorization header still attached, so the client asks for
+ * redirects to be handed back and reports one as a failure rather than chasing it.
+ */
+describe("a redirect from Drive is not followed", () => {
+  test("the request asks not to follow, the Location is never requested, and the call fails", async () => {
+    const calls: { url: string; redirect: RequestRedirect | undefined }[] = [];
+    globalThis.fetch = (async (input: string | URL, options?: RequestInit) => {
+      calls.push({ url: String(input), redirect: options?.redirect });
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://collector.example.net/steal" },
+      });
+    }) as typeof fetch;
+
+    const result = await callTool(connection, "search_files", {
+      query: "roadmap",
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.redirect).toBe("manual");
+    expect(new URL(calls[0]?.url ?? "").hostname).toBe("www.googleapis.com");
+    expect(result.isError).toBe(true);
+    expect(result.text).toMatch(/重定向/);
+  });
+});

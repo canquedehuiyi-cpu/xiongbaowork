@@ -70,7 +70,7 @@ export type ComputerConfig =
  * has Google or Entra or Okta and is not going to acquire another, so the shape here is a set of
  * optional providers rather than one required one, and the deployment turns on whichever it has.
  */
-export type AuthProviderId = "google" | "microsoft" | "okta";
+export type AuthProviderId = "google" | "microsoft" | "okta" | "github";
 
 /** An OAuth client, as every provider here needs one. */
 export type OAuthClient = { clientId: string; clientSecret: string };
@@ -96,6 +96,14 @@ export type AuthConfig = {
   microsoft?: OAuthClient & { tenantId: string };
   /** Okta is an OIDC provider rather than a named one, so it is identified by its issuer. */
   okta?: OAuthClient & { issuer: string };
+  /**
+   * GitHub, for a self-serve tenant that has neither a company directory nor a Google account.
+   *
+   * A GitHub address is only as good as GitHub's own `verified` flag on it, and Better Auth's
+   * provider carries that flag through as `emailVerified` (false when GitHub does not vouch for it),
+   * so an unverified GitHub address never links onto an existing account here.
+   */
+  github?: OAuthClient;
 };
 
 /**
@@ -113,6 +121,7 @@ export function configuredAuthProviders(
   if (auth.google) providers.push("google");
   if (auth.microsoft) providers.push("microsoft");
   if (auth.okta) providers.push("okta");
+  if (auth.github) providers.push("github");
   return providers;
 }
 
@@ -321,6 +330,14 @@ export type DeploymentConfig = {
    */
   computer?: ComputerConfig;
   /**
+   * Whether a tenant's model base URL may point at a private or loopback address over plain http
+   * (audit defect #6): the same development-only `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` switch, read
+   * on its own rather than through {@link computer}, so a laptop running a local model provider
+   * (Ollama on the LAN, say) with no Bot computer configured still reaches it. Refused in production
+   * like the switch itself.
+   */
+  modelEndpointsAllowPrivateHosts: boolean;
+  /**
    * Where a coworker's actions are carried out: this deployment's own container, or a machine the
    * tenant owns. `device` refuses when no machine is reachable rather than running the work here.
    */
@@ -507,7 +524,7 @@ function singleUserAllowed(
   const published = reachable.filter((value) => reachOf(value) === "public");
   if (published.length > 0) {
     throw new Error(
-      `OPENBOT_SINGLE_USER admits every request as one administrator with no sign-in, so it cannot be combined with an address the public internet reaches: ${published.join(", ")}. Configure GOOGLE_OAUTH_*, MICROSOFT_OAUTH_* or OKTA_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or serve it somewhere only you reach.`,
+      `OPENBOT_SINGLE_USER admits every request as one administrator with no sign-in, so it cannot be combined with an address the public internet reaches: ${published.join(", ")}. Configure GOOGLE_OAUTH_*, MICROSOFT_OAUTH_*, OKTA_OAUTH_* or GITHUB_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or serve it somewhere only you reach.`,
     );
   }
 
@@ -675,7 +692,7 @@ function managedAgentConfig(
 
 function oauthClient(
   environment: Environment,
-  provider: "GOOGLE" | "MICROSOFT" | "OKTA",
+  provider: "GOOGLE" | "MICROSOFT" | "OKTA" | "GITHUB",
 ): OAuthClient | undefined {
   const clientId = optional(environment, `${provider}_OAUTH_CLIENT_ID`);
   const clientSecret = optional(environment, `${provider}_OAUTH_CLIENT_SECRET`);
@@ -739,11 +756,12 @@ function authConfig(
 ): AuthConfig | undefined {
   const microsoft = microsoftAuth(environment);
   const okta = oktaAuth(environment);
+  const github = oauthClient(environment, "GITHUB");
 
   const secret = optional(environment, "BETTER_AUTH_SECRET");
   const baseUrl = url(environment, "BETTER_AUTH_URL");
 
-  if (!google && !microsoft && !okta) {
+  if (!google && !microsoft && !okta && !github) {
     /*
      * Email and password is a door of its own, so this combination is now a whole configuration
      * rather than half of one (ticket 004: a self-serve tenant arrives with an address and a
@@ -755,7 +773,7 @@ function authConfig(
      */
     if (Boolean(secret) !== Boolean(baseUrl)) {
       throw new Error(
-        "BETTER_AUTH_SECRET and BETTER_AUTH_URL are the two halves of signing people in, and only one is set. Set both to serve sign-in over email and password, add GOOGLE_OAUTH_*, MICROSOFT_OAUTH_* or OKTA_OAUTH_* for a provider, or unset both.",
+        "BETTER_AUTH_SECRET and BETTER_AUTH_URL are the two halves of signing people in, and only one is set. Set both to serve sign-in over email and password, add GOOGLE_OAUTH_*, MICROSOFT_OAUTH_*, OKTA_OAUTH_* or GITHUB_OAUTH_* for a provider, or unset both.",
       );
     }
     // Neither set: nothing signs anybody in, which is the single-user path and its own refusal.
@@ -867,6 +885,7 @@ function authConfig(
     ...(google ? { google } : {}),
     ...(microsoft ? { microsoft } : {}),
     ...(okta ? { okta } : {}),
+    ...(github ? { github } : {}),
   };
 }
 
@@ -1320,7 +1339,7 @@ export function loadConfig(
       auth?.baseUrl
     )?.replace(/\/+$/, ""),
     tenantPackageDirectory:
-      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/fintech",
+      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/qoderwake",
     runtime: runtimeCapabilities(environment),
     agentStallTimeoutMs: agentStallTimeoutMs(environment),
     auditRetentionDays: auditRetentionDays(environment),
@@ -1349,6 +1368,7 @@ export function loadConfig(
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
       : {}),
     computer: computerConfig(environment),
+    modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
      * container, which is what a development machine and every existing install already run.

@@ -9,7 +9,12 @@ import { Observable } from "rxjs";
 import { z } from "zod";
 import type { ApprovalRecord } from "../src/approvals/types";
 import type { GrantedTool } from "../src/plugins/tools";
-import { createProactiveEngine } from "../src/proactive/engine";
+import {
+  createProactiveEngine,
+  PROACTIVE_RUN_KIND,
+  PROACTIVE_TASK_KIND,
+  PROACTIVE_TENANT_UNRESOLVED,
+} from "../src/proactive/engine";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
 import {
   createReadOnlyClassifier,
@@ -18,10 +23,15 @@ import {
   restrictCoordinationForRun,
   restrictToolsForRun,
 } from "../src/proactive/restriction";
-import type { ProactiveStore } from "../src/proactive/store";
-import type { ProactiveSetting } from "../src/proactive/types";
+import type {
+  ProactiveStore,
+  StampedProactiveSetting,
+  StampedProactiveSuggestion,
+} from "../src/proactive/store";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
-import type { WorkQueue } from "../src/work/queue";
+import type { TaskProjector } from "../src/tasks/projector";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
+import type { WorkItem, WorkQueue } from "../src/work/queue";
 
 const catalogue = (effects: Record<string, "read" | "write">) => ({
   listServers: async () => [
@@ -220,7 +230,9 @@ describe("proactive run", () => {
         }),
       stop: async () => true,
     };
-    const setting: ProactiveSetting = {
+    // Stamped with its person's tenant, the way a setting a person created is (G01).
+    const setting: StampedProactiveSetting = {
+      tenantId: "owner",
       id: "setting",
       ownerUserId: "owner",
       agentId: "bot",
@@ -264,11 +276,13 @@ describe("proactive run", () => {
     const offered: {
       kind: string;
       key: string;
+      tenantId?: string;
       payload?: Record<string, unknown>;
     }[] = [];
     const queue = {
+      // Stamped with the frame it was offered from, as the database does.
       offer: async (item: (typeof offered)[number]) => {
-        offered.push(item);
+        offered.push({ ...item, tenantId: currentTenant() });
         return "queued";
       },
       claim: async ({ kind }: { kind: string }) => {
@@ -353,10 +367,11 @@ describe("proactive run", () => {
 
   test("a memory is formed only from a read the run actually made", async () => {
     const setting = {
+      tenantId: "owner",
       id: "s",
       ownerUserId: "owner",
       agentId: "bot",
-    } as ProactiveSetting;
+    } as StampedProactiveSetting;
     const formed: unknown[] = [];
     const results: string[] = [];
     // Drive one run through the queue path.
@@ -370,6 +385,7 @@ describe("proactive run", () => {
           {
             kind,
             key: "k",
+            tenantId: "owner",
             payload: { settingId: "s", runId: "run" },
             attempts: 1,
           },
@@ -465,6 +481,447 @@ describe("proactive run", () => {
         initiator: proactiveInitiator("run"),
       }),
     ).toEqual([]);
+  });
+});
+
+/**
+ * G01: a sweep has no tenant of its own, so it runs each piece of research as the tenant stamped on
+ * the setting it is for, and each queued run or task as the tenant stamped on its queue row.
+ *
+ * The fakes below answer the way the database does: a row is stamped with the frame it was written
+ * from, and a read sees its own tenant and `system`, or everything from `platform`.
+ */
+describe("G01: whose research a sweep is doing", () => {
+  const visible = (tenantId: string) => {
+    const frame = currentTenant();
+    return frame === "platform" || tenantId === frame || tenantId === "system";
+  };
+  const stamp = (
+    tenantId: string,
+    ownerUserId: string,
+    id: string,
+  ): StampedProactiveSetting => ({
+    tenantId,
+    id,
+    ownerUserId,
+    agentId: `bot-${id}`,
+    channelId: `channel-${id}`,
+    threadId: `thread-${id}`,
+    focus: "",
+    enabled: true,
+    intervalMinutes: 240,
+    nextRunAt: new Date(0),
+    lastRunAt: null,
+    lastStatus: "idle",
+    lastError: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  });
+
+  type Queued = WorkItem & { released?: string; finished?: boolean };
+
+  function harness(input: {
+    settings: StampedProactiveSetting[];
+    due?: StampedProactiveSetting[];
+    suggestions?: StampedProactiveSuggestion[];
+    queued?: Queued[];
+    board?: Pick<TaskProjector, "opened" | "finished">;
+    turnFails?: boolean;
+  }) {
+    const settings = input.settings;
+    const suggestions = [...(input.suggestions ?? [])];
+    const queued: Queued[] = [...(input.queued ?? [])];
+    const seen = {
+      claimDueAs: [] as string[],
+      runs: [] as { id: string; status: string; as: string }[],
+      turns: [] as { owner: string; as: string }[],
+      notified: [] as string[],
+      tasks: [] as { owner: string; as: string }[],
+      cardOwnedByCaller: [] as (boolean | undefined)[],
+      order: [] as string[],
+    };
+    const find = (id: string) =>
+      settings.find((row) => row.id === id && visible(row.tenantId)) ?? null;
+    const store = {
+      claimDue: async () => {
+        seen.claimDueAs.push(currentTenant());
+        return (input.due ?? settings).filter((row) => visible(row.tenantId));
+      },
+      byId: async (id: string) => find(id),
+      get: async (owner: string, id: string) => {
+        const row = find(id);
+        if (!row || row.ownerUserId !== owner) throw new Error("not found");
+        return row;
+      },
+      recordRun: async (id: string, status: string) => {
+        seen.runs.push({ id, status, as: currentTenant() });
+      },
+      readsFor: async () => [],
+      countSuggestions: async (runId: string) =>
+        suggestions.filter((row) => row.runId === runId).length,
+      addSuggestion: async (
+        row: Omit<StampedProactiveSuggestion, "tenantId" | "id">,
+      ) => {
+        const added = {
+          ...row,
+          id: `suggestion-${suggestions.length}`,
+          tenantId: currentTenant(),
+          status: "open",
+          deliveredAt: null,
+          resolvedAt: null,
+          createdAt: new Date(0),
+        } as StampedProactiveSuggestion;
+        suggestions.push(added);
+        return added;
+      },
+      undelivered: async (runId: string) =>
+        suggestions.filter(
+          (row) =>
+            row.runId === runId && !row.deliveredAt && visible(row.tenantId),
+        ),
+      markDelivered: async (id: string) => {
+        const row = suggestions.find((entry) => entry.id === id);
+        if (row) row.deliveredAt = new Date();
+      },
+      suggestion: async (owner: string, id: string) => {
+        const row = suggestions.find(
+          (entry) =>
+            entry.id === id &&
+            entry.ownerUserId === owner &&
+            visible(entry.tenantId),
+        );
+        if (!row) throw new Error("not found");
+        return row;
+      },
+    } as unknown as ProactiveStore;
+    const queue = {
+      offer: async (item: Omit<Queued, "tenantId" | "attempts">) => {
+        queued.push({
+          ...item,
+          payload: item.payload ?? {},
+          tenantId: currentTenant(),
+          attempts: 0,
+        });
+        return "queued";
+      },
+      claim: async ({ kind }: { kind: string }) => {
+        const item = queued.find(
+          (entry) => entry.kind === kind && !entry.finished && !entry.released,
+        );
+        if (!item) return [];
+        item.attempts += 1;
+        return [item];
+      },
+      renew: async () => true,
+      finish: async ({ key }: { key: string }) => {
+        const item = queued.find((entry) => entry.key === key);
+        if (item) item.finished = true;
+        return true;
+      },
+      release: async ({ key, reason }: { key: string; reason?: string }) => {
+        const item = queued.find((entry) => entry.key === key);
+        if (item) item.released = reason ?? "released";
+        return true;
+      },
+      purge: async () => 0,
+    } as unknown as WorkQueue;
+    const engine = createProactiveEngine({
+      store,
+      memory: {
+        formMemory: async () => ({
+          id: "m",
+          duplicate: false,
+          forgotten: false,
+        }),
+      },
+      queue,
+      owner: "worker",
+      board: input.board,
+      runTurn: async (turn) => {
+        seen.turns.push({ owner: turn.ownerUserId, as: currentTenant() });
+        seen.cardOwnedByCaller.push(turn.cardOwnedByCaller);
+        seen.order.push(`turn:${turn.runId}`);
+        const tools = await engine.toolsForTurn({
+          ownerUserId: turn.ownerUserId,
+          agentId: turn.agentId,
+          initiator: turn.initiator ?? { kind: "person" },
+        });
+        await tools
+          .find((tool) => tool.definition.name === "suggest_next_step")
+          ?.execute(
+            { title: "Reply to Sam", detail: "Sam asked for the spec." },
+            { toolCallId: "call", signal: new AbortController().signal },
+          );
+        if (input.turnFails) throw new Error("model unavailable");
+        return { replyText: "Summary." };
+      },
+      resolveScope: async (ownerUserId, channelId, agentId) => ({
+        ownerUserId,
+        channelId,
+        agentId,
+        threadId: "channel-thread",
+      }),
+      notify: async () => {
+        seen.notified.push(currentTenant());
+      },
+      startTask: async (scope) => {
+        seen.tasks.push({ owner: scope.ownerUserId, as: currentTenant() });
+      },
+      catalogue: { listServers: async () => [] },
+      mintThreadId: () => "thread",
+    });
+    return { engine, store, queued, suggestions, seen };
+  }
+
+  test("a due setting is offered and researched as its own tenant, and nobody else's is run", async () => {
+    const alice = stamp("alice", "alice", "a");
+    const { engine, store, queued, suggestions, seen } = harness({
+      settings: [
+        alice,
+        // Stamped as nobody's: there is no person to read apps for.
+        stamp("system", "alice", "sys"),
+        stamp("platform", "bob", "plat"),
+        // Filed under one person but naming another.
+        stamp("alice", "bob", "foreign"),
+      ],
+    });
+
+    // From no frame at all, the way the server's timer calls it.
+    await engine.sweep();
+
+    // "What is due" is asked as the platform, never as `system`.
+    expect(seen.claimDueAs).toEqual(["platform"]);
+    // Only the person's own setting reaches the queue, stamped as theirs.
+    expect(
+      queued.map((item) => [item.key.split(":")[0], item.tenantId]),
+    ).toEqual([["a", "alice"]]);
+    // The turn, the suggestion it made and the notification all ran as that person.
+    expect(seen.turns).toEqual([{ owner: "alice", as: "alice" }]);
+    expect(suggestions.map((row) => row.tenantId)).toEqual(["alice"]);
+    expect(seen.notified).toEqual(["alice"]);
+    expect(
+      seen.runs.filter((row) => row.id === "a").map((row) => row.as),
+    ).toEqual(["alice", "alice"]);
+    // The others are said to have failed, from the platform's frame, and never run.
+    for (const id of ["sys", "plat", "foreign"])
+      expect(seen.runs.filter((row) => row.id === id)).toEqual([
+        { id, status: "error", as: "platform" },
+      ]);
+    // And somebody else reads none of it.
+    expect(await runAsTenant("bob", () => store.byId("a"))).toBeNull();
+    await expect(
+      runAsTenant("bob", () =>
+        store.suggestion("alice", suggestions[0]?.id ?? ""),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("a queued run stamped as nobody's, or as somebody else, is ended without running anybody", async () => {
+    const alice = stamp("alice", "alice", "a");
+    const run = (key: string, tenantId: string, settingId: string) => ({
+      kind: PROACTIVE_RUN_KIND,
+      key,
+      tenantId,
+      payload: { settingId, runId: `run-${key}` },
+      attempts: 0,
+    });
+    const { engine, queued, seen } = harness({
+      settings: [alice, stamp("system", "alice", "sys")],
+      due: [],
+      queued: [
+        run("as-system", "system", "a"),
+        run("as-platform", "platform", "a"),
+        // Bob's row asking for Alice's research: her setting is not even visible from his frame.
+        run("as-bob", "bob", "a"),
+        // Alice's row asking for a setting stamped as nobody's, which her frame can still see.
+        run("as-alice-for-system", "alice", "sys"),
+      ],
+    });
+
+    for (let pass = 0; pass < 4; pass += 1) await engine.sweep();
+
+    expect(seen.turns).toEqual([]);
+    expect(seen.runs).toEqual([]);
+    const outcome = Object.fromEntries(
+      queued.map((item) => [item.key, item.released ?? "finished"]),
+    );
+    expect(outcome).toEqual({
+      "as-system": PROACTIVE_TENANT_UNRESOLVED,
+      "as-platform": PROACTIVE_TENANT_UNRESOLVED,
+      "as-bob": "finished",
+      "as-alice-for-system": PROACTIVE_TENANT_UNRESOLVED,
+    });
+  });
+
+  test("a started suggestion runs as its person, and a task for somebody else's is refused", async () => {
+    const alice = stamp("alice", "alice", "a");
+    const suggestion = {
+      tenantId: "alice",
+      id: "s1",
+      ownerUserId: "alice",
+      agentId: alice.agentId,
+      settingId: alice.id,
+      runId: "run",
+      title: "Reply to Sam",
+      detail: "Sam asked for the spec.",
+      sourceApp: null,
+      sourceRef: null,
+      sourceLink: null,
+      status: "started",
+      deliveredAt: null,
+      resolvedAt: null,
+      createdAt: new Date(0),
+    } as StampedProactiveSuggestion;
+    const task = (key: string, tenantId: string) => ({
+      kind: PROACTIVE_TASK_KIND,
+      key,
+      tenantId,
+      payload: { ownerUserId: "alice", suggestionId: "s1" },
+      attempts: 0,
+    });
+    const { engine, queued, seen } = harness({
+      settings: [alice],
+      due: [],
+      suggestions: [suggestion],
+      queued: [
+        // Bob's row naming Alice in its payload: the payload cannot stand in for the row.
+        task("as-bob", "bob"),
+        task("as-system", "system"),
+        task("as-alice", "alice"),
+      ],
+    });
+
+    for (let pass = 0; pass < 3; pass += 1) await engine.sweep();
+
+    expect(seen.tasks).toEqual([{ owner: "alice", as: "alice" }]);
+    expect(
+      Object.fromEntries(
+        queued.map((item) => [item.key, item.released ?? "finished"]),
+      ),
+    ).toEqual({
+      "as-bob": PROACTIVE_TENANT_UNRESOLVED,
+      "as-system": PROACTIVE_TENANT_UNRESOLVED,
+      "as-alice": "finished",
+    });
+  });
+
+  /*
+   * Story C2: every autonomous trigger files a card of its own. A research run is one, so it opens a
+   * `routine` card marked `proactive`, in the tenant the claimed setting proved, tells the turn runner
+   * the card is taken (so no second `chat` card is filed for the same work), and closes it when the
+   * run ends.
+   */
+  function recordingBoard(
+    order: () => string[],
+    options: { openFails?: boolean } = {},
+  ) {
+    const opened: (Parameters<TaskProjector["opened"]>[0] & { as: string })[] =
+      [];
+    const finished: (Parameters<TaskProjector["finished"]>[0] & {
+      as: string;
+    })[] = [];
+    const board: Pick<TaskProjector, "opened" | "finished"> = {
+      opened: async (card) => {
+        order().push(`opened:${card.runRef}`);
+        if (options.openFails) throw new Error("board unavailable");
+        opened.push({ ...card, as: currentTenant() });
+        return `card-${opened.length}`;
+      },
+      finished: async (card) => {
+        order().push(`finished:${card.runRef}`);
+        finished.push({ ...card, as: currentTenant() });
+      },
+    };
+    return { board, opened, finished };
+  }
+
+  test("C2: a research run opens its own proactive card in the setting's tenant and closes it for review", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order);
+    const { engine, queued, seen } = harness({
+      settings: [
+        stamp("alice", "alice", "a"),
+        stamp("system", "alice", "sys"),
+        stamp("alice", "bob", "foreign"),
+      ],
+      board: recorded.board,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    const runId = String(queued[0]?.payload.runId);
+    expect(runId).not.toBe("undefined");
+    // One card, only for the trusted setting, filed as Alice's autonomous work.
+    expect(recorded.opened).toEqual([
+      {
+        tenantId: "alice",
+        title: "主动调研",
+        executorAgentId: "bot-a",
+        source: "routine",
+        triggerSource: "proactive",
+        channelRef: "channel-a",
+        runRef: runId,
+        as: "alice",
+      },
+    ]);
+    // The runner is told the card is taken, so it files no `chat` card of its own.
+    expect(seen.cardOwnedByCaller).toEqual([true]);
+    // Opened before the turn, closed after it, to the review lane.
+    expect(seen.order).toEqual([
+      `opened:${runId}`,
+      `turn:${runId}`,
+      `finished:${runId}`,
+    ]);
+    expect(recorded.finished).toEqual([
+      { tenantId: "alice", runRef: runId, failed: false, as: "alice" },
+    ]);
+  });
+
+  test("C2: the card names the research focus, and a failed run closes its card as failed", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order);
+    const { engine, queued, seen } = harness({
+      settings: [{ ...stamp("alice", "alice", "a"), focus: "客户续约" }],
+      board: recorded.board,
+      turnFails: true,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    const runId = String(queued[0]?.payload.runId);
+    expect(recorded.opened.map((card) => card.title)).toEqual([
+      "主动调研：客户续约",
+    ]);
+    expect(seen.runs.filter((row) => row.id === "a").at(-1)?.status).toBe(
+      "error",
+    );
+    expect(recorded.finished).toEqual([
+      { tenantId: "alice", runRef: runId, failed: true, as: "alice" },
+    ]);
+  });
+
+  test("C2: a board that cannot be written does not stop the research, and the runner keeps its own card", async () => {
+    let order: string[] = [];
+    const recorded = recordingBoard(() => order, { openFails: true });
+    const { engine, seen, suggestions } = harness({
+      settings: [stamp("alice", "alice", "a")],
+      board: recorded.board,
+    });
+    order = seen.order;
+
+    await engine.sweep();
+
+    expect(seen.turns).toEqual([{ owner: "alice", as: "alice" }]);
+    // Not taken: the turn runner's own card is the run's only mark.
+    expect(seen.cardOwnedByCaller).toEqual([false]);
+    expect(suggestions).toHaveLength(1);
+    expect(seen.runs.filter((row) => row.id === "a").at(-1)?.status).toBe(
+      "succeeded",
+    );
+    // Nothing to close: no card was opened.
+    expect(recorded.finished).toEqual([]);
   });
 });
 

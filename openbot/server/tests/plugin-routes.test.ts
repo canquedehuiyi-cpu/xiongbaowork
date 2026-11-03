@@ -416,6 +416,9 @@ function grantsApp(
     },
     skillOwner: async () => null,
     agentOwner: async () => null,
+    // Whose frame an administrator's grant runs in (G01-E P10): these Bots belong to nobody, so the
+    // administrator's own, as before.
+    botOwnerTenant: async () => null,
     agentCanHandOn: async (agentId: string) => canHandOn(agentId),
     agentIsRegistered: async (agentId: string) =>
       agentId !== "never-registered",

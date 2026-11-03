@@ -16,6 +16,27 @@ import { text } from "drizzle-orm/pg-core";
 export const SYSTEM_TENANT = "system";
 
 /**
+ * Background work and admin questions that span tenants run as `platform`: a frame that belongs to
+ * nobody and may read across tenants, never a stamp a person's row carries.
+ */
+export const PLATFORM_TENANT = "platform";
+
+/**
+ * The shared tenant (G01-E): rows that belong to the team as a whole -- governance, shared Bots,
+ * group conversations. It is a stamp only, never a frame: nobody acts as `team`, and the tenant
+ * context refuses to open one. Who may read or write a `team` row is decided by the row's own
+ * ownership predicate, evaluated in the person frame of whoever asks.
+ */
+export const TEAM_TENANT = "team";
+
+/** Tenants that name nobody: no person acts as one, and work stamped with one has no owner. */
+export const NOBODY_TENANTS = [
+  SYSTEM_TENANT,
+  PLATFORM_TENANT,
+  TEAM_TENANT,
+] as const;
+
+/**
  * The default reads the session's tenant, so an insert that names no tenant lands in the tenant
  * the connection is running as -- which the database client sets from AsyncLocalStorage on every
  * query. A connection with no context runs as `system`, the platform's own tenant.

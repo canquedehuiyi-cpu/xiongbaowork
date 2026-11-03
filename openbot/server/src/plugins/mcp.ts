@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { cutAtCodeUnits } from "../channels/text";
+import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
 
 /**
  * The only place in this deployment that speaks MCP to somebody else's server.
@@ -212,6 +213,14 @@ type Connection = {
   url: string;
   /** The bearer token for this server, already decrypted. Absent for a server that needs none. */
   token?: string;
+  /**
+   * Present for a server whose URL a tenant chose (a custom server, no catalogue entry), and then
+   * every request goes through the outbound guard with this policy: each DNS answer must be public,
+   * and a redirect is refused rather than followed, so the token never travels with one.
+   * `customUrlRefusal` only reads the string when it is stored; this is the check on where it points.
+   * Absent for a catalogue-pinned server, whose host is a reviewed constant.
+   */
+  outbound?: OutboundPolicy;
 };
 
 /**
@@ -386,6 +395,10 @@ async function withClient<T>(
     requestInit: connection.token
       ? { headers: { Authorization: authorizationHeader(connection.token) } }
       : undefined,
+    // The SDK sends every POST, GET and DELETE through this when given; see `Connection.outbound`.
+    ...(connection.outbound
+      ? { fetch: createGuardedFetch(connection.outbound) }
+      : {}),
   });
   const client = new Client({ name: "openbot", version: "1.0.0" });
 

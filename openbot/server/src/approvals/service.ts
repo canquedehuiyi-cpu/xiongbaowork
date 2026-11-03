@@ -473,6 +473,14 @@ export function createApprovalService(
         );
       return questions.respond(ownerUserId, id, response);
     },
+    /**
+     * One of this person's own requests, in the inbox's shape, or ApprovalNotFoundError. The inbox
+     * carries only the newest hundred, and a board card can be parked on an older one: the card has
+     * to learn the request's policy (a hand-off is answered 已处理, not 批准) from somewhere.
+     */
+    async request(ownerUserId: string, id: string) {
+      return publicApproval(await store.get(ownerUserId, id));
+    },
     async inbox(ownerUserId: string) {
       const requests = await store.list(ownerUserId);
       const policy = store.policy;
@@ -597,8 +605,10 @@ export function createApprovalService(
         );
       // Default remains closed. A trusted producer must verify an EXISTING
       // frozen seed before validation, execution or any result write.
-      if (!options.continuationRecovery || !store.getRecoveryContext ||
-          (!request.result && !fresh))
+      // The no-result/no-producer case is decided first so a blocked retry
+      // reads no recovery option or store capability at all.
+      if ((!request.result && !fresh) || !options.continuationRecovery ||
+          !store.getRecoveryContext)
         throw new ApprovalRecoveryBlockedError();
       const prepared = !request.result && fresh
         ? await freshOperation(() => fresh.prepare(request, ownerUserId))

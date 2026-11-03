@@ -21,7 +21,9 @@ import {
   registerOAuthClientMutationOptions,
   removePluginServerMutationOptions,
   removeSkillMutationOptions,
+  replaceServerTokenMutationOptions,
   saveSkillMutationOptions,
+  setListingMutationOptions,
   setPluginGrantMutationOptions,
 } from "../src/lib/plugins/mutations";
 import { pluginKeys } from "../src/lib/plugins/queries";
@@ -171,6 +173,26 @@ const REFUSALS: {
     },
   },
   {
+    /*
+     * Spec E3. `addInstallListing` commits the row and then files the trail row, so a failing audit
+     * insert is a 500 over a listing that is now there.
+     */
+    name: "listing an entry for owners to install",
+    route: "POST /api/plugins/listings",
+    status: 500,
+    message: "没能上架。",
+    factory: setListingMutationOptions,
+    variables: { kind: "skill" as const, listed: true, ref: "weekly-report" },
+  },
+  {
+    name: "unlisting an entry",
+    route: "DELETE /api/plugins/listings",
+    status: 404,
+    message: "That entry is not listed.",
+    factory: setListingMutationOptions,
+    variables: { kind: "mcp" as const, listed: false, ref: "notion" },
+  },
+  {
     name: "adding a curated server",
     route: "POST /api/plugins/servers",
     status: 409,
@@ -214,6 +236,15 @@ const REFUSALS: {
     message: "That server could not be removed.",
     factory: removePluginServerMutationOptions,
     variables: "linear",
+  },
+  {
+    // Stored and pointed at in one transaction, then refreshed: a 409 is a token that is in place.
+    name: "replacing a server's token",
+    route: "POST /api/plugins/servers/:id/token",
+    status: 409,
+    message: "That server's tools could not be recorded.",
+    factory: replaceServerTokenMutationOptions,
+    variables: { serverId: "linear", token: "fixture-token" },
   },
   {
     name: "saving a skill",
@@ -485,6 +516,12 @@ const ENCODED_REQUESTS: {
     variables: HOSTILE_ID,
   },
   {
+    name: "replacing a server's token",
+    url: `/api/plugins/servers/${ENCODED_ID}/token`,
+    build: replaceServerTokenMutationOptions,
+    variables: { serverId: HOSTILE_ID, token: "fixture-token" },
+  },
+  {
     name: "registering an OAuth client",
     url: `/api/plugins/servers/${ENCODED_ID}/oauth-client`,
     build: registerOAuthClientMutationOptions,
@@ -548,6 +585,13 @@ const ENCODED_REQUESTS: {
       kind: "mcp" as const,
       ref: HOSTILE_ID,
     },
+  },
+  {
+    // Spec E3: the listing's catalogue key, in a query for the same reason as the grant's ref.
+    name: "unlisting an entry",
+    url: `/api/plugins/listings?kind=skill&ref=${ENCODED_ID}`,
+    build: setListingMutationOptions,
+    variables: { kind: "skill" as const, listed: false, ref: HOSTILE_ID },
   },
 ];
 

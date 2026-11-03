@@ -11,18 +11,19 @@ import { createDatabase, type Database } from "../src/db/client";
 import { approvalContinuations as ledger, approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { runAsTenant } from "../src/tenant/context";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // SOURCE_ONLY: real PG17 definitions, zero executions. Import opens the existing
 // DB module; this file is never a CPU-only import or an authorization artifact.
 // No DDL, automatic migration, grants, fallback URL, provider or production DB.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw) throw new Error("BLOCKED_TEST_DATABASE_URL");
+const disposable = await createDisposableTestDatabase({ role: "bypass" });
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (!/^postgres(?:ql)?:$/.test(url.protocol) ||
     !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
     !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-    process.env.TEST_DATABASE_DISPOSABLE !== databaseName)
+    disposable.databaseName !== databaseName)
   throw new Error("BLOCKED_NOT_DISPOSABLE");
 const database = createDatabase(raw, { max: 1 });
 const tenant = `preparation-${randomUUID()}`;
@@ -41,13 +42,13 @@ const baseOptions: ContinuationStoreOptions = {
 };
 
 beforeAll(async () => {
-  const [identity] = await database.select({
+  const [identity] = await runAsTenant("platform", () => database.select({
     name: sql<string>`current_database()`,
     version: sql<number>`current_setting('server_version_num')::int`,
     parent: sql<string | null>`to_regclass('public.approval_requests')::text`,
     ledger: sql<string | null>`to_regclass('public.approval_continuations')::text`,
     fixturePrivilege: sql<boolean>`exists(select 1 from pg_roles where rolname = current_user and (rolsuper or rolbypassrls))`,
-  }).from(sql`(select 1) as fixture_identity`);
+  }).from(sql`(select 1) as fixture_identity`));
   if (!identity || identity.name !== databaseName || identity.version < 170_000 ||
       identity.version >= 180_000 || !identity.parent || !identity.ledger ||
       !identity.fixturePrivilege)
@@ -67,8 +68,9 @@ afterAll(async () => {
     }
   } finally {
     await database.$client.close();
+    await disposable.drop();
   }
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 async function fixture(origin: ContinuationProvision["origin"] = "current") {
   const id = randomUUID();

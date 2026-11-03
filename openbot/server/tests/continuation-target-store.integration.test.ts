@@ -1,9 +1,18 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { AbstractAgent, type BaseEvent, EventType } from "@ag-ui/client";
-import type { AgentRunnerRunRequest } from "@copilotkit/runtime/v2";
+import {
+  AbstractAgent,
+  type BaseEvent,
+  EventType,
+  type RunAgentInput,
+} from "@ag-ui/client";
+import {
+  type AgentRunnerRunRequest,
+  ɵGLOBAL_STORE,
+} from "@copilotkit/runtime/v2";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { EMPTY, of } from "rxjs";
 import { createDatabase, type Database } from "../src/db/client";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 import {
   approvalContinuations,
   approvalContinuationSteps,
@@ -30,22 +39,28 @@ import { runAsTenant } from "../src/tenant/context";
 
 // REAL PG only. No default URL, DDL, auto-migration, service, model or provider.
 // Root supplies canonical schema/RLS and a non-owner, non-BYPASS fixture role.
-const raw = process.env.TEST_DATABASE_URL;
-if (!raw)
-  throw new Error("BLOCKED_TEST_DATABASE_URL: PG bodies/connections NOT RUN");
+const disposable = await createDisposableTestDatabase();
+const raw = disposable.url;
 const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !/^postgres(?:ql)?:$/.test(url.protocol) ||
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
   !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
-  process.env.TEST_DATABASE_DISPOSABLE !== databaseName
+  disposable.databaseName !== databaseName
 )
   throw new Error(
     "BLOCKED_NOT_DISPOSABLE: explicit loopback one-time test DB required",
   );
 const dbA = createDatabase(raw, { max: 1 });
 const dbB = createDatabase(raw, { max: 1 });
+/*
+ * The continuation ledger is FORCE RLS with no app-role policy, so only the fixture role can seed and
+ * lease it. The target store under test still runs as the app role on dbA/dbB.
+ */
+if (!disposable.bypassUrl)
+  throw new Error("BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_BYPASS_URL is required");
+const dbLedger = createDatabase(disposable.bypassUrl, { max: 1 });
 const owner = `target-owner-${crypto.randomUUID()}`;
 const tenant = owner;
 const ids: string[] = [];
@@ -97,7 +112,9 @@ afterAll(async () => {
   }
   await dbA.$client.close();
   await dbB.$client.close();
-});
+  await dbLedger.$client.close();
+  await disposable.drop();
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 class FixtureAgent extends AbstractAgent {
   run() {
     return EMPTY;
@@ -159,7 +176,9 @@ function faultDatabase(db: Database, phase: "before_commit" | "after_commit") {
     },
   };
 }
-async function setup() {
+async function setup(
+  agent: AbstractAgent = new FixtureAgent({ agentId: "pg-fixture-agent" }),
+) {
   const id = crypto.randomUUID();
   ids.push(id);
   const threadId = `target-thread-${id}`;
@@ -171,7 +190,6 @@ async function setup() {
     admissionId: `local-admission-${id}`,
   };
   const identity: ContinuationIdentity = { ...binding, inputDigest: "pending" };
-  const agent = new FixtureAgent({ agentId: "pg-fixture-agent" });
   const input = {
     threadId,
     runId: localRunId(identity),
@@ -205,7 +223,7 @@ async function setup() {
     throw new Error(
       `BLOCKED_CANONICAL_ROLE_RLS_RELEASE:${targetA.releaseReason}:${targetB.releaseReason}`,
     );
-  const store = createContinuationStore(dbA, {
+  const store = createContinuationStore(dbLedger, {
     leaseMs: 60000,
     authorizeCurrentProvisioning: async () => true, // fixture provenance, NOT production policy
     verifyNeverAdmittedProof: targetA.verifyNeverAdmittedProof,
@@ -415,8 +433,9 @@ test("old worker late terminal after actual DB expiry/ABA is rejected with zero 
   const h = await setup();
   await h.targetA.reserve(h.intent);
   await h.targetA.begin(h.intent);
+  // Simulated expiry is fixture work on the closed ledger, which the app role cannot change.
   await scoped(() =>
-    dbB
+    dbLedger
       .update(approvalContinuations)
       .set({ leaseUntil: sql`clock_timestamp()-interval '1 second'` })
       .where(
@@ -485,4 +504,124 @@ test("receipt is checked against immutable run journal, not mutable latest threa
       ),
   );
   await expect(h.targetA.verifyReceipt(receipt)).rejects.toThrow();
+});
+
+/** An in-process agent answering through the runner's real local stream, so the run enters the store. */
+class AnsweringAgent extends AbstractAgent {
+  run(input: RunAgentInput) {
+    return of<BaseEvent[]>(
+      {
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: `answer-${input.runId}`,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: `answer-${input.runId}`,
+        delta: "continued answer",
+      },
+      { type: EventType.TEXT_MESSAGE_END, messageId: `answer-${input.runId}` },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    );
+  }
+}
+
+/*
+ * G01-E P20: a continuation on a thread whose tenant this process has not loaded yet (a restart, then
+ * the approval's continuation before the person's first request) must not leave the thread's earlier
+ * runs out of memory. The load is once per tenant and never appends to a thread already holding runs,
+ * so whatever the continuation puts in the store first is all the store would ever show.
+ */
+test("a continuation before its tenant's threads are loaded keeps the thread's earlier runs, in order", async () => {
+  const h = await setup(new AnsweringAgent({ agentId: "pg-fixture-agent" }));
+  const { threadId } = h.plan;
+  const olderRunId = `older-run-${crypto.randomUUID()}`;
+  const earlier = new Date(Date.now() - 60 * 60 * 1000);
+  const olderEvents: BaseEvent[] = [
+    { type: EventType.RUN_STARTED, threadId, runId: olderRunId },
+    {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "older-answer",
+      role: "assistant",
+    },
+    {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "older-answer",
+      delta: "the earlier answer",
+    },
+    { type: EventType.TEXT_MESSAGE_END, messageId: "older-answer" },
+    { type: EventType.RUN_FINISHED, threadId, runId: olderRunId },
+  ];
+  await scoped(async () => {
+    await dbA.insert(threads).values({
+      id: threadId,
+      tenantId: tenant,
+      agentId: h.plan.agentId,
+      messagesSnapshot: [
+        {
+          id: "older-answer",
+          role: "assistant",
+          content: "the earlier answer",
+        },
+      ],
+      createdAt: earlier,
+      updatedAt: earlier,
+    });
+    await dbA.insert(threadRuns).values({
+      id: olderRunId,
+      threadId,
+      agentId: h.plan.agentId,
+      eventCount: olderEvents.length,
+      createdAt: earlier,
+    });
+    await dbA.insert(threadRunEvents).values(
+      olderEvents.map((event, seq) => ({
+        threadId,
+        runId: olderRunId,
+        seq,
+        event,
+      })),
+    );
+  });
+  // A process that has loaded nobody's threads: a fresh copy of the runner module (as after a restart).
+  const cold = (await import(
+    "../src/threads/postgres-runner.ts?p20-continuation-before-load"
+  )) as typeof import("../src/threads/postgres-runner");
+  const runner = new cold.PostgresAgentRunner(dbA);
+  expect(ɵGLOBAL_STORE.peek(threadId)).toBeUndefined();
+  const target = createLocalContinuationTurnTarget({
+    persistence: h.targetA,
+    request: h.request,
+    runner,
+  });
+  expect((await scoped(() => target.admit(h.intent))).kind).toBe("completed");
+  // The tenant's first request after the continuation: the load the continuation must not pre-empt.
+  await scoped(() => runner.hydrate());
+  const inMemory = ɵGLOBAL_STORE.peek(threadId)?.historicRuns ?? [];
+  expect(inMemory.map((run) => run.runId)).toEqual([olderRunId, h.plan.runId]);
+  const replayed = scoped(() => runner.getThreadEvents(threadId));
+  const deltas = replayed.flatMap((event) =>
+    event.type === EventType.TEXT_MESSAGE_CONTENT && "delta" in event
+      ? [event.delta]
+      : [],
+  );
+  expect(deltas).toEqual(["the earlier answer", "continued answer"]);
+  // And the stored record agrees: both runs, the earlier one first.
+  const stored = await scoped(() =>
+    dbB
+      .select({ id: threadRuns.id })
+      .from(threadRuns)
+      .where(eq(threadRuns.threadId, threadId))
+      .orderBy(threadRuns.createdAt),
+  );
+  expect(stored.map((row) => row.id)).toEqual([olderRunId, h.plan.runId]);
 });

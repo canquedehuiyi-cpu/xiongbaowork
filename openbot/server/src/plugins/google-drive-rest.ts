@@ -158,7 +158,7 @@ async function request(
   query: Record<string, string>,
 ): Promise<{ ok: true; response: Response } | { ok: false; message: string }> {
   if (!connection.token) {
-    return { ok: false, message: "No credential was available for this call." };
+    return { ok: false, message: "这次调用没有可用的凭据。" };
   }
 
   const url = new URL(`${connection.url.replace(/\/+$/, "")}${path}`);
@@ -170,6 +170,8 @@ async function request(
   try {
     response = await fetch(url, {
       headers: { authorization: `Bearer ${connection.token}` },
+      // Never followed: a default fetch carries the person's token to wherever a Location points.
+      redirect: "manual",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
@@ -177,8 +179,19 @@ async function request(
       ok: false,
       message:
         error instanceof Error && error.name === "TimeoutError"
-          ? "Google Drive did not answer in time."
-          : `Google Drive could not be reached: ${error instanceof Error ? error.message : String(error)}`,
+          ? "Google Drive 未在规定时间内响应。"
+          : `无法连接 Google Drive：${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  if (
+    (response.status >= 300 && response.status < 400) ||
+    response.type === "opaqueredirect"
+  ) {
+    await response.body?.cancel().catch(() => undefined);
+    return {
+      ok: false,
+      message: `Google Drive 返回了重定向（${response.status}）。系统不跟随重定向，凭据未被转发。`,
     };
   }
 
@@ -200,8 +213,8 @@ async function request(
     return {
       ok: false,
       message: detail
-        ? `Google Drive refused this request (${response.status}): ${detail}`
-        : `Google Drive refused this request (${response.status}).`,
+        ? `Google Drive 拒绝了这次请求（${response.status}）：${detail}`
+        : `Google Drive 拒绝了这次请求（${response.status}）。`,
     };
   }
 

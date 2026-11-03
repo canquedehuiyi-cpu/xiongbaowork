@@ -7,6 +7,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # release.yml runs these same checks on the tagged commit before it builds.
+  workflow_call:
+    inputs:
+      skip_image:
+        description: The caller builds and smoke-tests the image itself (release.yml builds once).
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,24 +29,40 @@ defaults:
 
 env:
   TENANT_PACKAGE_DIR: ../examples/qoderwake
-  # Frozen before the three tracks started. Never replace with moving main.
-  DELIVERY_BASELINE_SHA: 03df9efa29cc51b64bd4a7b695dcb977ac0869f6
+  # Frozen at the commit main was created from (D06 candidate). The previous value
+  # 03df9efa... does not exist in this repository. Never replace with moving main.
+  DELIVERY_BASELINE_SHA: 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634
 
 jobs:
   static:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - run: bunx biome lint --error-on-warnings .
+      - run: bunx biome lint --error-on-warnings --diagnostic-level=warn .
       - run: bun run typecheck
-      - run: bun test test-report.test.mjs
+      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs
         working-directory: openbot/scripts/ci
+
+  # The Helm chart, rendered for real. openbot/.github's chart job is the upstream copy and does not
+  # run here, so nothing rendered the chart in this fork. Lint plus a few `helm template` renders,
+  # no cluster: see scripts/ci/chart-check.sh for what each check stands for.
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.19.0
+      - run: bash scripts/ci/chart-check.sh
 
   server-test:
     runs-on: ubuntu-latest
@@ -66,13 +89,19 @@ jobs:
       INTELLIGENCE_MODE: local
       DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head
       TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head
+      # Migration 0109 creates the restricted role writer; tests bind it the way the server does.
+      TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_b_head
+      # D06 suites clone this migrated, never-connected template into one-time databases.
+      TEST_DATABASE_ADMIN_URL: postgres://openbot:ci-owner@127.0.0.1:5432/postgres
+      TEST_DATABASE_TEMPLATE: openbot_continuation_template
+      TEST_DATABASE_BYPASS_URL: postgres://openbot_fixture:ci-fixture@127.0.0.1:5432/postgres
       PGPASSWORD: ci-owner
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
@@ -82,7 +111,11 @@ jobs:
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_b_base OWNER openbot'
           DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_head bun run --cwd server scripts/migrate.ts
           DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_base bun run --cwd "$RUNNER_TEMP/delivery-baseline/openbot/server" scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_continuation_template OWNER openbot'
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_continuation_template bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE openbot_fixture LOGIN PASSWORD 'ci-fixture' NOSUPERUSER BYPASSRLS IN ROLE openbot_app"
           printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env
           printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$RUNNER_TEMP/delivery-baseline/openbot/.env"
       - name: Baseline tests (same head shard file list, own database)
@@ -92,12 +125,18 @@ jobs:
           TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
             bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
-        continue-on-error: true
+        # No continue-on-error: a failing head test fails this step and the job. The report step
+        # below runs anyway (if: always()) for the baseline comparison.
+        # G01-E P15: no OPENBOT_TENANT_FRAME_GUARD here. scripts/test-preload.ts defaults it to
+        # `throw`, so a database read or write with no tenant frame fails the test that made it.
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" "server shard ${{ matrix.shard }}"
-      - uses: actions/upload-artifact@v4
+      - name: Print head test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: server-${{ matrix.shard }}-logs
@@ -109,11 +148,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
@@ -122,25 +161,90 @@ jobs:
         continue-on-error: true
         run: bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" app "$RUNNER_TEMP/base.log"
       - name: Generate configuration and run app tests
-        continue-on-error: true
         run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: app-logs
           path: ${{ runner.temp }}/*.log
 
+  # Gate G4: the WakerFlow basic lifecycle in a real browser (the runner's preinstalled Chrome, driven
+  # by playwright-core) against the real server on its own PostgreSQL, serving the built app the way
+  # the image does. The model is aimock: no secret, no provider call, nothing charged. Generate ->
+  # edit -> save -> run -> abort mid-step -> inspect -> SIGKILL the server mid-run -> restart ->
+  # the interrupted run is closed failed and not replayed (WF-F) -> a fresh run completes.
+  e2e-wakerflow:
+    name: G4 WakerFlow lifecycle (browser, mocked model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      # The fresh-database check and the recovery-horizon time shift only (see the harness header).
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: Build the app the server serves (APP_DIST_DIR)
+        run: bun run --cwd app build
+      - name: The runner's preinstalled Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          "$chrome" --version
+          echo "E2E_CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: G4 WakerFlow lifecycle
+        env:
+          E2E_APP_DIST_DIR: app/dist
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g4
+        run: bun scripts/e2e/wakerflow-lifecycle.ts
+      - name: Print server logs (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/g4/server-*.log; do
+            bash scripts/ci/print-diagnostics.sh "$f"
+          done
+      # Screenshots of every step, the Playwright trace, both server logs and the model-call record.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-wakerflow-evidence
+          path: ${{ runner.temp }}/g4/
+
   image:
+    if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
       - run: docker build -f Dockerfile -t openbot:trackb .
@@ -148,9 +252,174 @@ jobs:
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
         run: bash scripts/ci/image-smoke.sh openbot:trackb
-      - uses: actions/upload-artifact@v4
+      - name: Print container logs (credentials masked)
+        if: failure()
+        run: |
+          for f in startup owner auth recreated; do
+            bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/delivery-evidence/$f.log" || true
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: image-evidence
           path: ${{ runner.temp }}/delivery-evidence/
           if-no-files-found: error
+
+  # Packages outside the server/app suites. None of them has a test counterpart in the frozen
+  # baseline run, so the gate is head only: Bun must report Ran N > 0, 0 fail, no unhandled errors.
+  # runner/ has no tests of its own: they live in server/tests and run in the server-test shards,
+  # and its native Windows path is exercised by win1-windows below.
+  workspaces-test:
+    name: workspace tests (${{ matrix.pkg }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Own bun.lock, outside the root workspaces, so installed and typechecked on their own.
+          # supervisor's docker.integration suite runs because the hosted runner has a Docker socket.
+          - pkg: agent-computer
+            own-lockfile: true
+          - pkg: supervisor
+            own-lockfile: true
+          # No package.json: imports only bun:test, node:crypto and relative files.
+          - pkg: shared
+            own-lockfile: false
+          # Root workspace (typechecked by static); its tests import only worker/src and ../shared.
+          - pkg: worker
+            own-lockfile: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - name: Install from the package's own frozen lockfile (no lifecycle scripts)
+        id: install
+        if: matrix.own-lockfile
+        working-directory: openbot/${{ matrix.pkg }}
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Head tests
+        working-directory: openbot/${{ matrix.pkg }}
+        run: bun test > "$RUNNER_TEMP/head.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/head.log" "${{ matrix.pkg }} (head only)"
+      - name: Print head test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
+      - name: Root frozen install (tsc resolves @types/bun from the root node_modules)
+        if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
+        working-directory: openbot
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Typecheck (not covered by the root typecheck)
+        if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
+        working-directory: openbot/${{ matrix.pkg }}
+        run: bun run typecheck
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: workspace-${{ matrix.pkg }}-logs
+          path: ${{ runner.temp }}/head.log
+
+  # WIN1: the native Windows device CLI executes commands, start failures are explicit, and Stop,
+  # timeout and protocol cancel kill the whole descendant tree. The probe imports the real runner
+  # executor, agent-computer shell, bun:sqlite journal and dispatcher; any failed check throws.
+  win1-windows:
+    name: WIN1 device CLI probe (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: openbot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      # runner/src/browser imports agent-computer/src/aria-snapshot, which needs yaml from the root.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: WIN1 probe (fresh Unicode workspace with spaces, real Node child trees)
+        run: |
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          $name = 'win1 ' + [char]0x718A + [char]0x5B9D + " $env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $dir = Join-Path $env:RUNNER_TEMP $name
+          if (Test-Path -LiteralPath $dir) { throw "Workspace $dir already exists; the probe needs a fresh one." }
+          $node = (Get-Command node -CommandType Application | Select-Object -First 1).Source
+          $log = Join-Path $env:RUNNER_TEMP 'win1.log'
+          bun scripts/ci/windows-runner-probe.ts $dir $node *>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { throw "windows-runner-probe exited $code" }
+          if (-not (Select-String -LiteralPath $log -SimpleMatch -Quiet -Pattern '"platform":"win32"')) { throw 'Probe did not report win32.' }
+          if (-not (Select-String -LiteralPath $log -Quiet -Pattern '^WINDOWS_PROBE_PASS$')) { throw 'WINDOWS_PROBE_PASS missing.' }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: win1-windows-log
+          path: ${{ runner.temp }}/win1.log
+
+  # Desktop shell on Windows: frontend typecheck, Bun tests and build (Tauri embeds ../dist at
+  # compile time), then the Rust regression tests. Ignored live tests stay off; no secrets used.
+  desktop-windows:
+    name: desktop tests (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: openbot/desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: openbot/desktop/src-tauri
+          key: windows
+      - name: Install desktop from its own frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Typecheck
+        run: bun run typecheck
+      # Bash (Git Bash on the runner), not pwsh: Bun writes its report to stderr, and pwsh would turn
+      # each redirected stderr line into an ErrorRecord before Tee-Object formats it into the log.
+      - name: Bun tests
+        shell: bash
+        run: bun test > "$RUNNER_TEMP/desktop-bun.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        shell: bash
+        working-directory: openbot
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-bun.log" 'desktop Bun tests on Windows (head only)'
+      - name: Print desktop Bun test diagnostics (credentials masked)
+        if: failure()
+        shell: bash
+        working-directory: openbot
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/desktop-bun.log"
+      - name: Frontend build (frontendDist for the Tauri compile)
+        run: bun run build
+      - name: Rust regression tests (lib and bins, --locked)
+        working-directory: openbot/desktop/src-tauri
+        shell: bash
+        run: |
+          cargo test --locked --lib --bins 2>&1 | tee "$RUNNER_TEMP/desktop-cargo.log"
+          # cargo exits 0 when a target has no tests; require that something actually passed.
+          passed=$(sed -nE 's/^test result: ok\. ([0-9]+) passed.*/\1/p' "$RUNNER_TEMP/desktop-cargo.log" | awk '{s+=$1} END {print s+0}')
+          echo "Rust tests passed: $passed"
+          [ "$passed" -gt 0 ] || { echo '::error::cargo test ran zero tests'; exit 1; }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: desktop-windows-logs
+          path: ${{ runner.temp }}/desktop-*.log

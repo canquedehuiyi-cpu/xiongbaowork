@@ -39,8 +39,10 @@ export async function listTenants(database: Database): Promise<TenantRow[]> {
         createdAt: users.createdAt,
         plan: subscriptions.planId,
         suspended: sql<boolean>`${revokedAccess.email} is not null`,
+        // By owner, as the quota counts them: a public or published Bot is stamped `team`
+        // (G01-E P8b) and is still its owner's Waker.
         wakers: sql<number>`(select count(*)::int from agent_profiles ap
-          where ap.tenant_id = ${users.id} and ap.deleted_at is null)`,
+          where ap.owner_user_id = ${users.id} and ap.deleted_at is null)`,
         activeRoutines: sql<number>`(select count(*)::int from routines r
           where r.tenant_id = ${users.id} and r.enabled)`,
       })
@@ -95,4 +97,30 @@ export async function restoreTenant(
       .where(eq(revokedAccess.email, normalize(user.email)));
     return true;
   });
+}
+
+export const TENANT_PAGE_MAX = 100;
+
+/**
+ * One page of the tenants this deployment serves, newest first, for the operator's per-tenant reads
+ * (spec J5). Opens no frame of its own: the caller is `asAdminPlatform`, after the admin capability
+ * has been re-checked. In any other frame row-level security narrows it to that frame's own row.
+ */
+export async function listTenantPage(
+  database: Database,
+  input: { limit: number; offset: number },
+): Promise<{
+  tenants: { id: string; email: string; name: string | null }[];
+  hasMore: boolean;
+}> {
+  const rows = await database
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .orderBy(desc(users.createdAt), users.id)
+    .limit(input.limit + 1)
+    .offset(input.offset);
+  return {
+    tenants: rows.slice(0, input.limit),
+    hasMore: rows.length > input.limit,
+  };
 }
