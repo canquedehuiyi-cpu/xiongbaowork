@@ -35,6 +35,27 @@ const ruleChange = z
 
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 
+/**
+ * Whether the database refused the statement for want of privilege: row-level security's "new row
+ * violates row-level security policy" and a missing grant both carry SQLSTATE 42501. The query
+ * builder wraps the driver's error, so it may sit on the error or on its cause; Bun's driver puts
+ * the SQLSTATE in `errno` (its `code` is `ERR_POSTGRES_SERVER_ERROR`), other drivers in `code`.
+ */
+function refusedByDatabase(error: unknown): boolean {
+  for (
+    let current: unknown = error, depth = 0;
+    current instanceof Error && depth < 4;
+    current = (current as Error & { cause?: unknown }).cause, depth += 1
+  ) {
+    const { code, errno } = current as Error & {
+      code?: unknown;
+      errno?: unknown;
+    };
+    if (code === "42501" || errno === "42501") return true;
+  }
+  return false;
+}
+
 export function createApprovalRoutes(
   service: ApprovalService,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
@@ -57,7 +78,11 @@ export function createApprovalRoutes(
     // 500 carrying the parser's message.
     error instanceof SyntaxError
       ? context.json({ error: "Supply a valid request." }, 400)
-      : context.json(
+      : // A team write the database refused (an admin whose role or capability it does not see) is
+        // a 403, never a 500 that echoes the statement back.
+        refusedByDatabase(error)
+        ? context.json({ error: "Administrator access required." }, 403)
+        : context.json(
           { error: error.message },
           error instanceof ApprovalNotFoundError
             ? 404

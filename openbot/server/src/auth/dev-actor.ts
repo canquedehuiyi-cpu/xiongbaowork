@@ -4,6 +4,7 @@ import { users } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { provisionTenant } from "../tenant/provisioning";
 import type { AppVariables, AuthenticatedActor } from "./guards";
+import { setRole } from "./roles";
 
 /**
  * A signed-in person, without signing in.
@@ -60,6 +61,31 @@ export async function initializeDevActorUser(
       }),
   );
 
+  return true;
+}
+
+/**
+ * The single-user actor's administrator role, in `user_roles`.
+ *
+ * `DEV_ACTOR.role` says "admin" to the request guard, but row-level security recognises an
+ * administrator only through `user_roles` (G01-E I10): the ADMIN predicate on team governance rows
+ * needs that row, and `adminCapability` re-reads it before granting the capability. Without it the
+ * one person a single-user deployment has could not change team approval rules or settings, which
+ * live in the shared `team` tenant. So the actor gets the same row any other administrator has,
+ * through the role writer, at boot, as `platform` (role facts belong to no tenant).
+ *
+ * Separate from {@link initializeDevActorUser} because the role writer is bound to the application
+ * `Database`, not to a transaction a caller may hand that function. Idempotent: called on every start,
+ * after the user row exists (the role row references it).
+ */
+export async function seedDevActorRole(
+  database: Database,
+  enabled: boolean,
+): Promise<boolean> {
+  if (!enabled) return false;
+  await runAsTenant("platform", () =>
+    setRole(database, DEV_ACTOR.id, DEV_ACTOR.role),
+  );
   return true;
 }
 

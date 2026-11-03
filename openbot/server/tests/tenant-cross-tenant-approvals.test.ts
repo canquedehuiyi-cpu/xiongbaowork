@@ -12,6 +12,12 @@ import {
   approvalAction,
 } from "../src/approvals/types";
 import { createAdminScope } from "../src/auth/admin-scope";
+import {
+  createDevRequireUser,
+  DEV_ACTOR,
+  initializeDevActorUser,
+  seedDevActorRole,
+} from "../src/auth/dev-actor";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
@@ -20,6 +26,7 @@ import {
   approvalRequests,
   approvalRules,
   approvalTeamRules,
+  userRoles,
   users,
 } from "../src/db/schema";
 import { TEAM_TENANT } from "../src/db/schema/tenant";
@@ -479,4 +486,106 @@ test("admin B changes and revokes the rule admin A made, and M's gate follows", 
       runAsTenant(stranger, () => service.gate(headless(stranger))),
     ),
   ).toBeFalse();
+});
+
+test("the single-user actor holds its admin role in `user_roles`, so it can change team settings and rules", async () => {
+  // As src/index.ts boots a single-user deployment: the user row, then its role, with no frame
+  // around either (each opens its own `platform` frame).
+  expect(await initializeDevActorUser(database, true)).toBe(true);
+  expect(await seedDevActorRole(database, true)).toBe(true);
+  // Idempotent: every start runs it again.
+  expect(await seedDevActorRole(database, true)).toBe(true);
+  expect(await seedDevActorRole(database, false)).toBe(false);
+  expect(
+    await asPlatform(() =>
+      database
+        .select({ role: userRoles.role })
+        .from(userRoles)
+        .where(eq(userRoles.userId, DEV_ACTOR.id)),
+    ),
+  ).toEqual([{ role: "admin" }]);
+
+  // The routes as a single-user deployment mounts them.
+  const routes = createApprovalRoutes(
+    service,
+    createDevRequireUser(),
+    scope.adminCapability,
+  );
+  const send = (path: string, method: "POST" | "PATCH", body: unknown) =>
+    routes.request(
+      new Request(`http://openbot.test/${path}`, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  // The settings row is shared by every suite: written back unchanged, which still goes through
+  // the `team` insert-or-update that row-level security has to admit.
+  const before = await runAsTenant(DEV_ACTOR.id, () =>
+    store.policy!.teamSettings(),
+  );
+  const settings = await send("team", "PATCH", {
+    enforceAutoReview: before.enforceAutoReview,
+    customRulesEnabled: before.customRulesEnabled,
+    hostCommandsCap: before.hostCommandsCap,
+  });
+  expect(settings.status).toBe(200);
+
+  const created = await send("team/rules", "POST", {
+    botId: `${suite}-bot`,
+    toolRef: `${suite}-single-user-tool`,
+    behaviour: "ask",
+  });
+  expect(created.status).toBe(201);
+  const { rule } = (await created.json()) as { rule: { id: string } };
+  expect(
+    await asPlatform(() =>
+      database
+        .select({ tenantId: approvalTeamRules.tenantId })
+        .from(approvalTeamRules)
+        .where(eq(approvalTeamRules.id, rule.id)),
+    ),
+  ).toEqual([{ tenantId: TEAM_TENANT }]);
+});
+
+test("an admin the database does not know as one gets 403 on a team write, not a 500 echoing the SQL", async () => {
+  // A session that says "admin" with no `user_roles` row: the guard admits it, the capability is
+  // not granted, and row-level security refuses the insert.
+  const routes = createApprovalRoutes(
+    service,
+    async (context, next) => {
+      context.set("actor", { id: stranger, role: "admin" });
+      await runAsTenant(stranger, () => next());
+    },
+    scope.adminCapability,
+  );
+  for (const [path, method, body] of [
+    ["team/rules", "POST", { toolRef: teamTool, behaviour: "allow" }],
+    ["team", "PATCH", { enforceAutoReview: true }],
+  ] as const) {
+    const response = await routes.request(
+      new Request(`http://openbot.test/${path}`, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(response.status).toBe(403);
+    const text = await response.text();
+    expect(text).not.toContain("insert");
+    expect(text).not.toContain("approval_team");
+  }
+  const rows = await asPlatform(() =>
+    database
+      .select({ id: approvalTeamRules.id })
+      .from(approvalTeamRules)
+      .where(
+        and(
+          eq(approvalTeamRules.botId, "*"),
+          eq(approvalTeamRules.toolRef, teamTool),
+        ),
+      ),
+  );
+  expect(rows).toEqual([]);
 });
