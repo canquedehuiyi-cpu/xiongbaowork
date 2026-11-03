@@ -539,6 +539,16 @@ install rather than found as a browser that fails on every page.
 
 ## Upgrades
 
+### Coworkers now act on the tenant's own machine by default (`config.tenantRuntime`)
+
+`config.tenantRuntime` defaults to `device` and is always rendered as `TENANT_RUNTIME`. A coworker's
+actions go to the tenant's paired machine over the runner's outbound websocket; an action for a
+tenant with no paired machine is refused, never run in the cluster. Releases before this one left the
+variable unset, and the server then used the cluster's own computer (`cloud`). An upgrade with
+`--reuse-values` therefore switches an existing release to `device`. To keep the old behaviour, set
+`--set config.tenantRuntime=cloud`. Any other value fails the render. The API logs one
+`{"type":"tenant-runtime", …}` line at boot naming the runtime and why.
+
 ### Coming from a release that only warned: the server now refuses a superuser
 
 Unset, `OPENBOT_RLS_ENFORCE` used to mean `warn`. It now means `refuse` under this chart's
