@@ -39,8 +39,8 @@ import {
   installListingsQueryOptions,
   listedRefs,
   type PluginServer,
-  type PluginsPage,
   type PluginSkill,
+  type PluginsPage,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
 
