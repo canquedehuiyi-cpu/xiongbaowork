@@ -512,32 +512,19 @@ describe("dedicated writer configuration (synthetic environment only)", () => {
   });
 });
 
-/** Run `work` with the tenant-frame guard on `throw`, then put the guard back as it was. */
-async function underGuardThrow<T>(work: () => Promise<T>): Promise<T> {
-  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    return await work();
-  } finally {
-    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-  }
-}
-
 describe("role writer startup frame (G01-E P3)", () => {
   test("start() initializes the writer in an explicit platform frame, not the unframed fallback", async () => {
     const seen: string[] = [];
     const { lifecycle, events } = fixture({
       initialize: async () => {
-        // Under `throw`, an unframed read would reject here instead of answering `system`.
+        // Every access needs a frame: an unframed read would reject here instead of answering
+        // `system`.
         seen.push(currentTenant());
       },
     });
-    await underGuardThrow(async () => {
-      expect(isTenantFramed()).toBe(false);
-      await lifecycle.start();
-      await lifecycle.stop();
-    });
+    expect(isTenantFramed()).toBe(false);
+    await lifecycle.start();
+    await lifecycle.stop();
     expect(seen).toEqual(["platform"]);
     expect(events).toContain("bound");
   });
@@ -560,12 +547,10 @@ describe("role writer startup frame (G01-E P3)", () => {
       },
     });
     try {
-      await underGuardThrow(async () => {
-        expect(isTenantFramed()).toBe(false);
-        // No `runAsTenant` here, unlike tests/support/role-writer.ts: the lifecycle frames it.
-        // initializeRoleWriter checks both roles against the database, so resolving means it ran.
-        await expect(lifecycle.start()).resolves.toBeUndefined();
-      });
+      expect(isTenantFramed()).toBe(false);
+      // No `runAsTenant` here, unlike tests/support/role-writer.ts: the lifecycle frames it.
+      // initializeRoleWriter checks both roles against the database, so resolving means it ran.
+      await expect(lifecycle.start()).resolves.toBeUndefined();
     } finally {
       await lifecycle.stop();
       await application.$client.close();

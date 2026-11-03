@@ -105,16 +105,9 @@ test("fills an app the team enabled, and leaves it the team's", async () => {
   );
   ids.push(id);
 
-  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    await backfillComposioLogos(database, {
-      listApps: async () => [app(id)],
-    });
-  } finally {
-    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-  }
+  await backfillComposioLogos(database, {
+    listApps: async () => [app(id)],
+  });
   const filled = await row(id);
   expect(filled?.logo).toBe("https://example.com/logo.svg");
   expect(filled?.tenantId).toBe(tenant);
