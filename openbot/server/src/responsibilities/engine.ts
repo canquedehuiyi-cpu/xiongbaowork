@@ -169,6 +169,7 @@ export function createResponsibilityEngine(options: {
               title: context.instruction,
               executorAgentId: context.agentId,
               source: "responsibility",
+              triggerSource: "responsibility",
               channelRef: context.channelId,
               runRef: runId,
               deviceId: (await deviceIdOf?.(context.agentId, runId)) ?? null,

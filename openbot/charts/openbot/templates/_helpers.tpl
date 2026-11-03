@@ -238,6 +238,40 @@ migrated one database while the API talked to another is a failure that looks li
 {{- end -}}
 
 {{/*
+The role writer's URL (migration 0109's `openbot_role_writer`), for the API server only.
+
+The API refuses to start without it against an external database. Its own Secret first if one is
+named, then an inline URL, then the database's Secret under its own key, so a Secret made for this
+chart carries both URLs. Nothing with the bundled database, which this leaves exactly as it was.
+Every key is read through `default`, so a release upgraded with `--reuse-values` from before these
+keys existed still renders (and then fails in `validation.yaml` or on the missing Secret key, which
+both name what to set, rather than on a nil).
+*/}}
+{{- define "openbot.roleWriterDatabaseUrlEnv" -}}
+{{- if not .Values.postgresql.enabled -}}
+{{- $database := .Values.database | default dict -}}
+{{- $ownSecret := $database.roleWriterExistingSecret | default "" -}}
+{{- $key := $database.roleWriterExistingSecretKey | default "role-writer-database-url" -}}
+{{- if $ownSecret -}}
+- name: ROLE_WRITER_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $ownSecret }}
+      key: {{ $key }}
+{{- else if $database.roleWriterUrl -}}
+- name: ROLE_WRITER_DATABASE_URL
+  value: {{ $database.roleWriterUrl | quote }}
+{{- else if $database.existingSecret -}}
+- name: ROLE_WRITER_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.existingSecret }}
+      key: {{ $key }}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Everything the API reads that is not the database.
 
 Secrets are referenced, never rendered: a value that appears here would appear in `helm get values`

@@ -449,6 +449,24 @@ database:
   url: ""
   existingSecret: ""
   existingSecretKey: "database-url"
+  # THE SECOND URL: the role writer. The API refuses to start without ROLE_WRITER_DATABASE_URL
+  # ("ROLE_WRITER_DATABASE_URL is required"), because `openbot_role_writer` (migration 0109) is the
+  # only login allowed to write identity roles, and the API role above may only read them. Two URLs,
+  # two roles, two passwords, as in the delivery manual's external-database section:
+  #
+  #   url:           postgres://openbot_app:<password>@host:5432/openbot?sslmode=require
+  #   roleWriterUrl: postgres://openbot_role_writer:<other password>@host:5432/openbot?sslmode=require
+  #
+  # Set both roles' passwords yourself after the first migration (the migration's are public).
+  # Only the API server reads it; the migrations Job and the sweeps do not get it.
+  #
+  # With `existingSecret`, the role-writer URL is read from the same Secret under
+  # `roleWriterExistingSecretKey`, so a Secret made for this chart carries both keys. Name another
+  # Secret with `roleWriterExistingSecret`, or put the URL here as `roleWriterUrl` (readable by
+  # anybody who can read the release, like `url`). Not used with the bundled database.
+  roleWriterUrl: ""
+  roleWriterExistingSecret: ""
+  roleWriterExistingSecretKey: "role-writer-database-url"
 
 # The bundled database. Off by default in favour of a managed one.
 # The bundled database.

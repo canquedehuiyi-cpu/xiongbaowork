@@ -61,7 +61,12 @@ tests/audit-retention.integration.test.ts
 tests/audit.test.ts
 tests/auth-audit-tenant.integration.test.ts
 tests/auth-mobile-scheme.integration.test.ts
+tests/automation-ingress.integration.test.ts
+tests/automation-ingress.test.ts
+tests/automation-routes.test.ts
+tests/automation-sweep.integration.test.ts
 tests/automation-tenant-policies.test.ts
+tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
@@ -196,6 +201,7 @@ tests/local-threads.test.ts
 tests/mastra-roster.test.ts
 tests/mcp-grant-removal.integration.test.ts
 tests/mcp-listing.test.ts
+tests/mcp-outbound.test.ts
 tests/mcp-protocol.test.ts
 tests/mcp-result.test.ts
 tests/mcp-server-removal-every-person.integration.test.ts

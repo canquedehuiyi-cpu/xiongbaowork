@@ -68,6 +68,12 @@ const as = (tenant: string) => {
           ),
         ),
       ),
+    request: (approvalId: string) =>
+      runAsTenant(tenant, () =>
+        approvals.request(
+          new Request(`http://openbot.test/${encodeURIComponent(approvalId)}`),
+        ),
+      ),
     cards: () =>
       runAsTenant(tenant, async () => {
         const response = await board.request(
@@ -269,4 +275,33 @@ test("another tenant's decision is a 404 and the owner's card does not move", as
     (entry) => entry.status !== "needs_action",
   );
   expect(after?.status).toBe("failed");
+});
+
+test("one request by id answers the owner in the inbox's shape and is a 404 to anybody else", async () => {
+  // The board reads a request the inbox does not list (past its newest hundred) by its own id, to
+  // learn whether its affirmative is 批准 or 已处理.
+  const { approvalId } = await parkedCard("single");
+
+  const mine = await ownerSide.request(approvalId);
+  expect(mine.status).toBe(200);
+  const body = (await mine.json()) as {
+    id: string;
+    status: string;
+    action: { toolRef: string; policy?: unknown; continuation?: unknown };
+  };
+  expect(body.id).toBe(approvalId);
+  expect(body.status).toBe("pending");
+  expect(body.action.toolRef).toBe("computer_write_file");
+  // The public shape: the saved continuation never leaves the server.
+  expect(body.action.continuation).toBeUndefined();
+
+  expect((await strangerSide.request(approvalId)).status).toBe(404);
+  expect((await ownerSide.request(`missing-${suite}`)).status).toBe(404);
+
+  const answered = await ownerSide.decide(approvalId, "deny");
+  expect(answered.status).toBe(200);
+  const after = (await (await ownerSide.request(approvalId)).json()) as {
+    status: string;
+  };
+  expect(after.status).toBe("denied");
 });
