@@ -1331,7 +1331,7 @@ export function loadConfig(
       auth?.baseUrl
     )?.replace(/\/+$/, ""),
     tenantPackageDirectory:
-      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/fintech",
+      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/qoderwake",
     runtime: runtimeCapabilities(environment),
     agentStallTimeoutMs: agentStallTimeoutMs(environment),
     auditRetentionDays: auditRetentionDays(environment),

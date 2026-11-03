@@ -14,7 +14,7 @@ import { createDatabase } from "../src/db/client";
 import { approvalRequests, approvalRules } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { runAsTenant } from "../src/tenant/context";
-import { createDisposableTestDatabase } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // SOURCE_ONLY: definitions, zero executions. Real PG17 only; never a CPU import.
 // Reuse the repository's explicit TEST_DATABASE_URL resolver, then tighten to
@@ -76,7 +76,7 @@ afterAll(async () => {
     await database.$client.close();
     await disposable.drop();
   }
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 function action(scopeName = "tx-fixture"): ApprovalAction {
   const args = { path: "notes.txt", content: "fixture content" };
