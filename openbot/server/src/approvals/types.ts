@@ -278,6 +278,8 @@ export type ApprovalPolicyStore = {
    * rule applies and the floors are their defaults.
    */
   employee?(botId: string): Promise<EmployeePolicy>;
+  /** Whether the current frame can see this Bot at all (its own, a team Bot it may use, the catalogue). */
+  botVisible?(botId: string): Promise<boolean>;
   /** The owner changes one of their Bots' floors, in their own frame. Another person's Bot is refused. */
   setEmployeeSecurity?(
     by: string,

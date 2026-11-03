@@ -649,6 +649,9 @@ export function createApprovalService(
       const policy = store.policy;
       if (!policy?.employee)
         throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+      // Another person's private Bot is not found, rather than having its owner's settings read out.
+      if (policy.botVisible && !(await policy.botVisible(botId)))
+        throw new ApprovalNotFoundError();
       const [employee, team, teamRules] = await Promise.all([
         policy.employee(botId),
         policy.teamSettings(),

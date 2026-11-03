@@ -30,6 +30,7 @@ const owner = `${prefix}-owner`;
 const member = `${prefix}-member`;
 const admin = `${prefix}-admin`;
 const teamBot = `${prefix}-team-bot`;
+const privateBot = `${prefix}-private-bot`;
 const store = createApprovalStore(database);
 const service = createApprovalService(store);
 const scope = createAdminScope({
@@ -88,6 +89,22 @@ beforeAll(async () => {
       type: "built_in",
       configuration: {},
     });
+    await database.insert(agents).values({
+      id: privateBot,
+      tenantId: owner,
+      name: "Mine",
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: privateBot,
+      tenantId: owner,
+      ownerUserId: owner,
+      title: "Mine",
+      roleDescription: "Private.",
+      avatarSeed: "seed",
+      visibility: "private",
+    });
     await database.insert(agentProfiles).values({
       agentId: teamBot,
       tenantId: "team",
@@ -105,7 +122,7 @@ afterAll(async () => {
       .delete(approvalTeamSettings)
       .where(eq(approvalTeamSettings.id, "team"));
     if (priorTeam) await database.insert(approvalTeamSettings).values(priorTeam);
-    await database.delete(agents).where(eq(agents.id, teamBot));
+    await database.delete(agents).where(inArray(agents.id, [teamBot, privateBot]));
     await database.delete(users).where(inArray(users.id, [owner, member, admin]));
   });
   await releaseRoleWriter?.();
@@ -293,4 +310,19 @@ test("with custom rules off, a tool can still be asked about or disabled, but no
   } finally {
     await asAdmin("PATCH", "/team", { customRulesEnabled: true });
   }
+});
+
+test("another person's private Bot is not found, and its settings are not read out", async () => {
+  await asOwner("PUT", `/employees/${privateBot}/tools`, {
+    toolRef: "computer_click",
+    mode: "disabled",
+  });
+  expect((await asOwner("GET", `/employees/${privateBot}`)).body).toMatchObject({
+    editable: true,
+    modes: [{ toolRef: "computer_click", behaviour: "deny" }],
+  });
+  const stranger = await asMember("GET", `/employees/${privateBot}`);
+  expect(stranger.status).toBe(404);
+  expect(JSON.stringify(stranger.body)).not.toContain("computer_click");
+  expect((await asMember("GET", `/employees/${prefix}-nobody`)).status).toBe(404);
 });
