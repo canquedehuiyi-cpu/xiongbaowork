@@ -49,6 +49,21 @@ jobs:
       - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs
         working-directory: openbot/scripts/ci
 
+  # The Helm chart, rendered for real. openbot/.github's chart job is the upstream copy and does not
+  # run here, so nothing rendered the chart in this fork. Lint plus a few `helm template` renders,
+  # no cluster: see scripts/ci/chart-check.sh for what each check stands for.
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.19.0
+      - run: bash scripts/ci/chart-check.sh
+
   server-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
