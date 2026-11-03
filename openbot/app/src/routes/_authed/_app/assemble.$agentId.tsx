@@ -114,7 +114,8 @@ function AssemblePage() {
           builtIn={profile.builtIn}
           canManage={profile.canManage}
           modelRef={profile.modelRef}
-          onSave={(modelRef) => save({ modelRef })}
+          onSave={(binding) => save(binding)}
+          platformModelRef={profile.platformModelRef ?? null}
         />
       </PageSection>
 

@@ -93,6 +93,10 @@ export type AgentAuditEvent = {
 /**
  * One page of the trail. `scope` says whose rows the server let this person see: `everyone` for the
  * coworker's owner and administrators, `own` for anybody else, who sees only what they did.
+ *
+ * For the owner "everyone" is every row filed in the owner's own tenant (theirs, the system's, an
+ * administrator's acting as them); what a colleague did to a shared coworker is filed in the
+ * colleague's tenant and only an administrator's page reads it.
  */
 export type AgentAuditPage = {
   scope: "everyone" | "own";

@@ -1,15 +1,20 @@
 import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createApp } from "../src/app";
 import {
   auditEventTypes,
+  createAuditReader,
   createAuditStore,
   recordAuditEvent,
   redactAuditPayload,
 } from "../src/audit";
 import { loadConfig } from "../src/config";
+import { createDatabase } from "../src/db/client";
+import { runAsTenant } from "../src/tenant/context";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 const config = loadConfig({
@@ -260,5 +265,123 @@ describe("admin audit API", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Administrator access required.",
     });
+  });
+});
+
+/**
+ * G01-E P7: the administrator's trail is the deployment's trail.
+ *
+ * Every audit row is stamped with the person it is about, and row-level security answers a person's
+ * frame with that person's rows only. The admin route therefore reads as `platform`, through
+ * `asAdminPlatform`, which needs the admin capability `adminCapability` grants after re-reading the
+ * caller's role. Asked of the real reader over the real database, because a stub reader cannot tell
+ * one frame from another.
+ */
+describe("the admin trail across people", () => {
+  const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+  const store = createAuditStore(database);
+  const reader = createAuditReader(database);
+  const suite = randomUUID().slice(0, 8);
+  const adminId = `audit-admin-${suite}`;
+  const first = `audit-person-a-${suite}`;
+  const second = `audit-person-b-${suite}`;
+  const target = `audit-target-${suite}`;
+
+  const authFor = (id: string) => ({
+    handler: () => new Response(null, { status: 204 }),
+    api: {
+      getSession: async () => ({
+        user: { id, email: `${id}@openbot.test` },
+      }),
+    },
+  });
+
+  const seed = async () => {
+    for (const person of [first, second, adminId]) {
+      await runAsTenant(person, () =>
+        recordAuditEvent(store, {
+          eventType: "person.access_revoked",
+          targetType: "person",
+          targetId: target,
+          actorUserId: person,
+          payload: { suite },
+        }),
+      );
+    }
+  };
+  const seeded = seed();
+
+  test("an administrator's route returns every person's rows", async () => {
+    await seeded;
+    const app = createApp(
+      config,
+      authFor(adminId),
+      { rolesForUser: async () => ["admin"] },
+      reader,
+    );
+
+    const response = await app.request(
+      `http://openbot.local/api/admin/audit-events?targetType=person&targetId=${target}&limit=10`,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      events: { actorUserId: string }[];
+    };
+    expect(body.events.map((event) => event.actorUserId).sort()).toEqual(
+      [adminId, first, second].sort(),
+    );
+  });
+
+  test("the same reader in the administrator's own frame returns only the administrator's rows", async () => {
+    await seeded;
+    const page = await runAsTenant(adminId, () =>
+      reader.list({ targetType: "person", targetId: target, limit: 10 }),
+    );
+    expect(page.events.map((event) => event.actorUserId)).toEqual([adminId]);
+  });
+
+  test("a person who is not an administrator gets 403 and no rows", async () => {
+    await seeded;
+    const app = createApp(
+      config,
+      authFor(first),
+      { rolesForUser: async () => ["user"] },
+      reader,
+    );
+
+    const response = await app.request(
+      `http://openbot.local/api/admin/audit-events?targetType=person&targetId=${target}`,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Administrator access required.",
+    });
+  });
+
+  test("an administrator whose role was removed since sign-in gets no cross-person read", async () => {
+    await seeded;
+    // The session still says admin (the actor's role was decided at sign-in), but the role
+    // repository no longer does, so `adminCapability` grants nothing and the read is refused.
+    let reads = 0;
+    const app = createApp(
+      config,
+      authFor(adminId),
+      {
+        rolesForUser: async () => (reads++ === 0 ? ["admin"] : ["user"]),
+      },
+      reader,
+    );
+
+    const response = await app.request(
+      `http://openbot.local/api/admin/audit-events?targetType=person&targetId=${target}`,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Administrator access required.",
+    });
+    expect(reads).toBe(2);
   });
 });

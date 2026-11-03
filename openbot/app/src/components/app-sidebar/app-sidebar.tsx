@@ -355,7 +355,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <EmptyHeader>
                     <EmptyTitle>你还没有会话</EmptyTitle>
                     <EmptyDescription className="text-pretty">
-                      开始和员工对话，你的会话就会出现在这里 here.
+                      开始和员工对话，你的会话就会出现在这里。
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>

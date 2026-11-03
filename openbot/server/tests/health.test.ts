@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
+import type { IdentityProviderStore } from "../src/auth/identity-provider-store";
 import { loadConfig } from "../src/config";
+import { currentTenant } from "../src/tenant/context";
 import { testEnvironment } from "./support/environment";
 
 const app = createApp(
@@ -35,6 +37,45 @@ describe("runtime capabilities", () => {
     expect(JSON.parse(body).transcription).toBe(true);
     expect(body).not.toContain("private");
   });
+  /*
+   * G01-E: this route answers before anybody signs in, so it has no person's frame, and the providers
+   * are deployment rows. They are read as `platform`; with no frame at all the read is refused (it
+   * used to fall back to `system`), and the whole route answered 500 on a deployment that had an
+   * identity provider store, which is every one that boots `index.ts`.
+   */
+  test("counts the registered identity providers in the platform frame, with nobody signed in", async () => {
+    const frames: string[] = [];
+    const identityProviders: IdentityProviderStore = {
+      list: async () => {
+        frames.push(currentTenant());
+        return [
+          {
+            providerId: "okta",
+            issuer: "https://idp.example",
+            domain: "example.com",
+            protocol: "saml",
+            registeredBy: null,
+          },
+        ];
+      },
+      remove: async () => false,
+    };
+    // `identityProviders` is createApp's 19th argument, after the config and seventeen optional ones.
+    const withProviders = createApp(
+      loadConfig(testEnvironment()),
+      ...(Array.from({ length: 17 }, () => undefined) as []),
+      identityProviders,
+    );
+    const response = await withProviders.request(
+      "http://openbot.local/api/capabilities",
+    );
+    expect(response.status).toBe(200);
+    expect(
+      ((await response.json()) as { ssoConfigured: boolean }).ssoConfigured,
+    ).toBe(true);
+    expect(frames).toEqual(["platform"]);
+  });
+
   test("reports the local runtime without exposing configuration secrets", async () => {
     const response = await app.request("http://openbot.local/api/capabilities");
 
