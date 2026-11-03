@@ -37,7 +37,7 @@ export function voiceSessionQueryOptions(channelId: string) {
         if (cursor) params.set("cursor", cursor);
         const response = await client(`/api/voice/sessions?${params}`, {
           signal,
-          fallback: "Could not load voice chats.",
+          fallback: "无法加载语音对话。",
         });
         const page = (await response.json()) as VoiceSessionPage;
         sessions.push(...page.sessions);
@@ -103,7 +103,7 @@ export function saveVoiceSession(
       const body: { session?: VoiceSessionRecord; error?: string } =
         await response.json().catch(() => ({}));
       if (!body.session)
-        throw new Error(body.error ?? "Could not save this voice chat.");
+        throw new Error(body.error ?? "无法保存这段语音对话。");
       const session = body.session;
       forgetVoiceCall(session, ownerId);
       queryClient.setQueryData<VoiceSessionRecord[]>(
@@ -117,12 +117,8 @@ export function saveVoiceSession(
         ...pending,
         saveState: "unsaved",
         saveError:
-          (error instanceof Error
-            ? error.message
-            : "Could not save this voice chat.") +
-          (recoverable
-            ? ""
-            : " Keep this page open to retry; browser recovery is unavailable."),
+          (error instanceof Error ? error.message : "无法保存这段语音对话。") +
+          (recoverable ? "" : "请保持此页面打开以便重试，浏览器无法帮你恢复。"),
       });
     }
   })();
@@ -146,7 +142,7 @@ export function useVoiceArchive(channelId: string) {
           summary: null,
           summaryStatus: "failed",
           saveState: "unsaved",
-          saveError: "The page closed before saving was confirmed.",
+          saveError: "页面在确认保存之前就关闭了。",
         })),
       enabled: false,
       gcTime: Infinity,

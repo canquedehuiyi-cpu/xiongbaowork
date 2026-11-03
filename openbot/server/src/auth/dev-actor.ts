@@ -2,7 +2,9 @@ import type { MiddlewareHandler } from "hono";
 import type { Database } from "../db/client";
 import { users } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
+import { provisionTenant } from "../tenant/provisioning";
 import type { AppVariables, AuthenticatedActor } from "./guards";
+import { setRole } from "./roles";
 
 /**
  * A signed-in person, without signing in.
@@ -37,23 +39,78 @@ export async function initializeDevActorUser(
   if (!enabled) return false;
 
   const name = DEV_ACTOR.name ?? DEV_ACTOR.email;
-  await database
-    .insert(users)
-    .values({
-      id: DEV_ACTOR.id,
-      email: DEV_ACTOR.email,
-      name,
-      emailVerified: false,
-    })
-    .onConflictDoUpdate({
-      target: users.id,
-      set: {
+  // `users` is an identity row, not a tenant's: written at boot as `platform` (G01-E P3), never
+  // through the legacy unframed fallback. A caller already inside a transaction keeps that
+  // transaction's connection; only the frame read by the client changes.
+  await runAsTenant("platform", () =>
+    database
+      .insert(users)
+      .values({
+        id: DEV_ACTOR.id,
         email: DEV_ACTOR.email,
         name,
-        updatedAt: new Date(),
-      },
-    });
+        emailVerified: false,
+      })
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          email: DEV_ACTOR.email,
+          name,
+          updatedAt: new Date(),
+        },
+      }),
+  );
 
+  return true;
+}
+
+/**
+ * The single-user actor's administrator role, in `user_roles`.
+ *
+ * `DEV_ACTOR.role` says "admin" to the request guard, but row-level security recognises an
+ * administrator only through `user_roles` (G01-E I10): the ADMIN predicate on team governance rows
+ * needs that row, and `adminCapability` re-reads it before granting the capability. Without it the
+ * one person a single-user deployment has could not change team approval rules or settings, which
+ * live in the shared `team` tenant. So the actor gets the same row any other administrator has,
+ * through the role writer, at boot, as `platform` (role facts belong to no tenant).
+ *
+ * Separate from {@link initializeDevActorUser} because the role writer is bound to the application
+ * `Database`, not to a transaction a caller may hand that function. Idempotent: called on every start,
+ * after the user row exists (the role row references it).
+ */
+export async function seedDevActorRole(
+  database: Database,
+  enabled: boolean,
+): Promise<boolean> {
+  if (!enabled) return false;
+  await runAsTenant("platform", () =>
+    setRole(database, DEV_ACTOR.id, DEV_ACTOR.role),
+  );
+  return true;
+}
+
+/**
+ * The single-user actor's tenant: a Free subscription row and its 分身.
+ *
+ * The actor is written at start-up, not by Better Auth's user-create hook, so it never got a
+ * subscription. Quota fails closed to Free on an absent row (audit #7), so the limits are the same
+ * either way -- including `customModels: false`, which refuses POST /api/models until the plan is
+ * switched -- but with the row in place the administrator can switch it with POST /api/quota/plan.
+ *
+ * Separate from {@link initializeDevActorUser} because provisioning writes tenant-scoped rows and has
+ * to run in the actor's own tenant scope, which a transaction already opened as `system` cannot give
+ * it. Idempotent: called on every start.
+ */
+export async function provisionDevActorTenant(
+  database: Database,
+  enabled: boolean,
+): Promise<boolean> {
+  if (!enabled) return false;
+  await provisionTenant(database, {
+    id: DEV_ACTOR.id,
+    email: DEV_ACTOR.email,
+    name: DEV_ACTOR.name ?? DEV_ACTOR.email,
+  });
   return true;
 }
 

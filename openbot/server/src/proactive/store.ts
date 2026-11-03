@@ -21,10 +21,25 @@ import {
 /** What a proactive run read, as the audit trail recorded it. The source of truth for provenance. */
 export type ProactiveRead = { ref: string; at: Date };
 
+/**
+ * A row as the database holds it, with the tenant it was stamped with (G01).
+ *
+ * Background work reads `tenantId` to decide whose frame to run in; it is written by the database
+ * from the frame the row was created in, never by the caller, so it is the one trusted answer to
+ * "whose is this". The API types leave it out because a person never sees or sets it.
+ */
+export type StampedProactiveSetting = ProactiveSetting & { tenantId: string };
+export type StampedProactiveSuggestion = ProactiveSuggestion & {
+  tenantId: string;
+};
+
 export function createProactiveStore(database: Database) {
   const owned = (owner: string, id: string) =>
     and(eq(proactiveSettings.ownerUserId, owner), eq(proactiveSettings.id, id));
-  async function get(owner: string, id: string): Promise<ProactiveSetting> {
+  async function get(
+    owner: string,
+    id: string,
+  ): Promise<StampedProactiveSetting> {
     const [row] = await database
       .select()
       .from(proactiveSettings)
@@ -35,7 +50,8 @@ export function createProactiveStore(database: Database) {
   }
   return {
     get,
-    async byId(id: string): Promise<ProactiveSetting | null> {
+    /** By id alone, for background work: RLS confines it to the frame's tenant (and `system`). */
+    async byId(id: string): Promise<StampedProactiveSetting | null> {
       const [row] = await database
         .select()
         .from(proactiveSettings)
@@ -96,8 +112,11 @@ export function createProactiveStore(database: Database) {
     /**
      * Take the due settings and move each one's next run forward in the same statement, so two
      * sweeps can never both take one and the interval holds even when a run then fails.
+     *
+     * Asked from the platform frame by the sweep, so it sees every tenant's due settings; each one
+     * comes back with the tenant it is stamped with, which is the frame its run is offered from.
      */
-    async claimDue(limit = 5): Promise<ProactiveSetting[]> {
+    async claimDue(limit = 5): Promise<StampedProactiveSetting[]> {
       const due = await database
         .select({ id: proactiveSettings.id })
         .from(proactiveSettings)
@@ -108,7 +127,7 @@ export function createProactiveStore(database: Database) {
           ),
         )
         .limit(Math.min(limit, 10));
-      const claimed: ProactiveSetting[] = [];
+      const claimed: StampedProactiveSetting[] = [];
       for (const { id } of due) {
         const [row] = await database
           .update(proactiveSettings)
@@ -213,7 +232,10 @@ export function createProactiveStore(database: Database) {
         .orderBy(desc(proactiveSuggestions.createdAt))
         .limit(100);
     },
-    async suggestion(owner: string, id: string): Promise<ProactiveSuggestion> {
+    async suggestion(
+      owner: string,
+      id: string,
+    ): Promise<StampedProactiveSuggestion> {
       const [row] = await database
         .select()
         .from(proactiveSuggestions)

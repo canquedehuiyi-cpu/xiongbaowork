@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { sessions, users } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -52,56 +53,59 @@ describe("the backfill migration", () => {
     const observed = new Map<string, Date | null>();
 
     try {
-      await database.transaction(async (tx) => {
-        for (const [id, stamp] of [
-          [blank, null],
-          [answered, ALREADY],
-          [neverHere, null],
-        ] as const) {
-          await tx.insert(users).values({
-            id,
-            email: `${id}@openbot.test`,
-            name: id,
-            emailVerified: true,
-            lastSignedInAt: stamp,
-          });
-        }
+      // A migration runs for the deployment, across every person: the platform frame.
+      await runAsTenant("platform", () =>
+        database.transaction(async (tx) => {
+          for (const [id, stamp] of [
+            [blank, null],
+            [answered, ALREADY],
+            [neverHere, null],
+          ] as const) {
+            await tx.insert(users).values({
+              id,
+              email: `${id}@openbot.test`,
+              name: id,
+              emailVerified: true,
+              lastSignedInAt: stamp,
+            });
+          }
 
-        // Two sessions on the person with no answer: the backfill takes the newer.
-        for (const [suffix, at] of [
-          ["newest", NEWEST],
-          ["older", OLDER],
-        ] as const) {
+          // Two sessions on the person with no answer: the backfill takes the newer.
+          for (const [suffix, at] of [
+            ["newest", NEWEST],
+            ["older", OLDER],
+          ] as const) {
+            await tx.insert(sessions).values({
+              id: `${blank}-${suffix}`,
+              userId: blank,
+              token: `${blank}-${suffix}-token`,
+              expiresAt: new Date(Date.now() + 86_400_000),
+              createdAt: at,
+            });
+          }
+
+          // One older session on the person who already has an answer: it must not move backwards.
           await tx.insert(sessions).values({
-            id: `${blank}-${suffix}`,
-            userId: blank,
-            token: `${blank}-${suffix}-token`,
+            id: `${answered}-session`,
+            userId: answered,
+            token: `${answered}-token`,
             expiresAt: new Date(Date.now() + 86_400_000),
-            createdAt: at,
+            createdAt: OLDER,
           });
-        }
 
-        // One older session on the person who already has an answer: it must not move backwards.
-        await tx.insert(sessions).values({
-          id: `${answered}-session`,
-          userId: answered,
-          token: `${answered}-token`,
-          expiresAt: new Date(Date.now() + 86_400_000),
-          createdAt: OLDER,
-        });
+          for (const statement of migration.split("--> statement-breakpoint")) {
+            if (statement.trim()) await tx.execute(sql.raw(statement));
+          }
 
-        for (const statement of migration.split("--> statement-breakpoint")) {
-          if (statement.trim()) await tx.execute(sql.raw(statement));
-        }
+          const rows = await tx
+            .select({ id: users.id, lastSignedInAt: users.lastSignedInAt })
+            .from(users)
+            .where(inArray(users.id, [blank, answered, neverHere]));
+          for (const row of rows) observed.set(row.id, row.lastSignedInAt);
 
-        const rows = await tx
-          .select({ id: users.id, lastSignedInAt: users.lastSignedInAt })
-          .from(users)
-          .where(inArray(users.id, [blank, answered, neverHere]));
-        for (const row of rows) observed.set(row.id, row.lastSignedInAt);
-
-        throw new Rollback();
-      });
+          throw new Rollback();
+        }),
+      );
     } catch (error) {
       if (!(error instanceof Rollback)) throw error;
     }

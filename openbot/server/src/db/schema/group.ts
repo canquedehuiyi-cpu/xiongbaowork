@@ -1,12 +1,14 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   pgTable,
   text,
   timestamp,
   primaryKey,
   uniqueIndex,
   index,
+  unique,
 } from "drizzle-orm/pg-core";
 import { channels, users } from "./core";
 import { jsonb } from "./json";
@@ -69,5 +71,34 @@ export const groupMessages = pgTable(
       "group_messages_status_check",
       sql`${table.status} IN ('queued', 'running', 'waiting', 'completed', 'failed')`,
     ),
+    // The key `group_message_private` hangs from, so a private row is always its sender's (0128).
+    unique("group_messages_id_owner_unique").on(table.id, table.ownerUserId),
+  ],
+);
+
+/**
+ * What a Bot reply holds back from the group while it is not shown yet (0128): its partial text
+ * while the Bot runs, and, while it waits on its sender, the held reply and the wait's details
+ * (approval id, saved continuation). Stamped with the sender, read by nobody else; the shared
+ * `group_messages` row keeps only the status and what every member's transcript shows.
+ */
+export const groupMessagePrivate = pgTable(
+  "group_message_private",
+  {
+    messageId: text("message_id").primaryKey(),
+    ownerUserId: text("owner_user_id").notNull(),
+    tenantId: tenantId(),
+    text: text("text").notNull().default(""),
+    details: jsonb("details").notNull().default({}),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "group_message_private_message_fk",
+      columns: [table.messageId, table.ownerUserId],
+      foreignColumns: [groupMessages.id, groupMessages.ownerUserId],
+    }).onDelete("cascade"),
   ],
 );

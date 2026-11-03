@@ -19,6 +19,7 @@ import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
 import { agents, componentExclusions, components } from "../src/db/schema";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -33,6 +34,16 @@ const suite = randomUUID().slice(0, 8);
 const allowedBot = `agent_headless_chart_${suite}`;
 const deniedBot = `agent_headless_withheld_${suite}`;
 let addedComponents: string[] = [];
+/** The person the routine belongs to; its turn runs in their tenant, as the routine sweep runs it. */
+const OWNER = "owner";
+
+/*
+ * The catalogue, the withholdings and these Bots are the deployment's, so their fixtures and the
+ * administrator's grant/revoke run as `platform` (G01) rather than in no frame at all.
+ */
+function asDeployment<T>(work: () => T): T {
+  return runAsTenant("platform", work);
+}
 
 const chartArgs = {
   title: "Stories on the front page by source",
@@ -43,41 +54,45 @@ const chartArgs = {
   ],
 };
 
-beforeAll(async () => {
-  for (const id of [allowedBot, deniedBot])
-    await database
-      .insert(agents)
-      .values({ id, name: id, type: "remote_ag_ui", configuration: {} })
-      .onConflictDoNothing();
-  // What the browser announces on first load, so the rows are the build's own declarations.
-  ({ added: addedComponents } = await store.syncCatalogue(
-    GALLERY.map(({ name, title, kind, description }) => ({
-      name,
-      title,
-      kind,
-      description,
-    })),
-  ));
-  const decision = await store.decide("showBarChart", allowedBot);
-  if (!decision.allowed)
-    throw new Error(
-      `The test database has showBarChart unpublished: ${decision.reason}`,
-    );
-  await store.revoke("showBarChart", deniedBot, "test@openbot.local");
-});
+beforeAll(() =>
+  asDeployment(async () => {
+    for (const id of [allowedBot, deniedBot])
+      await database
+        .insert(agents)
+        .values({ id, name: id, type: "remote_ag_ui", configuration: {} })
+        .onConflictDoNothing();
+    // What the browser announces on first load, so the rows are the build's own declarations.
+    ({ added: addedComponents } = await store.syncCatalogue(
+      GALLERY.map(({ name, title, kind, description }) => ({
+        name,
+        title,
+        kind,
+        description,
+      })),
+    ));
+    const decision = await store.decide("showBarChart", allowedBot);
+    if (!decision.allowed)
+      throw new Error(
+        `The test database has showBarChart unpublished: ${decision.reason}`,
+      );
+    await store.revoke("showBarChart", deniedBot, "test@openbot.local");
+  }),
+);
 
-afterAll(async () => {
-  await database
-    .delete(componentExclusions)
-    .where(inArray(componentExclusions.agentId, [allowedBot, deniedBot]));
-  if (addedComponents.length > 0)
+afterAll(() =>
+  asDeployment(async () => {
     await database
-      .delete(components)
-      .where(inArray(components.name, addedComponents));
-  await database
-    .delete(agents)
-    .where(inArray(agents.id, [allowedBot, deniedBot]));
-});
+      .delete(componentExclusions)
+      .where(inArray(componentExclusions.agentId, [allowedBot, deniedBot]));
+    if (addedComponents.length > 0)
+      await database
+        .delete(components)
+        .where(inArray(components.name, addedComponents));
+    await database
+      .delete(agents)
+      .where(inArray(agents.id, [allowedBot, deniedBot]));
+  }),
+);
 
 function lifecycle(input: RunAgentInput, body: BaseEvent[]): BaseEvent[] {
   return [
@@ -227,13 +242,15 @@ function harness(agent: AbstractAgent, botId: string) {
     audit,
     visited,
     run: () =>
-      run({
-        ownerUserId: "owner",
-        routineId: "routine-front-page",
-        agentId: botId,
-        threadId: `thread-${botId}`,
-        instruction: "Chart today's front page by source",
-      }),
+      runAsTenant(OWNER, () =>
+        run({
+          ownerUserId: OWNER,
+          routineId: "routine-front-page",
+          agentId: botId,
+          threadId: `thread-${botId}`,
+          instruction: "Chart today's front page by source",
+        }),
+      ),
   };
 }
 
@@ -331,25 +348,31 @@ describe("an unattended routine turn answering with a governed chart", () => {
   });
 
   test("a grant revoked after the turn started is refused at call time", async () => {
-    const tools = await createHeadlessComponentTools({
-      store,
-      botId: allowedBot,
-      ownerUserId: "owner",
-      initiator: { kind: "routine", id: "routine-front-page" },
-    });
+    const tools = await runAsTenant(OWNER, () =>
+      createHeadlessComponentTools({
+        store,
+        botId: allowedBot,
+        ownerUserId: OWNER,
+        initiator: { kind: "routine", id: "routine-front-page" },
+      }),
+    );
     const bar = tools.find((tool) => tool.definition.name === "showBarChart");
     expect(bar?.hidden).toBeUndefined();
-    await store.revoke("showBarChart", allowedBot, "test@openbot.local");
+    await asDeployment(() =>
+      store.revoke("showBarChart", allowedBot, "test@openbot.local"),
+    );
     try {
       const result = String(
-        await bar?.execute(chartArgs, {
-          toolCallId: "late",
-          signal: new AbortController().signal,
-        }),
+        await runAsTenant(OWNER, () =>
+          bar?.execute(chartArgs, {
+            toolCallId: "late",
+            signal: new AbortController().signal,
+          }),
+        ),
       );
       expect(result.startsWith(NOT_SHOWN)).toBeTrue();
     } finally {
-      await store.grant("showBarChart", allowedBot);
+      await asDeployment(() => store.grant("showBarChart", allowedBot));
     }
   });
 });
