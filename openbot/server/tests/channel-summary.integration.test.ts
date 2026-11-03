@@ -183,7 +183,10 @@ async function offer(channelId: string) {
       .from(channels)
       .where(eq(channels.id, channelId)),
   );
-  await runAsTenant(row?.tenantId ?? "system", () =>
+  // A conversation this file made always exists; offering one that does not would otherwise fall
+  // back to the unframed `system` partition, which P16 removes.
+  if (!row) throw new Error(`offer: no conversation ${channelId}`);
+  await runAsTenant(row.tenantId, () =>
     queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId }),
   );
 }
