@@ -3,11 +3,16 @@ import {
   useCopilotKit,
   useFrontendTool as useSDKFrontendTool,
 } from "@copilotkit/react-core/v2";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { InlineApproval } from "@/components/approvals/inline-approval";
+import {
+  disabledToolRefs,
+  employeePermissionsOptions,
+  toolIsDisabled,
+} from "@/lib/approvals";
 import { tryClient } from "@/lib/client";
-import { useActiveBotHolder } from "./active-bot";
+import { useActiveBotHolder, useDeclaredBotId } from "./active-bot";
 import { frontendApprovalSnapshot } from "./approval-context";
 
 type RenderProps = { toolCallId: string; [key: string]: unknown };
@@ -39,9 +44,21 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   // Stable for the provider's life, so the SDK's once-registered handler may keep it.
   const queryClient = useQueryClient();
   const bot = useActiveBotHolder();
+  /*
+   * A tool the active Bot's permissions disable is not offered to the model (SEC1 D4). Hidden with
+   * the SDK's `available`, so it stays registered and comes back the moment it is enabled again; the
+   * server's gate refuses it either way, so this decides only what the model is shown.
+   */
+  const declared = useDeclaredBotId();
+  const permissions = useQuery({
+    ...employeePermissionsOptions(declared ?? ""),
+    enabled: declared !== undefined,
+  });
+  const hidden = toolIsDisabled(disabledToolRefs(permissions.data), tool.name);
   const render = tool.render;
   useSDKFrontendTool({
     ...tool,
+    ...(hidden ? { available: false } : {}),
     ...(writes.has(tool.name)
       ? {
           // A component, so the approval card can use hooks; the SDK keeps this function forever.
@@ -98,5 +115,5 @@ export function useFrontendTool<T extends Record<string, unknown>>(
           return payload.result;
         }
       : undefined,
-  });
+  }, [hidden]);
 }

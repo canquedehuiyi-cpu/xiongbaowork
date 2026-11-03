@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
+import { BotPermissions } from "./permissions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -415,6 +416,7 @@ export function BotProfile({ agent }: { agent: AgentProfile }) {
       </PageSection>
 
       <BotActivitySections agentId={agent.id} />
+      <BotPermissions agentId={agent.id} />
       <UpdateRoutingSection />
       <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
     </>
