@@ -113,6 +113,10 @@ import {
   markAttachmentsSent,
 } from "./channels/attachments";
 import {
+  createChannelDispatch,
+  createChannelDispatchRoutes,
+} from "./channels/dispatch";
+import {
   announceTaskUpdate,
   createChannelEventHub,
   startChannelActivityListener,
@@ -2881,6 +2885,8 @@ await startupLifecycle.run(async (startup) => {
     memory: personalMemoryStore,
     queue: createWorkQueue(database),
     owner: workOwner("proactive"),
+    // Each research run files its own card (story C2); see `ProactiveEngineDeps.board`.
+    board: taskProjector,
     runTurn: createTurnRunner({
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
@@ -3117,6 +3123,57 @@ await startupLifecycle.run(async (startup) => {
           console.error(
             JSON.stringify({
               type: "group-sweep-error",
+              error: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 1_000),
+    (resource) => resource.stop(),
+  );
+
+  /*
+   * `@` a coworker inside a 1:1 conversation (spec B2, B3): a card on the board with the coworker named
+   * as executor, and the turn run here, on the channel's own thread, as that coworker. The same
+   * unattended runner a routine firing uses, so the pause gate, the "Use Bots" and model-allowlist
+   * refusals and the audit trail are the ones that already have suites. See channels/dispatch.ts.
+   */
+  const channelDispatch = createChannelDispatch({
+    queue: createWorkQueue(database),
+    owner: workOwner("channel-dispatch"),
+    board: taskProjector,
+    channel: (actor, channelId) => channelStore.get(actor, channelId),
+    // The same two ways a coworker can be the caller's that the memory ingestion asks, and a ban
+    // freezes this work as it freezes a routine firing (spec J5).
+    bot: async (actor, agentId) => {
+      if (await isAccessRevoked(database, actor.id)) return null;
+      const profile = await agentProfileStore.get(actor, agentId);
+      if (profile) return { id: agentId, name: profile.name };
+      return (await pluginStore.agentOwner(agentId)) === actor.id
+        ? { id: agentId, name: agentId }
+        : null;
+    },
+    actorFor,
+    runTurn: unattendedTurnRunner,
+    activity: async ({ actor, channelId, pinnedAgentId, text, sourceId }) =>
+      channelStore.recordActivity(
+        actor,
+        channelId,
+        { text, agentId: pinnedAgentId, at: new Date() },
+        { id: sourceId },
+      ),
+    busy: (threadId, busy) => channelStore.signalBusy(threadId, busy),
+    deviceIdOf: deviceIdForBot,
+  });
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          while (await channelDispatch.sweep()) {}
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "channel-dispatch-sweep-error",
               error: error instanceof Error ? error.message : String(error),
               timestamp: new Date().toISOString(),
             }),
@@ -3755,6 +3812,20 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
       signInAuditStore,
+    ),
+  );
+
+  /*
+   * `POST /api/channels/:channelId/dispatch` (spec B2): mounted beside the channel routes, behind the
+   * same session guard, so the offer and the card are written in the caller's own tenant.
+   */
+  app.route(
+    "/api/channels",
+    createChannelDispatchRoutes(
+      channelDispatch,
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
 

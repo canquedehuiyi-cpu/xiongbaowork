@@ -74,6 +74,8 @@ tests/bunfig-preload.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
 tests/channel-cursor.test.ts
+tests/channel-dispatch.integration.test.ts
+tests/channel-dispatch.test.ts
 tests/channel-events.integration.test.ts
 tests/channel-one-line.test.ts
 tests/channel-routes.test.ts
@@ -355,11 +357,14 @@ tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
 tests/stall-guard.test.ts
+tests/subscriptions-unique-migration.integration.test.ts
+tests/subscriptions-unique.integration.test.ts
 tests/support/database.test.ts
 tests/support/load-order.test.ts
 tests/task-card-reclaim.test.ts
 tests/task-card-run-error.test.ts
 tests/task-deliverable.test.ts
+tests/tasks-approval-decision.integration.test.ts
 tests/tasks-open-target.integration.test.ts
 tests/tasks-projector.test.ts
 tests/tasks-routes-filters.integration.test.ts

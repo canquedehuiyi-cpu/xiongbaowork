@@ -180,3 +180,75 @@ test("a run that is not here says so rather than saying whose it is", async () =
   const aborted = await post(`/runs/${randomUUID()}/abort`, {});
   expect(aborted.status).toBe(404);
 });
+
+/**
+ * Spec I6 over HTTP: pressing 运行 on a template with a coworker the person may not use is a 403 that
+ * names the refused steps, and nothing was dispatched — no run row, no card.
+ *
+ * The body carries the step list rather than only a sentence because the screen lists the step numbers
+ * the person has to fix, and the check is asked with the person who pressed run, not a default.
+ */
+test("running a template with a coworker the person may not use is a 403 naming the steps", async () => {
+  const asked: { initiatedBy: string; agentId: string }[] = [];
+  const refusing = createPipelineStore({
+    database,
+    board,
+    executeStep: async () => ({ status: "done", output: "不该跑" }),
+    canUse: async (initiatedBy, agentId) => {
+      asked.push({ initiatedBy, agentId });
+      return agentId !== STEPS[1]!.agentId;
+    },
+    newRunId: () => randomUUID(),
+  });
+  const refusingRoutes = createPipelineRoutes(refusing, createDevRequireUser());
+  const created = await refusingRoutes.request(
+    new Request("http://openbot.test/templates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ groupId, name: "含越权员工", steps: STEPS }),
+    }),
+  );
+  expect(created.status).toBe(201);
+  const { templateId } = (await created.json()) as { templateId: string };
+  // Scoped to this press's own task text: the dev actor's board is shared with the other cases here, and
+  // a whole-board count would also see their cards.
+  const cardsForPress = () =>
+    runAsTenant(tenant, async () =>
+      database
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.title, "越权的派活")),
+    );
+  expect(await cardsForPress()).toEqual([]);
+
+  const pressed = await refusingRoutes.request(
+    new Request(`http://openbot.test/templates/${templateId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ task: "越权的派活" }),
+    }),
+  );
+
+  expect(pressed.status).toBe(403);
+  const body = (await pressed.json()) as {
+    error: string;
+    refused: { index: number; stepId: string; agentId: string }[];
+  };
+  expect(body.refused).toEqual([
+    { index: 1, stepId: "review", agentId: STEPS[1]!.agentId },
+  ]);
+  expect(body.error).toContain("第 2 步");
+  expect(body.error).toContain(STEPS[1]!.agentId);
+  // Every step was asked, and asked about the person who pressed run.
+  expect(asked).toEqual(
+    STEPS.map((step) => ({ initiatedBy: tenant, agentId: step.agentId })),
+  );
+  const runs = await runAsTenant(tenant, async () =>
+    database
+      .select({ id: groupTaskRuns.id })
+      .from(groupTaskRuns)
+      .where(eq(groupTaskRuns.templateId, templateId)),
+  );
+  expect(runs).toEqual([]);
+  expect(await cardsForPress()).toEqual([]);
+});
