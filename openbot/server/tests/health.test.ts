@@ -76,6 +76,27 @@ describe("runtime capabilities", () => {
     expect(frames).toEqual(["platform"]);
   });
 
+  test("offers WakerFlow automations only where the WakerFlow target is registered (AUT3)", async () => {
+    const plain = await app.request("http://openbot.local/api/capabilities");
+    expect(
+      ((await plain.json()) as { wakerflowAutomations: boolean })
+        .wakerflowAutomations,
+    ).toBe(false);
+    // `coworker` is createApp's 34th argument, after the config and thirty-two optional ones.
+    const withFlows = createApp(
+      loadConfig(testEnvironment()),
+      ...(Array.from({ length: 32 }, () => undefined) as []),
+      { wakerflowAutomations: true },
+    );
+    const offered = await withFlows.request(
+      "http://openbot.local/api/capabilities",
+    );
+    expect(
+      ((await offered.json()) as { wakerflowAutomations: boolean })
+        .wakerflowAutomations,
+    ).toBe(true);
+  });
+
   test("reports the local runtime without exposing configuration secrets", async () => {
     const response = await app.request("http://openbot.local/api/capabilities");
 
@@ -86,6 +107,8 @@ describe("runtime capabilities", () => {
       // Default-on. The browser reads this to decide whether to offer the tool that generates an
       // interface, so it has to be here and not only in the runtime.
       generativeUi: true,
+      // AUT3: off unless the WakerFlow automation target was registered (index.ts does).
+      wakerflowAutomations: false,
       // Default-on: a fresh clone is somebody evaluating the template.
       selfHostBanner: true,
       transcription: false,
@@ -115,6 +138,7 @@ describe("runtime capabilities", () => {
       "mode",
       "durableHistory",
       "generativeUi",
+      "wakerflowAutomations",
       "selfHostBanner",
       "transcription",
       "voice",

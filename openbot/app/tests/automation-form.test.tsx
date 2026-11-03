@@ -131,7 +131,8 @@ const accept: Answer = (method, path, body) => {
 
 function draw(
   options: {
-    wakerflow?: boolean;
+    /** "server": not seeded, so the form reads `/api/capabilities` itself. */
+    wakerflow?: boolean | "server";
     onCreated?: (c: CreatedAutomation) => void;
   } = {},
 ) {
@@ -143,9 +144,11 @@ function draw(
     waker("agent-a", "小熊甲"),
     waker("agent-b", "小熊乙"),
   ]);
-  queryClient.setQueryData(automationKeys.capabilities(), {
-    wakerflow: options.wakerflow === true,
-  });
+  if (options.wakerflow !== "server") {
+    queryClient.setQueryData(automationKeys.capabilities(), {
+      wakerflow: options.wakerflow === true,
+    });
+  }
   const user = userEvent.setup({ document });
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -204,6 +207,66 @@ test("AUT3: with the capability, an existing WakerFlow is sent as the target", a
     maxRuns: null,
     endDate: null,
   });
+});
+
+test("AUT3: the deployment's own answer turns WakerFlow on, and only saved Flows are offered", async () => {
+  serve((method, path, body) => {
+    if (method === "GET" && path === "/api/capabilities") {
+      return Response.json({ mode: "local", wakerflowAutomations: true });
+    }
+    return accept(method, path, body);
+  });
+  // A draft Flow next to the saved one: it cannot run, so it is not offered.
+  const flows = globalThis.fetch;
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) =>
+    String(input) === "/api/wakerflows" && (init?.method ?? "GET") === "GET"
+      ? Response.json({
+          flows: [
+            { id: FLOW_ID, name: "周报流程", status: "ready" },
+            { id: "draft-flow", name: "草稿流程", status: "draft" },
+          ],
+        })
+      : flows(input, init)) as typeof fetch;
+  const { view } = draw({ wakerflow: "server" });
+  const kind = view.getByLabelText("执行对象") as HTMLSelectElement;
+  await waitFor(() =>
+    expect(
+      Array.from(kind.options).find((option) => option.value === "wakerflow")
+        ?.disabled,
+    ).toBe(false),
+  );
+  fireEvent.change(kind, { target: { value: "wakerflow" } });
+  const flow = (await view.findByLabelText(
+    "选择 WakerFlow",
+  )) as HTMLSelectElement;
+  await waitFor(() =>
+    expect(Array.from(flow.options).map((option) => option.value)).toEqual([
+      FLOW_ID,
+    ]),
+  );
+});
+
+test("AUT3: a deployment that does not answer `wakerflowAutomations` keeps WakerFlow off", async () => {
+  serve((method, path, body) => {
+    if (method === "GET" && path === "/api/capabilities") {
+      return Response.json({ mode: "local" });
+    }
+    return accept(method, path, body);
+  });
+  const { view } = draw({ wakerflow: "server" });
+  await waitFor(() =>
+    expect(calls.some((call) => call.path === "/api/capabilities")).toBe(true),
+  );
+  // Let the answer land before reading the picker.
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const kind = view.getByLabelText("执行对象") as HTMLSelectElement;
+  expect(
+    Array.from(kind.options).find((option) => option.value === "wakerflow")
+      ?.disabled,
+  ).toBe(true);
 });
 
 test("AUT1/AUT4: five triggers of every kind, a run cap and an end date go to the server", async () => {
