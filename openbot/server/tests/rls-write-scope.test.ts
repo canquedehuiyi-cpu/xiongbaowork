@@ -262,6 +262,151 @@ test("every tenant table answers all four commands, and no writer answers the pl
   expect(reachable).toEqual([]);
 });
 
+/** The tables 0122 shares through the `team` stamp (G01-E). */
+const TEAM_TABLES = [
+  "agent_profiles",
+  "agents",
+  "approval_team_rules",
+  "approval_team_settings",
+  "channel_agents",
+  "channel_memberships",
+  "channels",
+  "group_bot_threads",
+  "group_messages",
+  "mcp_servers",
+  "mcp_tools",
+  "plugin_grants",
+  "sandboxed_components",
+  "team_bot_assignments",
+  "team_bot_audience",
+  "team_bot_publications",
+];
+
+type NamedPolicyRow = PolicyRow & { name: string; permissive: string };
+
+test("every write that names a 'team' row also names who is writing it (G01-E, 0122)", async () => {
+  /*
+   * A `team` row belongs to nobody, so a write policy that admits one on its stamp alone admits it
+   * for everybody. Each such clause must carry an ownership predicate: the writer's own setting, a
+   * membership or visibility function, or a subquery that reads the owner or the admin's role.
+   */
+  const rows = Array.from(
+    (await runAsTenant("system", () =>
+      database.execute(
+        sql.raw(`
+          select p.tablename as "table", p.policyname as "name", p.permissive as "permissive",
+                 p.cmd as "command", p.qual as "using", p.with_check as "check"
+          from pg_policies p
+          where p.schemaname = 'public'
+          order by p.tablename, p.policyname
+        `),
+      ),
+    )) as ArrayLike<NamedPolicyRow>,
+  );
+
+  const unowned = rows
+    .filter((row) => row.command !== "SELECT")
+    .flatMap((row) =>
+      [row.using, row.check]
+        .map((clause) => ownRowCondition(clause))
+        .filter((own) => own.includes("'team'"))
+        .filter(
+          (own) =>
+            !own.includes("current_setting('app.tenant_id'") &&
+            !own.includes("openbot_team_channel_") &&
+            !own.includes("openbot_team_bot_visible(") &&
+            !own.includes("SUBQUERY_EXISTS"),
+        )
+        .map(() => `"${row.table}" ${row.name} admits a team row for anybody`),
+    );
+  expect(unowned).toEqual([]);
+
+  // `team_read` is a read, and exists exactly where 0122 shares rows.
+  const teamRead = rows.filter((row) => row.name === "team_read");
+  expect([...new Set(teamRead.map((row) => row.table))].sort()).toEqual(
+    TEAM_TABLES,
+  );
+  expect(teamRead.every((row) => row.command === "SELECT")).toBeTrue();
+  expect(teamRead.every((row) => row.permissive === "PERMISSIVE")).toBeTrue();
+
+  // Every table that shares anything refuses a `team` frame per command, and freezes its stamp.
+  const triggers = Array.from(
+    (await runAsTenant("system", () =>
+      database.execute(
+        sql.raw(`
+          select c.relname as "table", t.tgnargs as "count",
+                 encode(t.tgargs, 'escape') as "args", t.tgenabled as "enabled"
+          from pg_trigger t join pg_class c on c.oid = t.tgrelid
+          where t.tgname = 'openbot_team_row_guard' and not t.tgisinternal
+        `),
+      ),
+    )) as ArrayLike<{
+      table: string;
+      count: number;
+      args: string;
+      enabled: string;
+    }>,
+  );
+  const guarded = new Map(triggers.map((row) => [row.table, row]));
+  const shared = [
+    ...new Set(
+      rows
+        .filter((row) => row.name.startsWith("team_"))
+        .map((row) => row.table),
+    ),
+  ].sort();
+  expect(shared).toEqual(TEAM_TABLES);
+  const unguarded = shared.flatMap((table) => {
+    const problems: string[] = [];
+    for (const command of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
+      const refused = rows.find(
+        (row) =>
+          row.table === table &&
+          row.name === `team_frame_refused_${command.toLowerCase()}`,
+      );
+      if (
+        !refused ||
+        refused.command !== command ||
+        refused.permissive !== "RESTRICTIVE"
+      )
+        problems.push(`"${table}" does not refuse a team frame on ${command}`);
+    }
+    if (!guarded.has(table)) problems.push(`"${table}" has no row guard`);
+    else if (guarded.get(table)?.enabled !== "O")
+      problems.push(`"${table}" row guard is not enabled`);
+    return problems;
+  });
+  expect(unguarded).toEqual([]);
+
+  /*
+   * A misspelled trigger argument compares NULL with NULL and silently guards nothing, so every
+   * argument must name a real column of its table.
+   */
+  const columns = Array.from(
+    (await runAsTenant("system", () =>
+      database.execute(
+        sql.raw(`
+          select table_name as "table", column_name as "column"
+          from information_schema.columns where table_schema = 'public'
+        `),
+      ),
+    )) as ArrayLike<{ table: string; column: string }>,
+  );
+  const known = new Set(columns.map((row) => `${row.table}.${row.column}`));
+  const misspelled = triggers.flatMap((row) => {
+    const args = row.args.split("\\000").filter((arg) => arg !== "");
+    const problems = args
+      .filter((arg) => !known.has(`${row.table}.${arg}`))
+      .map((arg) => `"${row.table}" guards a column it does not have: ${arg}`);
+    if (args.length !== Number(row.count))
+      problems.push(`"${row.table}" guard arguments were not all read`);
+    return problems;
+  });
+  expect(misspelled).toEqual([]);
+  // The credential kind is frozen too, although `credentials` has no team policy yet (P10).
+  expect(guarded.has("credentials")).toBeTrue();
+});
+
 /*
  * The part of a policy clause that is about the row being written.
  *
