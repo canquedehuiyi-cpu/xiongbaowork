@@ -66,6 +66,16 @@ PowerShell 可把命令写在一行，或用反引号续行。修改宿主端口
 配置 `BETTER_AUTH_SECRET` 和 `BETTER_AUTH_URL` 即启用邮箱密码登录；OAuth 可以按
 [配置参考](configuration.md)追加。首位管理员邮箱必须在 `INITIAL_ADMIN_EMAILS`。
 
+`INITIAL_ADMIN_EMAILS` 只对经过验证的地址生效，也就是通过身份提供方（Google、Microsoft、Okta 或已登记的 SSO）登录的账号。
+用邮箱密码注册的账号无人验证过，所以即使地址在名单里也不会自动成为管理员：否则谁先抢注这个地址，谁就拿到平台管理员。
+只用邮箱密码登录的部署，请先用该地址注册，再在服务器容器里执行一次：
+
+```bash
+docker exec -it <容器名> /command/with-contenv sh -c 'cd /app/server && bun scripts/grant-admin.ts admin@example.com'
+```
+
+能在容器里执行命令的人已经掌握数据库和全部密钥，所以由他指定首位管理员。这条命令会写一条审计记录。
+
 ```dotenv
 OPENBOT_SINGLE_USER=false
 OPENBOT_PUBLIC_URL=https://employees.example.com

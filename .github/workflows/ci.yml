@@ -9,6 +9,11 @@ on:
   workflow_dispatch:
   # release.yml runs these same checks on the tagged commit before it builds.
   workflow_call:
+    inputs:
+      skip_image:
+        description: The caller builds and smoke-tests the image itself (release.yml builds once).
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -106,6 +111,8 @@ jobs:
             bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         continue-on-error: true
+        # G01-E P15: no OPENBOT_TENANT_FRAME_GUARD here. scripts/test-preload.ts defaults it to
+        # `throw`, so a database read or write with no tenant frame fails the test that made it.
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
@@ -150,6 +157,7 @@ jobs:
           path: ${{ runner.temp }}/*.log
 
   image:
+    if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:

@@ -9,6 +9,10 @@ config:
     google:
       clientId: example.apps.googleusercontent.com
   publicUrl: https://openbot.internal
+  # The bundled database connects as its superuser, and the chart refuses that unless it is said.
+  extraEnv:
+    - name: OPENBOT_RLS_ENFORCE
+      value: warn
 postgresql:
   enabled: true
   auth:

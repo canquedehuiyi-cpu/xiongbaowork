@@ -7,6 +7,7 @@ import {
 } from "../src/computer/policy-store";
 import { createDatabase } from "../src/db/client";
 import { actionPolicy } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -50,8 +51,11 @@ async function until(
   }
 }
 
+// The boundary row is the deployment's (`platform`), so the cleanup has to be able to see it.
 afterEach(async () => {
-  await database.delete(actionPolicy).where(eq(actionPolicy.id, "current"));
+  await runAsTenant("platform", () =>
+    database.delete(actionPolicy).where(eq(actionPolicy.id, "current")),
+  );
 });
 
 describe("a rule added on one server", () => {

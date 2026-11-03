@@ -46,6 +46,12 @@ import {
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
+import {
+  currentTenant,
+  isPersonTenant,
+  isTenantFramed,
+  runAsTenant,
+} from "../tenant/context";
 import { type StalledStream, TurnWatchdog } from "./turn-watchdog";
 
 /** The fetch an `HttpAgent` uses, as @ag-ui/client 0.0.57 declares it. */
@@ -132,6 +138,16 @@ type OpenStream = {
   requestBody: string | null;
   /** Set by whichever of the pump or the stall gets there first. */
   finished: boolean;
+  /**
+   * The tenant the stream was opened in (G01), and so the one its stall is recorded in.
+   *
+   * Captured from the frame of the request or claimed work that started the run, because the stall
+   * is noticed later by a shared sweeper timer, and a timer runs in whatever frame happened to arm
+   * it: the first stream of a quiet spell, which is somebody else's. `platform` when the opener was
+   * not a person's frame, so such a row is the operator's and never lands in another person's
+   * tenant or in the `system` rows every tenant can read.
+   */
+  tenant: string;
 };
 
 export function createStallGuard(options: StallGuardOptions): StallGuard {
@@ -230,22 +246,26 @@ export function createStallGuard(options: StallGuardOptions): StallGuard {
     }
     void stream.writer.close().catch(() => undefined);
 
-    if (options.auditStore) {
-      await recordAuditEvent(options.auditStore, {
-        eventType: "agent.stream_stalled",
-        targetType: "agent",
-        targetId: stream.bot.id,
-        ...(stream.bot.initiator ? { initiator: stream.bot.initiator } : {}),
-        payload: {
-          bot: stream.bot.id,
-          silentForMs: stalled.silentForMs,
-          // Chunks, not events. One chunk can carry several AG-UI events and the boundaries are the
-          // network's, so saying "events" here would be a number that looks precise and is not. Zero
-          // is the fact worth reading: the Bot answered the request and then said nothing at all.
-          chunks: stalled.chunks,
-          ...(turn ? { thread: turn.threadId, run: turn.runId } : {}),
-        },
-      }).catch(() => undefined);
+    const auditStore = options.auditStore;
+    if (auditStore) {
+      // In the stream's own tenant, whatever frame the sweeper that noticed the stall is in.
+      await runAsTenant(stream.tenant, () =>
+        recordAuditEvent(auditStore, {
+          eventType: "agent.stream_stalled",
+          targetType: "agent",
+          targetId: stream.bot.id,
+          ...(stream.bot.initiator ? { initiator: stream.bot.initiator } : {}),
+          payload: {
+            bot: stream.bot.id,
+            silentForMs: stalled.silentForMs,
+            // Chunks, not events. One chunk can carry several AG-UI events and the boundaries are the
+            // network's, so saying "events" here would be a number that looks precise and is not. Zero
+            // is the fact worth reading: the Bot answered the request and then said nothing at all.
+            chunks: stalled.chunks,
+            ...(turn ? { thread: turn.threadId, run: turn.runId } : {}),
+          },
+        }),
+      ).catch(() => undefined);
     }
   }
 
@@ -281,6 +301,7 @@ export function createStallGuard(options: StallGuardOptions): StallGuard {
         requestBody:
           typeof requestInit.body === "string" ? requestInit.body : null,
         finished: false,
+        tenant: openerTenant(),
       });
       watchdog.open({ id, botId: bot.id });
       arm();
@@ -335,6 +356,12 @@ export function createStallGuard(options: StallGuardOptions): StallGuard {
     watch,
     stop: disarm,
   };
+}
+
+/** The person whose frame opened a stream, or `platform` when it was nobody's. See OpenStream. */
+function openerTenant(): string {
+  const tenant = isTenantFramed() ? currentTenant() : undefined;
+  return isPersonTenant(tenant) ? tenant : "platform";
 }
 
 /**

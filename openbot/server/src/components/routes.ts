@@ -56,8 +56,17 @@ export function createComponentRoutes(
    * caller that reaches `publish` directly from creating the same half-published state.
    */
   sandboxedStore?: SandboxedStore,
+  /**
+   * `createAdminScope(...).adminCapability`, mounted on the Published switch only. A playground
+   * component's source is stamped `team`, and row-level security lets an administrator read its
+   * draft or publish it only with the admin capability (G01-E I10). Absent, the switch fails closed
+   * for playground components; compiled ones are unaffected.
+   */
+  adminCapability?: MiddlewareHandler<{ Variables: AppVariables }>,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  const capability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminCapability ?? ((_context, next) => next());
 
   const audit = async (
     context: { var: AppVariables },
@@ -491,7 +500,7 @@ export function createComponentRoutes(
     return context.json({ revoked: true });
   });
 
-  routes.post("/:name/publication", requireUser, async (context) => {
+  routes.post("/:name/publication", requireUser, capability, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
