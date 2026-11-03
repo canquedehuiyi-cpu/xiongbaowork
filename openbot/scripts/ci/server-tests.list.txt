@@ -352,6 +352,7 @@ tests/tasks-routes-filters.integration.test.ts
 tests/team-bot-move.integration.test.ts
 tests/team-bot-owner.integration.test.ts
 tests/team-bot-visibility-parity.integration.test.ts
+tests/team-bots-migration.integration.test.ts
 tests/team-bots.integration.test.ts
 tests/team-tenant-rls.integration.test.ts
 tests/tenant-cross-tenant-404.test.ts
