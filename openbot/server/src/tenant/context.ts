@@ -168,7 +168,7 @@ export function assertPersonTenant(
  *
  * `owner` is whoever the item's payload says it is for. It is required, and may only agree with the
  * stamp: a payload with no owner names nobody to act as. A row stamped as nobody's (`system`,
- * `platform`, empty), a payload naming somebody else, or a caller already acting for another person
+ * `platform`, `team`, empty), a payload naming somebody else, or a caller already acting for another person
  * comes back `{ ran: false }` without `work` being called, and the caller ends the item from the
  * queue's own frame. Everything `work` does — success, failure, audit, notify, cleanup — runs in the
  * stamped tenant.
