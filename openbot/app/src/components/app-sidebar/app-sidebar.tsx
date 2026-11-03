@@ -1,5 +1,6 @@
 import {
   IconBolt,
+  IconBook,
   IconBox,
   IconBoxSeam,
   IconBrain,
@@ -631,6 +632,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <IconBrain />
               </div>
               <span className="text-sm">记忆</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="hover:bg-foreground/5 h-10"
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/knowledge"
+                  activeProps={{ className: "bg-foreground/5" }}
+                />
+              )}
+            >
+              <div className="size-[28px] flex items-center justify-center">
+                <IconBook />
+              </div>
+              <span className="text-sm">知识库</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

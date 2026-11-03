@@ -246,6 +246,8 @@ test("an event that woke a coworker opens one card and closes it on the same run
     tenantId: "person-1",
     executorAgentId: "bot-1",
     source: "responsibility",
+    // Story C2: the 自主工作 lane's sub-label (职责) reads this, not the lane.
+    triggerSource: "responsibility",
     channelRef: "channel-1",
     runRef: "run-1",
     // Device mode: the board has to say which machine the work happened on, the same fact a chat

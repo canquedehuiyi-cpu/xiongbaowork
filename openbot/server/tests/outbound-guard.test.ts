@@ -6,6 +6,7 @@ import {
   guardedFetch,
   type OutboundLookup,
   OutboundRefusedError,
+  proxiedByEnvironment,
 } from "../src/net/outbound-guard";
 
 /**
@@ -277,6 +278,93 @@ describe("checking where a name actually resolves", () => {
       viaProxy: () => true,
     });
     expect(lookup.asked).toEqual(["api.example.com"]);
+  });
+
+  /*
+   * NO_PROXY (Codex P1 on #7). Bun's fetch dials a NO_PROXY host directly, so the pod resolves it at
+   * connect time: a name the guard could not resolve must not be waved through as "the proxy's
+   * problem". Matching as driven against Bun: exact, leading dot, `*`, host:port, case and spaces.
+   */
+  const proxied = { HTTPS_PROXY: "http://proxy.internal:3128" };
+
+  test("a NO_PROXY host that the pod cannot resolve is refused, proxy or not", async () => {
+    const lookup = fakeLookup({});
+    for (const noProxy of [
+      "mcp.tenant.example",
+      ".tenant.example",
+      "*.tenant.example",
+      "tenant.example",
+      "other.example, MCP.Tenant.Example ",
+      "mcp.tenant.example:443",
+      "*",
+    ]) {
+      const env = { ...proxied, NO_PROXY: noProxy };
+      const error = await assertResolvesPublic(
+        "https://mcp.tenant.example/mcp",
+        {
+          lookup,
+          viaProxy: (url) => proxiedByEnvironment(url, env),
+        },
+      ).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(OutboundRefusedError);
+      expect((error as OutboundRefusedError).kind).toBe("unresolved");
+    }
+    // `no_proxy`, lower case, is read as well.
+    expect(
+      proxiedByEnvironment(new URL("https://mcp.tenant.example/"), {
+        ...proxied,
+        no_proxy: "mcp.tenant.example",
+      }),
+    ).toBe(false);
+  });
+
+  test("a host NO_PROXY does not name keeps the proxy exemption", async () => {
+    const lookup = fakeLookup({});
+    const env = {
+      ...proxied,
+      NO_PROXY:
+        "internal.example,.corp.example,mcp.tenant.example.evil,localhost",
+    };
+    await assertResolvesPublic("https://mcp.tenant.example/mcp", {
+      lookup,
+      viaProxy: (url) => proxiedByEnvironment(url, env),
+    });
+    expect(proxiedByEnvironment(new URL("https://tenant.example/"), env)).toBe(
+      true,
+    );
+    // No proxy at all is not proxied, NO_PROXY or not.
+    expect(proxiedByEnvironment(new URL("https://api.example.com/"), {})).toBe(
+      false,
+    );
+    // http is proxied only by HTTP_PROXY.
+    expect(
+      proxiedByEnvironment(new URL("http://api.example.com/"), proxied),
+    ).toBe(false);
+  });
+
+  test("the default reads NO_PROXY from the process environment", async () => {
+    const saved = {
+      HTTPS_PROXY: process.env.HTTPS_PROXY,
+      NO_PROXY: process.env.NO_PROXY,
+      no_proxy: process.env.no_proxy,
+    };
+    try {
+      process.env.HTTPS_PROXY = "http://proxy.internal:3128";
+      process.env.NO_PROXY = "mcp.tenant.example";
+      delete process.env.no_proxy;
+      const error = await assertResolvesPublic(
+        "https://mcp.tenant.example/mcp",
+        {
+          lookup: fakeLookup({}),
+        },
+      ).catch((caught: unknown) => caught);
+      expect((error as OutboundRefusedError).kind).toBe("unresolved");
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
   });
 
   test("behind an egress proxy, a name that resolves inward is still refused", async () => {

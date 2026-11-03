@@ -1,3 +1,4 @@
+import type { OutboundPolicy } from "../net/outbound-guard";
 import * as builtinRoutines from "./builtin-routines";
 import * as composio from "./composio";
 import * as driveRest from "./google-drive-rest";
@@ -80,6 +81,8 @@ export type VendorTransport = {
      */
     actorId?: string;
     botId?: string;
+    /** Set for a tenant-chosen MCP URL; read by `./mcp` only. See its `Connection.outbound`. */
+    outbound?: OutboundPolicy;
   }): Promise<ListedTool[]>;
   callTool(
     connection: {
@@ -102,6 +105,8 @@ export type VendorTransport = {
       actorId?: string;
       /** The Bot the run belongs to. A routine runs as its Bot, which is never a name a model supplies. */
       botId?: string;
+      /** Set for a tenant-chosen MCP URL; read by `./mcp` only. See its `Connection.outbound`. */
+      outbound?: OutboundPolicy;
     },
     toolName: string,
     args: Record<string, unknown>,
