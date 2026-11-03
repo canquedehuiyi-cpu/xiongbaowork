@@ -22,15 +22,14 @@ import { bindTestRoleWriter } from "./support/role-writer";
  * G01-D: the sign-in trail says whose each row is. A refusal before any account is proven is the
  * deployment's (`platform`); a row about a session Better Auth resolved goes in that person's own
  * trail. Unframed, every one of them was `system`, which every tenant's trail lists, address
- * included. The handler is driven as `app.ts` drives it, as the identity layer (`platform`), and
- * under `OPENBOT_TENANT_FRAME_GUARD=throw` so a hook that read the tenant with no frame fails here.
+ * included. The handler is driven as `app.ts` drives it, as the identity layer (`platform`); every
+ * access needs a frame, so a hook that read the tenant with no frame fails here.
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const auditStore = createAuditStore(database);
 const suite = randomUUID().slice(0, 8);
 const admitted = `auth-audit-${suite}@acme.test`;
 const refused = `auth-audit-${suite}@elsewhere.test`;
-const savedGuard = process.env.OPENBOT_TENANT_FRAME_GUARD;
 let releaseRoleWriter: (() => Promise<void>) | undefined;
 let userId = "";
 
@@ -51,28 +50,22 @@ const auth = createAuth(
 );
 
 async function signUp(email: string) {
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    return await runAsTenant("platform", () =>
-      auth.handler(
-        new Request("http://127.0.0.1:3000/api/auth/sign-up/email", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            origin: "http://127.0.0.1:3000",
-          },
-          body: JSON.stringify({
-            name: "Audit",
-            email,
-            password: "a-passphrase-long-enough",
-          }),
+  return await runAsTenant("platform", () =>
+    auth.handler(
+      new Request("http://127.0.0.1:3000/api/auth/sign-up/email", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://127.0.0.1:3000",
+        },
+        body: JSON.stringify({
+          name: "Audit",
+          email,
+          password: "a-passphrase-long-enough",
         }),
-      ),
-    );
-  } finally {
-    if (savedGuard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = savedGuard;
-  }
+      }),
+    ),
+  );
 }
 
 /** The tenant of every row of one type that names this address. */

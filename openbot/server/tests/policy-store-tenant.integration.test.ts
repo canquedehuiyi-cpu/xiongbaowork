@@ -20,7 +20,6 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const rule = 'intent == "activate" && contains(element.name, "submit")';
 const admin = `policy-admin-${crypto.randomUUID()}`;
-const savedGuard = process.env.OPENBOT_TENANT_FRAME_GUARD;
 
 const stored = () =>
   runAsTenant("platform", () =>
@@ -28,8 +27,6 @@ const stored = () =>
   );
 
 afterEach(async () => {
-  if (savedGuard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-  else process.env.OPENBOT_TENANT_FRAME_GUARD = savedGuard;
   await runAsTenant("platform", () =>
     database.delete(actionPolicy).where(eq(actionPolicy.id, "current")),
   );
@@ -53,8 +50,8 @@ describe("the computer boundary is the deployment's row", () => {
       store.set({ mode: "enforce", deny: [rule], allow: ["true"] }),
     );
 
-    // Boot and the NOTIFY listener run outside any frame: under `throw` an unframed read would fail.
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+    // Boot and the NOTIFY listener run outside any frame, and every access needs a frame: an
+    // unframed read would fail.
     const restarted = createPolicyStore(DEFAULT_ACTION_POLICY, database);
     expect(await restarted.load()).toBe("the database");
     expect(restarted.get().deny).toEqual([rule]);
@@ -74,7 +71,6 @@ describe("the computer boundary is the deployment's row", () => {
         allow: ["true"],
       }),
     );
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     const store = createPolicyStore(DEFAULT_ACTION_POLICY, database);
     expect(await store.load()).toBe("the database");
     expect(store.get().deny).toEqual(["legacy"]);

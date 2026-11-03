@@ -32,8 +32,9 @@ import { testDatabaseUrl } from "./support/database";
  * Bun runs a transaction's callback from its own connection machinery, outside the caller's
  * AsyncLocalStorage frame. The session's `app.tenant_id` was already right, but any `currentTenant()`
  * read inside the callback — a store binding an envelope, a predicate built on the outer database —
- * answered the legacy `system` (or threw under the guard). The client now runs the callback inside
- * `runAsTenant(tenant)`, so code inside a transaction sees the tenant its statements run as.
+ * answered the legacy `system` (or, once every access needed a frame, threw). The client now runs
+ * the callback inside `runAsTenant(tenant)`, so code inside a transaction sees the tenant its
+ * statements run as.
  *
  * Each case opens its own pool of ONE connection and closes it at the end, so "fresh connection"
  * means a connection no earlier statement has touched, and "the same pooled connection" means the
@@ -49,18 +50,6 @@ function freshDatabase(): Database {
   const database = createDatabase(databaseUrl, { max: 1 });
   opened.push(database);
   return database;
-}
-
-/** Run `work` with the tenant-frame guard at `throw`, the behaviour G01-D makes the only one. */
-async function underThrowGuard<T>(work: () => Promise<T>): Promise<T> {
-  const previous = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    return await work();
-  } finally {
-    if (previous === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = previous;
-  }
 }
 
 async function capabilityOn(
@@ -83,23 +72,21 @@ afterAll(async () => {
 
 test("a transaction's callback runs in the frame that opened it, on a fresh connection", async () => {
   const database = freshDatabase();
-  const seen = await underThrowGuard(() =>
-    runAsTenant(alice, () =>
-      database.transaction(async (tx) => {
-        const before = currentTenant();
-        const rows = (await tx.execute(
-          sql`select current_setting('app.tenant_id', true) as tenant`,
-        )) as unknown as { tenant: string }[];
-        // After a round trip as well: the frame must not be lost by the continuation.
-        return { before, session: rows[0]?.tenant, after: currentTenant() };
-      }),
-    ),
+  const seen = await runAsTenant(alice, () =>
+    database.transaction(async (tx) => {
+      const before = currentTenant();
+      const rows = (await tx.execute(
+        sql`select current_setting('app.tenant_id', true) as tenant`,
+      )) as unknown as { tenant: string }[];
+      // After a round trip as well: the frame must not be lost by the continuation.
+      return { before, session: rows[0]?.tenant, after: currentTenant() };
+    }),
   );
   expect(seen).toEqual({ before: alice, session: alice, after: alice });
 
   // And again on the same, now reused, connection.
-  const again = await underThrowGuard(() =>
-    runAsTenant(alice, () => database.transaction(async () => currentTenant())),
+  const again = await runAsTenant(alice, () =>
+    database.transaction(async () => currentTenant()),
   );
   expect(again).toBe(alice);
 });
@@ -143,10 +130,8 @@ test("markAttachmentsSent records a send under the throwing guard", async () => 
   );
   if (!id) throw new Error("attachment was not seeded");
 
-  await underThrowGuard(() =>
-    runAsTenant(alice, () =>
-      markAttachmentsSent(database, { actorId: alice, threadId }, [id]),
-    ),
+  await runAsTenant(alice, () =>
+    markAttachmentsSent(database, { actorId: alice, threadId }, [id]),
   );
 
   const [row] = await runAsTenant(alice, () =>
@@ -180,20 +165,18 @@ test("credentials.rotate seals the new row to the caller's tenant under the thro
   );
 
   const bindings: CredentialBinding[] = [];
-  const rotated = await underThrowGuard(() =>
-    runAsTenant(alice, () =>
-      store.rotate({
-        previousCredentialId: previousId,
-        kind: "model",
-        provider: "openai",
-        keyId,
-        metadata: {},
-        seal: async (binding) => {
-          bindings.push(binding);
-          return "sealed";
-        },
-      }),
-    ),
+  const rotated = await runAsTenant(alice, () =>
+    store.rotate({
+      previousCredentialId: previousId,
+      kind: "model",
+      provider: "openai",
+      keyId,
+      metadata: {},
+      seal: async (binding) => {
+        bindings.push(binding);
+        return "sealed";
+      },
+    }),
   );
 
   expect(bindings).toEqual([

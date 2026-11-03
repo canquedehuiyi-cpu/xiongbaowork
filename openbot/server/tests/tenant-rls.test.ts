@@ -14,8 +14,8 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * Ticket 003 acceptance (spec test decision #7): two tenants cannot see each other's rows at the
  * SQL layer, and inserts default into the running tenant without the call site naming it.
  *
- * Who else may look (G01-E, decision-tests): a caller with no frame at all is an error once the frame
- * guard throws (the legacy `system` answer is on its way out); the `system` frame sees only the
+ * Who else may look (G01-E, decision-tests): a caller with no frame at all is an error, because
+ * every access needs a frame (the legacy `system` answer is gone); the `system` frame sees only the
  * platform's own catalogue, so not a person's row; `team` is a stamp and never a frame, so asking as
  * `team` throws before any statement runs; and `platform`, the explicit cross-tenant reader, sees the
  * row exactly as its owner stamped it.
@@ -32,17 +32,10 @@ const marker = `rls-test-${Date.now()}`;
 async function expectOnlyPlatformReaches(id: string) {
   const unframed = () =>
     db.select({ id: agents.id }).from(agents).where(eq(agents.id, id));
-  const guard = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    // Building the statement already reads the frame, so it is asked inside the promise.
-    await expect(
-      Promise.resolve().then(async () => await unframed()),
-    ).rejects.toThrow(TenantContextError);
-  } finally {
-    if (guard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = guard;
-  }
+  // Building the statement already reads the frame, so it is asked inside the promise.
+  await expect(
+    Promise.resolve().then(async () => await unframed()),
+  ).rejects.toThrow(TenantContextError);
 
   const seenBySystem = await runAsTenant("system", () =>
     db.select({ id: agents.id }).from(agents).where(eq(agents.id, id)),

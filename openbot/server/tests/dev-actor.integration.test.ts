@@ -143,17 +143,11 @@ describe("development actor persistence", () => {
       }));
     // Other suites share the actor's tenant; only what this test created is removed afterwards.
     const before = await owned();
-    // As src/index.ts calls it at boot: no frame around it. Under `throw` an unframed statement would
-    // reject, so this proves the upsert opens its own `platform` frame (G01-E P3).
-    const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-    try {
-      expect(isTenantFramed()).toBe(false);
-      expect(await initializeDevActorUser(database, true)).toBe(true);
-    } finally {
-      if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-      else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-    }
+    // As src/index.ts calls it at boot: no frame around it. Every access needs a frame, so an
+    // unframed statement would reject: this proves the upsert opens its own `platform` frame
+    // (G01-E P3).
+    expect(isTenantFramed()).toBe(false);
+    expect(await initializeDevActorUser(database, true)).toBe(true);
     expect(
       await runAsTenant(DEV_ACTOR.id, () =>
         database

@@ -19,9 +19,9 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * The live screen's upgrade runs ahead of every middleware, so it opens its own frame: the signed-in
- * person's (G01-E P4). Every case here runs with the frame guard set to `throw`, so an unframed read
- * anywhere on the path fails the test instead of reading as `system` — which is what used to tell an
- * owner that their own private Bot did not exist.
+ * person's (G01-E P4). Every access needs a frame, so an unframed read anywhere on the path fails
+ * the test instead of reading as `system` — which is what used to tell an owner that their own
+ * private Bot did not exist.
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `stream-upgrade-${randomUUID()}`;
@@ -30,7 +30,6 @@ const stranger = `${prefix}-stranger`;
 const bot = `${prefix}-bot`;
 const profiles = createAgentProfileStore(database, undefined);
 const demonstrations = createDemonstrationStore(database);
-let savedGuard: string | undefined;
 
 const roles: Record<string, OpenBotRole> = {
   [owner]: "user",
@@ -75,8 +74,6 @@ function streamRequest(user: string): Request {
 }
 
 beforeAll(async () => {
-  savedGuard = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
   await runAsTenant(stranger, () =>
     database
       .insert(users)
@@ -111,8 +108,6 @@ afterAll(async () => {
   await runAsTenant(stranger, () =>
     database.delete(users).where(inArray(users.id, [stranger])),
   );
-  if (savedGuard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-  else process.env.OPENBOT_TENANT_FRAME_GUARD = savedGuard;
   await database.$client.close();
 });
 
@@ -193,7 +188,7 @@ test("a step of the owner's recording that arrives on the socket is saved in the
     const socket = server.upgraded[0];
     expect(socket?.recordingId).toBe(recording.id);
     if (!socket) throw new Error("the socket was not upgraded");
-    // Outside any frame, as Bun runs the socket's handlers: the guard would throw on an unframed read.
+    // Outside any frame, as Bun runs the socket's handlers: an unframed read would throw.
     await captureInFrame(
       socket,
       {

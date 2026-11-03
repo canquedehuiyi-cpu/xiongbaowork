@@ -40,18 +40,6 @@ const HOUR = 60 * 60 * 1000;
 const as = <T>(tenant: string, run: () => Promise<T>): Promise<T> =>
   runAsTenant(tenant, run);
 
-/** Run one case under the frame guard set to `throw`, then put back what the run was given. */
-async function underThrowGuard<T>(run: () => Promise<T>): Promise<T> {
-  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    return await run();
-  } finally {
-    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-  }
-}
-
 async function seedAgent(tenant: string, id: string) {
   await as(tenant, async () => {
     await database.insert(agents).values({
@@ -250,14 +238,15 @@ describe("whose automation it is (tenant from the caller frame)", () => {
         .where(eq(automations.id, created.id)),
     );
     expect(unscoped).toEqual([]);
-    // And with the guard at `throw`, no frame at all reads nothing: it is refused outright.
+    // And no frame at all reads nothing: every access needs a frame, so it is refused outright.
+    // (The client refuses while the statement is built, so the async wrapper turns that into a
+    // rejection.)
     await expect(
-      underThrowGuard(async () =>
+      (async () =>
         database
           .select({ id: automations.id })
           .from(automations)
-          .where(eq(automations.id, created.id)),
-      ),
+          .where(eq(automations.id, created.id)))(),
     ).rejects.toBeInstanceOf(TenantContextError);
     await expect(
       as("system", async () => {
@@ -288,10 +277,8 @@ describe("whose automation it is (tenant from the caller frame)", () => {
     await expect(as("system", () => store.list())).rejects.toThrow(
       /tenant's frame/,
     );
-    // With the guard at `throw`, no frame at all is refused before the store is reached.
-    await expect(underThrowGuard(() => store.list())).rejects.toBeInstanceOf(
-      TenantContextError,
-    );
+    // Every access needs a frame, so no frame at all is refused before the store is reached.
+    await expect(store.list()).rejects.toBeInstanceOf(TenantContextError);
     await expect(as("platform", () => store.list())).rejects.toThrow(
       /tenant's frame/,
     );

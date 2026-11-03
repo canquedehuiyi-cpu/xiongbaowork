@@ -35,10 +35,10 @@ import { underThrowGuard } from "./support/frame-guard";
  * THE CALLBACK ROUTE FINDS ITS BOT UNDER ROW SECURITY, AND RUNS THE CALL IN THE RIGHT FRAME (G01-E PCB).
  *
  * `/api/agent-tools/call` has a credential instead of a session, so nothing frames it when it asks
- * which Bot holds the presented token. Asked outside every frame, that question is the legacy
- * `system` answer, and `system` sees neither a person's private Bot nor a `team` Bot: every external
- * agent's tool call was refused as an unknown token, for every Bot that is not in the catalogue. And
- * under `OPENBOT_TENANT_FRAME_GUARD=throw` (what P15 makes the default) the question threw.
+ * which Bot holds the presented token. Asked outside every frame, that question used to get the
+ * legacy `system` answer, and `system` sees neither a person's private Bot nor a `team` Bot: every
+ * external agent's tool call was refused as an unknown token, for every Bot that is not in the
+ * catalogue. Now every access needs a frame, and asked outside one the question throws.
  *
  * The route, the token lookup, the profile store, the plugin store (grants, policy, audit) and the
  * audit store are the real ones, against PostgreSQL; only the vendor is a stub.

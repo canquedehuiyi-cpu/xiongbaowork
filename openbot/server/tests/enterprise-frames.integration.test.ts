@@ -40,8 +40,8 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 /*
  * G01-D: the enterprise controls' timers and SCIM's deferred offboarding have no person behind
  * them. Each says whose it is: the deployment's settings and cross-tenant questions as `platform`,
- * and a person's own computers and trail as that person, read from their own rows. Driven under
- * `OPENBOT_TENANT_FRAME_GUARD=throw`, so anything left to the legacy `system` fallback fails here.
+ * and a person's own computers and trail as that person, read from their own rows. Every access
+ * needs a frame, so anything left to the legacy `system` fallback fails here.
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const auditStore = createAuditStore(database);
@@ -73,17 +73,6 @@ const provider: ComputerProvider = {
   ],
 };
 let controls: EnterpriseControls;
-const savedGuard = process.env.OPENBOT_TENANT_FRAME_GUARD;
-
-async function underThrow<T>(work: () => Promise<T>): Promise<T> {
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    return await work();
-  } finally {
-    if (savedGuard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = savedGuard;
-  }
-}
 
 /** Every audit row about `targetId` of one type, with the tenant it was filed under. */
 const rowsAbout = (eventType: string, targetId: string) =>
@@ -184,7 +173,7 @@ describe("enterprise controls with no frame of their own", () => {
   test("the settings refresh reads as platform", async () => {
     const errors = spyOn(console, "error").mockImplementation(() => {});
     try {
-      await underThrow(() => controls.refresh());
+      await controls.refresh();
       expect(
         errors.mock.calls.some((call) =>
           String(call[0]).includes("enterprise-controls-refresh-failed"),
@@ -197,15 +186,13 @@ describe("enterprise controls with no frame of their own", () => {
   });
 
   test("a Bot's network policy is resolved from its owner's profile, from no frame", async () => {
-    const policy = await underThrow(() => controls.policyForBot(bot));
+    const policy = await controls.policyForBot(bot);
     expect(policy.mode).toBeDefined();
   });
 
   test("an inactive computer is stopped and the row filed in its owner's trail", async () => {
     stopped.length = 0;
-    const result = await underThrow(() =>
-      controls.terminateInactiveComputers(),
-    );
+    const result = await controls.terminateInactiveComputers();
     expect(result?.stopped).toContain(bot);
     expect(await rowsAbout("computer.terminated_inactive", bot)).toEqual([
       { tenantId: person.id },
@@ -309,7 +296,7 @@ describe("a governed run, inside the person's own frame", () => {
     await allowlist({ enabled: true, models: ["anthropic/claude-frames"] });
     try {
       const runId = `refused-${suite}`;
-      const response = await underThrow(() => run(bot, runId));
+      const response = await run(bot, runId);
       expect(response.status).toBe(403);
       expect(await usageFor(runId)).toEqual([
         {
@@ -332,7 +319,7 @@ describe("a governed run, inside the person's own frame", () => {
     await allowlist({ enabled: true, models: ["openai/gpt-frames"] });
     try {
       const runId = `allowed-${suite}`;
-      const response = await underThrow(() => run(bot, runId));
+      const response = await run(bot, runId);
       expect(response.status).toBe(200);
       expect(await usageFor(runId)).toEqual([
         {
@@ -352,21 +339,19 @@ describe("a governed run, inside the person's own frame", () => {
     const errors = spyOn(console, "error").mockImplementation(() => {});
     try {
       const runId = `remote-${suite}`;
-      await underThrow(async () => {
-        const response = await run(remoteBot, runId);
-        expect(response.status).toBe(200);
-        // The body is read outside any frame, as the server reads it.
-        expect(await response.text()).toContain("anthropic/claude-frames");
-        expect(await eventually(() => usageFor(runId))).toEqual([
-          {
-            tenantId: person.id,
-            userId: person.id,
-            model: "anthropic/claude-frames",
-            source: "observed",
-            allowed: true,
-          },
-        ]);
-      });
+      const response = await run(remoteBot, runId);
+      expect(response.status).toBe(200);
+      // The body is read outside any frame, as the server reads it.
+      expect(await response.text()).toContain("anthropic/claude-frames");
+      expect(await eventually(() => usageFor(runId))).toEqual([
+        {
+          tenantId: person.id,
+          userId: person.id,
+          model: "anthropic/claude-frames",
+          source: "observed",
+          allowed: true,
+        },
+      ]);
       expect(
         errors.mock.calls.some((call) =>
           String(call[0]).includes("model-usage-write-failed"),
@@ -431,8 +416,8 @@ describe("the administrator's actions screen", () => {
 
   test("an administrator sees two people's actions", async () => {
     await seedActions();
-    const response = await underThrow(() =>
-      adminApp(["admin"]).request("/api/admin/enterprise/actions?limit=500"),
+    const response = await adminApp(["admin"]).request(
+      "/api/admin/enterprise/actions?limit=500",
     );
     expect(response.status).toBe(200);
     const { actions } = (await response.json()) as {
@@ -547,15 +532,13 @@ describe("a parked crew run, answered", () => {
       });
 
     // Somebody else's approval, answered in their own frame, names this run and is refused.
-    expect(
-      await underThrow(() => runAsTenant(stranger, () => answer(stranger))),
-    ).toBe("skipped");
+    expect(await runAsTenant(stranger, () => answer(stranger))).toBe("skipped");
     expect(await statusOf()).toBe("awaiting_action");
 
     // The owner's answer, handed over from `platform` (no person frame): resumed as the owner.
-    expect(
-      await underThrow(() => runAsTenant("platform", () => answer(person.id))),
-    ).toBe("resumed");
+    expect(await runAsTenant("platform", () => answer(person.id))).toBe(
+      "resumed",
+    );
     expect(await statusOf()).toBe("done");
     const stamps = await runAsTenant("platform", async () => {
       const runs = await database
