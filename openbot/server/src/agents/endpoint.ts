@@ -321,10 +321,7 @@ export function createAgentFetch(
         error instanceof OutboundRefusedError &&
         error.kind === "destination"
       ) {
-        throw refuse(
-          address,
-          `This deployment will not dial ${address}: ${error.message}`,
-        );
+        throw refuse(address, `本部署不会连接 ${address}：${error.message}`);
       }
       throw error;
     }

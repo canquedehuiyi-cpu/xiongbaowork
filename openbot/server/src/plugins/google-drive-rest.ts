@@ -191,7 +191,7 @@ async function request(
     await response.body?.cancel().catch(() => undefined);
     return {
       ok: false,
-      message: `Google Drive answered with a redirect (${response.status}), which is not followed, so the credential was not sent on.`,
+      message: `Google Drive 返回了重定向（${response.status}）。系统不跟随重定向，凭据未被转发。`,
     };
   }
 
