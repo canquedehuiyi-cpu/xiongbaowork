@@ -199,8 +199,8 @@ test("a switched-off model or a withdrawn key costs the binding, not the turn", 
 /**
  * Which frames read a binding (G01-E P4, decision-tests).
  *
- * A read with no frame at all is a bug, not "unbound": under the frame guard it rejects with
- * `TenantContextError` instead of quietly falling back to the deployment's model. The catalogue
+ * A read with no frame at all is a bug, not "unbound": every access needs a frame, so it rejects
+ * with `TenantContextError` instead of quietly falling back to the deployment's model. The catalogue
  * frame `system` and a stranger's frame hold none of this; the owner's frame does; and `platform`
  * (an admin's controls, background work) reads the owner's binding but still refuses a model row
  * that belongs to another tenant.
@@ -211,17 +211,10 @@ test("a binding is read only in a frame that can see it", async () => {
   const foreign = await connectModel(tenantB, "openai", "gpt-6");
   const thief = await newCoworker(tenantA, `${marker}-scope-thief`, foreign);
 
-  // (a) No frame, under the guard: refused out loud.
-  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    await expect(resolveModel(coworker)).rejects.toBeInstanceOf(
-      TenantContextError,
-    );
-  } finally {
-    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-  }
+  // (a) No frame: refused out loud.
+  await expect(resolveModel(coworker)).rejects.toBeInstanceOf(
+    TenantContextError,
+  );
   // (b) The catalogue frame sees the platform's own partition, which holds none of this.
   expect(await runAsTenant("system", () => resolveModel(coworker))).toBeNull();
   // (c) A stranger's frame does not see tenantA's coworker.

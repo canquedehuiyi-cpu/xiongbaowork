@@ -429,17 +429,9 @@ describe("the cron job's own sweep", () => {
         .where(eq(attachments.id, row.id)),
     );
 
-    const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-    let deleted: number;
-    try {
-      deleted = await cullStagedAttachments(database, {
-        olderThanHours: 50 * 365 * 24,
-      });
-    } finally {
-      if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-      else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-    }
+    const deleted = await cullStagedAttachments(database, {
+      olderThanHours: 50 * 365 * 24,
+    });
 
     expect(deleted).toBeGreaterThanOrEqual(1);
     expect(

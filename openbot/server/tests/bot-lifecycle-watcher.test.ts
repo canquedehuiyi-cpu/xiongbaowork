@@ -86,7 +86,7 @@ test("a database that stays unreadable stops the turns, and a pause stops them a
 
 /*
  * G01-D: the watcher's interval has no frame of its own (or the frame of whoever's turn started it),
- * so each pause is re-read as the tenant its turn was started in. Run under the `throw` guard, so a
+ * so each pause is re-read as the tenant its turn was started in. Every access needs a frame, so a
  * read left to the interval's frame fails instead of answering as `system`.
  */
 test("the watcher re-reads each pause as the tenant its turn was started in", async () => {
@@ -110,15 +110,8 @@ test("the watcher re-reads each pause as the tenant its turn was started in", as
   );
   reads.length = 0;
 
-  const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-  process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-  try {
-    // From grace's frame too: the interval inherits whichever frame first started it.
-    await checkRunningTurnsForTests();
-    await runAsTenant("grace", () => checkRunningTurnsForTests());
-  } finally {
-    if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-    else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-  }
+  // From grace's frame too: the interval inherits whichever frame first started it.
+  await checkRunningTurnsForTests();
+  await runAsTenant("grace", () => checkRunningTurnsForTests());
   expect(reads).toEqual(["ada", "grace", "ada", "grace"]);
 });
