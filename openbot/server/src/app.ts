@@ -483,8 +483,18 @@ export function createApp(
        * A count, not a list. The sign-in screen only needs to know whether to offer the email box
        * that routes by domain; naming the providers would tell anybody who loads the page which
        * companies use this deployment, which is not theirs to have before they sign in.
+       *
+       * Read as `platform` (G01-E): the providers are deployment rows, and this route runs before
+       * anybody has signed in, so there is no person's frame to read them in, the same reason the
+       * identity layer below runs as `platform`. With no frame it used to read as the legacy
+       * `system` fallback, and once that was removed it answered this whole route with a 500.
+       * Only the count leaves.
        */
-      ssoConfigured: ((await identityProviders?.list()) ?? []).length > 0,
+      ssoConfigured:
+        (identityProviders === undefined
+          ? []
+          : await runAsTenant("platform", () => identityProviders.list())
+        ).length > 0,
       /*
        * Whether an administrator requires SSO. The screen then leads with SSO and keeps social
        * sign-in only as the administrators' audited break-glass; the server refuses everybody else.
