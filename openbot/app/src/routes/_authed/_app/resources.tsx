@@ -1,4 +1,4 @@
-import { IconBook, IconPencil, IconPlus } from "@tabler/icons-react";
+import { IconBook, IconPencil, IconPlus, IconRoute } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -75,11 +75,37 @@ function ResourcesPage() {
     >
       <PlatformModelZone />
       <ModelZone />
+      <WakerFlowEntry />
       <SkillZone />
       <ConnectorZone />
       <KnowledgeZone />
       <ComponentZone />
     </PageShell>
+  );
+}
+
+/**
+ * The way into WakerFlow management (story WF1).
+ *
+ * Kept as one self-contained block on purpose: where this entry finally lives (here or in the
+ * sidebar) is still open, and moving it should be a change to one file.
+ */
+function WakerFlowEntry() {
+  return (
+    <PageSection
+      action={
+        <Button
+          render={(props) => <Link to="/wakerflows" {...props} />}
+          size="sm"
+          variant="outline"
+        >
+          <IconRoute />
+          管理
+        </Button>
+      }
+      description="用一句话描述想要的流程，生成由多位员工分步执行、可以修改保存的计划。"
+      title="WakerFlow"
+    />
   );
 }
 

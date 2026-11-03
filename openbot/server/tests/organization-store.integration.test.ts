@@ -21,6 +21,8 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+/** The identity layer and its tables are the deployment's, as `app.ts` runs them. */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
 let releaseRoleWriter: (() => Promise<void>) | undefined;
 beforeAll(async () => {
   releaseRoleWriter = await bindTestRoleWriter(database);
@@ -53,26 +55,32 @@ test("verified employee keeps the same-email local account and history identity 
       }),
   });
   try {
-    await database.insert(users).values({
-      id: localId,
-      email,
-      name: "Existing Employee",
-      onboardingStep: 4,
-      onboardingCompletedAt: new Date(),
+    // The identity tables carry no tenant, so they are seeded as the deployment's own...
+    await asPlatform(async () => {
+      await database.insert(users).values({
+        id: localId,
+        email,
+        name: "Existing Employee",
+        onboardingStep: 4,
+        onboardingCompletedAt: new Date(),
+      });
+      await setRole(database, localId, "admin");
+      await database
+        .insert(userInstructions)
+        .values({ userId: localId, instructions: history });
     });
-    await setRole(database, localId, "admin");
-    await database
-      .insert(userInstructions)
-      .values({ userId: localId, instructions: history });
-    await database.insert(channels).values({
-      id: channelId,
-      name: "Existing conversation",
-      description: "Preserved",
-      lastMessage: "Existing graphical Bot result",
+    // ...and the conversation history is the employee's own, filed in their tenant.
+    await runAsTenant(localId, async () => {
+      await database.insert(channels).values({
+        id: channelId,
+        name: "Existing conversation",
+        description: "Preserved",
+        lastMessage: "Existing graphical Bot result",
+      });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId, userId: localId });
     });
-    await database
-      .insert(channelMemberships)
-      .values({ channelId, userId: localId });
     const auth = createOrganizationAuth({
       authorityUrl: authority.url.origin,
       materializeUser: organizationUserStore(database),
@@ -85,51 +93,68 @@ test("verified employee keeps the same-email local account and history identity 
           cookie: "better-auth.session_token=fixture",
         }),
       ).toString("base64url");
-    const session = await auth.api.getSession({
-      headers: new Headers({ cookie }),
-    });
+    // Reached as `app.ts` reaches it: the identity layer runs as `platform`.
+    const session = await asPlatform(() =>
+      auth.api.getSession({
+        headers: new Headers({ cookie }),
+      }),
+    );
     expect(session?.user).toMatchObject({ id: localId, email, role: "user" });
     expect(
-      await database.select().from(users).where(eq(users.email, email)),
+      await asPlatform(() =>
+        database.select().from(users).where(eq(users.email, email)),
+      ),
     ).toHaveLength(1);
     expect(
-      await database.select().from(users).where(eq(users.id, authorityId)),
+      await asPlatform(() =>
+        database.select().from(users).where(eq(users.id, authorityId)),
+      ),
     ).toHaveLength(0);
-    const [instructions] = await database
-      .select()
-      .from(userInstructions)
-      .where(eq(userInstructions.userId, localId));
+    const [instructions] = await asPlatform(() =>
+      database
+        .select()
+        .from(userInstructions)
+        .where(eq(userInstructions.userId, localId)),
+    );
     expect(instructions?.instructions).toBe(history);
-    const [saved] = await database
-      .select()
-      .from(users)
-      .where(eq(users.id, localId));
+    const [saved] = await asPlatform(() =>
+      database.select().from(users).where(eq(users.id, localId)),
+    );
     expect(
       (
-        await database
-          .select()
-          .from(channelMemberships)
-          .where(eq(channelMemberships.channelId, channelId))
+        await runAsTenant(localId, () =>
+          database
+            .select()
+            .from(channelMemberships)
+            .where(eq(channelMemberships.channelId, channelId)),
+        )
       )[0]?.userId,
     ).toBe(localId);
     expect(
       (
-        await database.select().from(channels).where(eq(channels.id, channelId))
+        await runAsTenant(localId, () =>
+          database.select().from(channels).where(eq(channels.id, channelId)),
+        )
       )[0]?.lastMessage,
     ).toBe("Existing graphical Bot result");
     expect(saved?.onboardingStep).toBe(4);
     expect(saved?.onboardingCompletedAt).not.toBeNull();
     expect(
       (
-        await database
-          .select()
-          .from(userRoles)
-          .where(eq(userRoles.userId, localId))
+        await asPlatform(() =>
+          database
+            .select()
+            .from(userRoles)
+            .where(eq(userRoles.userId, localId)),
+        )
       ).map((row) => row.role),
     ).toEqual(["user"]);
     expect(
-      (await auth.api.getSession({ headers: new Headers({ cookie }) }))?.user
-        .id,
+      (
+        await asPlatform(() =>
+          auth.api.getSession({ headers: new Headers({ cookie }) }),
+        )
+      )?.user.id,
     ).toBe(localId);
 
     /*
@@ -171,8 +196,11 @@ test("verified employee keeps the same-email local account and history identity 
       materializeUser: organizationUserStore(database),
     });
     expect(
-      (await restarted.api.getSession({ headers: new Headers({ cookie }) }))
-        ?.user.id,
+      (
+        await asPlatform(() =>
+          restarted.api.getSession({ headers: new Headers({ cookie }) }),
+        )
+      )?.user.id,
     ).toBe(localId);
     expect((await owned()).subscriptions).toHaveLength(1);
   } finally {
@@ -186,8 +214,12 @@ test("verified employee keeps the same-email local account and history identity 
         .delete(subscriptions)
         .where(eq(subscriptions.tenantId, localId));
     });
-    await database.delete(channels).where(eq(channels.id, channelId));
-    await database.delete(users).where(eq(users.id, localId));
-    await database.delete(users).where(eq(users.id, authorityId));
+    await runAsTenant(localId, () =>
+      database.delete(channels).where(eq(channels.id, channelId)),
+    );
+    await asPlatform(async () => {
+      await database.delete(users).where(eq(users.id, localId));
+      await database.delete(users).where(eq(users.id, authorityId));
+    });
   }
 });

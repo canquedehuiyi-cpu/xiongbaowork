@@ -91,7 +91,7 @@ export function modelLibraryQueryOptions() {
     queryKey: modelKeys.library(),
     queryFn: async (): Promise<ModelLibrary> => {
       const response = await client("/api/models", {
-        fallback: "Your model library could not be loaded.",
+        fallback: "无法加载你的模型库。",
       });
       const body = (await response
         .json()

@@ -5,16 +5,23 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { and, desc, eq } from "drizzle-orm";
 import type { CredentialSecretReader } from "../credentials";
-import { decryptSecret } from "../credentials";
+import { openCredential } from "../credentials";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
+  credentials as credentialRows,
   modelRegistry,
   PLATFORM_POOL_KEY_ENV,
   platformModelPool,
   subscriptions,
 } from "../db/schema";
-import { runAsTenant } from "../tenant/context";
+import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import {
+  currentTenant,
+  isPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import {
   databaseTokenCallSink,
   type ModelTokenCallSink,
@@ -118,9 +125,13 @@ export function languageModelFor(
  * The binding row for one coworker, decided without touching the vault.
  *
  * `null` for a coworker with no binding, and for a binding that is disabled, missing, revoked, or
- * somebody else's. The tenancy comparison is not redundant with row-level security: a headless turn —
- * a routine at three in the morning, a hop delivery — reads as `system`, which sees every tenant's
- * rows, so a binding that reaches across that line would otherwise be honoured.
+ * somebody else's. The tenancy comparison is not redundant with row-level security: a question asked
+ * under `platform` — an admin's controls, background work that has not yet narrowed to its owner —
+ * sees every tenant's rows, and a foreign key is not stopped by row-level security, so a binding that
+ * points across that line would otherwise be honoured. Headless turns no longer read as `system`:
+ * background work runs in its row's owner frame, and a read with no frame at all is a bug that the
+ * frame guard turns into a `TenantContextError`, which the resolver below passes on rather than
+ * treating as "unbound".
  */
 async function bindingFor(
   database: Database,
@@ -130,6 +141,7 @@ async function bindingFor(
   const [profile] = await database
     .select({
       tenantId: agentProfiles.tenantId,
+      ownerUserId: agentProfiles.ownerUserId,
       modelRef: agentProfiles.modelRef,
       platformModelRef: agentProfiles.platformModelRef,
     })
@@ -137,16 +149,32 @@ async function bindingFor(
     .where(eq(agentProfiles.agentId, agentId))
     .limit(1);
   if (!profile) return null;
+  /*
+   * A TEAM Bot (G01-E, plan §2.4) is stamped `team`, which is nobody and cannot be billed. Its
+   * owner's private library model is the owner's key, so it is used only when the owner is the one
+   * asking; a teammate falls back to the deployment default. A pool model is paid by whoever invokes
+   * it — the person in the frame — and under `platform` (background work) by the owner.
+   */
+  const team = profile.tenantId === TEAM_TENANT;
+  // Asked only for a team Bot: a private Bot's binding never depends on who is asking.
+  const frame = team ? currentTenant() : "";
+  const owner = isPersonTenant(profile.ownerUserId)
+    ? profile.ownerUserId
+    : null;
   if (!profile.modelRef) {
-    return profile.platformModelRef
-      ? poolBindingFor(
-          database,
-          profile.tenantId,
-          profile.platformModelRef,
-          environment,
-        )
+    if (!profile.platformModelRef) return null;
+    const payer = !team
+      ? profile.tenantId
+      : isPersonTenant(frame)
+        ? frame
+        : frame === PLATFORM_TENANT
+          ? owner
+          : null;
+    return payer
+      ? poolBindingFor(database, payer, profile.platformModelRef, environment)
       : null;
   }
+  if (team && (!owner || frame !== owner)) return null;
   const [entry] = await database
     .select({
       tenantId: modelRegistry.tenantId,
@@ -160,7 +188,7 @@ async function bindingFor(
     .where(eq(modelRegistry.id, profile.modelRef))
     .limit(1);
   if (!entry?.enabled || !entry.credentialId) return null;
-  if (entry.tenantId !== profile.tenantId) return null;
+  if (entry.tenantId !== (team ? owner : profile.tenantId)) return null;
   return {
     kind: "library",
     tenantId: entry.tenantId,
@@ -204,7 +232,8 @@ async function planIdFor(
  * A pool binding, or `null` for every reason it may not hold: the row is gone or switched off, the
  * tenant's plan is not one of the row's tiers, the row names no pool key, or the deployment has no
  * value for that key. Each of those falls back to the deployment default, as a library binding does.
- * A coworker stamped `system` or `platform` gets none: its calls could not be metered to anybody.
+ * A tenant that is nobody's (`system`, `platform`, `team`) gets none: its calls could not be metered
+ * to anybody.
  */
 async function poolBindingFor(
   database: Database,
@@ -212,9 +241,7 @@ async function poolBindingFor(
   poolId: string,
   environment: PoolKeyEnvironment,
 ): Promise<PoolBinding | null> {
-  if (!tenantId || tenantId === "system" || tenantId === "platform") {
-    return null;
-  }
+  if (!isPersonTenant(tenantId)) return null;
   const [entry] = await database
     .select({
       id: platformModelPool.id,
@@ -251,6 +278,10 @@ async function poolBindingFor(
  * The model this coworker is bound to, in the `provider/model` shape the deployment's own model and
  * the administrator's allowlist both use — for the usage record and the allowlist check, which need
  * a NAME and must not be given the deployment's instead. Reading one costs no key.
+ *
+ * A binding whose vault row is gone or revoked names nothing, as the resolver below builds nothing for
+ * it: the run speaks the deployment's model, and that is the one to record (story H4). Only a key that
+ * will not decrypt is beyond this read; {@link createNamedAgentModelResolver} answers that too.
  */
 export async function boundModelName(
   database: Database,
@@ -259,29 +290,54 @@ export async function boundModelName(
 ): Promise<string | null> {
   try {
     const binding = await bindingFor(database, agentId, environment);
-    return binding ? `${binding.provider}/${binding.modelName}` : null;
+    if (!binding) return null;
+    if (binding.kind === "library") {
+      const [secret] = await database
+        .select({ revokedAt: credentialRows.revokedAt })
+        .from(credentialRows)
+        .where(eq(credentialRows.id, binding.credentialId))
+        .limit(1);
+      if (!secret || secret.revokedAt) return null;
+    }
+    return `${binding.provider}/${binding.modelName}`;
   } catch {
     // Never log the thrown value: database errors can contain connection details or row contents.
     return null;
   }
 }
 
+/** The model a coworker's run will speak with, and its `provider/model` name, decided together. */
+export type ResolvedAgentModel = { model: LanguageModel; name: string };
+
 /**
+ * The resolver, with the name of what it resolved.
+ *
+ * The name is taken from the SAME decision that built the model, so a usage record cannot name a bound
+ * model while the run spoke the deployment's: a revoked key, a credential that will not decrypt, a
+ * vault row that is gone — each answers `null` here exactly when the turn falls back to the default.
+ * {@link boundModelName} reads the rows without the key, so it would still name the binding for a key
+ * that will not decrypt.
+ *
  * Every call a bound model makes is metered into `model_token_calls` (see `./token-metering`).
  * `sink` exists for tests; production writes to the same database the binding was read from.
  */
-export function createAgentModelResolver(
+export function createNamedAgentModelResolver(
   database: Database,
   credentials: CredentialSecretReader,
   encryptionKey: string,
   sink: ModelTokenCallSink = databaseTokenCallSink(database),
   options: AgentModelResolverOptions = {},
-): AgentModelResolver {
+): (agentId: string) => Promise<ResolvedAgentModel | null> {
   const environment = options.environment ?? process.env;
   const languageModel = options.languageModel ?? languageModelFor;
   return async (agentId) => {
+    // A binding that will not read falls back to the deployment's model, but a missing tenant frame
+    // is the caller's bug and must not pass as "unbound".
     const binding = await bindingFor(database, agentId, environment).catch(
-      () => null,
+      (error) => {
+        if (error instanceof TenantContextError) throw error;
+        return null;
+      },
     );
     if (!binding) return null;
     if (binding.kind === "pool") {
@@ -292,9 +348,9 @@ export function createAgentModelResolver(
       .catch(() => null);
     if (!secret || secret.revokedAt) return null;
     try {
-      const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
+      const apiKey = await openCredential(encryptionKey, secret);
       const originalText = `${binding.provider}/${binding.modelName}`;
-      return meteredLanguageModel(
+      const model = meteredLanguageModel(
         languageModel(
           binding.provider,
           binding.baseUrl,
@@ -323,6 +379,7 @@ export function createAgentModelResolver(
         },
         sink,
       );
+      return { model, name: originalText };
     } catch {
       // A bad key costs the binding, not the conversation.
       return null;
@@ -336,9 +393,10 @@ function poolModel(
   agentId: string,
   languageModel: LanguageModelFactory,
   sink: ModelTokenCallSink,
-): LanguageModel | null {
+): ResolvedAgentModel | null {
   try {
-    return meteredLanguageModel(
+    const name = `${binding.provider}/${binding.modelName}`;
+    const model = meteredLanguageModel(
       languageModel(
         binding.provider,
         binding.baseUrl,
@@ -363,12 +421,38 @@ function poolModel(
             binding.modelName,
           ]),
         ),
-        originalText: `${binding.provider}/${binding.modelName}`,
+        originalText: name,
       },
       sink,
     );
+    return { model, name };
   } catch {
     // A provider client that cannot be built costs the binding, not the conversation.
     return null;
   }
+}
+
+export function createAgentModelResolver(
+  database: Database,
+  credentials: CredentialSecretReader,
+  encryptionKey: string,
+  sink: ModelTokenCallSink = databaseTokenCallSink(database),
+  options: AgentModelResolverOptions = {},
+): AgentModelResolver {
+  return modelOf(
+    createNamedAgentModelResolver(
+      database,
+      credentials,
+      encryptionKey,
+      sink,
+      options,
+    ),
+  );
+}
+
+/** The runtime's view of a named resolver: the model alone. */
+export function modelOf(
+  resolve: (agentId: string) => Promise<ResolvedAgentModel | null>,
+): AgentModelResolver {
+  return async (agentId) => (await resolve(agentId))?.model ?? null;
 }

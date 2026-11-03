@@ -17,6 +17,7 @@ import {
   skillTools,
   users,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import {
   createApplicationConfiguration,
   expandEnvironment,
@@ -35,26 +36,37 @@ const createdPackageIds: string[] = [];
 const createdTenantIds: string[] = [];
 const createdUserIds: string[] = [];
 
+/**
+ * The package catalogue -- canonical agents, their ownerless profiles, deployment packages, and the
+ * skills and grants a package ships -- lives in the `system` partition: `synchronizeTenantPackage`
+ * writes it there in its own scope. The fixtures that stand in for rows the sync has to find, and the
+ * reads that check what it wrote, run in that same partition, so they see exactly what the sync sees.
+ */
+const inCatalogue = <T>(work: () => Promise<T>) => runAsTenant("system", work);
+
 afterEach(async () => {
-  for (const channelId of createdChannelIds.splice(0)) {
-    await database.delete(channels).where(eq(channels.id, channelId));
-  }
-  for (const agentId of createdAgentIds.splice(0)) {
-    await database.delete(agents).where(eq(agents.id, agentId));
-  }
-  for (const packageId of createdPackageIds.splice(0)) {
-    await database
-      .delete(deploymentPackages)
-      .where(eq(deploymentPackages.id, packageId));
-  }
-  for (const tenantId of createdTenantIds.splice(0)) {
-    await database
-      .delete(deploymentPackages)
-      .where(eq(deploymentPackages.tenantId, tenantId));
-  }
-  for (const userId of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, userId));
-  }
+  // Cleanup reaches every partition a fixture may have landed in, and several people's rows.
+  await runAsTenant("platform", async () => {
+    for (const channelId of createdChannelIds.splice(0)) {
+      await database.delete(channels).where(eq(channels.id, channelId));
+    }
+    for (const agentId of createdAgentIds.splice(0)) {
+      await database.delete(agents).where(eq(agents.id, agentId));
+    }
+    for (const packageId of createdPackageIds.splice(0)) {
+      await database
+        .delete(deploymentPackages)
+        .where(eq(deploymentPackages.id, packageId));
+    }
+    for (const tenantId of createdTenantIds.splice(0)) {
+      await database
+        .delete(deploymentPackages)
+        .where(eq(deploymentPackages.tenantId, tenantId));
+    }
+    for (const userId of createdUserIds.splice(0)) {
+      await database.delete(users).where(eq(users.id, userId));
+    }
+  });
 });
 
 afterAll(async () => {
@@ -103,23 +115,27 @@ function loadedPackage(
 
 async function createUser() {
   const userId = randomUUID();
-  await database.insert(users).values({
-    id: userId,
-    email: `${userId}@example.test`,
-  });
+  await runAsTenant(userId, () =>
+    database.insert(users).values({
+      id: userId,
+      email: `${userId}@example.test`,
+    }),
+  );
   createdUserIds.push(userId);
   return userId;
 }
 
 async function createPackage(tenantId: string) {
-  const [deploymentPackage] = await database
-    .insert(deploymentPackages)
-    .values({
-      tenantId,
-      sourcePath: `/old/${randomUUID()}`,
-      checksum: randomUUID(),
-    })
-    .returning();
+  const [deploymentPackage] = await inCatalogue(async () =>
+    database
+      .insert(deploymentPackages)
+      .values({
+        tenantId,
+        sourcePath: `/old/${randomUUID()}`,
+        checksum: randomUUID(),
+      })
+      .returning(),
+  );
   if (!deploymentPackage) throw new Error("Expected deployment package.");
   createdPackageIds.push(deploymentPackage.id);
   return deploymentPackage;
@@ -525,41 +541,42 @@ describe("tenant YAML validation", () => {
 });
 
 describe("tenant package agent profile synchronization", () => {
-  test("creates a public ownerless profile for a canonical package agent", async () => {
-    const agent = packageAgent();
-    const tenantPackage = loadedPackage(agent);
+  test("creates a public ownerless profile for a canonical package agent", () =>
+    inCatalogue(async () => {
+      const agent = packageAgent();
+      const tenantPackage = loadedPackage(agent);
 
-    const deploymentPackage = await synchronizeTenantPackage(
-      database,
-      tenantPackage,
-    );
-    createdAgentIds.push(agent.id);
-    createdPackageIds.push(deploymentPackage.id);
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        tenantPackage,
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
 
-    const [canonical] = await database
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agent.id));
-    const [profile] = await database
-      .select()
-      .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, agent.id));
+      const [canonical] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      const [profile] = await database
+        .select()
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, agent.id));
 
-    expect(canonical).toMatchObject({
-      id: agent.id,
-      name: agent.name,
-      packageId: deploymentPackage.id,
-    });
-    expect(profile).toMatchObject({
-      agentId: agent.id,
-      ownerUserId: null,
-      title: agent.title,
-      roleDescription: agent.roleDescription,
-      avatarSeed: agent.id,
-      visibility: "public",
-      deletedAt: null,
-    });
-  });
+      expect(canonical).toMatchObject({
+        id: agent.id,
+        name: agent.name,
+        packageId: deploymentPackage.id,
+      });
+      expect(profile).toMatchObject({
+        agentId: agent.id,
+        ownerUserId: null,
+        title: agent.title,
+        roleDescription: agent.roleDescription,
+        avatarSeed: agent.id,
+        visibility: "public",
+        deletedAt: null,
+      });
+    }));
 
   /*
    * The row a corrected package leaves behind.
@@ -570,418 +587,439 @@ describe("tenant package agent profile synchronization", () => {
    * on stepping aside for that path. So the table is checked as well as the file, and a deployment
    * holding one refuses to start rather than serving it to everybody who can sign in.
    */
-  test("refuses to synchronize while a Bot named after a deployment route exists", async () => {
-    await database.insert(agents).values({
-      id: "policy",
-      name: "Left behind by an older package",
-      type: "built_in",
-      configuration: {},
-    });
-    createdAgentIds.push("policy");
+  test("refuses to synchronize while a Bot named after a deployment route exists", () =>
+    inCatalogue(async () => {
+      await database.insert(agents).values({
+        id: "policy",
+        name: "Left behind by an older package",
+        type: "built_in",
+        configuration: {},
+      });
+      createdAgentIds.push("policy");
 
-    const agent = packageAgent();
-    await expect(
-      synchronizeTenantPackage(database, loadedPackage(agent)),
-    ).rejects.toThrow(/reserved for a deployment route/i);
+      const agent = packageAgent();
+      await expect(
+        synchronizeTenantPackage(database, loadedPackage(agent)),
+      ).rejects.toThrow(/reserved for a deployment route/i);
 
-    // The refusal is the whole answer: nothing of the package is half-applied behind it.
-    const [applied] = await database
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agent.id));
-    expect(applied).toBeUndefined();
-  });
+      // The refusal is the whole answer: nothing of the package is half-applied behind it.
+      const [applied] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      expect(applied).toBeUndefined();
+    }));
 
-  test("synchronizes normally when no such Bot exists", async () => {
-    // The permissive half, so the check above is proved to be about the reserved id and not about
-    // any pre-existing row.
-    await database.insert(agents).values({
-      id: `policy-desk-${randomUUID()}`,
-      name: "An ordinary Bot",
-      type: "built_in",
-      configuration: {},
-    });
-    const agent = packageAgent();
-    const deploymentPackage = await synchronizeTenantPackage(
-      database,
-      loadedPackage(agent),
-    );
-    createdAgentIds.push(agent.id);
-    createdPackageIds.push(deploymentPackage.id);
-    const [applied] = await database
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agent.id));
-    expect(applied).toBeDefined();
-  });
+  test("synchronizes normally when no such Bot exists", () =>
+    inCatalogue(async () => {
+      // The permissive half, so the check above is proved to be about the reserved id and not about
+      // any pre-existing row.
+      await database.insert(agents).values({
+        id: `policy-desk-${randomUUID()}`,
+        name: "An ordinary Bot",
+        type: "built_in",
+        configuration: {},
+      });
+      const agent = packageAgent();
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        loadedPackage(agent),
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
+      const [applied] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      expect(applied).toBeDefined();
+    }));
 
-  test("resynchronizes and undeletes an existing package profile", async () => {
-    const agent = packageAgent({ avatarSeed: "old-avatar" });
-    const tenantPackage = loadedPackage(agent);
-    const deploymentPackage = await synchronizeTenantPackage(
-      database,
-      tenantPackage,
-    );
-    createdAgentIds.push(agent.id);
-    createdPackageIds.push(deploymentPackage.id);
-    const oldUpdatedAt = new Date("2000-01-01T00:00:00.000Z");
-    await database
-      .update(agentProfiles)
-      .set({
+  test("resynchronizes and undeletes an existing package profile", () =>
+    inCatalogue(async () => {
+      const agent = packageAgent({ avatarSeed: "old-avatar" });
+      const tenantPackage = loadedPackage(agent);
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        tenantPackage,
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
+      const oldUpdatedAt = new Date("2000-01-01T00:00:00.000Z");
+      await database
+        .update(agentProfiles)
+        .set({
+          visibility: "private",
+          deletedAt: new Date("2001-01-01T00:00:00.000Z"),
+          updatedAt: oldUpdatedAt,
+        })
+        .where(eq(agentProfiles.agentId, agent.id));
+
+      const updatedAgent = {
+        ...agent,
+        name: "Updated Package Assistant",
+        title: "Updated Work",
+        roleDescription: "Handle updated package work.",
+        avatarSeed: "updated-avatar",
+      };
+      await synchronizeTenantPackage(database, {
+        ...tenantPackage,
+        agents: [updatedAgent],
+        checksum: randomUUID(),
+      });
+
+      const [canonical] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      const [profile] = await database
+        .select()
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, agent.id));
+      expect(canonical?.name).toBe(updatedAgent.name);
+      expect(profile).toMatchObject({
+        ownerUserId: null,
+        title: updatedAgent.title,
+        roleDescription: updatedAgent.roleDescription,
+        avatarSeed: updatedAgent.avatarSeed,
+        visibility: "public",
+        deletedAt: null,
+      });
+      expect(profile?.updatedAt.getTime()).toBeGreaterThan(
+        oldUpdatedAt.getTime(),
+      );
+    }));
+
+  test("rejects a user-created canonical and profile collision without changing them", () =>
+    inCatalogue(async () => {
+      const ownerUserId = await createUser();
+      const agent = packageAgent();
+      const tenantPackage = loadedPackage(agent);
+      // A person's coworker is two rows in that person's own partition, which is where they write it.
+      await runAsTenant(ownerUserId, async () => {
+        await database.insert(agents).values({
+          id: agent.id,
+          name: "User Agent",
+          type: "built_in",
+          configuration: { systemPrompt: "User-owned prompt." },
+        });
+        await database.insert(agentProfiles).values({
+          agentId: agent.id,
+          ownerUserId,
+          title: "User Title",
+          roleDescription: "User role.",
+          avatarSeed: "user-avatar",
+          visibility: "private",
+        });
+      });
+      createdAgentIds.push(agent.id);
+
+      await expect(
+        synchronizeTenantPackage(database, tenantPackage),
+      ).rejects.toThrow("user-created agent");
+
+      const [canonical] = await runAsTenant(ownerUserId, () =>
+        database.select().from(agents).where(eq(agents.id, agent.id)),
+      );
+      const [profile] = await runAsTenant(ownerUserId, () =>
+        database
+          .select()
+          .from(agentProfiles)
+          .where(eq(agentProfiles.agentId, agent.id)),
+      );
+      expect(canonical).toMatchObject({
+        name: "User Agent",
+        packageId: null,
+        configuration: { systemPrompt: "User-owned prompt." },
+      });
+      expect(profile).toMatchObject({
+        ownerUserId,
+        title: "User Title",
+        roleDescription: "User role.",
+        avatarSeed: "user-avatar",
         visibility: "private",
-        deletedAt: new Date("2001-01-01T00:00:00.000Z"),
-        updatedAt: oldUpdatedAt,
-      })
-      .where(eq(agentProfiles.agentId, agent.id));
+      });
+      const synchronizedPackages = await database
+        .select()
+        .from(deploymentPackages)
+        .where(eq(deploymentPackages.tenantId, tenantPackage.tenantId));
+      expect(synchronizedPackages).toHaveLength(0);
+    }));
 
-    const updatedAgent = {
-      ...agent,
-      name: "Updated Package Assistant",
-      title: "Updated Work",
-      roleDescription: "Handle updated package work.",
-      avatarSeed: "updated-avatar",
-    };
-    await synchronizeTenantPackage(database, {
-      ...tenantPackage,
-      agents: [updatedAgent],
-      checksum: randomUUID(),
-    });
+  test("rejects a user-owned profile collision and rolls back canonical changes", () =>
+    inCatalogue(async () => {
+      const ownerUserId = await createUser();
+      const agent = packageAgent();
+      const tenantPackage = loadedPackage(agent);
+      const deploymentPackage = await createPackage(tenantPackage.tenantId);
+      await database.insert(agents).values({
+        id: agent.id,
+        name: "Original Package Agent",
+        type: "built_in",
+        configuration: { systemPrompt: "Original package prompt." },
+        packageId: deploymentPackage.id,
+      });
+      createdAgentIds.push(agent.id);
+      // The person's profile on that coworker is the person's row, written in their partition.
+      await runAsTenant(ownerUserId, () =>
+        database.insert(agentProfiles).values({
+          agentId: agent.id,
+          ownerUserId,
+          title: "User Title",
+          roleDescription: "User role.",
+          avatarSeed: "user-avatar",
+          visibility: "private",
+        }),
+      );
 
-    const [canonical] = await database
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agent.id));
-    const [profile] = await database
-      .select()
-      .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, agent.id));
-    expect(canonical?.name).toBe(updatedAgent.name);
-    expect(profile).toMatchObject({
-      ownerUserId: null,
-      title: updatedAgent.title,
-      roleDescription: updatedAgent.roleDescription,
-      avatarSeed: updatedAgent.avatarSeed,
-      visibility: "public",
-      deletedAt: null,
-    });
-    expect(profile?.updatedAt.getTime()).toBeGreaterThan(
-      oldUpdatedAt.getTime(),
-    );
-  });
+      await expect(
+        synchronizeTenantPackage(database, tenantPackage),
+      ).rejects.toThrow("user-owned profile");
 
-  test("rejects a user-created canonical and profile collision without changing them", async () => {
-    const ownerUserId = await createUser();
-    const agent = packageAgent();
-    const tenantPackage = loadedPackage(agent);
-    await database.insert(agents).values({
-      id: agent.id,
-      name: "User Agent",
-      type: "built_in",
-      configuration: { systemPrompt: "User-owned prompt." },
-    });
-    createdAgentIds.push(agent.id);
-    await database.insert(agentProfiles).values({
-      agentId: agent.id,
-      ownerUserId,
-      title: "User Title",
-      roleDescription: "User role.",
-      avatarSeed: "user-avatar",
-      visibility: "private",
-    });
+      const [canonical] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      const [profile] = await runAsTenant(ownerUserId, () =>
+        database
+          .select()
+          .from(agentProfiles)
+          .where(eq(agentProfiles.agentId, agent.id)),
+      );
+      const [unchangedPackage] = await database
+        .select()
+        .from(deploymentPackages)
+        .where(eq(deploymentPackages.id, deploymentPackage.id));
+      expect(canonical).toMatchObject({
+        name: "Original Package Agent",
+        configuration: { systemPrompt: "Original package prompt." },
+        packageId: deploymentPackage.id,
+      });
+      expect(profile).toMatchObject({
+        ownerUserId,
+        title: "User Title",
+        roleDescription: "User role.",
+        avatarSeed: "user-avatar",
+        visibility: "private",
+      });
+      expect(unchangedPackage).toMatchObject({
+        sourcePath: deploymentPackage.sourcePath,
+        checksum: deploymentPackage.checksum,
+      });
+    }));
 
-    await expect(
-      synchronizeTenantPackage(database, tenantPackage),
-    ).rejects.toThrow("user-created agent");
+  test("a package cannot take over a channel another package or user owns", () =>
+    inCatalogue(async () => {
+      const channelId = `tenant-channel-${randomUUID().slice(0, 8)}`;
+      const packageAAgent = packageAgent({ name: "Package A Agent" });
+      const packageBAgent = packageAgent({ name: "Package B Agent" });
+      const packageA = {
+        ...loadedPackage(packageAAgent),
+        channels: [
+          {
+            id: channelId,
+            name: "Package A Channel",
+            description: "Owned by package A.",
+            permittedAgents: [packageAAgent.id],
+            allowedGroups: ["all"],
+          },
+        ],
+      };
+      const packageB = {
+        ...loadedPackage(packageBAgent),
+        channels: [
+          {
+            id: channelId,
+            name: "Package B Channel",
+            description: "Owned by package B.",
+            permittedAgents: [packageBAgent.id],
+            allowedGroups: ["all"],
+          },
+        ],
+      };
 
-    const [canonical] = await database
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agent.id));
-    const [profile] = await database
-      .select()
-      .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, agent.id));
-    expect(canonical).toMatchObject({
-      name: "User Agent",
-      packageId: null,
-      configuration: { systemPrompt: "User-owned prompt." },
-    });
-    expect(profile).toMatchObject({
-      ownerUserId,
-      title: "User Title",
-      roleDescription: "User role.",
-      avatarSeed: "user-avatar",
-      visibility: "private",
-    });
-    const synchronizedPackages = await database
-      .select()
-      .from(deploymentPackages)
-      .where(eq(deploymentPackages.tenantId, tenantPackage.tenantId));
-    expect(synchronizedPackages).toHaveLength(0);
-  });
+      createdAgentIds.push(packageAAgent.id, packageBAgent.id);
+      createdChannelIds.push(channelId);
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, packageA)).id,
+      );
 
-  test("rejects a user-owned profile collision and rolls back canonical changes", async () => {
-    const ownerUserId = await createUser();
-    const agent = packageAgent();
-    const tenantPackage = loadedPackage(agent);
-    const deploymentPackage = await createPackage(tenantPackage.tenantId);
-    await database.insert(agents).values({
-      id: agent.id,
-      name: "Original Package Agent",
-      type: "built_in",
-      configuration: { systemPrompt: "Original package prompt." },
-      packageId: deploymentPackage.id,
-    });
-    createdAgentIds.push(agent.id);
-    await database.insert(agentProfiles).values({
-      agentId: agent.id,
-      ownerUserId,
-      title: "User Title",
-      roleDescription: "User role.",
-      avatarSeed: "user-avatar",
-      visibility: "private",
-    });
+      const snapshot = async () => ({
+        channel: (
+          await database
+            .select({
+              id: channels.id,
+              name: channels.name,
+              description: channels.description,
+              packageId: channels.packageId,
+            })
+            .from(channels)
+            .where(eq(channels.id, channelId))
+        )[0],
+        agents: (
+          await database
+            .select({ agentId: channelAgents.agentId })
+            .from(channelAgents)
+            .where(eq(channelAgents.channelId, channelId))
+        ).map((row) => row.agentId),
+      });
 
-    await expect(
-      synchronizeTenantPackage(database, tenantPackage),
-    ).rejects.toThrow("user-owned profile");
+      const beforePackageB = await snapshot();
+      await expect(
+        synchronizeTenantPackage(database, packageB),
+      ).rejects.toThrow(
+        `Tenant package channel "${channelId}" collides with a channel this package does not own`,
+      );
+      expect(await snapshot()).toEqual(beforePackageB);
 
-    const [canonical] = await database
-      .select()
-      .from(agents)
-      .where(eq(agents.id, agent.id));
-    const [profile] = await database
-      .select()
-      .from(agentProfiles)
-      .where(eq(agentProfiles.agentId, agent.id));
-    const [unchangedPackage] = await database
-      .select()
-      .from(deploymentPackages)
-      .where(eq(deploymentPackages.id, deploymentPackage.id));
-    expect(canonical).toMatchObject({
-      name: "Original Package Agent",
-      configuration: { systemPrompt: "Original package prompt." },
-      packageId: deploymentPackage.id,
-    });
-    expect(profile).toMatchObject({
-      ownerUserId,
-      title: "User Title",
-      roleDescription: "User role.",
-      avatarSeed: "user-avatar",
-      visibility: "private",
-    });
-    expect(unchangedPackage).toMatchObject({
-      sourcePath: deploymentPackage.sourcePath,
-      checksum: deploymentPackage.checksum,
-    });
-  });
+      await database
+        .delete(channelAgents)
+        .where(eq(channelAgents.channelId, channelId));
+      await database.delete(channels).where(eq(channels.id, channelId));
+      await database.insert(channels).values({
+        id: channelId,
+        name: "User Channel",
+        description: "Owned by a user.",
+        allowedGroups: [],
+        packageId: null,
+      });
+      await database.insert(channelAgents).values({
+        channelId,
+        agentId: packageAAgent.id,
+      });
 
-  test("a package cannot take over a channel another package or user owns", async () => {
-    const channelId = `tenant-channel-${randomUUID().slice(0, 8)}`;
-    const packageAAgent = packageAgent({ name: "Package A Agent" });
-    const packageBAgent = packageAgent({ name: "Package B Agent" });
-    const packageA = {
-      ...loadedPackage(packageAAgent),
-      channels: [
-        {
-          id: channelId,
-          name: "Package A Channel",
-          description: "Owned by package A.",
-          permittedAgents: [packageAAgent.id],
-          allowedGroups: ["all"],
-        },
-      ],
-    };
-    const packageB = {
-      ...loadedPackage(packageBAgent),
-      channels: [
-        {
-          id: channelId,
-          name: "Package B Channel",
-          description: "Owned by package B.",
-          permittedAgents: [packageBAgent.id],
-          allowedGroups: ["all"],
-        },
-      ],
-    };
+      const beforeUserChannel = await snapshot();
+      await expect(
+        synchronizeTenantPackage(database, packageB),
+      ).rejects.toThrow(
+        `Tenant package channel "${channelId}" collides with a channel this package does not own`,
+      );
+      expect(await snapshot()).toEqual(beforeUserChannel);
+    }));
 
-    createdAgentIds.push(packageAAgent.id, packageBAgent.id);
-    createdChannelIds.push(channelId);
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, packageA)).id,
-    );
+  test("a redeploy updates and removes agents only for the package's own channel", () =>
+    inCatalogue(async () => {
+      const channelId = `tenant-channel-${randomUUID().slice(0, 8)}`;
+      const firstAgent = packageAgent({ name: "First Agent" });
+      const secondAgent = packageAgent({ name: "Second Agent" });
+      const firstPackage = {
+        ...loadedPackage(firstAgent),
+        agents: [firstAgent, secondAgent],
+        channels: [
+          {
+            id: channelId,
+            name: "First Name",
+            description: "Before redeploy.",
+            permittedAgents: [firstAgent.id],
+            allowedGroups: ["all"],
+          },
+        ],
+      };
+      const secondPackage = {
+        ...firstPackage,
+        checksum: randomUUID(),
+        channels: [
+          {
+            id: channelId,
+            name: "Second Name",
+            description: "After redeploy.",
+            permittedAgents: [secondAgent.id],
+            allowedGroups: ["all", "support"],
+          },
+        ],
+      };
 
-    const snapshot = async () => ({
-      channel: (
-        await database
-          .select({
-            id: channels.id,
-            name: channels.name,
-            description: channels.description,
-            packageId: channels.packageId,
-          })
-          .from(channels)
-          .where(eq(channels.id, channelId))
-      )[0],
-      agents: (
+      createdAgentIds.push(firstAgent.id, secondAgent.id);
+      createdChannelIds.push(channelId);
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, firstPackage)).id,
+      );
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, secondPackage)).id,
+      );
+
+      const [channel] = await database
+        .select()
+        .from(channels)
+        .where(eq(channels.id, channelId));
+      const permittedAgents = (
         await database
           .select({ agentId: channelAgents.agentId })
           .from(channelAgents)
           .where(eq(channelAgents.channelId, channelId))
-      ).map((row) => row.agentId),
-    });
+      ).map((row) => row.agentId);
 
-    const beforePackageB = await snapshot();
-    await expect(synchronizeTenantPackage(database, packageB)).rejects.toThrow(
-      `Tenant package channel "${channelId}" collides with a channel this package does not own`,
-    );
-    expect(await snapshot()).toEqual(beforePackageB);
+      expect(channel).toMatchObject({
+        name: "Second Name",
+        description: "After redeploy.",
+        allowedGroups: ["all", "support"],
+      });
+      expect(permittedAgents).toEqual([secondAgent.id]);
+    }));
 
-    await database
-      .delete(channelAgents)
-      .where(eq(channelAgents.channelId, channelId));
-    await database.delete(channels).where(eq(channels.id, channelId));
-    await database.insert(channels).values({
-      id: channelId,
-      name: "User Channel",
-      description: "Owned by a user.",
-      allowedGroups: [],
-      packageId: null,
-    });
-    await database.insert(channelAgents).values({
-      channelId,
-      agentId: packageAAgent.id,
-    });
+  test("rejects a cross-package agent collision and rolls back both packages", () =>
+    inCatalogue(async () => {
+      const packageAAgent = packageAgent({
+        name: "Package A Agent",
+        title: "Package A Title",
+        roleDescription: "Package A role.",
+        avatarSeed: "package-a-avatar",
+      });
+      const packageA = loadedPackage(packageAAgent);
+      const packageARow = await synchronizeTenantPackage(database, packageA);
+      createdAgentIds.push(packageAAgent.id);
+      createdPackageIds.push(packageARow.id);
 
-    const beforeUserChannel = await snapshot();
-    await expect(synchronizeTenantPackage(database, packageB)).rejects.toThrow(
-      `Tenant package channel "${channelId}" collides with a channel this package does not own`,
-    );
-    expect(await snapshot()).toEqual(beforeUserChannel);
-  });
+      const packageB = loadedPackage({
+        ...packageAAgent,
+        name: "Package B Agent",
+        title: "Package B Title",
+        roleDescription: "Package B role.",
+        avatarSeed: "package-b-avatar",
+        configuration: { systemPrompt: "Package B prompt." },
+      });
+      const packageBRow = await createPackage(packageB.tenantId);
 
-  test("a redeploy updates and removes agents only for the package's own channel", async () => {
-    const channelId = `tenant-channel-${randomUUID().slice(0, 8)}`;
-    const firstAgent = packageAgent({ name: "First Agent" });
-    const secondAgent = packageAgent({ name: "Second Agent" });
-    const firstPackage = {
-      ...loadedPackage(firstAgent),
-      agents: [firstAgent, secondAgent],
-      channels: [
-        {
-          id: channelId,
-          name: "First Name",
-          description: "Before redeploy.",
-          permittedAgents: [firstAgent.id],
-          allowedGroups: ["all"],
-        },
-      ],
-    };
-    const secondPackage = {
-      ...firstPackage,
-      checksum: randomUUID(),
-      channels: [
-        {
-          id: channelId,
-          name: "Second Name",
-          description: "After redeploy.",
-          permittedAgents: [secondAgent.id],
-          allowedGroups: ["all", "support"],
-        },
-      ],
-    };
-
-    createdAgentIds.push(firstAgent.id, secondAgent.id);
-    createdChannelIds.push(channelId);
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, firstPackage)).id,
-    );
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, secondPackage)).id,
-    );
-
-    const [channel] = await database
-      .select()
-      .from(channels)
-      .where(eq(channels.id, channelId));
-    const permittedAgents = (
-      await database
-        .select({ agentId: channelAgents.agentId })
-        .from(channelAgents)
-        .where(eq(channelAgents.channelId, channelId))
-    ).map((row) => row.agentId);
-
-    expect(channel).toMatchObject({
-      name: "Second Name",
-      description: "After redeploy.",
-      allowedGroups: ["all", "support"],
-    });
-    expect(permittedAgents).toEqual([secondAgent.id]);
-  });
-
-  test("rejects a cross-package agent collision and rolls back both packages", async () => {
-    const packageAAgent = packageAgent({
-      name: "Package A Agent",
-      title: "Package A Title",
-      roleDescription: "Package A role.",
-      avatarSeed: "package-a-avatar",
-    });
-    const packageA = loadedPackage(packageAAgent);
-    const packageARow = await synchronizeTenantPackage(database, packageA);
-    createdAgentIds.push(packageAAgent.id);
-    createdPackageIds.push(packageARow.id);
-
-    const packageB = loadedPackage({
-      ...packageAAgent,
-      name: "Package B Agent",
-      title: "Package B Title",
-      roleDescription: "Package B role.",
-      avatarSeed: "package-b-avatar",
-      configuration: { systemPrompt: "Package B prompt." },
-    });
-    const packageBRow = await createPackage(packageB.tenantId);
-
-    const snapshot = async () => {
-      const [canonical] = await database
-        .select()
-        .from(agents)
-        .where(eq(agents.id, packageAAgent.id));
-      const [profile] = await database
-        .select()
-        .from(agentProfiles)
-        .where(eq(agentProfiles.agentId, packageAAgent.id));
-      const [persistedPackageA] = await database
-        .select()
-        .from(deploymentPackages)
-        .where(eq(deploymentPackages.id, packageARow.id));
-      const [persistedPackageB] = await database
-        .select()
-        .from(deploymentPackages)
-        .where(eq(deploymentPackages.id, packageBRow.id));
-      return {
-        canonical,
-        profile,
-        packageA: persistedPackageA,
-        packageB: persistedPackageB,
+      const snapshot = async () => {
+        const [canonical] = await database
+          .select()
+          .from(agents)
+          .where(eq(agents.id, packageAAgent.id));
+        const [profile] = await database
+          .select()
+          .from(agentProfiles)
+          .where(eq(agentProfiles.agentId, packageAAgent.id));
+        const [persistedPackageA] = await database
+          .select()
+          .from(deploymentPackages)
+          .where(eq(deploymentPackages.id, packageARow.id));
+        const [persistedPackageB] = await database
+          .select()
+          .from(deploymentPackages)
+          .where(eq(deploymentPackages.id, packageBRow.id));
+        return {
+          canonical,
+          profile,
+          packageA: persistedPackageA,
+          packageB: persistedPackageB,
+        };
       };
-    };
-    const before = await snapshot();
+      const before = await snapshot();
 
-    const outcome = await synchronizeTenantPackage(database, packageB).then(
-      () => ({ status: "fulfilled" as const }),
-      (error: unknown) => ({
-        status: "rejected" as const,
-        message: error instanceof Error ? error.message : String(error),
-      }),
-    );
-    const after = await snapshot();
+      const outcome = await synchronizeTenantPackage(database, packageB).then(
+        () => ({ status: "fulfilled" as const }),
+        (error: unknown) => ({
+          status: "rejected" as const,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      const after = await snapshot();
 
-    expect(outcome).toEqual({
-      status: "rejected",
-      message: `Tenant package agent "${packageAAgent.id}" collides with a user-created agent`,
-    });
-    expect(after).toEqual(before);
-  });
+      expect(outcome).toEqual({
+        status: "rejected",
+        message: `Tenant package agent "${packageAAgent.id}" collides with a user-created agent`,
+      });
+      expect(after).toEqual(before);
+    }));
 });
 
 /**
@@ -1209,10 +1247,12 @@ describe("seeding the skills a package ships", () => {
   const createdSkillIds: string[] = [];
 
   afterEach(async () => {
-    for (const id of createdSkillIds.splice(0)) {
-      await database.delete(skillTools).where(eq(skillTools.skillId, id));
-      await database.delete(skillsTable).where(eq(skillsTable.id, id));
-    }
+    await runAsTenant("platform", async () => {
+      for (const id of createdSkillIds.splice(0)) {
+        await database.delete(skillTools).where(eq(skillTools.skillId, id));
+        await database.delete(skillsTable).where(eq(skillsTable.id, id));
+      }
+    });
   });
 
   function withSkills(skills: LoadedTenantPackage["skills"]) {
@@ -1232,113 +1272,135 @@ describe("seeding the skills a package ships", () => {
     ...overrides,
   });
 
-  test("lands as a deployment skill with its declarations", async () => {
-    const shipped = skill();
-    const loaded = withSkills([shipped]);
-    createdAgentIds.push(loaded.agents[0]?.id as string);
-    const created = await synchronizeTenantPackage(database, loaded);
-    createdPackageIds.push(created.id);
+  test("lands as a deployment skill with its declarations", () =>
+    inCatalogue(async () => {
+      const shipped = skill();
+      const loaded = withSkills([shipped]);
+      createdAgentIds.push(loaded.agents[0]?.id as string);
+      const created = await synchronizeTenantPackage(database, loaded);
+      createdPackageIds.push(created.id);
 
-    const [row] = await database
-      .select()
-      .from(skillsTable)
-      .where(eq(skillsTable.slug, shipped.slug));
-    expect(row?.origin).toBe("catalogue");
-    // Null owner is what makes it everybody's, the same as one an administrator wrote.
-    expect(row?.ownerUserId).toBeNull();
-    expect(row?.instructions).toBe(shipped.instructions);
+      const [row] = await database
+        .select()
+        .from(skillsTable)
+        .where(eq(skillsTable.slug, shipped.slug));
+      expect(row?.origin).toBe("catalogue");
+      // Null owner is what makes it everybody's, the same as one an administrator wrote.
+      expect(row?.ownerUserId).toBeNull();
+      expect(row?.instructions).toBe(shipped.instructions);
 
-    const declared = await database
-      .select()
-      .from(skillTools)
-      .where(eq(skillTools.skillId, shipped.slug));
-    expect(declared.map((entry) => entry.ref).sort()).toEqual([
-      "google-drive/read_file_content",
-      "google-drive/search_files",
-    ]);
-  });
+      const declared = await database
+        .select()
+        .from(skillTools)
+        .where(eq(skillTools.skillId, shipped.slug));
+      expect(declared.map((entry) => entry.ref).sort()).toEqual([
+        "google-drive/read_file_content",
+        "google-drive/search_files",
+      ]);
+    }));
 
-  test("a ref for a connector nobody has added is stored anyway", async () => {
-    /*
-     * The property that makes shipping the declaration possible at all. The API path refuses a tool
-     * this deployment has never seen; a package cannot be held to that, because it is written before
-     * anybody connects anything. The ref does nothing until its connector exists.
-     */
-    const shipped = skill({ tools: ["not-added-yet/do_a_thing"] });
-    const loaded = withSkills([shipped]);
-    createdAgentIds.push(loaded.agents[0]?.id as string);
-    const created = await synchronizeTenantPackage(database, loaded);
-    createdPackageIds.push(created.id);
+  test("a ref for a connector nobody has added is stored anyway", () =>
+    inCatalogue(async () => {
+      /*
+       * The property that makes shipping the declaration possible at all. The API path refuses a tool
+       * this deployment has never seen; a package cannot be held to that, because it is written before
+       * anybody connects anything. The ref does nothing until its connector exists.
+       */
+      const shipped = skill({ tools: ["not-added-yet/do_a_thing"] });
+      const loaded = withSkills([shipped]);
+      createdAgentIds.push(loaded.agents[0]?.id as string);
+      const created = await synchronizeTenantPackage(database, loaded);
+      createdPackageIds.push(created.id);
 
-    const declared = await database
-      .select()
-      .from(skillTools)
-      .where(eq(skillTools.skillId, shipped.slug));
-    expect(declared.map((entry) => entry.ref)).toEqual([
-      "not-added-yet/do_a_thing",
-    ]);
-  });
+      const declared = await database
+        .select()
+        .from(skillTools)
+        .where(eq(skillTools.skillId, shipped.slug));
+      expect(declared.map((entry) => entry.ref)).toEqual([
+        "not-added-yet/do_a_thing",
+      ]);
+    }));
 
-  test("re-seeding replaces the declared set rather than adding to it", async () => {
-    const shipped = skill();
-    const first = withSkills([shipped]);
-    createdAgentIds.push(first.agents[0]?.id as string);
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, first)).id,
-    );
+  test("re-seeding replaces the declared set rather than adding to it", () =>
+    inCatalogue(async () => {
+      const shipped = skill();
+      const first = withSkills([shipped]);
+      createdAgentIds.push(first.agents[0]?.id as string);
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, first)).id,
+      );
 
-    const narrowed = { ...shipped, tools: ["google-drive/search_files"] };
-    const second = { ...first, skills: [narrowed] };
-    await synchronizeTenantPackage(database, second);
+      const narrowed = { ...shipped, tools: ["google-drive/search_files"] };
+      const second = { ...first, skills: [narrowed] };
+      await synchronizeTenantPackage(database, second);
 
-    const declared = await database
-      .select()
-      .from(skillTools)
-      .where(eq(skillTools.skillId, shipped.slug));
-    // A tool the package stopped declaring stops being declared, rather than lingering.
-    expect(declared.map((entry) => entry.ref)).toEqual([
-      "google-drive/search_files",
-    ]);
-  });
+      const declared = await database
+        .select()
+        .from(skillTools)
+        .where(eq(skillTools.skillId, shipped.slug));
+      // A tool the package stopped declaring stops being declared, rather than lingering.
+      expect(declared.map((entry) => entry.ref)).toEqual([
+        "google-drive/search_files",
+      ]);
+    }));
 
-  test("a skill somebody here wrote keeps its name, and the deployment still boots", async () => {
-    /*
-     * The `/` namespace is shared and first to take a name keeps it. Anybody signed in may write a
-     * skill, so a collision cannot be fatal: throwing here would let one person stop the deployment
-     * starting by choosing a name the package also uses.
-     */
-    const owner = `user_${randomUUID().slice(0, 8)}`;
-    createdUserIds.push(owner);
-    await database
-      .insert(users)
-      .values({ id: owner, email: `${owner}@example.test`, name: owner });
+  test("a skill somebody here wrote keeps its name, and the deployment still boots", () =>
+    inCatalogue(async () => {
+      /*
+       * The `/` namespace is shared and first to take a name keeps it. Anybody signed in may write a
+       * skill, so a collision cannot be fatal: throwing here would let one person stop the deployment
+       * starting by choosing a name the package also uses.
+       */
+      const owner = `user_${randomUUID().slice(0, 8)}`;
+      createdUserIds.push(owner);
+      await runAsTenant(owner, () =>
+        database
+          .insert(users)
+          .values({ id: owner, email: `${owner}@example.test`, name: owner }),
+      );
 
-    const shipped = skill();
-    await database.insert(skillsTable).values({
-      id: `mine-${shipped.slug}`,
-      ownerUserId: owner,
-      slug: shipped.slug,
-      title: "Mine",
-      summary: "Written here.",
-      instructions: "Do it my way.",
-      origin: "yours",
-    });
-    createdSkillIds.push(`mine-${shipped.slug}`);
+      const shipped = skill();
+      // A skill a person wrote is that person's row, in their own partition.
+      await runAsTenant(owner, () =>
+        database.insert(skillsTable).values({
+          id: `mine-${shipped.slug}`,
+          ownerUserId: owner,
+          slug: shipped.slug,
+          title: "Mine",
+          summary: "Written here.",
+          instructions: "Do it my way.",
+          origin: "yours",
+        }),
+      );
+      createdSkillIds.push(`mine-${shipped.slug}`);
 
-    const loaded = withSkills([shipped]);
-    createdAgentIds.push(loaded.agents[0]?.id as string);
-    // Resolves rather than throwing: that is the assertion.
-    const created = await synchronizeTenantPackage(database, loaded);
-    createdPackageIds.push(created.id);
+      const loaded = withSkills([shipped]);
+      createdAgentIds.push(loaded.agents[0]?.id as string);
+      // Resolves rather than throwing: that is the assertion.
+      const created = await synchronizeTenantPackage(database, loaded);
+      createdPackageIds.push(created.id);
 
-    const [row] = await database
-      .select()
-      .from(skillsTable)
-      .where(eq(skillsTable.slug, shipped.slug));
-    expect(row?.instructions).toBe("Do it my way.");
-    expect(row?.origin).toBe("yours");
-    expect(row?.ownerUserId).toBe(owner);
-  });
+      /*
+       * Slugs are per tenant (migration 0113): the person's row shadows the platform's for that
+       * person and is left exactly as they wrote it. The package's own row, if it seeded one, is a
+       * separate `system` row and never this person's.
+       */
+      const [row] = await runAsTenant(owner, () =>
+        database
+          .select()
+          .from(skillsTable)
+          .where(
+            and(
+              eq(skillsTable.slug, shipped.slug),
+              eq(skillsTable.tenantId, owner),
+            ),
+          ),
+      );
+      expect(row?.id).toBe(`mine-${shipped.slug}`);
+      expect(row?.instructions).toBe("Do it my way.");
+      expect(row?.origin).toBe("yours");
+      expect(row?.ownerUserId).toBe(owner);
+    }));
 });
 
 /**
@@ -1353,11 +1415,13 @@ describe("pairing a package's coworkers with its skills", () => {
   const createdSkillIds: string[] = [];
 
   afterEach(async () => {
-    for (const id of createdSkillIds.splice(0)) {
-      await database.delete(pluginGrants).where(eq(pluginGrants.ref, id));
-      await database.delete(skillTools).where(eq(skillTools.skillId, id));
-      await database.delete(skillsTable).where(eq(skillsTable.id, id));
-    }
+    await runAsTenant("platform", async () => {
+      for (const id of createdSkillIds.splice(0)) {
+        await database.delete(pluginGrants).where(eq(pluginGrants.ref, id));
+        await database.delete(skillTools).where(eq(skillTools.skillId, id));
+        await database.delete(skillsTable).where(eq(skillsTable.id, id));
+      }
+    });
   });
 
   function packageGiving(slugs: string[]) {
@@ -1383,149 +1447,186 @@ describe("pairing a package's coworkers with its skills", () => {
         and(eq(pluginGrants.kind, "skill"), eq(pluginGrants.agentId, agentId)),
       );
 
-  test("a coworker is granted the skills its package named", async () => {
-    const slug = `pkg-${randomUUID().slice(0, 8)}`;
-    const loaded = packageGiving([slug]);
-    const created = await synchronizeTenantPackage(database, loaded);
-    createdPackageIds.push(created.id);
+  test("a coworker is granted the skills its package named", () =>
+    inCatalogue(async () => {
+      const slug = `pkg-${randomUUID().slice(0, 8)}`;
+      const loaded = packageGiving([slug]);
+      const created = await synchronizeTenantPackage(database, loaded);
+      createdPackageIds.push(created.id);
 
-    const granted = await grantsFor(loaded.agents[0]?.id as string);
-    expect(granted.map((row) => row.ref)).toEqual([slug]);
-    // The mark is what lets a later deploy take back its own and nobody else's.
-    expect(granted[0]?.grantedBy).toBe("tenant-package");
-  });
+      const granted = await grantsFor(loaded.agents[0]?.id as string);
+      expect(granted.map((row) => row.ref)).toEqual([slug]);
+      // The mark is what lets a later deploy take back its own and nobody else's.
+      expect(granted[0]?.grantedBy).toBe("tenant-package");
+    }));
 
-  test("a skill the package stopped naming is taken back", async () => {
-    const slug = `pkg-${randomUUID().slice(0, 8)}`;
-    const loaded = packageGiving([slug]);
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, loaded)).id,
-    );
-
-    const agentId = loaded.agents[0]?.id as string;
-    expect(await grantsFor(agentId)).toHaveLength(1);
-
-    // Same package, same skill still shipped, but the coworker no longer asks for it.
-    const withoutIt = {
-      ...loaded,
-      agents: [{ ...(loaded.agents[0] as never), skills: [] }],
-    } as typeof loaded;
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, withoutIt)).id,
-    );
-
-    expect(await grantsFor(agentId)).toHaveLength(0);
-  });
-
-  test("a redeploy takes back only grants from the package being synchronized", async () => {
-    const slugA = `pkg-a-${randomUUID().slice(0, 8)}`;
-    const slugB = `pkg-b-${randomUUID().slice(0, 8)}`;
-    const userGrant = `user-grant-${randomUUID().slice(0, 8)}`;
-    const packageA = packageGiving([slugA]);
-    const packageB = packageGiving([slugB]);
-    createdSkillIds.push(userGrant);
-
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, packageA)).id,
-    );
-    const [packageAAgent] = packageA.agents;
-    if (!packageAAgent)
-      throw new Error("Expected package A to declare an agent.");
-    const agentA = packageAAgent.id;
-    expect((await grantsFor(agentA)).map((row) => row.ref)).toEqual([slugA]);
-
-    await database.insert(pluginGrants).values({
-      kind: "skill",
-      ref: userGrant,
-      agentId: agentA,
-      grantedBy: "an-administrator",
-    });
-
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, packageB)).id,
-    );
-    const [packageBAgent] = packageB.agents;
-    if (!packageBAgent)
-      throw new Error("Expected package B to declare an agent.");
-    const agentB = packageBAgent.id;
-
-    expect((await grantsFor(agentA)).map((row) => row.ref).sort()).toEqual(
-      [slugA, userGrant].sort(),
-    );
-    expect((await grantsFor(agentB)).map((row) => row.ref)).toEqual([slugB]);
-
-    const packageAWithoutSkill = {
-      ...packageA,
-      agents: [{ ...packageAAgent, skills: [] }],
-    };
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, packageAWithoutSkill)).id,
-    );
-
-    expect((await grantsFor(agentA)).map((row) => row.ref)).toEqual([
-      userGrant,
-    ]);
-    expect((await grantsFor(agentB)).map((row) => row.ref)).toEqual([slugB]);
-  });
-
-  test("a grant an administrator made by hand survives a redeploy", async () => {
-    const slug = `pkg-${randomUUID().slice(0, 8)}`;
-    const loaded = packageGiving([slug]);
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, loaded)).id,
-    );
-
-    const agentId = loaded.agents[0]?.id as string;
-    // Somebody decides this Bot should keep it, through the Skills page.
-    await database
-      .update(pluginGrants)
-      .set({ grantedBy: "an-administrator" })
-      .where(
-        and(eq(pluginGrants.kind, "skill"), eq(pluginGrants.agentId, agentId)),
+  test("a skill the package stopped naming is taken back", () =>
+    inCatalogue(async () => {
+      const slug = `pkg-${randomUUID().slice(0, 8)}`;
+      const loaded = packageGiving([slug]);
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, loaded)).id,
       );
 
-    const withoutIt = {
-      ...loaded,
-      agents: [{ ...(loaded.agents[0] as never), skills: [] }],
-    } as typeof loaded;
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, withoutIt)).id,
-    );
+      const agentId = loaded.agents[0]?.id as string;
+      expect(await grantsFor(agentId)).toHaveLength(1);
 
-    /*
-     * Kept. The package retracts what it gave, not what somebody decided: a redeploy quietly undoing
-     * a deliberate grant is the kind of thing nobody connects to the deploy that caused it.
-     */
-    const granted = await grantsFor(agentId);
-    expect(granted.map((row) => row.ref)).toEqual([slug]);
-    expect(granted[0]?.grantedBy).toBe("an-administrator");
-  });
+      // Same package, same skill still shipped, but the coworker no longer asks for it.
+      const withoutIt = {
+        ...loaded,
+        agents: [{ ...(loaded.agents[0] as never), skills: [] }],
+      } as typeof loaded;
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, withoutIt)).id,
+      );
 
-  test("a slug a person already owns is never granted to the package's Bot", async () => {
-    /*
-     * The case that decides whether this is safe at all. The seed skips a slug somebody already
-     * took, so granting anyway would hand this Bot an instruction a stranger wrote, under a name the
-     * package believed was its own.
-     */
-    const slug = `pkg-${randomUUID().slice(0, 8)}`;
-    const owner = await createUser();
-    await database.insert(skillsTable).values({
-      id: slug,
-      ownerUserId: owner,
-      slug,
-      title: "Mine",
-      summary: "Mine.",
-      instructions: "Do it my way.",
-      origin: "yours",
-    });
+      expect(await grantsFor(agentId)).toHaveLength(0);
+    }));
 
-    const loaded = packageGiving([slug]);
-    createdPackageIds.push(
-      (await synchronizeTenantPackage(database, loaded)).id,
-    );
+  test("a redeploy takes back only grants from the package being synchronized", () =>
+    inCatalogue(async () => {
+      const slugA = `pkg-a-${randomUUID().slice(0, 8)}`;
+      const slugB = `pkg-b-${randomUUID().slice(0, 8)}`;
+      const userGrant = `user-grant-${randomUUID().slice(0, 8)}`;
+      const packageA = packageGiving([slugA]);
+      const packageB = packageGiving([slugB]);
+      createdSkillIds.push(userGrant);
 
-    expect(await grantsFor(loaded.agents[0]?.id as string)).toHaveLength(0);
-  });
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, packageA)).id,
+      );
+      const [packageAAgent] = packageA.agents;
+      if (!packageAAgent)
+        throw new Error("Expected package A to declare an agent.");
+      const agentA = packageAAgent.id;
+      expect((await grantsFor(agentA)).map((row) => row.ref)).toEqual([slugA]);
+
+      await database.insert(pluginGrants).values({
+        kind: "skill",
+        ref: userGrant,
+        agentId: agentA,
+        grantedBy: "an-administrator",
+      });
+
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, packageB)).id,
+      );
+      const [packageBAgent] = packageB.agents;
+      if (!packageBAgent)
+        throw new Error("Expected package B to declare an agent.");
+      const agentB = packageBAgent.id;
+
+      expect((await grantsFor(agentA)).map((row) => row.ref).sort()).toEqual(
+        [slugA, userGrant].sort(),
+      );
+      expect((await grantsFor(agentB)).map((row) => row.ref)).toEqual([slugB]);
+
+      const packageAWithoutSkill = {
+        ...packageA,
+        agents: [{ ...packageAAgent, skills: [] }],
+      };
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, packageAWithoutSkill)).id,
+      );
+
+      expect((await grantsFor(agentA)).map((row) => row.ref)).toEqual([
+        userGrant,
+      ]);
+      expect((await grantsFor(agentB)).map((row) => row.ref)).toEqual([slugB]);
+    }));
+
+  test("a grant an administrator made by hand survives a redeploy", () =>
+    inCatalogue(async () => {
+      const slug = `pkg-${randomUUID().slice(0, 8)}`;
+      const loaded = packageGiving([slug]);
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, loaded)).id,
+      );
+
+      const agentId = loaded.agents[0]?.id as string;
+      // Somebody decides this Bot should keep it, through the Skills page.
+      await database
+        .update(pluginGrants)
+        .set({ grantedBy: "an-administrator" })
+        .where(
+          and(
+            eq(pluginGrants.kind, "skill"),
+            eq(pluginGrants.agentId, agentId),
+          ),
+        );
+
+      const withoutIt = {
+        ...loaded,
+        agents: [{ ...(loaded.agents[0] as never), skills: [] }],
+      } as typeof loaded;
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, withoutIt)).id,
+      );
+
+      /*
+       * Kept. The package retracts what it gave, not what somebody decided: a redeploy quietly undoing
+       * a deliberate grant is the kind of thing nobody connects to the deploy that caused it.
+       */
+      const granted = await grantsFor(agentId);
+      expect(granted.map((row) => row.ref)).toEqual([slug]);
+      expect(granted[0]?.grantedBy).toBe("an-administrator");
+    }));
+
+  test("a slug a person already owns is never granted to the package's Bot", () =>
+    inCatalogue(async () => {
+      /*
+       * The case that decides whether this is safe at all. The seed skips a slug somebody already
+       * took, so granting anyway would hand this Bot an instruction a stranger wrote, under a name the
+       * package believed was its own.
+       */
+      const slug = `pkg-${randomUUID().slice(0, 8)}`;
+      const owner = await createUser();
+      // A skill a person wrote is that person's row, in their own partition. As the store does, a
+      // tenant's row takes a fresh id: only a `system` row keeps `id = slug` (migration 0113).
+      const mine = randomUUID();
+      await runAsTenant(owner, () =>
+        database.insert(skillsTable).values({
+          id: mine,
+          ownerUserId: owner,
+          slug,
+          title: "Mine",
+          summary: "Mine.",
+          instructions: "Do it my way.",
+          origin: "yours",
+        }),
+      );
+
+      const loaded = packageGiving([slug]);
+      createdPackageIds.push(
+        (await synchronizeTenantPackage(database, loaded)).id,
+      );
+
+      /*
+       * Whatever the Bot was granted under this name resolves to the package's own `system` row,
+       * never to the instruction the person wrote, which stays theirs and unchanged.
+       */
+      const granted = await grantsFor(loaded.agents[0]?.id as string);
+      for (const grant of granted) {
+        const resolved = await runAsTenant("system", () =>
+          database
+            .select({
+              id: skillsTable.id,
+              instructions: skillsTable.instructions,
+            })
+            .from(skillsTable)
+            .where(eq(skillsTable.slug, grant.ref)),
+        );
+        expect(resolved.map((skill) => skill.id)).not.toContain(mine);
+        expect(resolved.map((skill) => skill.instructions)).not.toContain(
+          "Do it my way.",
+        );
+      }
+      const [theirs] = await runAsTenant(owner, () =>
+        database.select().from(skillsTable).where(eq(skillsTable.id, mine)),
+      );
+      expect(theirs?.instructions).toBe("Do it my way.");
+      expect(theirs?.tenantId).toBe(owner);
+    }));
 
   test("a coworker naming a skill the package does not ship is refused at load", () => {
     // A typo here attaches nothing and looks exactly like working, so it is refused rather than
@@ -1552,187 +1653,204 @@ describe("pairing a package's coworkers with its skills", () => {
   });
 });
 
-test("blank package endpoint disables only its owned agent and restores it when configured again", async () => {
-  const suffix = randomUUID();
-  const actor = { id: `reader-${suffix}`, role: "user" as const };
-  const original = process.env.MANAGED_AGENT_AG_UI_URL;
-  const originalPicked = process.env.PICKED_HARNESS_URL;
-  let packageId: string | undefined;
-  let otherPackageId: string | undefined;
-  const ownedIds: string[] = [];
-  const historyId = `history-${suffix}`;
-  try {
-    process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
-    process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
-    const source = new URL("../../examples/fintech", import.meta.url).pathname;
-    const configured = await loadTenantPackage(source);
-    const rename = (id: string) => `${id}-${suffix}`;
-    const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({
-      ...loaded,
-      tenantId: suffix,
-      skills: [],
-      channels: [],
-      agents: loaded.agents.map((agent) => ({
-        ...agent,
-        id: rename(agent.id),
+test("blank package endpoint disables only its owned agent and restores it when configured again", () =>
+  inCatalogue(async () => {
+    const suffix = randomUUID();
+    const actor = { id: `reader-${suffix}`, role: "user" as const };
+    const asActor = <T>(work: () => T) => runAsTenant(actor.id, work);
+    const original = process.env.MANAGED_AGENT_AG_UI_URL;
+    const originalPicked = process.env.PICKED_HARNESS_URL;
+    let packageId: string | undefined;
+    let otherPackageId: string | undefined;
+    const ownedIds: string[] = [];
+    const historyId = `history-${suffix}`;
+    try {
+      process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
+      process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
+      const source = new URL("../../examples/fintech", import.meta.url)
+        .pathname;
+      const configured = await loadTenantPackage(source);
+      const rename = (id: string) => `${id}-${suffix}`;
+      const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({
+        ...loaded,
+        tenantId: suffix,
         skills: [],
-      })),
-      omittedAgentIds: (loaded.omittedAgentIds ?? []).map(rename),
-    });
-    const enabled = isolate(configured);
-    ownedIds.push(...enabled.agents.map((agent) => agent.id));
-    packageId = (await synchronizeTenantPackage(database, enabled)).id;
-    await database
-      .insert(users)
-      .values({ id: actor.id, email: `${suffix}@example.test` });
-    const target = rename("risk-analyst");
-    const picked = rename("picked-harness");
-    await database.insert(channels).values({
-      id: historyId,
-      name: "Historical conversation",
-      description: "Preserved",
-      allowedGroups: [],
-    });
-    await database
-      .insert(channelAgents)
-      .values({ channelId: historyId, agentId: target });
-    await database
-      .insert(channelMemberships)
-      .values({ channelId: historyId, userId: actor.id });
-    const profiles = createAgentProfileStore(database, undefined);
-    const runtime = createRuntimeAgentLoader(database);
-    expect((await profiles.get(actor, target))?.deletedAt).toBeNull();
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === target)?.type,
-    ).toBe("remote_ag_ui");
+        channels: [],
+        agents: loaded.agents.map((agent) => ({
+          ...agent,
+          id: rename(agent.id),
+          skills: [],
+        })),
+        omittedAgentIds: (loaded.omittedAgentIds ?? []).map(rename),
+      });
+      const enabled = isolate(configured);
+      ownedIds.push(...enabled.agents.map((agent) => agent.id));
+      packageId = (await synchronizeTenantPackage(database, enabled)).id;
+      await asActor(() =>
+        database
+          .insert(users)
+          .values({ id: actor.id, email: `${suffix}@example.test` }),
+      );
+      const target = rename("risk-analyst");
+      const picked = rename("picked-harness");
+      await database.insert(channels).values({
+        id: historyId,
+        name: "Historical conversation",
+        description: "Preserved",
+        allowedGroups: [],
+      });
+      await database
+        .insert(channelAgents)
+        .values({ channelId: historyId, agentId: target });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId: historyId, userId: actor.id });
+      // What the person sees is read the way the person reads it: in their own frame.
+      const profileStore = createAgentProfileStore(database, undefined);
+      const loadRuntime = createRuntimeAgentLoader(database);
+      const profiles = {
+        get: (...args: Parameters<typeof profileStore.get>) =>
+          asActor(() => profileStore.get(...args)),
+        list: (...args: Parameters<typeof profileStore.list>) =>
+          asActor(() => profileStore.list(...args)),
+      };
+      const runtime = (...args: Parameters<typeof loadRuntime>) =>
+        asActor(() => loadRuntime(...args));
+      expect((await profiles.get(actor, target))?.deletedAt).toBeNull();
+      expect(
+        (await runtime(actor)).find((agent) => agent.id === target)?.type,
+      ).toBe("remote_ag_ui");
 
-    const [otherPackage] = await database
-      .insert(deploymentPackages)
-      .values({
-        tenantId: `other-${suffix}`,
-        sourcePath: "/synthetic/other",
-        checksum: suffix,
-      })
-      .returning();
-    if (!otherPackage) throw new Error("missing synthetic package");
-    otherPackageId = otherPackage.id;
-    const controls = [
-      { id: `user-${suffix}`, packageId: null, ownerUserId: actor.id },
-      { id: `other-${suffix}`, packageId: otherPackageId, ownerUserId: null },
-      { id: `owned-profile-${suffix}`, packageId, ownerUserId: actor.id },
-      { id: `removed-yaml-${suffix}`, packageId, ownerUserId: null },
-    ];
-    for (const control of controls) {
-      ownedIds.push(control.id);
-      await database.insert(agents).values({
-        id: control.id,
-        name: control.id,
-        type: "remote_ag_ui",
-        configuration: { endpoint: "https://example.test/agent" },
-        packageId: control.packageId,
-      });
-      await database.insert(agentProfiles).values({
-        agentId: control.id,
-        title: "Control",
-        roleDescription: "Preserve ownership",
-        avatarSeed: control.id,
-        visibility: "public",
-        ownerUserId: control.ownerUserId,
-      });
-    }
-    process.env.MANAGED_AGENT_AG_UI_URL = "";
-    const omitted = isolate(await loadTenantPackage(source));
-    expect(omitted.agents.some((agent) => agent.id === target)).toBe(false);
-    // Explicitly omitted foreign/user-owned IDs must not acquire package ownership.
-    omitted.omittedAgentIds.push(
-      ...controls.slice(0, 3).map((control) => control.id),
-    );
-    await synchronizeTenantPackage(database, omitted);
-    expect(await profiles.get(actor, target)).toBeNull();
-    expect(
-      (await profiles.list(actor)).some((agent) => agent.id === target),
-    ).toBe(false);
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === target)?.type,
-    ).toBe("unavailable");
-    expect(
-      (
-        await database
-          .select()
-          .from(channelAgents)
-          .where(eq(channelAgents.channelId, historyId))
-      ).length,
-    ).toBe(1);
-    expect(
-      (await database.select().from(agents).where(eq(agents.id, target)))
-        .length,
-    ).toBe(1);
-    expect((await profiles.get(actor, picked))?.deletedAt).toBeNull();
-    /*
-     * What the omit must NOT do is take package ownership of rows that are not its own — that is what
-     * these four controls are here for, and each of the four is a different way that could happen
-     * (person-owned with no package, owned by another package, person-owned AND package-tagged, and
-     * package-owned with no person). Ownership is what is asserted, for all four.
-     *
-     * `removed-yaml` then splits from the others, and it always should have: it is a coworker the yaml no
-     * longer declares at all, which is exactly the ghost ticket 029 defined the reclaim to catch — a
-     * package row nobody owns, left on the roster with a seat in the quota and an entry in every picker.
-     * This file stayed red from that change onward because the loop below asserted it survived untouched,
-     * which is the one outcome the set-difference rule exists to refuse. Retired is right; what must
-     * still hold is that it was retired as the platform's own row and not re-tagged.
-     */
-    for (const control of controls) {
-      const [row] = await database
-        .select({
-          ownerUserId: agentProfiles.ownerUserId,
-          packageId: agents.packageId,
+      const [otherPackage] = await database
+        .insert(deploymentPackages)
+        .values({
+          tenantId: `other-${suffix}`,
+          sourcePath: "/synthetic/other",
+          checksum: suffix,
         })
-        .from(agentProfiles)
-        .innerJoin(agents, eq(agents.id, agentProfiles.agentId))
-        .where(eq(agentProfiles.agentId, control.id))
-        .limit(1);
-      expect(row?.ownerUserId, control.id).toBe(control.ownerUserId);
+        .returning();
+      if (!otherPackage) throw new Error("missing synthetic package");
+      otherPackageId = otherPackage.id;
+      const controls = [
+        { id: `user-${suffix}`, packageId: null, ownerUserId: actor.id },
+        { id: `other-${suffix}`, packageId: otherPackageId, ownerUserId: null },
+        { id: `owned-profile-${suffix}`, packageId, ownerUserId: actor.id },
+        { id: `removed-yaml-${suffix}`, packageId, ownerUserId: null },
+      ];
+      for (const control of controls) {
+        ownedIds.push(control.id);
+        await database.insert(agents).values({
+          id: control.id,
+          name: control.id,
+          type: "remote_ag_ui",
+          configuration: { endpoint: "https://example.test/agent" },
+          packageId: control.packageId,
+        });
+        await database.insert(agentProfiles).values({
+          agentId: control.id,
+          title: "Control",
+          roleDescription: "Preserve ownership",
+          avatarSeed: control.id,
+          visibility: "public",
+          ownerUserId: control.ownerUserId,
+        });
+      }
+      process.env.MANAGED_AGENT_AG_UI_URL = "";
+      const omitted = isolate(await loadTenantPackage(source));
+      expect(omitted.agents.some((agent) => agent.id === target)).toBe(false);
+      // Explicitly omitted foreign/user-owned IDs must not acquire package ownership.
+      omitted.omittedAgentIds.push(
+        ...controls.slice(0, 3).map((control) => control.id),
+      );
+      await synchronizeTenantPackage(database, omitted);
+      expect(await profiles.get(actor, target)).toBeNull();
       expect(
-        row?.packageId,
-        `${control.id} must keep the package it was written under`,
-      ).toBe(control.packageId ?? null);
-    }
-    for (const control of controls.slice(0, 3))
+        (await profiles.list(actor)).some((agent) => agent.id === target),
+      ).toBe(false);
       expect(
-        (await profiles.get(actor, control.id))?.deletedAt,
-        control.id,
-      ).toBeNull();
-    expect(
-      (
-        await database
-          .select({ deletedAt: agentProfiles.deletedAt })
+        (await runtime(actor)).find((agent) => agent.id === target)?.type,
+      ).toBe("unavailable");
+      expect(
+        (
+          await database
+            .select()
+            .from(channelAgents)
+            .where(eq(channelAgents.channelId, historyId))
+        ).length,
+      ).toBe(1);
+      expect(
+        (await database.select().from(agents).where(eq(agents.id, target)))
+          .length,
+      ).toBe(1);
+      expect((await profiles.get(actor, picked))?.deletedAt).toBeNull();
+      /*
+       * What the omit must NOT do is take package ownership of rows that are not its own — that is what
+       * these four controls are here for, and each of the four is a different way that could happen
+       * (person-owned with no package, owned by another package, person-owned AND package-tagged, and
+       * package-owned with no person). Ownership is what is asserted, for all four.
+       *
+       * `removed-yaml` then splits from the others, and it always should have: it is a coworker the yaml no
+       * longer declares at all, which is exactly the ghost ticket 029 defined the reclaim to catch — a
+       * package row nobody owns, left on the roster with a seat in the quota and an entry in every picker.
+       * This file stayed red from that change onward because the loop below asserted it survived untouched,
+       * which is the one outcome the set-difference rule exists to refuse. Retired is right; what must
+       * still hold is that it was retired as the platform's own row and not re-tagged.
+       */
+      for (const control of controls) {
+        const [row] = await database
+          .select({
+            ownerUserId: agentProfiles.ownerUserId,
+            packageId: agents.packageId,
+          })
           .from(agentProfiles)
-          .where(eq(agentProfiles.agentId, controls[3]?.id ?? ""))
-          .limit(1)
-      )[0]?.deletedAt,
-      "a coworker the yaml dropped is retired, not left as a ghost",
-    ).toBeInstanceOf(Date);
-    await synchronizeTenantPackage(database, enabled);
-    expect((await profiles.get(actor, target))?.deletedAt).toBeNull();
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === target)?.type,
-    ).toBe("remote_ag_ui");
-  } finally {
-    if (original === undefined) delete process.env.MANAGED_AGENT_AG_UI_URL;
-    else process.env.MANAGED_AGENT_AG_UI_URL = original;
-    if (originalPicked === undefined) delete process.env.PICKED_HARNESS_URL;
-    else process.env.PICKED_HARNESS_URL = originalPicked;
-    await database.delete(channels).where(eq(channels.id, historyId));
-    for (const id of ownedIds)
-      await database.delete(agents).where(eq(agents.id, id));
-    if (packageId)
-      await database
-        .delete(deploymentPackages)
-        .where(eq(deploymentPackages.id, packageId));
-    if (otherPackageId)
-      await database
-        .delete(deploymentPackages)
-        .where(eq(deploymentPackages.id, otherPackageId));
-    await database.delete(users).where(eq(users.id, actor.id));
-  }
-});
+          .innerJoin(agents, eq(agents.id, agentProfiles.agentId))
+          .where(eq(agentProfiles.agentId, control.id))
+          .limit(1);
+        expect(row?.ownerUserId, control.id).toBe(control.ownerUserId);
+        expect(
+          row?.packageId,
+          `${control.id} must keep the package it was written under`,
+        ).toBe(control.packageId ?? null);
+      }
+      for (const control of controls.slice(0, 3))
+        expect(
+          (await profiles.get(actor, control.id))?.deletedAt,
+          control.id,
+        ).toBeNull();
+      expect(
+        (
+          await database
+            .select({ deletedAt: agentProfiles.deletedAt })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, controls[3]?.id ?? ""))
+            .limit(1)
+        )[0]?.deletedAt,
+        "a coworker the yaml dropped is retired, not left as a ghost",
+      ).toBeInstanceOf(Date);
+      await synchronizeTenantPackage(database, enabled);
+      expect((await profiles.get(actor, target))?.deletedAt).toBeNull();
+      expect(
+        (await runtime(actor)).find((agent) => agent.id === target)?.type,
+      ).toBe("remote_ag_ui");
+    } finally {
+      if (original === undefined) delete process.env.MANAGED_AGENT_AG_UI_URL;
+      else process.env.MANAGED_AGENT_AG_UI_URL = original;
+      if (originalPicked === undefined) delete process.env.PICKED_HARNESS_URL;
+      else process.env.PICKED_HARNESS_URL = originalPicked;
+      // Cleanup reaches every partition a fixture may have landed in, the person's row included.
+      await runAsTenant("platform", async () => {
+        await database.delete(channels).where(eq(channels.id, historyId));
+        for (const id of ownedIds)
+          await database.delete(agents).where(eq(agents.id, id));
+        if (packageId)
+          await database
+            .delete(deploymentPackages)
+            .where(eq(deploymentPackages.id, packageId));
+        if (otherPackageId)
+          await database
+            .delete(deploymentPackages)
+            .where(eq(deploymentPackages.id, otherPackageId));
+        await database.delete(users).where(eq(users.id, actor.id));
+      });
+    }
+  }));

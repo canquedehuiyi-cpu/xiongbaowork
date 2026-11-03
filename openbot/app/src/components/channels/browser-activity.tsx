@@ -15,7 +15,7 @@ const labels: Record<string, string> = {
   computer_read: "读取了页面",
   computer_snapshot: "查看了页面结构",
   computer_click: "在页面上点击",
-  computer_type: "Filled in field",
+  computer_type: "填写了字段",
   computer_key: "按了按键",
   computer_scroll: "滚动了页面",
 };
@@ -109,9 +109,7 @@ export function BrowserActivity({
               ? `浏览了 ${pages} 个页面`
               : "浏览器活动"
         }
-        detail={
-          issues ? `${issues} ${issues === 1 ? "issue" : "issues"}` : undefined
-        }
+        detail={issues ? `${issues} 个问题` : undefined}
         running={running}
       >
         <ol className="space-y-2 py-1">

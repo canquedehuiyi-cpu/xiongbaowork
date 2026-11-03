@@ -3,7 +3,11 @@ import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
 import type { CredentialSecretReader, CredentialStore } from "../credentials";
-import { encryptSecret } from "../credentials";
+import {
+  MODEL_REGISTRY_KEY_PREFIX,
+  openCredential,
+  sealCredential,
+} from "../credentials";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
@@ -15,7 +19,6 @@ import {
 } from "../db/schema";
 import type { Plan, QuotaService } from "../quota/limits";
 import { FREE_PLAN_FALLBACK, QuotaExceeded } from "../quota/limits";
-import { runAsTenant } from "../tenant/context";
 import type { PoolKeyEnvironment } from "./runtime-resolver";
 
 type Ctx = { Variables: AppVariables };
@@ -81,7 +84,8 @@ export function createModelRoutes(
      *
      * The plan is this tenant's own, and a workspace with no subscription is Free (audit #7) — also
      * when this deployment counts no quota, so the shelf never offers Pro rows by omission. The pool
-     * is platform-owned and read the way `/api/quota/plans` reads the catalogue. Only the fields a
+     * is platform-owned with no row security (openbot_app may only SELECT it), so it is read in the
+     * member's own frame: a member request never opens `platform` (G01-E). Only the fields a
      * screen needs leave this handler: never `api_key_env`, never a key. `available` says whether
      * the deployment holds the key behind the row, so a screen can grey out a row that would fall
      * back to the default model.
@@ -89,20 +93,18 @@ export function createModelRoutes(
     const plan: Plan = quota
       ? await quota.planFor(context.var.actor.id)
       : FREE_PLAN_FALLBACK;
-    const poolRows = await runAsTenant("platform", () =>
-      database
-        .select({
-          id: platformModelPool.id,
-          provider: platformModelPool.provider,
-          modelName: platformModelPool.modelName,
-          label: platformModelPool.label,
-          apiKeyEnv: platformModelPool.apiKeyEnv,
-          tiers: platformModelPool.tiers,
-        })
-        .from(platformModelPool)
-        .where(eq(platformModelPool.enabled, true))
-        .orderBy(platformModelPool.label, platformModelPool.id),
-    );
+    const poolRows = await database
+      .select({
+        id: platformModelPool.id,
+        provider: platformModelPool.provider,
+        modelName: platformModelPool.modelName,
+        label: platformModelPool.label,
+        apiKeyEnv: platformModelPool.apiKeyEnv,
+        tiers: platformModelPool.tiers,
+      })
+      .from(platformModelPool)
+      .where(eq(platformModelPool.enabled, true))
+      .orderBy(platformModelPool.label, platformModelPool.id);
     // Under this tenant's row-level security, like the library count above: other tenants' coworkers
     // on the same pool row are not this tenant's business.
     const pooled = await database
@@ -188,7 +190,15 @@ export function createModelRoutes(
         throw thrown;
       }
     }
-    const encrypted = await encryptSecret(encryptionKey, apiKey);
+    /*
+     * The key is named after the library row it belongs to, not after the model (audit #9).
+     *
+     * `modelName` is the tenant's own text: as a vault key it collided with every other tenant
+     * connecting the same model, and it shared a namespace with the deployment's
+     * `credentialSecretRef`, so a tenant could name a model after it. Nothing reads a library key by
+     * its name — the row's `credential_id` is the reference — so the id is the only name it needs.
+     */
+    const registryId = crypto.randomUUID();
     /*
      * ONE TRANSACTION FOR THE KEY AND THE ROW THAT POINTS AT IT.
      *
@@ -210,8 +220,8 @@ export function createModelRoutes(
           {
             kind: "model",
             provider,
-            keyId: modelName,
-            encryptedValue: encrypted,
+            keyId: `${MODEL_REGISTRY_KEY_PREFIX}${registryId}`,
+            seal: (binding) => sealCredential(encryptionKey, binding, apiKey),
             metadata: {},
           },
           transaction,
@@ -219,6 +229,7 @@ export function createModelRoutes(
         return await transaction
           .insert(modelRegistry)
           .values({
+            id: registryId,
             provider,
             baseUrl: baseUrl || null,
             credentialId: credential.id,
@@ -251,8 +262,7 @@ export function createModelRoutes(
     }
     const secret = await credentials.readSecret(row.credentialId);
     if (!secret) return context.json({ ok: false, error: "Key revoked." }, 200);
-    const { decryptSecret } = await import("../credentials");
-    const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
+    const apiKey = await openCredential(encryptionKey, secret);
     const answer = await probe(
       row.provider,
       row.baseUrl,

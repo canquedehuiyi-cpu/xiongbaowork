@@ -464,7 +464,7 @@ function EditableTextItem({
   const submit = async () => {
     const parsed = schema.safeParse(draft);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "That value does not fit.");
+      setError(parsed.error.issues[0]?.message ?? "这个值不符合要求。");
       return;
     }
     setSaving(true);
@@ -472,7 +472,7 @@ function EditableTextItem({
       await onSave(parsed.data);
       close();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Could not save.");
+      setError(failure instanceof Error ? failure.message : "保存失败。");
     } finally {
       setSaving(false);
     }
@@ -599,9 +599,7 @@ function VisibilityItem({
                 await onSave(next as AgentProfile["visibility"]);
               } catch (failure) {
                 setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : "Could not save.",
+                  failure instanceof Error ? failure.message : "保存失败。",
                 );
               } finally {
                 setSaving(false);
@@ -853,10 +851,10 @@ export function PersonaSection({
             setNotice(null);
             try {
               await save({ persona: trimmed() });
-              setNotice("Saved. It applies from the coworker's next turn.");
+              setNotice("已保存，员工下一轮开始生效。");
             } catch (failure) {
               setError(
-                failure instanceof Error ? failure.message : "Could not save.",
+                failure instanceof Error ? failure.message : "保存失败。",
               );
             }
           }}
@@ -872,12 +870,10 @@ export function PersonaSection({
               setDraft(emptyPersona);
               try {
                 await save({ persona: emptyPersona });
-                setNotice("Cleared.");
+                setNotice("已清除。");
               } catch (failure) {
                 setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : "Could not save.",
+                  failure instanceof Error ? failure.message : "保存失败。",
                 );
               }
             }}
@@ -964,13 +960,11 @@ export function PersonaSection({
                 {
                   onSuccess: () => {
                     setTemplateName("");
-                    setNotice("Saved for reuse.");
+                    setNotice("已存为模板，之后可以复用。");
                   },
                   onError: (failure) =>
                     setError(
-                      failure instanceof Error
-                        ? failure.message
-                        : "Could not save.",
+                      failure instanceof Error ? failure.message : "保存失败。",
                     ),
                 },
               );
@@ -1139,7 +1133,7 @@ export function ModelItem({
                 await onSave(binding);
               } catch (failure) {
                 setError(
-                  failure instanceof Error ? failure.message : "没能保存。",
+                  failure instanceof Error ? failure.message : "保存失败。",
                 );
               } finally {
                 setSaving(false);

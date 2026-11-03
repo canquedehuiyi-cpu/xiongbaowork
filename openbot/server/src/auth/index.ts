@@ -9,7 +9,7 @@ import { genericOAuth, okta } from "better-auth/plugins";
 import { eq, sql } from "drizzle-orm";
 import { createEnterpriseStore } from "../admin/settings-store";
 import type { AuditEventInput, AuditStore } from "../audit";
-import { recordAuditEvent } from "../audit";
+import { recordPersonAuditEvent, recordPlatformAuditEvent } from "../audit";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
 import {
@@ -26,11 +26,11 @@ import {
   users,
   verifications,
 } from "../db/schema";
+import { provisionTenant } from "../tenant/provisioning";
 import { DOMAIN_REFUSAL_MESSAGE, emailDomainAllowed } from "./email-domain";
 import { encryptSsoConfig } from "./encrypt-sso-config";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
-import { provisionTenant } from "../tenant/provisioning";
 
 /** What a person sees when SSO is required and they tried another way in. */
 /** The native app's custom scheme (mobile/app.config.ts). */
@@ -76,14 +76,22 @@ export async function decideSignInMethod(input: {
  * These run inside Better Auth's own hooks, where a thrown error becomes a refused sign-in. A trail
  * that is briefly unavailable must not lock everybody out of the deployment, so the failure is
  * logged where an operator will see it and the sign-in continues.
+ *
+ * Every row says whose it is (G01). `person` is the user id of the account Better Auth itself
+ * resolved (a session's `userId`), and the row goes in that person's trail. Without one — a refusal
+ * before any account is proven, keyed only on the address somebody typed — the row is the
+ * deployment's, `platform`. Unframed, these were all `system`, so every tenant's trail listed every
+ * refused sign-in in the deployment, address included.
  */
 async function record(
   auditStore: AuditStore | undefined,
   event: AuditEventInput,
+  person?: string,
 ): Promise<void> {
   if (!auditStore) return;
   try {
-    await recordAuditEvent(auditStore, event);
+    if (person === undefined) await recordPlatformAuditEvent(auditStore, event);
+    else await recordPersonAuditEvent(auditStore, person, event);
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -198,8 +206,8 @@ export function createAuth(
    * provider with a fixed address. The plugin is only registered when Okta is configured, so a
    * deployment that does not use it carries no extra routes.
    *
-   * They converge again at the browser: `signIn.social({ provider })` starts all three, so the
-   * sign-in screen has one code path and does not need to know which kind each provider is.
+   * They converge again at the browser: `signIn.social({ provider })` starts every one of them, so
+   * the sign-in screen has one code path and does not need to know which kind each provider is.
    */
   const scimDeps = {
     database,
@@ -475,6 +483,17 @@ export function createAuth(
             },
           }
         : {}),
+      /*
+       * GitHub, as Google is: a named provider with fixed endpoints and nothing to map.
+       *
+       * Better Auth asks GitHub for `user:email` and takes `emailVerified` from GitHub's own
+       * `verified` flag on that address (false when GitHub does not vouch for it). It is not added to
+       * any trusted-provider list, so an unverified GitHub address is never linked onto an existing
+       * account. Nor is a verified one linked onto a row whose own address is unverified, which is
+       * every password sign-up: Better Auth's `requireLocalEmailVerified` is on by default and is not
+       * turned off here. Both refusals are generic to every social provider, not GitHub's own.
+       */
+      ...(authConfig.github ? { github: authConfig.github } : {}),
     },
     databaseHooks: {
       user: {
@@ -574,31 +593,39 @@ export function createAuth(
               user &&
               !emailDomainAllowed(user.email, authConfig.allowedEmailDomains)
             ) {
-              await record(auditStore, {
-                eventType: "session.refused",
-                targetType: "person",
-                targetId: session.userId,
-                actorUserId: session.userId,
-                payload: {
-                  email: user.email,
-                  reason: "email domain not admitted by this deployment",
+              await record(
+                auditStore,
+                {
+                  eventType: "session.refused",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user.email,
+                    reason: "email domain not admitted by this deployment",
+                  },
                 },
-              });
+                session.userId,
+              );
               throw new APIError("FORBIDDEN", {
                 message: DOMAIN_REFUSAL_MESSAGE,
               });
             }
             if (user && (await isRevoked?.(user.email))) {
-              await record(auditStore, {
-                eventType: "session.refused",
-                targetType: "person",
-                targetId: session.userId,
-                actorUserId: session.userId,
-                payload: {
-                  email: user.email,
-                  reason: "access removed by an administrator",
+              await record(
+                auditStore,
+                {
+                  eventType: "session.refused",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user.email,
+                    reason: "access removed by an administrator",
+                  },
                 },
-              });
+                session.userId,
+              );
               throw new APIError("FORBIDDEN", {
                 message: "Your access to this deployment has been removed.",
               });
@@ -646,26 +673,34 @@ export function createAuth(
              * produce one of these on every sign-in.
              */
             if (promoted) {
-              await record(auditStore, {
-                eventType: "person.admin_by_configuration",
+              await record(
+                auditStore,
+                {
+                  eventType: "person.admin_by_configuration",
+                  targetType: "person",
+                  targetId: session.userId,
+                  actorUserId: session.userId,
+                  payload: {
+                    email: user?.email,
+                    reason:
+                      "this address is named in INITIAL_ADMIN_EMAILS, so the configuration granted it",
+                  },
+                },
+                session.userId,
+              );
+            }
+
+            await record(
+              auditStore,
+              {
+                eventType: "session.signed_in",
                 targetType: "person",
                 targetId: session.userId,
                 actorUserId: session.userId,
-                payload: {
-                  email: user?.email,
-                  reason:
-                    "this address is named in INITIAL_ADMIN_EMAILS, so the configuration granted it",
-                },
-              });
-            }
-
-            await record(auditStore, {
-              eventType: "session.signed_in",
-              targetType: "person",
-              targetId: session.userId,
-              actorUserId: session.userId,
-              payload: { email: user?.email },
-            });
+                payload: { email: user?.email },
+              },
+              session.userId,
+            );
           },
         },
       },

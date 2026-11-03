@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type SQL, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
+import { asPlatform } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -23,8 +24,12 @@ afterAll(async () => {
   await database.$client.close();
 });
 
+/**
+ * Catalogue probes and the refused write belong to no tenant: run in the platform frame. The frame
+ * changes only the tenant settings, not the role: the connection is still openbot_app.
+ */
 async function rows<T>(query: SQL): Promise<T[]> {
-  const result = await database.execute(query);
+  const result = await asPlatform(() => database.execute(query));
   return (Array.isArray(result) ? result : []) as T[];
 }
 
@@ -153,12 +158,12 @@ describe("migration 0120 platform model pool", () => {
     );
     // The suite connects as the application role in CI; the refusal below is about that role.
     expect(who?.role).toBe("openbot_app");
-    const failure = await database
-      .execute(sql`
+    const failure = await asPlatform(() =>
+      database.execute(sql`
         insert into public.platform_model_pool (provider, model_name, label, api_key_env)
         values ('openai', ${`app-insert-${Date.now()}`}, '越权写入', 'OPENBOT_POOL_APP_INSERT')
-      `)
-      .then(
+      `),
+    ).then(
         () => null,
         (error: unknown) => error,
       );

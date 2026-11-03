@@ -4,6 +4,7 @@ import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
 import { BuiltInAgent, CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import type { LanguageModel } from "ai";
+import { Hono } from "hono";
 import type { Observable } from "rxjs";
 import { defer, finalize, from, fromEvent, switchMap, takeUntil } from "rxjs";
 import { z } from "zod";
@@ -35,6 +36,7 @@ import {
 import type { AgentFetch, StallGuard } from "./channels/stall-guard";
 import { HeadlessToolsMiddleware } from "./computer/headless-tools";
 import type { DeploymentConfig } from "./config";
+import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { observeModelConnection } from "./desktop-connection-failure";
 import { desktopTelemetryProperties } from "./desktop-telemetry";
 import {
@@ -51,6 +53,11 @@ import {
 } from "./plugins/selection";
 import type { GrantedTool } from "./plugins/tools";
 import { grantedToolGuidance } from "./plugins/tools";
+import {
+  isPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "./tenant/context";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
 import { UNTRUSTED_GUIDANCE } from "./untrusted-content";
 
@@ -1954,6 +1961,34 @@ export type LoadAgentsForActor = (
 ) => Promise<RegisteredAgent[]>;
 
 /**
+ * The id `identifyActor` answers for a request nobody is signed in to: a person who owns nothing.
+ * See `index.ts`, where that answer is given so `/info` can still describe the deployment.
+ */
+const NOBODY = "";
+
+/**
+ * The frame one runtime request runs in, and the roster read of a Bot built for one (G01-E P16f).
+ *
+ * A signed-in person's request runs in that person's frame, ALL of it: the roster, the deployment
+ * model key, what each Bot holds, the run and its write-through, and the thread endpoints. The runtime
+ * is not behind `requireUser`, so nothing else opens that frame for it, and with the `system`
+ * fallback gone every one of those reads would refuse ("no tenant frame"); before that they read as
+ * `system`, which is nobody's roster and nobody's threads.
+ *
+ * Nobody signed in is read in the deployment's catalogue frame, `system`, and only for `/info` (see
+ * {@link mountCopilotRuntime}). That is exactly what the empty frame it was given before read: row
+ * security shows a frame of `''` its own rows (there are none) and `system`'s, and
+ * `openbot_team_bot_visible` refuses both `''` and `system`, so no person's row and no team row is in
+ * that roster. Anything else is not a person and is refused rather than given a frame.
+ */
+function runAsRuntimeActor<T>(actor: AgentActor, work: () => T): T {
+  if (actor.id === NOBODY) return runAsTenant(SYSTEM_TENANT, work);
+  if (!isPersonTenant(actor.id))
+    throw new TenantContextError("a runtime request is a person's or nobody's");
+  return runAsTenant(actor.id, work);
+}
+
+/**
  * Build the runtime's per-request agent factory.
  *
  * Resolution is per request, not per boot, because who may run a coworker is a property of the
@@ -2084,7 +2119,8 @@ function localRunnerOrRefused(
 
 /** What {@link mountCopilotRuntime} hands the wiring: the handler, and the seams beside a run. */
 export type MountedCopilotRuntime = {
-  handler: ReturnType<typeof createCopilotHonoHandler>;
+  /** The runtime's routes under `basePath`, each request already in its asker's frame. */
+  handler: Hono;
   /** A fresh runner for one server-side turn, on the backend this deployment mounted. */
   threadRunner: () => ThreadRunner;
   /** The conversation's run lock, as this backend issues it. */
@@ -2190,6 +2226,29 @@ export function mountCopilotRuntime(
    */
   resolveAgentModel?: AgentModelResolver,
 ): MountedCopilotRuntime {
+  /*
+   * The roster, read in the frame of the person it is for, wherever the Bot is built. The request
+   * path is already in that frame (see the handler below); a hop's `agentFor` is asked from its
+   * delivery's, and this says whose roster it is rather than leaning on which frame that is.
+   */
+  const loadAgentsInFrame: LoadAgentsForActor = (actor) =>
+    runAsRuntimeActor(actor, () => loadAgents(actor));
+
+  /*
+   * Who one request is, asked once. The frame below and the agent factory inside it both need it,
+   * and they must not disagree. The runtime hands the factory the `Request` it was given; where it
+   * builds a new one instead, the person is simply asked again, from the same session.
+   */
+  const actors = new WeakMap<Request, Promise<AgentActor>>();
+  const actorOf: IdentifyActor = (request) => {
+    let actor = actors.get(request);
+    if (!actor) {
+      actor = identifyActor(request);
+      actors.set(request, actor);
+    }
+    return actor;
+  };
+
   /**
    * The same Bot a person's run would get, built without a request.
    *
@@ -2215,7 +2274,7 @@ export function mountCopilotRuntime(
   }): Promise<AbstractAgent | null> => {
     const { actor } = input;
     const agents = await resolveRuntimeAgents(
-      () => loadAgents(actor),
+      () => loadAgentsInFrame(actor),
       model,
       resolveModelApiKey,
       stallGuard,
@@ -2287,8 +2346,8 @@ export function mountCopilotRuntime(
     // `identifyUser` is the Intelligence projection of the same person `identifyActor` returns:
     // one resolver decides both whose threads these are and whose coworkers exist.
     agents: createRequestAgents(
-      identifyActor,
-      loadAgents,
+      actorOf,
+      loadAgentsInFrame,
       model,
       resolveModelApiKey,
       stallGuard,
@@ -2320,9 +2379,57 @@ export function mountCopilotRuntime(
    * `ɵsupportsLocalThreadEndpoints`, which `PostgresAgentRunner` inherits.
    */
   const runtime = new CopilotRuntime({ ...sharedRuntimeOptions, runner });
+  const runtimeRoutes = createCopilotHonoHandler({ runtime, basePath });
+
+  /*
+   * EVERY RUNTIME REQUEST RUNS IN THE FRAME OF WHOEVER IT IS FOR (G01-E P16f).
+   *
+   * Nothing in front of the runtime opens one: it is mounted beside the routes `requireUser` guards,
+   * not behind it, and resolves its own actor. Only a governed run (`/agent/:id/run` and `/suggest`
+   * under enterprise controls) arrives inside the person's frame already, opened by the enterprise
+   * gate. So the frame is opened here, once, around the whole request, and the agent factory, the
+   * deployment-key read, the grants, the run and the thread endpoints (`listThreads`,
+   * `getThreadMessages`, `getThreadEvents`, read synchronously from inside the runtime's own
+   * handlers) all inherit it. Without it each of them threw "no tenant frame" and answered 500, and
+   * before that they ran as `system`: nobody's roster and nobody's threads.
+   *
+   * The model key is read in this frame too, as a routine's turn reads it in its owner's:
+   * `readModelSecret` is written for a person's frame, where row security shows the deployment's
+   * `system` row beside that person's own and the query prefers the deployment's.
+   *
+   * Signed out, the runtime describes the deployment and does nothing else. `/info` is read in the
+   * catalogue frame (see {@link runAsRuntimeActor}), because the deployment check reads it to tell
+   * "the licence is invalid" apart from "chat is broken"; every other route — connect, the thread
+   * endpoints, a run — is refused, because a thread belongs to somebody and there is nobody here.
+   */
+  const handler = new Hono().basePath(basePath);
+  handler.all("*", async (context) => {
+    const request = context.req.raw;
+    // A preflight carries no session and reads nothing: the runtime's CORS answer, unframed.
+    if (request.method === "OPTIONS") return runtimeRoutes.fetch(request);
+    const actor = await actorOf(request);
+    const describesItself =
+      request.method === "GET" &&
+      new URL(request.url).pathname === `${basePath}/info`;
+    if (actor.id === NOBODY) {
+      if (!describesItself)
+        return context.json({ error: "Sign in to use the chat." }, 401);
+      return runAsRuntimeActor(actor, () => runtimeRoutes.fetch(request));
+    }
+    /*
+     * A person's threads are back in memory before the runtime reads any (G01-E P18). The thread
+     * endpoints and connect replay answer synchronously out of the in-memory store, which a restart
+     * empties while the rows stay; so the person's first request that can touch a thread loads their
+     * stored threads, in their frame, and every later one finds that load done. `/info` touches none.
+     */
+    return runAsRuntimeActor(actor, async () => {
+      if (!describesItself) await runner.hydrate();
+      return runtimeRoutes.fetch(request);
+    });
+  });
 
   return {
-    handler: createCopilotHonoHandler({ runtime, basePath }),
+    handler,
     /**
      * The mounted runner, under the name a hop drives a turn by.
      *
@@ -2371,7 +2478,10 @@ export function mountCopilotRuntime(
      * a second view of it that could disagree. The tenant guard on `getThreadMessages` is what makes
      * that read safe to hand to a hop.
      */
-    history: async (input: { threadId: string; actorId: string }) =>
-      runner.getThreadMessages(input.threadId),
+    history: async (input: { threadId: string; actorId: string }) => {
+      // After a restart the store is cold until this tenant's threads are loaded (G01-E P18).
+      await runner.hydrate();
+      return runner.getThreadMessages(input.threadId);
+    },
   };
 }
