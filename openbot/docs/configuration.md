@@ -24,6 +24,54 @@ bash scripts/start.sh
 Sign-in adds its own pair: `BETTER_AUTH_SECRET` (at least 32 characters) and `BETTER_AUTH_URL`. All
 four stop server startup if missing.
 
+### The database role and `OPENBOT_RLS_ENFORCE`
+
+`DATABASE_URL` must name the application role `openbot_app`, not the owner: PostgreSQL does not apply
+row-level security to a superuser or a `BYPASSRLS` role, so tenant isolation would rest on the
+application's tenant context alone. The server reads its own role at boot, before it serves anything.
+
+| `OPENBOT_RLS_ENFORCE` | What an unenforced or unconfirmed role does                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| unset                 | `refuse`, unless `NODE_ENV` is `development` or `test`, where it is `warn`. Unset `NODE_ENV` refuses. |
+| `refuse`              | Prints `{"type":"rls-not-enforced", …}` (or `rls-role-check-unavailable`) on stderr and exits.   |
+| `warn`                | Prints the same line and keeps running. The written-down opt-out for a local database; do not deploy with it. |
+| anything else         | Refuses to start, so a typo cannot switch the check off.                                          |
+
+Where that bites, and who already says `warn`:
+
+- **The desktop app** connects as the compose owner `openbot`, a superuser, on a database published
+  on loopback only, and sets no `NODE_ENV`. It writes `OPENBOT_RLS_ENFORCE=warn` into the `.env` it
+  owns, next to `DATABASE_URL` (`desktop/src-tauri/src/env.rs`), so it keeps starting and prints
+  `rls-not-enforced` on every boot. Moving it to `openbot_app` is the real fix; that also moves the
+  worker, which reads the same file.
+- **The Helm chart's bundled database** (`postgresql.enabled`, off by default) connects as `postgres`.
+  The chart refuses to render until `config.extraEnv` names `OPENBOT_RLS_ENFORCE`; `extraEnv` renders
+  after the chart's own variables, so it is the value the pods get.
+- **An external database whose URL names a superuser or a `BYPASSRLS` role** (the usual way to make
+  migrations pass on a self-hosted server) only warned before and now refuses under the chart's
+  `NODE_ENV=production`. The chart gives the migrations Job and the API one `DATABASE_URL`, so it has
+  no supported way yet to migrate as the owner and serve as `openbot_app`. Until it does, either give
+  the URL a role that owns the schema without being a superuser or `BYPASSRLS` (what RDS, Cloud SQL
+  and Azure Database hand out, which are unaffected), or set
+  `config.extraEnv: [{name: OPENBOT_RLS_ENFORCE, value: warn}]` and accept that isolation rests on the
+  application.
+
+`0054_app_role.sql` creates `openbot_app` with the password `openbot`, which is printed in this
+repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
+already changed and resetting it would lock a running deployment out without a word. Instead, under
+`NODE_ENV=production` the server refuses to start when the password in `DATABASE_URL` is `openbot`
+(`{"type":"database-password-public-default", …}` on stderr); elsewhere it only warns. Set a real one
+as the owner, then put it in `DATABASE_URL`:
+
+```sql
+ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<random>';
+```
+
+The one-container image and CI already do this with a generated password. `openbot_app` holds row
+rights only: `0112_app_role_hardening.sql` revokes the `CREATE` on schemas `public` and `drizzle`
+that `0054` granted, so the role the server connects as cannot add tables, functions or triggers.
+Migrations run as the owner.
+
 There is no platform to configure. Threads and memory live in the PostgreSQL above, through the
 runtime's SSE-mode runner, so `DATABASE_URL` is the whole contract for a conversation's life.
 `INTELLIGENCE_MODE` is read only to be refused: set it to `local` or leave it unset, and naming
@@ -38,13 +86,38 @@ coworker without its own endpoint is refused. A leftover token with no URL is ig
 one-container image has no Bot process, so leave the URL unset there. `scripts/start.sh` points it
 at `agent-langgraph` on a laptop.
 
+### Binding stored credentials to their row (`VAULT_REQUIRE_AAD`)
+
+Credentials written by this version are sealed in a v2 envelope whose AES-GCM additional data is the
+row's own tenant, id and kind, so a value copied into another tenant's row, another row or another
+kind fails to open. Rows written by earlier versions are v1 envelopes, which carry no such binding
+and still open wherever they are pasted. They keep working until you finish the upgrade:
+
+1. Reseal the existing rows, from the server's own shell with the same `DATABASE_URL` and
+   `KEY_ENCRYPTION_KEY` the server uses:
+
+   ```sh
+   cd server && bun scripts/reseal-credentials.ts
+   ```
+
+   It lists tenants in the platform scope and reseals each tenant's rows inside that tenant's own
+   scope, replacing a row only if its stored value is still the one it read, so it is safe on a live
+   deployment and safe to run again. It prints one JSON line per tenant and a summary of counts and
+   row ids, never a secret, and exits `0` only when no unbound row remains. Exit `1` means some
+   remain: rerun it for rows that changed while it ran, and look at any row it reports as
+   `credential-reseal-unreadable` (not an envelope, or sealed under another key).
+2. Once it exits `0`, set `VAULT_REQUIRE_AAD=1` (or `true`) and restart. From then on an unbound
+   envelope is refused instead of opened. Leave it unset until step 1 is clean, or every remaining
+   v1 credential stops working.
+
 ## General variables
 
 | Variable             | Default                            | Meaning                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | `PORT`               | `3001`                             | API server port. `SERVER_PORT` names the same port; set either, or both to the same value, or the server refuses to start. |
+| `VAULT_REQUIRE_AAD`  | unset (off)                        | `1` or `true` refuses stored credentials that are not bound to their row. Set it only after `scripts/reseal-credentials.ts` exits `0`; see [above](#binding-stored-credentials-to-their-row-vault_require_aad). |
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
-| `TENANT_PACKAGE_DIR` | `../examples/fintech`              | Tenant package directory, resolved from `server/`.                  |
+| `TENANT_PACKAGE_DIR` | `../examples/qoderwake`            | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database.                      |
 | `OPENAI_API_KEY`     | unset                              | Default model key for built-in agents and both shipped Bots.        |
 | `OPENAI_BASE_URL`    | unset                              | OpenAI-compatible endpoint that key is spent against. See below.    |

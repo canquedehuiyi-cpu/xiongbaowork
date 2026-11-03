@@ -1179,7 +1179,13 @@ export async function synchronizeTenantPackage(
           const [seeded] = await transaction
             .insert(skillTable)
             .values({
+              /*
+               * Stated, not left to the column default: a catalogue skill is the platform's row, and
+               * only a platform row keeps `id = slug` (migration 0113). Every tenant row is on a uuid,
+               * so this id never meets one, and the conflict target below is the platform's own name.
+               */
               id: skill.slug,
+              tenantId: SYSTEM_TENANT,
               ownerUserId: null,
               slug: skill.slug,
               title: skill.title,
@@ -1191,11 +1197,12 @@ export async function synchronizeTenantPackage(
               packageId: deploymentPackage.id,
             })
             .onConflictDoUpdate({
-              target: skillTable.slug,
+              target: [skillTable.tenantId, skillTable.slug],
               /*
-               * Only ever a package skill. The `/` namespace is shared and first to take a name keeps
-               * it, so a person who wrote their own skill under this slug keeps theirs and the package
-               * loses one — rather than the package silently replacing something somebody wrote.
+               * Only ever a package skill. Within the platform's partition first to take a name keeps
+               * it, so a skill written there under this slug keeps its content and the package loses
+               * one — rather than the package silently replacing something somebody wrote. A tenant's
+               * own row under the slug is in another partition and is never this conflict (audit #9).
                *
                * A collision is skipped rather than thrown, unlike the agent case above. Anybody signed
                * in may write a skill, so throwing would let one person stop the deployment booting by
@@ -1294,6 +1301,9 @@ export async function synchronizeTenantPackage(
           .delete(skillTable)
           .where(
             and(
+              // The platform's rows only, stated rather than left to the frame: a tenant's row under
+              // the same slug is that tenant's, whatever this package declares.
+              eq(skillTable.tenantId, SYSTEM_TENANT),
               eq(skillTable.origin, "catalogue"),
               isNull(skillTable.ownerUserId),
               /*
@@ -1334,6 +1344,7 @@ export async function synchronizeTenantPackage(
             and(
               eq(pluginGrants.kind, "skill"),
               eq(pluginGrants.grantedBy, PACKAGE_GRANT),
+              eq(pluginGrants.tenantId, SYSTEM_TENANT),
               inArray(
                 pluginGrants.ref,
                 retiredSkills.map((skill) => skill.slug),

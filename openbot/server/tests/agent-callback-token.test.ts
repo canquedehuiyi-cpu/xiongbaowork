@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   authoriseAgentCall,
+  callbackFrameFor,
   hashCallbackToken,
   looksLikeCallbackToken,
   mintCallbackToken,
@@ -215,6 +216,77 @@ describe("who may call a tool back, and as whom", () => {
       status: 401,
       reason: "Not authorised.",
     });
+  });
+});
+
+/**
+ * WHICH FRAME AN AUTHORISED CALLBACK RUNS IN (G01-E PCB).
+ *
+ * The token lookup is a `platform` read, so it answers with the stamp on the holder's profile; the
+ * frame is decided from that stamp and the person the signed run names, and never from `team`,
+ * which is a stamp and not a frame. The route behaviour against PostgreSQL is in
+ * `agent-callback-frame.integration.test.ts`.
+ */
+describe("the frame an authorised callback runs in", () => {
+  test("the verdict carries the token holder's stamp, and the deployment-wide token carries none", async () => {
+    const token = mintCallbackToken();
+    const run = mintRunAssertion(
+      { botId: "agent_a", actorId: "usr_owner", runId: "r1" },
+      KEY,
+    );
+    const lookup = async (hash: string) =>
+      hash === hashCallbackToken(token)
+        ? { id: "agent_a", tenantId: "usr_owner" }
+        : null;
+    const own = await authoriseAgentCall({
+      presented: token,
+      run,
+      encryptionKey: KEY,
+      lookup,
+    });
+    expect(own.ok && own.botTenant).toBe("usr_owner");
+    const legacy = await authoriseAgentCall({
+      presented: "legacy-secret",
+      run,
+      encryptionKey: KEY,
+      legacyToken: "legacy-secret",
+      lookup,
+    });
+    expect(legacy.ok).toBe(true);
+    expect(legacy.ok && "botTenant" in legacy).toBe(false);
+  });
+
+  test("a person's private Bot runs in its owner's tenant, and only for its owner", () => {
+    expect(
+      callbackFrameFor({ actorId: "usr_owner", botTenant: "usr_owner" }),
+    ).toBe("usr_owner");
+    expect(
+      callbackFrameFor({ actorId: "usr_other", botTenant: "usr_owner" }),
+    ).toBeNull();
+  });
+
+  test("a `team` Bot runs in the asking person's frame, never as `team`", () => {
+    expect(callbackFrameFor({ actorId: "usr_mate", botTenant: "team" })).toBe(
+      "usr_mate",
+    );
+  });
+
+  test("a catalogue Bot and the deployment-wide token keep running as the asker", () => {
+    expect(callbackFrameFor({ actorId: "usr_7", botTenant: "system" })).toBe(
+      "usr_7",
+    );
+    expect(callbackFrameFor({ actorId: "usr_7" })).toBe("usr_7");
+  });
+
+  test("a run that names nobody is refused, whatever the Bot", () => {
+    for (const actorId of ["", "system", "platform", "team"])
+      for (const botTenant of [undefined, "system", "team", "usr_owner"])
+        expect(
+          callbackFrameFor({
+            actorId,
+            ...(botTenant === undefined ? {} : { botTenant }),
+          }),
+        ).toBeNull();
   });
 });
 

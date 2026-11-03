@@ -79,7 +79,7 @@ export function agentTrigger(
     char: AGENT_TRIGGER,
     accessibilityLabel: "agent",
     reopenOnChipClick: true,
-    emptyMessage: "No agents in this channel",
+    emptyMessage: "这个频道里还没有员工",
     onSearch: (query): TriggerSuggestion[] => [
       ...agents
         .filter((agent) => matches(query, agent.name, agent.description))
@@ -112,7 +112,7 @@ export function slashCommandTrigger(
     char: COMMAND_TRIGGER,
     position: "start",
     accessibilityLabel: "command",
-    emptyMessage: "No matching commands",
+    emptyMessage: "没有匹配的命令",
     onSearch: (query): TriggerSuggestion[] =>
       commands
         .filter((command) => matches(query, command.name, command.description))

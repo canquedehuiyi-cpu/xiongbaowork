@@ -1,3 +1,4 @@
+import { TenantContextError } from "../tenant/context";
 import type { AgentProfileStore } from "./profile-store";
 import type { AgentActor } from "./profile-types";
 
@@ -22,8 +23,19 @@ export function canUseComputer(
   );
 }
 
-/** The access check the computer routes and the live screen use, read from the profile store. */
+/**
+ * The access check the computer routes and the live screen use, read from the profile store.
+ *
+ * A failed read is "no such Bot", except a missing tenant frame: that is the caller's bug, not an
+ * answer, and swallowing it is how the live screen once told owners their own Bot did not exist.
+ */
 export function computerAccessCheck(store: Pick<AgentProfileStore, "get">) {
   return async (actor: AgentActor, botId: string) =>
-    canUseComputer(await store.get(actor, botId).catch(() => null), actor);
+    canUseComputer(
+      await store.get(actor, botId).catch((error) => {
+        if (error instanceof TenantContextError) throw error;
+        return null;
+      }),
+      actor,
+    );
 }

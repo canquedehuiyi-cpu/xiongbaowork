@@ -11,7 +11,7 @@
  */
 import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { HANDOFF_KIND } from "../agents/handoff";
-import { WAKE_UP_KIND, type WakeUpPayload } from "../agents/wake-up";
+import { readWakeUpPayload, wakeUpsOwnedBy } from "../agents/wake-up";
 import type { Database } from "../db/client";
 import {
   approvalRequests,
@@ -372,17 +372,11 @@ export function createActivityStore(database: Database) {
       const wakeUps = await database
         .select()
         .from(workItems)
-        .where(
-          and(
-            eq(workItems.kind, WAKE_UP_KIND),
-            sql`${workItems.payload}->>'ownerUserId' = ${ownerUserId}`,
-            sql`${workItems.payload}->>'agentId' = ${agentId}`,
-          ),
-        )
+        .where(wakeUpsOwnedBy(ownerUserId, agentId))
         .orderBy(desc(workItems.runAt))
         .limit(COMPLETED_LIMIT * 2);
       for (const row of wakeUps) {
-        const payload = row.payload as WakeUpPayload;
+        const payload = readWakeUpPayload(row.payload);
         const running =
           !row.finishedAt &&
           row.claimedBy !== null &&

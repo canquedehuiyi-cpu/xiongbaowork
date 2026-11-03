@@ -81,9 +81,15 @@ if (process.env.CONFIRM_TEST_RESET !== "yes") {
 }
 
 const { createDatabase } = await import("../src/db/client");
+const { runAsTenant } = await import("../src/tenant/context");
 const { sql } = await import("drizzle-orm");
 
 const database = createDatabase(url);
+/*
+ * Both statements below are the operator's, about nobody's rows, so they run as `platform` (G01-E):
+ * the client refuses a statement outside every frame, and a wipe belongs to no tenant.
+ */
+const asOperator = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 
 /*
  * TRUNCATE is not a data privilege. The role the application runs as (`openbot_app`) is granted
@@ -91,8 +97,8 @@ const database = createDatabase(url);
  * `permission denied for table …` — an error that reads like a broken ACL rather than like the wrong
  * key. Said here instead, because the fix is a different connection string, not a grant.
  */
-const [{ who }] = (await database.execute(
-  sql.raw(`select current_user as who`),
+const [{ who }] = (await asOperator(() =>
+  database.execute(sql.raw(`select current_user as who`)),
 )) as unknown as { who: string }[];
 if (who === "openbot_app") {
   console.error(
@@ -102,8 +108,10 @@ if (who === "openbot_app") {
   process.exit(1);
 }
 
-await database.execute(
-  sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`),
+await asOperator(() =>
+  database.execute(
+    sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`),
+  ),
 );
 console.log(
   `reset ${TABLES.length} test tables (and their dependants) in ${target} as ${who}`,
