@@ -356,7 +356,11 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
         .map((row) => row.table),
     ),
   ].sort();
-  expect(shared).toEqual(TEAM_TABLES);
+  /*
+   * `group_message_private` (0128) shares nothing, so it has no `team_read`; it holds the private
+   * part of shared group rows, and refuses a `team` frame and freezes its stamp like them.
+   */
+  expect(shared).toEqual([...TEAM_TABLES, "group_message_private"].sort());
   const unguarded = shared.flatMap((table) => {
     const problems: string[] = [];
     for (const command of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
