@@ -113,7 +113,7 @@ import {
   markAttachmentsSent,
 } from "./channels/attachments";
 import {
-  CHANNEL_ACTIVITY_TOPIC,
+  announceTaskUpdate,
   createChannelEventHub,
   startChannelActivityListener,
 } from "./channels/events";
@@ -211,6 +211,7 @@ import {
   createNamedAgentModelResolver,
   modelOf,
 } from "./models/runtime-resolver";
+import { databaseTokenCallSink } from "./models/token-metering";
 import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
@@ -507,14 +508,18 @@ await startupLifecycle.run(async (startup) => {
    *
    * Built here rather than inside `copilot.ts`, because that module has never held the database handle
    * and this one already holds the vault: a binding is a row plus a key, and neither belongs in the
-   * runtime wiring. Absent binding, absent model — the deployment's own answers, as before.
+   * runtime wiring. Absent binding, absent model — the deployment's own answers, as before, but
+   * metered now (audit defect #11): the runtime hands the resolver the deployment model it would have
+   * spoken, and the resolver wraps it with the same meter a bound model gets.
    */
+  const tokenCallSink = databaseTokenCallSink(database);
   const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
+    tokenCallSink,
   );
-  const resolveAgentModel = modelOf(resolveNamedAgentModel);
+  const resolveAgentModel = modelOf(resolveNamedAgentModel, tokenCallSink);
   const agentProfileStore = createAgentProfileStore(
     database,
     config.managedAgent?.endpoint,
@@ -702,17 +707,9 @@ await startupLifecycle.run(async (startup) => {
     database,
     (tenantId) => {
       // Same announce rail the channel roster listens on, so a second server
-      // instance's board moves too, not just this process's sockets.
-      void database.execute(
-        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify({
-          channelId: "",
-          memberIds: [tenantId],
-          lastMessage: null,
-          lastMessageAt: null,
-          lastMessageAgentId: null,
-          taskUpdated: true,
-        })})`,
-      );
+      // instance's board moves too, not just this process's sockets. The helper
+      // runs the lazy statement and logs its failure; it never rejects.
+      void announceTaskUpdate(database, tenantId);
     },
     quota,
   );

@@ -144,6 +144,7 @@ tests/delivery-turn.test.ts
 tests/demonstrations-store.integration.test.ts
 tests/demonstrations.test.ts
 tests/deployment-frames.test.ts
+tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
 tests/dev-actor.integration.test.ts
@@ -197,6 +198,8 @@ tests/memory-store.integration.test.ts
 tests/memory.test.ts
 tests/migration-journal.test.ts
 tests/mobile-links.test.ts
+tests/model-e2e-reconcile.test.ts
+tests/model-e2e-workflow.test.ts
 tests/model-library-routes.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
@@ -226,6 +229,7 @@ tests/pipeline-run.test.ts
 tests/pipeline-turn-channel.test.ts
 tests/plan-change-audit.integration.test.ts
 tests/plan-model.test.ts
+tests/platform-model-pool-routes.test.ts
 tests/platform-model-pool.integration.test.ts
 tests/platform-store.test.ts
 tests/plugin-call-args-validation.test.ts
@@ -262,6 +266,7 @@ tests/provider-oauth.test.ts
 tests/qoderwake-package.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
+tests/quota-token-usage.integration.test.ts
 tests/quota.test.ts
 tests/recovery-ap2-parent-schema-reconcile.test.ts
 tests/recovery-approval-direct-execution-domains.test.ts

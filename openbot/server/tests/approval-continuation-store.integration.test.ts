@@ -20,7 +20,7 @@ import { users } from "../src/db/schema/core";
 import { deliveryOutbox } from "../src/db/schema/delivery";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
-import { createDisposableTestDatabase } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // No DATABASE_URL fallback, DDL, automatic migrations, or provider invocation.
 // Root must provision an EMPTY disposable database with canonical schema/RLS.
@@ -91,7 +91,7 @@ afterAll(async () => {
   await dbA.$client.close();
   await dbB.$client.close();
   await disposable.drop();
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 async function provision(origin: ContinuationProvision["origin"] = "current") {
   const id = randomUUID();

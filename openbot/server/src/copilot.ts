@@ -1,7 +1,11 @@
 import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
 import { AbstractAgent, HttpAgent } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgent, CopilotRuntime } from "@copilotkit/runtime/v2";
+import {
+  BuiltInAgent,
+  CopilotRuntime,
+  resolveModel,
+} from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
@@ -43,7 +47,10 @@ import {
   type LoadPersonalMemory,
   PersonalMemoryMiddleware,
 } from "./memory/tools";
-import type { AgentModelResolver } from "./models/runtime-resolver";
+import type {
+  AgentModelResolver,
+  DeploymentModel,
+} from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
@@ -473,6 +480,37 @@ export function builtInAgentConfiguration(
         }
       : {}),
   };
+}
+
+/**
+ * The deployment default model, built the way the runtime builds it from `provider/model` and the
+ * deployment key — the same function, so the endpoint (`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`) and
+ * the key are exactly the ones a string would have reached.
+ *
+ * Built here and handed to the model resolver so that an unbound coworker's calls can be metered
+ * (audit defect #11): a model the runtime builds from a string inside itself never passes through
+ * the meter. `undefined` if it cannot be built, which leaves the string path, as before.
+ */
+function deploymentModel(
+  model: RuntimeModel,
+  apiKey: string,
+): DeploymentModel | undefined {
+  try {
+    return {
+      model: resolveModel(`${model.provider}/${model.defaultModel}`, apiKey),
+      provider: model.provider,
+      modelName: model.defaultModel,
+      baseUrl:
+        process.env[
+          model.provider === "anthropic"
+            ? "ANTHROPIC_BASE_URL"
+            : "OPENAI_BASE_URL"
+        ]?.trim() || null,
+      apiKey,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -976,7 +1014,11 @@ async function buildAgent(
   let agentModel: LanguageModel | undefined;
   if (resolveAgentModel) {
     try {
-      agentModel = (await resolveAgentModel(agent.id)) ?? undefined;
+      agentModel =
+        (await resolveAgentModel(
+          agent.id,
+          apiKey ? deploymentModel(model, apiKey) : undefined,
+        )) ?? undefined;
     } catch {
       // Never log the thrown value: database errors can contain connection details or row contents.
       console.error({
