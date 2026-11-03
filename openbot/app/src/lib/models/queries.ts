@@ -61,7 +61,7 @@ export function modelLibraryQueryOptions() {
       templates: ProviderTemplate[];
     }> => {
       const response = await client("/api/models", {
-        fallback: "Your model library could not be loaded.",
+        fallback: "无法加载你的模型库。",
       });
       return (
         (await response.json().catch(() => null)) ?? {

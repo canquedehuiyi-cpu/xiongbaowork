@@ -16,6 +16,11 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import {
+  assertPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
+import {
   linearTimestampFresh,
   verifyBearer,
   verifyGithubSignature,
@@ -139,6 +144,34 @@ const str = (value: unknown) => (typeof value === "string" ? value : undefined);
 const signedBodyId = (raw: string) =>
   `body-${createHash("sha256").update(raw).digest("hex")}`;
 
+/**
+ * The tenant a resolved trigger's work runs as, or null when its row names nobody (G01).
+ *
+ * A public ingress has no person behind it, so the trigger row decides: the tenant the database
+ * stamped on it, confirmed by its owner. A row stamped `system`, `platform` or nothing, or stamped
+ * with somebody other than its owner, is answered exactly like an unknown trigger. The payload is
+ * never asked.
+ */
+export function triggerTenant(trigger: {
+  id: string;
+  tenantId: string;
+  ownerUserId: string;
+}): string | null {
+  try {
+    return assertPersonTenant(trigger.tenantId, trigger.ownerUserId);
+  } catch (error) {
+    if (!(error instanceof TenantContextError)) throw error;
+    console.warn(
+      JSON.stringify({
+        type: "responsibility-trigger-untrusted-tenant",
+        triggerId: trigger.id,
+        reason: error.message,
+      }),
+    );
+    return null;
+  }
+}
+
 export function createTriggerIngressRoutes(deps: TriggerIngressDeps) {
   const now = deps.now ?? Date.now;
   const routes = new Hono();
@@ -165,11 +198,20 @@ export function createTriggerIngressRoutes(deps: TriggerIngressDeps) {
     );
   });
   routes.post("/:triggerId", async (context) => {
-    const trigger = await deps.directory.resolve(
-      context.req.param("triggerId"),
+    /*
+     * WHOSE EVENT THIS IS COMES FROM THE TRIGGER ROW (G01). Which trigger a URL names is a question
+     * across every tenant, so it is asked as `platform` and nothing else is. The delivery — event,
+     * run, queue item and audit row — then runs in the tenant stamped on that row, never in whatever
+     * frame the request arrived in and never as `system`.
+     */
+    const id = context.req.param("triggerId");
+    const trigger = await runAsTenant("platform", () =>
+      deps.directory.resolve(id),
     );
     if (!trigger || trigger.kind === "email" || trigger.kind === "slack")
       return context.json({ error: "Trigger not found." }, 404);
+    const tenant = triggerTenant(trigger);
+    if (!tenant) return context.json({ error: "Trigger not found." }, 404);
     if (!trigger.secret)
       return context.json(
         {
@@ -192,12 +234,14 @@ export function createTriggerIngressRoutes(deps: TriggerIngressDeps) {
     ) => {
       const filter =
         trigger.config.kind === "slack" ? null : trigger.config.filter;
-      const outcome = await deliverToTrigger(
-        deps,
-        trigger,
-        delivery,
-        extraPass &&
-          (!filter || matchesFilter(filter, delivery.type, delivery.payload)),
+      const outcome = await runAsTenant(tenant, () =>
+        deliverToTrigger(
+          deps,
+          trigger,
+          delivery,
+          extraPass &&
+            (!filter || matchesFilter(filter, delivery.type, delivery.payload)),
+        ),
       );
       if (outcome.status === "inactive" && trigger.kind === "webhook")
         return context.json(

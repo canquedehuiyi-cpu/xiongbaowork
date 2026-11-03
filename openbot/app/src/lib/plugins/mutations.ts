@@ -171,6 +171,30 @@ export function addCustomServerMutationOptions(queryClient: QueryClient) {
 }
 
 /**
+ * Replace the deployment token of a server that is already added, and point the server at it.
+ *
+ * One request rather than `storeMcpToken` and then a re-add. Storing a token for a key that holds
+ * one revokes the old one at once, so a re-add that failed after it left the server naming a
+ * revoked credential; the server does both in one transaction instead. Only the token is sent: the
+ * server's url, instance host and title are its own and stay as they are.
+ */
+export function replaceServerTokenMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (input: { serverId: string; token: string }) => {
+      await client(
+        `/api/plugins/servers/${encodeURIComponent(input.serverId)}/token`,
+        {
+          method: "POST",
+          body: { token: input.token },
+          fallback: "令牌没能保存。",
+        },
+      );
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+/**
  * Add a Composio app to the deployment, named by its slug.
  *
  * Its own endpoint rather than a curated key, because the catalogue is the vendor's rather than

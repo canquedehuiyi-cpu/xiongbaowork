@@ -36,7 +36,7 @@ export function createVoiceRoutes(
   app.get("/config", (context) => {
     context.header("Cache-Control", "no-store");
     if (!provider || !channels || !profiles)
-      return context.json({ error: "Live voice is not configured." }, 503);
+      return context.json({ error: "实时语音尚未配置。" }, 503);
     return context.json({ transport: provider.transport });
   });
   app.post(
@@ -45,10 +45,10 @@ export function createVoiceRoutes(
       context.header("Cache-Control", "no-store");
       // Cross-origin HTML forms cannot set this header; this route grants no CORS access.
       if (context.req.header("x-openbot-voice") !== "1") {
-        return context.json({ error: "Invalid voice request." }, 403);
+        return context.json({ error: "无效的语音请求。" }, 403);
       }
       if (!provider || !channels || !profiles)
-        return context.json({ error: "Live voice is not configured." }, 503);
+        return context.json({ error: "实时语音尚未配置。" }, 503);
       const userId = context.var.actor.id;
       const now = Date.now();
       for (const [id, attempt] of attempts) {
@@ -64,7 +64,7 @@ export function createVoiceRoutes(
         context.header("Retry-After", "60");
         return context.json(
           {
-            error: "Too many voice connection attempts. Please retry shortly.",
+            error: "语音连接尝试过于频繁，请稍后重试。",
           },
           429,
         );
@@ -82,18 +82,14 @@ export function createVoiceRoutes(
     },
     bodyLimit({
       maxSize: MAX_VOICE_SDP_BYTES,
-      onError: (context) =>
-        context.json({ error: "Voice connection request is too large." }, 413),
+      onError: (context) => context.json({ error: "语音连接请求过大。" }, 413),
     }),
     async (context) => {
       if (
         context.req.header("content-type")?.split(";")[0]?.trim() !==
         "application/json"
       ) {
-        return context.json(
-          { error: "A JSON voice connection request is required." },
-          400,
-        );
+        return context.json({ error: "语音连接请求必须是 JSON 格式。" }, 400);
       }
       const body: unknown = await context.req.json().catch(() => null);
       if (
@@ -104,52 +100,37 @@ export function createVoiceRoutes(
         !body.channelId.trim() ||
         body.channelId.length > 256
       ) {
-        return context.json(
-          { error: "A channel and valid audio SDP are required." },
-          400,
-        );
+        return context.json({ error: "需要提供频道和有效的音频 SDP。" }, 400);
       }
       if (!provider || !channels || !profiles)
-        return context.json({ error: "Live voice is not configured." }, 503);
+        return context.json({ error: "实时语音尚未配置。" }, 503);
       const offer = "sdp" in body ? body.sdp : undefined;
       if (
         (provider.transport === "webrtc" || offer !== undefined) &&
         !isVoiceSdp(offer)
       ) {
-        return context.json(
-          { error: "A valid audio SDP offer is required." },
-          400,
-        );
+        return context.json({ error: "需要提供有效的音频 SDP offer。" }, 400);
       }
       let channel: Awaited<ReturnType<ChannelStore["get"]>>;
       try {
         channel = await channels.get(context.var.actor, body.channelId);
       } catch {
-        return context.json(
-          { error: "The channel could not be loaded. Please retry." },
-          503,
-        );
+        return context.json({ error: "无法加载该频道，请重试。" }, 503);
       }
       if (!channel) return context.json({ error: "Channel not found." }, 404);
       if (!channel.active)
-        return context.json(
-          { error: "This channel is no longer active." },
-          409,
-        );
+        return context.json({ error: "该频道已不再活跃。" }, 409);
       const agentId = channel.agentIds[0];
       if (channel.agentIds.length !== 1 || !agentId)
         return context.json(
-          { error: "Live voice requires a channel with exactly one agent." },
+          { error: "实时语音要求频道中恰好有一位数字员工。" },
           400,
         );
       let profile: Awaited<ReturnType<AgentProfileStore["get"]>>;
       try {
         profile = await profiles.get(context.var.actor, agentId);
       } catch {
-        return context.json(
-          { error: "The agent could not be loaded. Please retry." },
-          503,
-        );
+        return context.json({ error: "无法加载该数字员工，请重试。" }, 503);
       }
       if (!profile || profile.deletedAt)
         return context.json({ error: "Agent not found." }, 404);

@@ -6,6 +6,7 @@ import {
 } from "../src/computer/snapshot-store";
 import { createDatabase } from "../src/db/client";
 import { computerSnapshot } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -25,6 +26,13 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
+/*
+ * The person whose turn takes and resolves the snapshots. A snapshot is written on the snapshot path
+ * of somebody's turn, so it is that person's row; every case, and the row counts in it, runs as them.
+ */
+const TENANT = `snapshot-store-${crypto.randomUUID().slice(0, 8)}`;
+const asPerson = <T>(work: () => T) => runAsTenant(TENANT, work);
+
 function snapshot(
   snapshotId: number,
   elements: SnapshotElement[],
@@ -38,112 +46,120 @@ function snapshot(
 }
 
 afterEach(async () => {
-  await database.delete(computerSnapshot);
+  await asPerson(() => database.delete(computerSnapshot));
 });
 
 describe("a snapshot taken on one server", () => {
-  test("is resolvable on another, elements and generation intact", async () => {
-    const tookSnapshot = createSnapshotStore(database);
-    await tookSnapshot.save(
-      "default",
-      snapshot(7, [
-        { ref: "e1", role: "input", name: "Customer name:", type: "text" },
-        { ref: "e9", role: "button", name: "Submit order" },
-      ]),
-    );
+  test("is resolvable on another, elements and generation intact", () =>
+    asPerson(async () => {
+      const tookSnapshot = createSnapshotStore(database);
+      await tookSnapshot.save(
+        "default",
+        snapshot(7, [
+          { ref: "e1", role: "input", name: "Customer name:", type: "text" },
+          { ref: "e9", role: "button", name: "Submit order" },
+        ]),
+      );
 
-    // A different process would hold none of that in memory. The second store reads it from Postgres.
-    const handlesClick = createSnapshotStore(database);
-    const loaded = await handlesClick.load("default");
-    expect(loaded?.snapshotId).toBe(7);
-    expect(loaded?.url).toBe("https://example.com/order");
-    expect(loaded?.elements.get("e9")?.name).toBe("Submit order");
-    // The type survives the JSON round trip, because a rule may care that a value went into a
-    // password field rather than a text one.
-    expect(loaded?.elements.get("e1")?.type).toBe("text");
-  });
+      // A different process would hold none of that in memory. The second store reads it from Postgres.
+      const handlesClick = createSnapshotStore(database);
+      const loaded = await handlesClick.load("default");
+      expect(loaded?.snapshotId).toBe(7);
+      expect(loaded?.url).toBe("https://example.com/order");
+      expect(loaded?.elements.get("e9")?.name).toBe("Submit order");
+      // The type survives the JSON round trip, because a rule may care that a value went into a
+      // password field rather than a text one.
+      expect(loaded?.elements.get("e1")?.type).toBe("text");
+    }));
 
-  test("a computer that was never snapshotted loads as undefined", async () => {
-    const store = createSnapshotStore(database);
-    expect(await store.load("never-snapshotted")).toBeUndefined();
-  });
+  test("a computer that was never snapshotted loads as undefined", () =>
+    asPerson(async () => {
+      const store = createSnapshotStore(database);
+      expect(await store.load("never-snapshotted")).toBeUndefined();
+    }));
 
-  test("a newer snapshot supersedes the last, keeping one row per computer", async () => {
-    const first = createSnapshotStore(database);
-    await first.save(
-      "default",
-      snapshot(7, [{ ref: "e9", role: "button", name: "Submit order" }]),
-    );
+  test("a newer snapshot supersedes the last, keeping one row per computer", () =>
+    asPerson(async () => {
+      const first = createSnapshotStore(database);
+      await first.save(
+        "default",
+        snapshot(7, [{ ref: "e9", role: "button", name: "Submit order" }]),
+      );
 
-    const second = createSnapshotStore(database);
-    await second.save(
-      "default",
-      snapshot(8, [{ ref: "e9", role: "button", name: "Cancel" }]),
-    );
+      const second = createSnapshotStore(database);
+      await second.save(
+        "default",
+        snapshot(8, [{ ref: "e9", role: "button", name: "Cancel" }]),
+      );
 
-    const rows = await database.select().from(computerSnapshot);
-    // One live snapshot per computer, by construction: a ref is only ever resolved against the current
-    // page, so a second row would be a page history the boundary has no use for.
-    expect(rows).toHaveLength(1);
+      const rows = await database.select().from(computerSnapshot);
+      // One live snapshot per computer, by construction: a ref is only ever resolved against the current
+      // page, so a second row would be a page history the boundary has no use for.
+      expect(rows).toHaveLength(1);
 
-    const loaded = await createSnapshotStore(database).load("default");
-    expect(loaded?.snapshotId).toBe(8);
-    expect(loaded?.elements.get("e9")?.name).toBe("Cancel");
-  });
+      const loaded = await createSnapshotStore(database).load("default");
+      expect(loaded?.snapshotId).toBe(8);
+      expect(loaded?.elements.get("e9")?.name).toBe("Cancel");
+    }));
 
-  test("an older snapshot arriving late does not overwrite the newer one", async () => {
-    // Two replicas snapshotting the same computer at once. Generation 8 is written first and
-    // generation 7 arrives after it, which is the ordering a load balancer can produce and Postgres
-    // has no way to prevent. Last-write-wins would put the older page back and every ref the model is
-    // holding would stop resolving; the generation decides instead, because it comes from the
-    // computer rather than from two machines' clocks.
-    const ahead = createSnapshotStore(database);
-    await ahead.save(
-      "default",
-      snapshot(8, [{ ref: "e9", role: "button", name: "Cancel" }]),
-    );
+  test("an older snapshot arriving late does not overwrite the newer one", () =>
+    asPerson(async () => {
+      // Two replicas snapshotting the same computer at once. Generation 8 is written first and
+      // generation 7 arrives after it, which is the ordering a load balancer can produce and Postgres
+      // has no way to prevent. Last-write-wins would put the older page back and every ref the model is
+      // holding would stop resolving; the generation decides instead, because it comes from the
+      // computer rather than from two machines' clocks.
+      const ahead = createSnapshotStore(database);
+      await ahead.save(
+        "default",
+        snapshot(8, [{ ref: "e9", role: "button", name: "Cancel" }]),
+      );
 
-    const behind = createSnapshotStore(database);
-    await behind.save(
-      "default",
-      snapshot(7, [{ ref: "e9", role: "button", name: "Submit order" }]),
-    );
+      const behind = createSnapshotStore(database);
+      await behind.save(
+        "default",
+        snapshot(7, [{ ref: "e9", role: "button", name: "Submit order" }]),
+      );
 
-    const loaded = await createSnapshotStore(database).load("default");
-    expect(loaded?.snapshotId).toBe(8);
-    expect(loaded?.elements.get("e9")?.name).toBe("Cancel");
-  });
+      const loaded = await createSnapshotStore(database).load("default");
+      expect(loaded?.snapshotId).toBe(8);
+      expect(loaded?.elements.get("e9")?.name).toBe("Cancel");
+    }));
 
-  test("clearing removes the row, so a wiped computer resolves nothing", async () => {
-    const store = createSnapshotStore(database);
-    await store.save(
-      "default",
-      snapshot(7, [{ ref: "e9", role: "button", name: "Submit order" }]),
-    );
+  test("clearing removes the row, so a wiped computer resolves nothing", () =>
+    asPerson(async () => {
+      const store = createSnapshotStore(database);
+      await store.save(
+        "default",
+        snapshot(7, [{ ref: "e9", role: "button", name: "Submit order" }]),
+      );
 
-    await store.clear("default");
+      await store.clear("default");
 
-    expect(await database.select().from(computerSnapshot)).toHaveLength(0);
-    expect(await createSnapshotStore(database).load("default")).toBeUndefined();
-  });
+      expect(await database.select().from(computerSnapshot)).toHaveLength(0);
+      expect(
+        await createSnapshotStore(database).load("default"),
+      ).toBeUndefined();
+    }));
 
-  test("two computers keep their snapshots apart", async () => {
-    const store = createSnapshotStore(database);
-    await store.save(
-      "sales-bot",
-      snapshot(3, [{ ref: "e1", role: "button", name: "Send" }]),
-    );
-    await store.save(
-      "research-bot",
-      snapshot(4, [{ ref: "e1", role: "link", name: "Open" }]),
-    );
+  test("two computers keep their snapshots apart", () =>
+    asPerson(async () => {
+      const store = createSnapshotStore(database);
+      await store.save(
+        "sales-bot",
+        snapshot(3, [{ ref: "e1", role: "button", name: "Send" }]),
+      );
+      await store.save(
+        "research-bot",
+        snapshot(4, [{ ref: "e1", role: "link", name: "Open" }]),
+      );
 
-    const other = createSnapshotStore(database);
-    expect((await other.load("sales-bot"))?.elements.get("e1")?.name).toBe(
-      "Send",
-    );
-    expect((await other.load("research-bot"))?.elements.get("e1")?.name).toBe(
-      "Open",
-    );
-  });
+      const other = createSnapshotStore(database);
+      expect((await other.load("sales-bot"))?.elements.get("e1")?.name).toBe(
+        "Send",
+      );
+      expect((await other.load("research-bot"))?.elements.get("e1")?.name).toBe(
+        "Open",
+      );
+    }));
 });

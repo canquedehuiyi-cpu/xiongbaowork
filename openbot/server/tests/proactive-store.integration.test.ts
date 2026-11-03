@@ -11,6 +11,7 @@ import {
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { workItems } from "../src/db/schema/work";
 import { createMemoryIngestion } from "../src/memory/ingestion";
 import { createMemoryStore } from "../src/memory/store";
@@ -52,44 +53,75 @@ const proactive = createProactiveStore(database);
 const memory = createMemoryStore(database);
 const ingestion = createMemoryIngestion({ store: memory, plugins });
 
+/*
+ * Settings, suggestions, memories and the Bots are the owner's, so each case runs inside the owner's
+ * tenant, as the owner's own requests and their runs do (G01). Where a case asks as `other`, it still
+ * asks from inside the owner's tenant, so what refuses `other` is the store's own owner check, not
+ * the row policy. People, the connector the Bots read (the team's, as an administrator's add writes
+ * it, G01-E P10) and teardown are the deployment's: `platform`.
+ */
+function asOwner<T>(work: () => T): T {
+  return runAsTenant(owner, work);
+}
+function asDeployment<T>(work: () => T): T {
+  return runAsTenant("platform", work);
+}
+
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: other, email: `${other}@example.test` },
-  ]);
-  await database.insert(agents).values([
-    { id: bot, name: "Research Bot", type: "built_in", configuration: {} },
-    { id: secondBot, name: "Second Bot", type: "built_in", configuration: {} },
-  ]);
-  await database.insert(agentProfiles).values(
-    [bot, secondBot].map((agentId) => ({
-      agentId,
-      ownerUserId: owner,
-      title: agentId,
-      roleDescription: "Assist",
-      avatarSeed: agentId,
-      visibility: "private" as const,
-    })),
+  await asDeployment(() =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: other, email: `${other}@example.test` },
+    ]),
   );
-  await database.insert(mcpServers).values({
-    id: server,
-    title: "Issue tracker",
-    vendor: "Fixture",
-    url: "https://issues.example.test/mcp",
-    provenance: "custom",
+  // The connector as an administrator's add leaves it: the team's server and tool (G01-E P10; a
+  // person's frame can no longer write either, 0127).
+  await asDeployment(async () => {
+    await database.insert(mcpServers).values({
+      tenantId: "team",
+      id: server,
+      title: "Issue tracker",
+      vendor: "Fixture",
+      url: "https://issues.example.test/mcp",
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values({
+      tenantId: "team",
+      serverId: server,
+      name: "list_issues",
+      effect: "read",
+      inputSchema: {},
+    });
   });
-  await database.insert(mcpTools).values({
-    serverId: server,
-    name: "list_issues",
-    effect: "read",
-    inputSchema: {},
+  await asOwner(async () => {
+    await database.insert(agents).values([
+      { id: bot, name: "Research Bot", type: "built_in", configuration: {} },
+      {
+        id: secondBot,
+        name: "Second Bot",
+        type: "built_in",
+        configuration: {},
+      },
+    ]);
+    await database.insert(agentProfiles).values(
+      [bot, secondBot].map((agentId) => ({
+        agentId,
+        ownerUserId: owner,
+        title: agentId,
+        roleDescription: "Assist",
+        avatarSeed: agentId,
+        visibility: "private" as const,
+      })),
+    );
+    await plugins.grant("mcp", ref, bot, owner);
   });
-  await plugins.grant("mcp", ref, bot, owner);
 });
 afterAll(async () => {
-  await database.delete(users).where(inArray(users.id, [owner, other]));
-  await database.delete(agents).where(inArray(agents.id, [bot, secondBot]));
-  await database.delete(mcpServers).where(eq(mcpServers.id, server));
+  await asDeployment(async () => {
+    await database.delete(users).where(inArray(users.id, [owner, other]));
+    await database.delete(agents).where(inArray(agents.id, [bot, secondBot]));
+    await database.delete(mcpServers).where(eq(mcpServers.id, server));
+  });
   await database.$client.close();
 });
 
@@ -99,282 +131,296 @@ const settingInput = {
   intervalMinutes: 60,
 };
 
-test("settings are owner scoped, one per Bot, and bounded in frequency", async () => {
-  const setting = await proactive.create(owner, settingInput, `${prefix}-t`);
-  expect(setting).toMatchObject({
-    enabled: true,
-    intervalMinutes: 60,
-    lastStatus: "idle",
-  });
-  await expect(
-    proactive.create(owner, settingInput, `${prefix}-t2`),
-  ).rejects.toBeInstanceOf(ProactiveRefusedError);
-  await expect(
-    proactive.create(
-      owner,
-      { ...settingInput, agentId: secondBot, intervalMinutes: 30 },
-      `${prefix}-t3`,
-    ),
-  ).rejects.toBeInstanceOf(ProactiveRefusedError);
-  // The database refuses what the schema refuses, even past the parser.
-  const refusal = await database
-    .insert(proactiveSettings)
-    .values({
-      id: randomUUID(),
-      ownerUserId: owner,
-      agentId: secondBot,
-      channelId: "c",
-      threadId: "t",
-      intervalMinutes: 5,
-    })
-    .then(
-      () => null,
-      (error: unknown) => error,
+test("settings are owner scoped, one per Bot, and bounded in frequency", () =>
+  asOwner(async () => {
+    const setting = await proactive.create(owner, settingInput, `${prefix}-t`);
+    expect(setting).toMatchObject({
+      enabled: true,
+      intervalMinutes: 60,
+      lastStatus: "idle",
+    });
+    await expect(
+      proactive.create(owner, settingInput, `${prefix}-t2`),
+    ).rejects.toBeInstanceOf(ProactiveRefusedError);
+    await expect(
+      proactive.create(
+        owner,
+        { ...settingInput, agentId: secondBot, intervalMinutes: 30 },
+        `${prefix}-t3`,
+      ),
+    ).rejects.toBeInstanceOf(ProactiveRefusedError);
+    // The database refuses what the schema refuses, even past the parser.
+    const refusal = await database
+      .insert(proactiveSettings)
+      .values({
+        id: randomUUID(),
+        ownerUserId: owner,
+        agentId: secondBot,
+        channelId: "c",
+        threadId: "t",
+        intervalMinutes: 5,
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(
+      (refusal as { cause?: { constraint?: string } } | null)?.cause
+        ?.constraint,
+    ).toBe("proactive_settings_interval_check");
+    expect((await proactive.list(other)).length).toBe(0);
+    await expect(proactive.get(other, setting.id)).rejects.toBeInstanceOf(
+      ProactiveNotFoundError,
     );
-  expect(
-    (refusal as { cause?: { constraint?: string } } | null)?.cause?.constraint,
-  ).toBe("proactive_settings_interval_check");
-  expect((await proactive.list(other)).length).toBe(0);
-  await expect(proactive.get(other, setting.id)).rejects.toBeInstanceOf(
-    ProactiveNotFoundError,
-  );
-  await expect(
-    proactive.update(other, setting.id, { enabled: false }),
-  ).rejects.toBeInstanceOf(ProactiveNotFoundError);
-  await expect(proactive.remove(other, setting.id)).rejects.toBeInstanceOf(
-    ProactiveNotFoundError,
-  );
-  expect(
-    (await proactive.update(owner, setting.id, { focus: "Billing" })).focus,
-  ).toBe("Billing");
-});
+    await expect(
+      proactive.update(other, setting.id, { enabled: false }),
+    ).rejects.toBeInstanceOf(ProactiveNotFoundError);
+    await expect(proactive.remove(other, setting.id)).rejects.toBeInstanceOf(
+      ProactiveNotFoundError,
+    );
+    expect(
+      (await proactive.update(owner, setting.id, { focus: "Billing" })).focus,
+    ).toBe("Billing");
+  }));
 
-test("a due setting is claimed once and its next run moves forward by its interval", async () => {
-  const [setting] = await proactive.list(owner);
-  if (!setting) throw new Error("setting missing");
-  await database
-    .update(proactiveSettings)
-    .set({ nextRunAt: new Date(Date.now() - 1000) })
-    .where(eq(proactiveSettings.id, setting.id));
-  const [first, second] = await Promise.all([
-    proactive.claimDue(10),
-    proactive.claimDue(10),
-  ]);
-  const claimed = [...first, ...second].filter((row) => row.id === setting.id);
-  expect(claimed).toHaveLength(1);
-  const next = claimed[0]?.nextRunAt.getTime() ?? 0;
-  expect(next - Date.now()).toBeGreaterThan(55 * 60_000);
-  expect(
-    (await proactive.claimDue(10)).some((row) => row.id === setting.id),
-  ).toBe(false);
-  await proactive.recordRun(setting.id, "running");
-  await proactive.recordRun(setting.id, "error", "x".repeat(900));
-  const after = await proactive.get(owner, setting.id);
-  expect(after.lastStatus).toBe("error");
-  expect(after.lastRunAt).not.toBeNull();
-  expect(after.lastError).toHaveLength(500);
-  // A disabled setting is never claimed.
-  await proactive.update(owner, setting.id, { enabled: false });
-  await database
-    .update(proactiveSettings)
-    .set({ nextRunAt: new Date(Date.now() - 1000) })
-    .where(eq(proactiveSettings.id, setting.id));
-  expect(
-    (await proactive.claimDue(10)).some((row) => row.id === setting.id),
-  ).toBe(false);
-  await proactive.update(owner, setting.id, { enabled: true });
-});
+test("a due setting is claimed once and its next run moves forward by its interval", () =>
+  asOwner(async () => {
+    const [setting] = await proactive.list(owner);
+    if (!setting) throw new Error("setting missing");
+    await database
+      .update(proactiveSettings)
+      .set({ nextRunAt: new Date(Date.now() - 1000) })
+      .where(eq(proactiveSettings.id, setting.id));
+    // "What is due" is the platform's question, as the sweep asks it (G01).
+    const [first, second] = await Promise.all([
+      asDeployment(() => proactive.claimDue(10)),
+      asDeployment(() => proactive.claimDue(10)),
+    ]);
+    const claimed = [...first, ...second].filter(
+      (row) => row.id === setting.id,
+    );
+    expect(claimed).toHaveLength(1);
+    const next = claimed[0]?.nextRunAt.getTime() ?? 0;
+    expect(next - Date.now()).toBeGreaterThan(55 * 60_000);
+    expect(
+      (await asDeployment(() => proactive.claimDue(10))).some(
+        (row) => row.id === setting.id,
+      ),
+    ).toBe(false);
+    await proactive.recordRun(setting.id, "running");
+    await proactive.recordRun(setting.id, "error", "x".repeat(900));
+    const after = await proactive.get(owner, setting.id);
+    expect(after.lastStatus).toBe("error");
+    expect(after.lastRunAt).not.toBeNull();
+    expect(after.lastError).toHaveLength(500);
+    // A disabled setting is never claimed.
+    await proactive.update(owner, setting.id, { enabled: false });
+    await database
+      .update(proactiveSettings)
+      .set({ nextRunAt: new Date(Date.now() - 1000) })
+      .where(eq(proactiveSettings.id, setting.id));
+    expect(
+      (await asDeployment(() => proactive.claimDue(10))).some(
+        (row) => row.id === setting.id,
+      ),
+    ).toBe(false);
+    await proactive.update(owner, setting.id, { enabled: true });
+  }));
 
-test("a run's reads come from its own successful audit rows only", async () => {
-  const runId = randomUUID();
-  const otherRun = randomUUID();
-  await auditStore.insert({
-    eventType: "mcp.call_succeeded",
-    targetType: "mcp_tool",
-    targetId: ref,
-    actorUserId: owner,
-    initiator: proactiveInitiator(runId),
-    payload: {},
-  });
-  await auditStore.insert({
-    eventType: "mcp.call_failed",
-    targetType: "mcp_tool",
-    targetId: `${server}/failed`,
-    actorUserId: owner,
-    initiator: proactiveInitiator(runId),
-    payload: {},
-  });
-  await auditStore.insert({
-    eventType: "mcp.call_succeeded",
-    targetType: "mcp_tool",
-    targetId: `${server}/elsewhere`,
-    actorUserId: owner,
-    initiator: proactiveInitiator(otherRun),
-    payload: {},
-  });
-  const reads = await proactive.readsFor(runId);
-  expect(reads.map((read) => read.ref)).toEqual([ref]);
-  expect(reads[0]?.at).toBeInstanceOf(Date);
-});
+test("a run's reads come from its own successful audit rows only", () =>
+  asOwner(async () => {
+    const runId = randomUUID();
+    const otherRun = randomUUID();
+    await auditStore.insert({
+      eventType: "mcp.call_succeeded",
+      targetType: "mcp_tool",
+      targetId: ref,
+      actorUserId: owner,
+      initiator: proactiveInitiator(runId),
+      payload: {},
+    });
+    await auditStore.insert({
+      eventType: "mcp.call_failed",
+      targetType: "mcp_tool",
+      targetId: `${server}/failed`,
+      actorUserId: owner,
+      initiator: proactiveInitiator(runId),
+      payload: {},
+    });
+    await auditStore.insert({
+      eventType: "mcp.call_succeeded",
+      targetType: "mcp_tool",
+      targetId: `${server}/elsewhere`,
+      actorUserId: owner,
+      initiator: proactiveInitiator(otherRun),
+      payload: {},
+    });
+    const reads = await proactive.readsFor(runId);
+    expect(reads.map((read) => read.ref)).toEqual([ref]);
+    expect(reads[0]?.at).toBeInstanceOf(Date);
+  }));
 
-test("suggestions are delivered once, listed to their owner, and resolved once", async () => {
-  const [setting] = await proactive.list(owner);
-  if (!setting) throw new Error("setting missing");
-  const runId = randomUUID();
-  const suggestion = await proactive.addSuggestion({
-    ownerUserId: owner,
-    agentId: bot,
-    settingId: setting.id,
-    runId,
-    title: "Reply to Sam",
-    detail: "Sam asked for the spec.",
-    sourceApp: "Issue tracker",
-    sourceRef: ref,
-    sourceLink: "https://issues.example.test/1",
-  });
-  await proactive.addSuggestion({
-    ownerUserId: owner,
-    agentId: bot,
-    settingId: setting.id,
-    runId,
-    title: "Second",
-    detail: "Second.",
-    sourceApp: null,
-    sourceRef: null,
-    sourceLink: null,
-  });
-  expect(await proactive.countSuggestions(runId)).toBe(2);
-  expect(await proactive.undelivered(runId)).toHaveLength(2);
-  await proactive.markDelivered(suggestion.id);
-  expect((await proactive.undelivered(runId)).map((row) => row.title)).toEqual([
-    "Second",
-  ]);
-  expect(
-    (await proactive.suggestions(owner)).some(
-      (row) => row.id === suggestion.id,
-    ),
-  ).toBe(true);
-  expect(await proactive.suggestions(other)).toEqual([]);
-  await expect(
-    proactive.suggestion(other, suggestion.id),
-  ).rejects.toBeInstanceOf(ProactiveNotFoundError);
-  await expect(
-    proactive.resolveSuggestion(other, suggestion.id, "dismissed"),
-  ).rejects.toBeInstanceOf(ProactiveRefusedError);
-  const [started, again] = await Promise.allSettled([
-    proactive.resolveSuggestion(owner, suggestion.id, "started"),
-    proactive.resolveSuggestion(owner, suggestion.id, "dismissed"),
-  ]);
-  expect(
-    [started, again].filter((result) => result.status === "fulfilled"),
-  ).toHaveLength(1);
-  expect(
-    (await proactive.suggestions(owner)).some(
-      (row) => row.id === suggestion.id,
-    ),
-  ).toBe(false);
-});
-
-test("Bot-formed memories carry provenance, await review, and never come back once forgotten", async () => {
-  const observedAt = new Date("2026-09-01T10:00:00Z");
-  const formed = await memory.formMemory(owner, {
-    agentId: bot,
-    content: "Owns the billing migration",
-    sourceApp: "Issue tracker",
-    sourceRef: ref,
-    sourceLink: "https://issues.example.test/42",
-    observedAt,
-  });
-  expect(formed.duplicate).toBe(false);
-  const [row] = (await memory.list(owner)).filter(
-    (entry) => entry.id === formed.id,
-  );
-  expect(row).toMatchObject({
-    formedBy: "bot",
-    formedByAgentId: bot,
-    reviewState: "unreviewed",
-    sourceApp: "Issue tracker",
-    sourceRef: ref,
-    sourceLink: "https://issues.example.test/42",
-    observedAt,
-    enabled: true,
-  });
-  expect(row?.provenance).toContain("2026-09-01T10:00:00.000Z");
-  expect(
-    await memory.formMemory(owner, {
+test("suggestions are delivered once, listed to their owner, and resolved once", () =>
+  asOwner(async () => {
+    const [setting] = await proactive.list(owner);
+    if (!setting) throw new Error("setting missing");
+    const runId = randomUUID();
+    const suggestion = await proactive.addSuggestion({
+      ownerUserId: owner,
       agentId: bot,
-      content: "owns the billing migration",
+      settingId: setting.id,
+      runId,
+      title: "Reply to Sam",
+      detail: "Sam asked for the spec.",
       sourceApp: "Issue tracker",
-    }),
-  ).toMatchObject({ id: formed.id, duplicate: true });
-  await expect(
-    memory.formMemory(owner, {
+      sourceRef: ref,
+      sourceLink: "https://issues.example.test/1",
+    });
+    await proactive.addSuggestion({
+      ownerUserId: owner,
       agentId: bot,
-      content: "Link",
-      sourceApp: "x",
-      sourceLink: "javascript:alert(1)",
-    }),
-  ).rejects.toBeInstanceOf(MemoryRefusedError);
-  expect(
-    (await memory.list(other)).some((entry) => entry.id === formed.id),
-  ).toBe(false);
-  // The person edits it: it stays theirs, now reviewed.
-  expect(
-    (await memory.update(owner, formed.id, { content: "Leads billing" }))
-      .reviewState,
-  ).toBe("edited");
+      settingId: setting.id,
+      runId,
+      title: "Second",
+      detail: "Second.",
+      sourceApp: null,
+      sourceRef: null,
+      sourceLink: null,
+    });
+    expect(await proactive.countSuggestions(runId)).toBe(2);
+    expect(await proactive.undelivered(runId)).toHaveLength(2);
+    await proactive.markDelivered(suggestion.id);
+    expect(
+      (await proactive.undelivered(runId)).map((row) => row.title),
+    ).toEqual(["Second"]);
+    expect(
+      (await proactive.suggestions(owner)).some(
+        (row) => row.id === suggestion.id,
+      ),
+    ).toBe(true);
+    expect(await proactive.suggestions(other)).toEqual([]);
+    await expect(
+      proactive.suggestion(other, suggestion.id),
+    ).rejects.toBeInstanceOf(ProactiveNotFoundError);
+    await expect(
+      proactive.resolveSuggestion(other, suggestion.id, "dismissed"),
+    ).rejects.toBeInstanceOf(ProactiveRefusedError);
+    const [started, again] = await Promise.allSettled([
+      proactive.resolveSuggestion(owner, suggestion.id, "started"),
+      proactive.resolveSuggestion(owner, suggestion.id, "dismissed"),
+    ]);
+    expect(
+      [started, again].filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      (await proactive.suggestions(owner)).some(
+        (row) => row.id === suggestion.id,
+      ),
+    ).toBe(false);
+  }));
 
-  const forgettable = await memory.formMemory(owner, {
-    agentId: bot,
-    content: "Prefers async updates",
-    sourceApp: "Issue tracker",
-    sourceRef: ref,
-  });
-  await memory.remove(owner, forgettable.id);
-  expect(
-    await memory.formMemory(owner, {
+test("Bot-formed memories carry provenance, await review, and never come back once forgotten", () =>
+  asOwner(async () => {
+    const observedAt = new Date("2026-09-01T10:00:00Z");
+    const formed = await memory.formMemory(owner, {
+      agentId: bot,
+      content: "Owns the billing migration",
+      sourceApp: "Issue tracker",
+      sourceRef: ref,
+      sourceLink: "https://issues.example.test/42",
+      observedAt,
+    });
+    expect(formed.duplicate).toBe(false);
+    const [row] = (await memory.list(owner)).filter(
+      (entry) => entry.id === formed.id,
+    );
+    expect(row).toMatchObject({
+      formedBy: "bot",
+      formedByAgentId: bot,
+      reviewState: "unreviewed",
+      sourceApp: "Issue tracker",
+      sourceRef: ref,
+      sourceLink: "https://issues.example.test/42",
+      observedAt,
+      enabled: true,
+    });
+    expect(row?.provenance).toContain("2026-09-01T10:00:00.000Z");
+    expect(
+      await memory.formMemory(owner, {
+        agentId: bot,
+        content: "owns the billing migration",
+        sourceApp: "Issue tracker",
+      }),
+    ).toMatchObject({ id: formed.id, duplicate: true });
+    await expect(
+      memory.formMemory(owner, {
+        agentId: bot,
+        content: "Link",
+        sourceApp: "x",
+        sourceLink: "javascript:alert(1)",
+      }),
+    ).rejects.toBeInstanceOf(MemoryRefusedError);
+    expect(
+      (await memory.list(other)).some((entry) => entry.id === formed.id),
+    ).toBe(false);
+    // The person edits it: it stays theirs, now reviewed.
+    expect(
+      (await memory.update(owner, formed.id, { content: "Leads billing" }))
+        .reviewState,
+    ).toBe("edited");
+
+    const forgettable = await memory.formMemory(owner, {
       agentId: bot,
       content: "Prefers async updates",
       sourceApp: "Issue tracker",
       sourceRef: ref,
-    }),
-  ).toMatchObject({ id: forgettable.id, duplicate: true, forgotten: true });
-  expect(
-    (await memory.list(owner)).some((entry) => entry.id === forgettable.id),
-  ).toBe(false);
-});
+    });
+    await memory.remove(owner, forgettable.id);
+    expect(
+      await memory.formMemory(owner, {
+        agentId: bot,
+        content: "Prefers async updates",
+        sourceApp: "Issue tracker",
+        sourceRef: ref,
+      }),
+    ).toMatchObject({ id: forgettable.id, duplicate: true, forgotten: true });
+    expect(
+      (await memory.list(owner)).some((entry) => entry.id === forgettable.id),
+    ).toBe(false);
+  }));
 
-test("a Bot-formed memory reaches only its Bot, only while it holds the source app", async () => {
-  const formed = await memory.formMemory(owner, {
-    agentId: bot,
-    content: "Launch review is on Thursdays",
-    sourceApp: "Issue tracker",
-    sourceRef: ref,
-  });
-  const recalled = async (agentId: string) =>
-    (await ingestion.recall(owner, agentId)).some(
-      (row) => row.id === formed.id,
+test("a Bot-formed memory reaches only its Bot, only while it holds the source app", () =>
+  asOwner(async () => {
+    const formed = await memory.formMemory(owner, {
+      agentId: bot,
+      content: "Launch review is on Thursdays",
+      sourceApp: "Issue tracker",
+      sourceRef: ref,
+    });
+    const recalled = async (agentId: string) =>
+      (await ingestion.recall(owner, agentId)).some(
+        (row) => row.id === formed.id,
+      );
+    expect(await recalled(bot)).toBe(true);
+    expect(await ingestion.contextFor(owner, bot)).toContain(
+      "Launch review is on Thursdays",
     );
-  expect(await recalled(bot)).toBe(true);
-  expect(await ingestion.contextFor(owner, bot)).toContain(
-    "Launch review is on Thursdays",
-  );
-  expect(await recalled(secondBot)).toBe(false);
-  expect(
-    (await ingestion.recall(other, bot)).some((row) => row.id === formed.id),
-  ).toBe(false);
-  // Without the Bot's holdings, none are returned.
-  expect(
-    (await memory.retrieve(owner, [])).some((row) => row.id === formed.id),
-  ).toBe(false);
-  await memory.update(owner, formed.id, { enabled: false });
-  expect(await recalled(bot)).toBe(false);
-  await memory.update(owner, formed.id, { enabled: true });
-  await plugins.revoke("mcp", ref, bot, owner);
-  expect(await recalled(bot)).toBe(false);
-  await plugins.grant("mcp", ref, bot, owner);
-  expect(await recalled(bot)).toBe(true);
-});
+    expect(await recalled(secondBot)).toBe(false);
+    expect(
+      (await ingestion.recall(other, bot)).some((row) => row.id === formed.id),
+    ).toBe(false);
+    // Without the Bot's holdings, none are returned.
+    expect(
+      (await memory.retrieve(owner, [])).some((row) => row.id === formed.id),
+    ).toBe(false);
+    await memory.update(owner, formed.id, { enabled: false });
+    expect(await recalled(bot)).toBe(false);
+    await memory.update(owner, formed.id, { enabled: true });
+    await plugins.revoke("mcp", ref, bot, owner);
+    expect(await recalled(bot)).toBe(false);
+    await plugins.grant("mcp", ref, bot, owner);
+    expect(await recalled(bot)).toBe(true);
+  }));
 
 /**
  * G01: background research runs as the tenant stamped on its setting, against the real policies.
@@ -389,21 +435,29 @@ describe("G01: whose research the sweep is doing", () => {
   const bob = `${prefix}-tenant-bob`;
   const aliceBot = `${prefix}-alice-bot`;
   const systemBot = `${prefix}-system-bot`;
+  const teamBot = `${prefix}-team-bot`;
   const foreignBot = `${prefix}-foreign-bot`;
   const settingIds: string[] = [];
 
   beforeAll(async () => {
-    await database.insert(users).values([
-      { id: alice, email: `${alice}@example.test` },
-      { id: bob, email: `${bob}@example.test` },
-    ]);
-    await database.insert(agents).values(
-      [aliceBot, systemBot, foreignBot].map((id) => ({
-        id,
-        name: id,
-        type: "built_in" as const,
-        configuration: {},
-      })),
+    await runAsTenant("platform", () =>
+      database.insert(users).values([
+        { id: alice, email: `${alice}@example.test` },
+        { id: bob, email: `${bob}@example.test` },
+      ]),
+    );
+    const bot = (id: string) => ({
+      id,
+      name: id,
+      type: "built_in" as const,
+      configuration: {},
+    });
+    // Alice's Bot is hers. The three that must never run are the deployment's: none is anybody's to run.
+    await runAsTenant(alice, () =>
+      database.insert(agents).values(bot(aliceBot)),
+    );
+    await runAsTenant("platform", () =>
+      database.insert(agents).values([systemBot, teamBot, foreignBot].map(bot)),
     );
   });
   afterAll(async () => {
@@ -421,7 +475,7 @@ describe("G01: whose research the sweep is doing", () => {
       await database.delete(users).where(inArray(users.id, [alice, bob]));
       await database
         .delete(agents)
-        .where(inArray(agents.id, [aliceBot, systemBot, foreignBot]));
+        .where(inArray(agents.id, [aliceBot, systemBot, teamBot, foreignBot]));
     });
   });
 
@@ -438,16 +492,32 @@ describe("G01: whose research the sweep is doing", () => {
         `${prefix}-alice-thread`,
       ),
     );
-    // Stamped as nobody's: written from no frame.
+    // Stamped as nobody's: written as `system`, the stamp a write from no frame used to get (G01-E:
+    // an unframed write is now an error, so the frame is named).
     const nobodys = randomUUID();
-    await database.insert(proactiveSettings).values({
-      id: nobodys,
-      ownerUserId: alice,
-      agentId: systemBot,
-      channelId: `${prefix}-system-channel`,
-      threadId: `${prefix}-system-thread`,
-      intervalMinutes: 60,
-    });
+    await runAsTenant("system", () =>
+      database.insert(proactiveSettings).values({
+        id: nobodys,
+        ownerUserId: alice,
+        agentId: systemBot,
+        channelId: `${prefix}-system-channel`,
+        threadId: `${prefix}-system-thread`,
+        intervalMinutes: 60,
+      }),
+    );
+    // Stamped `team`, which names nobody either: no frame writes it, so `platform` does.
+    const teams = randomUUID();
+    await runAsTenant("platform", () =>
+      database.insert(proactiveSettings).values({
+        id: teams,
+        tenantId: TEAM_TENANT,
+        ownerUserId: alice,
+        agentId: teamBot,
+        channelId: `${prefix}-team-channel`,
+        threadId: `${prefix}-team-thread`,
+        intervalMinutes: 60,
+      }),
+    );
     // Filed under Alice but naming Bob.
     const foreign = randomUUID();
     await runAsTenant(alice, () =>
@@ -460,7 +530,7 @@ describe("G01: whose research the sweep is doing", () => {
         intervalMinutes: 60,
       }),
     );
-    settingIds.push(mine.id, nobodys, foreign);
+    settingIds.push(mine.id, nobodys, teams, foreign);
 
     const claimedAs: string[] = [];
     const turns: { agentId: string; as: string }[] = [];
@@ -518,14 +588,15 @@ describe("G01: whose research the sweep is doing", () => {
     for (let pass = 0; pass < 10; pass += 1) {
       await engine.sweep();
       const states = await Promise.all(
-        [mine.id, nobodys, foreign].map(
+        [mine.id, nobodys, teams, foreign].map(
           async (id) => (await statusOf(id))?.status,
         ),
       );
       if (
         states[0] === "succeeded" &&
         states[1] === "error" &&
-        states[2] === "error"
+        states[2] === "error" &&
+        states[3] === "error"
       )
         break;
     }
@@ -536,14 +607,24 @@ describe("G01: whose research the sweep is doing", () => {
     ]);
     expect(
       turns.some(
-        (turn) => turn.agentId === systemBot || turn.agentId === foreignBot,
+        (turn) =>
+          turn.agentId === systemBot ||
+          turn.agentId === teamBot ||
+          turn.agentId === foreignBot,
       ),
     ).toBe(false);
     expect(await statusOf(mine.id)).toEqual({
       status: "succeeded",
       tenantId: alice,
     });
-    expect((await statusOf(nobodys))?.status).toBe("error");
+    expect(await statusOf(nobodys)).toEqual({
+      status: "error",
+      tenantId: "system",
+    });
+    expect(await statusOf(teams)).toEqual({
+      status: "error",
+      tenantId: TEAM_TENANT,
+    });
     expect((await statusOf(foreign))?.status).toBe("error");
 
     const everywhere = await runAsTenant("platform", async () => ({
@@ -558,11 +639,12 @@ describe("G01: whose research the sweep is doing", () => {
           or(
             like(workItems.key, `${mine.id}:%`),
             like(workItems.key, `${nobodys}:%`),
+            like(workItems.key, `${teams}:%`),
             like(workItems.key, `${foreign}:%`),
           ),
         ),
     }));
-    // The suggestion and the queued run are Alice's; nothing was queued for the other two.
+    // The suggestion and the queued run are Alice's; nothing was queued for the other three.
     expect(everywhere.suggestions).toEqual([{ tenantId: alice }]);
     expect(everywhere.work.map((row) => row.tenantId)).toEqual([alice]);
     expect(everywhere.work[0]?.key.startsWith(`${mine.id}:`)).toBe(true);
@@ -584,33 +666,53 @@ describe("G01: whose research the sweep is doing", () => {
     }));
     expect(asBob).toEqual({ settings: [], suggestions: [], work: [] });
 
-    // A run of Alice's setting queued from no frame is stamped as nobody's, and is ended unrun.
+    /*
+     * A run of Alice's setting queued as nobody's is ended unrun: one offered as `system` (the stamp
+     * an offer from no frame used to get; G01-E names the frame), and one stamped `team`, which no
+     * frame offers as, so `platform` writes it.
+     */
     const forged = `${mine.id}:forged`;
-    await createWorkQueue(database).offer({
-      kind: PROACTIVE_RUN_KIND,
-      key: forged,
-      payload: { settingId: mine.id, runId: randomUUID() },
-    });
-    const forgedRow = () =>
+    const forgedTeam = `${mine.id}:forged-team`;
+    await runAsTenant("system", () =>
+      createWorkQueue(database).offer({
+        kind: PROACTIVE_RUN_KIND,
+        key: forged,
+        payload: { settingId: mine.id, runId: randomUUID() },
+      }),
+    );
+    await runAsTenant("platform", () =>
+      database.insert(workItems).values({
+        kind: PROACTIVE_RUN_KIND,
+        key: forgedTeam,
+        payload: { settingId: mine.id, runId: randomUUID() },
+        tenantId: TEAM_TENANT,
+      }),
+    );
+    const forgedRow = (key: string) =>
       runAsTenant("platform", async () => {
         const [row] = await database
           .select({ error: workItems.lastError, tenantId: workItems.tenantId })
           .from(workItems)
           .where(
-            and(
-              eq(workItems.kind, PROACTIVE_RUN_KIND),
-              eq(workItems.key, forged),
-            ),
+            and(eq(workItems.kind, PROACTIVE_RUN_KIND), eq(workItems.key, key)),
           );
         return row;
       });
     for (let pass = 0; pass < 10; pass += 1) {
       await engine.sweep();
-      if ((await forgedRow())?.error) break;
+      if (
+        (await forgedRow(forged))?.error &&
+        (await forgedRow(forgedTeam))?.error
+      )
+        break;
     }
-    expect(await forgedRow()).toEqual({
+    expect(await forgedRow(forged)).toEqual({
       error: PROACTIVE_TENANT_UNRESOLVED,
       tenantId: "system",
+    });
+    expect(await forgedRow(forgedTeam)).toEqual({
+      error: PROACTIVE_TENANT_UNRESOLVED,
+      tenantId: TEAM_TENANT,
     });
     expect(turns.filter((turn) => turn.agentId === aliceBot)).toHaveLength(1);
   });

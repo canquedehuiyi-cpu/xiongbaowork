@@ -671,7 +671,7 @@ const TranscriptMessage = memo(function TranscriptMessage({
                 <span className="whitespace-pre-wrap">
                   {origin && (
                     <span className="mr-1.5 inline-flex items-center rounded bg-foreground/10 px-1.5 py-0.5 align-middle text-foreground/70 text-xs">
-                      via {origin.via}
+                      来自 {origin.via}
                     </span>
                   )}
                   {invoked ? (

@@ -24,6 +24,7 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -81,11 +82,13 @@ afterAll(async () => {
 
 async function createUser(): Promise<AgentActor> {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Channel Summary Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Channel Summary Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
@@ -180,7 +183,10 @@ async function offer(channelId: string) {
       .from(channels)
       .where(eq(channels.id, channelId)),
   );
-  await runAsTenant(row?.tenantId ?? "system", () =>
+  // A conversation this file made always exists; offering one that does not would otherwise fall
+  // back to the unframed `system` partition, which P16 removes.
+  if (!row) throw new Error(`offer: no conversation ${channelId}`);
+  await runAsTenant(row.tenantId, () =>
     queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId }),
   );
 }
@@ -528,9 +534,19 @@ describe("naming a claimed conversation", () => {
     for (let index = 0; index < 40; index += 1) {
       const member = await createUser();
       crowd.push(member.id);
-      await database
-        .insert(channelMemberships)
-        .values({ channelId: channel.id, userId: member.id });
+      // Members of the owner's own channel, stamped with the owner. Seeded by the platform: no
+      // person frame may write a row stamped with one person that names another (0128, G01-E P11
+      // review), and `addMember` now adds people only to a shared `team` group. The rows, and the
+      // member list the payload carries, are what they were.
+      await runAsTenant("platform", () =>
+        database
+          .insert(channelMemberships)
+          .values({
+            channelId: channel.id,
+            userId: member.id,
+            tenantId: owner.id,
+          }),
+      );
     }
 
     await offer(channel.id);
@@ -597,7 +613,7 @@ describe("naming a claimed conversation", () => {
  */
 describe("G01: whose conversation the loop is naming", () => {
   /** A conversation written straight to the tables from `frame`, stamped with whatever that is. */
-  async function rawChannel(owner: AgentActor, frame: string | null) {
+  async function rawChannel(owner: AgentActor, frame: string) {
     const id = `${testPrefix}-raw-${randomUUID()}`;
     const write = async () => {
       await database.insert(channels).values({
@@ -615,8 +631,10 @@ describe("G01: whose conversation the loop is naming", () => {
         threadId: `${id}-thread`,
       });
     };
-    // No frame is how a `system` row is made: the database stamps the session's tenant.
-    await (frame ? runAsTenant(frame, write) : write());
+    // The database stamps the session's tenant. A `system` row is made in an explicit `system`
+    // frame, the same stamp the legacy unframed fallback gave, so the file also runs with the guard
+    // set to `throw`.
+    await runAsTenant(frame, write);
     createdChannelIds.push(id);
     return id;
   }
@@ -701,19 +719,45 @@ describe("G01: whose conversation the loop is naming", () => {
 
   test("a conversation stamped as nobody's is never offered and never named, even when queued", async () => {
     const alice = await createUser();
-    const asSystem = await rawChannel(alice, null);
+    const asSystem = await rawChannel(alice, "system");
     const asPlatformRow = await rawChannel(alice, "platform");
-    const asSystemForAlice = await rawChannel(alice, null);
+    const asSystemForAlice = await rawChannel(alice, "system");
+    // The shared tenant is nobody's too (G01-E): a group conversation stamped `team` has no one
+    // person to name it for. Only `platform` may write a row stamped with another tenant.
+    const asTeam = `${testPrefix}-raw-${randomUUID()}`;
+    await asPlatform(async () => {
+      await database.insert(channels).values({
+        id: asTeam,
+        name: "Raw",
+        description: "Raw",
+        lastMessageAt: new Date(),
+        tenantId: TEAM_TENANT,
+      });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId: asTeam, userId: alice.id, tenantId: TEAM_TENANT });
+      await database.insert(intelligenceChannelMappings).values({
+        userId: alice.id,
+        channelId: asTeam,
+        threadId: `${asTeam}-thread`,
+        tenantId: TEAM_TENANT,
+      });
+    });
+    createdChannelIds.push(asTeam);
 
     // `offerAll`, not the bare offer: it takes back what it queued for other files' conversations, so
-    // the passes below claim only these three rows and title nobody else's conversation.
+    // the passes below claim only these four rows and title nobody else's conversation.
     const { offered } = await offerAll();
     expect(offered).not.toContain(asSystem);
     expect(offered).not.toContain(asPlatformRow);
     expect(offered).not.toContain(asSystemForAlice);
+    expect(offered).not.toContain(asTeam);
 
-    // Queued anyway: from no frame, from the platform's, and from Alice's for a `system` channel.
-    await queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asSystem });
+    // Queued anyway: from the `system` frame, from the platform's, and from Alice's for a `system`
+    // channel.
+    await runAsTenant("system", () =>
+      queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asSystem }),
+    );
     await asPlatform(() =>
       queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asPlatformRow }),
     );
@@ -721,8 +765,18 @@ describe("G01: whose conversation the loop is naming", () => {
       queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asSystemForAlice }),
     );
 
+    // And one stamped `team`, which no frame can offer: written as the platform, stamped explicitly.
+    await asPlatform(() =>
+      database.insert(workItems).values({
+        kind: CHANNEL_SUMMARY_KIND,
+        key: asTeam,
+        payload: { channelId: asTeam },
+        tenantId: TEAM_TENANT,
+      }),
+    );
+
     const seen = watching("Nobody's title");
-    const ids = [asSystem, asPlatformRow, asSystemForAlice];
+    const ids = [asSystem, asPlatformRow, asSystemForAlice, asTeam];
     const reasons = await sweepUntilSettled(ids, seen);
 
     for (const id of ids) {
@@ -755,14 +809,20 @@ describe("G01: whose conversation the loop is naming", () => {
         .delete(intelligenceChannelMappings)
         .where(eq(intelligenceChannelMappings.channelId, borrowed.id)),
     );
-    await runAsTenant(alice.id, async () => {
+    /*
+     * Rows stamped with Alice that name Bob. Alice's own frame can no longer write them (0128 refuses
+     * a row stamped with one person that names another, and deletes the old ones), so the platform
+     * seeds them, standing for a row that got there anyway: the loop must still refuse to name it.
+     */
+    await runAsTenant("platform", async () => {
       await database
         .insert(channelMemberships)
-        .values({ channelId: borrowed.id, userId: bob.id });
+        .values({ channelId: borrowed.id, userId: bob.id, tenantId: alice.id });
       await database.insert(intelligenceChannelMappings).values({
         userId: bob.id,
         channelId: borrowed.id,
         threadId: `${borrowed.id}-bob-thread`,
+        tenantId: alice.id,
       });
     });
     await offer(borrowed.id);
