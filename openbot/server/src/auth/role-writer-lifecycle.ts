@@ -210,8 +210,17 @@ export function createRoleWriterLifecycle<Connection>(options: {
           if (!dedicatedUrl?.trim()) {
             throw new Error("Missing dedicated role writer URL.");
           }
-          writer = await options.create(dedicatedUrl);
-          await options.initialize(options.application, writer);
+          // Role and catalogue facts belong to no tenant: the boot path asks as `platform`, never
+          // through the legacy unframed fallback (G01-E P3). Creating the pool is framed too:
+          // resolving a promise with a `Database` reads its `then`, which the tenant proxy answers
+          // from the current frame, so an unframed `await` of the new pool is itself a frame read.
+          const created = await runAsTenant("platform", () =>
+            Promise.resolve(options.create(dedicatedUrl)),
+          );
+          writer = created;
+          await runAsTenant("platform", () =>
+            options.initialize(options.application, created),
+          );
           bound = true;
         } catch {
           const failure = new Error("Role writer initialization failed.");
