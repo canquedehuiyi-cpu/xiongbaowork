@@ -166,22 +166,26 @@ async function rekeyStatement() {
 }
 
 beforeAll(async () => {
-  await database
-    .insert(mcpServers)
-    .values({
-      id: server,
-      title: "Skill slug server",
-      vendor: "Test",
-      url: "https://mcp.example.invalid/skill-slug",
-    })
-    .onConflictDoNothing();
-  await database
-    .insert(mcpTools)
-    .values([
-      { serverId: server, name: "alpha", description: "A." },
-      { serverId: server, name: "beta", description: "B." },
-    ])
-    .onConflictDoNothing();
+  // The server and its tools are a deployment catalogue row that both tenants read: written in the
+  // `system` frame that owns the catalogue, as it was stamped before the frame was explicit.
+  await asTenant("system", async () => {
+    await database
+      .insert(mcpServers)
+      .values({
+        id: server,
+        title: "Skill slug server",
+        vendor: "Test",
+        url: "https://mcp.example.invalid/skill-slug",
+      })
+      .onConflictDoNothing();
+    await database
+      .insert(mcpTools)
+      .values([
+        { serverId: server, name: "alpha", description: "A." },
+        { serverId: server, name: "beta", description: "B." },
+      ])
+      .onConflictDoNothing();
+  });
   for (const [tenant, bot] of [
     [tenantA, botA],
     [tenantB, botB],

@@ -15,6 +15,7 @@ import {
   users,
   voiceSessions,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { createVoiceSessionStore } from "../src/voice/sessions";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -36,37 +37,50 @@ const outsider = { id: `${prefix}-outsider`, role: "user" } as const;
 let channelId: string;
 let agentId: string;
 
+/*
+ * Every case runs in the channel owner's frame, as the owner's request would. Membership is shared
+ * channel state the owner writes; the member/outsider checks are the store's own ACL, asked from
+ * that frame. Cleanup reaches past any one person's frame: the platform.
+ */
+const asOwner = <T>(work: () => Promise<T>) => runAsTenant(owner.id, work);
+
 beforeAll(async () => {
   for (const actor of [owner, member, outsider])
-    await database.insert(users).values({
-      id: actor.id,
-      email: `${actor.id}@example.test`,
-      name: "Voice store test",
+    await runAsTenant(actor.id, () =>
+      database.insert(users).values({
+        id: actor.id,
+        email: `${actor.id}@example.test`,
+        name: "Voice store test",
+      }),
+    );
+  await asOwner(async () => {
+    const profile = await profiles.create(owner, {
+      name: "Voice test",
+      title: "Assistant",
+      roleDescription: "Help with planning.",
+      visibility: "public",
     });
-  const profile = await profiles.create(owner, {
-    name: "Voice test",
-    title: "Assistant",
-    roleDescription: "Help with planning.",
-    visibility: "public",
+    agentId = profile.id;
+    const channel = await channelStore.create(owner, [profile.id]);
+    channelId = channel.id;
+    await database
+      .insert(channelMemberships)
+      .values({ channelId, userId: member.id });
+    await database
+      .insert(intelligenceChannelMappings)
+      .values({ channelId, userId: member.id, threadId: randomUUID() });
   });
-  agentId = profile.id;
-  const channel = await channelStore.create(owner, [profile.id]);
-  channelId = channel.id;
-  await database
-    .insert(channelMemberships)
-    .values({ channelId, userId: member.id });
-  await database
-    .insert(intelligenceChannelMappings)
-    .values({ channelId, userId: member.id, threadId: randomUUID() });
 });
 
 afterAll(async () => {
-  if (channelId)
-    await database.delete(channels).where(eq(channels.id, channelId));
-  if (agentId) await database.delete(agents).where(eq(agents.id, agentId));
-  await database
-    .delete(users)
-    .where(inArray(users.id, [owner.id, member.id, outsider.id]));
+  await runAsTenant("platform", async () => {
+    if (channelId)
+      await database.delete(channels).where(eq(channels.id, channelId));
+    if (agentId) await database.delete(agents).where(eq(agents.id, agentId));
+    await database
+      .delete(users)
+      .where(inArray(users.id, [owner.id, member.id, outsider.id]));
+  });
   await database.$client.close();
 });
 
@@ -81,75 +95,89 @@ function input(id = randomUUID()): SaveVoiceSessionInput {
   };
 }
 
-test("sessions persist as JSON, are immutable/idempotent, and are shared only with channel members", async () => {
-  const request = input();
-  const saved = await store.save(owner, request);
-  expect(saved.durationSeconds).toBe(45);
-  expect(saved.summaryStatus).toBe("failed");
-  expect(await store.save(owner, request)).toEqual(saved);
-  expect((await store.list(member, channelId)).sessions).toContainEqual(saved);
-  await expect(store.list(outsider, channelId)).rejects.toThrow(
-    "Channel not found",
-  );
-  await expect(store.save(outsider, input())).rejects.toThrow(
-    "Channel not found",
-  );
-  await expect(store.save(member, request)).rejects.toThrow("already in use");
-  await expect(
-    store.save(owner, {
-      ...request,
-      transcript: [{ id: "changed", role: "user", text: "Changed" }],
-    }),
-  ).rejects.toThrow("already in use");
-  await expect(
-    store.summarize(member, request.id, "Forged summary"),
-  ).rejects.toThrow("not found");
-  const summary = await store.summarize(
-    owner,
-    request.id,
-    "Discussed launch plans; nothing executed.",
-  );
-  expect(summary.summaryStatus).toBe("ready");
-  expect((await store.save(owner, request)).summary).toBe(summary.summary);
-  const [row] = await database
-    .select()
-    .from(voiceSessions)
-    .where(eq(voiceSessions.id, request.id));
-  expect(row?.transcript.entries).toEqual(request.transcript);
-});
+test("sessions persist as JSON, are immutable/idempotent, and are shared only with channel members", () =>
+  asOwner(async () => {
+    const request = input();
+    const saved = await store.save(owner, request);
+    expect(saved.durationSeconds).toBe(45);
+    expect(saved.summaryStatus).toBe("failed");
+    expect(await store.save(owner, request)).toEqual(saved);
+    expect((await store.list(member, channelId)).sessions).toContainEqual(
+      saved,
+    );
+    await expect(store.list(outsider, channelId)).rejects.toThrow(
+      "Channel not found",
+    );
+    await expect(store.save(outsider, input())).rejects.toThrow(
+      "Channel not found",
+    );
+    await expect(store.save(member, request)).rejects.toThrow("already in use");
+    await expect(
+      store.save(owner, {
+        ...request,
+        transcript: [{ id: "changed", role: "user", text: "Changed" }],
+      }),
+    ).rejects.toThrow("already in use");
+    await expect(
+      store.summarize(member, request.id, "Forged summary"),
+    ).rejects.toThrow("not found");
+    const summary = await store.summarize(
+      owner,
+      request.id,
+      "Discussed launch plans; nothing executed.",
+    );
+    expect(summary.summaryStatus).toBe("ready");
+    expect((await store.save(owner, request)).summary).toBe(summary.summary);
+    const [row] = await database
+      .select()
+      .from(voiceSessions)
+      .where(eq(voiceSessions.id, request.id));
+    expect(row?.transcript.entries).toEqual(request.transcript);
+  }));
 
 /*
  * 51 sessions seeded one insert at a time, then paged over them — ~2.7s alone on this machine, which is
  * close enough to bun's 5s default that the case went red under shard load and green on its own. The
  * explicit 15s says what the case actually costs; the pagination property it checks is unchanged.
  */
-test("pagination handles equal timestamps without missing or repeating sessions", async () => {
-  for (let index = 0; index < 51; index++)
-    await store.save(owner, input(`page-${String(index).padStart(3, "0")}`));
-  const first = await store.list(owner, channelId);
-  expect(first.sessions).toHaveLength(50);
-  expect(first.nextCursor).not.toBeNull();
-  const second = await store.list(
-    owner,
-    channelId,
-    first.nextCursor ?? undefined,
-  );
-  expect(second.nextCursor).toBeNull();
-  const all = [...first.sessions, ...second.sessions];
-  expect(new Set(all.map(({ id }) => id)).size).toBe(all.length);
-  expect(all.filter(({ id }) => id.includes("-page-"))).toHaveLength(51);
-  await expect(store.list(owner, channelId, "not-a-cursor")).rejects.toThrow(
-    "Invalid voice history cursor",
-  );
-}, 15_000);
+test(
+  "pagination handles equal timestamps without missing or repeating sessions",
+  () =>
+    asOwner(async () => {
+      for (let index = 0; index < 51; index++)
+        await store.save(
+          owner,
+          input(`page-${String(index).padStart(3, "0")}`),
+        );
+      const first = await store.list(owner, channelId);
+      expect(first.sessions).toHaveLength(50);
+      expect(first.nextCursor).not.toBeNull();
+      const second = await store.list(
+        owner,
+        channelId,
+        first.nextCursor ?? undefined,
+      );
+      expect(second.nextCursor).toBeNull();
+      const all = [...first.sessions, ...second.sessions];
+      expect(new Set(all.map(({ id }) => id)).size).toBe(all.length);
+      expect(all.filter(({ id }) => id.includes("-page-"))).toHaveLength(51);
+      await expect(
+        store.list(owner, channelId, "not-a-cursor"),
+      ).rejects.toThrow("Invalid voice history cursor");
+    }),
+  15_000,
+);
 
-test("deleted agents make voice writes inactive while existing history stays readable", async () => {
-  await database
-    .update(agentProfiles)
-    .set({ deletedAt: new Date() })
-    .where(eq(agentProfiles.agentId, agentId));
-  await expect(store.save(owner, input())).rejects.toThrow("no longer active");
-  expect((await store.list(owner, channelId)).sessions.length).toBeGreaterThan(
-    0,
-  );
-});
+test("deleted agents make voice writes inactive while existing history stays readable", () =>
+  asOwner(async () => {
+    await database
+      .update(agentProfiles)
+      .set({ deletedAt: new Date() })
+      .where(eq(agentProfiles.agentId, agentId));
+    await expect(store.save(owner, input())).rejects.toThrow(
+      "no longer active",
+    );
+    expect(
+      (await store.list(owner, channelId)).sessions.length,
+    ).toBeGreaterThan(0);
+  }));

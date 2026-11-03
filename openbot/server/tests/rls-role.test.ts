@@ -8,7 +8,7 @@ import {
   ROLE_FACTS_SQL,
   readRoleFacts,
 } from "../src/db/rls-role";
-import { runAsTenant } from "../src/tenant/context";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -124,14 +124,18 @@ test("the overlay migration revokes schema CREATE from the application role", ()
 
 test("the application role cannot create objects in the schemas it writes through", async () => {
   const database = createDatabase(testDatabaseUrl(), TEST_POOL);
-  const [row] = (await database.execute(
-    sql.raw(`
+  // Schema privileges and DDL belong to no tenant: probed in the platform frame, which still connects
+  // as openbot_app, so the probe tests the application role's own rights.
+  const [row] = (await asPlatform(() =>
+    database.execute(
+      sql.raw(`
       select
         has_schema_privilege('openbot_app', 'public', 'CREATE') as creates_public,
         has_schema_privilege('openbot_app', 'drizzle', 'CREATE') as creates_drizzle,
         has_schema_privilege('openbot_app', 'public', 'USAGE') as uses_public,
         has_schema_privilege('openbot_app', 'drizzle', 'USAGE') as uses_drizzle
     `),
+    ),
   )) as unknown as Record<string, unknown>[];
   expect(row).toEqual({
     creates_public: false,
@@ -142,12 +146,12 @@ test("the application role cannot create objects in the schemas it writes throug
 
   // And the catalog answer is the behaviour: the suite connects as openbot_app (asserted above).
   const name = `app_role_create_probe_${Date.now()}`;
-  const failure: unknown = await database
-    .execute(sql.raw(`create table public.${name} (id int)`))
-    .then(
-      () => undefined,
-      (error: unknown) => error,
-    );
+  const failure: unknown = await asPlatform(() =>
+    database.execute(sql.raw(`create table public.${name} (id int)`)),
+  ).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
   // Drizzle wraps the driver error as "Failed query: ..." with PostgreSQL's own error as the cause.
   const cause =
     failure instanceof Error && failure.cause !== undefined
