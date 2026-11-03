@@ -52,8 +52,8 @@ describe("a clone that has only run bun install", () => {
   );
 
   test("can read the example tenant package with nothing set", () => {
-    // `pretest` loads this package, so a name here with no fallback fails the suite before a single
-    // test runs.
+    // Server tests load this package by path as a fixture, so a name here with no fallback fails them
+    // on a clone with no `.env`.
     const agents = readFileSync(
       join(root, "examples/fintech/agents.yaml"),
       "utf8",
@@ -68,6 +68,29 @@ describe("a clone that has only run bun install", () => {
         rest.startsWith(":-"),
         `\${${name}} in agents.yaml has no fallback, so a clone with no .env cannot read it`,
       ).toBe(true);
+    }
+  });
+
+  test("can read the default tenant package with nothing set", () => {
+    // With no `TENANT_PACKAGE_DIR`, `pretest` and the server load `examples/qoderwake`, so a name
+    // there with no fallback fails the suite before a single test runs.
+    for (const file of [
+      "brand.yaml",
+      "agents.yaml",
+      "channels.yaml",
+      "model.yaml",
+      "knowledge.yaml",
+      "skills.yaml",
+    ]) {
+      const text = readFileSync(join(root, "examples/qoderwake", file), "utf8");
+      for (const [, name, rest] of text.matchAll(
+        /\$\{([A-Za-z_][A-Za-z0-9_]*)([^}]*)\}/g,
+      )) {
+        expect(
+          rest.startsWith(":-"),
+          `\${${name}} in examples/qoderwake/${file} has no fallback, so a clone with no .env cannot read it`,
+        ).toBe(true);
+      }
     }
   });
 
