@@ -23,7 +23,7 @@ export function createAutonomousRoutes(
    * Spec C1's 全部员工: every coworker's unattended work at once. Two segments rather than a bare
    * `/autonomous`, because this router shares `/api/agents` with the agent routes, whose
    * `GET /:agentId` is mounted first and would answer a one-segment path as a coworker called
-   * "autonomous". The tenant scope is the caller's own; row-level security is the whole filter.
+   * "autonomous". The scope is the caller's own tenant, asked explicitly (see `summarise`).
    */
   routes.get("/autonomous/all", requireUser, async (context) =>
     context.json({ autonomous: await store.summaryForAll() }),
