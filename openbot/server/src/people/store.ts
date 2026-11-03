@@ -1,10 +1,16 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { isConfiguredAdmin, type OpenBotRole, setRole } from "../auth/roles";
+import {
+  holdsTrustedAddress,
+  isConfiguredAdmin,
+  type OpenBotRole,
+  setRole,
+} from "../auth/roles";
 import type { Database } from "../db/client";
 import {
   accounts,
   revokedAccess,
   sessions,
+  ssoProviders,
   userRoles,
   users,
 } from "../db/schema";
@@ -216,6 +222,9 @@ export function createPeopleStore(
         >`coalesce(array_agg(distinct ${accounts.providerId}) filter (where ${accounts.providerId} is not null), '{}')`,
         lastSignedInAt: users.lastSignedInAt,
         revoked: sql<boolean>`bool_or(${revokedAccess.email} is not null)`,
+        emailVerified: users.emailVerified,
+        // Arrived through an identity provider an administrator registered: see `holdsTrustedAddress`.
+        viaRegisteredProvider: sql<boolean>`coalesce(bool_or(${accounts.providerId} in (select ${ssoProviders.providerId} from ${ssoProviders})), false)`,
       })
       .from(users)
       .leftJoin(userRoles, eq(userRoles.userId, users.id))
@@ -254,7 +263,18 @@ export function createPeopleStore(
           ? new Date(row.lastSignedInAt).toISOString()
           : null,
         revoked: row.revoked === true,
-        configuredAdmin: isConfiguredAdmin(row.email, initialAdminEmails),
+        /*
+         * The same test the sign-in floor applies, so the 409s on demote and remove guard only the
+         * rows it will actually promote again. An unverified or password-held row carrying a listed
+         * address is not the person the list names, and an administrator must be able to deal with it.
+         */
+        configuredAdmin:
+          isConfiguredAdmin(row.email, initialAdminEmails) &&
+          holdsTrustedAddress({
+            emailVerified: row.emailVerified === true,
+            providerIds: row.providers,
+            viaRegisteredProvider: row.viaRegisteredProvider === true,
+          }),
       })),
       nextCursor:
         rows.length > limit && last

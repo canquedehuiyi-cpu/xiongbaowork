@@ -2,12 +2,13 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { eq, like } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { threadRunEvents, threadRuns, threads } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import { runAsTenant, TenantContextError } from "../src/tenant/context";
 import {
   createLocalThreadPlatform,
   createLocalThreadReader,
 } from "../src/threads/local-platform";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { expectUnframedRefused } from "./support/frame-guard";
 
 /**
  * Ticket 005 acceptance: a conversation this deployment keeps in its own PostgreSQL is scoped to the
@@ -35,7 +36,12 @@ type StoredRun = {
 /** The stand-in store: one Map, because the real one is a process singleton too. */
 const stored = new Map<
   string,
-  { runs: StoredRun[]; messages: unknown[]; createdAt: number }
+  {
+    historicRuns: StoredRun[];
+    messages: unknown[];
+    createdAt: number | null;
+    isRunning: boolean;
+  }
 >();
 
 // Keep the module's other exports (BuiltInAgent, CopilotRuntime, …): Bun's module mock outlives this
@@ -44,17 +50,29 @@ const realRuntime = { ...(await import("@copilotkit/runtime/v2")) };
 mock.module("@copilotkit/runtime/v2", () => ({
   ...realRuntime,
   ɵGLOBAL_STORE: {
-    appendRun(threadId: string, run: StoredRun) {
+    getOrCreate(threadId: string) {
       const entry = stored.get(threadId) ?? {
-        runs: [],
+        historicRuns: [],
         messages: [],
-        createdAt: run.createdAt,
+        createdAt: null,
+        isRunning: false,
       };
-      entry.runs.push(run);
+      stored.set(threadId, entry);
+      return entry;
+    },
+    peek(threadId: string) {
+      return stored.get(threadId);
+    },
+    appendRun(threadId: string, run: StoredRun) {
+      // `BoundedThreadStore.appendRun` drops a run for a thread it holds no entry for (G01-E P18):
+      // a replay that does not create the entry first loads nothing, so this stand-in drops it too.
+      const entry = stored.get(threadId);
+      if (!entry) return;
+      entry.createdAt ??= run.createdAt;
+      entry.historicRuns.push(run);
       // `BoundedThreadStore.appendRun` hoists the LAST run's messages to the thread level, which is
       // what `getThreadMessages` then answers from; the replay depends on that, so this does too.
       if (run.messages.length > 0) entry.messages = run.messages;
-      stored.set(threadId, entry);
     },
   },
   InMemoryAgentRunner: class {
@@ -62,19 +80,21 @@ mock.module("@copilotkit/runtime/v2", () => ({
       return [...stored.entries()].map(([id, entry]) => ({
         id,
         name: null,
-        agentId: entry.runs[0]?.agentId ?? "unknown",
+        agentId: entry.historicRuns[0]?.agentId ?? "unknown",
         organizationId: "",
         createdById: "",
         archived: false,
-        createdAt: new Date(entry.createdAt).toISOString(),
-        updatedAt: new Date(entry.createdAt).toISOString(),
+        createdAt: new Date(entry.createdAt ?? 0).toISOString(),
+        updatedAt: new Date(entry.createdAt ?? 0).toISOString(),
       }));
     }
     getThreadMessages(threadId: string) {
       return stored.get(threadId)?.messages ?? [];
     }
     getThreadEvents(threadId: string) {
-      return stored.get(threadId)?.runs.flatMap((run) => run.events) ?? [];
+      return (
+        stored.get(threadId)?.historicRuns.flatMap((run) => run.events) ?? []
+      );
     }
     run() {
       return { pipe: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }) };
@@ -82,8 +102,12 @@ mock.module("@copilotkit/runtime/v2", () => ({
   },
 }));
 
+// A fresh instance, not the cached one: `class PostgresAgentRunner extends InMemoryAgentRunner` is
+// evaluated once, at load. If an earlier file in this shard process (copilot.test.ts, say) already
+// loaded postgres-runner against the real runtime, the cached class keeps the real base class and the
+// mock above never reaches it; the query makes Bun evaluate the module again against the mock.
 const { PostgresAgentRunner } = (await import(
-  "../src/threads/postgres-runner"
+  "../src/threads/postgres-runner.ts?local-threads"
 )) as typeof import("../src/threads/postgres-runner");
 
 // The explicit test URL survives earlier pools deleting DATABASE_URL. Never read the application's
@@ -205,11 +229,28 @@ test("one tenant's rows are invisible to the other", async () => {
   expect(seenByA.every((row) => row.tenant === tenantA)).toBeTrue();
   expect(seenByB.map((row) => row.id)).toEqual([threadB]);
 
-  // A query with no tenant context runs as `system` and sees neither: forgetting the scope loses data
-  // loudly rather than leaking it quietly, which is the deal the RLS sweep strikes.
+  /*
+   * Forgetting the scope loses data loudly rather than leaking it quietly, which is the deal the RLS
+   * sweep strikes. G01-E: a query with no tenant context is refused outright under the frame guard
+   * (it used to run as `system`); `system`, asked for explicitly, sees neither tenant's rows; `team`
+   * is a stamp and never a frame, so asking as it throws before any statement is built.
+   */
+  const ourThreads = () =>
+    database
+      .select({ id: threads.id, tenant: threads.tenantId })
+      .from(threads)
+      .where(ours);
+  await expectUnframedRefused(ourThreads);
+  expect(await runAsTenant("system", ourThreads)).toEqual([]);
+  expect(() => runAsTenant("team", ourThreads)).toThrow(TenantContextError);
+
+  // And the rows really are there, each under its own tenant: only `platform`, the frame for
+  // questions across tenants, sees all three.
+  const seenByPlatform = await runAsTenant("platform", ourThreads);
   expect(
-    await database.select({ id: threads.id }).from(threads).where(ours),
-  ).toEqual([]);
+    Object.fromEntries(seenByPlatform.map((row) => [row.id, row.tenant])),
+  ).toEqual({ [threadA]: tenantA, [toolThread]: tenantA, [threadB]: tenantB });
+  expect(seenByPlatform).toHaveLength(3);
 
   // The run and event rows travel with their thread; both are read through the same policy.
   expect(
@@ -250,9 +291,11 @@ test("hydrate replays the calling tenant's thread, and the other tenant's stays 
   await runAsTenant(tenantA, () => runnerA.hydrate());
 
   const replayed = stored.get(threadA);
-  expect(replayed?.runs.map((run) => run.runId)).toEqual([`${threadA}-run`]);
-  expect(replayed?.runs[0]?.events).toHaveLength(2);
-  expect(replayed?.runs[0]?.agentId).toBe(`${marker}-bot`);
+  expect(replayed?.historicRuns.map((run) => run.runId)).toEqual([
+    `${threadA}-run`,
+  ]);
+  expect(replayed?.historicRuns[0]?.events).toHaveLength(2);
+  expect(replayed?.historicRuns[0]?.agentId).toBe(`${marker}-bot`);
 
   expect(
     idsFor(await runAsTenant(tenantA, () => runnerA.listThreads())),

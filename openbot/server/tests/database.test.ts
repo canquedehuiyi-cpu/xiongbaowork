@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createDatabase } from "../src/db/client";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL } from "./support/database";
 
 test("creates a typed database boundary without opening a query", () => {
@@ -8,5 +9,6 @@ test("creates a typed database boundary without opening a query", () => {
     TEST_POOL,
   );
 
-  expect(database.query.users).toBeDefined();
+  // The deployment's schema, not anybody's rows: asked from the platform frame.
+  expect(runAsTenant("platform", () => database.query.users)).toBeDefined();
 });

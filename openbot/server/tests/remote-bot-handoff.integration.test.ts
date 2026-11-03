@@ -14,6 +14,7 @@ import {
 } from "../src/db/schema";
 import type { ComposioBroker } from "../src/plugins/broker";
 import { createPluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -78,17 +79,26 @@ const desk = createHandoffDesk({
   caps: { maxDepth: 2, maxPerRun: 4 },
 });
 
+/** As the person: every hop and grant here is asked for in their own tenant, as a Bot's run is. */
+const asActor = <T>(fn: () => T) => runAsTenant(ACTOR, fn);
+
 async function clean() {
-  // By the suite's own actor, which every hop's payload carries. A hop's key is `hop:<hash>:<hash>`,
-  // so a key prefix matches nothing, and a hop left queued is claimed by the next suite's sweep.
-  await database
-    .delete(workItems)
-    .where(sql`${workItems.payload}->>'actorId' = ${ACTOR}`);
-  await database.delete(pluginGrants).where(inArray(pluginGrants.agentId, ALL));
-  await database
-    .delete(agentProfiles)
-    .where(inArray(agentProfiles.agentId, ALL));
-  await database.delete(agents).where(inArray(agents.id, ALL));
+  // As `platform`: the hops and grants are the person's rows and the Bots the catalogue's, and a
+  // tear-down from one tenant would see only its own.
+  await runAsTenant("platform", async () => {
+    // By the suite's own actor, which every hop's payload carries. A hop's key is `hop:<hash>:<hash>`,
+    // so a key prefix matches nothing, and a hop left queued is claimed by the next suite's sweep.
+    await database
+      .delete(workItems)
+      .where(sql`${workItems.payload}->>'actorId' = ${ACTOR}`);
+    await database
+      .delete(pluginGrants)
+      .where(inArray(pluginGrants.agentId, ALL));
+    await database
+      .delete(agentProfiles)
+      .where(inArray(agentProfiles.agentId, ALL));
+    await database.delete(agents).where(inArray(agents.id, ALL));
+  });
 }
 
 beforeEach(async () => {
@@ -113,17 +123,20 @@ beforeEach(async () => {
       configuration: { endpoint: "http://127.0.0.1:2/agui" },
     },
   ];
-  for (const row of rows) {
-    await database.insert(agents).values(row);
-    await database.insert(agentProfiles).values({
-      agentId: row.id,
-      name: row.name,
-      title: "",
-      roleDescription: "",
-      avatarSeed: row.id,
-      visibility: "public",
-    });
-  }
+  // The deployment's Bots (`system`), which every person's run must be able to read.
+  await runAsTenant("system", async () => {
+    for (const row of rows) {
+      await database.insert(agents).values(row);
+      await database.insert(agentProfiles).values({
+        agentId: row.id,
+        name: row.name,
+        title: "",
+        roleDescription: "",
+        avatarSeed: row.id,
+        visibility: "public",
+      });
+    }
+  });
 });
 
 afterAll(async () => {
@@ -141,62 +154,76 @@ const from = (runId = `run-${suite}-1`) => ({
 
 describe("a Bot at its own endpoint, handing work on", () => {
   test("its grant is read back, whatever its type", async () => {
-    expect(await store.botsReachableFrom(REMOTE)).toEqual([]);
+    expect(await asActor(() => store.botsReachableFrom(REMOTE))).toEqual([]);
 
-    await store.grant("bot", BUILT_IN, REMOTE, "test");
+    await asActor(() => store.grant("bot", BUILT_IN, REMOTE, "test"));
 
-    expect(await store.botsReachableFrom(REMOTE)).toEqual([BUILT_IN]);
+    expect(await asActor(() => store.botsReachableFrom(REMOTE))).toEqual([
+      BUILT_IN,
+    ]);
   });
 
   test("the screen is told it can hold the grant", async () => {
-    expect(await store.agentCanHandOn(REMOTE)).toBe(true);
-    expect(await store.agentCanHandOn(BUILT_IN)).toBe(true);
-    expect(await store.agentCanHandOn(`nobody-${suite}`)).toBeUndefined();
+    expect(await asActor(() => store.agentCanHandOn(REMOTE))).toBe(true);
+    expect(await asActor(() => store.agentCanHandOn(BUILT_IN))).toBe(true);
+    expect(
+      await asActor(() => store.agentCanHandOn(`nobody-${suite}`)),
+    ).toBeUndefined();
   });
 
   test("without a grant the hop is refused and says so", async () => {
-    const refused = await desk.send({
-      from: from(),
-      target: BUILT_IN,
-      envelope: { task: "have a look" },
-    });
+    const refused = await asActor(() =>
+      desk.send({
+        from: from(),
+        target: BUILT_IN,
+        envelope: { task: "have a look" },
+      }),
+    );
     expect(refused.ok).toBe(false);
 
-    const [row] = await database
-      .select({ payload: auditEvents.payload })
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "agent.handoff_refused"),
-          eq(auditEvents.targetId, REMOTE),
-        ),
-      )
-      .limit(1);
+    const [row] = await asActor(() =>
+      database
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "agent.handoff_refused"),
+            eq(auditEvents.targetId, REMOTE),
+          ),
+        )
+        .limit(1),
+    );
     expect(row).toBeDefined();
   });
 
   test("granted, it hands work to a built-in Bot and to another remote Bot", async () => {
-    await store.grant("bot", BUILT_IN, REMOTE, "test");
-    await store.grant("bot", OTHER_REMOTE, REMOTE, "test");
+    await asActor(() => store.grant("bot", BUILT_IN, REMOTE, "test"));
+    await asActor(() => store.grant("bot", OTHER_REMOTE, REMOTE, "test"));
 
-    const toBuiltIn = await desk.send({
-      from: from(`run-${suite}-2`),
-      target: BUILT_IN,
-      envelope: { task: "have a look" },
-    });
+    const toBuiltIn = await asActor(() =>
+      desk.send({
+        from: from(`run-${suite}-2`),
+        target: BUILT_IN,
+        envelope: { task: "have a look" },
+      }),
+    );
     expect(toBuiltIn).toMatchObject({ ok: true, to: BUILT_IN });
 
-    const toRemote = await desk.send({
-      from: from(`run-${suite}-3`),
-      target: OTHER_REMOTE,
-      envelope: { task: "and you" },
-    });
+    const toRemote = await asActor(() =>
+      desk.send({
+        from: from(`run-${suite}-3`),
+        target: OTHER_REMOTE,
+        envelope: { task: "and you" },
+      }),
+    );
     expect(toRemote).toMatchObject({ ok: true, to: OTHER_REMOTE });
 
-    const offered = await database
-      .select({ payload: auditEvents.payload })
-      .from(auditEvents)
-      .where(eq(auditEvents.eventType, "agent.handoff_offered"));
+    const offered = await asActor(() =>
+      database
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(eq(auditEvents.eventType, "agent.handoff_offered")),
+    );
     const targets = offered
       .map((row) => row.payload as Record<string, unknown>)
       .filter((payload) => payload.from === REMOTE)

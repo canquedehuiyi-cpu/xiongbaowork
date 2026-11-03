@@ -1,7 +1,10 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   uniqueIndex,
+  unique,
   uuid,
   text,
   timestamp,
@@ -57,3 +60,57 @@ export const providerTemplates = pgTable("provider_templates", {
   /** How the connectivity probe reaches it: chat-completions | messages | generativelanguage. */
   probe: text("probe").notNull().default("chat-completions"),
 });
+
+/** The plans a platform pool row may name; the migration's CHECK holds the same two. */
+export const PLATFORM_POOL_TIERS = ["free", "pro"] as const;
+export type PlatformPoolTier = (typeof PLATFORM_POOL_TIERS)[number];
+
+/**
+ * The name shape `api_key_env` must have (0120). The resolver checks it again before it reads the
+ * environment, so a row can only ever name a pool key and never DATABASE_URL or the vault key.
+ */
+export const PLATFORM_POOL_KEY_ENV = /^OPENBOT_POOL_[A-Z0-9_]{1,64}$/;
+
+/**
+ * The platform's own experience models (stories H1, K1): what a Free tenant's coworkers may speak
+ * with before the tenant connects a key of its own. Platform-owned, so no tenant_id and no row-level
+ * security; the application holds SELECT only and the operator writes the rows. The key is never
+ * stored: `apiKeyEnv` names the deployment environment variable that holds it.
+ */
+export const platformModelPool = pgTable(
+  "platform_model_pool",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull(),
+    baseUrl: text("base_url"),
+    modelName: text("model_name").notNull(),
+    label: text("label").notNull(),
+    apiKeyEnv: text("api_key_env").notNull(),
+    tiers: text("tiers")
+      .array()
+      .$type<PlatformPoolTier[]>()
+      .notNull()
+      .default(sql`'{free,pro}'::text[]`),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("platform_model_pool_provider_model_unique").on(
+      table.provider,
+      table.modelName,
+    ),
+    check(
+      "platform_model_pool_api_key_env",
+      sql`${table.apiKeyEnv} ~ '^OPENBOT_POOL_[A-Z0-9_]{1,64}$'`,
+    ),
+    check(
+      "platform_model_pool_tiers",
+      sql`${table.tiers} <@ '{free,pro}'::text[]`,
+    ),
+  ],
+);
