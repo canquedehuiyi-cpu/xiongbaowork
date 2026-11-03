@@ -2,14 +2,14 @@
 
 规则不变：**一个故事只有在 `main` 上有对应测试通过，才算"已验收"。** 本表没有任何一行是"已验收"。集成分支 `claude/magical-archimedes-8a6ljj` 还没有合进 `main`（走 canquedehuiyi-cpu/xiongbaowork#1 → canquedehuiyi-cpu/xiongbaowork#2），所以已经做完的故事一律写 `integrated (pending main)`。
 
-数据截至 2026-11-03，集成分支 `96a5b41`。状态是读集成分支上的代码和测试得出的，不是照抄 PR 标题：每行的"证据"列只列集成分支上确实存在的测试文件，"备注"写读代码时看到的缺口。PR 编号的出处是 GitHub 上已合并 PR 的 head 是否已在集成分支里（逐个用 `git merge-base --is-ancestor` 核对过）。
+数据截至 2026-11-03，集成分支 `9e05e09`。状态是读集成分支上的代码和测试得出的，不是照抄 PR 标题：每行的"证据"列只列集成分支上确实存在的测试文件，"备注"写读代码时看到的缺口。PR 编号的出处是 GitHub 上已合并 PR 的 head 是否已在集成分支里（逐个用 `git merge-base --is-ancestor` 核对过）。
 
 ## 取值
 
 | 列 | 取值 |
 | --- | --- |
 | 集成分支状态 | `implemented`：故事要求的行为在集成分支上有代码和测试；`partial`：有一部分，缺口写在备注里；`not started`：没有对应代码 |
-| 交付 PR | 交付该故事的已合并 PR。"基线（main 上已有）"表示代码在 `main` 的基线提交里就有，本轮没有 PR 改它；`open PR #N` 表示剩余部分还在未合并的 PR 里 |
+| 交付 PR | 交付该故事的已合并 PR。"基线（main 上已有）"表示代码在 `main` 的基线提交里就有，本轮没有 PR 改它；截至本表没有故事还依赖未合并的 PR |
 | 门 | 覆盖该故事的最终门（见下方门表）。G3 指全套自动测试 |
 | 验收状态 | `integrated (pending main)`：已在集成分支、等合进 `main` 后由 `main` 上的 CI 证成；`partly integrated (pending main)`：同上，但故事只做了一部分 |
 
@@ -17,20 +17,18 @@
 
 | 集成分支状态 | 故事数 |
 | --- | --- |
-| implemented | 62 |
-| partial | 10 |
+| implemented | 63 |
+| partial | 9 |
 | not started | 5 |
 | 合计 | 77 |
 
-- partial：A4、C1、F1、F2、F4、F6、J5、K4、AUT3、SEC1。
+- partial：A4、F1、F2、F4、F6、J5、K4、AUT3、SEC1。
 - not started：RES2、ROLE1、WF7、WF8、WF9。这 5 个都按 11-02 的 MVP 决定移到 v1.0 后。
 
-仍未合并、与故事有关的 PR（截至 `96a5b41`）：
+仍未合并、与故事有关的 PR（截至 `9e05e09`）只剩一个，且按决定不合并：
 
 | PR | 内容 | 涉及故事 |
 | --- | --- | --- |
-| canquedehuiyi-cpu/xiongbaowork#70 | 职责和主动巡检的启停开关 | C1 |
-| canquedehuiyi-cpu/xiongbaowork#161 | #58 自动任务运行时的评审修复 | C2、AUT1–AUT4 |
 | canquedehuiyi-cpu/xiongbaowork#54 | 支付 provider 接口 | K3；按"只手动"决定**不合并** |
 
 ## 故事
@@ -50,8 +48,8 @@
 | B2 | D05 | @ 某 Waker 发送后：创建一条 task（来源=对话触发，执行者=被 @ 的 Waker），消息路由到该 Waker 并驱动其运行（接… | implemented | canquedehuiyi-cpu/xiongbaowork#28 | G3 | `server/tests/channel-dispatch.test.ts`<br>`server/tests/channel-dispatch.integration.test.ts` | integrated (pending main) |  |
 | B3 | D05 | 被 @ 的 Waker 的回复同时出现在频道与任务详情中；任务状态随 run 生命周期流转。 | implemented | canquedehuiyi-cpu/xiongbaowork#28 | G3 | `server/tests/channel-dispatch.integration.test.ts` | integrated (pending main) |  |
 | B4 | D05 | 群聊中 Bot 交接（`message_bot`）产生的后续工作自动登记为子任务（来源=交接），在看板执行者列显示接手方。 | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#48 | G3 | `server/tests/handoff-child-card.test.ts`<br>`server/tests/agent-handoff-delivery.test.ts` | integrated (pending main) | 交接卡片 `source: "handoff"`、执行者为接手方（`agents/handoff-delivery.ts`）；看板标签来自 #48 |
-| C1 | D06 | 我在"自主工作"页看到所有 Waker 的 routines/responsibilities/proactive 任务清单：下次触发时间、… | partial | canquedehuiyi-cpu/xiongbaowork#42<br>canquedehuiyi-cpu/xiongbaowork#64<br>open PR #70 | G3 | `app/tests/autonomous-screen.test.tsx`<br>`server/tests/autonomous-summary.test.ts`<br>`app/tests/automations-section.test.tsx` | partly integrated (pending main) | routines、职责、主动巡检、自动任务的清单和下次触发时间已在（自动任务区来自 #64）；职责和主动巡检的启停开关在 open PR #70 |
-| C2 | D06 | 每次自主触发（routine fire / responsibility trigger）自动创建 task（来源=自主工作），initia… | implemented | canquedehuiyi-cpu/xiongbaowork#41<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#67 | G3 | `server/tests/proactive.test.ts`<br>`server/tests/unattended-single-card.integration.test.ts`<br>`server/tests/routine-runner.test.ts`<br>`server/tests/automation-waker-executor.test.ts` | integrated (pending main) | open PR #161 修 #58 评审意见（交付物留在卡上、熔断 payload） |
+| C1 | D06 | 我在"自主工作"页看到所有 Waker 的 routines/responsibilities/proactive 任务清单：下次触发时间、… | implemented | canquedehuiyi-cpu/xiongbaowork#42<br>canquedehuiyi-cpu/xiongbaowork#64<br>canquedehuiyi-cpu/xiongbaowork#70 | G3 | `app/tests/autonomous-screen.test.tsx`<br>`server/tests/autonomous-summary.test.ts`<br>`app/tests/automations-section.test.tsx`<br>`app/tests/autonomous-switches.test.tsx` | integrated (pending main) | 自动任务区来自 #64，职责和主动巡检的启停开关来自 #70 |
+| C2 | D06 | 每次自主触发（routine fire / responsibility trigger）自动创建 task（来源=自主工作），initia… | implemented | canquedehuiyi-cpu/xiongbaowork#41<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#67<br>canquedehuiyi-cpu/xiongbaowork#161 | G3 | `server/tests/proactive.test.ts`<br>`server/tests/unattended-single-card.integration.test.ts`<br>`server/tests/routine-runner.test.ts`<br>`server/tests/automation-waker-executor.test.ts` | integrated (pending main) | #161 修了 #58 的评审意见（交付物留在卡上、熔断 payload） |
 | C3 | D06 | 连续失败熔断（10 次）发生时，对应任务标"已结束-失败"并出现在"需要关注"区。 | implemented | canquedehuiyi-cpu/xiongbaowork#42<br>canquedehuiyi-cpu/xiongbaowork#58 | G3 | `server/tests/routine-runner.test.ts`<br>`app/tests/tasks-attention-region.test.tsx`<br>`server/tests/automation-waker-executor.test.ts` | integrated (pending main) |  |
 | C4 | D06 | 我可以在此页新建/暂停/删除 routine（复用现有 `/api/routines`，15 分钟下限与 20 条上限护栏保留）。 | implemented | 基线（main 上已有） | G3 | `app/tests/autonomous-screen.test.tsx`<br>`server/tests/routine-create.integration.test.ts` | integrated (pending main) | 15 分钟下限有断言（`Routines may run at most every 15 minutes.`） |
 | H1 | D09 | 租户在"能力与资源 > 模型库"**自助接入**任意多个模型：从平台 provider 模板（OpenAI 兼容/Anthropic/Goo… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#51<br>canquedehuiyi-cpu/xiongbaowork#55<br>canquedehuiyi-cpu/xiongbaowork#57 | G3 | `server/tests/model-library-routes.test.ts`<br>`server/tests/platform-model-pool.integration.test.ts`<br>`server/tests/platform-model-pool-routes.test.ts`<br>`app/tests/platform-model-pool.test.tsx` | integrated (pending main) |  |
@@ -101,7 +99,7 @@
 | WF4 | D10 | 流程编辑、复用、运行记录和任务看板查收闭环 | implemented | canquedehuiyi-cpu/xiongbaowork#45<br>canquedehuiyi-cpu/xiongbaowork#62<br>canquedehuiyi-cpu/xiongbaowork#157 | G3、G4 | `server/tests/wakerflow-run.integration.test.ts`<br>`server/tests/wakerflow-task-open.integration.test.ts`<br>`app/tests/wakerflow-runs.test.tsx` | integrated (pending main) | CI 有 G4 浏览器端到端 job（模拟模型） |
 | WF5 | D10 | 运行中止后状态不可被旧回调覆盖，后续步骤不得启动 | implemented | canquedehuiyi-cpu/xiongbaowork#45<br>canquedehuiyi-cpu/xiongbaowork#62<br>canquedehuiyi-cpu/xiongbaowork#90 | G3、G4 | `server/tests/wakerflow-run.integration.test.ts`<br>`app/tests/wakerflow-runs.test.tsx`<br>`server/tests/wakerflow-restart-recovery.integration.test.ts` | integrated (pending main) |  |
 | WF6 | D10 | 同一运行并发推进只有一个执行者，避免重复执行和重复计费 | implemented | canquedehuiyi-cpu/xiongbaowork#45 | G3、G4 | `server/tests/wakerflow-run.integration.test.ts` | integrated (pending main) |  |
-| AUT1 | D06 | 定期与一次性调度，多个触发条件（原版显示上限5） | implemented | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automations-store.integration.test.ts`<br>`server/tests/automation-sweep.integration.test.ts`<br>`server/tests/automation-routes.test.ts`<br>`app/tests/automation-form.test.tsx` | integrated (pending main) | open PR #161 修 #58 评审意见 |
+| AUT1 | D06 | 定期与一次性调度，多个触发条件（原版显示上限5） | implemented | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64<br>canquedehuiyi-cpu/xiongbaowork#161 | G3 | `server/tests/automations-store.integration.test.ts`<br>`server/tests/automation-sweep.integration.test.ts`<br>`server/tests/automation-routes.test.ts`<br>`app/tests/automation-form.test.tsx` | integrated (pending main) |  |
 | AUT2 | D06 | 事件 Hook/API 入口及触发行为 | implemented | canquedehuiyi-cpu/xiongbaowork#63<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automation-ingress.test.ts`<br>`server/tests/automation-ingress.integration.test.ts`<br>`app/tests/automations-section.test.tsx` | integrated (pending main) |  |
 | AUT3 | D06 | 执行对象可选 Waker 或已创建 WakerFlow | partial | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automation-waker-executor.test.ts`<br>`server/tests/automation-routes.test.ts`<br>`app/tests/automation-form.test.tsx` | partly integrated (pending main) | 只有 Waker 目标能跑：没有注册 `wakerflow` 执行器，WakerFlow 目标保存时被拒（`automations/types.ts`）；表单要 `/api/capabilities` 返回 `wakerflowAutomations: true` 才给选 WakerFlow，服务端目前不返回这个字段 |
 | AUT4 | D06 | 自动任务最大运行次数、截止日期、到期停止 | implemented | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automation-sweep.integration.test.ts`<br>`server/tests/automations-store.integration.test.ts`<br>`app/tests/automations-section.test.tsx` | integrated (pending main) |  |
