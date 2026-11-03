@@ -904,6 +904,13 @@
       "when": 1793631300000,
       "tag": "0129_subscriptions_tenant_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1793631600000,
+      "tag": "0130_avatar_sources",
+      "breakpoints": true
     }
   ]
 }

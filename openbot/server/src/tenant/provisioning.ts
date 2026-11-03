@@ -13,6 +13,21 @@ export function avatarAgentId(tenantId: string): string {
 }
 
 /**
+ * What the 分身 is for, as its role description says it (story F1).
+ *
+ * A role description is read as a coworker's PURPOSE: the employee list shows it, and the router
+ * offers it as the coworker's `for:` line (`routing/classify.ts`). It used to be an instruction to
+ * the person ("选择你的信息来源，为个人分身完成输入配置。"), which told the router this coworker
+ * exists to configure sources. Migration 0130 replaces that sentence with this one on every 分身 that
+ * still carries it. Whether the 分身 is configured is `agent_profiles.configured_at`, not prose.
+ *
+ * It does not reach the 分身's own prompt: a `built_in` coworker runs on `configuration.systemPrompt`
+ * below, and its declared sources are appended per run (`avatarSourcesGuidance` in copilot.ts).
+ */
+export const AVATAR_ROLE_DESCRIPTION =
+  "代表你本人收集、整理和跟进工作信息，回答与你自己的资料、日程和待办有关的问题。";
+
+/**
  * The id a brand package's conversation gets inside one person's workspace.
  *
  * Same reasoning as {@link avatarAgentId}: deterministic, so a retried sync cannot mint a second copy,
@@ -26,7 +41,8 @@ export function packageChannelId(tenantId: string, channelId: string): string {
 
 /**
  * Everything a brand-new tenant gets before they see a single screen: a Free subscription and
- * their 分身, the personal coworker the onboarding then asks to configure.
+ * their 分身, the personal coworker the onboarding then asks to configure (its information sources,
+ * `avatar-sources.ts`; until then `configured_at` is null and the employee list says 待配置).
  *
  * Called from Better Auth's user-create hook, so every arrival path — password sign-up, OAuth,
  * SSO — provisions the same way; and from the paths that never pass through that hook, the
@@ -74,7 +90,7 @@ export async function provisionTenant(
         tenantId: user.id,
         ownerUserId: user.id,
         title: "个人分身",
-        roleDescription: "选择你的信息来源，为个人分身完成输入配置。",
+        roleDescription: AVATAR_ROLE_DESCRIPTION,
         avatarSeed: user.id.slice(0, 8),
         visibility: "private",
       })

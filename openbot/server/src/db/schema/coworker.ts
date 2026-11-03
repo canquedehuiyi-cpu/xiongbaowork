@@ -10,6 +10,7 @@ import {
   check,
   index,
   pgEnum,
+  pgPolicy,
   pgTable,
   primaryKey,
   text,
@@ -85,6 +86,12 @@ export const agentProfiles = pgTable(
      * thing as a persona with three empty boxes: only the first sends no section at all.
      */
     persona: jsonb("persona").$type<Persona | null>(),
+    /**
+     * When the person first saved an information source for their 分身 (story F1, spec D2,
+     * migration 0130). Null is what the employee list shows as 待配置. Only the 分身 has one: every
+     * other coworker is configured when it is created, and leaves this null.
+     */
+    configuredAt: timestamp("configured_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -100,6 +107,85 @@ export const agentProfiles = pgTable(
     ),
   ],
 );
+
+/*
+ * Who may see an avatar source, and who may write one: the owner's frame, and the platform's. No
+ * `system` branch on either side, because a source is never a catalogue row (migration 0130).
+ */
+const avatarSourceScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
+
+/**
+ * An information source a person declared for their 分身 (story F1, option T1, migration 0130).
+ *
+ * Stage 1 writes `declaration` only: a label and a note in the person's words, put in the 分身's
+ * prompt on each run and granting no access to anything. The other kinds are later stages and the
+ * API refuses them. `agent_id` is always `avatar-<tenant_id>`: the database refuses anything else.
+ * A removed source keeps its row with `revokedAt` set.
+ */
+export const avatarSources = pgTable(
+  "avatar_sources",
+  {
+    tenantId: tenantId(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    kind: text("kind")
+      .$type<"declaration" | "local_folder" | "notebook" | "connector">()
+      .notNull(),
+    label: text("label").notNull(),
+    note: text("note").notNull().default(""),
+    /** The runner folder's machine (a later stage). Never set by stage 1. */
+    deviceId: text("device_id"),
+    /** The runner's opaque id for a folder: never an absolute path (a later stage). */
+    rootRef: text("root_ref"),
+    createdAt: createdAt(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("avatar_sources_active_idx")
+      .on(table.agentId, table.createdAt)
+      .where(sql`${table.revokedAt} IS NULL`),
+    check(
+      "avatar_sources_own_avatar",
+      sql`${table.agentId} = 'avatar-' || ${table.tenantId}`,
+    ),
+    check(
+      "avatar_sources_kind",
+      sql`${table.kind} IN ('declaration', 'local_folder', 'notebook', 'connector')`,
+    ),
+    check(
+      "avatar_sources_label_length",
+      sql`char_length(${table.label}) BETWEEN 1 AND 60`,
+    ),
+    check("avatar_sources_note_length", sql`char_length(${table.note}) <= 500`),
+    pgPolicy("tenant_isolation", {
+      as: "permissive",
+      for: "select",
+      to: "public",
+      using: avatarSourceScope,
+    }),
+    pgPolicy("tenant_isolation_insert", {
+      as: "permissive",
+      for: "insert",
+      to: "public",
+      withCheck: avatarSourceScope,
+    }),
+    pgPolicy("tenant_isolation_update", {
+      as: "permissive",
+      for: "update",
+      to: "public",
+      using: avatarSourceScope,
+      withCheck: avatarSourceScope,
+    }),
+    pgPolicy("tenant_isolation_delete", {
+      as: "permissive",
+      for: "delete",
+      to: "public",
+      using: avatarSourceScope,
+    }),
+  ],
+).enableRLS();
 
 /**
  * A persona kept to be given again.
