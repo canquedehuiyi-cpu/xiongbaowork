@@ -98,3 +98,29 @@ export async function restoreTenant(
     return true;
   });
 }
+
+export const TENANT_PAGE_MAX = 100;
+
+/**
+ * One page of the tenants this deployment serves, newest first, for the operator's per-tenant reads
+ * (spec J5). Opens no frame of its own: the caller is `asAdminPlatform`, after the admin capability
+ * has been re-checked. In any other frame row-level security narrows it to that frame's own row.
+ */
+export async function listTenantPage(
+  database: Database,
+  input: { limit: number; offset: number },
+): Promise<{
+  tenants: { id: string; email: string; name: string | null }[];
+  hasMore: boolean;
+}> {
+  const rows = await database
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .orderBy(desc(users.createdAt), users.id)
+    .limit(input.limit + 1)
+    .offset(input.offset);
+  return {
+    tenants: rows.slice(0, input.limit),
+    hasMore: rows.length > input.limit,
+  };
+}
