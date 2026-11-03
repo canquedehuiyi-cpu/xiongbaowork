@@ -8,7 +8,7 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createChannelStore } from "../src/channels/routes";
@@ -253,6 +253,49 @@ async function makeDueAt(routineId: string, nextRunAt: Date): Promise<Date> {
   return row?.nextRunAt as Date;
 }
 
+/**
+ * The database's own clock: the one `dueRoutines` decides "due" by (`next_run_at <= now()`).
+ *
+ * A test that stamps a row in 2001 and tells the sweep it is 2001 has two clocks that disagree —
+ * Postgres still thinks it is today, so every 2001 stamp is due to it however far the sweep's `now`
+ * says the routine has moved on. Where a test is about what the DATABASE lets through (a race, a
+ * second pass after an advance), its stamps are taken from this instead and no `now` is injected,
+ * so both clocks agree the way they do in production.
+ */
+async function databaseNow(): Promise<Date> {
+  const [clock] = await asPlatform(() =>
+    database.execute<{ now: Date | string }>(sql`select now() as now`),
+  );
+  if (!clock) throw new Error("the database would not say what time it is");
+  return new Date(clock.now);
+}
+
+/**
+ * A routine whose most recent occurrence was a whole minute ago by the database's clock, stamped due
+ * at exactly that occurrence — the row a real sweep finds on a real morning.
+ *
+ * The routine is made daily at that minute (UTC), so the stamp is a genuine occurrence, it is inside
+ * the grace window, and the next occurrence is a full day away: no second occurrence can fall due
+ * while the test runs, whatever the time of day it runs at.
+ */
+async function makeDueAMinuteAgo(
+  routineId: string,
+): Promise<{ stamp: Date; next: Date }> {
+  const now = await databaseNow();
+  const due = new Date(Math.floor(now.getTime() / 60_000) * 60_000 - 60_000);
+  await asPlatform(() =>
+    database
+      .update(routines)
+      .set({
+        cron: `${due.getUTCMinutes()} ${due.getUTCHours()} * * *`,
+        timezone: "UTC",
+      })
+      .where(eq(routines.id, routineId)),
+  );
+  const stamp = await makeDueAt(routineId, due);
+  return { stamp, next: new Date(stamp.getTime() + 24 * 60 * 60_000) };
+}
+
 async function readRoutine(routineId: string) {
   const [row] = await asPlatform(() =>
     database.select().from(routines).where(eq(routines.id, routineId)).limit(1),
@@ -335,12 +378,39 @@ describe("offering the firings that are due", () => {
    */
   test("two sweeps racing on one due routine offer it exactly once", async () => {
     const { routine } = await makeRoutine();
-    const from = await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
-    const now = () => new Date("2001-01-01T09:26:00Z");
+    // On the database's clock, with no `now` injected: what is due, how late it is and where the
+    // clock lands are all measured on one clock, as they are in production.
+    const { stamp, next } = await makeDueAMinuteAgo(routine.id);
+
+    /*
+     * THE RACE, MADE CERTAIN. Each sweep reads what is due from the real store, then waits until the
+     * other has read too, so both hold the same stamp before either offers or advances — the case of
+     * three replicas waking on one minute. Left to `Promise.all` alone, the second read could land
+     * after the first sweep advanced, which is a different interleaving, pinned by the next test.
+     */
+    let read = 0;
+    let bothRead: () => void = () => {};
+    const together = new Promise<void>((resolve) => {
+      bothRead = resolve;
+    });
+    const racing = {
+      ...store,
+      dueRoutines: async (limit: number) => {
+        const rows = await store.dueRoutines(limit);
+        read += 1;
+        if (read === 2) bothRead();
+        await together;
+        return rows;
+      },
+    };
 
     const outcomes = await Promise.all([
-      asPlatform(() => offerDueRoutines(sweepOptions({ now }))),
-      asPlatform(() => offerDueRoutines(sweepOptions({ now }))),
+      asPlatform(() =>
+        offerDueRoutines(sweepOptions({ routineStore: racing })),
+      ),
+      asPlatform(() =>
+        offerDueRoutines(sweepOptions({ routineStore: racing })),
+      ),
     ]);
 
     // Both sweeps saw it as due and both offered it, which is the honest report: each did put the
@@ -348,13 +418,45 @@ describe("offering the firings that are due", () => {
     for (const outcome of outcomes) {
       expect(outcome.offered).toContain(routine.id);
     }
-    expect(await firingsFor(routine.id)).toHaveLength(1);
+    const firings = await firingsFor(routine.id);
+    expect(firings).toHaveLength(1);
+    expect(firings[0]?.key).toBe(
+      `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
+    );
 
     const after = await readRoutine(routine.id);
-    expect(after?.nextRunAt.getTime()).toBeGreaterThan(from.getTime());
+    expect(after?.nextRunAt.getTime()).toBeGreaterThan(stamp.getTime());
     // One occurrence on from the stamp it was given, not two: a second advance would have moved it
-    // to the 3rd of January.
-    expect(after?.nextRunAt.toISOString()).toBe("2001-01-02T09:00:00.000Z");
+    // a further day.
+    expect(after?.nextRunAt.toISOString()).toBe(next.toISOString());
+  });
+
+  /**
+   * THE SAME RACE, SERIALISED: the second sweep reads the row only after the first has offered it and
+   * moved its clock. This is the interleaving `Promise.all` above may or may not produce, so it is
+   * pinned here on its own. The advanced stamp is a day ahead of the database's clock, so the second
+   * pass finds nothing due and offers nothing — no second key, and no second advance.
+   */
+  test("a second sweep that reads after the first advanced offers nothing more", async () => {
+    const { routine } = await makeRoutine();
+    const { stamp, next } = await makeDueAMinuteAgo(routine.id);
+
+    const first = await asPlatform(() => offerDueRoutines(sweepOptions()));
+    expect(first.offered).toContain(routine.id);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      next.toISOString(),
+    );
+
+    const second = await asPlatform(() => offerDueRoutines(sweepOptions()));
+    expect(second.offered).not.toContain(routine.id);
+
+    const firings = await firingsFor(routine.id);
+    expect(firings.map((firing) => firing.key)).toEqual([
+      `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
+    ]);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      next.toISOString(),
+    );
   });
 
   /**
