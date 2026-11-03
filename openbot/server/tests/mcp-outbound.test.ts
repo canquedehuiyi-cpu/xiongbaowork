@@ -59,9 +59,9 @@ describe("a custom server whose name resolves inside the deployment", () => {
 
       const listing = listTools(connection);
       await expect(listing).rejects.toBeInstanceOf(McpServerError);
-      await expect(listing).rejects.toThrow(/inside this deployment's network/);
+      await expect(listing).rejects.toThrow(/内部网络/);
       await expect(callTool(connection, "anything", {})).rejects.toThrow(
-        /inside this deployment's network/,
+        /内部网络/,
       );
       expect(calls).toHaveLength(0);
     });
@@ -90,7 +90,7 @@ describe("a custom server that answers with a redirect", () => {
       },
     };
 
-    await expect(listTools(connection)).rejects.toThrow(/redirect/i);
+    await expect(listTools(connection)).rejects.toThrow(/重定向/);
 
     // Only ever the address that was registered; the Location was never requested, so the header
     // never left for it.

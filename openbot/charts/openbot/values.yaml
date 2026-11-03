@@ -458,7 +458,8 @@ database:
   #   roleWriterUrl: postgres://openbot_role_writer:<other password>@host:5432/openbot?sslmode=require
   #
   # Set both roles' passwords yourself after the first migration (the migration's are public).
-  # Only the API server reads it; the migrations Job and the sweeps do not get it.
+  # Only the API server reads it; the migrations Job and the sweeps do not get it. With the bundled
+  # database the chart makes this role's password itself (see templates/database-roles-secret.yaml).
   #
   # With `existingSecret`, the role-writer URL is read from the same Secret under
   # `roleWriterExistingSecretKey`, so a Secret made for this chart carries both keys. Name another
@@ -467,6 +468,22 @@ database:
   roleWriterUrl: ""
   roleWriterExistingSecret: ""
   roleWriterExistingSecretKey: "role-writer-database-url"
+  # THE MIGRATION URL: the database OWNER, used by the migrations Job only and never by the API.
+  # The API's role (`url` above, openbot_app) cannot run migrations: the grants and roles they make
+  # are the owner's. Inline as `migrationUrl` (required with an inline `url`), or with
+  # `existingSecret` under `migrationExistingSecretKey` in the same Secret. A Secret without that key
+  # still upgrades: the Job logs that it is migrating with `database-url` as it used to, which works
+  # only when that URL is itself the owner's.
+  migrationUrl: ""
+  migrationExistingSecretKey: "migration-database-url"
+  # BUNDLED DATABASE ONLY: the role writer's password. Empty, the chart generates one and reads it
+  # back from the cluster on each upgrade. A tool that renders without cluster access (GitOps,
+  # `helm template`) cannot read it back and generates a new one every render, which also rolls the
+  # API pods each sync: SET ONE HERE (alphanumeric, e.g. `openssl rand -hex 24`), or name a Secret
+  # you manage with `roleWriterPasswordExistingSecret` (key `roleWriterPasswordExistingSecretKey`).
+  roleWriterPassword: ""
+  roleWriterPasswordExistingSecret: ""
+  roleWriterPasswordExistingSecretKey: "role-writer-password"
 
 # The bundled database. Off by default in favour of a managed one.
 # The bundled database.

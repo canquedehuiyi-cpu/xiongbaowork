@@ -710,6 +710,6 @@ describe("a redirect from Drive is not followed", () => {
     expect(calls[0]?.redirect).toBe("manual");
     expect(new URL(calls[0]?.url ?? "").hostname).toBe("www.googleapis.com");
     expect(result.isError).toBe(true);
-    expect(result.text).toMatch(/redirect/i);
+    expect(result.text).toMatch(/重定向/);
   });
 });

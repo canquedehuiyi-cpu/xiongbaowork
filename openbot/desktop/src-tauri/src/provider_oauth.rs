@@ -885,7 +885,7 @@ mod tests {
         let ready = lock_child_ready(&mut child);
         // Bun's own start is not what this measures. On a loaded Windows runner the start plus the
         // lock (PowerShell, then Add-Type) once took more than the 15 s the whole thing had, so the
-        // fixture's start gets its own bound and the lock keeps 15 s from its attempt.
+        // fixture's start gets its own bound here, and the lock gets the helper's bounds below.
         assert_eq!(
             ready.recv_timeout(Duration::from_secs(60)).unwrap(),
             "waiting"
@@ -899,10 +899,12 @@ mod tests {
         ));
         drop(native);
         let dropped = std::time::Instant::now();
-        // 15 s: Bun's own Windows lock helper gives up 15 s after it started, before the drop, so
-        // a lock that fails says so ("child exited without a lock") before this times out.
+        // 75 s: Bun's Windows lock helper (server/src/provider-oauth-lock.ts, LOCK_HELPER_TIMING)
+        // gets 60 s to start and then 15 s to lock, both counted from before the drop, so a lock
+        // that fails says so ("child exited without a lock") before this times out. On Unix Bun
+        // retries the flock itself and answers within milliseconds of the drop.
         assert_eq!(
-            ready.recv_timeout(Duration::from_secs(15)).unwrap(),
+            ready.recv_timeout(Duration::from_secs(75)).unwrap(),
             "locked"
         );
         eprintln!(

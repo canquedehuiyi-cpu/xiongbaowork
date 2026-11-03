@@ -29,5 +29,13 @@
   // type-checked and turning it on surfaces a few hundred years of accumulated `any`. It is what let
   // a test pass an options object where a connection string belongs and hear nothing back. Its own
   // change, because it is a sweep and not a fix.
-  "include": ["src", "scripts", "../scripts/composio-smoke.ts"]
+  //
+  // `../scripts/e2e/wakerflow-lifecycle.ts`: the G4 gate's harness, run by the `e2e-wakerflow` CI job.
+  // It is a module and drives this workspace's server, so it is checked here like composio-smoke.
+  "include": [
+    "src",
+    "scripts",
+    "../scripts/composio-smoke.ts",
+    "../scripts/e2e/wakerflow-lifecycle.ts"
+  ]
 }

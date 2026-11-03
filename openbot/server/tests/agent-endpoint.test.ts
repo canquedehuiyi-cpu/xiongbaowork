@@ -620,7 +620,7 @@ describe("dialling a stored agent endpoint", () => {
         method: "POST",
         body: new ReadableStream(),
       }),
-    ).rejects.toThrow(/will not forward/i);
+    ).rejects.toThrow(/不会把这次运行转发/);
     expect(calls.length).toBe(1);
   });
 
@@ -636,7 +636,7 @@ describe("dialling a stored agent endpoint", () => {
         method: "POST",
         body: "not json at all",
       }),
-    ).rejects.toThrow(/will not forward/i);
+    ).rejects.toThrow(/不会把这次运行转发/);
     expect(calls.length).toBe(1);
   });
 
@@ -889,7 +889,7 @@ describe("where a hop's name resolves", () => {
       ).rejects.toBeInstanceOf(EndpointNotAllowedError);
       expect(calls).toHaveLength(0);
       expect(refusals).toHaveLength(1);
-      expect(refusals[0]?.reason).toMatch(/inside this deployment's network/);
+      expect(refusals[0]?.reason).toMatch(/内部网络/);
     }
   });
 
@@ -1004,7 +1004,7 @@ describe("where a hop's name resolves", () => {
     });
 
     await expect(dial("https://gone.example.com/ag-ui", keyed)).rejects.toThrow(
-      /could not be resolved/,
+      /无法解析/,
     );
     expect(calls).toHaveLength(0);
     expect(refusals).toHaveLength(0);

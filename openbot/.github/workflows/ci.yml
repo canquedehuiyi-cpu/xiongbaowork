@@ -177,17 +177,17 @@ jobs:
       # Getting that wrong is invisible until a pod starts, and every shipped target had it wrong.
       - run: bun scripts/check-rendered-chart.ts rendered.yaml
       # The API refuses to start without ROLE_WRITER_DATABASE_URL against an external database, and
-      # the chart never set it, so every external-database install crash-looped. Every external target
-      # here reads both URLs from its database Secret; the bundled target is left exactly as it was.
+      # the chart never set it, so every install crash-looped. Every external target here reads both
+      # URLs from its database Secret; the bundled target gets it from the chart's own password Secret.
       - name: Role writer reaches the API
         run: |
           set -euo pipefail
           if grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/openbot/ci/${{ matrix.target }}-values.yaml); then
-            if grep -q 'ROLE_WRITER_DATABASE_URL' rendered.yaml; then
-              echo "::error::The bundled database render gained ROLE_WRITER_DATABASE_URL; it is meant to be unchanged."
+            grep -A1 'name: ROLE_WRITER_DATABASE_URL$' rendered.yaml | grep -q 'openbot_role_writer:$(ROLE_WRITER_PASSWORD)@' || {
+              echo "::error::The bundled database render does not give the API the role writer from the chart's password Secret."
               exit 1
-            fi
-            echo "bundled database: no role-writer URL, unchanged"
+            }
+            echo "bundled database: role-writer URL from the chart's password Secret"
           else
             grep -A4 'name: ROLE_WRITER_DATABASE_URL' rendered.yaml | grep -q 'key: role-writer-database-url' || {
               echo "::error::An external-database render does not give the API ROLE_WRITER_DATABASE_URL from the database Secret."
@@ -202,6 +202,7 @@ jobs:
               --set-string database.existingSecret= \
               --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
               --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/openbot \
+              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/openbot \
               | grep -A1 'name: ROLE_WRITER_DATABASE_URL' | grep -q 'openbot_role_writer:y@db.internal' || {
               echo "::error::An inline database.roleWriterUrl did not reach the API."
               exit 1
@@ -266,7 +267,12 @@ jobs:
           if ! grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/openbot/ci/${{ matrix.target }}-values.yaml); then
             refuses "an external database URL with no role-writer URL" \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
+              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/openbot
+            refuses "an external database URL with no owner URL for migrations" \
+              --set-string database.existingSecret= \
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
+              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/openbot
           else
             echo "skipped: the role-writer refusal is only armed for an external database"
           fi

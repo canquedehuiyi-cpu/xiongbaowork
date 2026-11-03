@@ -240,15 +240,21 @@ migrated one database while the API talked to another is a failure that looks li
 {{/*
 The role writer's URL (migration 0109's `openbot_role_writer`), for the API server only.
 
-The API refuses to start without it against an external database. Its own Secret first if one is
-named, then an inline URL, then the database's Secret under its own key, so a Secret made for this
-chart carries both URLs. Nothing with the bundled database, which this leaves exactly as it was.
+The API refuses to start without it in every mode. With the bundled database: the role writer's
+password from the chart's own `-database-roles` Secret (see database-roles-secret.yaml), declared
+first for the reason `openbot.databaseUrlEnv` gives. External: its own Secret first if one is named,
+then an inline URL, then the database's Secret under its own key, so a Secret made for this chart
+carries both URLs.
 Every key is read through `default`, so a release upgraded with `--reuse-values` from before these
 keys existed still renders (and then fails in `validation.yaml` or on the missing Secret key, which
 both name what to set, rather than on a nil).
 */}}
 {{- define "openbot.roleWriterDatabaseUrlEnv" -}}
-{{- if not .Values.postgresql.enabled -}}
+{{- if .Values.postgresql.enabled -}}
+{{ include "openbot.roleWriterPasswordEnv" . }}
+- name: ROLE_WRITER_DATABASE_URL
+  value: postgres://openbot_role_writer:$(ROLE_WRITER_PASSWORD)@{{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.auth.database }}
+{{- else -}}
 {{- $database := .Values.database | default dict -}}
 {{- $ownSecret := $database.roleWriterExistingSecret | default "" -}}
 {{- $key := $database.roleWriterExistingSecretKey | default "role-writer-database-url" -}}
@@ -267,6 +273,99 @@ both name what to set, rather than on a nil).
     secretKeyRef:
       name: {{ $database.existingSecret }}
       key: {{ $key }}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The bundled database's role-writer password (see database-roles-secret.yaml): the operator's
+`database.roleWriterPassword` if set, else the value already in the cluster, else a new one.
+*/}}
+{{- define "openbot.roleWriterPassword" -}}
+{{- $database := .Values.database | default dict -}}
+{{- $password := $database.roleWriterPassword | default "" -}}
+{{- if not $password -}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace (printf "%s-database-roles" (include "openbot.fullname" .)) -}}
+{{- if and $existing $existing.data (index $existing.data "role-writer-password") -}}
+{{- $password = index $existing.data "role-writer-password" | b64dec -}}
+{{- else -}}
+{{- $password = randAlphaNum 48 -}}
+{{- end -}}
+{{- end -}}
+{{- $password -}}
+{{- end -}}
+
+{{/*
+ROLE_WRITER_PASSWORD for the bundled database: from the operator's own Secret when one is named,
+else from the chart's `-database-roles` Secret.
+*/}}
+{{- define "openbot.roleWriterPasswordEnv" -}}
+{{- $database := .Values.database | default dict -}}
+- name: ROLE_WRITER_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      {{- if $database.roleWriterPasswordExistingSecret }}
+      name: {{ $database.roleWriterPasswordExistingSecret }}
+      key: {{ $database.roleWriterPasswordExistingSecretKey | default "role-writer-password" }}
+      {{- else }}
+      name: {{ include "openbot.fullname" . }}-database-roles
+      key: role-writer-password
+      {{- end }}
+{{- end -}}
+
+{{/*
+What the API pods' `checksum/role-writer` annotation follows, so a changed role-writer password rolls
+them: the role is ALTERed by the migrations Job and a running pod keeps the password it started with.
+A hash, never the value. With an operator's Secret, its data when the cluster can be read.
+*/}}
+{{- define "openbot.roleWriterChecksum" -}}
+{{- $database := .Values.database | default dict -}}
+{{- if $database.roleWriterPasswordExistingSecret -}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $database.roleWriterPasswordExistingSecret -}}
+{{- printf "%s/%v" $database.roleWriterPasswordExistingSecret (($existing).data | default dict) | sha256sum -}}
+{{- else -}}
+{{- include "openbot.roleWriterPassword" . | sha256sum -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Where the migrations Job connects: the database OWNER, never the API's role.
+
+Bundled: the same owner URL the API gets (`openbot.databaseUrlEnv`), plus the role writer's password,
+which the Job sets on the role after migrating. External: `database.migrationUrl` when given inline;
+with `database.existingSecret`, MIGRATION_DATABASE_URL from that Secret's
+`database.migrationExistingSecretKey` (optional there, so a Secret from before this key still
+upgrades: the Job then says so and migrates with DATABASE_URL as it used to). An inline database
+without `migrationUrl` is refused in validation.yaml.
+*/}}
+{{- define "openbot.migrationDatabaseUrlEnv" -}}
+{{- $database := .Values.database | default dict -}}
+{{- if .Values.postgresql.enabled -}}
+{{ include "openbot.databaseUrlEnv" . }}
+{{ include "openbot.roleWriterPasswordEnv" . }}
+{{- else if $database.migrationUrl -}}
+- name: DATABASE_URL
+  value: {{ $database.migrationUrl | quote }}
+{{- /* The API's own URL, so the Job can check both reach the same database before migrating. */}}
+{{- if $database.existingSecret }}
+- name: APP_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.existingSecret }}
+      key: {{ $database.existingSecretKey | default "database-url" }}
+{{- else if $database.url }}
+- name: APP_DATABASE_URL
+  value: {{ $database.url | quote }}
+{{- end }}
+{{- else -}}
+{{ include "openbot.databaseUrlEnv" . }}
+{{- if $database.existingSecret }}
+- name: MIGRATION_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $database.existingSecret }}
+      key: {{ $database.migrationExistingSecretKey | default "migration-database-url" }}
+      optional: true
 {{- end -}}
 {{- end -}}
 {{- end -}}

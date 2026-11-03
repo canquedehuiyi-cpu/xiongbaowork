@@ -450,5 +450,18 @@ describe("the list says when the breaker stopped it (C1/C3)", () => {
     expect(
       (await listed(alice)).find((item) => item.id === automation.id),
     ).toMatchObject({ enabled: true, breakerTripped: false });
+
+    // Resumed, then paused by hand: off, but no longer the breaker's doing.
+    const pausedAgain = await call(alice, "PUT", `/${automation.id}/enabled`, {
+      enabled: false,
+    });
+    expect(pausedAgain.status).toBe(200);
+    expect(
+      (await listed(alice)).find((item) => item.id === automation.id),
+    ).toMatchObject({ enabled: false, breakerTripped: false });
+    // The retired marker still ends the failed streak: nothing is counted from before the trip.
+    expect(
+      await runAsTenant(alice, () => store.consecutiveFailures(automation.id)),
+    ).toBe(0);
   });
 });
