@@ -29,16 +29,18 @@ export function wakerGroupsQueryOptions() {
 }
 
 /**
- * The three fields the status line reads, out of the task rows the board already serves.
+ * The fields the status line reads, out of the task rows the board already serves.
  *
  * Deliberately not a copy of the board's `Task`: this screen answers one question — is anything
- * running for this coworker right now — and a wider type would invite it to start restating facts
- * the board is better placed to state.
+ * running for this coworker right now, and on which machine (spec F4) — and a wider type would invite
+ * it to start restating facts the board is better placed to state.
  */
 export type RunningTask = {
   id: string;
   executorAgentId: string;
   status: string;
+  /** The machine device mode picked for this task; null in cloud mode or with none paired. */
+  deviceId?: string | null;
 };
 
 export function runningTasksQueryOptions() {

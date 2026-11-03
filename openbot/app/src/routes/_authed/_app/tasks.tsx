@@ -387,13 +387,19 @@ export const archivesOnDrop = (
   laneKey === "finished" &&
   (status === "awaiting_review" || (status === "failed" && !archivedAt));
 
-const FILTERS = [
-  { key: "", label: "全部" },
+/**
+ * Spec A4's 状态 dropdown: every status the address can carry, in the board's words. `ended` is the
+ * stat bar's 已结束 (the screen's own key, see `ENDED_STATUSES`), listed so the dropdown can show the
+ * filter the bar set rather than a blank.
+ */
+export const STATUS_FILTERS = [
+  { key: "", label: "全部状态" },
   { key: "running", label: "进行中" },
   { key: "needs_action", label: "需要操作" },
   { key: "awaiting_review", label: "查收结果" },
   { key: "done", label: "已结束-已完成" },
   { key: "failed", label: "已结束-失败" },
+  { key: "ended", label: "已结束（全部）" },
 ] as const;
 
 /**
@@ -709,8 +715,11 @@ function TaskCard({
   decidingIds,
 }: {
   task: Task;
-  /** Which of the tenant's machines did it, already named — or its id if the machine is gone. */
-  machine: string | null;
+  /**
+   * Which of the tenant's machines did it, already named — or its id if the machine is gone — and
+   * whether that machine is online now (spec F4).
+   */
+  machine: DevicePresence | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
@@ -851,8 +860,24 @@ function TaskCard({
          * machine, and a lane that mixes a laptop's task with a desktop's has to say which is which
          * without making somebody count chips at the top.
          */}
+        {/*
+         * Spec F4: and whether that machine is there right now. Work bound to an offline machine
+         * waits for it (the device queue), so 离线 on the card is why such a card is not moving.
+         */}
         {machine ? (
-          <span className="rounded bg-foreground/5 px-1.5">{machine}</span>
+          <span
+            className={`rounded px-1.5 ${
+              machine.online === false
+                ? "bg-red-500/10 text-red-500"
+                : "bg-foreground/5"
+            }`}
+            data-device-online={
+              machine.online === null ? "unknown" : String(machine.online)
+            }
+            title={`设备${presenceWord(machine.online)}`}
+          >
+            {machine.name} · {presenceWord(machine.online)}
+          </span>
         ) : null}
         {/*
          * What there is to 查收 (spec A9): the components it drew and the files it handed over, so the
@@ -900,6 +925,11 @@ function TaskCard({
   );
 }
 
+import {
+  type DevicePresence,
+  presenceOf,
+  presenceWord,
+} from "@/lib/devices/presence";
 import { devicesQueryOptions } from "@/lib/devices/queries";
 
 /**
@@ -933,7 +963,7 @@ export function AttentionRegion({
   decidingIds,
 }: {
   tasks: Task[];
-  machineLabel: (deviceId: string | null) => string | null;
+  machineLabel: (deviceId: string | null) => DevicePresence | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
@@ -1047,10 +1077,11 @@ export const whoAddress = (
   };
 };
 
-const PERIODS: { label: string; value: Period }[] = [
-  { label: "一周", value: "week" },
-  { label: "一月", value: "month" },
-  { label: "全部", value: "all" },
+/** Spec A4's 数据周期 dropdown. Its own words, since the 状态 dropdown beside it also has a 全部. */
+export const PERIODS: { label: string; value: Period }[] = [
+  { label: "最近一周", value: "week" },
+  { label: "最近一月", value: "month" },
+  { label: "全部时间", value: "all" },
 ];
 
 function TasksPage() {
@@ -1196,15 +1227,11 @@ function TasksPage() {
   /*
    * Named from the machines this person owns, and the id when the machine is not among them: work
    * that happened on a laptop which has since been unpaired still happened there, and a card that
-   * goes quiet about it reads as work that happened nowhere.
+   * goes quiet about it reads as work that happened nowhere. With it, whether that machine is online
+   * (spec F4), from the same device list.
    */
-  const machineLabel = (deviceId: string | null) => {
-    if (!deviceId) return null;
-    const known = (machines.data ?? []).find(
-      (machine) => machine.deviceId === deviceId,
-    );
-    return known?.name ?? deviceId.slice(0, 8);
-  };
+  const machineLabel = (deviceId: string | null) =>
+    presenceOf(deviceId, machines.data);
   const dropLane = (laneKey: string, taskId: string) => {
     const task = list.find((entry) => entry.id === taskId);
     if (task && archivesOnDrop(laneKey, task.status, task.archivedAt)) {
@@ -1334,38 +1361,39 @@ function TasksPage() {
         />
       ) : null}
       <div className="flex flex-wrap items-center gap-2 pb-4">
-        {FILTERS.map((entry) => (
-          <button
-            aria-pressed={status === entry.key}
-            key={entry.key}
-            type="button"
-            onClick={() => setStatus(entry.key)}
-            className={`rounded-full px-3 py-1 text-sm ${
-              status === entry.key
-                ? "bg-foreground text-background"
-                : "bg-foreground/5 hover:bg-foreground/10"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-        <span className="flex items-center gap-1">
-          {PERIODS.map((entry) => (
-            <button
-              aria-pressed={period === entry.value}
-              className={`rounded-full px-3 py-1 text-sm ${
-                period === entry.value
-                  ? "bg-foreground text-background"
-                  : "bg-foreground/5 hover:bg-foreground/10"
-              }`}
-              key={entry.value}
-              onClick={() => setPeriod(entry.value)}
-              type="button"
-            >
+        {/*
+         * Spec A4: 状态 and 数据周期 are dropdowns, like Waker/Group and 触发方式 beside them. Each
+         * still writes one axis of the address (`status`, `period`), so the query and a shared link
+         * mean what they did when these were buttons.
+         */}
+        <select
+          aria-label="状态"
+          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          onChange={(event) => setStatus(event.target.value)}
+          value={status}
+        >
+          {status && !STATUS_FILTERS.some((entry) => entry.key === status) ? (
+            // A link may name a status this release has no word for; it is still what is applied.
+            <option value={status}>当前状态：{status}</option>
+          ) : null}
+          {STATUS_FILTERS.map((entry) => (
+            <option key={entry.key} value={entry.key}>
               {entry.label}
-            </button>
+            </option>
           ))}
-        </span>
+        </select>
+        <select
+          aria-label="数据周期"
+          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          onChange={(event) => setPeriod(event.target.value as Period)}
+          value={period}
+        >
+          {PERIODS.map((entry) => (
+            <option key={entry.value} value={entry.value}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
         <input
           aria-label="搜索任务"
           value={search}
@@ -1452,7 +1480,8 @@ function TasksPage() {
                 }`}
               >
                 {machine.name}
-                {!machine.online ? " · 休眠" : ""}
+                {/* Spec F4: each machine says whether it is there, not only when it is away. */}
+                {` · ${presenceWord(machine.online)}`}
                 {machine.needsAttention
                   ? ` · 需要你 (${machine.queued})`
                   : machine.queued

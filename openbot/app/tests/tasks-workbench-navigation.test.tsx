@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
@@ -305,7 +305,14 @@ test("moving the window keeps every other axis; only post-click requests are jud
     ),
   ).toBe(true);
   const before = taskRequests(requests).length;
-  await clickButtonByText(view, "一月");
+  // Spec A4: the window is the 数据周期 dropdown.
+  fireEvent.change(
+    view.container.querySelector(
+      'select[aria-label="数据周期"]',
+    ) as HTMLSelectElement,
+    { target: { value: "month" } },
+  );
+  await settleReactWork();
   await waitFor(() => {
     expect(taskRequests(requests).length).toBeGreaterThan(before);
   });
@@ -414,4 +421,79 @@ test("clearing the machine leaves the crew and the rest of the filter in place",
   expect(list.some((url) => url.includes("deviceId=d-1"))).toBe(true);
   expect(list[list.length - 1]).not.toInclude("deviceId=");
   expect(list[list.length - 1]).toInclude("executors=growth");
+});
+
+/*
+ * Spec A4: 状态 and 数据周期 are dropdowns, like Waker/Group and 触发方式. They write the same two
+ * axes the buttons did, so the address and both reads mean exactly what they meant before.
+ */
+test("the 状态 and 数据周期 dropdowns write their axes and keep the others", async () => {
+  const requests: string[] = [];
+  controlFetch(requests);
+  const { router, view } = draw("/tasks?machineId=d-1&q=weekly", requests);
+  await waitFor(() => {
+    expect(
+      view.container.querySelector('select[aria-label="状态"]'),
+    ).not.toBeNull();
+  });
+  const select = (label: string) =>
+    view.container.querySelector(
+      `select[aria-label="${label}"]`,
+    ) as HTMLSelectElement;
+  // Every status the address can carry, including the stat bar's 已结束.
+  expect([...select("状态").options].map((option) => option.value)).toEqual([
+    "",
+    "running",
+    "needs_action",
+    "awaiting_review",
+    "done",
+    "failed",
+    "ended",
+  ]);
+  expect([...select("数据周期").options].map((option) => option.value)).toEqual(
+    ["week", "month", "all"],
+  );
+  // The defaults read as chosen: every status, the last month.
+  expect(select("状态").value).toBe("");
+  expect(select("数据周期").value).toBe("month");
+  // No status or period buttons are left beside the dropdowns.
+  for (const label of ["全部", "进行中", "一周", "一月"]) {
+    expect(
+      [...view.container.querySelectorAll("button")].filter(
+        (node) => (node.textContent ?? "").trim() === label,
+      ),
+    ).toEqual([]);
+  }
+
+  const before = taskRequests(requests).length;
+  // One choice at a time, as a person makes them: each writes its axis onto the current address.
+  fireEvent.change(select("状态"), { target: { value: "failed" } });
+  await waitFor(() => {
+    expect(router.state.location.href).toInclude("status=failed");
+  });
+  fireEvent.change(select("数据周期"), { target: { value: "week" } });
+  await waitFor(() => {
+    const after = taskRequests(requests).slice(before);
+    expect(
+      after.some(
+        (url) => url.includes("status=failed") && url.includes("period=week"),
+      ),
+    ).toBe(true);
+  });
+  const href = router.state.location.href;
+  for (const axis of [
+    "status=failed",
+    "period=week",
+    "machineId=d-1",
+    "q=weekly",
+  ])
+    expect(href).toInclude(axis);
+  expect(select("状态").value).toBe("failed");
+  expect(select("数据周期").value).toBe("week");
+  // The stat bar's 已结束 is ended in the address, and the dropdown says so.
+  fireEvent.change(select("状态"), { target: { value: "ended" } });
+  await waitFor(() => {
+    expect(router.state.location.href).toInclude("status=ended");
+  });
+  expect(select("状态").value).toBe("ended");
 });

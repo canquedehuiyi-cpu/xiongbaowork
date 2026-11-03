@@ -42,9 +42,10 @@ import { observeApprovalAgent } from "@/lib/copilot/approval-context";
 import { ConversationProvider } from "@/lib/copilot/conversation";
 import { afterMs, joinWithin } from "@/lib/copilot/join-thread";
 import { repairUnansweredToolCalls } from "@/lib/copilot/repair-history";
-import { stoppedReason } from "@/lib/copilot/stopped-turn";
+import { runErrorReason, stoppedReason } from "@/lib/copilot/stopped-turn";
 import { readThreadMessages } from "@/lib/copilot/thread-messages";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
+import { reportIfQuotaError } from "@/lib/quota/guidance";
 import {
   askChannelAgent,
   messageText,
@@ -834,7 +835,8 @@ export function ChannelChat({
     const subscription = agent.subscribe?.({
       // Both surfaces fall back to the same sentence, from the same place, so a person who uses
       // both is not told two different things about the same silence.
-      onRunErrorEvent: ({ event }) => fail(stoppedReason(event?.message)),
+      // A quota refusal also opens the guidance dialog (story K4); see `runErrorReason`.
+      onRunErrorEvent: ({ event }) => fail(runErrorReason(event)),
       onRunFailed: ({ error }) => fail(stoppedReason(error)),
       onRunFinishedEvent: () => {
         const wasOurs = awaitingReply.current;
@@ -1077,6 +1079,8 @@ export function ChannelChat({
                   });
                 }
               } catch (error) {
+                // A dispatch refused for quota is a 402 from `/dispatch`: the same guidance (K4).
+                reportIfQuotaError(error);
                 // Only a refused dispatch is said here; a failed turn has its own line (`runError`).
                 if (
                   draft.agentId !== null &&

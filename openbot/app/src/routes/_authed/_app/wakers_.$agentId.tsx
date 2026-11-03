@@ -23,6 +23,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
 import { agentRunningTasksQueryOptions } from "@/lib/bot-lifecycle/queries";
 import { RequestError } from "@/lib/client";
+import {
+  modelChoiceName,
+  modelLibraryQueryOptions,
+  poolChoiceName,
+} from "@/lib/models/queries";
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { routinesQueryOptions } from "@/lib/routines/queries";
@@ -134,6 +139,7 @@ function WakerDetailPage() {
             : "这位员工归别人所有，这里只能看。"}
         </p>
       </div>
+      <ModelLine profile={profile} />
 
       <DutiesSection profile={profile} />
       <RunningTasksSection agentId={profile.id} />
@@ -146,6 +152,50 @@ function WakerDetailPage() {
         <AgentAuditTrail agentId={profile.id} />
       </PageSection>
     </PageShell>
+  );
+}
+
+/**
+ * Which model this coworker's runs speak with (story H4), named the way the assembly page names it.
+ *
+ * Read from the profile's own binding and the existing model library, nothing else: a remote coworker
+ * chooses its model on its own server; an unbound one runs on the deployment's model; a pool binding
+ * is a platform experience model. A library binding is resolved only against the VIEWER's library,
+ * which is the owner's only when the viewer is the owner, so anybody else is told whose library it is
+ * in rather than shown an id.
+ */
+function ModelLine({ profile }: { profile: AgentProfile }) {
+  const bound =
+    profile.builtIn && Boolean(profile.modelRef || profile.platformModelRef);
+  const library = useQuery({ ...modelLibraryQueryOptions(), enabled: bound });
+
+  let name: string;
+  if (!profile.builtIn) name = "外部托管模型";
+  else if (!bound) name = "部署默认模型";
+  else if (library.isPending) name = "正在读取…";
+  else if (profile.platformModelRef) {
+    const pooled = library.data?.pool.find(
+      (model) => model.id === profile.platformModelRef,
+    );
+    name = pooled
+      ? `${poolChoiceName(pooled)}（平台体验模型）`
+      : "平台体验模型";
+  } else {
+    const connected = library.data?.models.find(
+      (model) => model.id === profile.modelRef,
+    );
+    name = connected
+      ? modelChoiceName(connected)
+      : library.isError
+        ? "模型库里的一个模型（读不到模型库）"
+        : "主人模型库里的一个模型";
+  }
+
+  return (
+    <p className="mt-3 text-sm" data-testid="coworker-model">
+      <span className="text-muted-foreground">模型：</span>
+      {name}
+    </p>
   );
 }
 

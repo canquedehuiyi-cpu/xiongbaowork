@@ -1,4 +1,6 @@
+import { type BaseEvent, EventType } from "@ag-ui/client";
 import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { catchError, type Observable, of, throwError } from "rxjs";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
@@ -99,6 +101,62 @@ export class QuotaExceeded extends Error {
       upgradeUrl: "/plans" as const,
     };
   }
+}
+
+/**
+ * The `code` a chat turn refused for quota carries on its run stream (story K4).
+ *
+ * A turn is not a JSON request: the runtime answers it with an event stream, and a runner that fails
+ * that stream with `QuotaExceeded` reaches the browser as a stream that simply closes, because the
+ * runtime logs the error and ends the response without writing an event. The person saw the composer
+ * unlock and nothing else. The refusal therefore goes on the stream as the event every chat surface
+ * already reads, `RUN_ERROR`, with this stable code and the same 402 body the JSON routes send in
+ * `rawEvent`, so the browser can show the same guidance it shows for a refused request.
+ */
+export const QUOTA_RUN_ERROR_CODE = "quota_exceeded";
+
+/** One refused turn as the `RUN_ERROR` that says so: message, stable code, and the 402 body. */
+export function quotaRunError(refusal: QuotaExceeded): BaseEvent {
+  return {
+    type: EventType.RUN_ERROR,
+    message: refusal.message,
+    code: QUOTA_RUN_ERROR_CODE,
+    rawEvent: refusal.body,
+  } as BaseEvent;
+}
+
+/** A quota refusal on a turn's stream becomes a `RUN_ERROR` and a normal close; anything else passes. */
+export function quotaRefusalAsRunError(
+  stream: Observable<BaseEvent>,
+): Observable<BaseEvent> {
+  return stream.pipe(
+    catchError((error: unknown) =>
+      error instanceof QuotaExceeded
+        ? of(quotaRunError(error))
+        : throwError(() => error),
+    ),
+  );
+}
+
+/**
+ * The runner as the chat runtime is given it: every `run` it answers says a quota refusal on the
+ * stream. Everything else (thread endpoints, hydration, the runner's own methods) is the runner's.
+ *
+ * Only the runtime the browser talks to gets this. A hop or an unattended turn drives the runner
+ * directly and still sees `QuotaExceeded` thrown, which is how those callers record a skipped turn.
+ */
+export function withQuotaRunErrors<
+  T extends { run: (request: never) => Observable<BaseEvent> },
+>(runner: T): T {
+  return new Proxy(runner, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (property === "run")
+        return (request: Parameters<T["run"]>[0]) =>
+          quotaRefusalAsRunError(target.run(request));
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 const METRIC_WORDS: Record<QuotaMetric, string> = {

@@ -1,5 +1,6 @@
 import { useAgent } from "@copilotkit/react-core/v2";
 import { useEffect, useState } from "react";
+import { reportIfQuotaRunError } from "@/lib/quota/guidance";
 
 /**
  * Why the last turn ended without an answer, for a surface that has to say so itself.
@@ -33,6 +34,19 @@ export function stoppedReason(reported: unknown): string {
 }
 
 /**
+ * The sentence for a turn's `RUN_ERROR`, in either chat surface.
+ *
+ * A turn refused for quota (story K4) opens the one guidance dialog — what ran out, and how to
+ * upgrade or wait — and the chat's own line says the same in a sentence. Every other run error is
+ * passed on in the words of whatever ended the turn, as {@link stoppedReason} does.
+ */
+export function runErrorReason(event: unknown): string {
+  const quota = reportIfQuotaRunError(event);
+  if (quota) return `${quota.title}。${quota.sentence}。${quota.hint}`;
+  return stoppedReason((event as { message?: unknown } | undefined)?.message);
+}
+
+/**
  * Watch one Bot's runs and hold on to the reason the last one ended, if it ended badly.
  *
  * Bound by agent id rather than handed an agent, so a caller that only renders the packaged chat
@@ -50,7 +64,7 @@ export function useStoppedTurn(agentId: string): string | null {
   useEffect(() => {
     const subscription = agent.subscribe?.({
       onRunInitialized: () => setStopped(null),
-      onRunErrorEvent: ({ event }) => setStopped(stoppedReason(event?.message)),
+      onRunErrorEvent: ({ event }) => setStopped(runErrorReason(event)),
       onRunFailed: ({ error }) => setStopped(stoppedReason(error)),
     });
     return () => subscription?.unsubscribe();

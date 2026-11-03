@@ -134,3 +134,33 @@ export function reportIfQuotaError(error: unknown): boolean {
   reportQuotaExceeded(error.quota);
   return true;
 }
+
+/** The `code` the server puts on a chat turn's `RUN_ERROR` when the turn is refused for quota. */
+export const QUOTA_RUN_ERROR_CODE = "quota_exceeded";
+
+/**
+ * True-ish when a turn's `RUN_ERROR` is the server's quota refusal: reports it, and answers the
+ * guidance so the chat can say the same thing in its own line.
+ *
+ * A chat turn is a stream, not a request, so its refusal never reaches `client.ts`. The server writes
+ * it as `RUN_ERROR` with code `quota_exceeded` and the same 402 body in `rawEvent`
+ * (`server/src/quota/limits.ts`, `quotaRunError`). The body is validated by the same parser a 402
+ * response goes through, so a malformed one is left to the chat's ordinary error line.
+ */
+export function reportIfQuotaRunError(event: unknown): QuotaGuidance | null {
+  if (event === null || typeof event !== "object") return null;
+  const { code, message, rawEvent } = event as {
+    code?: unknown;
+    message?: unknown;
+    rawEvent?: unknown;
+  };
+  if (code !== QUOTA_RUN_ERROR_CODE) return null;
+  const details = new RequestError(
+    typeof message === "string" ? message : "",
+    402,
+    rawEvent,
+  ).quota;
+  if (!details) return null;
+  reportQuotaExceeded(details);
+  return guidanceFor(details);
+}

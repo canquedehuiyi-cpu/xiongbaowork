@@ -191,3 +191,11 @@ test("when the device list failed, nobody is said to be resting", async () => {
   await view.findByText(IDLE);
   expect(view.queryByText(new RegExp(RESTING))).toBeNull();
 });
+
+test("each machine on the board says whether it is online (spec F4)", async () => {
+  controlFetch("ok");
+  const { view } = draw("/tasks");
+  const chip = await view.findByRole("button", { name: /dev-laptop/ });
+  // Said when it is there, not only when it is away.
+  expect(chip.textContent).toBe("dev-laptop · 在线");
+});

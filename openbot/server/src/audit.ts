@@ -620,6 +620,11 @@ export type AuditEventQuery = {
   targetId?: string;
   from?: string;
   to?: string;
+  /**
+   * The person whose trail this is (`audit_events.tenant_id`). Never read from a URL: only the
+   * platform screen's per-tenant view sets it, inside `asAdminPlatform` (spec J5).
+   */
+  tenantId?: string;
 };
 
 export type AuditReader = {
@@ -1067,6 +1072,7 @@ export function createAuditReader(database: Database): AuditReader {
             ? eq(auditEvents.targetType, query.targetType)
             : undefined,
           query.targetId ? eq(auditEvents.targetId, query.targetId) : undefined,
+          query.tenantId ? eq(auditEvents.tenantId, query.tenantId) : undefined,
           query.from
             ? gt(auditEvents.createdAt, new Date(query.from))
             : undefined,

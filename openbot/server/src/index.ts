@@ -101,8 +101,11 @@ import {
 import {
   createWakerAutomationExecutor,
   firingOfInitiator,
+  wakerflowAutomationTarget,
 } from "./automations/waker-executor";
+import { createAutomationTargetRegistry } from "./automations/types";
 import { createAuth } from "./auth";
+import { createAdminScope } from "./auth/admin-scope";
 import {
   createDevRequireUser,
   DEV_ACTOR,
@@ -2511,7 +2514,12 @@ await startupLifecycle.run(async (startup) => {
     personInitiator: PERSON_INITIATOR,
   });
   // Declared before the approval-resume loop, which settles an automation firing an approval held.
-  const automationStore = createAutomationStore(database);
+  // AUT3: a WakerFlow target is accepted once it can be carried out, through the WakerFlow store.
+  const automationTargets = createAutomationTargetRegistry();
+  automationTargets.register(wakerflowAutomationTarget(wakerFlowStore));
+  const automationStore = createAutomationStore(database, {
+    executors: automationTargets,
+  });
   const approvalContinuationRunner = createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
@@ -3023,6 +3031,8 @@ await startupLifecycle.run(async (startup) => {
     quota,
     deviceIdOf: deviceIdForBot,
     accessRevokedOf: (userId: string) => isAccessRevoked(database, userId),
+    // AUT3: a WakerFlow target starts one run through the same path as the WakerFlow page's 运行.
+    wakerflows: wakerFlowStore,
   });
   const automationSweep = {
     store: automationStore,
@@ -3030,6 +3040,8 @@ await startupLifecycle.run(async (startup) => {
     owner: workOwner("automation"),
     executors: {
       waker: (firing: AutomationFiring, event?: AutomationEvent) =>
+        wakerAutomationExecutor.run(firing, event),
+      wakerflow: (firing: AutomationFiring, event?: AutomationEvent) =>
         wakerAutomationExecutor.run(firing, event),
     },
     // A turn can take minutes; it must not hold the next pass's offers past their grace window.
@@ -3968,6 +3980,8 @@ await startupLifecycle.run(async (startup) => {
       },
       groups: groupConversations,
       teamBots,
+      // AUT3: the WakerFlow target is registered above, so the form may offer it.
+      wakerflowAutomations: true,
       lifecycle: {
         lifecycle: createBotLifecycleStore(database),
         reset: createBotReset({
@@ -4001,6 +4015,11 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
       signInAuditStore,
+      // Spec J5's cross-tenant reads, through the admin capability like `/api/admin/audit-events`.
+      {
+        adminScope: createAdminScope({ roleRepository }),
+        auditReader: createAuditReader(database),
+      },
     ),
   );
 
