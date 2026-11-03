@@ -27,13 +27,14 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * Spec test decision #7's conversation face: a stranger may not read, post to, or delete a channel
  * they are not in, and each refusal is a 404.
  *
- * The first case measures which layer actually guards the row. Before G01-E the fixture ran
- * unframed, so the channel was written into the deployment's own `system` partition and only the
- * membership join inside each store method kept a stranger out. Every request now runs in the
- * signed-in person's frame (the stub below opens it, as the real `requireUser` does), so a person's
- * channel is stamped with them and row security keeps a stranger from even seeing the row; the
- * membership join is the second wall. A shared group (`team`, G01-E P11) is read only by its
- * members, which the last cases pin.
+ * The first case measures which layer actually guards the row. Every request runs in the signed-in
+ * person's frame (the stub below opens it, as the real `requireUser` does), so a person's channel
+ * is stamped with them and row security keeps a stranger from even seeing it: for that channel the
+ * store's own membership join is never reached. So a second channel is kept in the shape this file
+ * was written for before G01-E: stamped `system` (seeded by the platform, as legacy and catalogue
+ * rows are), which every person's SELECT admits, with only the owner's membership. There the
+ * membership join inside each store method is the only wall, and the same cases are asked of it.
+ * A shared group (`team`, G01-E P11) is read only by its members, which the last cases pin.
  *
  * Deletion is the damage case. A stranger's DELETE that answered 404 while stamping `deleted_at`
  * would empty the conversation out of its owner's sidebar and leave them no signal it happened.
@@ -70,7 +71,7 @@ const routesFor = (actorId: string) => {
 const call = (
   actorId: string,
   path: string,
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   body?: unknown,
 ) =>
   routesFor(actorId).request(
@@ -103,7 +104,20 @@ const rowOfChannel = () =>
 
 let channelId = "";
 let groupId = "";
+let legacyId = "";
 let seenByStrangerDirectly: string | undefined;
+let legacySeenByStrangerDirectly: string | undefined;
+
+/** The legacy channel's own row, all of it, as one comparable string (see `rowOfChannel`). */
+const rowOfLegacy = () =>
+  runAsTenant(owner, async () => {
+    const [row] = await database
+      .select()
+      .from(channels)
+      .where(eq(channels.id, legacyId))
+      .limit(1);
+    return row;
+  });
 
 beforeAll(async () => {
   for (const tenantId of [owner, stranger, teammate]) {
@@ -160,6 +174,55 @@ beforeAll(async () => {
       .limit(1);
     return row?.id;
   });
+
+  /*
+   * The legacy channel: `system`-stamped, every row of it, with only the owner in it. The stranger
+   * keeps a mapping of their own to it, as somebody taken out of a conversation does (the store
+   * leaves it; every read joins the membership), so the mapping join cannot stand in for the
+   * membership join either.
+   */
+  legacyId = `channel-tenant-${suite}-legacy`;
+  channelIds.push(legacyId);
+  await runAsTenant("platform", async () => {
+    await database.insert(channels).values({
+      id: legacyId,
+      name: "Legacy conversation",
+      description: "Written before conversations had owners.",
+      tenantId: "system",
+    });
+    await database.insert(channelMemberships).values({
+      channelId: legacyId,
+      userId: owner,
+      tenantId: "system",
+    });
+    await database.insert(channelAgents).values({
+      channelId: legacyId,
+      agentId: coworker.id,
+      tenantId: "system",
+    });
+    await database.insert(intelligenceChannelMappings).values([
+      {
+        userId: owner,
+        channelId: legacyId,
+        threadId: `${legacyId}-owner-thread`,
+        tenantId: "system",
+      },
+      {
+        userId: stranger,
+        channelId: legacyId,
+        threadId: `${legacyId}-stranger-thread`,
+        tenantId: stranger,
+      },
+    ]);
+  });
+  legacySeenByStrangerDirectly = await runAsTenant(stranger, async () => {
+    const [row] = await database
+      .select({ id: channels.id })
+      .from(channels)
+      .where(eq(channels.id, legacyId))
+      .limit(1);
+    return row?.id;
+  });
 });
 
 afterAll(async () => {
@@ -189,10 +252,59 @@ test("the owner reads the channel, and a stranger cannot even see the row in the
    * Recorded rather than assumed. This used to be the channel's id: the fixture ran unframed, the
    * row sat in the `system` partition every tenant's SELECT admits, and only the membership join
    * stood between a stranger and it. It flipped once every write and request ran in a person's
-   * frame (G01-E): the row is the owner's, and row security now does that work too. The cases below
-   * still go through the routes, so the store's own membership join is exercised as before.
+   * frame (G01-E): the row is the owner's, and row security turns the stranger away before the
+   * store's membership join is ever asked. That join is what the legacy channel below is for.
    */
   expect(seenByStrangerDirectly).toBeUndefined();
+});
+
+test("on the legacy channel the stranger SELECTs the row, and only the store's membership join refuses them", async () => {
+  // The owner, whose membership it is, reads it through the route: the fixture is reachable.
+  expect((await call(owner, legacyId)).status).toBe(200);
+  // The stranger sees the row itself: row security does not keep them out of a `system` row.
+  expect(legacySeenByStrangerDirectly).toBe(legacyId);
+
+  expect((await call(stranger, legacyId)).status).toBe(404);
+  const list = (await (await call(stranger, "")).json()) as {
+    channels: { id: string }[];
+  };
+  expect(list.channels.map((entry) => entry.id)).not.toContain(legacyId);
+  expect(
+    (await call(stranger, `${legacyId}/busy`, "POST", { busy: true })).status,
+  ).toBe(404);
+});
+
+test("on the legacy channel a stranger's activity, read marker and delete are 404s that change nothing", async () => {
+  const before = JSON.stringify(await rowOfLegacy());
+  const membershipBefore = await runAsTenant(owner, () =>
+    database
+      .select()
+      .from(channelMemberships)
+      .where(eq(channelMemberships.channelId, legacyId)),
+  );
+
+  const activity = await call(stranger, `${legacyId}/activity`, "POST", {
+    text: "standing at the window",
+    agentId: null,
+    at: new Date().toISOString(),
+  });
+  expect(activity.status).toBe(404);
+  expect((await call(stranger, `${legacyId}/read`, "PUT")).status).toBe(404);
+  expect(
+    (await call(stranger, `${legacyId}/pin`, "PUT", { pinned: true })).status,
+  ).toBe(404);
+  expect((await call(stranger, legacyId, "DELETE")).status).toBe(404);
+
+  // The whole channel row and every membership row are as they were: nothing stamped, nothing read.
+  expect(JSON.stringify(await rowOfLegacy())).toBe(before);
+  expect(
+    await runAsTenant(owner, () =>
+      database
+        .select()
+        .from(channelMemberships)
+        .where(eq(channelMemberships.channelId, legacyId)),
+    ),
+  ).toEqual(membershipBefore);
 });
 
 test("a stranger's read is a 404 and the channel is absent from their list", async () => {
