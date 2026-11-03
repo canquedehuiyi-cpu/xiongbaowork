@@ -17,6 +17,7 @@ import {
   type BotAttention,
   botLifecycleKeys,
 } from "@/lib/bot-lifecycle/queries";
+import { deviceKeys } from "@/lib/devices/queries";
 import {
   runningTasksQueryOptions,
   type WakerGroup,
@@ -604,4 +605,76 @@ test("a board that cannot be read is said as unknown, not as idle", async () => 
   // The roster still renders: not knowing who is busy is not the same as showing nothing.
   expect(screen.getByText("Backend Engineer")).toBeTruthy();
   expect(screen.getByText("Night Auditor")).toBeTruthy();
+});
+
+/*
+ * Spec F4: a coworker card says whether the machine its work runs on is online. A running task bound
+ * to a machine names that machine (the task's own deviceId); without one there is no binding to
+ * read, so the card says how many of the owner's machines are online, and says that is what it is.
+ * Not the owner's coworker, or nobody paired: no line at all.
+ */
+test("each card says whether the machine its work runs on is online", async () => {
+  const shared: AgentProfile = {
+    ...base,
+    id: "agent-9",
+    name: "Shared Helper",
+    mine: false,
+  };
+  queryClientForDraw = seed([base, reviewer, shared], [], ["agent-1"]);
+  queryClientForDraw.setQueryData(runningTasksQueryOptions().queryKey, [
+    {
+      id: "task-agent-1",
+      executorAgentId: "agent-1",
+      status: "running",
+      deviceId: "d-2",
+    },
+  ]);
+  const machine = (deviceId: string, name: string, online: boolean) => ({
+    id: `row-${deviceId}`,
+    deviceId,
+    name,
+    platform: "macos",
+    lastSeenAt: new Date().toISOString(),
+    online,
+  });
+  queryClientForDraw.setQueryData(deviceKeys.list(), [
+    machine("d-1", "studio", true),
+    machine("d-2", "laptop", false),
+  ]);
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  const lineOf = (name: string) =>
+    screen
+      .getByText(name)
+      .closest("[data-slot=item]")
+      ?.querySelector("[data-device-line]");
+
+  // Its running task is bound to the laptop, which is away.
+  const bound = lineOf("Backend Engineer");
+  expect(bound?.getAttribute("data-device-line")).toBe("task");
+  expect(bound?.getAttribute("data-device-online")).toBe("false");
+  expect(bound?.textContent).toBe("设备：laptop · 离线");
+
+  // Nothing running, so no binding: the owner's machines, said as such.
+  const owner = lineOf("Code Reviewer");
+  expect(owner?.getAttribute("data-device-line")).toBe("owner");
+  expect(owner?.getAttribute("data-device-online")).toBe("true");
+  expect(owner?.textContent).toBe(
+    "你的设备：1/2 台在线（没有进行中的任务绑定到具体设备）",
+  );
+
+  // Somebody else's coworker would not run on this person's machines: no line.
+  expect(lineOf("Shared Helper")).toBeNull();
+});
+
+test("with no paired machine, no card has a device line", async () => {
+  queryClientForDraw = seed([base], [], []);
+  queryClientForDraw.setQueryData(deviceKeys.list(), []);
+  const screen = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  expect(screen.container.querySelector("[data-device-line]")).toBeNull();
 });

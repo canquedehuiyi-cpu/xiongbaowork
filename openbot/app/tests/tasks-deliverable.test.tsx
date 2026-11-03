@@ -160,7 +160,9 @@ test("a card names the machine its work ran on, read from the row's deviceId", (
       <AttentionRegion
         machineLabel={(deviceId) => {
           asked.push(deviceId);
-          return deviceId === "d-1" ? "dev-laptop" : null;
+          return deviceId === "d-1"
+            ? { name: "dev-laptop", online: false }
+            : null;
         }}
         onArchive={() => {}}
         onReview={() => {}}
@@ -172,5 +174,7 @@ test("a card names the machine its work ran on, read from the row's deviceId", (
     </QueryClientProvider>,
   );
   expect(asked).toContain("d-1");
-  expect(view.getByText("dev-laptop")).toBeTruthy();
+  // Spec F4: and whether that machine is there now.
+  const chip = view.getByText("dev-laptop · 离线");
+  expect(chip.getAttribute("data-device-online")).toBe("false");
 });
