@@ -8,6 +8,7 @@ import {
   routineRuns,
   routines,
 } from "../db/schema";
+import { currentTenant } from "../tenant/context";
 
 /**
  * What one coworker does with nobody asking (ticket 020, spec C1).
@@ -116,30 +117,49 @@ export function createAutonomousStore(database: Database) {
   /**
    * The summaries for one coworker, or for every coworker this tenant can see when `agentId` is null.
    *
-   * Every read runs in the caller's tenant scope, so row-level security decides which coworker
-   * exists here at all: an agent id from another workspace simply has no rows.
+   * Every read is the caller's OWN rows: the frame's tenant, asked explicitly. Row-level security
+   * alone is not that scope — on these tables it also lets `system`-stamped rows through to every
+   * person (the shared catalogue's read rule), and a schedule or firing stamped `system` is nobody's
+   * unattended work, so it must not appear on anybody's overview. An agent id from another workspace
+   * simply has no rows.
    */
   async function summarise(
     agentId: string | null,
   ): Promise<AutonomousSummary[]> {
+    const tenant = currentTenant();
     const [routineRows, responsibilityRows, proactiveRows] = await Promise.all([
       database
         .select()
         .from(routines)
-        .where(agentId === null ? undefined : eq(routines.agentId, agentId))
+        .where(
+          and(
+            eq(routines.tenantId, tenant),
+            agentId === null ? undefined : eq(routines.agentId, agentId),
+          ),
+        )
         .orderBy(desc(routines.nextRunAt)),
       database
         .select()
         .from(responsibilities)
         .where(
-          agentId === null ? undefined : eq(responsibilities.agentId, agentId),
+          and(
+            eq(responsibilities.tenantId, tenant),
+            agentId === null
+              ? undefined
+              : eq(responsibilities.agentId, agentId),
+          ),
         )
         .orderBy(desc(responsibilities.updatedAt)),
       database
         .select()
         .from(proactiveSettings)
         .where(
-          agentId === null ? undefined : eq(proactiveSettings.agentId, agentId),
+          and(
+            eq(proactiveSettings.tenantId, tenant),
+            agentId === null
+              ? undefined
+              : eq(proactiveSettings.agentId, agentId),
+          ),
         )
         .orderBy(desc(proactiveSettings.nextRunAt)),
     ]);
@@ -163,11 +183,12 @@ export function createAutonomousStore(database: Database) {
             .from(routineRuns)
             .where(
               and(
+                eq(routineRuns.tenantId, tenant),
                 inArray(
                   routineRuns.routineId,
                   routineRows.map((routine) => routine.id),
                 ),
-                sql`${routineRuns.id} in (select recent.id from routine_runs recent where recent.routine_id = ${routineRuns.routineId} order by recent.started_at desc, recent.id desc limit ${RECENT_LIMIT})`,
+                sql`${routineRuns.id} in (select recent.id from routine_runs recent where recent.routine_id = ${routineRuns.routineId} and recent.tenant_id = ${tenant} order by recent.started_at desc, recent.id desc limit ${RECENT_LIMIT})`,
               ),
             )
             .orderBy(desc(routineRuns.startedAt), desc(routineRuns.id)),
@@ -182,11 +203,12 @@ export function createAutonomousStore(database: Database) {
             .from(responsibilityRuns)
             .where(
               and(
+                eq(responsibilityRuns.tenantId, tenant),
                 inArray(
                   responsibilityRuns.responsibilityId,
                   responsibilityRows.map((responsibility) => responsibility.id),
                 ),
-                sql`${responsibilityRuns.id} in (select recent.id from responsibility_runs recent where recent.responsibility_id = ${responsibilityRuns.responsibilityId} order by recent.started_at desc nulls last, recent.created_at desc, recent.id desc limit ${RECENT_LIMIT})`,
+                sql`${responsibilityRuns.id} in (select recent.id from responsibility_runs recent where recent.responsibility_id = ${responsibilityRuns.responsibilityId} and recent.tenant_id = ${tenant} order by recent.started_at desc nulls last, recent.created_at desc, recent.id desc limit ${RECENT_LIMIT})`,
               ),
             )
             .orderBy(
@@ -313,8 +335,8 @@ export function createAutonomousStore(database: Database) {
      * Every coworker's unattended work in one read (spec C1's 全部员工 view): the same answer as
      * `summaryForAgent`, once per coworker that has any schedule, goal or check-in in this tenant.
      *
-     * No agent id narrows it, so row-level security is the whole of the scope — exactly as it is for
-     * one coworker, where a foreign id simply has no rows. A coworker with nothing unattended is left
+     * No agent id narrows it, so the caller's own tenant is the whole of the scope — exactly as it is
+     * for one coworker, where a foreign id simply has no rows (and `system` rows are nobody's). A coworker with nothing unattended is left
      * out rather than listed empty: the page already has the roster for that.
      */
     async summaryForAll(): Promise<AutonomousSummary[]> {

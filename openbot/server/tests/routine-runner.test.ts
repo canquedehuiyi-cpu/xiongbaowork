@@ -418,7 +418,7 @@ describe("the board a headless firing leaves", () => {
 
     expect(recorded.board.opened).toEqual([
       {
-        tenantId: "user_owner",
+        tenantId: CONTEXT.tenantId,
         title: "Post the standup summary.",
         executorAgentId: "bot_helper",
         source: "routine",

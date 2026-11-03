@@ -17,6 +17,7 @@ import {
 import type { StepResult } from "../src/pipeline/store";
 import {
   createPipelineStore,
+  PipelineStepForbiddenError,
   PipelineValidationError,
 } from "../src/pipeline/store";
 import { createTaskProjector } from "../src/tasks/projector";
@@ -57,8 +58,18 @@ type Behaviour = (input: {
 }) => Promise<StepResult>;
 
 const calls: { agentId: string; instruction: string }[] = [];
+/** Every authorization question the store asked, and about whom (spec I6: the initiator, not a default). */
+const asked: { initiatedBy: string; agentId: string }[] = [];
 
-function build(behaviour: Behaviour, allowed: string[] | "all" = "all") {
+/**
+ * `allowed` is read on every check rather than copied, so a case can revoke a coworker while its run is
+ * in flight by editing the array it passed in.
+ */
+function build(
+  behaviour: Behaviour,
+  allowed: string[] | "all" = "all",
+  quota?: Parameters<typeof createPipelineStore>[0]["quota"],
+) {
   return createPipelineStore({
     database,
     board,
@@ -66,8 +77,11 @@ function build(behaviour: Behaviour, allowed: string[] | "all" = "all") {
       calls.push({ agentId: input.agentId, instruction: input.instruction });
       return behaviour(input);
     },
-    canUse: async (_tenant, agentId) =>
-      allowed === "all" || allowed.includes(agentId),
+    canUse: async (initiatedBy, agentId) => {
+      asked.push({ initiatedBy, agentId });
+      return allowed === "all" || allowed.includes(agentId);
+    },
+    ...(quota ? { quota } : {}),
     newRunId: () => randomUUID(),
   });
 }
@@ -335,15 +349,88 @@ test("an approval parks the run at its step, and the resume continues from that 
 });
 
 /**
- * Spec I6, and the assertion that carries the weight is the second one: the coworker the person may not
- * use never runs, and nobody else runs its step either.
+ * Spec I6 at dispatch: a template naming a coworker the person may not use is refused as a whole, before
+ * anything is written. No quota is asked, no card opens, no run row exists and no step runs — a plan
+ * whose middle the person cannot run is not started only to fail at step 2 after step 1 spent a turn.
+ * The refusal names every refused step, and the question is asked about the person who pressed run.
+ */
+test("a template with a coworker the person may not use is refused whole before anything is dispatched", async () => {
+  calls.length = 0;
+  asked.length = 0;
+  const quotaAsked: unknown[] = [];
+  const quota = {
+    assertCapacity: async (...args: unknown[]) => {
+      quotaAsked.push(args);
+    },
+  } as unknown as Parameters<typeof createPipelineStore>[0]["quota"];
+  const pipeline = build(answer("不该跑到这里"), [STEPS[0]!.agentId], quota);
+  const templateId = await pipeline.createTemplate({
+    tenantId: tenant,
+    groupId,
+    name: "整单拒绝的流水线",
+    steps: STEPS,
+  });
+  const cardsBefore = (await cards()).length;
+  const initiator = `person-${suite}`;
+
+  const refusal = await pipeline
+    .start({
+      tenantId: tenant,
+      templateId,
+      task: "派给用不了的员工",
+      initiatedBy: initiator,
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(refusal).toBeInstanceOf(PipelineStepForbiddenError);
+  const forbidden = refusal as PipelineStepForbiddenError;
+  // Both refused steps, by position, id and coworker — not just the first one met.
+  expect(forbidden.refused).toEqual([
+    { index: 1, stepId: STEPS[1]!.id, agentId: STEPS[1]!.agentId },
+    { index: 2, stepId: STEPS[2]!.id, agentId: STEPS[2]!.agentId },
+  ]);
+  expect(forbidden.message).toContain("第 2、3 步");
+  expect(forbidden.message).toContain(STEPS[1]!.agentId);
+  expect(forbidden.message).toContain(STEPS[2]!.agentId);
+  // Every step was asked about, and about the initiator rather than the workspace.
+  expect(asked).toEqual(
+    STEPS.map((step) => ({ initiatedBy: initiator, agentId: step.agentId })),
+  );
+  // Nothing was written: no quota asked, no card, no run row, no turn.
+  expect(quotaAsked).toEqual([]);
+  expect((await cards()).length).toBe(cardsBefore);
+  const runs = await runAsTenant(tenant, async () =>
+    database
+      .select({ id: groupTaskRuns.id })
+      .from(groupTaskRuns)
+      .where(eq(groupTaskRuns.templateId, templateId)),
+  );
+  expect(runs).toEqual([]);
+  expect(calls).toEqual([]);
+});
+
+/**
+ * Spec I6 mid-run, and the assertion that carries the weight is the second one: a coworker whose use is
+ * revoked after the run started never runs, and nobody else runs its step either.
+ *
+ * The revocation happens while step 1 is running, because `start` now refuses a template whose coworkers
+ * are not all usable up front — so the per-step check in `advance` is what catches a use withdrawn in
+ * between, and it has to stop the run the same way.
  */
 test("a coworker the person may not use stops the run without being substituted", async () => {
   calls.length = 0;
-  const pipeline = build(answer("不该跑到这里"), [
-    STEPS[0]!.agentId,
-    STEPS[2]!.agentId,
-  ]);
+  asked.length = 0;
+  const allowed = STEPS.map((step) => step.agentId);
+  const pipeline = build(async ({ agentId }) => {
+    if (agentId === STEPS[0]!.agentId) {
+      // Revoked mid-run: step 2's coworker stops being usable while step 1 is working.
+      allowed.splice(allowed.indexOf(STEPS[1]!.agentId), 1);
+    }
+    return { status: "done", output: "不该跑到这里" } as const;
+  }, allowed);
   const templateId = await pipeline.createTemplate({
     tenantId: tenant,
     groupId,
@@ -371,6 +458,56 @@ test("a coworker the person may not use stops the run without being substituted"
   // Step 3 was never reached: a pipeline that carried on past a refused step would be running a plan
   // whose middle nobody approved.
   expect(outcome.steps[2]?.state).toBe("pending");
+  // The per-step check in `advance` asks about the run's recorded initiator, never the workspace default.
+  expect(asked.every((entry) => entry.initiatedBy === tenant)).toBe(true);
+  expect(asked.filter((entry) => entry.agentId === STEPS[1]!.agentId)).toEqual([
+    { initiatedBy: tenant, agentId: STEPS[1]!.agentId },
+    { initiatedBy: tenant, agentId: STEPS[1]!.agentId },
+  ]);
+});
+
+/**
+ * A run with no initiator on record cannot answer "may this person use this coworker", so its next step
+ * is refused rather than run under the workspace's id. Rows written before `initiated_by` was always
+ * stamped are the case this closes.
+ */
+test("a run without a recorded initiator is refused at its next step, not run as the workspace", async () => {
+  calls.length = 0;
+  asked.length = 0;
+  const pipeline = build(answer("不该跑到这里"));
+  const templateId = await pipeline.createTemplate({
+    tenantId: tenant,
+    groupId,
+    name: "没有发起人的运行",
+    steps: STEPS,
+  });
+  const started = await pipeline.start({
+    tenantId: tenant,
+    templateId,
+    task: "发起人丢了",
+    initiatedBy: tenant,
+  });
+  await runAsTenant(tenant, async () =>
+    database
+      .update(groupTaskRuns)
+      .set({ initiatedBy: null })
+      .where(eq(groupTaskRuns.id, started.runId)),
+  );
+  asked.length = 0;
+
+  const outcome = await pipeline.advance({
+    tenantId: tenant,
+    runId: started.runId,
+  });
+
+  expect(outcome.status).toBe("failed");
+  expect(outcome.cursor).toBe(0);
+  expect(outcome.steps[0]?.state).toBe("failed");
+  expect(outcome.steps[0]?.error).toContain("没有记录发起人");
+  expect(calls).toEqual([]);
+  // Not asked at all: there is nobody to ask about, and the workspace id is not a stand-in.
+  expect(asked).toEqual([]);
+  expect((await run(started.runId))?.status).toBe("failed");
 });
 
 test("abort closes what is open as failed and skip moves past one step without running it", async () => {

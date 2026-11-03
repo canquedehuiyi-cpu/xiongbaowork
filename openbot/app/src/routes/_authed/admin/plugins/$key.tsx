@@ -43,10 +43,14 @@ import { grantRoster } from "@/lib/agents/grant-roster";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { storeMcpToken } from "@/lib/credentials/mutations";
 import {
+  type CrewGrantOutcome,
+  crewMembers,
+  crewSummary,
+  grantToMembers,
+} from "@/lib/plugins/crew-grant";
+import {
   addCuratedServerMutationOptions,
   connectAccountMutationOptions,
-  grantPlugin,
-  invalidatePlugins,
   refreshPluginServerMutationOptions,
   registerOAuthClientMutationOptions,
   removePluginServerMutationOptions,
@@ -241,6 +245,17 @@ function RouteComponent() {
     done: number;
     total: number;
   } | null>(null);
+  /**
+   * What the last batch could not write, member by member, or null when it all landed.
+   *
+   * Kept beside the dialog rather than in the page banner, because the dialog stays open on a
+   * refusal and the banner is behind it. One line per refused member, with the server's own reason,
+   * because a crew is several people and "2 refused" does not say which two.
+   */
+  const [refusals, setRefusals] = useState<{
+    text: string;
+    members: { agentId: string; line: string }[];
+  } | null>(null);
 
   /* Every write reports into one banner rather than each growing its own handler. */
   const report = { onError: (thrown: Error) => setError(thrown.message) };
@@ -430,36 +445,49 @@ function RouteComponent() {
   };
 
   /*
-   * One write per grant, in selection order. The server records each grant as its own audit row, so
-   * a bulk action here is honestly N decisions; a refusal stops the rest and leaves the dialog open
-   * with the banner saying why.
+   * Every selected coworker times every selected tool, through the shared group batch (spec E2):
+   * one write per grant, each its own audit row on the server, every refusal kept rather than the
+   * first one stopping the rest, and one refetch at the end. A selection made by pressing a crew is
+   * the same selection as one made by ticking its members — the crew itself is never sent.
    *
-   * One refetch for the batch, at the end. Going through the grant mutation invalidated every plugin
-   * query after each write and awaited it, so a batch of twenty grants was twenty round trips
-   * interleaved with twenty refetches of a list nobody could see behind the dialog — most of the
-   * wait, for nothing anybody read. It is invalidated even when a grant is refused, because the ones
-   * before it landed and the screen behind is now stale about them.
+   * The dialog closes only when everything landed. Otherwise it stays open over what was chosen and
+   * says, per member, what was refused and why; the grants that did land are already drawn behind it.
    */
   const grantSelected = async () => {
     setError(null);
-    const total = selectedBots.size * selectedRefs.size;
-    setGranting({ done: 0, total });
-    let done = 0;
-    try {
-      for (const agentId of selectedBots) {
-        for (const ref of selectedRefs) {
-          await grantPlugin({ agentId, kind: "mcp", ref });
-          done += 1;
-          setGranting({ done, total });
-        }
-      }
+    setRefusals(null);
+    const agentIds = [...selectedBots];
+    const refs = [...selectedRefs];
+    setGranting({ done: 0, total: agentIds.length * refs.length });
+    /* Only the refetch can throw here; every grant's own refusal is inside the outcome. */
+    const outcome: CrewGrantOutcome | null = await grantToMembers({
+      queryClient,
+      kind: "mcp",
+      refs,
+      agentIds,
+      onProgress: (done, total) => setGranting({ done, total }),
+    }).catch((thrown: unknown) => {
+      setError(thrown instanceof Error ? thrown.message : String(thrown));
+      return null;
+    });
+    setGranting(null);
+    if (!outcome) return;
+    const summary = crewSummary(outcome, { what: `${refs.length} 个工具` });
+    if (!summary.failed) {
       setDialog(null);
-    } catch (thrown) {
-      setError((thrown as Error).message);
-    } finally {
-      await invalidatePlugins(queryClient);
-      setGranting(null);
+      return;
     }
+    const nameOf = (agentId: string) =>
+      bots.find((bot) => bot.id === agentId)?.name ?? agentId;
+    setRefusals({
+      text: summary.text,
+      members: outcome.members
+        .filter((member) => member.refused.length > 0)
+        .map((member) => ({
+          agentId: member.agentId,
+          line: `${nameOf(member.agentId)}：${member.refused.length} 个工具被拒绝（${member.refused[0]?.reason ?? "没有给出原因"}）`,
+        })),
+    });
   };
 
   /*
@@ -922,6 +950,7 @@ function RouteComponent() {
                   onClick={() => {
                     setSelectedBots(new Set());
                     setSelectedRefs(new Set());
+                    setRefusals(null);
                     setDialog("grant");
                   }}
                   size="sm"
@@ -1212,6 +1241,16 @@ function RouteComponent() {
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="mt-4 space-y-5">
+              {refusals ? (
+                <div className="text-destructive text-sm" role="alert">
+                  <p>{refusals.text}</p>
+                  <ul className="mt-1 list-disc pl-5 text-xs">
+                    {refusals.members.map((member) => (
+                      <li key={member.agentId}>{member.line}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {/*
                * Each set of tickboxes is a group named by its own heading, so a screen reader
                * reaching a bare tool name is told which list it is in. "Changes things" is the whole
@@ -1229,24 +1268,33 @@ function RouteComponent() {
                 </p>
                 {(crews.data?.length ?? 0) > 0 ? (
                   <div className="mb-2 flex flex-wrap gap-1">
-                    {(crews.data ?? []).map((crew) => (
-                      <button
-                        className="bg-foreground/5 hover:bg-foreground/10 rounded-full px-3 py-1 text-sm"
-                        key={crew.id}
-                        onClick={() =>
-                          setSelectedBots((previous) => {
-                            const next = new Set(previous);
-                            for (const member of crew.members) {
-                              next.add(member.agentId);
-                            }
-                            return next;
-                          })
-                        }
-                        type="button"
-                      >
-                        {crew.name} · {crew.members.length}
-                      </button>
-                    ))}
+                    {(crews.data ?? []).map((crew) => {
+                      /*
+                       * Only members this dialog draws a row for: a member it cannot show would be
+                       * granted without ever appearing in "授予 …" above the button.
+                       */
+                      const members = crewMembers(crew, (agentId) =>
+                        bots.some((bot) => bot.id === agentId),
+                      );
+                      return (
+                        <button
+                          aria-label={`选择${crew.name}的 ${members.length} 位员工`}
+                          className="bg-foreground/5 hover:bg-foreground/10 rounded-full px-3 py-1 text-sm disabled:opacity-50"
+                          disabled={members.length === 0}
+                          key={crew.id}
+                          onClick={() =>
+                            setSelectedBots((previous) => {
+                              const next = new Set(previous);
+                              for (const agentId of members) next.add(agentId);
+                              return next;
+                            })
+                          }
+                          type="button"
+                        >
+                          {crew.name} · {members.length}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
                 <div className="space-y-2">

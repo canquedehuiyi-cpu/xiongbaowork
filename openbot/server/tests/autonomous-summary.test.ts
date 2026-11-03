@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "../src/auth/guards";
 import { createAutonomousRoutes } from "../src/autonomous/routes";
@@ -596,6 +596,128 @@ test("summaryForAll answers every coworker of this tenant, and nobody else's", a
           .delete(proactiveSettings)
           .where(eq(proactiveSettings.agentId, second));
         await database.delete(agents).where(eq(agents.id, second));
+      });
+    }
+  });
+});
+
+/*
+ * Row-level security on these tables also lets `system`-stamped rows through to every person (the
+ * shared catalogue's read rule). A schedule, goal, check-in or firing stamped `system` is nobody's
+ * unattended work, so neither read may show it: not as a coworker on the overview, not on the
+ * coworker's own summary, and not as a firing of the person's own routine.
+ */
+test("system-stamped schedules and firings appear on nobody's overview", async () => {
+  await withSummaryRows(async (fixture) => {
+    const systemBot = `${fixture.id}-system-bot`;
+    const ids = {
+      routine: `${fixture.id}-system-routine`,
+      run: `${fixture.id}-system-run`,
+      ownRun: `${fixture.id}-system-run-on-own`,
+      goal: `${fixture.id}-system-goal`,
+      proactive: `${fixture.id}-system-proactive`,
+    };
+    const ownRoutine = await fixture.addRoutine("own routine");
+    try {
+      await runAsTenant(fixture.owner, async () => {
+        await database.insert(agents).values({
+          id: systemBot,
+          name: "System coworker",
+          type: "built_in",
+          configuration: {},
+        });
+        await database.insert(routineRuns).values({
+          id: `${fixture.id}-own-run`,
+          routineId: ownRoutine,
+          status: "succeeded",
+          startedAt: new Date("2026-10-30T10:00:00.000Z"),
+          finishedAt: new Date("2026-10-30T10:01:00.000Z"),
+        });
+      });
+      await runAsTenant("system", async () => {
+        await database.insert(routines).values({
+          id: ids.routine,
+          ownerUserId: fixture.owner,
+          agentId: systemBot,
+          channelId: `${fixture.id}-channel`,
+          instruction: "Nobody's routine",
+          cron: "0 3 * * *",
+          nextRunAt: new Date("2026-11-01T12:00:00.000Z"),
+          enabled: true,
+        });
+        await database.insert(routineRuns).values([
+          {
+            id: ids.run,
+            routineId: ids.routine,
+            status: "failed",
+            startedAt: new Date("2026-10-31T10:00:00.000Z"),
+          },
+          // Newer than the owner's own firing, so a leak would also be the routine's lastRun.
+          {
+            id: ids.ownRun,
+            routineId: ownRoutine,
+            status: "failed",
+            startedAt: new Date("2026-10-31T11:00:00.000Z"),
+          },
+        ]);
+        await database.insert(responsibilities).values({
+          id: ids.goal,
+          ownerUserId: fixture.owner,
+          agentId: systemBot,
+          channelId: `${fixture.id}-channel`,
+          threadId: `${fixture.id}-thread`,
+          title: "Nobody's goal",
+          instruction: "Nothing.",
+          successCriteria: "Nothing.",
+          status: "active",
+        });
+        await database.insert(proactiveSettings).values({
+          id: ids.proactive,
+          ownerUserId: fixture.owner,
+          agentId: systemBot,
+          channelId: `${fixture.id}-channel`,
+          threadId: `${fixture.id}-thread`,
+          focus: "Nobody's check-in",
+          enabled: true,
+          intervalMinutes: 60,
+          nextRunAt: new Date("2026-11-01T12:00:00.000Z"),
+        });
+      });
+
+      for (const reader of [fixture.owner, fixture.foreign]) {
+        const all = await runAsTenant(reader, () => store.summaryForAll());
+        expect(all.map((summary) => summary.agentId)).not.toContain(systemBot);
+        const one = await runAsTenant(reader, () =>
+          store.summaryForAgent(systemBot),
+        );
+        expect(one.routines).toEqual([]);
+        expect(one.responsibilities).toEqual([]);
+        expect(one.proactive).toEqual([]);
+        expect(one.lastActivityAt).toBeNull();
+      }
+
+      // The person's own routine reports only its own firing, not the system-stamped one.
+      const own = await runAsTenant(fixture.owner, () =>
+        store.summaryForAgent(fixture.bot),
+      );
+      expect(own.routines.map((routine) => routine.id)).toEqual([ownRoutine]);
+      expect(own.routines[0]?.recentRuns).toEqual([
+        { status: "succeeded", at: new Date("2026-10-30T10:00:00.000Z") },
+      ]);
+      expect(own.lastActivityAt).toEqual(new Date("2026-10-30T10:00:00.000Z"));
+    } finally {
+      await runAsTenant("platform", async () => {
+        await database
+          .delete(routineRuns)
+          .where(inArray(routineRuns.id, [ids.run, ids.ownRun]));
+        await database.delete(routines).where(eq(routines.id, ids.routine));
+        await database
+          .delete(responsibilities)
+          .where(eq(responsibilities.id, ids.goal));
+        await database
+          .delete(proactiveSettings)
+          .where(eq(proactiveSettings.id, ids.proactive));
+        await database.delete(agents).where(eq(agents.id, systemBot));
       });
     }
   });

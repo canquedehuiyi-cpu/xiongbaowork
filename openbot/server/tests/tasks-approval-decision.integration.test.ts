@@ -177,8 +177,8 @@ const approvalStatus = async (approvalId: string) => {
   return row?.status;
 };
 
+// The two people are seeded and removed in the platform frame: no database access runs unframed.
 beforeAll(async () => {
-  // Identity rows belong to nobody's frame: written as `platform`, like every fixture user.
   await runAsTenant("platform", () =>
     database.insert(users).values([
       { id: owner, email: `${owner}@example.test` },
