@@ -14,11 +14,9 @@
  * no person. Callers decide what nobody means for them; none of them may turn it into `team`.
  */
 import { eq, inArray } from "drizzle-orm";
-import { ComputerUnavailableError } from "../computer/client";
 import type { Database } from "../db/client";
 import { agentProfiles, agents } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
-import { type DispatchTarget, DeviceOfflineError } from "../devices/channel";
 import { asPlatform, isPersonTenant } from "../tenant/context";
 
 function ownerOf(row: {
@@ -68,33 +66,4 @@ export async function ownerTenantsOfBots(
       .where(inArray(agents.id, agentIds)),
   );
   return new Map(rows.map((row) => [row.id, ownerOf(row)] as const));
-}
-
-/**
- * In device mode, the machine a Bot's action runs on: one of its OWNER's registered devices that is
- * connected right now (ticket 017). A team Bot dispatches to its owner's machine, never to a machine
- * of `team`, which has none.
- *
- * With no owner it refuses, and with no machine reachable it refuses rather than falling back to the
- * deployment's container: "run on my machine" answered by somebody else's server is a wrong answer.
- */
-export async function deviceTargetForBot(
-  deps: {
-    database: Database;
-    reachableDevice: (tenantId: string) => string | null;
-    isRegistered: (target: DispatchTarget) => Promise<boolean>;
-  },
-  botId: string,
-): Promise<DispatchTarget> {
-  const tenantId = await ownerTenantOfBot(deps.database, botId);
-  if (!tenantId) {
-    throw new ComputerUnavailableError(
-      `${botId} does not belong to a tenant with machines of its own.`,
-    );
-  }
-  const deviceId = deps.reachableDevice(tenantId);
-  if (!deviceId || !(await deps.isRegistered({ tenantId, deviceId }))) {
-    throw new DeviceOfflineError(tenantId);
-  }
-  return { tenantId, deviceId };
 }

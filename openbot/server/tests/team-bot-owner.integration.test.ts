@@ -8,14 +8,10 @@ import {
   installEnterpriseControls,
   recordHeadlessModelUsage,
 } from "../src/admin/controls";
-import {
-  deviceTargetForBot,
-  ownerTenantOfBot,
-  ownerTenantsOfBots,
-} from "../src/agents/bot-owner";
+import { ownerTenantOfBot, ownerTenantsOfBots } from "../src/agents/bot-owner";
 import { createAuditStore } from "../src/audit";
-import { AutomationRefusedError } from "../src/automations/types";
 import { createAutomationStore } from "../src/automations/store";
+import { AutomationRefusedError } from "../src/automations/types";
 import { ComputerUnavailableError } from "../src/computer/client";
 import type {
   ComputerLocation,
@@ -36,6 +32,7 @@ import {
 } from "../src/db/schema";
 import { TEAM_TENANT } from "../src/db/schema/tenant";
 import type { DispatchTarget } from "../src/devices/channel";
+import { createDeviceSelector } from "../src/devices/selection";
 import {
   createAgentModelResolver,
   type LanguageModelFactory,
@@ -282,7 +279,10 @@ beforeAll(async () => {
   await seedTeamBot(teamBot, { published: true });
   await seedTeamBot(hiddenBot);
   await seedTeamBot(orphanBot, { owner: null });
-  await seedTeamBot(proPoolBot, { published: true, platformModelRef: pool.pro });
+  await seedTeamBot(proPoolBot, {
+    published: true,
+    platformModelRef: pool.pro,
+  });
   await seedTeamBot(freePoolBot, {
     published: true,
     platformModelRef: pool.free,
@@ -355,25 +355,28 @@ describe("whose a team Bot is", () => {
 
   test("device mode dispatches a team Bot to its owner's machine, never to `team`", async () => {
     const asked: string[] = [];
-    const registered: DispatchTarget[] = [];
-    const deps = {
-      database,
-      reachableDevice: (tenantId: string) => {
+    const reached: DispatchTarget[] = [];
+    // Wired as index.ts wires it: the owner comes from bot-owner.ts, the machines from that owner.
+    const selector = createDeviceSelector({
+      ownerOf: (botId) => ownerTenantOfBot(database, botId),
+      devicesOf: async (tenantId) => {
         asked.push(tenantId);
-        return tenantId === owner ? "owner-laptop" : null;
+        return tenantId === owner
+          ? [{ deviceId: "owner-laptop", online: true }]
+          : [];
       },
-      isRegistered: async (target: DispatchTarget) => {
-        registered.push(target);
+      isReachable: (target) => {
+        reached.push(target);
         return true;
       },
-    };
-    expect(
-      await runAsTenant(teammate, () => deviceTargetForBot(deps, teamBot)),
-    ).toEqual({ tenantId: owner, deviceId: "owner-laptop" });
+    });
+    expect(await runAsTenant(teammate, () => selector.forBot(teamBot))).toEqual(
+      { tenantId: owner, deviceId: "owner-laptop" },
+    );
     expect(asked).toEqual([owner]);
-    expect(registered).toEqual([{ tenantId: owner, deviceId: "owner-laptop" }]);
+    expect(reached).toEqual([{ tenantId: owner, deviceId: "owner-laptop" }]);
     // A team Bot with no owner has no machine to run on, and is refused rather than sent to `team`.
-    await expect(deviceTargetForBot(deps, orphanBot)).rejects.toBeInstanceOf(
+    await expect(selector.forBot(orphanBot)).rejects.toBeInstanceOf(
       ComputerUnavailableError,
     );
     expect(asked).not.toContain(TEAM_TENANT);
@@ -381,7 +384,12 @@ describe("whose a team Bot is", () => {
 
   test("the culler offers and suspends a team Bot's computer in its owner's frame", async () => {
     const { provider, stopped } = providerWith([
-      { botId: teamBot, status: "running", url: "http://c", startedAt: longAgo },
+      {
+        botId: teamBot,
+        status: "running",
+        url: "http://c",
+        startedAt: longAgo,
+      },
     ]);
     const options = {
       database,
@@ -519,9 +527,7 @@ describe("who pays for a team Bot's model", () => {
     );
     expect(written).toEqual([{ tenantId: teammate }]);
     // For the owner, on Free, the same pro-only binding does not hold.
-    expect(
-      await runAsTenant(owner, () => resolveModel(proPoolBot)),
-    ).toBeNull();
+    expect(await runAsTenant(owner, () => resolveModel(proPoolBot))).toBeNull();
   });
 
   test("background work under `platform` bills the owner", async () => {
@@ -542,8 +548,8 @@ describe("who pays for a team Bot's model", () => {
     ).toBeNull();
     expect(await asPlatform(() => resolveModel(libraryBot))).toBeNull();
     // The owner's key was handed to the factory only for the owner's own turn.
-    expect(
-      built.filter((call) => call.apiKey === "sk-owner-key"),
-    ).toHaveLength(1);
+    expect(built.filter((call) => call.apiKey === "sk-owner-key")).toHaveLength(
+      1,
+    );
   });
 });

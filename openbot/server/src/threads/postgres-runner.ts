@@ -29,7 +29,7 @@ import {
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
-import type { TaskProjector } from "../tasks/projector";
+import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
   isPersonTenant,
@@ -134,7 +134,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * Asked, never insisted on: a turn that cannot name a machine still runs — in cloud mode there is
      * none — so the answer here is a label for the card rather than a gate. The gate is the dispatch.
      */
-    private readonly deviceOf?: (agentId: string) => Promise<string | null>,
+    private readonly deviceOf?: (
+      agentId: string,
+      taskRef?: string,
+    ) => Promise<string | null>,
   ) {
     super({ onConcurrentRun: "supersede" });
   }
@@ -460,7 +463,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      */
     const card =
       this.board && !cardIsTaken
-        ? Promise.resolve(this.deviceOf?.(agentId))
+        ? Promise.resolve(this.deviceOf?.(agentId, runId))
             .catch(() => null)
             .then((deviceId) =>
               // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
@@ -482,10 +485,32 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         : undefined;
     const finish = (failed: boolean) => {
       if (!card) return;
+      /*
+       * What the turn produced rides on the card (spec A9), read from the stream before it is handed
+       * on. A failed turn's half-drawn output is not something to review, so it carries none.
+       */
+      const produced = () => {
+        // Read inside the stream's `complete`: a throw here would skip the transcript's write below.
+        try {
+          return deliverableFromEvents(
+            events,
+            new Set(request.input.messages.map((message) => message.id)),
+          );
+        } catch (error) {
+          console.error("task deliverable unreadable", error);
+          return undefined;
+        }
+      };
+      const deliverableRef = failed ? undefined : produced();
       void card
         .then(() =>
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
-          this.board!.finished({ tenantId: tenant, runRef: runId, failed }),
+          this.board!.finished({
+            tenantId: tenant,
+            runRef: runId,
+            failed,
+            deliverableRef,
+          }),
         )
         .catch((error) => console.error("task projection failed", error));
     };
