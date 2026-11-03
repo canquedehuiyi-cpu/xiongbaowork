@@ -39,11 +39,15 @@ export function createQuotaRoutes(
     });
   });
 
-  /** Both tiers, in the order a comparison page should show them. Platform-owned rows. */
+  /**
+   * Both tiers, in the order a comparison page should show them.
+   *
+   * Read in the caller's own frame. `plans` is the deployment's price list and has no row-level
+   * security, so the `platform` frame this used to open bought nothing, and a member's request is
+   * not a path that may open it (G01-E I5).
+   */
   routes.get("/plans", requireUser, async (context) => {
-    const rows = await runAsTenant("platform", () =>
-      database.select().from(plans),
-    );
+    const rows = await database.select().from(plans);
     return context.json({
       plans: rows.sort((left, right) =>
         left.id === right.id ? 0 : left.id === "free" ? -1 : 1,

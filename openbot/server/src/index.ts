@@ -292,7 +292,12 @@ import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTeamBots } from "./team-bots/team-bots";
 import { isAccessRevoked } from "./tenant/access";
-import { runAsClaimedTenant, runAsTenant } from "./tenant/context";
+import {
+  assertPersonTenant,
+  runAsClaimedTenant,
+  runAsTenant,
+  TenantContextError,
+} from "./tenant/context";
 import {
   createPackageStatusReader,
   loadTenantPackage,
@@ -2598,12 +2603,39 @@ await startupLifecycle.run(async (startup) => {
                     const parkedCrew = await pipelineStore.runHoldingApproval({
                       approvalId,
                     });
+                    /*
+                     * In the crew owner's frame, and only for this approval's owner (G01-E R10, R14). The
+                     * lookup ran as `platform` and can name any person's run; an approval answered by one
+                     * person must never drive another person's crew, so a run stamped for somebody else is
+                     * left parked and logged rather than resumed.
+                     */
+                    let crewTenant: string | undefined;
                     if (parkedCrew) {
-                      await pipelineStore.resume({
-                        tenantId: parkedCrew.tenantId,
-                        runId: parkedCrew.runId,
-                        output: outcome.replyText,
-                      });
+                      try {
+                        crewTenant = assertPersonTenant(
+                          parkedCrew.tenantId,
+                          input.ownerUserId,
+                        );
+                      } catch (error) {
+                        if (!(error instanceof TenantContextError)) throw error;
+                        console.warn(
+                          JSON.stringify({
+                            type: "parked-crew-owner-mismatch",
+                            approvalId,
+                            runId: parkedCrew.runId,
+                          }),
+                        );
+                      }
+                    }
+                    if (parkedCrew && crewTenant) {
+                      const tenant = crewTenant;
+                      await runAsTenant(tenant, () =>
+                        pipelineStore.resume({
+                          tenantId: tenant,
+                          runId: parkedCrew.runId,
+                          output: outcome.replyText,
+                        }),
+                      );
                     }
                     await database
                       .update(routineRuns)
