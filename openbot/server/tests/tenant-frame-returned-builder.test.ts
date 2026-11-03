@@ -1,13 +1,9 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { asc, eq, like } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents } from "../src/db/schema";
-import {
-  runAsTenant,
-  TenantContextError,
-  tenantFrameGuard,
-} from "../src/tenant/context";
+import { runAsTenant, TenantContextError } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -35,6 +31,32 @@ const suite = `frame-${randomUUID().slice(0, 8)}`;
 const tenantA = `${suite}-a`;
 const tenantB = `${suite}-b`;
 const seeded = `${suite}-seeded`;
+
+/*
+ * The two no-frame cases pin the guard themselves, so they assert the same thing whatever guard the
+ * runner sets: with the guard off, the legacy behaviour (an unframed read sees nothing, an unframed
+ * builder runs as the frame that awaits it); with it on, building a statement with no frame is
+ * refused.
+ */
+const savedGuard = process.env.OPENBOT_TENANT_FRAME_GUARD;
+function restoreGuard() {
+  if (savedGuard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
+  else process.env.OPENBOT_TENANT_FRAME_GUARD = savedGuard;
+}
+afterEach(restoreGuard);
+
+/** Runs `work` with the frame guard set to `guard`, restoring the runner's guard afterwards. */
+async function withGuard<T>(
+  guard: "off" | "throw",
+  work: () => T | Promise<T>,
+): Promise<T> {
+  process.env.OPENBOT_TENANT_FRAME_GUARD = guard;
+  try {
+    return await work();
+  } finally {
+    restoreGuard();
+  }
+}
 
 /** Something worth awaiting first, the way `owned(...)` or an ownership check is in the stores. */
 async function precheck() {
@@ -235,34 +257,36 @@ test("the shapes that always worked still do", async () => {
       .where(eq(agents.id, seeded));
   });
   expect(fromSystem).toEqual([]);
-  if (tenantFrameGuard() === "throw") {
-    // With the guard on, a caller with no frame is refused before it reaches any row.
+  const unscoped = await withGuard("off", () =>
+    database
+      .select({ id: agents.id })
+      .from(agents)
+      .where(eq(agents.id, seeded)),
+  );
+  expect(unscoped).toEqual([]);
+  // With the guard on, a caller with no frame is refused before it reaches any row.
+  await withGuard("throw", () => {
     expect(() =>
       database
         .select({ id: agents.id })
         .from(agents)
         .where(eq(agents.id, seeded)),
     ).toThrow(TenantContextError);
-  } else {
-    const unscoped = await database
-      .select({ id: agents.id })
-      .from(agents)
-      .where(eq(agents.id, seeded));
-    expect(unscoped).toEqual([]);
-  }
+  });
 });
 
 test("a builder made outside every frame still runs as the frame that awaits it", async () => {
-  if (tenantFrameGuard() === "throw") {
-    // With the guard on there is no builder made outside every frame: making one is refused.
+  const rows = await withGuard("off", () => {
+    const unframed = database.select({ id: agents.id }).from(agents);
+    return runAsTenant(tenantA, async () =>
+      unframed.where(eq(agents.id, seeded)),
+    );
+  });
+  expect(rows).toEqual([{ id: seeded }]);
+  // With the guard on there is no builder made outside every frame: making one is refused.
+  await withGuard("throw", () => {
     expect(() => database.select({ id: agents.id }).from(agents)).toThrow(
       TenantContextError,
     );
-    return;
-  }
-  const unframed = database.select({ id: agents.id }).from(agents);
-  const rows = await runAsTenant(tenantA, async () =>
-    unframed.where(eq(agents.id, seeded)),
-  );
-  expect(rows).toEqual([{ id: seeded }]);
+  });
 });
