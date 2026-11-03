@@ -7,6 +7,7 @@ import type { Database } from "../db/client";
 import { plans, subscriptions } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import type { QuotaService } from "./limits";
+import { tokenUsageFor } from "./token-usage";
 
 type Ctx = { Variables: AppVariables };
 
@@ -26,9 +27,10 @@ export function createQuotaRoutes(
 
   routes.get("/", requireUser, async (context) => {
     const tenantId = context.var.actor.id;
-    const [plan, usage] = await Promise.all([
+    const [plan, usage, tokens] = await Promise.all([
       quota.planFor(tenantId),
       quota.usageFor(tenantId),
+      tokenUsageFor(database, tenantId),
     ]);
     // Always a plan: a workspace with no subscription is held to Free, so the panel says Free too —
     // the ceilings it draws are the ones the write paths enforce.
@@ -36,6 +38,8 @@ export function createQuotaRoutes(
       plan: { id: plan.id, name: plan.name },
       limits: plan.limits,
       usage,
+      // Model tokens through bound models this period; sums stay null when no call reported them.
+      tokens,
     });
   });
 
