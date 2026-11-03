@@ -117,7 +117,7 @@ jobs:
           mkdir -p "$mount"
           hdiutil attach -readonly -nobrowse -mountpoint "$mount" "${images[0]}"
           trap 'hdiutil detach "$mount"' EXIT
-          export OPENBOT_VERIFY_APP="$mount/OpenBot.app"
+          export OPENBOT_VERIFY_APP="$mount/XiongBao.app"
           python3 - <<'PY'
           import json, os, pathlib, plistlib, subprocess
           build = json.loads(pathlib.Path('desktop/build-version.json').read_text())

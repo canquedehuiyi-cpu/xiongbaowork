@@ -95,7 +95,13 @@ export type ProactiveEngineDeps = {
   /** A person-started turn in their channel with this text as their message. */
   startTask(
     scope: ProactiveScope,
-    input: { runId: string; text: string; signal: AbortSignal },
+    input: {
+      /** The setting's tenant, which the turn is told it runs for (see `TurnRunner`). */
+      tenantId: string;
+      runId: string;
+      text: string;
+      signal: AbortSignal;
+    },
   ): Promise<void>;
   catalogue: {
     listServers(): Promise<
@@ -300,6 +306,8 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     try {
       await deps.runTurn({
         ownerUserId: setting.ownerUserId,
+        // The setting's own tenant: the sweep that claimed this run has none (see `TurnRunner`).
+        tenantId: setting.tenantId,
         routineId: `proactive:${setting.id}`,
         agentId: setting.agentId,
         threadId: setting.threadId,
@@ -631,6 +639,7 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
             "This Bot or its channel is no longer available to you.",
           );
         await deps.startTask(scope, {
+          tenantId: setting.tenantId,
           runId: `suggestion-${suggestion.id}`,
           text: `${suggestion.title}\n\n${suggestion.detail}${suggestion.sourceLink ? `\n\nSource: ${suggestion.sourceLink}` : ""}`,
           signal,

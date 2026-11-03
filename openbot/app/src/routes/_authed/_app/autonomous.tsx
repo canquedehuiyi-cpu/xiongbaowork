@@ -1,10 +1,10 @@
 import {
   queryOptions,
+  type UseQueryResult,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
-  type UseQueryResult,
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";

@@ -27,6 +27,7 @@ import type { GrantedTool } from "../plugins/tools";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import {
   assertPersonTenant,
+  requireTenant,
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
@@ -91,15 +92,50 @@ const scheduleSchema = z
 const keyPrefix = (ownerUserId: string, agentId: string) =>
   `wake:${JSON.stringify([ownerUserId, agentId])}:`;
 
-const owned = (ownerUserId: string, agentId: string) =>
+/**
+ * The row's payload as an object, in SQL.
+ *
+ * `settle` once appended its outcome as a JSON string rather than merging it, which turned the
+ * payload into an array: `[{...payload}, "{\"outcome\":...}"]`. Those rows are finished and reaped
+ * within a week, so they are read through rather than migrated: the first element is the payload.
+ */
+const payloadObject = sql`(case when jsonb_typeof(${workItems.payload}) = 'array' then ${workItems.payload}->0 else ${workItems.payload} end)`;
+
+/** Follow-ups that belong to this person and this Bot. */
+export const wakeUpsOwnedBy = (ownerUserId: string, agentId: string) =>
   and(
     eq(workItems.kind, WAKE_UP_KIND),
-    sql`${workItems.payload}->>'ownerUserId' = ${ownerUserId}`,
-    sql`${workItems.payload}->>'agentId' = ${agentId}`,
+    sql`${payloadObject}->>'ownerUserId' = ${ownerUserId}`,
+    sql`${payloadObject}->>'agentId' = ${agentId}`,
   );
 
+const owned = wakeUpsOwnedBy;
+
+/**
+ * A stored payload as an object, including the array shape the old `settle` wrote (see
+ * `payloadObject`): the object first, then each outcome it appended as a JSON string, later ones
+ * winning.
+ */
+export function readWakeUpPayload(raw: unknown): WakeUpPayload {
+  if (!Array.isArray(raw)) return raw as WakeUpPayload;
+  let merged: Record<string, unknown> = {};
+  for (const part of raw) {
+    let value: unknown = part;
+    if (typeof part === "string") {
+      try {
+        value = JSON.parse(part);
+      } catch {
+        continue;
+      }
+    }
+    if (value && typeof value === "object" && !Array.isArray(value))
+      merged = { ...merged, ...(value as Record<string, unknown>) };
+  }
+  return merged as WakeUpPayload;
+}
+
 function toRecord(row: typeof workItems.$inferSelect): WakeUpRecord {
-  const payload = row.payload as WakeUpPayload;
+  const payload = readWakeUpPayload(row.payload);
   const running =
     !row.finishedAt &&
     row.claimedBy !== null &&
@@ -165,6 +201,13 @@ export function createWakeUpStore(
       channelId?: string;
       initiator?: AuditInitiator;
     }): Promise<WakeUpRecord> {
+      /*
+       * Scheduled only from inside the person's own frame (G01). The row is stamped with whatever
+       * tenant this runs as, and the sweep later runs the follow-up as exactly that tenant, so a
+       * schedule made unframed (stamped `system`, which every tenant reads), from the platform's
+       * frame, or from another person's would either never run or run for the wrong person.
+       */
+      assertPersonTenant(requireTenant(), input.ownerUserId);
       const delay = input.dueAt.getTime() - now().getTime();
       if (!Number.isFinite(delay) || delay < WAKE_UP_MIN_DELAY_MS - 1_000)
         throw new WakeUpRefusedError(
@@ -291,7 +334,13 @@ export function createWakeUpStore(
       await database
         .update(workItems)
         .set({
-          payload: sql`${workItems.payload} || ${{ outcome }}::jsonb`,
+          /*
+           * Merged as an object, so the payload stays one and a second settle replaces `outcome`
+           * rather than nesting it. Not `JSON.stringify(...)`: the driver encodes a string parameter
+           * as a JSON string, and `object || string` is an array. A row already in that array shape
+           * is folded back to its object first.
+           */
+          payload: sql`${payloadObject} || ${{ outcome }}::jsonb`,
           updatedAt: sql`now()`,
         })
         .where(and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, id)));
@@ -329,6 +378,8 @@ export function wakeUpTools(options: {
         } catch (error) {
           if (error instanceof WakeUpRefusedError)
             return `${REFUSAL_MARKER} ${error.message}`;
+          if (error instanceof TenantContextError)
+            return `${REFUSAL_MARKER} A follow-up can only be scheduled for the person this turn runs for.`;
           throw error;
         }
       },
@@ -395,6 +446,8 @@ export function wakeUpInstruction(payload: WakeUpPayload): string {
 
 export type WakeUpTurn = (input: {
   ownerUserId: string;
+  /** The follow-up's own tenant, as stamped when it was scheduled: see `TurnRunner`. */
+  tenantId: string;
   routineId: string;
   agentId: string;
   threadId: string;
@@ -450,7 +503,7 @@ export function createWakeUpRunner(options: {
         maxAttempts: 1,
       });
       for (const item of claimed) {
-        const payload = item.payload as unknown as WakeUpPayload;
+        const payload = readWakeUpPayload(item.payload);
         const at = () => new Date().toISOString();
         const done = async (
           outcome: NonNullable<WakeUpPayload["outcome"]>["status"],
@@ -506,6 +559,7 @@ export function createWakeUpRunner(options: {
             try {
               const { replyText } = await runTurn({
                 ownerUserId: payload.ownerUserId,
+                tenantId: tenant,
                 routineId: `follow-up:${item.key}`,
                 agentId: payload.agentId,
                 threadId: channel.threadId,
