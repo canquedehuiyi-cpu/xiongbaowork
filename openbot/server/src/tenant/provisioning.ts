@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { agentProfiles, agents, subscriptions } from "../db/schema";
 import { runAsTenant } from "./context";
@@ -42,22 +41,15 @@ export async function provisionTenant(
   // The rows name a tenant that does not exist yet, so the write has to run
   // inside that tenant's scope; RLS will not admit another scope's stamp.
   await runAsTenant(user.id, async () => {
-    // `subscriptions` has no unique key on the tenant, so `onConflictDoNothing` alone never fires and
-    // a second call would add a second row. Callers that run on every sign-in (the organization
-    // store) and at every start (the single-user actor) call this repeatedly, so the Free row is
-    // written only when the tenant has no subscription row at all -- an existing one, active or
-    // canceled, is the plan someone chose and is left alone. Two first calls racing can still both
-    // insert; the quota reader resolves that deterministically to the most recent active row.
-    const [existing] = await database
-      .select({ id: subscriptions.id })
-      .from(subscriptions)
-      .where(eq(subscriptions.tenantId, user.id))
-      .limit(1);
-    if (!existing)
-      await database
-        .insert(subscriptions)
-        .values({ tenantId: user.id, planId: "free" })
-        .onConflictDoNothing();
+    // One subscription row per tenant (`subscriptions_tenant_unique`, 0129). Callers that run on
+    // every sign-in (the organization store) and at every start (the single-user actor) call this
+    // repeatedly, and two first calls can race; the conflict on the tenant makes every call after the
+    // first a no-op, so an existing row, active or canceled, is the plan someone chose and is left
+    // alone.
+    await database
+      .insert(subscriptions)
+      .values({ tenantId: user.id, planId: "free" })
+      .onConflictDoNothing({ target: subscriptions.tenantId });
 
     // One 分身 per tenant, keyed by a deterministic id so a retried hook cannot make a second.
     const avatarId = avatarAgentId(user.id);
