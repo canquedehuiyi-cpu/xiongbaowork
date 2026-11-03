@@ -8,6 +8,7 @@ import { decryptSecret } from "../credentials";
 import type { Database } from "../db/client";
 import { credentials, modelRegistry } from "../db/schema";
 import { languageModelFor } from "../models/runtime-resolver";
+import type { OutboundPolicy } from "../net/outbound-guard";
 import { runAsTenant } from "../tenant/context";
 import { WakerFlowValidationError } from "./store";
 
@@ -67,6 +68,11 @@ export function createFlowModelResolver(options: {
   /** Pending product decision: off means the platform model is neither listed nor accepted. */
   allowPlatformModel?: boolean;
   platform?: PlatformFlowModel;
+  /**
+   * Where a library row's base URL may point (audit defect #6): the same policy as a coworker's run,
+   * since the row is the tenant's and the planning call carries the tenant's key to it.
+   */
+  outbound?: OutboundPolicy;
 }): FlowModelResolver {
   const { database, encryptionKey } = options;
   const build = options.resolve ?? languageModelFor;
@@ -147,7 +153,13 @@ export function createFlowModelResolver(options: {
         return {
           modelRef: row.id,
           name: `${row.provider}/${row.modelName}`,
-          model: build(row.provider, row.baseUrl, row.modelName, apiKey),
+          model: build(
+            row.provider,
+            row.baseUrl,
+            row.modelName,
+            apiKey,
+            options.outbound ?? {},
+          ),
         };
       } catch {
         // Never the thrown value: it can carry key material or the envelope.

@@ -1,6 +1,24 @@
 import { z } from "zod";
 import type { Persona } from "../../../../shared/persona";
 
+/** What the server accepts as an avatar seed (`routes.ts`). Kept in step by hand, like the limits. */
+export const AVATAR_SEED_PATTERN = /^[\w:.-]{1,64}$/;
+
+/**
+ * A fresh avatar seed for the 换一个 button.
+ *
+ * `getRandomValues`, not `randomUUID`: the latter exists only in a secure context, and a deployment
+ * reached over plain http would lose the button. 16 hex characters is far more faces than anybody
+ * will reroll through, and always matches `AVATAR_SEED_PATTERN`.
+ */
+export function randomAvatarSeed(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
 /**
  * Browser-side coworker form contract. Limits match the server parser so validation errors can be
  * shown next to fields before submit.
@@ -46,6 +64,16 @@ export const agentFormSchema = z.object({
    * the same three-way the key above uses, because one form writes several fields at once.
    */
   modelRef: z.string().uuid().nullable().optional(),
+  /**
+   * The seed the coworker's abstract avatar is drawn from.
+   *
+   * Optional, like the server's: absent on a create means the server uses the new id, and absent on an
+   * edit leaves the stored face alone. Same shape the server accepts, so a bad one is caught here.
+   */
+  avatarSeed: z
+    .string()
+    .regex(AVATAR_SEED_PATTERN, "头像种子只能是 1 到 64 个字母、数字或 _ - : .")
+    .optional(),
 });
 
 export type AgentFormValues = z.infer<typeof agentFormSchema>;
@@ -83,5 +111,9 @@ export function agentInputFrom(values: AgentFormPatch) {
     // field leaves the binding alone instead of clearing it.
     ...(values.modelRef === undefined ? {} : { modelRef: values.modelRef }),
     ...(values.persona === undefined ? {} : { persona: values.persona }),
+    // Only when this screen chose one, so an edit that never showed the avatar cannot redraw it.
+    ...(values.avatarSeed === undefined
+      ? {}
+      : { avatarSeed: values.avatarSeed }),
   };
 }

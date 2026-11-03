@@ -42,6 +42,7 @@ tests/approvals-interactive.integration.test.ts
 tests/approvals-native.test.ts
 tests/approvals-policy.integration.test.ts
 tests/approvals-policy.test.ts
+tests/approvals-question-board.test.ts
 tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-store.integration.test.ts
@@ -77,6 +78,8 @@ tests/bunfig-preload.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
 tests/channel-cursor.test.ts
+tests/channel-dispatch.integration.test.ts
+tests/channel-dispatch.test.ts
 tests/channel-events.integration.test.ts
 tests/channel-one-line.test.ts
 tests/channel-routes.test.ts
@@ -188,6 +191,8 @@ tests/host-access-tools.test.ts
 tests/human-input-end-to-end.test.ts
 tests/identity-provider-audit.test.ts
 tests/jsonb-encoding.integration.test.ts
+tests/knowledge-base.integration.test.ts
+tests/knowledge-tools.test.ts
 tests/last-sign-in-backfill.integration.test.ts
 tests/local-threads.test.ts
 tests/mastra-roster.test.ts
@@ -204,6 +209,7 @@ tests/mobile-links.test.ts
 tests/model-e2e-reconcile.test.ts
 tests/model-e2e-workflow.test.ts
 tests/model-library-routes.test.ts
+tests/model-probe.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
 tests/model-token-metering.test.ts
@@ -215,6 +221,7 @@ tests/organization-store.integration.test.ts
 tests/otel-export-scrubbing.test.ts
 tests/otel-exporter-compat.test.ts
 tests/otel-sdk-lifecycle.test.ts
+tests/outbound-guard.test.ts
 tests/owner-assembly-audit.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
@@ -229,6 +236,7 @@ tests/picked-harness-auth.test.ts
 tests/pipeline-control.integration.test.ts
 tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
+tests/pipeline-template-edit.test.ts
 tests/pipeline-turn-channel.test.ts
 tests/plan-change-audit.integration.test.ts
 tests/plan-model.test.ts

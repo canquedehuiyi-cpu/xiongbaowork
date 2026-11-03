@@ -10,6 +10,8 @@ import { randomUUID } from "node:crypto";
 import { and, eq, like } from "drizzle-orm";
 import { createAutomationStore } from "../src/automations/store";
 import {
+  ABANDONED_FIRING_ERROR,
+  ABANDONED_FIRING_MS,
   AUTOMATION_FIRE_KIND,
   type AutomationFiringExecutor,
   type AutomationSweepOptions,
@@ -545,5 +547,208 @@ describe("whose firing it is (tenant from the claimed record)", () => {
         });
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("the clock a firing is judged on (the database's)", () => {
+  test("due and late are measured on one clock: the rows come back with it", async () => {
+    const automation = await createFor(tenantA, wakerA);
+    const trigger = await addTrigger(tenantA, automation.id, DAILY);
+    const due = recentMinute();
+    await makeDue(tenantA, trigger.id, due);
+
+    const rows = await store.dueTriggers(500);
+    const row = rows.find((candidate) => candidate.id === trigger.id);
+    expect(row).toBeDefined();
+    // The database's now(), not this process's: the same instant the WHERE compared against.
+    expect(row?.asOf.getTime()).toBeGreaterThanOrEqual(due.getTime());
+    expect(Math.abs((row?.asOf.getTime() ?? 0) - Date.now())).toBeLessThan(
+      MINUTE,
+    );
+  });
+
+  test("a clock that says the stamp is not yet due offers nothing; one that says it is stale moves it on", async () => {
+    const automation = await createFor(tenantA, wakerA);
+    const trigger = await addTrigger(tenantA, automation.id, DAILY);
+    const due = recentMinute();
+    await makeDue(tenantA, trigger.id, due);
+
+    // An hour behind the stamp: not due on that clock, so neither offered nor moved.
+    const behind = new Date(due.getTime() - HOUR);
+    expect(
+      (await offerDueAutomations(options({ now: () => behind }))).offered,
+    ).not.toContain(automation.id);
+    expect((await rawTrigger(tenantA, trigger.id))?.nextRunAt?.getTime()).toBe(
+      due.getTime(),
+    );
+
+    // Twenty minutes ahead: late past the grace on that same clock, so it is missed, not fired.
+    const ahead = new Date(due.getTime() + 20 * MINUTE);
+    expect(
+      (await offerDueAutomations(options({ now: () => ahead }))).offered,
+    ).not.toContain(automation.id);
+    expect(await itemsFor(trigger.id)).toHaveLength(0);
+    expect(
+      (await rawTrigger(tenantA, trigger.id))?.nextRunAt?.getTime(),
+    ).toBeGreaterThan(ahead.getTime());
+  });
+});
+
+describe("a trigger switched off after it was offered", () => {
+  test("a schedule switched off between the offer and the firing does not fire", async () => {
+    const automation = await createFor(tenantA, wakerA);
+    const trigger = await addTrigger(tenantA, automation.id, DAILY);
+    await makeDue(tenantA, trigger.id, recentMinute());
+    await offerDueAutomations(options());
+    await as(tenantA, () =>
+      store.setTriggerEnabled(automation.id, trigger.id, false),
+    );
+
+    const report = await dispatchClaimedAutomations(options());
+    expect(report.skipped).toEqual([
+      { automationId: automation.id, reason: "stopped: disabled" },
+    ]);
+    expect(executed).toHaveLength(0);
+    expect((await rawAutomation(tenantA, automation.id))?.runCount).toBe(0);
+  });
+
+  test("a one-off the scheduler consumed still fires; one a person switched off does not", async () => {
+    const automation = await createFor(tenantA, wakerA);
+    const at = new Date(Date.now() + HOUR);
+    const consumed = await addTrigger(tenantA, automation.id, {
+      kind: "once",
+      at: at.toISOString(),
+    });
+    const stopped = await addTrigger(tenantA, automation.id, {
+      kind: "once",
+      at: at.toISOString(),
+    });
+    await as(tenantA, () =>
+      store.setTriggerEnabled(automation.id, stopped.id, false),
+    );
+    // Switched off by a person, a one-off keeps its stamp, but shows no next run.
+    expect((await rawTrigger(tenantA, stopped.id))?.nextRunAt?.getTime()).toBe(
+      at.getTime(),
+    );
+    const listed = await as(tenantA, () => store.listTriggers(automation.id));
+    expect(
+      listed.find((trigger) => trigger.id === stopped.id)?.nextRunAt,
+    ).toBeNull();
+
+    const due = recentMinute();
+    await makeDue(tenantA, consumed.id, due);
+    await offerDueAutomations(options());
+    expect((await rawTrigger(tenantA, consumed.id))?.enabled).toBe(false);
+    expect((await dispatchClaimedAutomations(options())).fired).toEqual([
+      automation.id,
+    ]);
+
+    expect(
+      await as(tenantA, () =>
+        store.beginFiring({
+          automationId: automation.id,
+          triggerId: stopped.id,
+          externalId: `due:${minuteKey(due)}`,
+          fingerprint: "person-stopped",
+        }),
+      ),
+    ).toEqual({ status: "stopped", reason: "disabled" });
+  });
+
+  test("a person switching a one-off off while it is being offered keeps it from being consumed", async () => {
+    const automation = await createFor(tenantA, wakerA);
+    const once = await addTrigger(tenantA, automation.id, {
+      kind: "once",
+      at: new Date(Date.now() + HOUR).toISOString(),
+    });
+    const due = recentMinute();
+    await makeDue(tenantA, once.id, due);
+    await as(tenantA, () =>
+      store.setTriggerEnabled(automation.id, once.id, false),
+    );
+    // The sweep's compare-and-set on a trigger that is off does nothing.
+    expect(await as(tenantA, () => store.advanceTrigger(once.id, due))).toBe(
+      false,
+    );
+    expect((await rawTrigger(tenantA, once.id))?.nextRunAt?.getTime()).toBe(
+      due.getTime(),
+    );
+  });
+});
+
+describe("an end date moved after the schedule reached it (AUT4)", () => {
+  test("a later end date wakes the schedule; an earlier one stops it again", async () => {
+    const soon = new Date(Date.now() + 2 * HOUR);
+    const automation = await as(tenantA, () =>
+      store.create({
+        name: `到期 ${randomUUID().slice(0, 4)}`,
+        target: { kind: "waker", agentId: wakerA },
+        endDate: soon,
+      }),
+    );
+    created.push({ tenant: tenantA, id: automation.id });
+    // Twelve hours away: past the end date, so the schedule has nothing to do.
+    const trigger = await addTrigger(tenantA, automation.id, DAILY);
+    expect(trigger.enabled).toBe(true);
+    expect(trigger.nextRunAt).toBeNull();
+
+    await as(tenantA, () =>
+      store.update(automation.id, {
+        endDate: new Date(Date.now() + 3 * 24 * HOUR),
+      }),
+    );
+    const woken = await rawTrigger(tenantA, trigger.id);
+    expect(woken?.nextRunAt?.getTime()).toBe(
+      nextOccurrence(DAILY_CRON, "UTC", new Date()).getTime(),
+    );
+
+    await as(tenantA, () => store.update(automation.id, { endDate: soon }));
+    expect((await rawTrigger(tenantA, trigger.id))?.nextRunAt).toBeNull();
+
+    await as(tenantA, () => store.update(automation.id, { endDate: null }));
+    expect(
+      (await rawTrigger(tenantA, trigger.id))?.nextRunAt?.getTime(),
+    ).toBeGreaterThan(Date.now());
+  });
+});
+
+describe("a firing a dead server left running (WF-F: mark failed, no replay)", () => {
+  test("is closed as failed by the next pass; a fresh one is left alone", async () => {
+    const automation = await createFor(tenantA, wakerA);
+    const trigger = await addTrigger(tenantA, automation.id, DAILY);
+    const begin = async (externalId: string) => {
+      const begun = await as(tenantA, () =>
+        store.beginFiring({
+          automationId: automation.id,
+          triggerId: trigger.id,
+          externalId,
+          fingerprint: externalId,
+        }),
+      );
+      if (begun.status !== "started") throw new Error(begun.status);
+      return begun.firing.id;
+    };
+    const abandoned = await begin("abandoned");
+    const fresh = await begin("fresh");
+    await as(tenantA, async () => {
+      await database
+        .update(automationFirings)
+        .set({ updatedAt: new Date(Date.now() - ABANDONED_FIRING_MS - MINUTE) })
+        .where(eq(automationFirings.id, abandoned));
+    });
+
+    await dispatchClaimedAutomations(options());
+
+    const rows = await firingsOf(tenantA, automation.id);
+    expect(rows.find((row) => row.id === abandoned)).toMatchObject({
+      status: "failed",
+      error: ABANDONED_FIRING_ERROR,
+    });
+    expect(rows.find((row) => row.id === fresh)?.status).toBe("running");
+    // Taken up after it was reaped, it does not run.
+    expect(await as(tenantA, () => store.startFiring(abandoned))).toBe(false);
+    expect(await as(tenantA, () => store.startFiring(fresh))).toBe(true);
+    // Never replayed.
+    expect(executed).toHaveLength(0);
   });
 });

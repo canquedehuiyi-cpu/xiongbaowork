@@ -77,7 +77,7 @@ export type TargetVerdict =
  * compresses IPv6, and turns `127.1` into `127.0.0.1`. What it does not do is unwrap an embedded IPv4
  * or drop the root dot, because both are legal and it is not the one deciding anything.
  */
-function canonicalHostname(hostname: string): string {
+export function canonicalHostname(hostname: string): string {
   // The root dot. `example.com.` and `example.com` are the same name to DNS and to Chromium.
   const name = hostname.replace(/\.+$/, "");
 
@@ -149,7 +149,7 @@ function isPrivateIpv6(hostname: string): boolean {
 }
 
 /** The eight groups of an IPv6 address, or null if it is not one. Compression is expanded. */
-function expandIpv6(hostname: string): number[] | null {
+export function expandIpv6(hostname: string): number[] | null {
   const halves = hostname.split("::");
   if (halves.length > 2) return null;
 
