@@ -44,7 +44,16 @@ type AgentInputObject = {
   modelRef?: unknown;
   platformModelRef?: unknown;
   persona?: unknown;
+  avatarSeed?: unknown;
 };
+
+/**
+ * What an avatar seed may be: what the form draws from and what every surface hands boring-avatars.
+ *
+ * Bounded and kept to word characters plus `-`, `:` and `.` — the shape existing seeds already have
+ * (agent ids, `avatar-<uuid>`) — so a seed is never a place to park arbitrary text in a profile.
+ */
+const AVATAR_SEED = /^[\w:.-]{1,64}$/;
 
 /**
  * Parse and validate what a user typed into the agent form.
@@ -143,6 +152,23 @@ export function parseAgentInput(
   const persona = parsePersona(input.persona);
   if (typeof persona === "string") return { ok: false, error: persona };
 
+  // Optional on create and on update alike. Absent means "the default" on a create and "leave it"
+  // on an update, so a form that never showed the avatar cannot redraw it; anything sent is checked.
+  let avatarSeed: string | undefined;
+  if (input.avatarSeed !== undefined) {
+    if (
+      typeof input.avatarSeed !== "string" ||
+      !AVATAR_SEED.test(input.avatarSeed)
+    ) {
+      return {
+        ok: false,
+        error:
+          "Avatar seed must be 1 to 64 letters, digits or the characters _ - : .",
+      };
+    }
+    avatarSeed = input.avatarSeed;
+  }
+
   const modelRef = parseModelReference(input.modelRef);
   if (modelRef === INVALID_REFERENCE) {
     return { ok: false, error: "Pick a model from your model library." };
@@ -177,6 +203,7 @@ export function parseAgentInput(
       // Only sent when the form knew about it, so a save that never touched the persona boxes leaves
       // the stored one where it is.
       ...(persona === undefined ? {} : { persona }),
+      ...(avatarSeed === undefined ? {} : { avatarSeed }),
     },
   };
 }

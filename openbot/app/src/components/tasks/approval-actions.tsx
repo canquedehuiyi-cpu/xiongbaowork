@@ -5,14 +5,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type ApprovalDecision,
+  answerPersonQuestion,
   approvalInboxOptions,
   approvalRequestOptions,
   decideApproval,
 } from "@/lib/approvals";
-import { RequestError } from "@/lib/client";
 
 /**
  * Spec A8: a card waiting on a person's approval is answered on the board itself, and the card moves
@@ -24,7 +24,25 @@ import { RequestError } from "@/lib/client";
  * its step share one), and the screen does the same ahead of it: the flip is optimistic, undone if the
  * server refuses, and the reads are refreshed afterwards either way so the board ends on the server's
  * answer rather than on its own guess.
+ *
+ * Spec I3: a card can also be parked on a QUESTION its coworker put to the person (`ask_person`). The
+ * server parks it under the question's key, the same `pendingApprovalId` field, and the owner-scoped
+ * inbox lists the open questions beside the approvals -- so the card shows the question and an answer
+ * box instead of 批准/拒绝, and answering goes through `POST /api/approvals/questions/:id/respond`, the
+ * endpoint the 审批 page answers with. An answer moves the card back to 进行中, ahead of the server and
+ * under the same per-id gate and rollback as a decision.
  */
+
+/** What a card can be answered with: an approval decision, or a written answer to a question. */
+export type BoardAnswer = ApprovalDecision | "answer";
+
+/** The board's one answer write, as the page threads it to every card. */
+export type OnBoardAnswer = (
+  id: string,
+  answer: BoardAnswer,
+  /** The person's words, for an `answer`. */
+  response?: string,
+) => void;
 
 /** The fields of a card this file reads. The board's own `Task` satisfies it. */
 export type ApprovalCard = {
@@ -60,7 +78,7 @@ export const approvalChoices = (
 
 /** What the server's projector writes for a decision (`tasks/projector.ts` `resumed`). */
 export const statusAfterDecision = (
-  decision: ApprovalDecision,
+  decision: BoardAnswer,
 ): "running" | "failed" => (decision === "deny" ? "failed" : "running");
 
 /**
@@ -71,7 +89,7 @@ export const statusAfterDecision = (
 export function flipCardsForDecision<T extends ApprovalCard>(
   tasks: T[],
   approvalId: string,
-  decision: ApprovalDecision,
+  decision: BoardAnswer,
 ): T[] {
   const status = statusAfterDecision(decision);
   return tasks.map((task) =>
@@ -90,7 +108,7 @@ type Snapshot = [QueryKey, unknown][];
 async function flipCaches(
   queryClient: QueryClient,
   approvalId: string,
-  decision: ApprovalDecision,
+  decision: BoardAnswer,
 ): Promise<Snapshot> {
   // A read already in flight would land after the flip and paint the old state back over it.
   await Promise.all(
@@ -126,8 +144,14 @@ export function useApprovalDecision() {
    */
   const [failure, setFailure] = useState<Error | null>(null);
   const mutation = useMutation({
-    mutationFn: (input: { approvalId: string; decision: ApprovalDecision }) =>
-      decideApproval(input.approvalId, input.decision),
+    mutationFn: (input: {
+      approvalId: string;
+      decision: BoardAnswer;
+      response?: string;
+    }) =>
+      input.decision === "answer"
+        ? answerPersonQuestion(input.approvalId, input.response ?? "")
+        : decideApproval(input.approvalId, input.decision),
     // A decision is not replayable: a lost response may still have landed.
     retry: false,
     onMutate: async (input) => ({
@@ -168,12 +192,18 @@ export function useApprovalDecision() {
         void queryClient.invalidateQueries({ queryKey });
     },
   });
-  const decide = (approvalId: string, decision: ApprovalDecision) => {
+  const decide: OnBoardAnswer = (approvalId, decision, response) => {
+    // An empty answer is not an answer; the server would refuse it after the card had already moved.
+    if (decision === "answer" && !response?.trim()) return;
     if (inflight.current.has(approvalId)) return;
     inflight.current.add(approvalId);
     setPending(new Set(inflight.current));
     setFailure(null);
-    mutation.mutate({ approvalId, decision });
+    mutation.mutate({
+      approvalId,
+      decision,
+      ...(decision === "answer" ? { response: response?.trim() } : {}),
+    });
   };
   return {
     decide,
@@ -184,15 +214,69 @@ export function useApprovalDecision() {
 }
 
 /**
- * The buttons on one card. Nothing at all for a card that is not parked on an approval, and nothing for
- * one whose approval is reported as decided elsewhere or is no longer there (the board catches up on
- * its next read).
+ * The answer box for a card parked on a question: the question in the coworker's words, a field, and
+ * 回答. The field is this card's own; the gate on sending twice is the page's, per question.
+ */
+function QuestionAnswer({
+  questionId,
+  question,
+  onDecide,
+  busy,
+}: {
+  questionId: string;
+  question: string;
+  onDecide: OnBoardAnswer;
+  busy: boolean;
+}) {
+  const [draft, setDraft] = useState("");
+  const empty = !draft.trim();
+  return (
+    <form
+      aria-label="回答问题"
+      className="flex min-w-0 items-center gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy || empty) return;
+        onDecide(questionId, "answer", draft);
+        setDraft("");
+      }}
+    >
+      <span className="max-w-48 truncate" title={question}>
+        问：{question}
+      </span>
+      <input
+        aria-label="你的回答"
+        className="min-w-0 rounded border border-foreground/20 bg-background px-1.5 py-0.5"
+        disabled={busy}
+        maxLength={6000}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="写下你的回答"
+        value={draft}
+      />
+      <button
+        aria-busy={busy}
+        className="bg-foreground text-background rounded px-2 py-0.5"
+        disabled={busy || empty}
+        type="submit"
+      >
+        {busy ? "提交中…" : "回答"}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * The buttons on one card. Nothing at all for a card that is not parked on an approval or a question,
+ * and nothing for one whose approval is reported as decided elsewhere (the board catches up on its next
+ * read). Whether the card waits on a question, and whether an action was handed to the person, is read
+ * from the same owner-scoped inbox the 审批 page reads.
  *
- * Whether the action was handed to the person decides the affirmative button (批准 or 已处理), and the
- * server refuses the wrong one, so it is offered only once the request's policy is KNOWN. The policy is
- * read from the same owner-scoped inbox the 审批 page reads; a request the inbox does not list (it
- * carries only the newest hundred) is read by its own id. Until one of those answers, the card offers
- * 拒绝 alone, which is a valid answer to either kind.
+ * The affirmative button depends on the request's policy -- 批准, or 已处理 for an action handed to the
+ * person -- and the server refuses the wrong one, so it is offered only once that policy is KNOWN. The
+ * inbox lists only the newest hundred requests, so a card whose id the inbox does not know (even after
+ * the re-read below), or an inbox that could not be read, asks for that one request by its id. Until an
+ * answer arrives the card offers nothing; an id the server does not know as a request (gone, or a
+ * question past the inbox's list) offers nothing either, rather than a guess.
  */
 export function ApprovalActions({
   task,
@@ -200,7 +284,7 @@ export function ApprovalActions({
   pending,
 }: {
   task: ApprovalCard;
-  onDecide: (approvalId: string, decision: ApprovalDecision) => void;
+  onDecide: OnBoardAnswer;
   pending: ReadonlySet<string>;
 }) {
   const approvalId = approvalOf(task);
@@ -210,32 +294,57 @@ export function ApprovalActions({
   });
   const inboxData = inbox.data;
   // Read defensively: an inbox that answered without a list is "not known yet", not a crash.
-  const listed =
-    inboxData && Array.isArray(inboxData.requests)
-      ? inboxData.requests.find((entry) => entry.id === approvalId)
-      : undefined;
-  const unlisted = approvalId !== null && inbox.isSuccess && !listed;
+  const questions =
+    inboxData && Array.isArray(inboxData.questions) ? inboxData.questions : [];
+  const requests =
+    inboxData && Array.isArray(inboxData.requests) ? inboxData.requests : [];
+  const question = questions.find((entry) => entry.id === approvalId);
+  const listed = requests.find((entry) => entry.id === approvalId);
+  /*
+   * A card can be parked on something newer than the cached inbox (it is polled, the board is pushed):
+   * a question asked a moment ago is in neither list yet. So an id the loaded inbox does not know is
+   * read again once before anything else is tried.
+   */
+  const unknown =
+    approvalId !== null &&
+    inboxData !== undefined &&
+    question === undefined &&
+    listed === undefined;
+  const [recheckedId, setRecheckedId] = useState<string | null>(null);
+  const { refetch } = inbox;
+  useEffect(() => {
+    if (!unknown || approvalId === null || recheckedId === approvalId) return;
+    setRecheckedId(approvalId);
+    void refetch();
+  }, [unknown, approvalId, recheckedId, refetch]);
+  const stillUnknown =
+    unknown && recheckedId === approvalId && !inbox.isFetching;
   const single = useQuery({
     ...approvalRequestOptions(approvalId ?? ""),
-    enabled: unlisted,
+    enabled:
+      approvalId !== null &&
+      (stillUnknown || (inboxData === undefined && inbox.isError)),
   });
   if (approvalId === null) return null;
-  const request = listed ?? (unlisted ? single.data : undefined);
-  if (request && request.status !== "pending") return null;
-  // Gone, or never this person's: there is nothing left to answer here.
-  if (
-    unlisted &&
-    single.error instanceof RequestError &&
-    single.error.status === 404
-  )
-    return null;
-  const choices = request
-    ? approvalChoices(request.action.policy?.behaviour === "hand_off")
-    : approvalChoices(false).filter(({ decision }) => decision === "deny");
+  if (inboxData === undefined && !inbox.isError) return null;
+  if (unknown && !stillUnknown) return null;
+  if (question)
+    return (
+      <QuestionAnswer
+        busy={pending.has(approvalId)}
+        onDecide={onDecide}
+        question={question.question}
+        questionId={approvalId}
+      />
+    );
+  const request = listed ?? single.data;
+  // Not known (still being read, gone, or unreadable): no answer whose kind cannot be vouched for.
+  if (request?.status !== "pending") return null;
+  const handOff = request.action.policy?.behaviour === "hand_off";
   const busy = pending.has(approvalId);
   return (
     <>
-      {choices.map(({ decision, label }) => (
+      {approvalChoices(handOff).map(({ decision, label }) => (
         <button
           aria-busy={busy}
           className={

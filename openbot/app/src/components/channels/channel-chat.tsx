@@ -9,6 +9,10 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { attachmentModality } from "@/components/channels/chat-messages";
+import {
+  toGroupOptions,
+  withGroupMembers,
+} from "@/components/channels/composer";
 import { ConversationView } from "@/components/channels/conversation-view";
 import {
   seedMessage,
@@ -55,6 +59,7 @@ import {
   withVoiceChats,
 } from "@/lib/voice/archive";
 import { useVoiceCall } from "@/lib/voice/use-voice-call";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
 import { newId } from "../../lib/new-id";
 
@@ -257,6 +262,9 @@ export function ChannelChat({
   const { copilotkit } = useCopilotKit();
   // Mentions are scoped to the channel's permitted agents.
   const { data: agentProfiles } = useQuery(agentListQueryOptions());
+  // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
+  const { data: wakerGroups } = useQuery(wakerGroupsQueryOptions());
+  const roster = mentionRoster(agentProfiles, channel.agentIds);
   const channelAgentId = `channel:${channel.id}`;
   const { agent, isReady } = useAgent({
     agentId: channelAgentId,
@@ -946,9 +954,13 @@ export function ChannelChat({
             }
             /*
              * In a 1:1 conversation `@` names any coworker this person can see: naming the pinned one is
-             * an ordinary message, naming anybody else hands them the work (see `onSubmit`).
+             * an ordinary message, naming anybody else hands them the work (see `onSubmit`). A Group's
+             * members are listed under it and picked as the same coworker, so they take the same path.
              */
-            agents={mentionRoster(agentProfiles, channel.agentIds)}
+            agents={withGroupMembers(
+              roster,
+              toGroupOptions(wakerGroups, roster),
+            )}
             channelId={channel.id}
             /*
              * THE TURN, not the run. `say` waits for the runtime agent and the join before a run starts,
