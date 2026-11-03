@@ -91,6 +91,7 @@ import {
   createAutomationStore,
 } from "./automations/store";
 import {
+  AUTOMATION_FIRE_KIND,
   type AutomationEvent,
   dispatchClaimedAutomations,
   offerDueAutomations,
@@ -2986,29 +2987,51 @@ await startupLifecycle.run(async (startup) => {
   /*
    * AUT2: an event (public hook or signed-in API call) is queued straight away; this starts a
    * dispatch at once rather than at the next 30-second pass. Claims are leased, so it may overlap
-   * the loop safely, and the loop is still what drains the queue if this is lost.
+   * the loop safely, and the loop is still what drains the queue if a wake-up is lost.
    *
-   * As `platform`, like the loop: it is called from inside a signed-in request, and every claimed
-   * item re-enters its own owner's frame, which `assertPersonTenant` refuses from another person's.
+   * WOKEN BY THE QUEUE'S OWN NOTIFICATION, NOT BY THE REQUEST (G01-E I5). Every offer says its kind
+   * aloud on commit (`work/queue.ts`), and the listener runs the dispatch as `platform` with no
+   * request behind it, like the loop. Starting it from the request instead would mean opening
+   * `platform` on a member's (or a signed-out caller's) path, or dispatching inside that person's
+   * frame, where every other owner's claimed item would be refused as cross-tenant and dropped.
+   * It also wakes the replica that did not take the request.
    */
-  const dispatchAutomationsNow = () => {
-    void runAsTenant("platform", async () => {
-      return await dispatchClaimedAutomations(automationSweep);
-    }).catch((error: unknown) =>
+  let automationDispatching = false;
+  let automationDispatchAgain = false;
+  const dispatchAutomationsNow = async () => {
+    if (automationDispatching) {
+      automationDispatchAgain = true;
+      return;
+    }
+    automationDispatching = true;
+    try {
+      do {
+        automationDispatchAgain = false;
+        await dispatchClaimedAutomations(automationSweep);
+      } while (automationDispatchAgain);
+    } catch (error) {
       console.error(
         JSON.stringify({
           type: "automation-dispatch-now-error",
           error: error instanceof Error ? error.name : "UnknownError",
           timestamp: new Date().toISOString(),
         }),
-      ),
-    );
+      );
+    } finally {
+      automationDispatching = false;
+    }
   };
+  await startup.acquire(
+    () =>
+      startWorkOfferedListener(config.databaseUrl, (kind) => {
+        if (kind === AUTOMATION_FIRE_KIND) void dispatchAutomationsNow();
+      }),
+    (listener) => listener.stop(),
+  );
   const automationIngress = {
     queue: automationQueue,
     signingPepper: config.keyEncryptionKey,
     auditStore: bootAuditStore,
-    onOffered: dispatchAutomationsNow,
   };
   startup.acquireSync(
     () =>
