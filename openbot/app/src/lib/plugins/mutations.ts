@@ -144,6 +144,38 @@ export function setPluginGrantMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/**
+ * Spec E3: list (上架) or unlist (下架) a catalogue entry for owners to install themselves.
+ *
+ * An administrator's write. Listing posts the kind and the catalogue key; unlisting deletes by query
+ * string, as a grant does, because a listing has no id of its own either. Unlisting stops new
+ * installs only: what owners already installed stays until they take it off. The server's refusal
+ * (an app that is not in the catalogue, somebody's own skill) is the error's message as sent.
+ */
+export function setListingMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (variables: {
+      kind: PluginKind;
+      ref: string;
+      listed: boolean;
+    }) => {
+      if (variables.listed) {
+        await client("/api/plugins/listings", {
+          method: "POST",
+          body: { kind: variables.kind, ref: variables.ref },
+          fallback: "没能上架。",
+        });
+        return;
+      }
+      await client(
+        `/api/plugins/listings?kind=${variables.kind}&ref=${encodeURIComponent(variables.ref)}`,
+        { method: "DELETE", fallback: "没能下架。" },
+      );
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
 export function addCuratedServerMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: async (input: CuratedServerInput) => {

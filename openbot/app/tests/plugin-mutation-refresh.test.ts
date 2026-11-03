@@ -23,6 +23,7 @@ import {
   removeSkillMutationOptions,
   replaceServerTokenMutationOptions,
   saveSkillMutationOptions,
+  setListingMutationOptions,
   setPluginGrantMutationOptions,
 } from "../src/lib/plugins/mutations";
 import { pluginKeys } from "../src/lib/plugins/queries";
@@ -170,6 +171,26 @@ const REFUSALS: {
       kind: "mcp" as const,
       ref: "linear/create_issue",
     },
+  },
+  {
+    /*
+     * Spec E3. `addInstallListing` commits the row and then files the trail row, so a failing audit
+     * insert is a 500 over a listing that is now there.
+     */
+    name: "listing an entry for owners to install",
+    route: "POST /api/plugins/listings",
+    status: 500,
+    message: "没能上架。",
+    factory: setListingMutationOptions,
+    variables: { kind: "skill" as const, listed: true, ref: "weekly-report" },
+  },
+  {
+    name: "unlisting an entry",
+    route: "DELETE /api/plugins/listings",
+    status: 404,
+    message: "That entry is not listed.",
+    factory: setListingMutationOptions,
+    variables: { kind: "mcp" as const, listed: false, ref: "notion" },
   },
   {
     name: "adding a curated server",
@@ -564,6 +585,13 @@ const ENCODED_REQUESTS: {
       kind: "mcp" as const,
       ref: HOSTILE_ID,
     },
+  },
+  {
+    // Spec E3: the listing's catalogue key, in a query for the same reason as the grant's ref.
+    name: "unlisting an entry",
+    url: `/api/plugins/listings?kind=skill&ref=${ENCODED_ID}`,
+    build: setListingMutationOptions,
+    variables: { kind: "skill" as const, listed: false, ref: HOSTILE_ID },
   },
 ];
 

@@ -18,8 +18,16 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { grantRoster } from "@/lib/agents/grant-roster";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import { setPluginGrantMutationOptions } from "@/lib/plugins/mutations";
-import { pluginsPageQueryOptions } from "@/lib/plugins/queries";
+import {
+  setListingMutationOptions,
+  setPluginGrantMutationOptions,
+} from "@/lib/plugins/mutations";
+import {
+  appKeyOf,
+  installListingsQueryOptions,
+  listedRefs,
+  pluginsPageQueryOptions,
+} from "@/lib/plugins/queries";
 
 /**
  * One tool, and which Bots hold it.
@@ -66,8 +74,23 @@ function RouteComponent() {
     ...setPluginGrantMutationOptions(queryClient),
     onError: (thrown: Error) => setError(thrown.message),
   });
+  /*
+   * Spec E3: whether owners may install this app's tools on their own Wakers. A listing names the
+   * app, so the switch here lists the whole app, which the sentence beside it says.
+   */
+  const listings = useQuery(installListingsQueryOptions());
+  const setListing = useMutation({
+    ...setListingMutationOptions(queryClient),
+    onError: (thrown: Error) => setError(thrown.message),
+  });
 
   const server = plugins.data?.servers.find((row) => row.id === key);
+  /*
+   * The app's name as a listing and a grant spell it, not the route's row id: a curated connector is
+   * the team's row `team:<catalogue key>`, and a listing stored under that would match no grant ref.
+   */
+  const appKey = server ? appKeyOf(server) : key;
+  const appListed = listedRefs(listings.data, "mcp").has(appKey);
   const tool = server?.tools.find((row) => row.name === toolName);
 
   const back = {
@@ -177,6 +200,37 @@ function RouteComponent() {
               >
                 {tool.effect === "write" ? "会改动" : "只读"}
               </span>
+            </ItemActions>
+          </Item>
+        </PageRows>
+      </PageSection>
+
+      <PageSection
+        description="上架针对整个应用，不只是这个工具。下架只会阻止新的安装，员工主人已经装上的会保留，直到他们自己卸下。"
+        title="自助安装"
+      >
+        <PageRows>
+          <Item size="sm">
+            <ItemContent>
+              <ItemTitle>上架 {server?.title ?? key}</ItemTitle>
+              <ItemDescription>
+                {listings.error
+                  ? "读不到上架状态，所以现在不能切换。"
+                  : appListed
+                    ? "已上架：员工的主人可以在装配页里把这个应用的工具装到自己的员工上，不用再找管理员授予。"
+                    : "未上架：只有管理员能把这个应用的工具授予员工。"}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Switch
+                aria-label={`上架 ${server?.title ?? key}`}
+                checked={appListed}
+                disabled={!listings.data || setListing.isPending}
+                onCheckedChange={(next) => {
+                  setError(null);
+                  setListing.mutate({ kind: "mcp", listed: next, ref: appKey });
+                }}
+              />
             </ItemActions>
           </Item>
         </PageRows>

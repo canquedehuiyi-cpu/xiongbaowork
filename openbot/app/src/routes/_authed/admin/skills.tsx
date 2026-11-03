@@ -31,6 +31,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
@@ -42,9 +43,14 @@ import {
 import {
   removeSkillMutationOptions,
   saveSkillMutationOptions,
+  setListingMutationOptions,
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
-import { pluginsPageQueryOptions } from "@/lib/plugins/queries";
+import {
+  installListingsQueryOptions,
+  listedRefs,
+  pluginsPageQueryOptions,
+} from "@/lib/plugins/queries";
 import {
   type WakerGroup,
   wakerGroupsQueryOptions,
@@ -100,6 +106,16 @@ function RouteComponent() {
     ...setPluginGrantMutationOptions(queryClient),
     ...report,
   });
+  /*
+   * Spec E3: which deployment skills owners may install on their own Wakers. Only a deployment
+   * skill (no owner) gets the switch: the server refuses to list somebody's own skill.
+   */
+  const listings = useQuery(installListingsQueryOptions());
+  const setListing = useMutation({
+    ...setListingMutationOptions(queryClient),
+    ...report,
+  });
+  const listedSkills = listedRefs(listings.data, "skill");
 
   const bots = (agents ?? []).map((agent: { id: string }) => ({
     id: agent.id,
@@ -151,7 +167,7 @@ function RouteComponent() {
       ) : null}
 
       <PageSection
-        description="为整个部署写的。个人在自己的技能页里写自己的。"
+        description="为整个部署写的。个人在自己的技能页里写自己的。打开「上架」后，员工的主人可以在装配页里自己给员工装上或卸下这个技能。"
         title="已安装"
       >
         {/* A read that failed says so; `isPending` goes false on it too, and it is not "none". */}
@@ -163,6 +179,12 @@ function RouteComponent() {
           <PageEmpty>还没有技能。</PageEmpty>
         ) : (
           <PageRows>
+            {listings.error &&
+            skills.some((skill) => skill.ownerUserId === null) ? (
+              <p className="text-destructive text-sm" role="alert">
+                读不到上架目录，所以上架开关暂时不能切换。
+              </p>
+            ) : null}
             {skills.map((skill, index) => (
               <React.Fragment key={skill.slug}>
                 <Item size="sm">
@@ -248,6 +270,28 @@ function RouteComponent() {
                     </ItemFooter>
                   </ItemContent>
                   <ItemActions>
+                    {skill.ownerUserId === null ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Switch
+                          aria-label={`上架 /${skill.slug}`}
+                          checked={listedSkills.has(skill.slug)}
+                          disabled={
+                            !listings.data ||
+                            (setListing.isPending &&
+                              setListing.variables?.ref === skill.slug)
+                          }
+                          onCheckedChange={(next) => {
+                            setError(null);
+                            setListing.mutate({
+                              kind: "skill",
+                              listed: next,
+                              ref: skill.slug,
+                            });
+                          }}
+                        />
+                        <span aria-hidden="true">上架</span>
+                      </div>
+                    ) : null}
                     <Button
                       onClick={() => removeSkill.mutate(skill.slug)}
                       size="sm"

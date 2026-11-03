@@ -1,6 +1,7 @@
 import { IconExternalLink } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   ModelItem,
@@ -33,9 +34,20 @@ import {
   knowledgeNotebooksQueryOptions,
   setKnowledgeBindingMutationOptions,
 } from "@/lib/knowledge/queries";
-import { setPluginGrantMutationOptions } from "@/lib/plugins/mutations";
+import {
+  invalidatePlugins,
+  setPluginGrantMutationOptions,
+} from "@/lib/plugins/mutations";
 import {
   agentPluginsQueryOptions,
+  appKeyOf,
+  installedByMeQueryOptions,
+  installListingsQueryOptions,
+  listedRefs,
+  type PluginServer,
+  type PluginSkill,
+  type PluginsPage,
+  type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
 
@@ -49,7 +61,8 @@ import {
  * stays the place to change one fact; this is the place to decide what the coworker IS, and both
  * write through the same hooks and endpoints, so neither can be a second answer to a saved value.
  *
- * Installing goes through the grant endpoint the plugin screens already use, on purpose: the grant,
+ * Installing goes through the grant endpoint the plugin screens already use, on purpose (and so does
+ * an owner's self-install of an entry an administrator listed, spec E3): the grant,
  * the policy check and the audit row are one server-side write, and a second path that put a skill on
  * a Bot would be a second place to get any of the three wrong.
  */
@@ -124,6 +137,10 @@ function AssemblePage() {
       </PageSection>
 
       <SkillsZone agentId={profile.id} canManage={profile.canManage} />
+      <SelfInstallToolsZone
+        agentId={profile.id}
+        canManage={profile.canManage}
+      />
       <ConnectorZone agentId={profile.id} />
       <KnowledgeZone
         agentId={profile.id}
@@ -167,11 +184,48 @@ const emptyProfile = {
 };
 
 /**
+ * The grant mutation, with every write still in flight tracked by what it names.
+ *
+ * `useMutation`'s own `variables` are only the LATEST call's: ticking a second box made the first
+ * look settled while its request was still out, and a second press on it could send a grant and a
+ * revoke that crossed. Tracked in the hook's own callbacks, which run for every call (the ones
+ * passed to `mutate` run for the latest only).
+ */
+function useTrackedGrant() {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const keyOf = (variables: { kind: string; ref: string }) =>
+    `${variables.kind}:${variables.ref}`;
+  const mutation = useMutation({
+    ...setPluginGrantMutationOptions(queryClient),
+    onMutate: (variables) => {
+      setPending((current) => new Set(current).add(keyOf(variables)));
+    },
+    onSettled: (_data, _error, variables) => {
+      setPending((current) => {
+        const next = new Set(current);
+        next.delete(keyOf(variables));
+        return next;
+      });
+      return invalidatePlugins(queryClient);
+    },
+  });
+  return {
+    mutation,
+    busy: (kind: "mcp" | "skill", ref: string) =>
+      pending.has(keyOf({ kind, ref })),
+  };
+}
+
+/**
  * The skills that can be put on this coworker, with a box for each.
  *
- * Only the person's own skills are offered: a deployment-owned skill is refused by the same server
- * rule that grants the others, and a box that bounces with somebody else's sentence on it is a worse
- * answer than a line saying who decides.
+ * Two kinds of box. The person's own skills, which the owner rule lets them grant; and the
+ * deployment skills an administrator has listed (上架, spec E3), which the owner of a Waker may
+ * install on it and take off again themselves. A deployment skill nobody listed is still an
+ * administrator's to grant, so it is counted in a sentence rather than offered as a box that would
+ * bounce with somebody else's refusal on it — except one this person installed while it was listed:
+ * that stays theirs to take off after it is unlisted (下架), so it keeps its box, for removing only.
  */
 function SkillsZone({
   agentId,
@@ -180,18 +234,32 @@ function SkillsZone({
   agentId: string;
   canManage: boolean;
 }) {
-  const queryClient = useQueryClient();
   const page = useQuery(pluginsPageQueryOptions());
   const granted = useQuery(agentPluginsQueryOptions(agentId));
   const me = useQuery(currentUserQueryOptions());
-  const setGrant = useMutation(setPluginGrantMutationOptions(queryClient));
+  const listings = useQuery(installListingsQueryOptions());
+  const byMe = useQuery(installedByMeQueryOptions(agentId));
+  const { mutation: setGrant, busy: busyRef } = useTrackedGrant();
 
   const skills = page.data?.skills ?? [];
   const mine = skills.filter((skill) => skill.ownerUserId === me.data?.id);
-  const deploymentOwned = skills.filter((skill) => skill.ownerUserId === null);
+  const listed = listedRefs(listings.data, "skill");
   const installed = new Set(
     (granted.data?.skills ?? []).map((skill) => skill.slug),
   );
+  const installedByMe = new Set(byMe.data?.skills ?? []);
+  const deploymentOwned = skills.filter((skill) => skill.ownerUserId === null);
+  const catalogue = deploymentOwned.filter(
+    (skill) =>
+      listed.has(skill.slug) ||
+      (installed.has(skill.slug) && installedByMe.has(skill.slug)),
+  );
+  const unlisted = deploymentOwned.filter(
+    (skill) => !catalogue.includes(skill),
+  );
+  const busy = (slug: string) => busyRef("skill", slug);
+  const toggle = (slug: string, checked: boolean) =>
+    setGrant.mutate({ agentId, granted: checked, kind: "skill", ref: slug });
 
   return (
     <PageSection
@@ -204,7 +272,7 @@ function SkillsZone({
         <p className="text-destructive text-sm" role="alert">
           读不到技能列表。
         </p>
-      ) : mine.length === 0 ? (
+      ) : mine.length === 0 && catalogue.length === 0 ? (
         <Empty className="h-[120px] border border-dashed">
           <EmptyHeader>
             <EmptyTitle className="text-muted-foreground">
@@ -216,47 +284,291 @@ function SkillsZone({
           </EmptyHeader>
         </Empty>
       ) : (
-        <ItemGroup>
-          {mine.map((skill) => (
-            <Item key={skill.slug} variant="muted">
-              <ItemContent>
-                <ItemTitle>{skill.title}</ItemTitle>
-                <ItemDescription>{skill.summary}</ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <label
-                  className="flex items-center gap-2 text-sm"
-                  htmlFor={`assemble-skill-${skill.slug}`}
-                >
-                  <Checkbox
-                    checked={installed.has(skill.slug)}
-                    disabled={
-                      !canManage ||
-                      (setGrant.isPending &&
-                        setGrant.variables?.ref === skill.slug)
-                    }
-                    id={`assemble-skill-${skill.slug}`}
-                    onCheckedChange={(checked) =>
-                      setGrant.mutate({
-                        agentId,
-                        granted: checked === true,
-                        kind: "skill",
-                        ref: skill.slug,
-                      })
-                    }
-                  />
-                  已安装
-                </label>
-              </ItemActions>
-            </Item>
-          ))}
-        </ItemGroup>
+        <>
+          {mine.length > 0 ? (
+            <ItemGroup>
+              {mine.map((skill) => (
+                <Item key={skill.slug} variant="muted">
+                  <ItemContent>
+                    <ItemTitle>{skill.title}</ItemTitle>
+                    <ItemDescription>{skill.summary}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <label
+                      className="flex items-center gap-2 text-sm"
+                      htmlFor={`assemble-skill-${skill.slug}`}
+                    >
+                      <Checkbox
+                        checked={installed.has(skill.slug)}
+                        disabled={!canManage || busy(skill.slug)}
+                        id={`assemble-skill-${skill.slug}`}
+                        onCheckedChange={(checked) =>
+                          toggle(skill.slug, checked === true)
+                        }
+                      />
+                      已安装
+                    </label>
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          ) : null}
+          {catalogue.length > 0 ? (
+            <CatalogueSkills
+              busy={busy}
+              canManage={canManage}
+              installed={installed}
+              listed={listed}
+              onToggle={toggle}
+              skills={catalogue}
+            />
+          ) : null}
+        </>
       )}
-      {deploymentOwned.length > 0 ? (
+      {unlisted.length > 0 ? (
         <p className="mt-3 text-muted-foreground text-sm">
-          另有 {deploymentOwned.length} 个部署技能由管理员在插件页里授予。
+          另有 {unlisted.length} 个部署技能由管理员在插件页里授予。
         </p>
       ) : null}
+      {listings.error ? (
+        <p className="mt-2 text-destructive text-sm" role="alert">
+          读不到管理员上架的目录，所以这里暂时只列出你自己的技能。
+        </p>
+      ) : null}
+      {setGrant.error ? (
+        <p className="mt-2 text-destructive text-sm" role="alert">
+          {setGrant.error.message}
+        </p>
+      ) : null}
+    </PageSection>
+  );
+}
+
+/**
+ * 目录技能: the deployment skills an administrator listed, one box each (spec E3).
+ *
+ * Named by an aria-label and never wrapped in a <label>: Base UI names a checkbox after a label it
+ * finds, and "已安装" would then name every box alike.
+ */
+function CatalogueSkills({
+  skills,
+  installed,
+  listed,
+  canManage,
+  busy,
+  onToggle,
+}: {
+  skills: PluginSkill[];
+  installed: Set<string>;
+  listed: Set<string>;
+  canManage: boolean;
+  busy: (slug: string) => boolean;
+  onToggle: (slug: string, checked: boolean) => void;
+}) {
+  return (
+    <div className="mt-4">
+      <h3 className="font-medium text-sm">目录技能</h3>
+      <p className="mb-2 text-muted-foreground text-xs">
+        管理员上架的部署技能。你可以自己给这位员工装上或卸下，每次都会记录。
+      </p>
+      <ItemGroup>
+        {skills.map((skill) => (
+          <Item key={skill.slug} variant="muted">
+            <ItemContent>
+              <ItemTitle>{skill.title}</ItemTitle>
+              <ItemDescription>
+                {listed.has(skill.slug)
+                  ? skill.summary
+                  : "已下架：你之前装上的仍在，可以卸下，但不能再装。"}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <div className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  aria-label={`安装目录技能 ${skill.title}`}
+                  checked={installed.has(skill.slug)}
+                  disabled={
+                    !canManage ||
+                    busy(skill.slug) ||
+                    // Unlisted: taking it off is all that is left, so an empty box is not a choice.
+                    (!listed.has(skill.slug) && !installed.has(skill.slug))
+                  }
+                  onCheckedChange={(checked) => {
+                    if (!canManage) return;
+                    onToggle(skill.slug, checked === true);
+                  }}
+                />
+                <span aria-hidden="true">已安装</span>
+              </div>
+            </ItemActions>
+          </Item>
+        ))}
+      </ItemGroup>
+    </div>
+  );
+}
+
+/**
+ * Whether an app answers as whoever is asking, so a Waker can only use it once the person has
+ * connected their own account: a catalogue `user-oauth` vendor, or a brokered app that needs an
+ * account (the rule the connected-accounts page lists them by).
+ */
+function connectsPerPerson(server: PluginServer, page: PluginsPage): boolean {
+  if (server.provenance === "composio") return server.authScheme !== "NO_AUTH";
+  // The catalogue key, not the row id: a curated connector is the team's row `team:<key>`.
+  const key = appKeyOf(server);
+  return page.catalogue.some(
+    (entry) => entry.key === key && entry.auth === "user-oauth",
+  );
+}
+
+/**
+ * 可自助安装的工具: the tools of the apps an administrator listed (spec E3), one box per tool.
+ *
+ * The same grant endpoint as every other grant, so the policy check and the trail row are the
+ * server's; a refusal is shown as the server worded it. An app whose credential is each person's
+ * own says so, because a tool installed on a Waker still cannot reach an account nobody connected.
+ *
+ * An app unlisted (下架) after this person installed some of its tools keeps those tools here, for
+ * taking off only: the server still lets the person who installed a grant remove it, and the page
+ * would otherwise lose the one control that does. What an administrator granted is not shown here.
+ *
+ * Apps are matched by catalogue key (`appKeyOf`), which is what a listing names, not by row id.
+ */
+function SelfInstallToolsZone({
+  agentId,
+  canManage,
+}: {
+  agentId: string;
+  canManage: boolean;
+}) {
+  const page = useQuery(pluginsPageQueryOptions());
+  const granted = useQuery(agentPluginsQueryOptions(agentId));
+  const listings = useQuery(installListingsQueryOptions());
+  const byMe = useQuery(installedByMeQueryOptions(agentId));
+  const { mutation: setGrant, busy } = useTrackedGrant();
+
+  const listed = listedRefs(listings.data, "mcp");
+  const servers = page.data?.servers ?? [];
+  const heldRefs = new Set((granted.data?.tools ?? []).map((tool) => tool.ref));
+  const mineRefs = new Set(byMe.data?.tools ?? []);
+  const isHeld = (tool: PluginTool) =>
+    heldRefs.has(tool.ref) || tool.grantedTo.includes(agentId);
+  // Listed apps first, then any unlisted app this person still has one of their own installs on.
+  const unlistedWithMine = [
+    ...new Set(
+      [...mineRefs]
+        .map((ref) => ref.split("/")[0] ?? "")
+        .filter((key) => key && !listed.has(key)),
+    ),
+  ].filter((key) =>
+    servers.some(
+      (server) =>
+        appKeyOf(server) === key &&
+        server.tools.some((tool) => mineRefs.has(tool.ref) && isHeld(tool)),
+    ),
+  );
+  const apps = [...listed, ...unlistedWithMine];
+
+  return (
+    <PageSection
+      description="管理员上架的应用里的工具。勾选即装到这位员工上并记录；取消勾选即卸下。"
+      title="可自助安装的工具"
+    >
+      {page.isPending || listings.isPending || granted.isPending ? (
+        <Skeleton className="h-14" />
+      ) : page.error || listings.error || granted.error ? (
+        <p className="text-destructive text-sm" role="alert">
+          读不到可自助安装的工具。
+        </p>
+      ) : apps.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          管理员还没有上架任何应用。
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {apps.map((key) => {
+            const server = servers.find((row) => appKeyOf(row) === key);
+            if (!server) {
+              return (
+                <p className="text-muted-foreground text-sm" key={key}>
+                  {key}{" "}
+                  已上架，但这个部署还没有添加它，所以暂时没有可安装的工具。
+                </p>
+              );
+            }
+            const appListed = listed.has(key);
+            const tools = appListed
+              ? server.tools
+              : server.tools.filter(
+                  (tool) => mineRefs.has(tool.ref) && isHeld(tool),
+                );
+            return (
+              <div key={key}>
+                <h3 className="font-medium text-sm">{server.title}</h3>
+                {appListed ? null : (
+                  <p className="mb-2 text-muted-foreground text-xs">
+                    已下架：你之前装上的工具仍在，可以在这里卸下，但不能再装新的。
+                  </p>
+                )}
+                {appListed &&
+                page.data &&
+                connectsPerPerson(server, page.data) ? (
+                  <p className="mb-2 text-muted-foreground text-xs">
+                    这个应用以使用者本人的账号访问：装上之后，还要先在
+                    <Link
+                      className="mx-1 underline"
+                      to="/settings/connected-accounts"
+                    >
+                      已连接的账号
+                    </Link>
+                    里连接你自己的账号，员工才能真正调用。
+                  </p>
+                ) : null}
+                {tools.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    这个应用目前没有提供工具。
+                  </p>
+                ) : (
+                  <ItemGroup>
+                    {tools.map((tool) => (
+                      <Item key={tool.ref} variant="muted">
+                        <ItemContent>
+                          <ItemTitle>{tool.name}</ItemTitle>
+                          <ItemDescription>{tool.description}</ItemDescription>
+                        </ItemContent>
+                        <ItemActions>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              aria-label={`安装工具 ${server.title}/${tool.name}`}
+                              checked={isHeld(tool)}
+                              disabled={
+                                !canManage ||
+                                busy("mcp", tool.ref) ||
+                                (!appListed && !isHeld(tool))
+                              }
+                              onCheckedChange={(checked) => {
+                                if (!canManage) return;
+                                setGrant.mutate({
+                                  agentId,
+                                  granted: checked === true,
+                                  kind: "mcp",
+                                  ref: tool.ref,
+                                });
+                              }}
+                            />
+                            <span aria-hidden="true">已安装</span>
+                          </div>
+                        </ItemActions>
+                      </Item>
+                    ))}
+                  </ItemGroup>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {setGrant.error ? (
         <p className="mt-2 text-destructive text-sm" role="alert">
           {setGrant.error.message}
@@ -272,7 +584,8 @@ function SkillsZone({
  * A connector's tools are granted by an administrator because the connector belongs to the
  * deployment, not to the person: a box here would be a request to hand out somebody else's
  * credentials, refused by the same server rule that shows the refusal. So this says what a run of
- * this coworker actually holds, and points at the screen that decides it.
+ * this coworker actually holds, and points at the screen that decides it. Tools of an app an
+ * administrator listed (spec E3) are ticked in 可自助安装的工具 above and show up here as well.
  */
 function ConnectorZone({ agentId }: { agentId: string }) {
   const granted = useQuery(agentPluginsQueryOptions(agentId));
@@ -289,7 +602,7 @@ function ConnectorZone({ agentId }: { agentId: string }) {
           决定授权
         </Button>
       }
-      description="在插件页里授予。这里列出的就是这位员工运行时实际拥有的。"
+      description="管理员在插件页里授予的，加上你在上面自助安装的。这里列出的就是这位员工运行时实际拥有的。"
       title="连接器"
     >
       {granted.isPending ? (

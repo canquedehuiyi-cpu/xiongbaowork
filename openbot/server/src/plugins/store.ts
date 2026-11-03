@@ -5423,6 +5423,34 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * The grants on one Bot that `by` wrote, as kind and ref.
+     *
+     * The list form of {@link grantedBy}: after an administrator unlists an entry, an owner may still
+     * take off what they installed themselves (and only that), so the assembly page asks which of a
+     * Waker's grants those are rather than drawing a box for every grant and letting the rest bounce.
+     * Read in the caller's frame, under the same policies as every other grant read.
+     */
+    async grantsWrittenBy(
+      agentId: string,
+      by: string,
+    ): Promise<Array<{ kind: PluginKind; ref: string }>> {
+      const rows = await database
+        .select({ kind: pluginGrants.kind, ref: pluginGrants.ref })
+        .from(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.agentId, agentId),
+            eq(pluginGrants.grantedBy, by),
+          ),
+        )
+        .orderBy(asc(pluginGrants.kind), asc(pluginGrants.ref));
+      return rows.map((row) => ({
+        kind: row.kind as PluginKind,
+        ref: row.ref,
+      }));
+    },
+
+    /**
      * Spec E3 / D11: the entries an owner may install on their own Waker without an administrator.
      *
      * Read in whatever frame the caller is in: the SELECT policy admits the platform's `system` rows to
