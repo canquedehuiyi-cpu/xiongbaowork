@@ -553,6 +553,20 @@ describe("after an entry is unlisted (下架)", () => {
     expect(await grantRow("mcp", toolRef, aliceSecondBot)).toBeUndefined();
   });
 
+  test("an owner is told which grants on their Waker they installed themselves, and only those", async () => {
+    const mine = await send(asAlice(), `/for/${aliceBot}/installed-by-me`);
+    expect(mine.status).toBe(200);
+    const body = (await mine.json()) as { tools: string[]; skills: string[] };
+    expect(body.tools).toContain(toolRef);
+    // Bob's Waker holds the same tool, but the administrator granted it: not his to take off.
+    const bobs = await send(asBob(), `/for/${bobBot}/installed-by-me`);
+    expect(bobs.status).toBe(200);
+    expect(((await bobs.json()) as { tools: string[] }).tools).not.toContain(
+      toolRef,
+    );
+    expect(await grantRow("mcp", toolRef, bobBot)).toBeDefined();
+  });
+
   test("an owner can still uninstall what they installed themselves", async () => {
     const response = await send(asAlice(), revoke("mcp", toolRef, aliceBot), {
       method: "DELETE",

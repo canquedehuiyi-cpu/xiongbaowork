@@ -2883,6 +2883,28 @@ export function createPluginRoutes(
   });
 
   /** What one Bot holds. The runtime reads this to decide what to offer a model. */
+  /**
+   * Spec E3: the tools and skills on this Bot that the caller installed themselves.
+   *
+   * What an owner may still take off after an administrator unlists the entry (see
+   * {@link selfInstallDecision}): the assembly page keeps those visible and removable, and nothing
+   * else that was unlisted. Gated like `/for/:agentId`, so it says nothing about somebody else's Bot.
+   */
+  routes.get("/for/:agentId/installed-by-me", requireUser, async (context) => {
+    const agentId = context.req.param("agentId");
+    if (!(await canUseBot(context.var.actor, agentId))) {
+      return context.json({ error: "There is no such Bot." }, 404);
+    }
+    const email = context.var.actor?.email;
+    const grants = email ? await store.grantsWrittenBy(agentId, email) : [];
+    return context.json({
+      tools: grants.filter((grant) => grant.kind === "mcp").map((g) => g.ref),
+      skills: grants
+        .filter((grant) => grant.kind === "skill")
+        .map((g) => g.ref),
+    });
+  });
+
   routes.get("/for/:agentId", requireUser, async (context) => {
     const agentId = context.req.param("agentId");
     // A grant list is a fact about the Bot it belongs to. Left open it says which tools somebody

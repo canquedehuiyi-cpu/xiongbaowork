@@ -1,6 +1,7 @@
 import { IconExternalLink } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   ModelItem,
@@ -33,14 +34,20 @@ import {
   knowledgeNotebooksQueryOptions,
   setKnowledgeBindingMutationOptions,
 } from "@/lib/knowledge/queries";
-import { setPluginGrantMutationOptions } from "@/lib/plugins/mutations";
+import {
+  invalidatePlugins,
+  setPluginGrantMutationOptions,
+} from "@/lib/plugins/mutations";
 import {
   agentPluginsQueryOptions,
+  appKeyOf,
+  installedByMeQueryOptions,
   installListingsQueryOptions,
   listedRefs,
   type PluginServer,
   type PluginSkill,
   type PluginsPage,
+  type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
 
@@ -177,13 +184,48 @@ const emptyProfile = {
 };
 
 /**
+ * The grant mutation, with every write still in flight tracked by what it names.
+ *
+ * `useMutation`'s own `variables` are only the LATEST call's: ticking a second box made the first
+ * look settled while its request was still out, and a second press on it could send a grant and a
+ * revoke that crossed. Tracked in the hook's own callbacks, which run for every call (the ones
+ * passed to `mutate` run for the latest only).
+ */
+function useTrackedGrant() {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const keyOf = (variables: { kind: string; ref: string }) =>
+    `${variables.kind}:${variables.ref}`;
+  const mutation = useMutation({
+    ...setPluginGrantMutationOptions(queryClient),
+    onMutate: (variables) => {
+      setPending((current) => new Set(current).add(keyOf(variables)));
+    },
+    onSettled: (_data, _error, variables) => {
+      setPending((current) => {
+        const next = new Set(current);
+        next.delete(keyOf(variables));
+        return next;
+      });
+      return invalidatePlugins(queryClient);
+    },
+  });
+  return {
+    mutation,
+    busy: (kind: "mcp" | "skill", ref: string) =>
+      pending.has(keyOf({ kind, ref })),
+  };
+}
+
+/**
  * The skills that can be put on this coworker, with a box for each.
  *
  * Two kinds of box. The person's own skills, which the owner rule lets them grant; and the
  * deployment skills an administrator has listed (上架, spec E3), which the owner of a Waker may
  * install on it and take off again themselves. A deployment skill nobody listed is still an
  * administrator's to grant, so it is counted in a sentence rather than offered as a box that would
- * bounce with somebody else's refusal on it.
+ * bounce with somebody else's refusal on it — except one this person installed while it was listed:
+ * that stays theirs to take off after it is unlisted (下架), so it keeps its box, for removing only.
  */
 function SkillsZone({
   agentId,
@@ -192,24 +234,30 @@ function SkillsZone({
   agentId: string;
   canManage: boolean;
 }) {
-  const queryClient = useQueryClient();
   const page = useQuery(pluginsPageQueryOptions());
   const granted = useQuery(agentPluginsQueryOptions(agentId));
   const me = useQuery(currentUserQueryOptions());
   const listings = useQuery(installListingsQueryOptions());
-  const setGrant = useMutation(setPluginGrantMutationOptions(queryClient));
+  const byMe = useQuery(installedByMeQueryOptions(agentId));
+  const { mutation: setGrant, busy: busyRef } = useTrackedGrant();
 
   const skills = page.data?.skills ?? [];
   const mine = skills.filter((skill) => skill.ownerUserId === me.data?.id);
   const listed = listedRefs(listings.data, "skill");
-  const deploymentOwned = skills.filter((skill) => skill.ownerUserId === null);
-  const catalogue = deploymentOwned.filter((skill) => listed.has(skill.slug));
-  const unlisted = deploymentOwned.filter((skill) => !listed.has(skill.slug));
   const installed = new Set(
     (granted.data?.skills ?? []).map((skill) => skill.slug),
   );
-  const busy = (slug: string) =>
-    setGrant.isPending && setGrant.variables?.ref === slug;
+  const installedByMe = new Set(byMe.data?.skills ?? []);
+  const deploymentOwned = skills.filter((skill) => skill.ownerUserId === null);
+  const catalogue = deploymentOwned.filter(
+    (skill) =>
+      listed.has(skill.slug) ||
+      (installed.has(skill.slug) && installedByMe.has(skill.slug)),
+  );
+  const unlisted = deploymentOwned.filter(
+    (skill) => !catalogue.includes(skill),
+  );
+  const busy = (slug: string) => busyRef("skill", slug);
   const toggle = (slug: string, checked: boolean) =>
     setGrant.mutate({ agentId, granted: checked, kind: "skill", ref: slug });
 
@@ -270,6 +318,7 @@ function SkillsZone({
               busy={busy}
               canManage={canManage}
               installed={installed}
+              listed={listed}
               onToggle={toggle}
               skills={catalogue}
             />
@@ -304,12 +353,14 @@ function SkillsZone({
 function CatalogueSkills({
   skills,
   installed,
+  listed,
   canManage,
   busy,
   onToggle,
 }: {
   skills: PluginSkill[];
   installed: Set<string>;
+  listed: Set<string>;
   canManage: boolean;
   busy: (slug: string) => boolean;
   onToggle: (slug: string, checked: boolean) => void;
@@ -325,14 +376,23 @@ function CatalogueSkills({
           <Item key={skill.slug} variant="muted">
             <ItemContent>
               <ItemTitle>{skill.title}</ItemTitle>
-              <ItemDescription>{skill.summary}</ItemDescription>
+              <ItemDescription>
+                {listed.has(skill.slug)
+                  ? skill.summary
+                  : "已下架：你之前装上的仍在，可以卸下，但不能再装。"}
+              </ItemDescription>
             </ItemContent>
             <ItemActions>
               <div className="flex items-center gap-2 text-sm">
                 <Checkbox
                   aria-label={`安装目录技能 ${skill.title}`}
                   checked={installed.has(skill.slug)}
-                  disabled={!canManage || busy(skill.slug)}
+                  disabled={
+                    !canManage ||
+                    busy(skill.slug) ||
+                    // Unlisted: taking it off is all that is left, so an empty box is not a choice.
+                    (!listed.has(skill.slug) && !installed.has(skill.slug))
+                  }
                   onCheckedChange={(checked) => {
                     if (!canManage) return;
                     onToggle(skill.slug, checked === true);
@@ -355,8 +415,10 @@ function CatalogueSkills({
  */
 function connectsPerPerson(server: PluginServer, page: PluginsPage): boolean {
   if (server.provenance === "composio") return server.authScheme !== "NO_AUTH";
+  // The catalogue key, not the row id: a curated connector is the team's row `team:<key>`.
+  const key = appKeyOf(server);
   return page.catalogue.some(
-    (entry) => entry.key === server.id && entry.auth === "user-oauth",
+    (entry) => entry.key === key && entry.auth === "user-oauth",
   );
 }
 
@@ -366,6 +428,12 @@ function connectsPerPerson(server: PluginServer, page: PluginsPage): boolean {
  * The same grant endpoint as every other grant, so the policy check and the trail row are the
  * server's; a refusal is shown as the server worded it. An app whose credential is each person's
  * own says so, because a tool installed on a Waker still cannot reach an account nobody connected.
+ *
+ * An app unlisted (下架) after this person installed some of its tools keeps those tools here, for
+ * taking off only: the server still lets the person who installed a grant remove it, and the page
+ * would otherwise lose the one control that does. What an administrator granted is not shown here.
+ *
+ * Apps are matched by catalogue key (`appKeyOf`), which is what a listing names, not by row id.
  */
 function SelfInstallToolsZone({
   agentId,
@@ -374,15 +442,33 @@ function SelfInstallToolsZone({
   agentId: string;
   canManage: boolean;
 }) {
-  const queryClient = useQueryClient();
   const page = useQuery(pluginsPageQueryOptions());
   const granted = useQuery(agentPluginsQueryOptions(agentId));
   const listings = useQuery(installListingsQueryOptions());
-  const setGrant = useMutation(setPluginGrantMutationOptions(queryClient));
+  const byMe = useQuery(installedByMeQueryOptions(agentId));
+  const { mutation: setGrant, busy } = useTrackedGrant();
 
-  const listedApps = [...listedRefs(listings.data, "mcp")];
+  const listed = listedRefs(listings.data, "mcp");
   const servers = page.data?.servers ?? [];
   const heldRefs = new Set((granted.data?.tools ?? []).map((tool) => tool.ref));
+  const mineRefs = new Set(byMe.data?.tools ?? []);
+  const isHeld = (tool: PluginTool) =>
+    heldRefs.has(tool.ref) || tool.grantedTo.includes(agentId);
+  // Listed apps first, then any unlisted app this person still has one of their own installs on.
+  const unlistedWithMine = [
+    ...new Set(
+      [...mineRefs]
+        .map((ref) => ref.split("/")[0] ?? "")
+        .filter((key) => key && !listed.has(key)),
+    ),
+  ].filter((key) =>
+    servers.some(
+      (server) =>
+        appKeyOf(server) === key &&
+        server.tools.some((tool) => mineRefs.has(tool.ref) && isHeld(tool)),
+    ),
+  );
+  const apps = [...listed, ...unlistedWithMine];
 
   return (
     <PageSection
@@ -395,14 +481,14 @@ function SelfInstallToolsZone({
         <p className="text-destructive text-sm" role="alert">
           读不到可自助安装的工具。
         </p>
-      ) : listedApps.length === 0 ? (
+      ) : apps.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           管理员还没有上架任何应用。
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          {listedApps.map((key) => {
-            const server = servers.find((row) => row.id === key);
+          {apps.map((key) => {
+            const server = servers.find((row) => appKeyOf(row) === key);
             if (!server) {
               return (
                 <p className="text-muted-foreground text-sm" key={key}>
@@ -411,10 +497,23 @@ function SelfInstallToolsZone({
                 </p>
               );
             }
+            const appListed = listed.has(key);
+            const tools = appListed
+              ? server.tools
+              : server.tools.filter(
+                  (tool) => mineRefs.has(tool.ref) && isHeld(tool),
+                );
             return (
               <div key={key}>
                 <h3 className="font-medium text-sm">{server.title}</h3>
-                {page.data && connectsPerPerson(server, page.data) ? (
+                {appListed ? null : (
+                  <p className="mb-2 text-muted-foreground text-xs">
+                    已下架：你之前装上的工具仍在，可以在这里卸下，但不能再装新的。
+                  </p>
+                )}
+                {appListed &&
+                page.data &&
+                connectsPerPerson(server, page.data) ? (
                   <p className="mb-2 text-muted-foreground text-xs">
                     这个应用以使用者本人的账号访问：装上之后，还要先在
                     <Link
@@ -426,13 +525,13 @@ function SelfInstallToolsZone({
                     里连接你自己的账号，员工才能真正调用。
                   </p>
                 ) : null}
-                {server.tools.length === 0 ? (
+                {tools.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
                     这个应用目前没有提供工具。
                   </p>
                 ) : (
                   <ItemGroup>
-                    {server.tools.map((tool) => (
+                    {tools.map((tool) => (
                       <Item key={tool.ref} variant="muted">
                         <ItemContent>
                           <ItemTitle>{tool.name}</ItemTitle>
@@ -442,14 +541,11 @@ function SelfInstallToolsZone({
                           <div className="flex items-center gap-2 text-sm">
                             <Checkbox
                               aria-label={`安装工具 ${server.title}/${tool.name}`}
-                              checked={
-                                heldRefs.has(tool.ref) ||
-                                tool.grantedTo.includes(agentId)
-                              }
+                              checked={isHeld(tool)}
                               disabled={
                                 !canManage ||
-                                (setGrant.isPending &&
-                                  setGrant.variables?.ref === tool.ref)
+                                busy("mcp", tool.ref) ||
+                                (!appListed && !isHeld(tool))
                               }
                               onCheckedChange={(checked) => {
                                 if (!canManage) return;

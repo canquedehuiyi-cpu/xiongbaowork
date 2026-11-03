@@ -23,6 +23,7 @@ import {
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
 import {
+  appKeyOf,
   installListingsQueryOptions,
   listedRefs,
   pluginsPageQueryOptions,
@@ -84,7 +85,12 @@ function RouteComponent() {
   });
 
   const server = plugins.data?.servers.find((row) => row.id === key);
-  const appListed = listedRefs(listings.data, "mcp").has(key);
+  /*
+   * The app's name as a listing and a grant spell it, not the route's row id: a curated connector is
+   * the team's row `team:<catalogue key>`, and a listing stored under that would match no grant ref.
+   */
+  const appKey = server ? appKeyOf(server) : key;
+  const appListed = listedRefs(listings.data, "mcp").has(appKey);
   const tool = server?.tools.find((row) => row.name === toolName);
 
   const back = {
@@ -222,7 +228,7 @@ function RouteComponent() {
                 disabled={!listings.data || setListing.isPending}
                 onCheckedChange={(next) => {
                   setError(null);
-                  setListing.mutate({ kind: "mcp", listed: next, ref: key });
+                  setListing.mutate({ kind: "mcp", listed: next, ref: appKey });
                 }}
               />
             </ItemActions>
