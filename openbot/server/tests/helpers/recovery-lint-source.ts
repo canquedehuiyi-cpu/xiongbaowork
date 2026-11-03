@@ -15,13 +15,24 @@ type ApprovedLintTestInverse = Readonly<{
 const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
   // D06 suite moved onto the shared disposable-database helper (load-order rule); same guards.
   // G01-E P14: the fixture-identity probe runs as `platform`, so it needs no unframed fallback.
+  // Its afterAll, which drops the disposable database, has DISPOSABLE_DROP_TIMEOUT_MS (a CI checkpoint).
   {
     "path": "tests/approval-continuation-preparation-transaction.integration.test.ts",
-    "currentBytes": 21424,
-    "currentSha256": "ee813a24ca72260ac5e08c580b006caf790057f5d28430eecb62309ad9bd255f",
+    "currentBytes": 21480,
+    "currentSha256": "773ffa2e40a2c02d696e6ac87ead43ce7de75b1181d8a546aa063bcbfa62eab9",
     "beforeBytes": 21306,
     "beforeSha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
     "edits": [
+      {
+        "after": "import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from \"./support/database\";\n",
+        "before": "import { createDisposableTestDatabase } from \"./support/database\";\n",
+        "count": 1
+      },
+      {
+        "after": "    await disposable.drop();\n  }\n}, DISPOSABLE_DROP_TIMEOUT_MS);\n",
+        "before": "    await disposable.drop();\n  }\n});\n",
+        "count": 1
+      },
       {
         "after": "import { runAsTenant } from \"../src/tenant/context\";\nimport { createDisposableTestDatabase } from \"./support/database\";\n",
         "before": "import { runAsTenant } from \"../src/tenant/context\";\n",

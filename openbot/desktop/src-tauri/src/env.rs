@@ -194,14 +194,28 @@ fn bind_loopbacks(port: u16) -> std::io::Result<Vec<std::net::TcpListener>> {
     let mut held = vec![ipv4];
     match std::net::TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, port)) {
         Ok(ipv6) => held.push(ipv6),
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
-            ) => {}
+        Err(error) if ipv6_loopback_unavailable(&error) => {}
         Err(error) => return Err(error),
     }
     Ok(held)
+}
+
+/// Whether an IPv6 loopback bind failed because this host has no IPv6 at all,
+/// rather than because the port is taken. A kernel with IPv6 disabled reports
+/// EAFNOSUPPORT (WSAEAFNOSUPPORT on Windows), which std leaves uncategorized.
+/// An occupied port (`AddrInUse`) is never treated as IPv6 being unavailable.
+pub(crate) fn ipv6_loopback_unavailable(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    const EAFNOSUPPORT: Option<i32> = Some(libc::EAFNOSUPPORT);
+    #[cfg(windows)]
+    const EAFNOSUPPORT: Option<i32> = Some(10047); // WSAEAFNOSUPPORT
+    #[cfg(not(any(unix, windows)))]
+    const EAFNOSUPPORT: Option<i32> = None;
+
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
+    ) || (EAFNOSUPPORT.is_some() && error.raw_os_error() == EAFNOSUPPORT)
 }
 
 #[cfg(test)]
@@ -209,6 +223,35 @@ mod port_tests {
     use super::*;
     use std::collections::HashSet;
     use std::net::{TcpListener, TcpStream};
+
+    #[test]
+    fn ipv6_unavailable_covers_missing_address_family_but_not_occupied_ports() {
+        use std::io::{Error, ErrorKind};
+        #[cfg(unix)]
+        let eafnosupport = libc::EAFNOSUPPORT;
+        #[cfg(windows)]
+        let eafnosupport = 10047;
+        #[cfg(any(unix, windows))]
+        assert!(ipv6_loopback_unavailable(&Error::from_raw_os_error(
+            eafnosupport
+        )));
+        assert!(ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::AddrNotAvailable
+        )));
+        assert!(ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::Unsupported
+        )));
+        assert!(!ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::AddrInUse
+        )));
+        #[cfg(unix)]
+        assert!(!ipv6_loopback_unavailable(&Error::from_raw_os_error(
+            libc::EADDRINUSE
+        )));
+        assert!(!ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::PermissionDenied
+        )));
+    }
 
     #[test]
     fn occupied_ports_are_replaced_with_distinct_bindable_loopback_ports() {
