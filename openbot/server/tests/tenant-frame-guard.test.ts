@@ -1,22 +1,29 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import { createDatabase } from "../src/db/client";
+import { users } from "../src/db/schema";
 import { TEAM_TENANT } from "../src/db/schema/tenant";
 import {
-  assertPersonTenant,
   asPlatform,
+  assertPersonTenant,
   currentTenant,
-  forgetReportedUnframedSites,
   isPersonTenant,
+  isTenantFramed,
+  requireTenant,
   runAsClaimedTenant,
   runAsTenant,
   TenantContextError,
-  tenantFrameGuard,
 } from "../src/tenant/context";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { expectUnframedRefused, UNFRAMED_REFUSAL } from "./support/frame-guard";
 
 /*
- * G01-D, step one: `OPENBOT_TENANT_FRAME_GUARD` decides what an unframed read of the tenant does,
- * so the remaining offenders can be found (`report`, which CI's server shards run) or proven gone
- * (`throw`) before the legacy `system` fallback is removed. A framed read is never affected.
+ * G01-E P16: there is no answer outside a tenant frame. `currentTenant()` used to fall back to the
+ * legacy `system` frame, and `OPENBOT_TENANT_FRAME_GUARD` (`off` / `report` / `throw`) decided
+ * whether that was silent, written to stderr as a `tenant-unframed-access` line, or refused. The
+ * fallback and the guard are gone: an unframed read is a `TenantContextError` whatever the
+ * environment says, nothing is written about it, and a framed read is never affected.
+ *
+ * The variable is still set below, to every value it ever had, to prove that it no longer matters.
  */
 const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
 afterEach(() => {
@@ -24,41 +31,29 @@ afterEach(() => {
   else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
 });
 
-describe("tenant frame guard", () => {
-  test("the test process runs under throw: scripts/test-preload.ts makes it the default", () => {
-    // `saved` is the guard as the preload left it, read before any case here switched it.
-    expect(saved).toBe("throw");
-    expect(tenantFrameGuard()).toBe("throw");
-    expect(() => currentTenant()).toThrow(TenantContextError);
-  });
+/*
+ * A statement built at module scope, the moment this file is imported and before any frame exists:
+ * the client asks for the tenant before drizzle sees the call, so it is refused here rather than
+ * left to run later as whoever awaits it, or as nobody. Creating the client makes no connection.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+afterAll(async () => {
+  await database.$client.close();
+});
+function refusalOf(work: () => unknown): unknown {
+  try {
+    work();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+const builtAtModuleScope = refusalOf(() =>
+  database.select({ id: users.id }).from(users),
+);
 
-  test("only report and throw switch it on, and anything else is the legacy fallback", () => {
-    expect(tenantFrameGuard({})).toBe("off");
-    expect(tenantFrameGuard({ OPENBOT_TENANT_FRAME_GUARD: "off" })).toBe("off");
-    expect(tenantFrameGuard({ OPENBOT_TENANT_FRAME_GUARD: "yes" })).toBe("off");
-    expect(tenantFrameGuard({ OPENBOT_TENANT_FRAME_GUARD: " Report " })).toBe(
-      "report",
-    );
-    expect(tenantFrameGuard({ OPENBOT_TENANT_FRAME_GUARD: "THROW" })).toBe(
-      "throw",
-    );
-  });
-
-  test("off: an unframed read is still the legacy system answer, and says nothing", () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "off";
-    const written = spyOn(process.stderr, "write");
-    try {
-      expect(currentTenant()).toBe("system");
-      expect(written).not.toHaveBeenCalled();
-    } finally {
-      written.mockRestore();
-    }
-  });
-
-  test("report: still system, but each call site is written once with who forgot the frame", () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "report";
-    // Under CI's own `report`, other files in this shard may already have filled the cap.
-    forgetReportedUnframedSites();
+describe("no tenant frame", () => {
+  test("currentTenant() outside every frame throws whatever the environment says, and writes nothing", () => {
     const lines: string[] = [];
     const written = spyOn(process.stderr, "write").mockImplementation(
       (chunk: unknown) => {
@@ -67,27 +62,39 @@ describe("tenant frame guard", () => {
       },
     );
     try {
-      // One call site, reached twice: reported once.
-      for (let read = 0; read < 2; read += 1)
-        expect(currentTenant()).toBe("system");
+      for (const guard of [undefined, "off", "report", "throw", "yes"]) {
+        if (guard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
+        else process.env.OPENBOT_TENANT_FRAME_GUARD = guard;
+        // One call site reached twice, which `report` used to write once.
+        for (let read = 0; read < 2; read += 1)
+          expect(() => currentTenant()).toThrow(
+            new TenantContextError(UNFRAMED_REFUSAL),
+          );
+        expect(() => requireTenant()).toThrow(
+          new TenantContextError(UNFRAMED_REFUSAL),
+        );
+        expect(isTenantFramed()).toBe(false);
+      }
     } finally {
       written.mockRestore();
     }
-    expect(lines).toHaveLength(1);
-    const report = JSON.parse(lines[0] ?? "{}") as {
-      type: string;
-      site: string;
-      stack: string[];
-    };
-    expect(report.type).toBe("tenant-unframed-access");
-    expect(report.site).toContain("tenant-frame-guard.test.ts");
-    expect(report.site).not.toContain("tenant/context.ts");
+    expect(
+      lines.filter((line) => line.includes("tenant-unframed-access")),
+    ).toEqual([]);
+    expect(lines).toEqual([]);
   });
 
-  test("throw: an unframed read is a TenantContextError, a framed one is untouched", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
-    expect(() => currentTenant()).toThrow(TenantContextError);
+  test("an empty frame names nobody, the same as none", () => {
+    expect(() => runAsTenant("", () => currentTenant())).toThrow(
+      new TenantContextError(UNFRAMED_REFUSAL),
+    );
+    expect(runAsTenant("", () => isTenantFramed())).toBe(false);
+  });
+
+  test("a framed read is untouched, and the explicit system frame is a frame like any other", async () => {
     expect(runAsTenant("user-1", () => currentTenant())).toBe("user-1");
+    expect(runAsTenant("user-1", () => requireTenant())).toBe("user-1");
+    expect(runAsTenant("user-1", () => isTenantFramed())).toBe(true);
     expect(runAsTenant("platform", () => currentTenant())).toBe("platform");
     // The explicit escape for the catalogue rows every tenant reads: named, never a fallback.
     expect(runAsTenant("system", () => currentTenant())).toBe("system");
@@ -97,6 +104,21 @@ describe("tenant frame guard", () => {
         return currentTenant();
       }),
     ).toBe("user-2");
+    // The frame closes with its work.
+    expect(() => currentTenant()).toThrow(TenantContextError);
+  });
+
+  test("a module-scope builder is refused when it is built, so there is nothing to await later", async () => {
+    expect(builtAtModuleScope).toBeInstanceOf(TenantContextError);
+    expect((builtAtModuleScope as Error).message).toBe(UNFRAMED_REFUSAL);
+    // The same from a test body outside every frame, for a builder, a transaction and a raw statement.
+    await expectUnframedRefused(() =>
+      database.select({ id: users.id }).from(users),
+    );
+    await expectUnframedRefused(() =>
+      database.transaction(async () => undefined),
+    );
+    await expectUnframedRefused(() => database.execute("select 1"));
   });
 });
 
@@ -149,7 +171,6 @@ describe("team is nobody", () => {
   });
 
   test("asPlatform opens the platform frame for exactly its own work", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     expect(asPlatform(() => currentTenant())).toBe("platform");
     expect(
       await asPlatform(async () => {
@@ -168,7 +189,6 @@ describe("team is nobody", () => {
  */
 describe("the unframed-refusal probe", () => {
   test("pins the refusal currentTenant() makes outside every frame, word for word", () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     expect(() => currentTenant()).toThrow(
       new TenantContextError(UNFRAMED_REFUSAL),
     );
@@ -210,9 +230,9 @@ describe("the unframed-refusal probe", () => {
     }
   });
 
-  test("puts the guard back as it found it", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "report";
+  test("passes whatever the old guard variable says, and leaves the environment as it found it", async () => {
+    process.env.OPENBOT_TENANT_FRAME_GUARD = "off";
     await expectUnframedRefused(() => currentTenant());
-    expect(process.env.OPENBOT_TENANT_FRAME_GUARD).toBe("report");
+    expect(process.env.OPENBOT_TENANT_FRAME_GUARD).toBe("off");
   });
 });

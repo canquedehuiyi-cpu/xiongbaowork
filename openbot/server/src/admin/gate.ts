@@ -200,9 +200,9 @@ export function createEnterpriseGate(
       /*
        * A governed run is judged, run and recorded HERE, inside the tenant frame `requireUser` opened
        * for this person: the Bot lookup, the bound model, the usage row and the audit row are theirs.
-       * Outside it they would read and write as `system` (or throw under
-       * OPENBOT_TENANT_FRAME_GUARD=throw), where a Bot stamped with its owner's tenant is not found,
-       * so a built-in Bot would pass the allowlist unjudged.
+       * Outside it they would have no frame at all, and every one of those reads and writes throws
+       * (G01-E). Before that they ran as `system`, where a Bot stamped with its owner's tenant is not
+       * found, so a built-in Bot would have passed the allowlist unjudged.
        */
       if (!refused && governedAgent)
         governed = await governRun(context, next, governedAgent);

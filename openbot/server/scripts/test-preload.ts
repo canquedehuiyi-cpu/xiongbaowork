@@ -20,17 +20,10 @@
  * `@copilotkit/runtime` also eagerly imports the Vertex provider, which pulls `gaxios` through a
  * Bun global cache path during tests. These tests do not exercise Vertex, so the provider is stubbed
  * at the same preload boundary and fails loudly if a server test tries to use it.
- *
- * G01-E: the suite runs with the tenant frame guard set to `throw` unless the runner names another
- * value, so a database read or write that forgot its tenant frame fails the test that reached it
- * instead of quietly answering the legacy `system`. CI never set the variable, which made the
- * suite's own default `off`. A test that switches the guard for one case puts back what it found.
  */
 
 import { mock } from "bun:test";
 import "eventsource";
-
-process.env.OPENBOT_TENANT_FRAME_GUARD ??= "throw";
 
 mock.module("@ai-sdk/google-vertex", () => ({
   createVertex: () => () => {
