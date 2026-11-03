@@ -827,6 +827,26 @@ describe("deployment configuration", () => {
     ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
   });
 
+  // A local model provider (audit defect #6) is reached under the same switch, and needs no Bot
+  // computer: read through `computer`, the switch did nothing for a laptop that had none configured.
+  test("opens model endpoints to private hosts locally, with or without a computer", () => {
+    const withoutComputer = loadConfig({
+      ...baseEnvironment,
+      AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+    });
+    expect(withoutComputer.computer).toBeUndefined();
+    expect(withoutComputer.modelEndpointsAllowPrivateHosts).toBe(true);
+    expect(loadConfig(baseEnvironment).modelEndpointsAllowPrivateHosts).toBe(
+      false,
+    );
+    expect(() =>
+      loadConfig({
+        ...productionEnvironment,
+        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+      }),
+    ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
+  });
+
   // The refusal has to name the way out, because the person reading it at boot is looking at a file
   // they copied and does not necessarily know which line is the problem.
   test("says to remove the line, and that it is local only", () => {
