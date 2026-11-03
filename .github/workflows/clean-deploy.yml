@@ -3,6 +3,13 @@
 # GHCR login, on a fresh runner. Then the running image must be the digest the release recorded in
 # container-images.json, and it must pass the same API/branding assertions as Gate 1.
 #
+# Two database shapes, one job each:
+# - embedded: the README block alone (single container, PostgreSQL inside it).
+# - external: a separate pgvector/pg17 container stands in for the customer's database. The
+#   deployment manual's section 4 blocks (<!-- g7:external-migrate --> and
+#   <!-- g7:external-roles -->) run verbatim against it, then the same README block starts the API
+#   with EMBEDDED_POSTGRES=off on the .env.delivery it keeps.
+#
 # The GHCR package must be public for the unauthenticated pull to work; until a person makes it
 # public this job fails at `docker pull`, which is the correct customer-facing answer.
 name: 熊宝干净部署（G7 Linux）
@@ -30,19 +37,27 @@ defaults:
 
 jobs:
   linux:
+    name: linux (${{ matrix.database }} database)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [embedded, external]
     env:
       TAG: ${{ inputs.tag }}
+      DATABASE_SHAPE: ${{ matrix.database }}
     steps:
       - name: Release tag format
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/g7"
+          mkdir -p "$RUNNER_TEMP/g7" "$RUNNER_TEMP/customer"
           echo "EVIDENCE=$RUNNER_TEMP/g7" >> "$GITHUB_ENV"
+          echo "CUSTOMER=$RUNNER_TEMP/customer" >> "$GITHUB_ENV"
           printf '%s\n' "$TAG" > "$RUNNER_TEMP/g7/tag.txt"
+          printf '%s\n' "$DATABASE_SHAPE" > "$RUNNER_TEMP/g7/database.txt"
           if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
             echo "::error::Not a release tag: '$TAG'"
             exit 1
@@ -59,30 +74,20 @@ jobs:
       - name: Manual block checks (tagged README and deployment manual)
         working-directory: source/openbot/scripts/ci
         run: bun test manual-blocks.test.mjs
-      - name: Extract the README g7:linux block
+      - name: Extract the manual blocks
         working-directory: source/openbot
         run: |
           set -euo pipefail
           bun scripts/ci/manual-blocks.mjs ../README.md g7:linux > "$EVIDENCE/g7-linux.sh"
           cat "$EVIDENCE/g7-linux.sh"
-      - name: Run it as a customer (empty directory, no registry login)
-        env:
-          OPENBOT_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          customer="$RUNNER_TEMP/customer"
-          mkdir "$customer"
-          # An empty Docker config: no stored registry credential can make a private image pullable.
-          mkdir "$RUNNER_TEMP/docker-config"
-          printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
-          cd "$customer"
-          start=$SECONDS
-          env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" \
-            bash -euo pipefail "$EVIDENCE/g7-linux.sh"
-          echo "G7 install and health in $((SECONDS-start))s" | tee "$EVIDENCE/timing.txt"
-          # The customer directory holds the generated key: record only which names it set.
-          sed -E 's/=.*$/=<set>/' .env.delivery > "$EVIDENCE/env-names.txt"
-      - name: The running image is the released digest
+          if [ "$DATABASE_SHAPE" = external ]; then
+            bun scripts/ci/manual-blocks.mjs docs/deployment-qoderwake.md g7:external-migrate \
+              > "$EVIDENCE/g7-external-migrate.sh"
+            bun scripts/ci/manual-blocks.mjs docs/deployment-qoderwake.md g7:external-roles \
+              > "$EVIDENCE/g7-external-roles.sql"
+            cat "$EVIDENCE/g7-external-migrate.sh" "$EVIDENCE/g7-external-roles.sql"
+          fi
+      - name: The release record (container-images.json)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -94,6 +99,102 @@ jobs:
             echo "::error::container-images.json has no usable reference: '$expected'"
             exit 1
           fi
+          echo "EXPECTED_REFERENCE=$expected" >> "$GITHUB_ENV"
+
+      # --- external database only: what an operator does before the README command ---
+      - name: External PostgreSQL (a separate pgvector/pg17 server)
+        if: ${{ matrix.database == 'external' }}
+        run: |
+          set -euo pipefail
+          owner_pw="$(openssl rand -hex 32)"
+          echo "::add-mask::$owner_pw"
+          docker run -d --name xiongbao-external-pg \
+            -e POSTGRES_USER=openbot -e POSTGRES_PASSWORD="$owner_pw" -e POSTGRES_DB=openbot_b \
+            pgvector/pgvector:pg17 >/dev/null
+          # TCP, not the socket: the image's init-time server listens on the socket only.
+          deadline=$((SECONDS+60))
+          until docker exec xiongbao-external-pg pg_isready -h 127.0.0.1 -U openbot -d openbot_b >/dev/null 2>&1; do
+            if [ "$SECONDS" -ge "$deadline" ]; then docker logs xiongbao-external-pg; exit 1; fi
+            sleep 1
+          done
+          # Reached by address from the default bridge, as the README's `docker run` has no --network.
+          host="$(docker inspect xiongbao-external-pg --format '{{(index .NetworkSettings.Networks "bridge").IPAddress}}')"
+          [[ "$host" =~ ^[0-9.]+$ ]]
+          printf 'host=%s\n' "$host" | tee "$EVIDENCE/external-db.txt"
+          cd "$CUSTOMER"
+          umask 077
+          printf 'DATABASE_URL=postgres://openbot:%s@%s:5432/openbot_b\n' "$owner_pw" "$host" > .env.migration
+          cp "$EVIDENCE/container-images.json" container-images.json
+          echo "EXTERNAL_DB_HOST=$host" >> "$GITHUB_ENV"
+      - name: Migrate the external database (deployment manual, section 4, verbatim; no registry login)
+        if: ${{ matrix.database == 'external' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/docker-config"
+          printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
+          cd "$CUSTOMER"
+          env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" \
+            bash -euo pipefail "$EVIDENCE/g7-external-migrate.sh" 2>&1 | tee "$EVIDENCE/external-migrate.log"
+          rm -f .env.migration
+          migrations="$(docker exec xiongbao-external-pg psql -U openbot -d openbot_b -At -v ON_ERROR_STOP=1 \
+            -c 'SELECT count(*) FROM drizzle.__drizzle_migrations')"
+          printf 'applied_migrations=%s\n' "$migrations" | tee -a "$EVIDENCE/external-db.txt"
+          [ "$migrations" -gt 0 ]
+      - name: Set the runtime role passwords (deployment manual, section 4, verbatim)
+        if: ${{ matrix.database == 'external' }}
+        run: |
+          set -euo pipefail
+          app_pw="$(openssl rand -hex 32)"
+          writer_pw="$(openssl rand -hex 32)"
+          echo "::add-mask::$app_pw"
+          echo "::add-mask::$writer_pw"
+          umask 077
+          # Only the two placeholders change; anything else left in angle brackets fails here.
+          sed -e "s/<app随机口令>/$app_pw/" -e "s/<role_writer随机口令>/$writer_pw/" \
+            "$EVIDENCE/g7-external-roles.sql" > "$RUNNER_TEMP/roles.sql"
+          if grep -q '<[^>]*>' "$RUNNER_TEMP/roles.sql"; then
+            echo "::error::the manual's role block has a placeholder this job does not fill"
+            exit 1
+          fi
+          roles="$(docker exec -i xiongbao-external-pg psql -U openbot -d openbot_b -At -v ON_ERROR_STOP=1 \
+            < "$RUNNER_TEMP/roles.sql")"
+          rm -f "$RUNNER_TEMP/roles.sql"
+          printf '%s\n' "$roles" | tee "$EVIDENCE/external-roles.txt"
+          if ! grep -qx 'openbot_app|f|f' <<< "$roles" || ! grep -qx 'openbot_role_writer|f|f' <<< "$roles"; then
+            echo "::error::expected openbot_app|f|f and openbot_role_writer|f|f"
+            exit 1
+          fi
+          # .env.delivery as the README fetches it, switched to the external database (section 4).
+          cd "$CUSTOMER"
+          curl --fail --silent --show-error --location -o .env.delivery \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$TAG/openbot/docker/delivery.env.example"
+          grep -qx 'EMBEDDED_POSTGRES=on' .env.delivery
+          sed -i 's/^EMBEDDED_POSTGRES=on$/EMBEDDED_POSTGRES=off/' .env.delivery
+          {
+            printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)"
+            printf 'DATABASE_URL=postgres://openbot_app:%s@%s:5432/openbot_b\n' "$app_pw" "$EXTERNAL_DB_HOST"
+            printf 'ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:%s@%s:5432/openbot_b\n' "$writer_pw" "$EXTERNAL_DB_HOST"
+          } >> .env.delivery
+
+      - name: Run it as a customer (empty directory, no registry login)
+        env:
+          OPENBOT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # An empty Docker config: no stored registry credential can make a private image pullable.
+          mkdir -p "$RUNNER_TEMP/docker-config"
+          printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
+          cd "$CUSTOMER"
+          start=$SECONDS
+          env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" \
+            bash -euo pipefail "$EVIDENCE/g7-linux.sh"
+          echo "G7 install and health in $((SECONDS-start))s" | tee "$EVIDENCE/timing.txt"
+          # The customer directory holds the generated key: record only which names it set.
+          sed -E 's/=.*$/=<set>/' .env.delivery > "$EVIDENCE/env-names.txt"
+      - name: The running image is the released digest
+        run: |
+          set -euo pipefail
+          expected="$EXPECTED_REFERENCE"
           image="$(docker inspect xiongbao-local --format '{{.Config.Image}}')"
           if [ "$image" != "${expected%@*}:$TAG" ]; then
             echo "::error::xiongbao-local runs '$image', expected ${expected%@*}:$TAG"
@@ -136,15 +237,33 @@ jobs:
             echo "::error::the container reported an RLS readiness problem"
             exit 1
           fi
+      - name: The API uses the external database, not an embedded one
+        if: ${{ matrix.database == 'external' }}
+        run: |
+          set -euo pipefail
+          # postgres-init exits at once with EMBEDDED_POSTGRES=off, so no cluster was created.
+          docker exec xiongbao-local sh -c 'test ! -e /var/lib/postgresql/data/PG_VERSION'
+          sessions="$(docker exec xiongbao-external-pg psql -U openbot -d openbot_b -At -v ON_ERROR_STOP=1 \
+            -c "SELECT count(*) FROM pg_stat_activity WHERE datname = 'openbot_b' AND usename = 'openbot_app'")"
+          printf 'embedded_cluster=absent\nexternal_openbot_app_sessions=%s\n' "$sessions" | tee -a "$EVIDENCE/external-db.txt"
+          [ "$sessions" -gt 0 ]
       - name: Save container logs
         if: always()
-        run: docker logs xiongbao-local > "$EVIDENCE/container.log" 2>&1 || true
+        run: |
+          docker logs xiongbao-local > "$EVIDENCE/container.log" 2>&1 || true
+          if [ "$DATABASE_SHAPE" = external ]; then
+            docker logs xiongbao-external-pg > "$EVIDENCE/external-pg.log" 2>&1 || true
+          fi
       - name: Print container logs (credentials masked)
         if: failure()
-        run: bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/container.log" || true
+        run: |
+          bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/container.log" || true
+          if [ -f "$EVIDENCE/external-pg.log" ]; then
+            bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/external-pg.log" || true
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: g7-linux-evidence
+          name: g7-linux-${{ matrix.database }}-evidence
           path: ${{ runner.temp }}/g7/
           if-no-files-found: error

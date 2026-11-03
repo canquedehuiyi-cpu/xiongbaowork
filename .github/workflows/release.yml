@@ -374,8 +374,9 @@ jobs:
             --verify-tag --title "$TAG" --notes-file notes/release-notes.md "${flags[@]}"
 
   # Gate 7, Linux half: a fresh runner installs this release exactly as the README tells a customer
-  # to, without any registry login, and checks it runs the digest recorded above. It fails until the
-  # GHCR package has been made public, which is a human step.
+  # to, without any registry login, and checks it runs the digest recorded above; once with the
+  # embedded database and once against a separate PostgreSQL migrated by the deployment manual's
+  # section 4 commands. It fails until the GHCR package has been made public, which is a human step.
   g7-linux:
     needs: [tag-check, github-release]
     if: ${{ !inputs.dry_run }}

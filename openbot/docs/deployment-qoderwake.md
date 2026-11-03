@@ -101,29 +101,41 @@ OPENBOT_SELF_HOST_BANNER=false
 ```dotenv
 EMBEDDED_POSTGRES=off
 DATABASE_URL=postgres://openbot_app:<URL编码口令>@db.example.com:5432/openbot_b?sslmode=require
+ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:<URL编码口令>@db.example.com:5432/openbot_b?sslmode=require
 ```
 
 **API 运行期必须是非超级用户、无 BYPASSRLS 的角色。owner 串只用于迁移。**
+`ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `openbot_role_writer`，唯一可以写入身份角色的登录；
+缺少它 API 拒绝启动（`ROLE_WRITER_DATABASE_URL is required`）。内嵌模式自动生成这两条连接串，外接模式需要自己配置。
 嵌入模式会自动导出 `MIGRATION_DATABASE_URL`，外接模式不会自动迁移，运维在发布流程中单独执行。
 创建临时的私密 `.env.migration`，其中 `DATABASE_URL` 是 owner 串；不要把该文件交给 API 容器。
 迁移与运行使用同一个 digest（`container-images.json` 的取得见第 7 节）。
+下面两段命令在每次发布后由 CI 原样执行（Gate 7 Linux 外接库：独立 pgvector/pg17 容器）。
 
+<!-- g7:external-migrate:begin -->
 ```bash
 OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
 docker run --rm --env-file .env.migration --entrypoint /bin/sh \
   "$OPENBOT_IMAGE" \
   -c 'cd /app/server && exec /usr/local/bin/bun scripts/migrate.ts'
 ```
+<!-- g7:external-migrate:end -->
 
-迁移后通过安全 SQL 会话设置独立随机 app 密码（覆盖迁移中的公开开发密码），并约束角色：
+迁移后用 owner 通过安全 SQL 会话为两个角色设置各自独立的随机密码（覆盖迁移中的公开开发密码），并约束角色：
 
+<!-- g7:external-roles:begin -->
 ```sql
-ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<随机口令>';
-SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'openbot_app';
--- 期望 openbot_app | f | f
+ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<app随机口令>';
+ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<role_writer随机口令>';
+SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
+  WHERE rolname IN ('openbot_app', 'openbot_role_writer') ORDER BY rolname;
+-- 期望 openbot_app | f | f 与 openbot_role_writer | f | f
 ```
+<!-- g7:external-roles:end -->
 
-将同一口令写入运行期 DATABASE_URL，启动 API。生产数据库依运营方的备份和 TLS 策略配置；
+将两个口令分别写入运行期 `DATABASE_URL` 与 `ROLE_WRITER_DATABASE_URL`，删除 `.env.migration`，
+再按 README 的单容器命令（`.env.delivery` 已存在时会保留）或第 2 节 Compose 启动 API。
+生产数据库依运营方的备份和 TLS 策略配置；
 若 API 日志出现 `rls-not-enforced`，容器会拒绝启动。不要通过关闭 refuse 绕过配置错误。
 
 ## 5. 品牌与模型配置
@@ -170,7 +182,7 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 升级先备份，按第 7 节取得新版本的 digest 并校验来源，在隔离环境验证迁移；
 单容器重建时使用原命名卷和原 env-file，镜像写成 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<新 digest>`。
 Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
-内嵌库每次启动自动迁移。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
+内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
 一旦有 schema 迁移，回滚镜像不一定足够，必要时恢复备份；不要把只回滚代码当成数据库回滚。
 
 ## 7. 版本固定与来源校验
@@ -205,7 +217,9 @@ docker logs xiongbao-local
 `bash scripts/ci/image-smoke.sh <镜像>` 只使用自己的临时容器/卷及 3772，结束自动清理。
 发布流程先对推送的 digest 执行上述检查（Gate 1），再打标签；随后 `clean-deploy.yml` 在全新 Linux
 runner 上、不登录 GHCR，原样执行 README 的 Linux 命令块，核对运行的镜像 digest 与 `container-images.json`
-一致，并运行同一组接口断言（Gate 7 Linux）。也可以在 Actions 中手动运行该 workflow 并填写标签。
+一致，并运行同一组接口断言（Gate 7 Linux）。同一任务另有外接库一半：独立的 pgvector/pg17 容器，
+原样执行第 4 节的迁移与角色命令，再用同一 README 命令启动 `EMBEDDED_POSTGRES=off` 的 API，
+确认内嵌库未初始化、API 以 `openbot_app` 连接外接库。也可以在 Actions 中手动运行该 workflow 并填写标签。
 
 全套测试绿色必须读取日志的 `0 fail`，不能只读退出码。
 阶段 0–2 的测试 continue-on-error、构建成功、健康成功和完整验收是不同结果。

@@ -292,6 +292,89 @@ test("README g7:linux never overwrites an existing key file", () => {
   expect(body.indexOf("KEY_ENCRYPTION_KEY=%s")).toBeGreaterThan(guard);
 });
 
+// --- deployment manual section 4: external PostgreSQL (Gate 7 Linux, external database job) ---
+
+const externalMigrate = extractBlock(manual, "g7:external-migrate");
+const externalRoles = extractBlock(manual, "g7:external-roles");
+const cleanDeploy = readFileSync(
+  join(root, ".github", "workflows", "clean-deploy.yml"),
+  "utf8",
+);
+
+test("manual g7:external-migrate migrates with the released digest and the owner file only", () => {
+  expect(externalMigrate.lang).toBe("bash");
+  const file = tempFile("g7-external-migrate.sh", externalMigrate.body);
+  const result = spawnSync("bash", ["-n", file], { encoding: "utf8" });
+  expect(result.stderr).toBe("");
+  expect(result.status).toBe(0);
+  const body = externalMigrate.body;
+  expect(body).toContain(
+    'OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"',
+  );
+  expect(body).toContain("--env-file .env.migration");
+  expect(body).toContain("scripts/migrate.ts");
+  for (const forbidden of [
+    ".env.delivery",
+    "docker build",
+    "docker login",
+    "drizzle-kit",
+    ":local",
+  ]) {
+    expect(body).not.toContain(forbidden);
+  }
+});
+
+test("manual g7:external-roles locks down both runtime roles", () => {
+  expect(externalRoles.lang).toBe("sql");
+  const body = externalRoles.body;
+  expect(body).toMatch(
+    /^ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<[^>]+>';$/m,
+  );
+  expect(body).toMatch(
+    /^ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<[^>]+>';$/m,
+  );
+  expect(body).toContain("'openbot_app', 'openbot_role_writer'");
+});
+
+test("clean-deploy.yml fills every placeholder of the manual's role block", () => {
+  const placeholders = [...externalRoles.body.matchAll(/<[^>]+>/g)].map(
+    (match) => match[0],
+  );
+  expect(placeholders.length).toBe(2);
+  for (const placeholder of placeholders) {
+    expect({
+      placeholder,
+      filled: cleanDeploy.includes(`s/${placeholder}/`),
+    }).toEqual({ placeholder, filled: true });
+  }
+  for (const block of [
+    "g7:external-migrate",
+    "g7:external-roles",
+    "g7:linux",
+  ]) {
+    expect(cleanDeploy).toContain(` ${block} `);
+  }
+});
+
+test("manual section 4 names every database URL an external-database API needs", () => {
+  // The API refuses to start without the role writer (server/src/index.ts), and the embedded
+  // database is the only mode that generates it, so an external database must be told.
+  const index = readFileSync(
+    join(openbot, "server", "src", "index.ts"),
+    "utf8",
+  );
+  expect(index).toContain("ROLE_WRITER_DATABASE_URL is required");
+  const section = manual.slice(
+    manual.indexOf("## 4. 外接 PostgreSQL"),
+    manual.indexOf("## 5. "),
+  );
+  expect(section).toMatch(/^EMBEDDED_POSTGRES=off$/m);
+  expect(section).toMatch(/^DATABASE_URL=postgres:\/\/openbot_app:/m);
+  expect(section).toMatch(
+    /^ROLE_WRITER_DATABASE_URL=postgres:\/\/openbot_role_writer:/m,
+  );
+});
+
 test("README g7:windows pulls the same image and tag (manual acceptance)", () => {
   expect(windows.lang).toBe("powershell");
   expect(windows.body).toContain(`"${IMAGE}:$OpenbotTag"`);
