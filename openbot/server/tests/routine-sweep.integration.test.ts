@@ -25,6 +25,7 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
 import { MINIMUM_INTERVAL_MS } from "../src/routines/schedule";
 import { createRoutineStore } from "../src/routines/store";
 import {
@@ -72,10 +73,10 @@ const queue = createWorkQueue(database);
 
 const testPrefix = `routine-sweep-${randomUUID()}`;
 const createdUserIds: string[] = [];
-// Each Bot and channel with the frame it was made in (its owner's, or `null` for the one legacy
-// unframed seed), so cleanup runs in that same frame.
-const createdAgentIds: { id: string; ownerId: string | null }[] = [];
-const createdChannelIds: { id: string; ownerId: string | null }[] = [];
+// Each Bot and channel with the frame it was made in (its owner's, or `system` for the one seed the
+// catalogue frame must see), so cleanup runs in that same frame.
+const createdAgentIds: { id: string; ownerId: string }[] = [];
+const createdChannelIds: { id: string; ownerId: string }[] = [];
 
 /** Every day at 09:00 UTC: comfortably above the floor, and one occurrence is one day. */
 const DAILY = "0 9 * * *";
@@ -104,9 +105,6 @@ const asOwnerOf = <T>(owner: { id: string }, fn: () => T): T =>
   runAsTenant(owner.id, fn);
 const asRoutineOwner = <T>(routine: { ownerUserId: string }, fn: () => T): T =>
   runAsTenant(routine.ownerUserId, fn);
-/** In `frame`, or with no frame at all when it is `null` (the legacy shape one test still pins). */
-const inFrame = <T>(frame: string | null, fn: () => T): T =>
-  frame === null ? fn() : runAsTenant(frame, fn);
 
 function sweepOptions(overrides: Record<string, unknown> = {}) {
   return {
@@ -135,7 +133,7 @@ afterEach(async () => {
   }
   // A person's own channel, Bot and account, each deleted in that person's frame.
   for (const { id: channelId, ownerId } of createdChannelIds.splice(0)) {
-    await inFrame(ownerId, async () => {
+    await runAsTenant(ownerId, async () => {
       await database
         .delete(intelligenceChannelMappings)
         .where(eq(intelligenceChannelMappings.channelId, channelId));
@@ -143,7 +141,7 @@ afterEach(async () => {
     });
   }
   for (const { id: agentId, ownerId } of createdAgentIds.splice(0)) {
-    await inFrame(ownerId, async () => {
+    await runAsTenant(ownerId, async () => {
       await database
         .delete(agentProfiles)
         .where(eq(agentProfiles.agentId, agentId));
@@ -179,15 +177,15 @@ async function createUser(): Promise<AgentActor> {
 
 /**
  * `frame` is the tenant the Bot and channel are made in: their owner's, except in the one test that
- * still reproduces the legacy unframed shape (see "offering only a person's routine"), which passes
- * `null` and so seeds with no frame, exactly as before.
+ * writes a routine as `system` (see "offering only a person's routine"), which seeds them in the
+ * `system` frame too, so that frame can see what its routine names.
  */
 async function createAgent(
   owner: AgentActor,
   name = "Expense Manager",
-  frame: string | null = owner.id,
+  frame: string = owner.id,
 ) {
-  const profile = await inFrame(frame, () =>
+  const profile = await runAsTenant(frame, () =>
     profileStore.create(owner, {
       name,
       title: "Finance Operations",
@@ -202,9 +200,9 @@ async function createAgent(
 async function createChannel(
   owner: AgentActor,
   agentIds: string[],
-  frame: string | null = owner.id,
+  frame: string = owner.id,
 ) {
-  const channel = await inFrame(frame, () =>
+  const channel = await runAsTenant(frame, () =>
     channelStore.create(owner, agentIds),
   );
   createdChannelIds.push({ id: channel.id, ownerId: frame });
@@ -486,38 +484,55 @@ describe("offering the firings that are due", () => {
 
 /**
  * THE ROUTINE'S OWN STAMP DECIDES WHOSE FIRING IT IS (G01), and a stamp that names nobody is never
- * offered. A routine written outside any person's frame — as the legacy `system`, or as `platform`
- * — would otherwise queue a work item every consumer runs as nobody, or as everybody.
+ * offered. A routine written outside any person's frame — as `system` (what an unframed write used
+ * to land as), as `platform`, or stamped `team` — would otherwise queue a work item every consumer
+ * runs as nobody, or as everybody.
  */
 describe("offering only a person's routine", () => {
-  test("a routine stamped system or platform is never offered, and stops holding a slot", async () => {
+  test("a routine stamped system, platform or team is never offered, and stops holding a slot", async () => {
     const owner = await createUser();
-    // DECISION PENDING (G01-D): the unframed create below needs a Bot and channel the legacy unframed
-    // default can see, so they are seeded with no frame (`null`), exactly as this test always seeded
-    // them, until somebody decides what it should assert once the fallback goes.
-    const agentId = await createAgent(owner, undefined, null);
-    const channel = await createChannel(owner, [agentId], null);
+    // The `system` routine below is written in an explicit `system` frame (G01-E: an unframed write
+    // no longer falls back to it), and it has to see the Bot and channel it names, so they are seeded
+    // in that frame too.
+    const agentId = await createAgent(owner, undefined, SYSTEM_TENANT);
+    const channel = await createChannel(owner, [agentId], SYSTEM_TENANT);
     const input = {
       ownerUserId: owner.id,
       agentId,
       channelId: channel.id,
       cron: DAILY,
     };
-    // Unframed, the legacy shape the old tests wrote: the row lands as `system`.
-    const unframed = await store.create({ ...input, instruction: "Nobody's." });
+    const systems = await runAsTenant(SYSTEM_TENANT, () =>
+      store.create({ ...input, instruction: "Nobody's." }),
+    );
     const operators = await asPlatform(() =>
       store.create({ ...input, instruction: "The operator's." }),
     );
+    // `team` is a stamp no frame writes, so the row is put there the only way it can be: written by
+    // `platform` and re-stamped (`routines` is not a team table, so no guard trigger stands between).
+    const teams = await asPlatform(async () => {
+      const routine = await store.create({
+        ...input,
+        instruction: "The team's.",
+      });
+      await database
+        .update(routines)
+        .set({ tenantId: TEAM_TENANT })
+        .where(eq(routines.id, routine.id));
+      return routine;
+    });
     // And one the same person really owns, so the pass is shown to carry on past the refusals.
     const mine = await asOwnerOf(owner, () =>
       store.create({ ...input, instruction: "Mine." }),
     );
-    expect((await readRoutine(unframed.id))?.tenantId).toBe("system");
+    expect((await readRoutine(systems.id))?.tenantId).toBe(SYSTEM_TENANT);
     expect((await readRoutine(operators.id))?.tenantId).toBe("platform");
+    expect((await readRoutine(teams.id))?.tenantId).toBe(TEAM_TENANT);
     expect((await readRoutine(mine.id))?.tenantId).toBe(owner.id);
 
-    await makeDueAt(unframed.id, new Date("2001-01-01T09:25:00Z"));
+    await makeDueAt(systems.id, new Date("2001-01-01T09:25:00Z"));
     await makeDueAt(operators.id, new Date("2001-01-01T09:25:00Z"));
+    await makeDueAt(teams.id, new Date("2001-01-01T09:25:00Z"));
     await makeDueAt(mine.id, new Date("2001-01-01T09:25:00Z"));
 
     const lines: string[] = [];
@@ -536,16 +551,18 @@ describe("offering only a person's routine", () => {
     }
 
     expect(offered).toContain(mine.id);
-    expect(offered).not.toContain(unframed.id);
+    expect(offered).not.toContain(systems.id);
     expect(offered).not.toContain(operators.id);
-    expect(await firingsFor(unframed.id)).toHaveLength(0);
+    expect(offered).not.toContain(teams.id);
+    expect(await firingsFor(systems.id)).toHaveLength(0);
     expect(await firingsFor(operators.id)).toHaveLength(0);
+    expect(await firingsFor(teams.id)).toHaveLength(0);
     // The one that was offered is stamped with its owner, which is what the consumer checks.
     const [firing] = await firingsFor(mine.id);
     expect(firing?.tenantId).toBe(owner.id);
 
     // Said out loud, per routine.
-    for (const refused of [unframed.id, operators.id]) {
+    for (const refused of [systems.id, operators.id, teams.id]) {
       const line = lines.find((entry) => entry.includes(refused));
       expect(JSON.parse(line as string).type).toBe(
         "routine-sweep-untrusted-tenant",
@@ -553,10 +570,12 @@ describe("offering only a person's routine", () => {
     }
     // Moved past the stale stamp without a firing, so the row does not sit at the head of every
     // later pass: no run row, and no longer due at the 2001 stamp.
-    expect(await runsFor(unframed.id)).toHaveLength(0);
-    expect(
-      (await readRoutine(unframed.id))?.nextRunAt.getTime(),
-    ).toBeGreaterThan(new Date("2001-01-01T09:25:00Z").getTime());
+    for (const refused of [systems.id, teams.id]) {
+      expect(await runsFor(refused)).toHaveLength(0);
+      expect((await readRoutine(refused))?.nextRunAt.getTime()).toBeGreaterThan(
+        new Date("2001-01-01T09:25:00Z").getTime(),
+      );
+    }
   });
 });
 
@@ -902,14 +921,28 @@ describe("consuming a claimed firing", () => {
         payload,
       }),
     );
-    // And one offered from no frame at all, which the queue stamps as the legacy `system`.
-    await queue.offer({
-      kind: ROUTINE_FIRE_KIND,
-      key: `${routine.id}:2001-01-01T09:24Z`,
-      payload: { ...payload, scheduledFor: "2001-01-01T09:24:00.000Z" },
-    });
+    // One offered as `system`, the stamp an offer from no frame used to get (G01-E: an unframed
+    // offer is now an error, so the frame is named).
+    await runAsTenant(SYSTEM_TENANT, () =>
+      queue.offer({
+        kind: ROUTINE_FIRE_KIND,
+        key: `${routine.id}:2001-01-01T09:24Z`,
+        payload: { ...payload, scheduledFor: "2001-01-01T09:24:00.000Z" },
+      }),
+    );
+    // And one stamped `team`, which no frame offers as: written by `platform`, the only way it can be.
+    await asPlatform(() =>
+      database.insert(workItems).values({
+        kind: ROUTINE_FIRE_KIND,
+        key: `${routine.id}:2001-01-01T09:23Z`,
+        payload: { ...payload, scheduledFor: "2001-01-01T09:23:00.000Z" },
+        tenantId: TEAM_TENANT,
+      }),
+    );
     const stamps = (await firingsFor(routine.id)).map((row) => row.tenantId);
-    expect(stamps.sort()).toEqual([stranger.id, "system"].sort());
+    expect(stamps.sort()).toEqual(
+      [stranger.id, SYSTEM_TENANT, TEAM_TENANT].sort(),
+    );
 
     const lines: string[] = [];
     const warn = spyOn(console, "warn").mockImplementation((...args) => {
@@ -924,9 +957,9 @@ describe("consuming a claimed firing", () => {
       warn.mockRestore();
     }
 
-    expect(report.considered).toBe(2);
+    expect(report.considered).toBe(3);
     expect(report.fired).toEqual([]);
-    expect(report.skipped).toHaveLength(2);
+    expect(report.skipped).toHaveLength(3);
     for (const skipped of report.skipped) {
       expect(skipped.routineId).toBe(routine.id);
       expect(skipped.reason).toContain("refused");
@@ -935,11 +968,11 @@ describe("consuming a claimed firing", () => {
     expect(await runsFor(routine.id)).toHaveLength(0);
     // Finished, not released: no redelivery can change the stamp on the row.
     const firings = await firingsFor(routine.id);
-    expect(firings).toHaveLength(2);
+    expect(firings).toHaveLength(3);
     expect(firings.every((row) => row.finishedAt !== null)).toBe(true);
     expect(
       lines.filter((line) => line.includes("routine-fire-untrusted-tenant")),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   /**

@@ -15,6 +15,7 @@ import {
   routines,
   users,
 } from "../src/db/schema";
+import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
 import {
   createRoutineStore,
   MAX_ENABLED_ROUTINES,
@@ -49,14 +50,14 @@ const DAILY = "0 9 * * *";
 
 /**
  * WHOSE FRAME (G01). A person's own calls run inside that person's frame, the way the routes run
- * them: `asNewPerson` mints the person's id first so their account, Bots and channels are made in
- * their own tenant. The sweep's questions, and the test's own reads and writes of rows across tenants
- * (stamps, cleanup), go as `platform`, the operator's view.
+ * them: `asNewPerson` mints the person's id first so their Bots, channels and routines are made in
+ * their own tenant. Their account is an identity row, not a tenant's, so it is written as `platform`,
+ * the way sign-in writes it. The sweep's questions, and the test's own reads and writes of rows
+ * across tenants (stamps, cleanup), go as `platform`, the operator's view.
  *
- * `makeRoutine` takes the owner's id the same way `setUp` does; every caller passes one from
- * `asNewPerson` except "joins the run to its routine", which still calls it with no frame and no id
- * because its assertion reads the legacy `system` stamp that unframed write leaves (pending a G01-D
- * decision).
+ * `setUp` and `makeRoutine` take the owner's id, always one from `asNewPerson`, and do their work in
+ * that owner's frame. Nothing in this file writes from no frame (G01-E): a row that names nobody is
+ * made by `platform` re-stamping one, never by forgetting the frame.
  */
 const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
 const newUserId = () => `${testPrefix}-user-${randomUUID()}`;
@@ -68,9 +69,10 @@ function asNewPerson<T>(work: (id: string) => Promise<T>): Promise<T> {
 const otherPerson = () => asNewPerson((id) => createUser(id));
 
 afterEach(async () => {
-  // Across every tenant this file wrote in — each person's own and the legacy `system` — so as
-  // `platform`. Routines cascade from both the owner and the agent, but they are cleared first so a
-  // failure part-way through cleanup leaves nothing pointing at rows this file is about to delete.
+  // Across every tenant this file wrote in — each person's own, and the `team` and `system` stamps
+  // one test puts on a routine — so as `platform`. Routines cascade from both the owner and the
+  // agent, but they are cleared first so a failure part-way through cleanup leaves nothing pointing
+  // at rows this file is about to delete.
   await asPlatform(async () => {
     for (const userId of createdUserIds) {
       await database.delete(routines).where(eq(routines.ownerUserId, userId));
@@ -98,11 +100,14 @@ afterAll(async () => {
 });
 
 async function createUser(id = newUserId()): Promise<AgentActor> {
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Routine Store Test User",
-  });
+  // An identity row, written as `platform` the way sign-in writes it.
+  await asPlatform(() =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Routine Store Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
@@ -125,11 +130,13 @@ async function createChannel(owner: AgentActor, agentIds: string[]) {
 }
 
 /** A person, a Bot and the one channel they share: the ordinary starting point. */
-async function setUp(ownerId?: string) {
+async function setUp(ownerId: string) {
   const owner = await createUser(ownerId);
-  const agentId = await createAgent(owner);
-  const channel = await createChannel(owner, [agentId]);
-  return { owner, agentId, channel };
+  return runAsTenant(ownerId, async () => {
+    const agentId = await createAgent(owner);
+    const channel = await createChannel(owner, [agentId]);
+    return { owner, agentId, channel };
+  });
 }
 
 /**
@@ -896,16 +903,18 @@ async function readRoutine(routineId: string) {
 
 async function makeRoutine(
   instruction = "Summarise the day.",
-  ownerId?: string,
+  ownerId: string,
 ) {
   const { owner, agentId, channel } = await setUp(ownerId);
-  const routine = await store.create({
-    ownerUserId: owner.id,
-    agentId,
-    channelId: channel.id,
-    instruction,
-    cron: DAILY,
-  });
+  const routine = await runAsTenant(ownerId, () =>
+    store.create({
+      ownerUserId: owner.id,
+      agentId,
+      channelId: channel.id,
+      instruction,
+      cron: DAILY,
+    }),
+  );
   return { owner, agentId, channel, routine };
 }
 
@@ -1324,27 +1333,47 @@ describe("switching off a routine the sweep cannot schedule", () => {
 
 describe("the runner's read of one firing", () => {
   test("joins the run to its routine, owner included", async () => {
-    const { owner, agentId, channel, routine } = await makeRoutine(
-      "Post the standup summary.",
-    );
-    const { runId } = await store.insertRun(routine.id);
+    await asNewPerson(async (ownerId) => {
+      const { owner, agentId, channel, routine } = await makeRoutine(
+        "Post the standup summary.",
+        ownerId,
+      );
+      const { runId } = await store.insertRun(routine.id);
 
-    // The owner comes back because the runner acts AS the owner: the channel it posts into and the
-    // thread it continues are that person's, and nothing else in the run row says who that is.
-    //
-    // `tenantId` comes back with it, and it is the runner's answer to "whose frame do I take for the
-    // turn". The fixture writes unframed, so this is the platform's own partition — which is the point
-    // of reading it off the routine instead of inferring it from the owner id: whatever the row says
-    // is where the row's owner will look for the result.
-    expect(await store.runContext(runId)).toEqual({
-      routineId: routine.id,
-      ownerUserId: owner.id,
-      tenantId: "system",
-      agentId,
-      channelId: channel.id,
-      // Read at dispatch so a routine paused after it was queued still does not run.
-      enabled: true,
-      instruction: "Post the standup summary.",
+      // The owner comes back because the runner acts AS the owner: the channel it posts into and the
+      // thread it continues are that person's, and nothing else in the run row says who that is.
+      //
+      // `tenantId` comes back with it, and it is the runner's answer to "whose frame do I take for
+      // the turn". Written in the owner's frame, the row says the owner.
+      const expected = {
+        routineId: routine.id,
+        ownerUserId: owner.id,
+        tenantId: ownerId,
+        agentId,
+        channelId: channel.id,
+        // Read at dispatch so a routine paused after it was queued still does not run.
+        enabled: true,
+        instruction: "Post the standup summary.",
+      };
+      expect(await store.runContext(runId)).toEqual(expected);
+
+      // And the stamp is reported as the row has it, not inferred from the owner id: that is the
+      // point of reading it off the routine. Re-stamped by `platform` to each tenant that names
+      // nobody (`routines` is not a team table, so no guard trigger refuses the move), the answer
+      // follows the stamp while the owner stays who it was — the runner then refuses the stamp,
+      // rather than running the turn as the owner the payload names.
+      for (const stamp of [TEAM_TENANT, SYSTEM_TENANT]) {
+        await asPlatform(() =>
+          database
+            .update(routines)
+            .set({ tenantId: stamp })
+            .where(eq(routines.id, routine.id)),
+        );
+        expect(await store.runContext(runId)).toEqual({
+          ...expected,
+          tenantId: stamp,
+        });
+      }
     });
   });
 
