@@ -25,6 +25,13 @@ afterEach(() => {
 });
 
 describe("tenant frame guard", () => {
+  test("the test process runs under throw: scripts/test-preload.ts makes it the default", () => {
+    // `saved` is the guard as the preload left it, read before any case here switched it.
+    expect(saved).toBe("throw");
+    expect(tenantFrameGuard()).toBe("throw");
+    expect(() => currentTenant()).toThrow(TenantContextError);
+  });
+
   test("only report and throw switch it on, and anything else is the legacy fallback", () => {
     expect(tenantFrameGuard({})).toBe("off");
     expect(tenantFrameGuard({ OPENBOT_TENANT_FRAME_GUARD: "off" })).toBe("off");
