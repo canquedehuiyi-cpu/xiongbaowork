@@ -5,6 +5,8 @@
  * Run only by `.github/workflows/model-e2e.yml`, by hand, inside the GitHub Environment `model-e2e`,
  * against that job's own throwaway Postgres. Nothing else may run it: it spends real tokens on a real
  * key, so it refuses unless `MODEL_E2E=1`, `GITHUB_ACTIONS=true` and `MODEL_E2E_API_KEY` are all set.
+ * The workflow fills `MODEL_E2E_API_KEY` from the `model-e2e` Environment's `DEEPSEEK_API_KEY`, the
+ * only place that key is stored, and points the run at DeepSeek unless its variables say otherwise.
  * `ci.yml` does not reference it.
  *
  * The path is the product's, not a shortcut around it:

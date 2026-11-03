@@ -6,7 +6,9 @@ import { harnessGate, summaryMarkdown } from "../scripts/model-e2e";
 /**
  * Story G6 / audit defect #11: the real-model harness spends a real key, so the workflow that runs
  * it is a manual, main-only job inside the `model-e2e` Environment, with the key reaching it only as
- * `secrets.MODEL_E2E_API_KEY` through `env`. Nothing on a pull request or a push may run it.
+ * that Environment's `secrets.DEEPSEEK_API_KEY` through `env`. The key lives in the Environment and
+ * nowhere else (no repository or organisation secret is named). Nothing on a pull request or a push
+ * may run it.
  */
 
 const workflowPath = new URL(
@@ -107,11 +109,27 @@ test("actions are pinned to full commit SHAs, Bun is 1.3.14, the lockfile is fro
   }
 });
 
-test("the key reaches the job only as secrets.MODEL_E2E_API_KEY, through env", () => {
+test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSEEK_API_KEY, through env", () => {
   const references = text.match(/secrets\.[A-Za-z0-9_]+/g) ?? [];
-  expect(references).toEqual(["secrets.MODEL_E2E_API_KEY"]);
+  expect(references).toEqual(["secrets.DEEPSEEK_API_KEY"]);
   expect(text).not.toMatch(/secrets\[/);
   expect(text).not.toContain("toJSON(secrets");
+
+  // Environment secrets reach only jobs that name the Environment; every job here does (above), and
+  // the one job that carries the key is one of them.
+  const carrierJobs = jobs.filter((job) =>
+    job.steps.some((step) =>
+      Object.values(step.env ?? {}).some((value) =>
+        String(value).includes("secrets."),
+      ),
+    ),
+  );
+  expect(carrierJobs).toHaveLength(1);
+  const carrierEnvironment =
+    typeof carrierJobs[0].environment === "string"
+      ? carrierJobs[0].environment
+      : carrierJobs[0].environment?.name;
+  expect(carrierEnvironment).toBe("model-e2e");
 
   const steps = jobs.flatMap((job) => job.steps);
   const carriers = steps.filter((step) =>
@@ -121,24 +139,40 @@ test("the key reaches the job only as secrets.MODEL_E2E_API_KEY, through env", (
   );
   expect(carriers).toHaveLength(1);
   expect(carriers[0].env?.MODEL_E2E_API_KEY).toBe(
-    expression("secrets.MODEL_E2E_API_KEY"),
+    expression("secrets.DEEPSEEK_API_KEY"),
   );
   for (const step of steps) {
     expect(step.run ?? "").not.toContain("secrets.");
     expect(JSON.stringify(step.with ?? {})).not.toContain("secrets.");
   }
-  // Provider, model and endpoint are repository variables, not literals in the file.
-  expect(carriers[0].env?.MODEL_E2E_PROVIDER).toBe(
-    expression("vars.MODEL_E2E_PROVIDER"),
-  );
+  // The key is a DeepSeek key, so the provider is DeepSeek; model and endpoint are variables with
+  // DeepSeek's own defaults when the variable is unset.
+  expect(carriers[0].env?.MODEL_E2E_PROVIDER).toBe("deepseek");
   expect(carriers[0].env?.MODEL_E2E_MODEL).toBe(
-    expression("vars.MODEL_E2E_MODEL"),
+    expression("vars.MODEL_E2E_MODEL || 'deepseek-chat'"),
   );
   expect(carriers[0].env?.MODEL_E2E_BASE_URL).toBe(
-    expression("vars.MODEL_E2E_BASE_URL"),
+    expression("vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1'"),
   );
   expect(carriers[0].env?.MODEL_E2E).toBe("1");
   expect(carriers[0].run).toContain("scripts/model-e2e.ts");
+});
+
+test("the DeepSeek defaults pass the harness gate", () => {
+  const gate = harnessGate({
+    MODEL_E2E: "1",
+    GITHUB_ACTIONS: "true",
+    MODEL_E2E_API_KEY: "test-key-not-real",
+    DATABASE_URL: "postgres://openbot_app:x@127.0.0.1:5432/e2e",
+    MODEL_E2E_PROVIDER: "deepseek",
+    MODEL_E2E_MODEL: "deepseek-chat",
+    MODEL_E2E_BASE_URL: "https://api.deepseek.com/v1",
+  });
+  expect(gate.ok).toBe(true);
+  if (gate.ok) {
+    expect(gate.config.provider).toBe("deepseek");
+    expect(gate.config.baseUrl).toBe("https://api.deepseek.com/v1");
+  }
 });
 
 test("the workflow carries no key-like literal", () => {

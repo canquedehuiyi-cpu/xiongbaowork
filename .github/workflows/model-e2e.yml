@@ -2,6 +2,11 @@
 # model_token_calls row it wrote. Spends a real key, so it runs only by hand, only from main, and
 # only inside the GitHub Environment `model-e2e` (whose protection rules gate the secret).
 # ci.yml never runs this; there is deliberately no pull_request or push trigger here.
+#
+# The key is the DeepSeek key stored ONLY as the `model-e2e` Environment's secret
+# DEEPSEEK_API_KEY: an Environment secret reaches only a job that names that Environment.
+# The model and endpoint are variables (MODEL_E2E_MODEL, MODEL_E2E_BASE_URL) with DeepSeek's
+# own defaults when unset.
 name: 模型 E2E 计量对账
 
 on:
@@ -58,8 +63,8 @@ jobs:
         env:
           MODEL_E2E: "1"
           DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_model_e2e
-          MODEL_E2E_PROVIDER: ${{ vars.MODEL_E2E_PROVIDER }}
-          MODEL_E2E_MODEL: ${{ vars.MODEL_E2E_MODEL }}
-          MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL }}
-          MODEL_E2E_API_KEY: ${{ secrets.MODEL_E2E_API_KEY }}
+          MODEL_E2E_PROVIDER: deepseek
+          MODEL_E2E_MODEL: ${{ vars.MODEL_E2E_MODEL || 'deepseek-chat' }}
+          MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
+          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: bun run --cwd server scripts/model-e2e.ts
