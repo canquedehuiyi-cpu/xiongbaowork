@@ -276,18 +276,18 @@ export function checkOutboundUrl(
   try {
     url = new URL(raw.trim());
   } catch {
-    return { allowed: false, reason: "That is not a web address." };
+    return { allowed: false, reason: "这不是有效的网址。" };
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     return {
       allowed: false,
-      reason: "A model endpoint must be an http or https address.",
+      reason: "模型接口地址必须以 http 或 https 开头。",
     };
   }
   if (url.username || url.password) {
     return {
       allowed: false,
-      reason: "A model endpoint may not carry a user name or password.",
+      reason: "模型接口地址中不能包含用户名或密码。",
     };
   }
   const hostname = url.hostname.toLowerCase();
@@ -297,8 +297,7 @@ export function checkOutboundUrl(
   ) {
     return {
       allowed: false,
-      reason:
-        "That address holds this deployment's own cloud credentials, so nothing is ever sent to it.",
+      reason: "该地址是本部署的云凭据服务，不会向它发送任何内容。",
     };
   }
   const opened =
@@ -307,8 +306,7 @@ export function checkOutboundUrl(
   if (url.protocol !== "https:" && policy.allowPrivateHosts !== true) {
     return {
       allowed: false,
-      reason:
-        "A model endpoint must use https, or the key would travel unencrypted.",
+      reason: "模型接口必须使用 https，否则密钥会以明文传输。",
     };
   }
   // A named host is scoped to the port it was named with (a bare name: the scheme's default port),
@@ -316,7 +314,7 @@ export function checkOutboundUrl(
   if (!opened && hostIsNamed(url, policy.allowedHosts)) {
     return {
       allowed: false,
-      reason: "That host is allowed only on the port it was named with.",
+      reason: "该主机只允许使用登记时指定的端口。",
     };
   }
   const bare = canonicalHostname(hostname);
@@ -327,8 +325,7 @@ export function checkOutboundUrl(
   if (internal && !opened) {
     return {
       allowed: false,
-      reason:
-        "That address is inside this deployment's network, so nothing is sent to it.",
+      reason: "该地址位于本部署的内部网络，不会向它发送任何内容。",
     };
   }
   return { allowed: true, url: url.toString() };
@@ -361,21 +358,18 @@ export async function assertResolvesPublic(
     // No local answer. Behind an egress proxy the proxy resolves it (KNOWN LIMIT — EGRESS PROXY);
     // otherwise the request could not go anywhere anyway: unreachable, not forbidden.
     if ((policy.viaProxy ?? proxiedByEnvironment)(url)) return;
-    throw new OutboundRefusedError(
-      `${hostname} could not be resolved.`,
-      "unresolved",
-    );
+    throw new OutboundRefusedError(`无法解析 ${hostname}。`, "unresolved");
   }
   for (const { address } of answers) {
     const risk = addressRisk(address);
     if (risk === "metadata") {
       throw new OutboundRefusedError(
-        `${hostname} resolves to this deployment's cloud credential service, so nothing is sent to it.`,
+        `${hostname} 解析到本部署的云凭据服务，不会向它发送任何内容。`,
       );
     }
     if (risk === "internal" && !opened) {
       throw new OutboundRefusedError(
-        `${hostname} resolves inside this deployment's network, so nothing is sent to it.`,
+        `${hostname} 解析到本部署的内部网络，不会向它发送任何内容。`,
       );
     }
   }
@@ -426,7 +420,7 @@ export async function guardedFetch(
   ) {
     await response.body?.cancel().catch(() => undefined);
     throw new OutboundRefusedError(
-      `The model endpoint answered with a redirect (HTTP ${response.status}); redirects are not followed, so the key is not sent on.`,
+      `模型接口返回了重定向（HTTP ${response.status}）。系统不跟随重定向，密钥未被转发。`,
       "redirect",
     );
   }

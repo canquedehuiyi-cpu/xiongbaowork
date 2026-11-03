@@ -30,9 +30,10 @@ export async function lockProviderCredentials(
     return process.platform === "win32"
       ? await windowsLock(path)
       : await unixLock(path);
-  } catch {
+  } catch (error) {
     throw new CredentialLockUnavailable(
       "The model credential store is busy or unavailable.",
+      { cause: error },
     );
   }
 }
@@ -113,6 +114,7 @@ public static class OpenBotCredentialLock {
   }
 }
 '@
+[Console]::Out.WriteLine('ready'); [Console]::Out.Flush()
 $deadline=[DateTime]::UtcNow.AddSeconds(5)
 $file=$null
 while ($null -eq $file) {
@@ -149,17 +151,85 @@ async function windowsLock(path: string): Promise<() => Promise<void>> {
       windowsHide: true,
     },
   );
+  return holdLockHelper(child);
+}
+
+/** The helper process as {@link holdLockHelper} drives it: a Bun subprocess with piped stdio. */
+export interface LockHelper {
+  readonly stdout: ReadableStream<Uint8Array>;
+  readonly stdin: { end(): unknown };
+  readonly exited: Promise<number>;
+  kill(): void;
+}
+
+/**
+ * How long the helper may take, in two parts. Starting is a fresh Windows PowerShell plus the
+ * Add-Type compile of its CreateFileW wrapper, which on a cold machine alone can take longer than a
+ * lock ever should, so it has its own bound and ends at the helper's `ready` line. The lock then
+ * gets `lockMs` from `ready`; the helper itself stops retrying a held lock 5 s after `ready`.
+ */
+export const LOCK_HELPER_TIMING = { startupMs: 60_000, lockMs: 15_000 };
+
+/**
+ * Waits for the helper's `ready` and then `locked` lines, killing it if either bound passes or it
+ * says anything else. Answers the release: end its stdin, and it closes the handle and exits 0.
+ */
+export async function holdLockHelper(
+  child: LockHelper,
+  timing: { startupMs: number; lockMs: number } = LOCK_HELPER_TIMING,
+): Promise<() => Promise<void>> {
   const reader = child.stdout.getReader();
-  const timeout = setTimeout(() => child.kill(), 15_000);
+  const decoder = new TextDecoder();
+  let expired: "startup" | "lock" | undefined;
+  let timeout = setTimeout(() => {
+    expired = "startup";
+    child.kill();
+  }, timing.startupMs);
   try {
     let message = "";
-    while (!message.includes("\n")) {
+    let ready = false;
+    for (;;) {
+      const lines = message
+        .split("\n")
+        .slice(0, -1)
+        .map((line) => line.trim());
+      if (lines.length > 0 && lines[0] !== "ready")
+        throw new Error("Invalid credential lock response.");
+      if (lines.length > 0 && !ready) {
+        ready = true;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          expired = "lock";
+          child.kill();
+        }, timing.lockMs);
+      }
+      if (lines.length > 1) {
+        if (lines.length > 2 || lines[1] !== "locked")
+          throw new Error("Invalid credential lock response.");
+        break;
+      }
       const { value, done } = await reader.read();
-      if (done) throw new Error("Could not acquire credential lock.");
-      message += new TextDecoder().decode(value);
+      if (done) {
+        if (expired === "startup") {
+          console.error(
+            JSON.stringify({
+              type: "credential-lock-helper-not-started",
+              note: "Windows PowerShell did not start the credential lock helper in time; the helper was stopped.",
+              startupMs: timing.startupMs,
+            }),
+          );
+          throw new Error(
+            `The credential lock helper did not start within ${timing.startupMs} ms.`,
+          );
+        }
+        throw new Error(
+          expired === "lock"
+            ? `Could not acquire credential lock within ${timing.lockMs} ms.`
+            : "Could not acquire credential lock.",
+        );
+      }
+      message += decoder.decode(value, { stream: true });
     }
-    if (message.trim() !== "locked")
-      throw new Error("Invalid credential lock response.");
   } catch (error) {
     child.kill();
     await child.exited;

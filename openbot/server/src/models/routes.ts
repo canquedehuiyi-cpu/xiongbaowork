@@ -463,7 +463,7 @@ export async function probe(
     response.status >= 300 && response.status < 400
       ? {
           ok: false,
-          error: `HTTP ${response.status} (redirects are not followed)`,
+          error: `HTTP ${response.status}（不跟随重定向）`,
         }
       : response.ok || (acceptBadRequest && response.status === 400)
         ? { ok: true }
@@ -554,8 +554,8 @@ export async function probe(
       ok: false,
       error:
         name === "TimeoutError" || name === "AbortError"
-          ? "The provider did not answer in time."
-          : `${name}: the provider could not be reached.`,
+          ? "模型提供方未在规定时间内响应。"
+          : `${name}：无法连接模型提供方。`,
     };
   }
 }
