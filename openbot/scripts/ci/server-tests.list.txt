@@ -37,6 +37,7 @@ tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
 tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
+tests/approvals-employee-permissions.integration.test.ts
 tests/approvals-execute.test.ts
 tests/approvals-frontend.test.ts
 tests/approvals-interactive.integration.test.ts

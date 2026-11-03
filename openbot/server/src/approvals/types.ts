@@ -185,6 +185,14 @@ export type ApprovalTeamSettings = {
   /** Every Bot asks before a dangerous command, whatever its own switch says (SEC1 D10). */
   enforceDangerousCommands: boolean;
 };
+/** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
+export type EmployeeToolMode = "direct" | "ask" | "disabled";
+/** Each mode is one rule behaviour: 直接 is allow, 询问 is ask, 禁用 is deny. */
+export const EMPLOYEE_TOOL_BEHAVIOUR: Record<EmployeeToolMode, RuleBehaviour> = {
+  direct: "allow",
+  ask: "ask",
+  disabled: "deny",
+};
 /** A floor's switch on one Bot: off, or ask before acting. */
 export type SecurityFloorMode = "off" | "ask";
 /**
@@ -270,6 +278,8 @@ export type ApprovalPolicyStore = {
    * rule applies and the floors are their defaults.
    */
   employee?(botId: string): Promise<EmployeePolicy>;
+  /** Whether the current frame can see this Bot at all (its own, a team Bot it may use, the catalogue). */
+  botVisible?(botId: string): Promise<boolean>;
   /** The owner changes one of their Bots' floors, in their own frame. Another person's Bot is refused. */
   setEmployeeSecurity?(
     by: string,

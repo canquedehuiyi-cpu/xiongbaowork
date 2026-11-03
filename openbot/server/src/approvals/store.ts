@@ -5,6 +5,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
+import { agents } from "../db/schema/core";
 import {
   approvalPreferences,
   approvalRequests,
@@ -659,6 +660,18 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
      * turn asked. Nothing is written there. A Bot that belongs to nobody (the catalogue, a team Bot
      * naming no person) has no owner rules and the default floors.
      */
+    /*
+     * Read under the asker's own row security on `agents`, which shows them their own Bots, the team
+     * Bots they may use and the catalogue, and nobody else's private Bot.
+     */
+    async botVisible(botId) {
+      const rows = await database
+        .select({ id: agents.id })
+        .from(agents)
+        .where(eq(agents.id, botId))
+        .limit(1);
+      return rows.length === 1;
+    },
     async employee(botId): Promise<EmployeePolicy> {
       const owner = await ownerTenantOfBot(database, botId);
       if (!owner)
