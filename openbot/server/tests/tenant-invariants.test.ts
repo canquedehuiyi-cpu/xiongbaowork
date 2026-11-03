@@ -139,8 +139,9 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/admin/routes.ts": { "asAdminPlatform(": 1, 'runAsTenant("platform"': 1 },
   "src/agents/bot-owner.ts": { "asPlatform(": 2 },
   "src/agents/handoff-runner.ts": { 'runAsTenant("platform"': 1 },
-  // A Bot's audit trail read across every tenant, for an administrator holding the capability (D07).
-  "src/agents/lifecycle-routes.ts": { "asAdminPlatform(": 1 },
+  // A Bot's audit trail for an administrator holding the capability (D07): finding another person's
+  // private Bot as `platform` (as GET /api/agents/:agentId does), and reading its rows across tenants.
+  "src/agents/lifecycle-routes.ts": { "asAdminPlatform(": 2 },
   "src/agents/profile-store.ts": { "asPlatform(": 1 },
   "src/agents/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 3 },
   "src/agents/wake-up.ts": { 'runAsTenant("platform"': 2 },
