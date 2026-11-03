@@ -13,7 +13,7 @@ slow turn that is still alive is never closed out from under the server running 
 | Left behind by a dead process | Closed as | Notes |
 |---|---|---|
 | `routine_runs` row with no status | `skipped`, with the reason in `error` | Same reaper the routine sweep uses |
-| `group_task_runs` at `running` that belong to a WakerFlow run (`flow_id` set) | `failed`; the step that was running fails with "The server restarted during this step. It may already have acted; it was not replayed.", steps not yet started fail as not run | Closed first, by `wakerflows/recovery.ts`, in one transaction with the parent and every still-open card under it, in the run's own tenant. Nobody reruns it automatically; the person decides |
+| `group_task_runs` at `running` that belong to a WakerFlow run (`flow_id` set) | `failed`; the step that was running fails with "服务在这一步执行期间重启了。这一步可能已经产生了效果，系统没有重新执行它。", steps not yet started fail with "服务在这一步开始前重启了，运行已停止，这一步没有执行。" | Closed first, by `wakerflows/recovery.ts`, in one transaction with the parent and every still-open card under it, in the run's own tenant. Nobody reruns it automatically; the person decides |
 | `waker_flow_requests` run request still `pending` | `completed` pointing at its run if the pipeline registered one, otherwise `unknown` (its parent card, if opened, `failed`) | Same phase. Never re-driven; it would otherwise block deleting the Flow |
 | `group_task_runs` at `running` (crew run) | `failed`; open steps `failed`, finished steps untouched | Parent and open step cards closed `failed` in the run's own tenant |
 | Routine / responsibility task card at `running` | `failed` | Only when its run is no longer open in its own ledger (`tasks/reclaim.ts`) |

@@ -107,7 +107,7 @@ describe("the probe", () => {
     );
     expect(answer.ok).toBeFalse();
     expect(answer.refused).toBeUndefined();
-    expect(answer.error ?? "").toContain("could not be resolved");
+    expect(answer.error ?? "").toContain("无法解析");
     expect(network.calls).toHaveLength(0);
   });
 
@@ -130,7 +130,7 @@ describe("the probe", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(answer).toEqual({
       ok: false,
-      error: "The provider did not answer in time.",
+      error: "模型提供方未在规定时间内响应。",
     });
     expect(network.calls).toHaveLength(0);
   });

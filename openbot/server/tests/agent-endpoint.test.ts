@@ -889,7 +889,7 @@ describe("where a hop's name resolves", () => {
       ).rejects.toBeInstanceOf(EndpointNotAllowedError);
       expect(calls).toHaveLength(0);
       expect(refusals).toHaveLength(1);
-      expect(refusals[0]?.reason).toMatch(/inside this deployment's network/);
+      expect(refusals[0]?.reason).toMatch(/内部网络/);
     }
   });
 
@@ -1004,7 +1004,7 @@ describe("where a hop's name resolves", () => {
     });
 
     await expect(dial("https://gone.example.com/ag-ui", keyed)).rejects.toThrow(
-      /could not be resolved/,
+      /无法解析/,
     );
     expect(calls).toHaveLength(0);
     expect(refusals).toHaveLength(0);

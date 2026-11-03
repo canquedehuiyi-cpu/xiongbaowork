@@ -55,11 +55,11 @@ import {
 
 /** What the step that was running says about itself after a restart. */
 export const FLOW_STEP_INTERRUPTED =
-  "The server restarted during this step. It may already have acted; it was not replayed.";
+  "服务在这一步执行期间重启了。这一步可能已经产生了效果，系统没有重新执行它。";
 
 /** What a step that had not started yet says: the run ended before it. */
 export const FLOW_STEP_NOT_STARTED =
-  "The server restarted before this step started; the run stopped and this step was not run.";
+  "服务在这一步开始前重启了，运行已停止，这一步没有执行。";
 
 /** The board's projection, for the live update only; the cards themselves are written here. */
 export type FlowRecoveryBoard = {
