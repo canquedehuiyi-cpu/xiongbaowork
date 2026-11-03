@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { buildAGUITextResponse } from "@copilotkit/aimock";
 import { AGUIMock } from "@copilotkit/aimock/agui";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
 import { createApp } from "../src/app";
 import { createAuditStore } from "../src/audit";
@@ -11,7 +11,13 @@ import { loadConfig } from "../src/config";
 import { type IdentifyActor, mountCopilotRuntime } from "../src/copilot";
 import { createCredentialStore, resolveModelApiKey } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
-import { agentProfiles, agents, threads, users } from "../src/db/schema";
+import {
+  agentProfiles,
+  agents,
+  threadRuns,
+  threads,
+  users,
+} from "../src/db/schema";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
@@ -438,5 +444,158 @@ describe("the runtime answers in the frame of the person asking (G01-E P16f)", (
         )
       ).status,
     ).toBe(404);
+  });
+});
+
+/*
+ * G01-E P17: a thread is its owner's on every runtime door, not only on the three thread endpoints.
+ *
+ * `/agent/:id/connect` replays a thread out of the process-wide in-memory store, and `/agent/:id/run`
+ * continues one there, both by thread id alone. The Bot in the path is only the Bot: a person who can
+ * see a Bot Alice also uses (the catalogue's, here) and has her thread id must get what an unknown
+ * thread id gets, which is nothing.
+ */
+describe("a thread id that is not the caller's replays and continues nothing (G01-E P17)", () => {
+  /** Alice's finished turn on her own Bot, written through to her tenant. */
+  async function alicesThread(): Promise<string> {
+    const threadId = `rtf-p17-${randomUUID()}`;
+    threadIds.push(threadId);
+    const ran = await post(
+      `/api/copilotkit/agent/${bots.aliceRemote}/run`,
+      alice,
+      runInput(threadId),
+    );
+    expect(ran.status).toBe(200);
+    expect(ran.text).toContain("RUN_FINISHED");
+    await eventually(() =>
+      runAsTenant(alice, () =>
+        database
+          .select({ id: threadRuns.id })
+          .from(threadRuns)
+          .where(eq(threadRuns.threadId, threadId)),
+      ),
+    );
+    return threadId;
+  }
+
+  test("Bob connecting to a Bot he can see with Alice's thread id gets an empty stream; Alice's own connect still replays", async () => {
+    const threadId = await alicesThread();
+
+    const his = await post(
+      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      bob,
+      runInput(threadId),
+    );
+    expect(his.status).toBe(200);
+    // Exactly what an id nobody ever ran answers.
+    const unknown = await post(
+      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      bob,
+      runInput(`rtf-p17-never-${randomUUID()}`),
+    );
+    expect(unknown.status).toBe(200);
+    expect(his.text).toBe(unknown.text);
+    for (const leaked of ["RUN_STARTED", "frames answer", "hello", threadId])
+      expect(his.text).not.toContain(leaked);
+
+    const hers = await post(
+      `/api/copilotkit/agent/${bots.aliceRemote}/connect`,
+      alice,
+      runInput(threadId),
+    );
+    expect(hers.status).toBe(200);
+    expect(hers.text).toContain("RUN_STARTED");
+    expect(hers.text).toContain("frames answer");
+  });
+
+  test("Bob running with Alice's thread id is refused: nothing is appended to her thread and none of it becomes his", async () => {
+    const threadId = await alicesThread();
+    const before = await get(
+      `/api/copilotkit/threads/${threadId}/events`,
+      alice,
+    );
+    const hersBefore = (before.body?.events ?? []) as unknown[];
+    expect(hersBefore.length).toBeGreaterThan(0);
+
+    const ran = await post(
+      `/api/copilotkit/agent/${bots.catalogue}/run`,
+      bob,
+      runInput(threadId),
+    );
+    // Refused the way a run that could not start is: the stream ends before it began.
+    for (const event of ["RUN_STARTED", "RUN_FINISHED", "frames answer"])
+      expect(ran.text).not.toContain(event);
+    // A write-through, had there been one, lands a macrotask after the stream ends.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Nothing of hers became readable to him by way of the run...
+    const hisEvents = await get(
+      `/api/copilotkit/threads/${threadId}/events`,
+      bob,
+    );
+    expect(hisEvents.body?.events).toEqual([]);
+    const hisMessages = await get(
+      `/api/copilotkit/threads/${threadId}/messages`,
+      bob,
+    );
+    expect(hisMessages.body?.messages).toEqual([]);
+    expect(
+      threadIdsIn((await get(`/api/copilotkit/threads`, bob)).body),
+    ).not.toContain(threadId);
+    const hisConnect = await post(
+      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      bob,
+      runInput(threadId),
+    );
+    expect(hisConnect.text).not.toContain("RUN_STARTED");
+
+    // ...nothing of his was stored against her thread...
+    const runs = await runAsTenant("platform", () =>
+      database
+        .select({ tenantId: threadRuns.tenantId })
+        .from(threadRuns)
+        .where(eq(threadRuns.threadId, threadId)),
+    );
+    expect(runs.map((row) => row.tenantId)).toEqual([alice]);
+
+    // ...and the thread is still hers, as it was.
+    const after = await get(
+      `/api/copilotkit/threads/${threadId}/events`,
+      alice,
+    );
+    expect(after.body?.events).toEqual(hersBefore);
+    expect(
+      threadIdsIn(
+        (
+          await get(
+            `/api/copilotkit/threads?agentId=${bots.aliceRemote}`,
+            alice,
+          )
+        ).body,
+      ),
+    ).toContain(threadId);
+
+    // Her own next turn on it still runs.
+    const again = await post(
+      `/api/copilotkit/agent/${bots.aliceRemote}/run`,
+      alice,
+      runInput(threadId),
+    );
+    expect(again.text).toContain("RUN_FINISHED");
+    // And is written through to her thread, beside the first.
+    const deadline = Date.now() + 3000;
+    let hers: string[] = [];
+    while (hers.length < 2 && Date.now() < deadline) {
+      hers = (
+        await runAsTenant(alice, () =>
+          database
+            .select({ id: threadRuns.id })
+            .from(threadRuns)
+            .where(eq(threadRuns.threadId, threadId)),
+        )
+      ).map((row) => row.id);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(hers.length).toBe(2);
   });
 });

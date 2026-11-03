@@ -1,13 +1,23 @@
 import type { BaseEvent, Message } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
 import {
+  type AgentRunnerConnectRequest,
+  type AgentRunnerIsRunningRequest,
   type AgentRunnerRunRequest,
+  type AgentRunnerStopRequest,
   InMemoryAgentRunner,
   type InMemoryThread,
   ɵGLOBAL_STORE,
 } from "@copilotkit/runtime/v2";
 import { asc, eq } from "drizzle-orm";
-import { from, Observable, type Subscription, switchMap, tap } from "rxjs";
+import {
+  EMPTY,
+  from,
+  Observable,
+  type Subscription,
+  switchMap,
+  tap,
+} from "rxjs";
 import type { Database } from "../db/client";
 import {
   takeLocalRunTicket,
@@ -20,7 +30,7 @@ import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
-import { currentTenant, runAsTenant } from "../tenant/context";
+import { currentTenant, isTenantFramed, runAsTenant } from "../tenant/context";
 import { runnerCardSuppressed } from "./unattended-card";
 
 /**
@@ -40,6 +50,19 @@ const threadOwners = new Map<string, string>();
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
   return owner === tenant || owner === SYSTEM_TENANT;
+}
+
+/**
+ * Why a run on somebody else's thread id did not happen.
+ *
+ * The same words whether the id is another tenant's or `system`'s, and no owner named: the refusal
+ * says this caller may not continue that id, never whose it is.
+ */
+export class ThreadUnavailableError extends Error {
+  override readonly name = "ThreadUnavailableError";
+  constructor() {
+    super("This conversation is not available.");
+  }
 }
 
 /**
@@ -269,26 +292,91 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * this turn neither re-asks it nor files a second row.
      */
     const cardIsTaken = runnerCardSuppressed();
-    if (!quota || cardIsTaken) return this.stream(request, tenant, cardIsTaken);
     /*
-     * The month is asked about before the model is called, not after.
+     * A thread id another tenant holds here is refused before anything else is asked: the parent's
+     * `run` would supersede that tenant's live turn, append this run to their history, and the
+     * write-through would then index the thread as this caller's.
+     */
+    const owner = threadOwners.get(request.threadId);
+    if (owner !== undefined && owner !== tenant)
+      return new Observable((subscriber) =>
+        subscriber.error(new ThreadUnavailableError()),
+      );
+    const ceiling = cardIsTaken ? undefined : quota;
+    /*
+     * Two questions before the model is called, each deferred rather than awaited because a runner
+     * answers with a stream, and a refusal has to arrive as that stream failing — which is how the
+     * browser already shows a run that could not start.
      *
-     * A turn that runs and is then refused leaves a person charged for work they got and a task card
-     * that never appeared; the ceiling on tasks per month only means something if the fifty-first
-     * conversation does not happen at all. Deferred rather than awaited because a runner answers with
-     * a stream, and the refusal has to arrive as that stream failing — which is how the browser
-     * already shows a run that could not start.
+     * The month comes first. A turn that runs and is then refused leaves a person charged for work
+     * they got and a task card that never appeared; the ceiling on tasks per month only means
+     * something if the fifty-first conversation does not happen at all. Then the thread: see `claim`.
      */
     return new Observable<BaseEvent>((subscriber) => {
       let inner: Subscription | undefined;
-      void quota.assertCapacity(tenant, "tasksPerMonth").then(
+      let closed = false;
+      void (async () => {
+        if (ceiling) await ceiling.assertCapacity(tenant, "tasksPerMonth");
+        await this.claim(request, tenant);
+      })().then(
         () => {
-          inner = this.stream(request, tenant, false).subscribe(subscriber);
+          if (closed) return;
+          inner = this.stream(request, tenant, cardIsTaken).subscribe(
+            subscriber,
+          );
         },
         (thrown: unknown) => subscriber.error(thrown),
       );
-      return () => inner?.unsubscribe();
+      return () => {
+        closed = true;
+        inner?.unsubscribe();
+      };
     });
+  }
+
+  /**
+   * Make the thread this tenant's before a turn runs on it, or refuse the turn.
+   *
+   * The row is the record (`threads.tenant_id`, under row-level security), and the ownership index
+   * is this process's mirror of it. A thread id the index already gives this tenant needs no read. One
+   * it knows nothing about is claimed by writing the header row in the caller's own frame: a new id
+   * becomes theirs there and then, and an id that already has a row is theirs only if the row reads
+   * back with their stamp. Another tenant's row is invisible to this frame, and `system`'s is visible
+   * but outside the write scope (0072), so both read as not-the-caller's and the run is refused.
+   *
+   * Indexed before the parent's `run` starts rather than when the write-through lands, so the
+   * owner's own reconnect during a first turn finds the thread, and nobody else's run can take the
+   * id in between.
+   */
+  private async claim(
+    request: AgentRunnerRunRequest,
+    tenant: string,
+  ): Promise<void> {
+    const { threadId } = request;
+    const known = threadOwners.get(threadId);
+    if (known === tenant) return;
+    if (known !== undefined) throw new ThreadUnavailableError();
+    const created = await this.database
+      .insert(threads)
+      .values({
+        id: threadId,
+        tenantId: tenant,
+        agentId: request.agent.agentId ?? "unknown",
+      })
+      .onConflictDoNothing()
+      .returning({ id: threads.id });
+    if (created.length === 0) {
+      const [row] = await this.database
+        .select({ tenantId: threads.tenantId })
+        .from(threads)
+        .where(eq(threads.id, threadId))
+        .limit(1);
+      if (row?.tenantId !== tenant) throw new ThreadUnavailableError();
+    }
+    // Asked again: another of this tenant's requests, or another tenant's, may have landed first.
+    const now = threadOwners.get(threadId);
+    if (now !== undefined && now !== tenant) throw new ThreadUnavailableError();
+    threadOwners.set(threadId, tenant);
   }
 
   /** The turn itself, once the plan has admitted it. */
@@ -556,5 +644,35 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   override getThreadEvents(threadId: string): BaseEvent[] {
     if (!ownedBy(threadId, currentTenant())) return [];
     return super.getThreadEvents(threadId);
+  }
+
+  /**
+   * `/agent/:id/connect` replays a thread straight out of the shared store, by thread id alone — the
+   * Bot in the path is not the thread's. Guarded the way the three reads above are: a thread this
+   * tenant does not hold answers what an id nobody ever ran answers, a stream that completes empty.
+   */
+  override connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
+    if (!ownedBy(request.threadId, currentTenant())) return EMPTY;
+    return super.connect(request);
+  }
+
+  /** Whether somebody else's thread is mid-turn is not this caller's to learn. */
+  override isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
+    if (!ownedBy(request.threadId, currentTenant()))
+      return Promise.resolve(false);
+    return super.isRunning(request);
+  }
+
+  /**
+   * Stopping a turn is a write on the thread, so it takes the write scope: a thread the index gives
+   * another tenant (`system` included), or asked outside any frame, answers "no active run", as an
+   * unknown one does. A thread the index does not know yet is left to the parent, which is what a
+   * local continuation's own cancellation stops before its write-through lands.
+   */
+  override stop(request: AgentRunnerStopRequest): Promise<boolean | undefined> {
+    const owner = threadOwners.get(request.threadId);
+    if (owner !== undefined && (!isTenantFramed() || owner !== currentTenant()))
+      return Promise.resolve(false);
+    return super.stop(request);
   }
 }
