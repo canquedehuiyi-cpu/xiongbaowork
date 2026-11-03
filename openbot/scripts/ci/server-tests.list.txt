@@ -128,6 +128,7 @@ tests/content-governance.test.ts
 tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
+tests/copilot-runtime-frames.integration.test.ts
 tests/copilot.test.ts
 tests/credential-rotation-leak.integration.test.ts
 tests/credentials-reseal.test.ts

@@ -125,10 +125,14 @@ function doorCounts(files: Parsed[]): Record<string, Record<string, number>> {
  * A changed count here is a door added or removed: say which, and why it is not a member path, in
  * the change that moves it.
  *
- * Two entries are member-reachable on purpose, each a narrow lookup that hands the work back to a
- * person's frame: `delivery/store.ts` (`registerDevice`'s platform lookup of who already holds a
- * device token, plan (d)) and `agents/profile-store.ts` (the callback route's `asPlatform` read of
- * {id, tenantId} by token hash, PCB).
+ * Beside the identity layer (`auth/guards.ts`, `index.ts`'s runtime actor lookup, `app.ts`'s auth
+ * handler) and the refusal rows `app.ts` files as nobody's for a bad worker secret or callback token,
+ * three doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
+ * `delivery/store.ts` (`registerDevice`'s platform lookup of who already holds a device token, plan
+ * (d)) and `agents/profile-store.ts` (the callback route's `asPlatform` read of {id, tenantId} by
+ * token hash, PCB), which both hand the work back to a person's frame; and `app.ts`'s
+ * `/api/capabilities` count of identity providers, which signed-out requests reach too (P16a): it
+ * reads deployment rows and only the count leaves.
  */
 const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/admin/controls.ts": { 'runAsTenant("platform"': 6 },
@@ -156,6 +160,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/channels/summary.ts": { 'runAsTenant("platform"': 2 },
   "src/computer/policy-store.ts": { 'runAsTenant("platform"': 1 },
   "src/computer/routes.ts": { "asAdminPlatform(": 1 },
+  // A signed-out runtime `/info` reads the deployment's catalogue roster, as `system` (P16f).
+  "src/copilot.ts": { 'runAsTenant("system"': 1 },
   "src/credentials-reseal.ts": { 'runAsTenant("platform"': 2 },
   "src/db/client.ts": { "set_config('app.tenant_id', ${tenant}": 2 },
   "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 2 },

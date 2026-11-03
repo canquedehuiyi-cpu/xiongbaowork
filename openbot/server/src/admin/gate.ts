@@ -213,8 +213,10 @@ export function createEnterpriseGate(
     if (governedAgent) return governed;
     /*
      * Everything else passes on outside the frame, as before: each gated route sits behind its own
-     * `requireUser`, which opens the person's frame again, and the CopilotKit runtime frames every
-     * call by the actor it resolves itself.
+     * `requireUser`, which opens the person's frame again. The CopilotKit runtime is not behind
+     * `requireUser`; `mountCopilotRuntime` opens the frame of the actor it resolves around each whole
+     * runtime request (and refuses a signed-out one everything but `/info`), so an ungoverned
+     * `/connect` or thread read is framed there, not here.
      */
     return next();
   };

@@ -430,11 +430,11 @@ await startupLifecycle.run(async (startup) => {
    * The authorization projection of the same person: agent visibility is decided from this.
    *
    * An unauthenticated request resolves to a person who owns nothing rather than an error, so the
-   * runtime can still describe itself, `/info` reports the licence and the public roster, which is
-   * what a deployment check reads to tell "the licence is invalid" apart from "chat is silently
-   * broken". It grants nothing: this actor matches no private profile and is not an administrator,
-   * and a run still fails in `identifyUser`, which has no anonymous case because a thread must belong
-   * to somebody.
+   * runtime can still describe itself, `/info` reports the licence and the deployment's catalogue
+   * roster, which is what a deployment check reads to tell "the licence is invalid" apart from "chat
+   * is silently broken". It grants nothing: `mountCopilotRuntime` reads that `/info` in the catalogue
+   * frame (`system`), where no person's row and no team row is visible, and refuses this actor every
+   * other runtime route, because a thread must belong to somebody (G01-E P16f).
    */
   const ANONYMOUS_ACTOR = { id: "", role: "user" } as const;
 
@@ -558,13 +558,13 @@ await startupLifecycle.run(async (startup) => {
     config.managedAgent,
   );
   /*
-   * The runtime is handed this rather than the loader itself, because the CopilotKit runtime calls
-   * its agent factory from its own async context, which is not the request's. Every row this person's
-   * own workspace created is then invisible: the query runs in the `system` fallback scope, so only
-   * platform rows -- a tenant package's coworkers -- ever register, and addressing one of the
-   * person's own answers "Agent not found" with no run, no message stored and nothing on screen.
+   * A routine's Bot is built from this: its owner's roster, read in its owner's frame. Scoped here on
+   * the actor the caller already passes, so the scope cannot disagree with the actor. Without it every
+   * row the owner's own workspace created is invisible, and addressing one of their own Bots answers
+   * "Agent not found" with no run, no message stored and nothing on screen.
    *
-   * Scoped here on the actor the caller already passes, so the scope cannot disagree with the actor.
+   * The runtime is handed the loader itself instead: `mountCopilotRuntime` opens the asker's frame
+   * around each whole request, and reads this roster in it, or in the catalogue frame for nobody.
    */
   const loadAgentsForActor: typeof runtimeAgentsForActor = (actor) =>
     runAsTenant(actor.id, () => runtimeAgentsForActor(actor));
@@ -2161,7 +2161,8 @@ await startupLifecycle.run(async (startup) => {
   const copilotRuntime = mountCopilotRuntime(
     config,
     runtimeModel,
-    loadAgentsForActor,
+    // Unscoped: the runtime reads it in the frame of whoever each request (or hop) is for.
+    runtimeAgentsForActor,
     resolveRuntimeModelApiKey,
     identifyUser,
     identifyActor,
