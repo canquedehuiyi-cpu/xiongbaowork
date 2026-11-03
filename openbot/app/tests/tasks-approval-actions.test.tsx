@@ -101,8 +101,21 @@ const fixture = (): Row[] => [
  * ACCEPTS a decision it applies it the way the projector does, so the refetch after it agrees with
  * the flip; when it REFUSES, the rows stay as they were.
  */
-function installServer(options: { handOff?: string[] } = {}) {
-  let rows = fixture();
+function installServer(
+  options: {
+    handOff?: string[];
+    /** Open questions (spec I3): each adds a card parked on it, and the inbox lists it. */
+    questions?: { id: string; question: string }[];
+    /** The first inbox read predates the questions: they were asked after the inbox was cached. */
+    questionsAfterFirstRead?: boolean;
+  } = {},
+) {
+  let rows = [
+    ...fixture(),
+    ...(options.questions ?? []).map((entry) =>
+      row(`asked-${entry.id}`, "needs_action", entry.id),
+    ),
+  ];
   const requests: { method: string; path: string; body?: string }[] = [];
   const held: {
     approvalId: string;
@@ -117,6 +130,13 @@ function installServer(options: { handOff?: string[] } = {}) {
       path,
       body: typeof init?.body === "string" ? init.body : undefined,
     });
+    const answer = /^\/api\/approvals\/questions\/([^/]+)\/respond$/.exec(path);
+    if (method === "POST" && answer) {
+      const approvalId = decodeURIComponent(answer[1] ?? "");
+      return new Promise<Response>((resolve) => {
+        held.push({ approvalId, decision: "answer", resolve });
+      });
+    }
     const decision = /^\/api\/approvals\/([^/]+)\/decision$/.exec(path);
     if (method === "POST" && decision) {
       const approvalId = decodeURIComponent(decision[1] ?? "");
@@ -125,6 +145,9 @@ function installServer(options: { handOff?: string[] } = {}) {
         held.push({ approvalId, decision: chosen, resolve });
       });
     }
+    const inboxReads = requests.filter(
+      (entry) => entry.method === "GET" && entry.path === "/api/approvals",
+    ).length;
     const body = path.startsWith("/api/tasks?")
       ? { tasks: rows }
       : path === "/api/approvals"
@@ -149,7 +172,24 @@ function installServer(options: { handOff?: string[] } = {}) {
             })),
             rules: [],
             teamRules: [],
-            questions: [],
+            // An answered question leaves the inbox, the way `questions.list` drops finished rows.
+            questions: (options.questions ?? [])
+              .filter(
+                (entry) =>
+                  !(options.questionsAfterFirstRead && inboxReads <= 1) &&
+                  rows.some(
+                    (card) =>
+                      card.pendingApprovalId === entry.id &&
+                      card.status === "needs_action",
+                  ),
+              )
+              .map((entry) => ({
+                id: entry.id,
+                botId: "bot",
+                threadId: "thread",
+                question: entry.question,
+                createdAt: new Date().toISOString(),
+              })),
           }
         : path.startsWith("/api/devices")
           ? { devices: [] }
@@ -408,6 +448,8 @@ test("a refused decision puts every card back, says why, and still refreshes the
     expect(badge(view, "parent")?.getAttribute("data-status")).toBe("running");
   });
 
+  // Counted after the click, so the refresh asserted below must come from the refused decision.
+  const beforeRelease = reads(server.requests).approvals;
   server.release(400, "This request was already decided.");
   await waitFor(() => {
     expect(badge(view, "parent")?.getAttribute("data-status")).toBe(
@@ -424,7 +466,7 @@ test("a refused decision puts every card back, says why, and still refreshes the
   });
   await waitFor(() => {
     expect(reads(server.requests).board).toBeGreaterThan(base.board);
-    expect(reads(server.requests).approvals).toBeGreaterThan(base.approvals);
+    expect(reads(server.requests).approvals).toBeGreaterThan(beforeRelease);
   });
   // The buttons are back, because the question is still open on the server.
   expect(buttonIn(view, "parent", "批准")).toBeDefined();
@@ -515,5 +557,127 @@ test("an action handed to the person offers 已处理 instead of 批准, and sen
   ]);
   server.release(200);
   await waitFor(() => expect(server.held).toHaveLength(0));
+  view.unmount();
+});
+
+/**
+ * Spec I3: a card parked on a QUESTION (`ask_person`) is answered on the board. It shows the question and
+ * an answer box -- never 批准/拒绝, which would send a decision for an approval that does not exist --
+ * and 回答 posts to the endpoint the 审批 page answers with. The card goes back to 进行中 before the
+ * server answers, and a refusal puts it back with its answer box.
+ */
+const QUESTION = { id: "q-branch", question: "合并到哪个分支？" };
+
+const answerBox = (view: View, id: string) =>
+  listCard(view, id).querySelector(
+    'input[aria-label="你的回答"]',
+  ) as HTMLInputElement | null;
+
+test("pure: an answer moves the question's cards to 进行中 and nothing else", () => {
+  const rows = [...fixture(), row("asked", "needs_action", "q-1")];
+  const answered = flipCardsForDecision(rows, "q-1", "answer");
+  expect(
+    answered.map((entry) => [entry.id, entry.status, entry.pendingApprovalId]),
+  ).toEqual([
+    ["parent", "needs_action", "ap-shared"],
+    ["step", "needs_action", "ap-shared"],
+    ["other", "needs_action", "ap-other"],
+    ["busy", "running", null],
+    ["asked", "running", null],
+  ]);
+  expect(answered[0]).toBe(rows[0]);
+});
+
+test("回答 on a question's card posts the answer and flips the card to 进行中 before the server answers", async () => {
+  const server = installServer({ questions: [QUESTION] });
+  const view = draw();
+  const base = await ready(view, server.requests);
+  const asked = `asked-${QUESTION.id}`;
+  await waitFor(() => expect(answerBox(view, asked)).not.toBeNull());
+  // The question is shown in the coworker's words, with an answer box rather than a decision.
+  expect(listCard(view, asked).textContent).toContain(QUESTION.question);
+  expect(labels(view, asked)).toEqual(["回答"]);
+  // Nothing to send until something is written.
+  expect((buttonIn(view, asked, "回答") as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+
+  await userEvent.type(answerBox(view, asked) as HTMLElement, "  main 分支  ");
+  await userEvent.click(buttonIn(view, asked, "回答") as HTMLElement);
+
+  await waitFor(() => {
+    expect(server.held).toHaveLength(1);
+    expect(badge(view, asked)?.getAttribute("data-status")).toBe("running");
+  });
+  expect(badge(view, asked)?.textContent).toBe("进行中");
+  // The approvals' cards are not touched by an answer.
+  expect(badge(view, "parent")?.getAttribute("data-status")).toBe(
+    "needs_action",
+  );
+  expect(buttonIn(view, "parent", "批准")).toBeDefined();
+  expect(decisions(server.requests)).toEqual([
+    `/api/approvals/questions/${QUESTION.id}/respond {"response":"main 分支"}`,
+  ]);
+
+  server.release(200);
+  await waitFor(() => {
+    const after = reads(server.requests);
+    expect(after.board).toBeGreaterThan(base.board);
+    expect(after.summary).toBeGreaterThan(base.summary);
+    expect(after.approvals).toBeGreaterThan(base.approvals);
+  });
+  await waitFor(() => {
+    expect(badge(view, asked)?.getAttribute("data-status")).toBe("running");
+  });
+  expect(answerBox(view, asked)).toBeNull();
+  expect(view.container.querySelectorAll('[role="alert"]')).toHaveLength(0);
+  view.unmount();
+});
+
+test("a refused answer puts the question's card back with its answer box and says why", async () => {
+  const server = installServer({ questions: [QUESTION] });
+  const view = draw();
+  await ready(view, server.requests);
+  const asked = `asked-${QUESTION.id}`;
+  await waitFor(() => expect(answerBox(view, asked)).not.toBeNull());
+
+  await userEvent.type(answerBox(view, asked) as HTMLElement, "main");
+  await userEvent.click(buttonIn(view, asked, "回答") as HTMLElement);
+  await waitFor(() => {
+    expect(badge(view, asked)?.getAttribute("data-status")).toBe("running");
+  });
+
+  server.release(404, "That approval was not found.");
+  await waitFor(() => {
+    expect(badge(view, asked)?.getAttribute("data-status")).toBe(
+      "needs_action",
+    );
+    expect(
+      [...view.container.querySelectorAll('[role="alert"]')]
+        .map((node) => node.textContent ?? "")
+        .join(" "),
+    ).toContain("That approval was not found.");
+  });
+  await waitFor(() => expect(answerBox(view, asked)).not.toBeNull());
+  expect(labels(view, asked)).not.toContain("批准");
+  view.unmount();
+});
+
+test("a question newer than the cached inbox is read again, and its card never offers 批准", async () => {
+  const server = installServer({
+    questions: [QUESTION],
+    questionsAfterFirstRead: true,
+  });
+  const view = draw();
+  await ready(view, server.requests);
+  const asked = `asked-${QUESTION.id}`;
+  // The first inbox read does not know the question: the card waits for a second read, offering nothing.
+  expect(labels(view, asked)).not.toContain("批准");
+  await waitFor(() => expect(answerBox(view, asked)).not.toBeNull());
+  expect(reads(server.requests).approvals).toBeGreaterThan(1);
+  expect(labels(view, asked)).toEqual(["回答"]);
+  // The approvals the first read already knew kept their buttons throughout.
+  expect(buttonIn(view, "parent", "批准")).toBeDefined();
+  expect(decisions(server.requests)).toEqual([]);
   view.unmount();
 });

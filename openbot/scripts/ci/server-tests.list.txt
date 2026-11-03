@@ -42,6 +42,7 @@ tests/approvals-interactive.integration.test.ts
 tests/approvals-native.test.ts
 tests/approvals-policy.integration.test.ts
 tests/approvals-policy.test.ts
+tests/approvals-question-board.test.ts
 tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-store.integration.test.ts
