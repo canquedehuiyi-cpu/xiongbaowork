@@ -104,6 +104,7 @@ tests/computer-handoff-contract.test.ts
 tests/computer-human-input.test.ts
 tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
+tests/computer-policy-dry-run-frame.test.ts
 tests/computer-policy-dry-run-limit.test.ts
 tests/computer-policy-route.test.ts
 tests/computer-policy.test.ts
