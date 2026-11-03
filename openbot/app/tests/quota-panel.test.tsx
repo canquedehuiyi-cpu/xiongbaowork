@@ -45,7 +45,7 @@ const free = {
   usage: { period: "2026-10", wakers: 2, tasks: 3, devices: 1, models: 0 },
   tokens: {
     period: "2026-10",
-    scope: "bound-models",
+    scope: "coworker-calls",
     calls: 3,
     reportedCalls: 3,
     partialCalls: 0,
@@ -330,7 +330,11 @@ test("the panel shows the token line and what it counts", async () => {
   const view = drawPanel(seed());
 
   expect(await view.findByText(/模型 token 1,234 tokens/)).toBeTruthy();
-  expect(view.getByText("仅统计绑定模型的调用")).toBeTruthy();
+  expect(
+    view.getByText(
+      "统计员工的全部模型调用（含部署默认模型），不含内部路由与命名调用",
+    ),
+  ).toBeTruthy();
 });
 
 test("the panel says unknown, not 0, when no call reported usage", async () => {
@@ -359,5 +363,9 @@ test("the plans page shows the token readout with its scope", async () => {
 
   expect(await view.findByText("本月模型 token")).toBeTruthy();
   expect(view.getByText("1,234 tokens")).toBeTruthy();
-  expect(view.getByText("仅统计绑定模型的调用")).toBeTruthy();
+  expect(
+    view.getByText(
+      "统计员工的全部模型调用（含部署默认模型），不含内部路由与命名调用",
+    ),
+  ).toBeTruthy();
 });
