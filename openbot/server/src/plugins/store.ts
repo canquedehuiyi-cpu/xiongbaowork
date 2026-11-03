@@ -3791,6 +3791,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       const [existing] = await database
         .select({
           id: mcpServers.id,
+          // Whether this is the team's server, whose people's rows the removal has to reach. See `reach`.
+          tenantId: mcpServers.tenantId,
           catalogueKey: mcpServers.catalogueKey,
           credentialId: mcpServers.credentialId,
           // Read so the brokered connections below can be keyed on the app the url names, which is
@@ -3821,6 +3823,31 @@ export function createPluginStore(options: PluginStoreOptions) {
       // to ask with the key. A row that arrived without an entry — a typed URL, a brokered app — is
       // its own name, which is what the address the caller used already is.
       const entryKey = existing?.catalogueKey ?? serverId;
+
+      /*
+       * EVERY PERSON'S ROWS FOR A TEAM SERVER, not only the ones this frame can see (G01-E P21, I5).
+       *
+       * CRITERION. Removing a `team` server revokes every person's token for it, ends every person's
+       * brokered account for it and releases every grant on it, whoever's Bot holds the grant.
+       *
+       * REASON. The server is the team's, but what hangs off it is stamped with each person: their
+       * `mcp_user_token` and its pointer, their `composio_connections` row, and a grant on their own
+       * private Bot (an administrator's grant there runs in the owner's frame; a person's own install
+       * lands there too). Row security shows the administrator's frame none of those, so the removal
+       * deleted the server and left them standing: a refresh token live at the vendor with its pointer
+       * cascaded away, an account still attached at Composio, and grants and connections that counted
+       * again the moment the same server was added back, with nobody asked.
+       *
+       * So those reads and writes run as `platform`, and nothing else does. Narrow on three sides:
+       * only after `requireServerWriter` above (an administrator holding the capability, or
+       * `platform` itself), only for a `team` server (a `system` catalogue row keeps its frame-bound
+       * removal, so this door never deletes a catalogue row), and only rows keyed by this server: its
+       * entry key, its toolkit, its row id. The server's own secret and the trail stay in the
+       * caller's frame.
+       */
+      const team = existing?.tenantId === TEAM_TENANT;
+      const reach = <T>(work: () => Promise<T>): Promise<T> =>
+        team ? runAsTenant("platform", work) : work();
 
       /**
        * Whether that token is still live, read rather than inferred from a
@@ -3875,20 +3902,22 @@ export function createPluginStore(options: PluginStoreOptions) {
        * grant whose pointer has already gone (a person removed earlier) would otherwise be invisible
        * here too. The same argument `retireConnectionsFor` makes from the other direction.
        */
-      const held = await database
-        .select({ id: credentialRows.id, keyId: credentialRows.keyId })
-        .from(credentialRows)
-        .where(
-          and(
-            eq(credentialRows.kind, "mcp_user_token"),
-            eq(credentialRows.provider, entryKey),
-            isNull(credentialRows.revokedAt),
-          ),
-        )
-        .orderBy(asc(credentialRows.keyId));
+      const held = await reach(() =>
+        database
+          .select({ id: credentialRows.id, keyId: credentialRows.keyId })
+          .from(credentialRows)
+          .where(
+            and(
+              eq(credentialRows.kind, "mcp_user_token"),
+              eq(credentialRows.provider, entryKey),
+              isNull(credentialRows.revokedAt),
+            ),
+          )
+          .orderBy(asc(credentialRows.keyId)),
+      );
 
       for (const grant of held) {
-        await credentials.revoke(grant.id);
+        await reach(() => credentials.revoke(grant.id));
         await recordAuditEvent(auditStore, {
           eventType: "mcp.account_disconnected",
           targetType: "mcp_server",
@@ -3971,11 +4000,13 @@ export function createPluginStore(options: PluginStoreOptions) {
          * are where the people are. Sorted, so two removals of the same app revoke in the same
          * order and write their trail rows in the same order.
          */
-        const connected = await database
-          .select({ userId: composioConnections.userId })
-          .from(composioConnections)
-          .where(eq(composioConnections.toolkit, toolkit))
-          .orderBy(asc(composioConnections.userId));
+        const connected = await reach(() =>
+          database
+            .select({ userId: composioConnections.userId })
+            .from(composioConnections)
+            .where(eq(composioConnections.toolkit, toolkit))
+            .orderBy(asc(composioConnections.userId)),
+        );
 
         /*
          * What the broker was actually asked for each of them, kept so the trail below records the
@@ -3993,9 +4024,11 @@ export function createPluginStore(options: PluginStoreOptions) {
           );
         }
 
-        await database
-          .delete(composioConnections)
-          .where(eq(composioConnections.toolkit, toolkit));
+        await reach(() =>
+          database
+            .delete(composioConnections)
+            .where(eq(composioConnections.toolkit, toolkit)),
+        );
 
         for (const connection of connected) {
           await recordAuditEvent(auditStore, {
@@ -4049,19 +4082,35 @@ export function createPluginStore(options: PluginStoreOptions) {
         if (broker) await broker.deleteAuthConfig(toolkit);
       }
 
-      const released = await database.transaction(async (transaction) => {
-        const removed = await transaction
-          .delete(pluginGrants)
-          .where(
-            and(
-              eq(pluginGrants.kind, "mcp"),
-              eq(sql`split_part(${pluginGrants.ref}, '/', 1)`, entryKey),
-            ),
-          )
-          .returning({ ref: pluginGrants.ref, agentId: pluginGrants.agentId });
-        await transaction.delete(mcpServers).where(eq(mcpServers.id, target));
-        return removed.sort((left, right) => left.ref.localeCompare(right.ref));
-      });
+      // Every Bot's grants and the row together, as one step; for a team server across every person
+      // (see `reach`), the row itself still named by identity and stamp.
+      const released = await reach(() =>
+        database.transaction(async (transaction) => {
+          const removed = await transaction
+            .delete(pluginGrants)
+            .where(
+              and(
+                eq(pluginGrants.kind, "mcp"),
+                eq(sql`split_part(${pluginGrants.ref}, '/', 1)`, entryKey),
+              ),
+            )
+            .returning({
+              ref: pluginGrants.ref,
+              agentId: pluginGrants.agentId,
+            });
+          await transaction
+            .delete(mcpServers)
+            .where(
+              and(
+                eq(mcpServers.id, target),
+                team ? eq(mcpServers.tenantId, TEAM_TENANT) : undefined,
+              ),
+            );
+          return removed.sort((left, right) =>
+            left.ref.localeCompare(right.ref),
+          );
+        }),
+      );
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",
