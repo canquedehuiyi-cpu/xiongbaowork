@@ -8,6 +8,7 @@ import {
 } from "@ag-ui/client";
 import { asc, eq } from "drizzle-orm";
 import { EMPTY } from "rxjs";
+import { createWakeUpRunner, WAKE_UP_KIND } from "../src/agents/wake-up";
 import type { AgentChannel, ChannelStore } from "../src/channels/routes";
 import { createDatabase } from "../src/db/client";
 import {
@@ -74,6 +75,7 @@ function cardsOf(tenant: string) {
       .select({
         id: tasks.id,
         source: tasks.source,
+        triggerSource: tasks.triggerSource,
         status: tasks.status,
         runRef: tasks.runRef,
         title: tasks.title,
@@ -287,8 +289,12 @@ test("a routine firing leaves exactly one card and spends exactly one task", asy
   expect(await settledCardCount(tenant)).toBe(cardsBefore + 1);
   expect((await usageOf(tenant)).tasks).toBe(usedBefore + 1);
   // The duplicate was a `chat` card: the runner's own, not the routine's.
-  const sources = (await cardsOf(tenant)).map((card) => card.source);
-  expect(sources.filter((source) => source === "chat")).toEqual([]);
+  const cards = await cardsOf(tenant);
+  expect(cards.filter((card) => card.source === "chat")).toEqual([]);
+  // Story C2: the one card says what fired it, which is what the board's 例行 sub-label reads.
+  expect(cards.find((card) => card.runRef === runId)?.triggerSource).toBe(
+    "routine",
+  );
 });
 
 test("one crew step leaves one step card and no extra conversation card", async () => {
@@ -368,6 +374,108 @@ test("a person's own turn still opens its card and is still charged", async () =
 
   expect(await settledCardCount(tenant)).toBe(cardsBefore + 1);
   expect((await usageOf(tenant)).tasks).toBe(usedBefore + 1);
+  // Story C2: a person typed it, so it stays 对话触发 with no autonomous trigger.
+  const card = (await cardsOf(tenant)).find((row) => row.runRef === runId);
+  expect(card).toMatchObject({ source: "chat", triggerSource: null });
+});
+
+test("a follow-up a Bot woke itself for files the runner's one card as unattended work", async () => {
+  /*
+   * Story C2. A wake-up opens no card of its own, so the runner still files and charges exactly one —
+   * but nobody typed the turn, so that card must sit on the 自主工作 lane (`routine`, which the board's
+   * 无人值守 filter reads) with trigger `wake_up`, not under 对话触发. Driven through the real
+   * `createWakeUpRunner`, so the marker under test is the one the follow-up path actually sets.
+   */
+  const { tenant, agentId, channelId, threadId } = await workspace("wake");
+  const { runTurn } = unattendedTurn(agentId);
+  const key = `wake:${randomUUID()}`;
+  const settled: string[] = [];
+  const wakeUps = createWakeUpRunner({
+    queue: {
+      claim: async () => [
+        {
+          kind: WAKE_UP_KIND,
+          key,
+          tenantId: tenant,
+          attempts: 1,
+          payload: {
+            ownerUserId: tenant,
+            agentId,
+            reason: "一小时后再看一眼构建。",
+            dueAt: new Date().toISOString(),
+            scheduledAt: new Date().toISOString(),
+          },
+        },
+      ],
+      finish: async () => true,
+      purge: async () => 0,
+    },
+    store: {
+      settle: async (_id: string, outcome: { status: string }) => {
+        settled.push(outcome.status);
+      },
+    } as never,
+    owner: "test-wake-up",
+    actorFor: async () => ({ id: tenant }) as never,
+    channels: {
+      get: async () => null,
+      direct: async () => ({
+        id: channelId,
+        name: "例行对话",
+        agentIds: [agentId],
+        threadId,
+        active: true,
+        lastMessageAt: null,
+      }),
+      recordActivity: async () => {},
+    },
+    runTurn,
+  });
+
+  const cardsBefore = (await cardsOf(tenant)).length;
+  const usedBefore = (await usageOf(tenant)).tasks;
+
+  const report = await wakeUps.sweep();
+
+  expect(report.ran).toEqual([key]);
+  expect(settled).toEqual(["succeeded"]);
+  expect(await settledCardCount(tenant)).toBe(cardsBefore + 1);
+  expect((await usageOf(tenant)).tasks).toBe(usedBefore + 1);
+  const cards = (await cardsOf(tenant)).slice(cardsBefore);
+  expect(cards).toHaveLength(1);
+  expect(cards[0]).toMatchObject({
+    source: "routine",
+    triggerSource: "wake_up",
+  });
+
+  // The marker is the follow-up's frame and nothing wider: the next person's turn is `chat` again.
+  const personRun = `run_${randomUUID()}`;
+  const runner = new PostgresAgentRunner(database, billed, quotaService);
+  await runAsTenant(tenant, async () => {
+    await new Promise<void>((resolve) => {
+      runner
+        .run({
+          threadId,
+          agent: new AnsweringAgent({ agentId }),
+          input: {
+            threadId,
+            runId: personRun,
+            state: {},
+            tools: [],
+            context: [],
+            forwardedProps: {},
+            messages: [
+              { id: `m-${personRun}`, role: "user", content: "构建怎么样了？" },
+            ],
+          } as unknown as RunAgentInput,
+        })
+        .subscribe({ complete: () => resolve(), error: () => resolve() });
+    });
+  });
+  expect(await settledCardCount(tenant)).toBe(cardsBefore + 2);
+  expect(
+    (await cardsOf(tenant)).find((card) => card.runRef === personRun),
+  ).toMatchObject({ source: "chat", triggerSource: null });
 });
 
 test("an entry that owns its card leaves the runner filing nothing, but still writes the thread", async () => {

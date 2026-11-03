@@ -528,6 +528,15 @@ export const auditEventTypes = [
   "routine.enabled_changed",
   /* A run refused because its model is not on the team model allowlist. */
   "model.refused",
+  /* A person's knowledge base: notebooks, their text sources, and which Wakers may read them. */
+  "knowledge.notebook_created",
+  "knowledge.notebook_updated",
+  "knowledge.notebook_deleted",
+  "knowledge.source_added",
+  "knowledge.source_updated",
+  "knowledge.source_removed",
+  "knowledge.binding_granted",
+  "knowledge.binding_revoked",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

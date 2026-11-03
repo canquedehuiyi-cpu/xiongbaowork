@@ -88,7 +88,10 @@ function app(
       get: async (_actor: unknown, id: string) =>
         id === "bot-1"
           ? { id: "bot-1", name: "Sales", ownerUserId: "owner-1" }
-          : null,
+          : // Another person's private Bot: no person's frame finds it, only `platform` does.
+            id === "private-bot" && currentTenant() === "platform"
+            ? { id: "private-bot", name: "Ledger", ownerUserId: "owner-2" }
+            : null,
     },
     auditStore: {
       insert: async (event: AuditEventInput) => void rows.push(event),
@@ -333,6 +336,58 @@ describe("an agent's audit trail route", () => {
       seesEveryone: true,
     });
     expect(frames).toEqual(["platform"]);
+  });
+
+  test("an administrator holding the capability reads the trail of another person's private Bot", async () => {
+    const { queries, frames, reader } = trail();
+    const { hono } = app({
+      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      auditTrail: reader,
+      roles: ["admin"],
+    });
+    const response = await hono.request("http://t/api/bots/private-bot/audit");
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { scope: string }).scope).toBe(
+      "everyone",
+    );
+    expect(queries).toEqual([
+      {
+        agentId: "private-bot",
+        viewerUserId: "admin-1",
+        seesEveryone: true,
+        limit: 50,
+      },
+    ]);
+    expect(frames).toEqual(["platform"]);
+  });
+
+  test("another person's private Bot stays not found without the capability", async () => {
+    for (const options of [
+      {},
+      {
+        actor: {
+          id: "admin-1",
+          email: "admin@openbot.test",
+          role: "admin",
+        } as Actor,
+        roles: ["user"] as OpenBotRole[],
+      },
+      {
+        actor: {
+          id: "admin-1",
+          email: "admin@openbot.test",
+          role: "admin",
+        } as Actor,
+      },
+    ]) {
+      const { queries, reader } = trail();
+      const { hono } = app({ ...options, auditTrail: reader });
+      const response = await hono.request(
+        "http://t/api/bots/private-bot/audit",
+      );
+      expect(response.status).toBe(404);
+      expect(queries).toEqual([]);
+    }
   });
 
   test("an administrator whose role was removed since sign-in is answered as anyone", async () => {

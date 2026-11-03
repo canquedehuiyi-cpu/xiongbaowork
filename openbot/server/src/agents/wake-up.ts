@@ -31,6 +31,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import { fileRunnerCardAs } from "../threads/postgres-runner";
 import type { WorkQueue } from "../work/queue";
 import { BotPausedError } from "./lifecycle";
 import type { AgentActor } from "./profile-types";
@@ -557,15 +558,24 @@ export function createWakeUpRunner(options: {
               id: `follow-up:${item.key}`,
             };
             try {
-              const { replyText } = await runTurn({
-                ownerUserId: payload.ownerUserId,
-                tenantId: tenant,
-                routineId: `follow-up:${item.key}`,
-                agentId: payload.agentId,
-                threadId: channel.threadId,
-                instruction: wakeUpInstruction(payload),
-                initiator,
-              });
+              /*
+               * Nobody typed this turn, so its card is unattended work (story C2): the runner still files
+               * and charges the one card, as it does for every entry that opens none, but on the
+               * `routine` lane with trigger `wake_up` rather than as a person's `chat`.
+               */
+              const { replyText } = await fileRunnerCardAs(
+                { source: "routine", triggerSource: "wake_up" },
+                () =>
+                  runTurn({
+                    ownerUserId: payload.ownerUserId,
+                    tenantId: tenant,
+                    routineId: `follow-up:${item.key}`,
+                    agentId: payload.agentId,
+                    threadId: channel.threadId,
+                    instruction: wakeUpInstruction(payload),
+                    initiator,
+                  }),
+              );
               await channels.recordActivity(
                 actor,
                 channel.id,

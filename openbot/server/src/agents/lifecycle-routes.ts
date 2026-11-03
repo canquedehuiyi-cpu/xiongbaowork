@@ -273,16 +273,16 @@ export function createBotLifecycleRoutes(
    * work's on their behalf, and an administrator's acting as them. What a colleague did to a shared
    * Bot is filed in the colleague's tenant and stays out of the owner's page. Only an administrator
    * holding the capability reads the Bot's rows across every tenant, as `platform`.
+   *
+   * WHICH BOTS: what the caller's own frame reaches, and for that administrator also another
+   * person's private Bot, found as `platform` the way `GET /api/agents/:agentId` finds it for the
+   * admin pages. Without that, the profile page an administrator opened answered 404 here.
    */
   routes.get(
     "/:agentId/audit",
     requireUser,
     adminScope?.adminCapability ?? ((_context, next) => next()),
     async (context) => {
-      const agent = await reachable(context);
-      if (agent instanceof Response) return agent;
-      if (!auditTrail)
-        return context.json({ error: "Audit logging is not configured." }, 503);
       const actor = context.var.actor;
       // The admin door, only for an administrator who holds the capability in this request: a role
       // removed since sign-in, or a deployment with no admin scope, is answered as anyone.
@@ -292,6 +292,20 @@ export function createBotLifecycleRoutes(
         capabilityFor(actor.id) === "admin"
           ? adminScope
           : undefined;
+      const agentId = context.req.param("agentId") ?? "";
+      if (!agentId.trim())
+        return context.json({ error: "A Bot id is required." }, 400);
+      const agent =
+        (await profiles.get(actor, agentId)) ??
+        // Somebody else's private Bot, reached from the admin pages only, as `platform`.
+        (admin
+          ? await admin.asAdminPlatform(actor, () =>
+              profiles.get(actor, agentId),
+            )
+          : null);
+      if (!agent) return context.json({ error: "Agent not found." }, 404);
+      if (!auditTrail)
+        return context.json({ error: "Audit logging is not configured." }, 503);
       const seesEveryone =
         admin !== undefined ||
         (typeof agent.ownerUserId === "string" &&

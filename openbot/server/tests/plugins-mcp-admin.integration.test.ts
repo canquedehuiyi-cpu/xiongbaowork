@@ -96,6 +96,15 @@ const store = createPluginStore({
     sent.push(connection.token);
     return { text: "[vendor not reached in tests]", isError: false };
   },
+  /*
+   * The vendors here are under the reserved `.example` name and never resolve, and a custom server's
+   * refresh goes through the outbound guard, which asks where the name points before it sends.
+   * Without an answer the guard stops at `unresolved` (unless an egress proxy is configured, which is
+   * why this passed on a proxied workstation and failed in CI), and the squat suite's mock vendor is
+   * never reached. A public address for every name keeps the guard in the path and lets the squat
+   * rules decide, the same seam `plugin-credential-binding` uses.
+   */
+  outboundLookup: async () => [{ address: "93.184.216.34", family: 4 }],
 });
 
 const adminRequest = createAdminRequest(database);

@@ -5,7 +5,6 @@ import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
-import { RoutinesList } from "@/components/routines/routines-list";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -26,6 +25,7 @@ import { agentRunningTasksQueryOptions } from "@/lib/bot-lifecycle/queries";
 import { RequestError } from "@/lib/client";
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { relativeTime } from "@/lib/relative-time";
+import { routinesQueryOptions } from "@/lib/routines/queries";
 import {
   type ResponsibilityRecord,
   responsibilitiesQueryOptions,
@@ -201,8 +201,75 @@ function DutiesSection({ profile }: { profile: AgentProfile }) {
       )}
 
       <h3 className="mt-6 font-medium text-sm">定时任务</h3>
-      <RoutinesList agentId={profile.id} embedded />
+      <RoutineSummary agentId={profile.id} />
     </PageSection>
+  );
+}
+
+/**
+ * The coworker's routines, read-only: what runs, when, and whether it is switched on.
+ *
+ * Not the routines list, which runs a routine now, pauses it and deletes it: opening a coworker to
+ * look at it must not be one click from making it act. Those controls stay on the assembly page,
+ * which this links to, beside every other change to the coworker.
+ */
+function RoutineSummary({ agentId }: { agentId: string }) {
+  const routines = useQuery(routinesQueryOptions());
+  const mine = (routines.data?.routines ?? []).filter(
+    (routine) => routine.agentId === agentId,
+  );
+
+  return (
+    <div data-testid="routine-summary">
+      {routines.isPending ? (
+        <Skeleton
+          role="status"
+          aria-label="正在读取定时任务"
+          className="mt-2 h-12"
+        />
+      ) : routines.isError ? (
+        <div className="mt-2">
+          <QueryError
+            error={routines.error}
+            label="读不到定时任务"
+            onRetry={() => void routines.refetch()}
+            retrying={routines.isFetching}
+          />
+        </div>
+      ) : mine.length === 0 ? (
+        <p className="mt-2 text-muted-foreground text-sm">
+          这位员工还没有定时任务
+        </p>
+      ) : (
+        <ItemGroup className="mt-2">
+          {mine.map((routine) => (
+            <Item key={routine.id} size="sm" variant="muted">
+              <ItemContent className={routine.enabled ? "" : "opacity-60"}>
+                <ItemTitle>
+                  {routine.schedule}
+                  <span className="font-normal text-muted-foreground text-xs">
+                    {routine.timezone}
+                  </span>
+                  <span className="rounded bg-foreground/5 px-1.5 py-0.5 font-normal text-muted-foreground text-xs">
+                    {routine.enabled ? "已启用" : "已暂停"}
+                  </span>
+                </ItemTitle>
+                <ItemDescription className="line-clamp-2">
+                  {routine.instruction}
+                </ItemDescription>
+              </ItemContent>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
+      <Link
+        className="mt-2 inline-block text-muted-foreground text-xs underline-offset-2 hover:underline"
+        params={{ agentId }}
+        to="/assemble/$agentId"
+      >
+        去装配页管理定时任务
+      </Link>
+    </div>
   );
 }
 
