@@ -1707,6 +1707,8 @@ export function createApp(
           appUrl: config.appUrl,
         },
         composio,
+        // A team Bot's grants are `team`; an administrator writes them with the capability (G01-E).
+        adminScope?.adminCapability,
       ),
     );
   }

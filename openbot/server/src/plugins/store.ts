@@ -1280,8 +1280,47 @@ function withoutShadowed<T extends { tenantId: string; slug: string }>(
   );
 }
 
+/** A team Bot's grant written by somebody who is neither its owner nor a capable administrator. */
+const TEAM_GRANT_REFUSAL =
+  "Only this Bot's owner, or an administrator, changes what a shared Bot is granted.";
+
+/**
+ * Whether the database refused the statement for want of privilege: row security's "new row violates
+ * row-level security policy" carries SQLSTATE 42501. The query builder wraps the driver's error, so it
+ * may sit on the error or on its cause; Bun's driver puts the SQLSTATE in `errno`, others in `code`.
+ */
+function refusedByRowSecurity(error: unknown): boolean {
+  for (
+    let current: unknown = error, depth = 0;
+    current instanceof Error && depth < 4;
+    current = (current as Error & { cause?: unknown }).cause, depth += 1
+  ) {
+    const { code, errno } = current as Error & {
+      code?: unknown;
+      errno?: unknown;
+    };
+    if (code === "42501" || errno === "42501") return true;
+  }
+  return false;
+}
+
 export function createPluginStore(options: PluginStoreOptions) {
   const { database, auditStore, credentials, encryptionKey } = options;
+
+  /**
+   * Whether this Bot's profile, as the caller's frame sees it, is stamped `team` (G01-E P8b): its
+   * grants are then `team` too. A Bot the frame cannot see answers false, and its grant is stamped
+   * with the frame as before.
+   */
+  async function isTeamBot(agentId: string): Promise<boolean> {
+    const [profile] = await database
+      .select({ tenantId: agentProfiles.tenantId })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, agentId))
+      .limit(1);
+    return profile?.tenantId === TEAM_TENANT;
+  }
+
   /*
    * Held rather than resolved, because the transport is a property of the entry and is not known
    * until a call names one. An injected vendor still wins over both, which is what keeps a test able
@@ -4772,13 +4811,33 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       options?: { selfService?: boolean },
     ): Promise<void> {
-      await database
-        .insert(pluginGrants)
-        .values({ kind, ref, agentId, grantedBy: by })
-        .onConflictDoUpdate({
-          target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
-          set: { grantedBy: by, updatedAt: new Date() },
-        });
+      /*
+       * A team Bot's grant is stamped `team` (G01-E P8b/P10): that is the stamp `listForAgent` reads
+       * for it, in its owner's frame, a teammate's and `platform`. Stamped with the writer's frame
+       * instead, the owner's own new grant offered nothing. 0122's `team_write_*` policies admit the
+       * row only for the Bot's owner or an administrator holding the capability, so a teammate's
+       * grant is refused here rather than stored as an inert row of their own.
+       */
+      const team = await isTeamBot(agentId);
+      try {
+        await database
+          .insert(pluginGrants)
+          .values({
+            kind,
+            ref,
+            agentId,
+            grantedBy: by,
+            ...(team ? { tenantId: TEAM_TENANT } : {}),
+          })
+          .onConflictDoUpdate({
+            target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
+            set: { grantedBy: by, updatedAt: new Date() },
+          });
+      } catch (error) {
+        if (team && refusedByRowSecurity(error))
+          throw new PluginRefusedError(TEAM_GRANT_REFUSAL, null);
+        throw error;
+      }
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",
@@ -4803,15 +4862,25 @@ export function createPluginStore(options: PluginStoreOptions) {
       /** See {@link grant}: an owner uninstalled it from their own Waker. */
       options?: { selfService?: boolean },
     ): Promise<void> {
-      await database
-        .delete(pluginGrants)
-        .where(
-          and(
-            eq(pluginGrants.kind, kind),
-            eq(pluginGrants.ref, ref),
-            eq(pluginGrants.agentId, agentId),
-          ),
-        );
+      const grantOf = and(
+        eq(pluginGrants.kind, kind),
+        eq(pluginGrants.ref, ref),
+        eq(pluginGrants.agentId, agentId),
+      );
+      await database.delete(pluginGrants).where(grantOf);
+      /*
+       * A team Bot's grant (see `grant`) is the owner's or a capable administrator's to take away.
+       * Row security turns anybody else's delete into "0 rows", which is no refusal at all (I9): a
+       * `team` grant this frame can still read afterwards is one it was not allowed to remove.
+       */
+      if (await isTeamBot(agentId)) {
+        const [kept] = await database
+          .select({ ref: pluginGrants.ref })
+          .from(pluginGrants)
+          .where(and(grantOf, eq(pluginGrants.tenantId, TEAM_TENANT)))
+          .limit(1);
+        if (kept) throw new PluginRefusedError(TEAM_GRANT_REFUSAL, null);
+      }
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",

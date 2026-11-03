@@ -20,7 +20,8 @@ import type {
 import { createAgentRoutes } from "../src/agents/routes";
 import { createAuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
-import type { AppVariables } from "../src/auth/guards";
+import { type AppVariables, createRoleRepository } from "../src/auth/guards";
+import { setRole } from "../src/auth/roles";
 import { DEPLOYMENT_ROUTES } from "../src/computer/deployment-routes";
 import { createDatabase } from "../src/db/client";
 import {
@@ -36,6 +37,7 @@ import {
 } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 const databaseUrl = testDatabaseUrl();
 const database = createDatabase(databaseUrl, TEST_POOL);
@@ -64,6 +66,13 @@ const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
 const adminScope = createAdminScope({
   roleRepository: { rolesForUser: async () => ["admin"] as never },
 });
+/*
+ * The same doors as production builds them: `adminCapability` re-reads `user_roles`, so a session
+ * that still says "admin" for somebody whose role was taken away holds no capability.
+ */
+const adminScopeFromRoles = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
 const auditStore = createAuditStore(database);
 
 function signedInAs(
@@ -81,6 +90,7 @@ function agentRequest(
   method: "GET" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
+  scope: typeof adminScope = adminScope,
 ) {
   const app = new Hono<{ Variables: AppVariables }>();
   app.route(
@@ -95,7 +105,7 @@ function agentRequest(
       false,
       undefined,
       undefined,
-      adminScope,
+      scope,
     ),
   );
   return app.request(`http://test${path}`, {
@@ -796,6 +806,50 @@ describe("agent profile store integration", () => {
       restamp = error;
     }
     expect(restamp).toBeDefined();
+    /*
+     * The stamp above (`other.id`) would be refused even with the move's GUC set, so it alone does not
+     * show the GUC is what decides. Back to the owner's own tenant: refused without `app.team_move`,
+     * admitted with it (the explicit move), and then put back the same way.
+     */
+    let toOwnerWithoutMove: unknown;
+    try {
+      await as(owner, () =>
+        database
+          .update(agentProfiles)
+          .set({ tenantId: owner.id })
+          .where(eq(agentProfiles.agentId, publicSource.agentId)),
+      );
+    } catch (error) {
+      toOwnerWithoutMove = error;
+    }
+    expect(toOwnerWithoutMove).toBeDefined();
+    expect(await stampsOf(publicSource.agentId)).toEqual({
+      agent: "team",
+      profile: "team",
+    });
+    /*
+     * With the GUC, inside a transaction that is then rolled back: the profile alone back to the owner
+     * would leave the `agents` row `team` and, for the owner, unreadable (its `team_read` asks whether
+     * the profile is `team`), a half move only `platform` could repair. The store moves both together.
+     */
+    const rollback = new Error("roll the explicit move back");
+    let underMove: unknown;
+    await expect(
+      as(owner, () =>
+        database.transaction(async (tx) => {
+          await tx.execute(
+            sql`select set_config('app.team_move', ${publicSource.agentId}, true)`,
+          );
+          underMove = await tx
+            .update(agentProfiles)
+            .set({ tenantId: owner.id })
+            .where(eq(agentProfiles.agentId, publicSource.agentId))
+            .returning({ tenantId: agentProfiles.tenantId });
+          throw rollback;
+        }),
+      ),
+    ).rejects.toBe(rollback);
+    expect(underMove).toEqual([{ tenantId: owner.id }]);
     expect(await stampsOf(publicSource.agentId)).toEqual({
       agent: "team",
       profile: "team",
@@ -990,6 +1044,178 @@ describe("agent profile store integration", () => {
     expect(await as(owner, () => store.get(owner, source.agentId))).toBeNull();
     expect(
       (await agentRequest(admin, "GET", `/${source.agentId}`)).status,
+    ).toBe(404);
+  });
+
+  test("an admin whose role was taken away holds no admin door, though the session still says admin", async () => {
+    const owner = await createUser();
+    const demoted = await createUser("admin");
+    const admin = await createUser("admin");
+    const privateSource = await createProfileFixture({
+      owner,
+      frame: owner.id,
+    });
+    const publicSource = await createProfileFixture({
+      owner,
+      visibility: "public",
+      frame: owner.id,
+    });
+    const input: CreateAgentInput = {
+      name: "Demoted Rename",
+      title: "Demoted Title",
+      roleDescription: "Demoted role update.",
+      visibility: "public",
+    };
+    const releaseRoleWriter = await bindTestRoleWriter(database);
+    try {
+      // Only `admin` holds the role in `user_roles`; `demoted`'s session is all that says admin.
+      await asPlatform(() => setRole(database, admin.id, "admin"));
+      const request = (
+        actor: AgentActor,
+        method: "GET" | "PATCH" | "DELETE",
+        agentId: string,
+      ) =>
+        agentRequest(
+          actor,
+          method,
+          `/${agentId}`,
+          method === "PATCH" ? input : undefined,
+          adminScopeFromRoles,
+        );
+
+      // The same doors, read from the table, open for the administrator who holds the role.
+      expect((await request(admin, "GET", privateSource.agentId)).status).toBe(
+        200,
+      );
+      // Somebody else's private Bot: as for anyone, not there.
+      for (const method of ["GET", "PATCH", "DELETE"] as const)
+        expect(
+          (await request(demoted, method, privateSource.agentId)).status,
+        ).toBe(404);
+      // A team Bot they can see: the session's role gets past the store's check, and the write is
+      // still refused, because only the owner's frame (or `platform`, which they cannot open) writes it.
+      expect(
+        (await request(demoted, "PATCH", publicSource.agentId)).status,
+      ).toBe(403);
+      expect(
+        (await request(demoted, "DELETE", publicSource.agentId)).status,
+      ).toBe(403);
+
+      const rows = await asPlatform(() =>
+        database
+          .select({
+            title: agentProfiles.title,
+            visibility: agentProfiles.visibility,
+            deletedAt: agentProfiles.deletedAt,
+          })
+          .from(agentProfiles)
+          .where(eq(agentProfiles.ownerUserId, owner.id)),
+      );
+      expect(rows.map((row) => row.title)).not.toContain("Demoted Title");
+      expect(rows.every((row) => row.deletedAt === null)).toBe(true);
+      expect(await stampsOf(privateSource.agentId)).toEqual({
+        agent: owner.id,
+        profile: owner.id,
+      });
+    } finally {
+      await releaseRoleWriter();
+    }
+  });
+
+  test("an admin on the admin pages manages a Bot whose owner was deleted, as `platform`", async () => {
+    const owner = await createUser();
+    const member = await createUser();
+    const admin = await createUser("admin");
+    const source = await createProfileFixture({
+      owner,
+      visibility: "public",
+      frame: owner.id,
+    });
+    // The owner's account goes; the profile's owner is set null by the foreign key.
+    await asPlatform(() =>
+      database.delete(users).where(eq(users.id, owner.id)),
+    );
+    const profileRow = async () =>
+      (
+        await asPlatform(() =>
+          database
+            .select({
+              ownerUserId: agentProfiles.ownerUserId,
+              tenantId: agentProfiles.tenantId,
+              title: agentProfiles.title,
+              deletedAt: agentProfiles.deletedAt,
+            })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, source.agentId)),
+        )
+      )[0];
+    expect(await profileRow()).toMatchObject({
+      ownerUserId: null,
+      tenantId: "team",
+      deletedAt: null,
+    });
+    const input: CreateAgentInput = {
+      name: "Orphan Rename",
+      title: "Orphan Title",
+      roleDescription: "Orphan role update.",
+      visibility: "public",
+    };
+
+    // Everybody still sees it; nobody's own frame can change it.
+    expect(
+      (await agentRequest(member, "GET", `/${source.agentId}`)).status,
+    ).toBe(200);
+    expect(
+      (await agentRequest(member, "PATCH", `/${source.agentId}`, input)).status,
+    ).toBe(403);
+    expect(
+      (await agentRequest(member, "DELETE", `/${source.agentId}`)).status,
+    ).toBe(403);
+    await expect(
+      as(admin, () => store.update(admin, source.agentId, input)),
+    ).rejects.toBeInstanceOf(AgentNotManageableError);
+    expect((await profileRow())?.title).toBe("Seed Assistant");
+
+    // The admin page: found and changed as `platform`, the trail row naming the admin who acted.
+    const response = await agentRequest(
+      admin,
+      "PATCH",
+      `/${source.agentId}`,
+      input,
+    );
+    expect(response.status).toBe(200);
+    expect(await profileRow()).toMatchObject({
+      ownerUserId: null,
+      tenantId: "team",
+      title: "Orphan Title",
+    });
+    const trail = (eventType: string) =>
+      asPlatform(() =>
+        database
+          .select({
+            tenantId: auditEvents.tenantId,
+            actorUserId: auditEvents.actorUserId,
+          })
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.targetId, source.agentId),
+              eq(auditEvents.eventType, eventType),
+            ),
+          ),
+      );
+    expect(await trail("bot.updated")).toEqual([
+      { tenantId: "platform", actorUserId: admin.id },
+    ]);
+
+    const deleted = await agentRequest(admin, "DELETE", `/${source.agentId}`);
+    expect(deleted.status).toBe(204);
+    expect((await profileRow())?.deletedAt).not.toBeNull();
+    expect(await trail("bot.deleted")).toEqual([
+      { tenantId: "platform", actorUserId: admin.id },
+    ]);
+    expect(
+      (await agentRequest(member, "GET", `/${source.agentId}`)).status,
     ).toBe(404);
   });
 

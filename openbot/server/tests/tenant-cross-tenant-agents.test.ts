@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createAgentRoutes } from "../src/agents/routes";
@@ -28,6 +28,8 @@ const store = createAgentProfileStore(database, undefined);
 const suite = randomUUID().slice(0, 8);
 const owner = `agent-tenant-${suite}-owner`;
 const stranger = `agent-tenant-${suite}-stranger`;
+/** Every coworker this file made, for the cleanup of the ones no person's frame can delete. */
+const createdAgentIds: string[] = [];
 
 /**
  * A coworker's owner is a person, and `agent_profiles.owner_user_id` is a foreign key onto `users`.
@@ -96,6 +98,7 @@ async function makeCoworker(visibility: "private" | "public") {
       },
     ),
   );
+  createdAgentIds.push(created.id);
   return { id: created.id, name };
 }
 
@@ -114,6 +117,15 @@ afterAll(async () => {
       .where(eq(agentProfiles.ownerUserId, owner));
     await database.delete(agents).where(eq(agents.tenantId, owner));
   });
+  /*
+   * A public coworker lives in `team` (G01-E P8b): the owner's frame above deletes neither its
+   * `agents` row (only the owner's own tenant is deletable there) nor, once its owner is gone below,
+   * anything at all. The deployment's cleanup, by id, so no ownerless public Bot outlives the run.
+   */
+  if (createdAgentIds.length > 0)
+    await runAsTenant("platform", () =>
+      database.delete(agents).where(inArray(agents.id, createdAgentIds)),
+    );
   await runAsTenant(owner, () =>
     database.delete(users).where(eq(users.id, owner)),
   );

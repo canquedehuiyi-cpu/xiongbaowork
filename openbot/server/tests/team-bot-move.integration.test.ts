@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { Hono } from "hono";
 import {
   AgentNotFoundError,
   AgentNotManageableError,
@@ -10,6 +11,9 @@ import {
 } from "../src/agents/profile-store";
 import type { AgentActor, CreateAgentInput } from "../src/agents/profile-types";
 import { createAuditStore } from "../src/audit";
+import { createAdminScope } from "../src/auth/admin-scope";
+import { type AppVariables, createRoleRepository } from "../src/auth/guards";
+import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -21,9 +25,10 @@ import {
   skills,
   users,
 } from "../src/db/schema";
-import { createPluginStore } from "../src/plugins/store";
+import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * G01-E P8b: a public Bot lives in the shared `team` tenant, and its owner moves it there and back.
@@ -63,6 +68,59 @@ const skillSlug = `${suite}-standup`;
 const createdAgentIds: string[] = [];
 
 const as = <T>(actor: AgentActor, fn: () => T): T => runAsTenant(actor.id, fn);
+
+/*
+ * An administrator's request: their own frame, holding the capability `adminCapability` grants after
+ * re-reading `user_roles` (where `beforeAll` makes `admin` an administrator).
+ */
+const adminScope = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+
+async function withCapability<T>(
+  actor: AgentActor,
+  work: () => Promise<T>,
+): Promise<T> {
+  let outcome: { value: T } | { error: unknown } | undefined;
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.use(
+    "*",
+    async (context, next) => {
+      context.set("actor", { ...actor, email: `${actor.id}@example.test` });
+      await runAsTenant(actor.id, () => next());
+    },
+    adminScope.adminCapability,
+  );
+  app.get("/", async (context) => {
+    outcome = await work().then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    return context.body(null, 204);
+  });
+  await app.request("http://test/");
+  if (!outcome) throw new Error("The admin request never ran its work.");
+  if ("error" in outcome) throw outcome.error;
+  return outcome.value;
+}
+
+/** The message of a refused statement, wherever the query builder put the driver's error. */
+async function refusal(work: Promise<unknown>): Promise<string> {
+  try {
+    await work;
+  } catch (error) {
+    const messages: string[] = [];
+    for (
+      let current: unknown = error;
+      current instanceof Error;
+      current = (current as Error & { cause?: unknown }).cause
+    )
+      messages.push(current.message);
+    return messages.join(" / ");
+  }
+  return "not refused";
+}
 
 const input = (visibility: "public" | "private"): CreateAgentInput => ({
   name: "Ledger Desk",
@@ -128,6 +186,7 @@ const childTables = [
 ];
 
 beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
   await asPlatform(async () => {
     await database.insert(users).values(
       people.map((person) => ({
@@ -135,6 +194,7 @@ beforeAll(async () => {
         email: `${person.id}@example.test`,
       })),
     );
+    await setRole(database, admin.id, "admin");
     // A server every person reads (`team`, as P10 stamps them), with one tool.
     await database.insert(mcpServers).values({
       id: server,
@@ -180,6 +240,7 @@ afterAll(async () => {
       ),
     );
   });
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 
@@ -291,7 +352,7 @@ describe("nobody but the owner writes, deletes or moves the Bot", () => {
   test("a stranger's raw writes change nothing, and a stranger cannot move somebody else's Bot", async () => {
     const privateBot = await createBot("private");
     // Granted while private, then made public, so the grant moved with it. (Grants written to a Bot
-    // that is already `team` are P10's.)
+    // that is already `team` are stamped `team` by `grant`: see the last describe below.)
     const teamBot = await createBot("private");
     await as(owner, () => plugins.grant("mcp", toolRef, teamBot, owner.id));
     await as(owner, () => store.update(owner, teamBot, input("public")));
@@ -437,5 +498,97 @@ describe("nobody but the owner writes, deletes or moves the Bot", () => {
         ),
     );
     expect(holder).toEqual([{ agentId: teamBot }]);
+  });
+});
+
+describe("a team Bot's grants, written after it moved", () => {
+  const otherRef = `${server}/audit`;
+  const grantRows = (agentId: string) =>
+    asPlatform(() =>
+      database
+        .select({ ref: pluginGrants.ref, tenantId: pluginGrants.tenantId })
+        .from(pluginGrants)
+        .where(eq(pluginGrants.agentId, agentId))
+        .orderBy(pluginGrants.ref),
+    );
+
+  test("the owner's new grant is stamped `team` and offered; a teammate's grant or revoke is refused", async () => {
+    const agentId = await createBot("public");
+    await as(owner, () => plugins.grant("mcp", toolRef, agentId, owner.id));
+    expect(await grantRows(agentId)).toEqual([
+      { ref: toolRef, tenantId: "team" },
+    ]);
+    expect((await offered(owner.id, agentId)).tools).toEqual([toolRef]);
+    expect((await offered(teammate.id, agentId)).tools).toEqual([toolRef]);
+    expect((await offered("platform", agentId)).tools).toEqual([toolRef]);
+
+    // A teammate sees the Bot and its grant, and may change neither.
+    await expect(
+      as(teammate, () => plugins.grant("mcp", otherRef, agentId, teammate.id)),
+    ).rejects.toBeInstanceOf(PluginRefusedError);
+    await expect(
+      as(teammate, () => plugins.revoke("mcp", toolRef, agentId, teammate.id)),
+    ).rejects.toBeInstanceOf(PluginRefusedError);
+    // An administrator without the capability (a routine, a Bot turn) neither.
+    await expect(
+      as(admin, () => plugins.grant("mcp", otherRef, agentId, admin.id)),
+    ).rejects.toBeInstanceOf(PluginRefusedError);
+    expect(await grantRows(agentId)).toEqual([
+      { ref: toolRef, tenantId: "team" },
+    ]);
+
+    // An administrator holding the capability may, and writes `team` too.
+    await withCapability(admin, () =>
+      plugins.grant("mcp", otherRef, agentId, admin.id),
+    );
+    expect(await grantRows(agentId)).toEqual([
+      { ref: otherRef, tenantId: "team" },
+      { ref: toolRef, tenantId: "team" },
+    ]);
+    await withCapability(admin, () =>
+      plugins.revoke("mcp", otherRef, agentId, admin.id),
+    );
+
+    // The owner takes theirs away, and the Bot is offered nothing.
+    await as(owner, () => plugins.revoke("mcp", toolRef, agentId, owner.id));
+    expect(await grantRows(agentId)).toEqual([]);
+    expect((await offered(owner.id, agentId)).tools).toEqual([]);
+  });
+
+  test("an administrator with the capability cannot re-stamp a team Bot's grants, even with `app.team_move` set", async () => {
+    const agentId = await createBot("public");
+    await as(owner, () => plugins.grant("mcp", toolRef, agentId, owner.id));
+    // Row security admits the administrator's update of a team grant (0122); the row guard's owner
+    // check (0125) is what refuses the re-stamp out of `team`.
+    const refused = await withCapability(admin, () =>
+      refusal(
+        database.transaction(async (tx) => {
+          await tx.execute(
+            sql`select set_config('app.team_move', ${agentId}, true)`,
+          );
+          return tx
+            .update(pluginGrants)
+            .set({ tenantId: admin.id })
+            .where(eq(pluginGrants.agentId, agentId))
+            .returning({ ref: pluginGrants.ref });
+        }),
+      ),
+    );
+    expect(refused).toContain("tenant_id of plugin_grants is fixed");
+    expect(await grantRows(agentId)).toEqual([
+      { ref: toolRef, tenantId: "team" },
+    ]);
+    expect(await stampsOf(agentId)).toEqual({
+      agent: "team",
+      profile: "team",
+      grants: ["team"],
+    });
+    // The owner's own move back still passes the same guard.
+    await as(owner, () => store.update(owner, agentId, input("private")));
+    expect(await stampsOf(agentId)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+      grants: [owner.id],
+    });
   });
 });

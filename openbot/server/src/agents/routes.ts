@@ -424,31 +424,41 @@ export function createAgentRoutes(
       ? adminScope
       : undefined;
   /**
-   * The person whose frame an administrator's write on this Bot must run in, or `undefined` for the
-   * caller's own frame: not an administrator with the capability, their own Bot, or a Bot nobody owns.
-   * Read as `platform`, because the Bot may be one the administrator's own frame cannot see.
+   * Where an administrator's write on this Bot must run, read as `platform` because the Bot may be
+   * one the administrator's own frame cannot see:
+   * - another person's Bot: in that OWNER's frame (`adminActAsOwner`), so the write is the owner's as
+   *   far as the team policies are concerned and the trail row lands with the owner;
+   * - a Bot nobody owns any more (its owner's account was deleted, `owner_user_id` set null): no
+   *   person's frame may write it, a team Bot's included, so as `platform` (`asAdminPlatform`);
+   * - otherwise (not an administrator with the capability, their own Bot, no such Bot) the caller's
+   *   own frame, which answers exactly as it answers anyone.
    */
-  const ownerToActFor = async (
+  const adminTarget = async (
     actor: AgentActor,
     agentId: string,
-  ): Promise<string | undefined> => {
+  ): Promise<{ owner: string } | "platform" | undefined> => {
     const doors = adminDoors(actor);
     if (!doors) return undefined;
     const found = await doors.asAdminPlatform(actor, () =>
       store.get(actor, agentId),
     );
-    const owner = found?.ownerUserId;
-    return isPersonTenant(owner) && owner !== actor.id ? owner : undefined;
+    if (!found) return undefined;
+    const owner = found.ownerUserId;
+    if (owner === null) return "platform";
+    return isPersonTenant(owner) && owner !== actor.id ? { owner } : undefined;
   };
-  /** `work` in the owner's frame when an administrator acts on another person's Bot, else here. */
+  /** `work` where {@link adminTarget} says an administrator's write belongs, else here. */
   const asOwnerWhereAdmin = async <T>(
     actor: AgentActor,
     agentId: string,
     work: () => Promise<T>,
   ): Promise<T> => {
-    const owner = await ownerToActFor(actor, agentId);
+    const target = await adminTarget(actor, agentId);
     const doors = adminDoors(actor);
-    return owner && doors ? doors.adminActAsOwner(actor, owner, work) : work();
+    if (!target || !doors) return work();
+    return target === "platform"
+      ? doors.asAdminPlatform(actor, work)
+      : doors.adminActAsOwner(actor, target.owner, work);
   };
 
   /**

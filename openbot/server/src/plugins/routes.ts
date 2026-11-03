@@ -194,8 +194,21 @@ export function createPluginRoutes(
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
   composio?: { broker: ComposioBroker },
+  /**
+   * `createAdminScope(...).adminCapability`, mounted on the grant routes (G01-E P8b, pulled forward
+   * from P10). A team Bot's grants are stamped `team`, and row security admits that write only for
+   * the Bot's owner or an administrator holding the capability, so without it an administrator's
+   * grant on a team Bot is refused: fail closed, never wider.
+   */
+  adminCapability?: MiddlewareHandler<{ Variables: AppVariables }>,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  const signedInWithCapability: MiddlewareHandler<{
+    Variables: AppVariables;
+  }> = (context, next) =>
+    requireUser(context, async () => {
+      await (adminCapability ?? ((_context, inner) => inner()))(context, next);
+    });
 
   const actorEmail = (context: { var: AppVariables }) =>
     context.var.actor?.email ?? "unknown";
@@ -2542,7 +2555,7 @@ export function createPluginRoutes(
     return null;
   }
 
-  routes.post("/grants", requireUser, async (context) => {
+  routes.post("/grants", signedInWithCapability, async (context) => {
     const body = (await context.req.json().catch(() => null)) as {
       kind?: unknown;
       ref?: string;
@@ -2584,17 +2597,24 @@ export function createPluginRoutes(
       return context.json({ error: decision.refusal }, 403);
     }
 
-    if (decision.selfService) {
-      await store.grant(kind, grantRef, grantAgentId, actorEmail(context), {
-        selfService: true,
-      });
-    } else {
-      await store.grant(kind, grantRef, grantAgentId, actorEmail(context));
+    try {
+      if (decision.selfService) {
+        await store.grant(kind, grantRef, grantAgentId, actorEmail(context), {
+          selfService: true,
+        });
+      } else {
+        await store.grant(kind, grantRef, grantAgentId, actorEmail(context));
+      }
+    } catch (error) {
+      // A shared Bot's grant that is not this person's to write (see `store.grant`).
+      if (error instanceof PluginRefusedError)
+        return context.json({ error: error.message }, 403);
+      throw error;
     }
     return context.json({ ok: true });
   });
 
-  routes.delete("/grants", requireUser, async (context) => {
+  routes.delete("/grants", signedInWithCapability, async (context) => {
     const kind = asGrantKind(context.req.query("kind"));
     const ref = context.req.query("ref");
     const agentId = context.req.query("agentId");
@@ -2629,16 +2649,27 @@ export function createPluginRoutes(
       return context.json({ error: decision.refusal }, 403);
     }
 
-    if (decision.selfService) {
-      await store.revoke(
-        kind,
-        trimmedRef,
-        trimmedAgentId,
-        actorEmail(context),
-        { selfService: true },
-      );
-    } else {
-      await store.revoke(kind, trimmedRef, trimmedAgentId, actorEmail(context));
+    try {
+      if (decision.selfService) {
+        await store.revoke(
+          kind,
+          trimmedRef,
+          trimmedAgentId,
+          actorEmail(context),
+          { selfService: true },
+        );
+      } else {
+        await store.revoke(
+          kind,
+          trimmedRef,
+          trimmedAgentId,
+          actorEmail(context),
+        );
+      }
+    } catch (error) {
+      if (error instanceof PluginRefusedError)
+        return context.json({ error: error.message }, 403);
+      throw error;
     }
     return context.json({ ok: true });
   });
