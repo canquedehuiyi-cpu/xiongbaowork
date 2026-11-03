@@ -33,9 +33,26 @@ const DEFAULT_LEASE_MS = 60_000;
 const RETRY_DELAY_MS = 60_000;
 const NO_EXECUTOR = "这个执行对象暂时无法自动运行。";
 
-/** Carries one begun firing out. Called in the owner's tenant frame; expected not to throw. */
+/** Where an event-started firing came from (AUT2): the public hook, or the signed-in API. */
+export type AutomationEventSource = "hook" | "api";
+
+/**
+ * What an event-started firing carries to its executor (AUT2). `payload` came from outside the
+ * product: an executor hands it on as untrusted data, never as an instruction.
+ */
+export type AutomationEvent = {
+  source: AutomationEventSource;
+  receivedAt: string;
+  payload: Record<string, unknown>;
+};
+
+/**
+ * Carries one begun firing out. Called in the owner's tenant frame; expected not to throw. `event`
+ * is present when the firing was started by a hook or an API call rather than by the clock.
+ */
 export type AutomationFiringExecutor = (
   firing: AutomationFiring,
+  event?: AutomationEvent,
 ) => Promise<void>;
 
 export type AutomationSweepOptions = {
@@ -100,6 +117,63 @@ export function minuteKey(due: Date): string {
 
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * AUT2: one event (a hook delivery or an API call) becomes one work item, offered in the owner's
+ * frame — the tenant the caller read from the trigger or automation row, never from the request.
+ *
+ * The key carries the caller's idempotency key, so the same delivery again collides here; the
+ * firing's identity (`<source>:<delivery id>`) collides again in `beginFiring` after the queue row is
+ * gone. Phase two below claims it like any other firing.
+ */
+export async function offerAutomationEvent(
+  queue: Pick<WorkQueue, "offer">,
+  input: {
+    tenantId: string;
+    automationId: string;
+    triggerId: string;
+    source: AutomationEventSource;
+    deliveryId: string;
+    payload: Record<string, unknown>;
+    receivedAt: Date;
+  },
+): Promise<{ status: "queued" | "already" | "refused"; key: string }> {
+  const tenant = assertPersonTenant(input.tenantId);
+  const externalId = `${input.source}:${input.deliveryId}`;
+  const key = `${input.triggerId}:${externalId}`;
+  const status = await runAsTenant(tenant, async () => {
+    return await queue.offer({
+      kind: AUTOMATION_FIRE_KIND,
+      key,
+      payload: {
+        automationId: input.automationId,
+        triggerId: input.triggerId,
+        triggerKind: "webhook",
+        source: input.source,
+        externalId,
+        receivedAt: input.receivedAt.toISOString(),
+        event: input.payload,
+      },
+    });
+  });
+  return { status, key };
+}
+
+/** The event an item carries, when it was offered by `offerAutomationEvent`. */
+function eventOf(payload: Record<string, unknown>): AutomationEvent | null {
+  const source = payload.source;
+  if (source !== "hook" && source !== "api") return null;
+  const event = payload.event;
+  return {
+    source,
+    receivedAt:
+      typeof payload.receivedAt === "string" ? payload.receivedAt : "",
+    payload:
+      event && typeof event === "object" && !Array.isArray(event)
+        ? (event as Record<string, unknown>)
+        : {},
+  };
 }
 
 /** Phase one: due triggers become idempotent work items, and each trigger's clock moves once. */
@@ -267,10 +341,15 @@ export async function dispatchClaimedAutomations(
         parsedStamp && !Number.isNaN(parsedStamp.getTime())
           ? parsedStamp
           : null;
-      // The firing's identity: this trigger at this minute. A redelivery collides on it.
+      // An event (AUT2) carries what started it; its identity is the delivery it came with.
+      const event = scheduledFor ? null : eventOf(item.payload);
+      const eventId = item.payload.externalId;
+      // The firing's identity: this trigger at this minute, or this delivery. A redelivery collides.
       const externalId = scheduledFor
         ? `due:${minuteKey(scheduledFor)}`
-        : `item:${item.key}`;
+        : event && typeof eventId === "string" && eventId
+          ? eventId
+          : `item:${item.key}`;
       if (scheduledFor && now.getTime() - scheduledFor.getTime() > graceMs) {
         const reason = "claimed too long after the occurrence it was due for";
         await finish(item.key, automationId, reason);
@@ -313,7 +392,7 @@ export async function dispatchClaimedAutomations(
               );
               return;
             }
-            await execute(firing);
+            await (event ? execute(firing, event) : execute(firing));
           } catch (error) {
             // Executors record their own outcomes; this is the backstop for one that threw anyway.
             console.error(

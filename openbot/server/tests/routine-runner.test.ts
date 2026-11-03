@@ -422,6 +422,8 @@ describe("the board a headless firing leaves", () => {
         title: "Post the standup summary.",
         executorAgentId: "bot_helper",
         source: "routine",
+        // Story C2: the 自主工作 lane's sub-label (例行) reads this, not the lane.
+        triggerSource: "routine",
         channelRef: "channel_1",
         runRef: RUN_ID,
         deviceId: null,

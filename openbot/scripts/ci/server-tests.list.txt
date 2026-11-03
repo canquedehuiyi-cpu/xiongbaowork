@@ -1,6 +1,7 @@
 tests/admin-capability.test.ts
 tests/admin-controls-shutdown.test.ts
 tests/admin-people-credentials-validation.test.ts
+tests/agent-audit-trail.integration.test.ts
 tests/agent-auth-header.test.ts
 tests/agent-callback-frame.integration.test.ts
 tests/agent-callback-token.test.ts
@@ -60,6 +61,8 @@ tests/audit-retention.integration.test.ts
 tests/audit.test.ts
 tests/auth-audit-tenant.integration.test.ts
 tests/auth-mobile-scheme.integration.test.ts
+tests/automation-ingress.integration.test.ts
+tests/automation-ingress.test.ts
 tests/automation-routes.test.ts
 tests/automation-sweep.integration.test.ts
 tests/automation-tenant-policies.test.ts
@@ -198,6 +201,7 @@ tests/local-threads.test.ts
 tests/mastra-roster.test.ts
 tests/mcp-grant-removal.integration.test.ts
 tests/mcp-listing.test.ts
+tests/mcp-outbound.test.ts
 tests/mcp-protocol.test.ts
 tests/mcp-result.test.ts
 tests/mcp-server-removal-every-person.integration.test.ts

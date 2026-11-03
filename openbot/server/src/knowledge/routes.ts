@@ -24,7 +24,7 @@ import {
  *   POST   /notebooks/:id/sources                      { title, kind, content }   text|markdown, 64K chars
  *   GET    /notebooks/:id/sources/:sourceId
  *   PATCH  /notebooks/:id/sources/:sourceId            { title?, content?, revision }
- *   DELETE /notebooks/:id/sources/:sourceId
+ *   DELETE /notebooks/:id/sources/:sourceId            { revision? }              409 when stale
  *   PUT    /notebooks/:id/bindings/:agentId            { accessMode: "read_only" } 403 unless their Waker
  *   DELETE /notebooks/:id/bindings/:agentId
  *   GET    /for/:agentId                               the notebooks a Waker may read
@@ -136,6 +136,7 @@ export function createKnowledgeRoutes(
       context.var.actor.id,
       context.req.param("id"),
       context.req.param("sourceId"),
+      await optionalBody(context.req.raw),
     );
     return context.body(null, 204);
   });

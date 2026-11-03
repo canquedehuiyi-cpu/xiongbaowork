@@ -1,4 +1,10 @@
 import { checkNavigationTarget } from "../computer/target";
+import {
+  assertResolvesPublic,
+  type OutboundLookup,
+  OutboundRefusedError,
+  untilAborted,
+} from "../net/outbound-guard";
 
 /**
  * Where an external agent lives, and whether we are willing to talk to it.
@@ -242,6 +248,14 @@ export function createAgentFetch(
     allowedHosts?: ReadonlySet<string>;
     fetchImpl?: typeof fetch;
     /**
+     * Resolves each hop's name before it is dialled. Defaults to the system resolver, except when
+     * `fetchImpl` is injected without one: a substituted fetch opens no socket, so there is no
+     * address to check, and a test that replaces the network should not reach a real resolver.
+     */
+    lookup?: OutboundLookup;
+    /** Injected by tests; defaults to reading HTTP(S)_PROXY, as the outbound guard does. */
+    viaProxy?: (url: URL) => boolean;
+    /**
      * Told about every address this refused to dial, and why.
      *
      * A refusal is the one thing on this path an operator cannot otherwise learn. The person who
@@ -276,6 +290,45 @@ export function createAgentFetch(
         : {}),
       ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
     });
+  const resolveHops =
+    options.lookup !== undefined || options.fetchImpl === undefined;
+
+  /**
+   * Where this hop's NAME resolves, judged before it is dialled.
+   *
+   * `check` reads the URL as written, so `https://agent.example.com` passes it whatever its A record
+   * says. The outbound guard resolves it and refuses the hop if ANY answer is internal, with the
+   * operator's settings meaning what they mean at registration: the development opt-in, or this
+   * exact host being named in `agentEndpointAllowedHosts`, admits an internal answer. Nothing admits
+   * the metadata service. Same-resolver races remain the guard's KNOWN LIMIT — DNS REBINDING.
+   *
+   * A name that does not resolve is not dialled either (a resolver that fails first and answers
+   * inward second is the cheap form of that race), but it is not reported as a refusal: it is
+   * "unreachable", and counting it would bury the rows that matter.
+   */
+  const resolvesAllowed = async (address: string) => {
+    if (!resolveHops) return;
+    try {
+      await assertResolvesPublic(address, {
+        allowPrivateHosts:
+          options.allowPrivateHosts === true ||
+          namedAsAllowed(address, options.allowedHosts),
+        ...(options.lookup ? { lookup: options.lookup } : {}),
+        ...(options.viaProxy ? { viaProxy: options.viaProxy } : {}),
+      });
+    } catch (error) {
+      if (
+        error instanceof OutboundRefusedError &&
+        error.kind === "destination"
+      ) {
+        throw refuse(
+          address,
+          `This deployment will not dial ${address}: ${error.message}`,
+        );
+      }
+      throw error;
+    }
+  };
 
   return async function guardedFetch(url: string, init?: RequestInit) {
     const stored = check(url);
@@ -291,6 +344,9 @@ export function createAgentFetch(
     let carried = init;
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+      // Under the caller's signal (the connection test's deadline, a run's abort): a resolver that
+      // never answers must not hold the request past it.
+      await untilAborted(resolvesAllowed(target), carried?.signal ?? undefined);
       // `manual` is what makes this a check rather than a comment: the caller sees the redirect, and
       // the underlying fetch cannot quietly follow one on its own.
       const response = await doFetch(target, {

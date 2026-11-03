@@ -170,6 +170,8 @@ async function request(
   try {
     response = await fetch(url, {
       headers: { authorization: `Bearer ${connection.token}` },
+      // Never followed: a default fetch carries the person's token to wherever a Location points.
+      redirect: "manual",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
@@ -179,6 +181,17 @@ async function request(
         error instanceof Error && error.name === "TimeoutError"
           ? "Google Drive did not answer in time."
           : `Google Drive could not be reached: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  if (
+    (response.status >= 300 && response.status < 400) ||
+    response.type === "opaqueredirect"
+  ) {
+    await response.body?.cancel().catch(() => undefined);
+    return {
+      ok: false,
+      message: `Google Drive answered with a redirect (${response.status}), which is not followed, so the credential was not sent on.`,
     };
   }
 
