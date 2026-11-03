@@ -383,16 +383,41 @@ test("a push token registered by one person cannot be moved to another person's 
       platform: "ios",
     }),
   );
-  // After the owner signs out on the phone, the next person to sign in there takes the token.
+  expect(await asOwner(() => store.devices(owner))).toEqual([
+    expect.objectContaining({ id: ownersDevice, token }),
+  ]);
+  // Signing out on the phone takes the device off the owner's list.
   await asOwner(() => store.removeDevice(owner, ownersDevice));
-  /*
-   * The handover rewrites a row stamped with the owner's tenant, which no other person's frame may
-   * touch, so it is asserted in the frame that row lives in: what is checked is the store's own
-   * rule (a disabled token may change hands), not row security. In the stranger's own frame the
-   * same call is refused by row security today; that is a product gap for src, not for this test.
-   */
-  const next = randomUUID();
+  expect(await asOwner(() => store.devices(owner))).toEqual([]);
+});
+
+/*
+ * KNOWN PRODUCT GAP, kept as an expected failure (not skipped): after the owner signs out on the
+ * phone, the next person to sign in there should take the token. Production runs that
+ * registration in the new person's own frame, and there the ON CONFLICT (token) update of a row
+ * stamped with the previous owner's tenant is refused by row security ("new row violates
+ * row-level security policy" on push_devices). Asserting it from the previous owner's frame
+ * would pass only because of a frame no production path opens, and would leave the row with the
+ * new person's owner_user_id but the old tenant_id, invisible to the new person. The fix belongs
+ * in src (registerDevice needs an explicit, audited cross-tenant handover); once it lands this
+ * test starts passing, `test.failing` then reports it, and it must become a plain `test`.
+ */
+test.failing("after the owner signs out on a phone, the next person to sign in there takes its push token", async () => {
+  const token = `ExponentPushToken[${prefix.replace(/[^A-Za-z0-9]/g, "")}handover]`;
+  const projectId = randomUUID();
+  const ownersDevice = randomUUID();
   await asOwner(() =>
+    store.registerDevice({
+      id: ownersDevice,
+      ownerUserId: owner,
+      token,
+      projectId,
+      platform: "ios",
+    }),
+  );
+  await asOwner(() => store.removeDevice(owner, ownersDevice));
+  const next = randomUUID();
+  await asStranger(() =>
     store.registerDevice({
       id: next,
       ownerUserId: stranger,
@@ -401,7 +426,7 @@ test("a push token registered by one person cannot be moved to another person's 
       platform: "ios",
     }),
   );
-  expect(await asOwner(() => store.devices(stranger))).toEqual([
+  expect(await asStranger(() => store.devices(stranger))).toEqual([
     expect.objectContaining({ id: next, token }),
   ]);
   expect(await asOwner(() => store.devices(owner))).toEqual([]);
