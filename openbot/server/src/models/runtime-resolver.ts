@@ -16,9 +16,11 @@ import {
   subscriptions,
 } from "../db/schema";
 import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
 import {
   currentTenant,
   isPersonTenant,
+  isTenantFramed,
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
@@ -39,7 +41,35 @@ import {
  */
 export type AgentModelResolver = (
   agentId: string,
+  /**
+   * The deployment's own model, already built, for a coworker with no binding. Given, an unbound
+   * coworker answers on it METERED (audit defect #11); absent, an unbound coworker resolves to
+   * `null` and the runtime builds the deployment model itself, unmetered, as it always did.
+   */
+  deployment?: DeploymentModel,
 ) => Promise<LanguageModel | null>;
+
+/**
+ * The deployment default model as a run will speak it: built by the runtime from the deployment's
+ * `provider/model` and key, exactly as it would otherwise build it from the string, so metering it
+ * changes nothing about where the call goes. Everything but `model` and `apiKey` is non-secret, and
+ * `apiKey` is read only to digest it.
+ */
+export type DeploymentModel = {
+  model: LanguageModel;
+  provider: string;
+  modelName: string;
+  /** The endpoint the deployment's environment points that provider at, when it names one. */
+  baseUrl: string | null;
+  apiKey: string;
+};
+
+/**
+ * The `model_ref` and `credential_id` of a call on the deployment default: the nil UUID, because that
+ * call is made through no model-library row and no vault row. Both columns are NOT NULL and carry no
+ * foreign key, so a reader tells a default-model call from a bound one by this value.
+ */
+export const DEPLOYMENT_MODEL_REF = "00000000-0000-0000-0000-000000000000";
 
 /** What a coworker is bound to, before the key behind it is touched. */
 type LibraryBinding = {
@@ -84,6 +114,12 @@ export type LanguageModelFactory = (
 export type AgentModelResolverOptions = {
   environment?: PoolKeyEnvironment;
   languageModel?: LanguageModelFactory;
+  /**
+   * Where a TENANT's library base URL may point (audit defect #6), passed to {@link languageModelFor}
+   * for library bindings only. A platform pool row's base URL is the operator's (rows are written by
+   * the operator, never by a tenant route), so it is not held to the tenant policy.
+   */
+  outbound?: OutboundPolicy;
 };
 
 const OPENAI_COMPATIBLE_DEFAULTS: Record<string, string> = {
@@ -98,6 +134,12 @@ export function languageModelFor(
   baseUrl: string | null,
   modelName: string,
   apiKey: string,
+  /**
+   * Where a tenant's base URL may point (audit defect #6). Applied to every request the SDK makes to
+   * a tenant-chosen endpoint: checked, resolved, never redirected. No deadline here — a streamed
+   * answer is legitimately long, and the run's own abort signal still applies.
+   */
+  outbound: OutboundPolicy = {},
 ): LanguageModel {
   if (provider === "anthropic") {
     return createAnthropic({ apiKey })(modelName);
@@ -118,6 +160,7 @@ export function languageModelFor(
     baseURL,
     apiKey,
     includeUsage: true,
+    ...(baseUrl ? { fetch: createGuardedFetch(outbound) } : {}),
   }).chatModel(modelName);
 }
 
@@ -329,7 +372,13 @@ export function createNamedAgentModelResolver(
   options: AgentModelResolverOptions = {},
 ): (agentId: string) => Promise<ResolvedAgentModel | null> {
   const environment = options.environment ?? process.env;
-  const languageModel = options.languageModel ?? languageModelFor;
+  const outbound = options.outbound ?? {};
+  // A library binding's base URL is the tenant's, so the default factory holds it to the guard.
+  const libraryModel: LanguageModelFactory =
+    options.languageModel ??
+    ((provider, baseUrl, modelName, apiKey) =>
+      languageModelFor(provider, baseUrl, modelName, apiKey, outbound));
+  const poolLanguageModel = options.languageModel ?? languageModelFor;
   return async (agentId) => {
     // A binding that will not read falls back to the deployment's model, but a missing tenant frame
     // is the caller's bug and must not pass as "unbound".
@@ -341,7 +390,7 @@ export function createNamedAgentModelResolver(
     );
     if (!binding) return null;
     if (binding.kind === "pool") {
-      return poolModel(binding, agentId, languageModel, sink);
+      return poolModel(binding, agentId, poolLanguageModel, sink);
     }
     const secret = await credentials
       .readSecret(binding.credentialId)
@@ -351,7 +400,7 @@ export function createNamedAgentModelResolver(
       const apiKey = await openCredential(encryptionKey, secret);
       const originalText = `${binding.provider}/${binding.modelName}`;
       const model = meteredLanguageModel(
-        languageModel(
+        libraryModel(
           binding.provider,
           binding.baseUrl,
           binding.modelName,
@@ -447,12 +496,69 @@ export function createAgentModelResolver(
       sink,
       options,
     ),
+    sink,
   );
 }
 
-/** The runtime's view of a named resolver: the model alone. */
+/**
+ * The runtime's view of a named resolver: the model alone.
+ *
+ * With a `sink`, a coworker the named resolver leaves unbound — no binding, or one that fell back —
+ * answers on the deployment model the runtime hands in, metered into that sink (audit defect #11).
+ * The named resolver itself still answers `null` for it, so the usage record and the allowlist keep
+ * naming the deployment's model, as they always did.
+ */
 export function modelOf(
   resolve: (agentId: string) => Promise<ResolvedAgentModel | null>,
+  sink?: ModelTokenCallSink,
 ): AgentModelResolver {
-  return async (agentId) => (await resolve(agentId))?.model ?? null;
+  return async (agentId, deployment) => {
+    const bound = (await resolve(agentId))?.model;
+    if (bound) return bound;
+    if (!deployment || !sink) return null;
+    return meteredDeploymentModel(deployment, agentId, sink);
+  };
+}
+
+/**
+ * The deployment default model, metered to the person whose run it is.
+ *
+ * There is no binding row to take a tenant from, so the row belongs to the frame the run is built in:
+ * the person asking, or the owner a routine's headless turn runs as (G01-E). That is also who a pool
+ * call on a shared Bot is charged to. Outside a person's frame (`platform`) the call has nobody to be
+ * metered to, so the model is returned as it is and the run still answers — the sink would refuse
+ * such a row anyway.
+ */
+export function meteredDeploymentModel(
+  deployment: DeploymentModel,
+  agentId: string,
+  sink: ModelTokenCallSink,
+): LanguageModel {
+  const tenantId = isTenantFramed() ? currentTenant() : "";
+  if (!isPersonTenant(tenantId)) return deployment.model;
+  const originalText = `${deployment.provider}/${deployment.modelName}`;
+  return meteredLanguageModel(
+    deployment.model,
+    {
+      tenantId,
+      agentId,
+      modelRef: DEPLOYMENT_MODEL_REF,
+      provider: deployment.provider,
+      modelName: deployment.modelName,
+      credentialId: DEPLOYMENT_MODEL_REF,
+      // Moves when the deployment's key is rotated; a digest of a digest, never the key.
+      credentialDigest: sha256Hex(
+        `deployment:${deployment.provider}:${sha256Hex(deployment.apiKey)}`,
+      ),
+      originalModelFingerprint: sha256Hex(
+        JSON.stringify([
+          deployment.provider,
+          deployment.baseUrl,
+          deployment.modelName,
+        ]),
+      ),
+      originalText,
+    },
+    sink,
+  );
 }
