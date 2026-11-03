@@ -10,6 +10,7 @@ import { createSnapshotStore } from "../src/computer/snapshot-store";
 import { createDockerSupervisorProvider } from "../src/computer/supervisor";
 import { createDatabase } from "../src/db/client";
 import { computerSnapshot } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -30,6 +31,11 @@ const FIRST_RUN = "2026-08-25T10:00:00.000Z";
 const SECOND_RUN = "2026-08-25T11:30:00.000Z";
 const PERMISSIVE: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 const ACTOR = { id: "dev-local-user" };
+/*
+ * Both replicas serve the actor's turn, so each case runs in the actor's frame the way a request
+ * does: the snapshot row replica A writes is that person's, and replica B reads it back as them.
+ */
+const asPerson = <T>(work: () => T) => runAsTenant(ACTOR.id, work);
 
 const SNAPSHOT: SnapshotResult = {
   snapshotId: 7,
@@ -97,48 +103,54 @@ function replica(startedAt: () => string, known: string[] = []) {
 }
 
 beforeAll(async () => {
-  await database
-    .delete(computerSnapshot)
-    .where(eq(computerSnapshot.computerId, botId));
+  await asPerson(() =>
+    database
+      .delete(computerSnapshot)
+      .where(eq(computerSnapshot.computerId, botId)),
+  );
 });
 
 afterAll(async () => {
-  await database
-    .delete(computerSnapshot)
-    .where(eq(computerSnapshot.computerId, botId));
+  await asPerson(() =>
+    database
+      .delete(computerSnapshot)
+      .where(eq(computerSnapshot.computerId, botId)),
+  );
 });
 
-test("replica B refuses a ref that replica A took before the container was replaced", async () => {
-  // Replica A: takes the snapshot during the first run. Writes it to Postgres.
-  const a = replica(() => FIRST_RUN);
-  await a.gateway.snapshot(botId);
+test("replica B refuses a ref that replica A took before the container was replaced", () =>
+  asPerson(async () => {
+    // Replica A: takes the snapshot during the first run. Writes it to Postgres.
+    const a = replica(() => FIRST_RUN);
+    await a.gateway.snapshot(botId);
 
-  // The row really is in Postgres, carrying the run it was taken on.
-  const [stored] = await database
-    .select({ session: computerSnapshot.session })
-    .from(computerSnapshot)
-    .where(eq(computerSnapshot.computerId, botId));
-  expect(stored?.session).toBe(FIRST_RUN);
+    // The row really is in Postgres, carrying the run it was taken on.
+    const [stored] = await database
+      .select({ session: computerSnapshot.session })
+      .from(computerSnapshot)
+      .where(eq(computerSnapshot.computerId, botId));
+    expect(stored?.session).toBe(FIRST_RUN);
 
-  // Replica B: a different process. Never located this Bot, so it holds nothing for it. The
-  // container has since been replaced, so the supervisor now reports the second run.
-  const b = replica(() => SECOND_RUN, [botId]);
-  const clicked = await b.gateway
-    .click(botId, ACTOR, { ref: "e9", snapshotId: 7 })
-    .catch((error: unknown) => error);
+    // Replica B: a different process. Never located this Bot, so it holds nothing for it. The
+    // container has since been replaced, so the supervisor now reports the second run.
+    const b = replica(() => SECOND_RUN, [botId]);
+    const clicked = await b.gateway
+      .click(botId, ACTOR, { ref: "e9", snapshotId: 7 })
+      .catch((error: unknown) => error);
 
-  expect(clicked).toBeInstanceOf(StaleSnapshotError);
-});
+    expect(clicked).toBeInstanceOf(StaleSnapshotError);
+  }));
 
-test("CONTROL: replica B allows the same ref while the run is still current", async () => {
-  const a = replica(() => FIRST_RUN);
-  await a.gateway.snapshot(botId);
+test("CONTROL: replica B allows the same ref while the run is still current", () =>
+  asPerson(async () => {
+    const a = replica(() => FIRST_RUN);
+    await a.gateway.snapshot(botId);
 
-  // Same cold replica, but the container was never replaced.
-  const b = replica(() => FIRST_RUN, [botId]);
-  const result = await b.gateway.click(botId, ACTOR, {
-    ref: "e9",
-    snapshotId: 7,
-  });
-  expect(result).toMatchObject({ action: "click" });
-});
+    // Same cold replica, but the container was never replaced.
+    const b = replica(() => FIRST_RUN, [botId]);
+    const result = await b.gateway.click(botId, ACTOR, {
+      ref: "e9",
+      snapshotId: 7,
+    });
+    expect(result).toMatchObject({ action: "click" });
+  }));

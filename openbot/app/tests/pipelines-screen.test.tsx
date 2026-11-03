@@ -275,7 +275,7 @@ test("a step can only be given to somebody the crew actually has", async () => {
 });
 
 /**
- * The board's 打开 on a crew's card, and the group chat's 查看这次运行, both land here with `?run=`
+ * The board's 查看详情 on a crew's card, and the group chat's 查看这次运行, both land here with `?run=`
  * (audit N1). Arriving that way has to show the run itself, not the plan list with the panel closed --
  * a link that lands on the right page and the wrong state is still a link that did not go anywhere.
  */

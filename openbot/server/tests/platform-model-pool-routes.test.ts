@@ -488,6 +488,52 @@ describe("PATCH /api/agents/:id: binding a coworker to the pool", () => {
     });
   });
 
+  test("a shared Bot stamped team is bound against the plan of the person saving it", async () => {
+    // Made public in the first save, so the row is re-stamped `team` (G01-E) once it is written.
+    const proShared = await newCoworker(proTenant);
+    const published = await patch(proTenant, proShared, {
+      visibility: "public",
+    });
+    expect(published.status).toBe(200);
+    const [stamp] = await runAsTenant(proTenant, () =>
+      db
+        .select({ tenantId: agentProfiles.tenantId })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, proShared)),
+    );
+    expect(stamp?.tenantId).toBe("team");
+    // `team` holds no subscription; the Pro owner's own plan decides, so the Pro-only row binds.
+    const bound = await patch(proTenant, proShared, {
+      visibility: "public",
+      platformModelRef: pool.proOnly,
+    });
+    expect(bound.status).toBe(200);
+    expect(await stored(proTenant, proShared)).toEqual({
+      modelRef: null,
+      platformModelRef: pool.proOnly,
+    });
+
+    // A Free owner's shared Bot is still held to Free.
+    const freeShared = await newCoworker(freeTenant);
+    expect(
+      (await patch(freeTenant, freeShared, { visibility: "public" })).status,
+    ).toBe(200);
+    const refused = await patch(freeTenant, freeShared, {
+      visibility: "public",
+      platformModelRef: pool.proOnly,
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toBe(
+      new PlatformModelNotAvailableError().message,
+    );
+    const free = await patch(freeTenant, freeShared, {
+      visibility: "public",
+      platformModelRef: pool.freeTier,
+    });
+    expect(free.status).toBe(200);
+    expect(free.body.agent?.platformModelRef).toBe(pool.freeTier);
+  });
+
   test("the coworker count on a pool row is the tenant's own", async () => {
     const freeBefore = mine((await library(freeTenant)).body.pool).find(
       (entry) => entry.id === pool.freeTier,
