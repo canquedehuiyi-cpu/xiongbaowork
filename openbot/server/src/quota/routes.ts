@@ -89,11 +89,9 @@ export function createQuotaRoutes(
      * Move the row if the tenant has one, add one if they do not — and write the trail row that says
      * so in the same transaction.
      *
-     * Update-then-insert rather than an upsert because `subscriptions` has no unique constraint on
-     * `tenant_id` — provisioning's `onConflictDoNothing` only guards its own primary key — so there is
-     * nothing for an upsert to conflict on. The constraint itself is a separate change (it also fixes
-     * the admin list, where a second row duplicates the tenant); until then this is the shape that
-     * cannot make a second row from a repeated switch.
+     * An upsert on the tenant's one row (`subscriptions_tenant_unique`, migration 0129): a workspace
+     * with no row gets one, an active row is moved, and a canceled row is moved and reactivated, so a
+     * repeated or concurrent switch can never leave a second row for the admin list to repeat.
      *
      * Audited, and fail closed. A tier granted with no payment behind it is exactly the act somebody
      * later asks "who did this"; so the `plan.changed` row commits with the move or neither does, and
@@ -125,19 +123,15 @@ export function createQuotaRoutes(
         ) {
           return false;
         }
-        if (current.length > 0) {
-          await transaction
-            .update(subscriptions)
-            .set({ planId, status: "active", updatedAt: new Date() })
-            .where(
-              and(
-                eq(subscriptions.tenantId, tenantId),
-                eq(subscriptions.status, "active"),
-              ),
-            );
-        } else {
-          await transaction.insert(subscriptions).values({ tenantId, planId });
-        }
+        // The tenant's one row (0129), whatever its status: a canceled row is moved and reactivated
+        // rather than joined by a second one, and two first switches racing meet on the conflict.
+        await transaction
+          .insert(subscriptions)
+          .values({ tenantId, planId })
+          .onConflictDoUpdate({
+            target: subscriptions.tenantId,
+            set: { planId, status: "active", updatedAt: new Date() },
+          });
         await recordAuditEvent(audit, {
           eventType: "plan.changed",
           targetType: "tenant",
