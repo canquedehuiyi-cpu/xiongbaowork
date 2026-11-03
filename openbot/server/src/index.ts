@@ -1280,6 +1280,15 @@ await startupLifecycle.run(async (startup) => {
       ...(isolation.warning ? { warning: isolation.warning } : {}),
     }),
   );
+  // Which computer a coworker acts on, and why, once per boot. Production with TENANT_RUNTIME unset
+  // is `device` (F6), so a deployment whose Bots now ask for a paired machine can see the reason here.
+  console.info(
+    JSON.stringify({
+      type: "tenant-runtime",
+      runtime: config.tenantRuntime,
+      reason: config.tenantRuntimeReason,
+    }),
+  );
   /**
    * One Bot's endpoint must not take down the platform.
    *
