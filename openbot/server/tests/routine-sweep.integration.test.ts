@@ -4,6 +4,7 @@ import {
   beforeEach,
   describe,
   expect,
+  setSystemTime,
   spyOn,
   test,
 } from "bun:test";
@@ -746,6 +747,213 @@ describe("draining a stale stamp instead of replaying it", () => {
  * saw a routine that quietly stopped. So the pass survives it, says so, and switches the routine off
  * with the reason written where the routines page reads it.
  */
+/**
+ * ONE CLOCK, THE DATABASE'S. `dueRoutines` decides what is due on Postgres's `now()`; the sweep
+ * measures lateness and lands a stale clock on that same `now()`, returned with each row, and never
+ * on its own process clock. The process clock is moved here with `setSystemTime` — the sweep is given
+ * no `now` — to stand for a node whose clock disagrees with the database's.
+ */
+describe("measuring every moment on the database's clock", () => {
+  const EVERY_QUARTER_HOUR = "*/15 * * * *";
+
+  async function setSchedule(routineId: string, cron: string) {
+    await asPlatform(() =>
+      database
+        .update(routines)
+        .set({ cron, timezone: "UTC" })
+        .where(eq(routines.id, routineId)),
+    );
+  }
+
+  /** Run `work` with the process clock `offsetMs` away from the database's, then put it back. */
+  async function withProcessClockOff<T>(
+    offsetMs: number,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    setSystemTime(new Date((await databaseNow()).getTime() + offsetMs));
+    try {
+      return await work();
+    } finally {
+      setSystemTime();
+    }
+  }
+
+  /*
+   * THE BACKLOG REPLAY. A quarter-hourly routine a month behind, swept by a node whose clock is half
+   * an hour behind the database's — more than the floor less the window, so where the old shape
+   * landed the stale clock (the next quarter hour after the NODE's now) was a moment the database
+   * still called due. The next pass measured that row on the node's clock, found it "not late at
+   * all" and offered it, and the one after offered the next: the month's backlog, replayed a quarter
+   * hour at a time. On the database's clock the first pass lands the routine after the database's
+   * now, and nothing older than the passes is ever offered.
+   */
+  test("a node whose clock is behind the database's does not replay a stale backlog", async () => {
+    const { routine } = await makeRoutine("A month behind, on a slow node.");
+    await setSchedule(routine.id, EVERY_QUARTER_HOUR);
+    const started = await databaseNow();
+    const quarter = 15 * 60_000;
+    await makeDueAt(
+      routine.id,
+      new Date(
+        Math.floor(started.getTime() / quarter) * quarter -
+          30 * 24 * 60 * 60_000,
+      ),
+    );
+
+    await withProcessClockOff(-30 * 60_000, async () => {
+      await asPlatform(() => offerDueRoutines(sweepOptions()));
+      // Landed in the database's future in one move, not at the node's now.
+      expect(
+        (await readRoutine(routine.id))?.nextRunAt.getTime(),
+      ).toBeGreaterThan(started.getTime());
+
+      await asPlatform(() => offerDueRoutines(sweepOptions()));
+      await asPlatform(() => offerDueRoutines(sweepOptions()));
+    });
+
+    // No occurrence from before the passes began was offered: the backlog was skipped, not replayed.
+    const replayed = (await firingsFor(routine.id)).filter(
+      (firing) =>
+        new Date(String(firing.payload.scheduledFor)).getTime() <
+        started.getTime(),
+    );
+    expect(replayed).toEqual([]);
+  });
+
+  /*
+   * The other direction. A node whose clock runs ahead of the database's by more than the window
+   * used to measure a firing the database had just let through as already stale, and skip it: the
+   * person's routine silently missed its morning. On the database's clock it is a minute late, and
+   * it fires.
+   */
+  test("a node whose clock is ahead of the database's does not drop a firing that is due", async () => {
+    const { routine } = await makeRoutine("Due a minute ago, on a fast node.");
+    const { stamp, next } = await makeDueAMinuteAgo(routine.id);
+
+    const { offered } = await withProcessClockOff(30 * 60_000, () =>
+      asPlatform(() => offerDueRoutines(sweepOptions())),
+    );
+
+    expect(offered).toContain(routine.id);
+    expect((await firingsFor(routine.id)).map((firing) => firing.key)).toEqual([
+      `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
+    ]);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      next.toISOString(),
+    );
+  });
+
+  /*
+   * A test's clock is used end to end. The serialised race from above, on a clock in 2001: the first
+   * sweep offers 09:25 and moves the routine to 09:00 the next day. When only the sweep's arithmetic
+   * used the injected clock and Postgres judged "due" by its own, that 2001 stamp was still due to
+   * Postgres, measured nearly a day "early" by the sweep, taken as fresh — and a second key offered.
+   */
+  test("an injected clock is the database's clock too, so a second pass offers nothing", async () => {
+    const { routine } = await makeRoutine();
+    await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
+    const now = () => new Date("2001-01-01T09:26:00Z");
+
+    const first = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now })),
+    );
+    const second = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now })),
+    );
+
+    expect(first.offered).toContain(routine.id);
+    expect(second.offered).not.toContain(routine.id);
+    expect((await firingsFor(routine.id)).map((firing) => firing.key)).toEqual([
+      `${routine.id}:2001-01-01T09:25Z`,
+    ]);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      "2001-01-02T09:00:00.000Z",
+    );
+  });
+
+  /*
+   * An offered firing's clock moves to the next occurrence after the later of its stamp and now, so
+   * it is never due again the moment it moves. With the default window that is the stamp's own next
+   * occurrence; with a window wider than the schedule, measuring from the stamp landed on 09:15,
+   * already past at 09:20, and the next pass offered that too.
+   */
+  test("with a window wider than the schedule, an offered routine's clock still lands after now", async () => {
+    const { routine } = await makeRoutine("Every quarter hour.");
+    await setSchedule(routine.id, EVERY_QUARTER_HOUR);
+    await makeDueAt(routine.id, new Date("2001-01-01T09:00:00Z"));
+    const now = () => new Date("2001-01-01T09:20:00Z");
+    const graceMs = 30 * 60_000;
+
+    const first = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now, graceMs })),
+    );
+    expect(first.offered).toContain(routine.id);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      "2001-01-01T09:30:00.000Z",
+    );
+
+    const second = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now, graceMs })),
+    );
+    expect(second.offered).not.toContain(routine.id);
+    expect((await firingsFor(routine.id)).map((firing) => firing.key)).toEqual([
+      `${routine.id}:2001-01-01T09:00Z`,
+    ]);
+  });
+
+  /*
+   * A row handed over as due by a clock that says it is not. The real store cannot do this — it
+   * admits a row only at or before the clock it returns — so the store is wrapped to report a clock
+   * a minute behind the stamp. Taken as "fresh", the old shape, it was offered and its clock moved;
+   * now it is left exactly where it was, and the skew is said out loud.
+   */
+  test("a row the returned clock says is not yet due is warned about as skew, not offered", async () => {
+    const { routine } = await makeRoutine("Seen by a clock behind it.");
+    const { stamp } = await makeDueAMinuteAgo(routine.id);
+    const skewed = {
+      ...store,
+      dueRoutines: async (limit: number, asOf?: Date) =>
+        (await store.dueRoutines(limit, asOf)).map((row) =>
+          row.id === routine.id
+            ? { ...row, asOf: new Date(row.nextRunAt.getTime() - 60_000) }
+            : row,
+        ),
+    };
+    const warnings: Record<string, unknown>[] = [];
+    const warn = spyOn(console, "warn").mockImplementation((...args) => {
+      try {
+        warnings.push(JSON.parse(String(args[0])));
+      } catch {
+        // Not a structured line; not what this test is about.
+      }
+    });
+    try {
+      const { offered } = await asPlatform(() =>
+        offerDueRoutines(sweepOptions({ routineStore: skewed })),
+      );
+      expect(offered).not.toContain(routine.id);
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(await firingsFor(routine.id)).toHaveLength(0);
+    expect((await readRoutine(routine.id))?.nextRunAt.getTime()).toBe(
+      stamp.getTime(),
+    );
+    expect(
+      warnings.filter((line) => line.type === "routine-sweep-clock-skew"),
+    ).toEqual([
+      {
+        type: "routine-sweep-clock-skew",
+        routineId: routine.id,
+        scheduledFor: stamp.toISOString(),
+        asOf: new Date(stamp.getTime() - 60_000).toISOString(),
+        aheadByMs: 60_000,
+      },
+    ]);
+  });
+});
+
 describe("surviving a routine that cannot be scheduled", () => {
   test("a poisoned cron is warned about, switched off with its reason on the page, and the next routine still offered", async () => {
     const { owner: poisonedOwner, routine: poisoned } =
