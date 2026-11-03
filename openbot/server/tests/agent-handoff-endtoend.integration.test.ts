@@ -401,16 +401,25 @@ describe("G01: whose work a sweep is doing", () => {
    * Two stamps that name nobody. `system` is what an offer from no frame used to get by default, so
    * it is offered here from an explicit `system` frame; `team` is a stamp no frame can write, so that
    * row is put on the queue the only way one can be, by `platform`. Neither has a person to act as.
+   *
+   * THE THIRD CASE IS THE ONE THAT ASKS `isPersonTenant` ABOUT `team`. A `team` stamp on a hop for
+   * a real person is refused by the owner/stamp comparison as well, so it would still be refused if
+   * `team` were ever taken for a person. A hop whose payload names `team` as its person agrees with
+   * its own stamp: the only thing left to refuse it is that `team` is nobody.
    */
-  test.each([SYSTEM_TENANT, TEAM_TENANT])(
-    "a hop stamped as nobody's (`%s`) is ended without running anybody",
-    async (stamp) => {
-      const run = `${RUN}-nobody-${stamp}`;
+  test.each([
+    [SYSTEM_TENANT, ACTOR],
+    [TEAM_TENANT, ACTOR],
+    [TEAM_TENANT, TEAM_TENANT],
+  ])(
+    "a hop stamped as nobody's (`%s`, for `%s`) is ended without running anybody",
+    async (stamp, actorId) => {
+      const run = `${RUN}-nobody-${stamp}-for-${actorId}`;
       const key = `${run}:${TARGET}`;
       const payload = {
         fromBotId: ASKER,
         toBotId: TARGET,
-        actorId: ACTOR,
+        actorId,
         threadId: `thread-${suite}`,
         runId: run,
         depth: 1,
@@ -614,18 +623,26 @@ describe("G01: whose work a sweep is doing", () => {
    * `system` is the stamp a background row used to get by default from no frame, so it is written
    * here from an explicit `system` frame. `team` is a stamp no frame can write, so that row is
    * written by `platform`. Both name nobody, so neither has a person whose turn could run.
+   *
+   * As with the hop above, the last case is the one that reaches `isPersonTenant("team")`: a payload
+   * that names `team` as its owner agrees with its `team` stamp, so the owner/stamp comparison has
+   * nothing to refuse and only "`team` is nobody" stands between it and a turn.
    */
-  test.each([SYSTEM_TENANT, TEAM_TENANT])(
-    "a follow-up stamped `%s` is failed and its turn never runs",
-    async (stamp) => {
+  test.each([
+    [SYSTEM_TENANT, ACTOR],
+    [TEAM_TENANT, ACTOR],
+    [TEAM_TENANT, TEAM_TENANT],
+  ])(
+    "a follow-up stamped `%s` (for `%s`) is failed and its turn never runs",
+    async (stamp, ownerUserId) => {
       const { turns, sweepUntil } = wakeUps();
       const key =
         stamp === SYSTEM_TENANT
-          ? await runAsTenant(SYSTEM_TENANT, () => dueFollowUp(ACTOR))
-          : await asPlatform(() => dueFollowUp(ACTOR, stamp));
+          ? await runAsTenant(SYSTEM_TENANT, () => dueFollowUp(ownerUserId))
+          : await asPlatform(() => dueFollowUp(ownerUserId, stamp));
 
       expect(await sweepUntil(key)).toBe("skipped");
-      expect(turns.filter((turn) => turn.owner === ACTOR)).toEqual([]);
+      expect(turns.filter((turn) => turn.owner === ownerUserId)).toEqual([]);
       const [row] = await runAsTenant("platform", () => outcomeOf(key));
       expect(row?.tenantId).toBe(stamp);
       expect(
