@@ -1,7 +1,14 @@
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
-import { currentTenant, runAsTenant, tenantFrame } from "../tenant/context";
+import {
+  capabilityFor,
+  currentTenant,
+  runAsTenant,
+  TenantContextError,
+  tenantFrame,
+} from "../tenant/context";
 import * as schema from "./schema";
+import { TEAM_TENANT } from "./schema/tenant";
 
 /**
  * Bun's transaction session: callable as a template tag, and every statement run through it goes on
@@ -154,6 +161,17 @@ export function createDatabase(
   });
 
   /*
+   * `team` is a stamp, never a frame (G01-E): no statement runs with `app.tenant_id = 'team'`, in
+   * which every shared row would pass as the caller's own. `runAsTenant` already refuses to open
+   * such a frame; this is the same refusal at the last place a tenant reaches the session.
+   */
+  const refuseTeam = (tenant: string): string => {
+    if (tenant === TEAM_TENANT)
+      throw new TenantContextError("'team' is a stamp, never a frame");
+    return tenant;
+  };
+
+  /*
    * Every query carries a tenant onto its session.
    *
    * Bun 1.3.14 has no `SQL#set` on this platform, so the mechanism is a reserved connection:
@@ -172,10 +190,14 @@ export function createDatabase(
     tenantOf: () => string,
     run: (scoped: SQL) => Promise<T>,
   ): Promise<T> => {
-    const tenant = tenantOf();
+    const tenant = refuseTeam(tenantOf());
+    // Read with the tenant, synchronously: the capability is granted for one tenant (see
+    // `capabilityFor`), and it is ALWAYS written, as `''` when absent, so no pooled connection
+    // carries an earlier request's capability into this statement.
+    const capability = capabilityFor(tenant);
     const conn = await raw.reserve();
     try {
-      await conn`select set_config('app.tenant_id', ${tenant}, false)`;
+      await conn`select set_config('app.tenant_id', ${tenant}, false), set_config('app.capability', ${capability}, false)`;
       return await run(conn as unknown as SQL);
     } finally {
       conn.release();
@@ -259,6 +281,7 @@ export function createDatabase(
    * embedding, `.toSQL()` and `.prepare()` behave exactly as drizzle wrote them.
    */
   const clientFor = (pinned: string | undefined) => {
+    if (pinned !== undefined) refuseTeam(pinned);
     const tenantOf = pinned === undefined ? currentTenant : () => pinned;
     return new Proxy(raw, {
       get(target, property, receiver) {
@@ -287,12 +310,19 @@ export function createDatabase(
              * somebody else's library — reached the person as a refusal and as a server fault at once.
              *
              * `is_local = true` lasts exactly the transaction, so the pooled connection carries no
-             * tenant into whatever the next caller runs on it.
+             * tenant — and no capability, which is written alongside it the same way `withTenant`
+             * writes it — into whatever the next caller runs on it.
+             *
+             * The callback itself runs inside `runAsTenant(tenant)` (G01-E). Bun calls it from its own
+             * connection machinery, outside the caller's frame, so without this a `currentTenant()`
+             * read anywhere inside the transaction — a store stamping a row, `sealedRow` binding an
+             * envelope — fell back to `system` while the session's `app.tenant_id` said otherwise.
              */
-            const tenant = tenantOf();
+            const tenant = refuseTeam(tenantOf());
+            const capability = capabilityFor(tenant);
             return method.call(target, async (tx) => {
-              await tx`select set_config('app.tenant_id', ${tenant}, true)`;
-              return fn(tx);
+              await tx`select set_config('app.tenant_id', ${tenant}, true), set_config('app.capability', ${capability}, true)`;
+              return runAsTenant(tenant, () => fn(tx));
             });
           };
         }

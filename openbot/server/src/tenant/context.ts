@@ -227,3 +227,34 @@ export function runAsTenant<T>(tenantId: string, fn: () => T): T {
  */
 export const asPlatform = <T>(work: () => T): T =>
   runAsTenant(PLATFORM_TENANT, work);
+
+/**
+ * THE ADMIN CAPABILITY (G01-E, I10). Being an administrator is a fact about a person; acting with
+ * the administrator's write powers over shared governance rows is a fact about one REQUEST. An
+ * admin's routines, proactive work and Bot turns run in the admin's frame too, and they must not
+ * carry those powers, so the capability is held apart from the frame: only the `adminCapability`
+ * middleware in `auth/admin-scope.ts` grants it, after re-reading the role, and the database client
+ * hands it to Postgres as `app.capability` on every statement.
+ *
+ * It names the tenant it was granted for. A statement whose tenant is anything else — a nested
+ * `runAsTenant(other)`, an `asPlatform` lookup — sees no capability, so it never travels with a
+ * frame change.
+ */
+type Capability = { tenant: string; capability: "admin" };
+const capabilityStore = new AsyncLocalStorage<Capability>();
+
+/** `"admin"` only when the capability was granted for exactly this tenant; otherwise `""`. */
+export function capabilityFor(tenant: string): "admin" | "" {
+  const held = capabilityStore.getStore();
+  return held !== undefined && held.tenant === tenant ? held.capability : "";
+}
+
+/**
+ * Run `work` holding the admin capability for `tenant`. INTERNAL: only `auth/admin-scope.ts` may
+ * call it, after it has re-verified the role; the G01-E allowlist pins that.
+ */
+export function withCapability<T>(tenant: string, work: () => T): T {
+  if (!isPersonTenant(tenant))
+    throw new TenantContextError("the admin capability belongs to a person");
+  return capabilityStore.run({ tenant, capability: "admin" }, work);
+}
