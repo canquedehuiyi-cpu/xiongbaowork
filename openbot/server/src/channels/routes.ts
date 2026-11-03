@@ -391,17 +391,36 @@ export function createChannelStore(
         ),
       );
     if (missing.length === 0) return;
+    const wanted = missing.map((row) => row.channelId);
     await database
       .insert(intelligenceChannelMappings)
       .values(
-        missing.map((row) => ({
+        wanted.map((channelId) => ({
           userId: actor.id,
-          channelId: row.channelId,
+          channelId,
           threadId: threadIdentity.mint(),
         })),
       )
       // Two first reads at once both found it missing; the second one's row is the same fact.
       .onConflictDoNothing();
+    /*
+     * And it must now be there, readable by this person. A conflict with a row they cannot see
+     * (somebody else's row holding their key, which 0128 refuses and cleans up) would leave the
+     * group invisible to its own member with nothing said, so it is a fault, not "not found".
+     */
+    const written = await database
+      .select({ channelId: intelligenceChannelMappings.channelId })
+      .from(intelligenceChannelMappings)
+      .where(
+        and(
+          inArray(intelligenceChannelMappings.channelId, wanted),
+          eq(intelligenceChannelMappings.userId, actor.id),
+        ),
+      );
+    if (written.length !== wanted.length)
+      throw new Error(
+        "This person's place in a group conversation is held by a row they cannot read.",
+      );
   };
 
   const store: ChannelStore = {

@@ -23,7 +23,9 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
+  channelMemberships,
   channels,
+  groupMessages,
   intelligenceChannelMappings,
   tasks,
   users,
@@ -179,6 +181,43 @@ function service(options: {
 
 async function drain(conversations: { sweep(): Promise<boolean> }) {
   for (let i = 0; i < 10 && (await conversations.sweep()); i++) {}
+}
+
+/**
+ * Everything of a group's transcript `reader` can SELECT straight from the tables, in their own
+ * frame: every column of the shared rows, and any private row (0128) they can reach. What a member
+ * may not read must not be in here, whatever the service's own projection hides.
+ */
+async function rawTranscript(reader: AgentActor, channelId: string) {
+  return as(reader, async () =>
+    JSON.stringify({
+      shared: await database.execute(
+        sql`select * from group_messages where channel_id = ${channelId}`,
+      ),
+      held: await database.execute(
+        sql`select p.* from group_message_private p join group_messages m on m.id = p.message_id where m.channel_id = ${channelId}`,
+      ),
+      everyHeld: await database.execute(
+        sql`select * from group_message_private`,
+      ),
+    }),
+  );
+}
+
+/** A queued item as the platform reads it: ended (finished) or handed back (an error kept). */
+async function itemState(key: string) {
+  const [row] = await runAsTenant("platform", () =>
+    database
+      .select({
+        finishedAt: workItems.finishedAt,
+        lastError: workItems.lastError,
+      })
+      .from(workItems)
+      .where(eq(workItems.key, key)),
+  );
+  return row
+    ? { finished: row.finishedAt !== null, lastError: row.lastError }
+    : null;
 }
 
 /** A person's sign-in email, read in their own frame as their request would. */
@@ -658,6 +697,12 @@ describe("group conversations in PostgreSQL", () => {
     const held = seen.messages.at(-1);
     expect(held).toMatchObject({ agentId: ada, status: "waiting", text: "" });
     expect(JSON.stringify(seen)).not.toContain("launch slipped");
+    // Not through the service only: no row the teammate can select holds the held reply (0128).
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "launch slipped",
+    );
+    // The owner, whose reply it is, holds it in their own private row.
+    expect(await rawTranscript(owner, channel.id)).toContain("launch slipped");
 
     decision = "approved";
     // The owner decides, in their own frame: the waiting row is theirs.
@@ -673,6 +718,22 @@ describe("group conversations in PostgreSQL", () => {
       status: "completed",
       text: "From your notes: the launch slipped.",
     });
+    // Allowed, the final text is in the shared row the teammate selects, and the hold is gone.
+    const shown = await as(teammate, () =>
+      database
+        .select({ text: groupMessages.text, status: groupMessages.status })
+        .from(groupMessages)
+        .where(eq(groupMessages.id, held?.id ?? "")),
+    );
+    expect(shown).toEqual([
+      { text: "From your notes: the launch slipped.", status: "completed" },
+    ]);
+    const [left] = await runAsTenant("platform", () =>
+      database.execute(
+        sql`select count(*)::int as n from group_message_private where message_id = ${held?.id ?? ""}`,
+      ),
+    );
+    expect(left).toEqual({ n: 0 });
   });
   test("a reply held for the owner's permission still hands off to the Bot it names", async () => {
     const owner = await person();
@@ -746,6 +807,7 @@ describe("group conversations in PostgreSQL", () => {
       });
       let channelId = "";
       let teammateMidRun = "";
+      let teammateRawMidRun = "";
       let ownerMidRun = "";
       const { conversations } = service({
         replies: {
@@ -768,6 +830,8 @@ describe("group conversations in PostgreSQL", () => {
                 conversations.list(teammate.id, channelId),
               ),
             );
+            // And straight from every table the teammate can select (0128).
+            teammateRawMidRun = await rawTranscript(teammate, channelId);
             return "From your notes: the launch slipped.";
           },
         },
@@ -791,6 +855,11 @@ describe("group conversations in PostgreSQL", () => {
       });
       await drain(conversations);
       expect(teammateMidRun).not.toContain("launch slipped");
+      expect(teammateRawMidRun).not.toContain("launch slipped");
+      // Nor once it waits on the owner's permission.
+      expect(await rawTranscript(teammate, channel.id)).not.toContain(
+        "launch slipped",
+      );
       // The owner, whose Bot it is, still watches the reply arrive.
       expect(ownerMidRun).toContain("launch slipped");
     });
@@ -820,7 +889,9 @@ describe("group conversations in PostgreSQL", () => {
             input.onText?.("From your notes: the launch slipped.");
             await new Promise((resolve) => setTimeout(resolve, 30));
             // Meanwhile the teammate asks Grace from their own request, and another replica runs
-            // that turn (in the teammate's frame, from the queued item's stamp).
+            // that turn (in the teammate's frame, from the queued item's stamp). That replica's
+            // worker is nobody's (`platform`), not nested in this owner's turn: a sweep running
+            // inside one person's frame may not take up another person's work (runAsClaimedTenant).
             await as(teammate, () =>
               conversations.send(teammate.id, channelId, {
                 id: `${prefix}-handed-teammate`,
@@ -828,7 +899,7 @@ describe("group conversations in PostgreSQL", () => {
                 agentId: grace,
               }),
             );
-            await conversations.sweep();
+            await runAsTenant("platform", () => conversations.sweep());
             return "From your notes: the launch slipped.";
           },
           [grace]: (input) => {
@@ -1275,6 +1346,275 @@ describe("group conversations in PostgreSQL", () => {
     expect(
       await as(owner, () => channelStore.get(owner, channel.id)),
     ).toBeNull();
+  });
+
+  /*
+   * P11 review: a person's key in a group (their membership, their mapping) is global, so a row
+   * holding it that they cannot see would lock them out with nothing said. 0128 refuses such a row
+   * from anybody but `platform` and deletes the old ones; these are planted as `platform` to stand
+   * for one that got there anyway, and the store must say so instead of reporting success.
+   */
+  test("an invitee whose place is held by a row they cannot read is not reported added, and their read fails loudly", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const squatter = await person();
+    const ada = await as(owner, () => bot(owner, "Ada", "public"));
+    const grace = await as(owner, () => bot(owner, "Grace", "public"));
+    const { conversations } = service({
+      replies: { [ada]: () => "a", [grace]: () => "g" },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+
+    // The squatter tries it from their own frame: refused by the database (0128).
+    const planted = await as(squatter, () =>
+      database
+        .insert(channelMemberships)
+        .values({ channelId: channel.id, userId: teammate.id })
+        .then(
+          () => "written",
+          (error: { cause?: { errno?: string } }) => error.cause?.errno,
+        ),
+    );
+    expect(planted).toBe("42501");
+
+    // A membership key held by a row the inviter cannot see: the add is refused, not a 201.
+    await runAsTenant("platform", () =>
+      database.insert(channelMemberships).values({
+        channelId: channel.id,
+        userId: teammate.id,
+        tenantId: squatter.id,
+      }),
+    );
+    await expect(
+      as(owner, () => conversations.addMember(owner.id, channel.id, { email })),
+    ).rejects.toThrow("their place in it is taken");
+    await expect(
+      as(teammate, () => conversations.list(teammate.id, channel.id)),
+    ).rejects.toThrow(GroupNotFoundError);
+    await runAsTenant("platform", () =>
+      database
+        .delete(channelMemberships)
+        .where(
+          and(
+            eq(channelMemberships.channelId, channel.id),
+            eq(channelMemberships.userId, teammate.id),
+          ),
+        ),
+    );
+    // With the key free the add writes the membership, and adding them again is the same fact.
+    expect(
+      await as(owner, () =>
+        conversations.addMember(owner.id, channel.id, { email }),
+      ),
+    ).toEqual({ userId: teammate.id });
+    expect(
+      await as(owner, () =>
+        conversations.addMember(owner.id, channel.id, { email }),
+      ),
+    ).toEqual({ userId: teammate.id });
+
+    // A mapping key held by a row the invitee cannot see: their first read fails loudly, rather
+    // than the group silently not existing for one of its members.
+    await runAsTenant("platform", () =>
+      database.insert(intelligenceChannelMappings).values({
+        channelId: channel.id,
+        userId: teammate.id,
+        threadId: `${prefix}-squatted-thread`,
+        tenantId: squatter.id,
+      }),
+    );
+    await expect(
+      as(teammate, () => channelStore.get(teammate, channel.id)),
+    ).rejects.toThrow("held by a row they cannot read");
+    await runAsTenant("platform", () =>
+      database
+        .delete(intelligenceChannelMappings)
+        .where(
+          and(
+            eq(intelligenceChannelMappings.channelId, channel.id),
+            eq(intelligenceChannelMappings.userId, teammate.id),
+          ),
+        ),
+    );
+    expect(
+      (await as(teammate, () => channelStore.get(teammate, channel.id)))?.id,
+    ).toBe(channel.id);
+  });
+
+  test("a Bot's place in a turn held by somebody else's row fails that turn loudly, never as done", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada", "public"));
+    const grace = await as(owner, () => bot(owner, "Grace", "public"));
+    const { conversations, calls } = service({
+      replies: { [ada]: () => "Ada here.", [grace]: () => "Grace here." },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+
+    // A member reads every message id, so they can occupy a Bot reply's id before the worker:
+    // with a row of their own (invisible to the sender) or a `team` one (visible, but theirs).
+    for (const [variant, stamp] of [
+      ["own", teammate.id],
+      ["team", "team"],
+    ] as const) {
+      const messageId = `${prefix}-taken-${variant}`;
+      await as(owner, () =>
+        conversations.send(owner.id, channel.id, {
+          id: messageId,
+          text: "hello",
+          agentId: ada,
+        }),
+      );
+      await as(teammate, () =>
+        database.insert(groupMessages).values({
+          id: `${messageId}:${ada}`,
+          channelId: channel.id,
+          ownerUserId: teammate.id,
+          agentId: ada,
+          text: "forged answer",
+          tenantId: stamp,
+        }),
+      );
+      await expect(
+        runAsTenant("platform", () => conversations.sweep()),
+      ).rejects.toThrow("taken by another row");
+      expect(calls).toHaveLength(0);
+      // Handed back with the reason, not finished as if the Bot had answered.
+      expect(await itemState(messageId)).toEqual({
+        finished: false,
+        lastError: expect.stringContaining("taken by another row"),
+      });
+      const [kept] = await runAsTenant("platform", () =>
+        database
+          .select({
+            ownerUserId: groupMessages.ownerUserId,
+            text: groupMessages.text,
+          })
+          .from(groupMessages)
+          .where(eq(groupMessages.id, `${messageId}:${ada}`)),
+      );
+      expect(kept).toEqual({ ownerUserId: teammate.id, text: "forged answer" });
+    }
+
+    // Nor can a member take another person's Bot thread key before their first turn (0128).
+    const thread = await as(owner, () =>
+      database
+        .execute(
+          sql`insert into group_bot_threads (owner_user_id, channel_id, agent_id, thread_id) values (${teammate.id}, ${channel.id}, ${ada}, ${`${prefix}-squat-thread`})`,
+        )
+        .then(
+          () => "written",
+          (error: { cause?: { errno?: string } }) => error.cause?.errno,
+        ),
+    );
+    expect(thread).toBe("42501");
+    await as(teammate, () =>
+      conversations.send(teammate.id, channel.id, {
+        id: `${prefix}-teammate-asks`,
+        text: "hi Ada",
+        agentId: ada,
+      }),
+    );
+    await runAsTenant("platform", () => drain(conversations));
+    expect(calls.map((call) => [call.ownerUserId, call.agentId])).toEqual([
+      [teammate.id, ada],
+    ]);
+  });
+
+  test("a turn queued by someone taken out of the group writes nothing into it", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada", "public"));
+    const grace = await as(owner, () => bot(owner, "Grace", "public"));
+    const { conversations, calls } = service({
+      replies: { [ada]: () => "Ada here.", [grace]: () => "Grace here." },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    const messageId = `${prefix}-before-removal`;
+    await as(teammate, () =>
+      conversations.send(teammate.id, channel.id, {
+        id: messageId,
+        text: "one for the road",
+        agentId: ada,
+      }),
+    );
+    await as(owner, () =>
+      conversations.removeMember(owner.id, channel.id, teammate.id),
+    );
+    await runAsTenant("platform", () => drain(conversations));
+
+    expect(calls).toHaveLength(0);
+    // No Bot row of that turn anywhere, under any stamp: the channel is not theirs to write into.
+    const rows = await runAsTenant("platform", () =>
+      database
+        .select({ id: groupMessages.id, tenantId: groupMessages.tenantId })
+        .from(groupMessages)
+        .where(like(groupMessages.id, `${messageId}:%`)),
+    );
+    expect(rows).toEqual([]);
+    // Ended, since no retry can make them a member again.
+    expect(await itemState(messageId)).toEqual({
+      finished: true,
+      lastError: null,
+    });
+  });
+
+  test("a queued turn whose payload names somebody other than its stamp is ended, never run", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations, calls, audit } = service({
+      replies: { [ada]: () => "Ada here.", [grace]: () => "Grace here." },
+    });
+    // The owner's own two-Bot channel; the planted item is stamped with them but names the teammate.
+    const channel = await as(owner, async () => {
+      const made = await channelStore.create(owner, [ada, grace]);
+      createdChannels.push(made.id);
+      return made;
+    });
+    const key = `${prefix}-mismatched-item`;
+    await as(owner, () =>
+      database.insert(workItems).values({
+        kind: GROUP_TURN_KIND,
+        key,
+        payload: {
+          ownerUserId: teammate.id,
+          channelId: channel.id,
+          messageId: key,
+          agentIds: [ada],
+          text: "run me as someone else",
+        },
+      }),
+    );
+    expect(await runAsTenant("platform", () => conversations.sweep())).toBe(
+      true,
+    );
+    expect(calls).toHaveLength(0);
+    expect(audit).toEqual([]);
+    const rows = await runAsTenant("platform", () =>
+      database
+        .select({ id: groupMessages.id })
+        .from(groupMessages)
+        .where(like(groupMessages.id, `${key}%`)),
+    );
+    expect(rows).toEqual([]);
+    expect(await itemState(key)).toEqual({ finished: true, lastError: null });
   });
 
   /**

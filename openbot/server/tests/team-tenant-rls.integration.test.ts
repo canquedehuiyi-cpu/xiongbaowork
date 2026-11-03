@@ -1143,8 +1143,7 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
     // The group reads the shared row, which holds nothing of the reply.
     const [shared] = await inFrame(
       as(owner),
-      (tx) =>
-        tx`select text, details from group_messages where id = ${heldId}`,
+      (tx) => tx`select text, details from group_messages where id = ${heldId}`,
     );
     expect(JSON.stringify(shared)).not.toContain("launch slipped");
     // Nobody else writes the private row of somebody's message: not under the sender's name ...
