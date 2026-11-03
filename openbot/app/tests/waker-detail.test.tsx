@@ -284,6 +284,20 @@ test("the detail page shows duties, running tasks, skill grants and the audit tr
     expect(duties.getByText("每天早上汇总迁移进度")).toBeTruthy(),
   );
   expect(duties.queryByText("别人的定时任务")).toBeNull();
+  // Read-only: the routine is shown, but nothing on this page runs, pauses or deletes it; that is
+  // the assembly page's, which the section links to.
+  const routines = within(screen.getByTestId("routine-summary"));
+  expect(routines.getByText("已启用")).toBeTruthy();
+  expect(routines.queryByRole("button")).toBeNull();
+  expect(routines.queryByRole("switch")).toBeNull();
+  expect(routines.queryByRole("checkbox")).toBeNull();
+  expect(routines.queryByText("立即运行")).toBeNull();
+  expect(
+    routines
+      .getByText("去装配页管理定时任务")
+      .closest("a")
+      ?.getAttribute("href"),
+  ).toBe(`/assemble/${agentId}`);
 
   // 进行中任务: the board, asked for this executor and for running work only.
   const running = section(screen, "进行中任务");
