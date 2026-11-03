@@ -1591,10 +1591,15 @@ describe("GET /:id", () => {
         .values({ id: colleagueId, email: `${colleagueId}@example.test` }),
     );
     createdUserIds.push(colleagueId);
-    const id = await runAsTenant(memberId, async () => {
-      await db
+    // The colleague's membership is stamped with the member, as before, but written by the platform:
+    // since 0128 (G01-E P11) a person-stamped row must name that same person, so no person's frame
+    // may write it.
+    await runAsTenant("platform", () =>
+      db
         .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+        .values({ channelId, userId: colleagueId, tenantId: memberId }),
+    );
+    const id = await runAsTenant(memberId, async () => {
       return uploadText(db, {
         channelId,
         uploadedBy: memberId,

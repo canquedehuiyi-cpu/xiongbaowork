@@ -63,12 +63,20 @@ beforeAll(async () => {
     agentId = profile.id;
     const channel = await channelStore.create(owner, [profile.id]);
     channelId = channel.id;
+  });
+  // The member's membership and mapping keep the owner's stamp, as before, but are written by the
+  // platform: since 0128 (G01-E P11) a person-stamped row must name that same person, so the
+  // owner's frame may not write a row naming the member.
+  await runAsTenant("platform", async () => {
     await database
       .insert(channelMemberships)
-      .values({ channelId, userId: member.id });
-    await database
-      .insert(intelligenceChannelMappings)
-      .values({ channelId, userId: member.id, threadId: randomUUID() });
+      .values({ channelId, userId: member.id, tenantId: owner.id });
+    await database.insert(intelligenceChannelMappings).values({
+      channelId,
+      userId: member.id,
+      threadId: randomUUID(),
+      tenantId: owner.id,
+    });
   });
 });
 
