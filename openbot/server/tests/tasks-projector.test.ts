@@ -80,6 +80,68 @@ test("a task remembers which machine it ran on, and one with no machine says so"
   expect(rows.find((row) => row.id === inCloud)?.deviceId).toBeNull();
 });
 
+/*
+ * Story C2: an autonomous run's card says which trigger set it off, finer than its lane. Background
+ * research is filed in the `routine` lane and marked `proactive`; a card that names no trigger keeps
+ * the column null, which is what every card written before this read as.
+ */
+test("a proactive card persists its trigger source, and a card without one stays null", async () => {
+  const proactive = await projector.opened({
+    tenantId: tenant,
+    title: "主动调研",
+    executorAgentId: agent,
+    source: "routine",
+    triggerSource: "proactive",
+    channelRef: "chan-1",
+    runRef: `run-proactive-${suite}`,
+  });
+  const plain = await projector.opened({
+    tenantId: tenant,
+    title: "每日站会提醒",
+    executorAgentId: agent,
+    source: "routine",
+    runRef: `run-plain-${suite}`,
+  });
+
+  const rows = await runAsTenant(tenant, () =>
+    database
+      .select({
+        id: tasks.id,
+        source: tasks.source,
+        triggerSource: tasks.triggerSource,
+        tenantId: tasks.tenantId,
+        status: tasks.status,
+      })
+      .from(tasks)
+      .where(inArray(tasks.id, [proactive, plain])),
+  );
+  expect(rows.find((row) => row.id === proactive)).toEqual({
+    id: proactive,
+    source: "routine",
+    triggerSource: "proactive",
+    tenantId: tenant,
+    status: "running",
+  });
+  expect(rows.find((row) => row.id === plain)?.triggerSource).toBeNull();
+
+  // Closing the card keeps what set it off.
+  await projector.finished({
+    tenantId: tenant,
+    runRef: `run-proactive-${suite}`,
+    failed: false,
+  });
+  const [closed] = await runAsTenant(tenant, () =>
+    database
+      .select({ status: tasks.status, triggerSource: tasks.triggerSource })
+      .from(tasks)
+      .where(inArray(tasks.id, [proactive])),
+  );
+  expect(closed).toEqual({
+    status: "awaiting_review",
+    triggerSource: "proactive",
+  });
+});
+
 test("a decision resumes or fails the parked task, and finishing awaits review", async () => {
   await projector.resumed({
     tenantId: tenant,
