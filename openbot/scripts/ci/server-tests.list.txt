@@ -349,6 +349,7 @@ tests/task-card-run-error.test.ts
 tests/tasks-open-target.integration.test.ts
 tests/tasks-projector.test.ts
 tests/tasks-routes-filters.integration.test.ts
+tests/team-bot-move.integration.test.ts
 tests/team-bot-owner.integration.test.ts
 tests/team-bot-visibility-parity.integration.test.ts
 tests/team-bots.integration.test.ts
