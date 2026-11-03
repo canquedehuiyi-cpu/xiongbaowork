@@ -30,12 +30,14 @@ import {
   users,
 } from "../src/db/schema/core";
 import { agentProfiles, routines } from "../src/db/schema/coworker";
+import { groupMessages } from "../src/db/schema/group";
 import { memorySources, personalMemories } from "../src/db/schema/memory";
 import {
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
 import { responsibilities } from "../src/db/schema/responsibilities";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { workItems } from "../src/db/schema/work";
 import { createRoutineRunner } from "../src/routines/runner";
 import { runAsTenant, TenantContextError } from "../src/tenant/context";
@@ -112,26 +114,39 @@ beforeAll(async () => {
       await database.insert(channelAgents).values({ channelId, agentId: bot });
     });
   /*
-   * LEFT UNFRAMED FOR A HUMAN DECISION (G01-D). The conversation both people are in must be read by
-   * each of them: the owner's reset plan counts the other member, and the other person's attention
-   * counts it as unread. A row stamped with either person is invisible to the other, so only the
-   * legacy `system` answer satisfies both; it is not a catalogue row, so it is not framed `system`.
+   * The conversation both people are in is a shared group, stamped `team` (G01-E P11), and written
+   * the way the channel store writes one: from the owner's frame, the channel first (the database
+   * stamps its creator from that frame), then the owner's own membership, then the other person's
+   * (the owner is a member by then), then the Bot. Each person reads it in their own frame: the
+   * owner's reset plan counts the other member, and the other person's attention counts it unread.
    */
-  await database.insert(channels).values({
-    id: shared,
-    name: shared,
-    description: "",
-    lastMessage: "hello",
-    lastMessageAt: new Date(),
-    lastMessageAgentId: bot,
+  await as(owner, async () => {
+    await database.insert(channels).values({
+      id: shared,
+      tenantId: TEAM_TENANT,
+      name: shared,
+      description: "",
+      lastMessage: "hello",
+      lastMessageAt: new Date(),
+      lastMessageAgentId: bot,
+    });
+    await database
+      .insert(channelMemberships)
+      .values({ channelId: shared, userId: owner, tenantId: TEAM_TENANT });
+    await database
+      .insert(channelMemberships)
+      .values({ channelId: shared, userId: other, tenantId: TEAM_TENANT });
+    await database
+      .insert(channelAgents)
+      .values({ channelId: shared, agentId: bot, tenantId: TEAM_TENANT });
+    await database.insert(groupMessages).values({
+      id: `${prefix}-shared-line`,
+      channelId: shared,
+      ownerUserId: owner,
+      text: "hello",
+      tenantId: TEAM_TENANT,
+    });
   });
-  await database.insert(channelMemberships).values([
-    { channelId: shared, userId: owner },
-    { channelId: shared, userId: other },
-  ]);
-  await database
-    .insert(channelAgents)
-    .values({ channelId: shared, agentId: bot });
   for (const person of [owner, other])
     await as(person, async () => {
       await database.insert(routines).values({
@@ -709,6 +724,39 @@ describe("reset", () => {
         .where(eq(channels.id, shared)),
     );
     expect(sharedRow?.deletedAt).toBeNull();
+    // The other member reads the same row, in their own frame, and it is still there for them too.
+    const [othersRow] = await as(other, () =>
+      database
+        .select({ deletedAt: channels.deletedAt })
+        .from(channels)
+        .where(eq(channels.id, shared)),
+    );
+    expect(othersRow).toEqual({ deletedAt: null });
+    // It is the team's row, not either person's.
+    const [stamped] = await asPlatform(() =>
+      database
+        .select({ tenantId: channels.tenantId })
+        .from(channels)
+        .where(eq(channels.id, shared)),
+    );
+    expect(stamped?.tenantId).toBe(TEAM_TENANT);
+    // And somebody who is not in it reads none of it: not the channel, its people or its lines.
+    const outsider = `${prefix}-outsider`;
+    const outside = await as(outsider, async () => ({
+      channels: await database
+        .select({ id: channels.id })
+        .from(channels)
+        .where(eq(channels.id, shared)),
+      memberships: await database
+        .select({ userId: channelMemberships.userId })
+        .from(channelMemberships)
+        .where(eq(channelMemberships.channelId, shared)),
+      messages: await database
+        .select({ id: groupMessages.id })
+        .from(groupMessages)
+        .where(eq(groupMessages.channelId, shared)),
+    }));
+    expect(outside).toEqual({ channels: [], memberships: [], messages: [] });
     // Read as the platform, so a follow-up of any stamp that survived would be seen.
     const remaining = await runAsTenant("platform", () =>
       database

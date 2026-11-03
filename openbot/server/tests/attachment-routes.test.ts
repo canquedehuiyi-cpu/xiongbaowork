@@ -87,6 +87,28 @@ function framedAs<T>(framing: Framing, tenant: string, work: () => T): T {
   return framing === "framed" ? runAsTenant(tenant, work) : work();
 }
 
+/**
+ * A colleague's membership of the member's own channel, stamped with the member: the single-tenant
+ * shape these cases were written for, where the colleague's calls run in the member's frame.
+ *
+ * Seeded by the platform because no person frame may write it any more: since 0128 (G01-E P11 review)
+ * a row stamped with one person must name that person, so nobody can occupy somebody else's key in
+ * a channel. Other people share a conversation only as a `team` group. The rows are the same as
+ * before, so what each case asserts about attachments is unchanged.
+ */
+async function colleagueInMembersChannel(
+  db: typeof database,
+  channelId: string,
+  colleagueId: string,
+  memberId: string,
+) {
+  await runAsTenant("platform", () =>
+    db
+      .insert(channelMemberships)
+      .values({ channelId, userId: colleagueId, tenantId: memberId }),
+  );
+}
+
 /** A member of a channel, a stranger to it, and an app that uploads as the member. */
 async function harness(framing: Framing = "framed") {
   const memberId = `${testPrefix}-member-${randomUUID()}`;
@@ -1639,9 +1661,7 @@ describe("GET /:id", () => {
           .values({ id: colleagueId, email: `${colleagueId}@example.test` }),
       );
       createdUserIds.push(colleagueId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+      await colleagueInMembersChannel(db, channelId, colleagueId, memberId);
       const id = await uploadText(db, {
         channelId,
         uploadedBy: memberId,
@@ -2107,9 +2127,7 @@ describe("GET /:id", () => {
           .values({ id: colleagueId, email: `${colleagueId}@example.test` }),
       );
       createdUserIds.push(colleagueId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+      await colleagueInMembersChannel(db, channelId, colleagueId, memberId);
 
       const sent = await uploadText(db, {
         channelId,
@@ -2478,9 +2496,7 @@ describe("DELETE /:id", () => {
         }),
       );
       createdUserIds.push(otherMemberId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: otherMemberId });
+      await colleagueInMembersChannel(db, channelId, otherMemberId, memberId);
       const otherMember = actorMiddleware(otherMemberId);
 
       const id = await uploadText(db, {
@@ -3102,9 +3118,7 @@ describe("loadAttachmentForTurn", () => {
         }),
       );
       createdUserIds.push(otherMemberId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: otherMemberId });
+      await colleagueInMembersChannel(db, channelId, otherMemberId, memberId);
 
       const id = await uploadText(db, {
         channelId,
@@ -3623,9 +3637,7 @@ describe("markAttachmentsSent", () => {
         }),
       );
       createdUserIds.push(colleagueId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+      await colleagueInMembersChannel(db, channelId, colleagueId, memberId);
 
       const theirs = await uploadText(db, {
         channelId,
