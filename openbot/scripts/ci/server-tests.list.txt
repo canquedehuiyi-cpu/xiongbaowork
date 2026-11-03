@@ -188,6 +188,8 @@ tests/host-access-tools.test.ts
 tests/human-input-end-to-end.test.ts
 tests/identity-provider-audit.test.ts
 tests/jsonb-encoding.integration.test.ts
+tests/knowledge-base.integration.test.ts
+tests/knowledge-tools.test.ts
 tests/last-sign-in-backfill.integration.test.ts
 tests/local-threads.test.ts
 tests/mastra-roster.test.ts
