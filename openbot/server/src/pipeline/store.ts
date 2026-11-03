@@ -5,6 +5,7 @@ import {
   groupTaskRuns,
   groupTaskTemplates,
   tasks,
+  wakerFlows,
   wakerGroupMembers,
 } from "../db/schema";
 import {
@@ -181,6 +182,17 @@ function isUuid(value: string) {
     value,
   );
 }
+
+/**
+ * The WakerFlow that compiled this template's crew, if any (spec D10).
+ *
+ * A Flow's crew and templates are its compiled form, not a crew a person arranged: the generic
+ * pipeline API must not list them, add steps to them, or start them behind the Flow's back.
+ */
+const owningFlow = () =>
+  sql<
+    string | null
+  >`(select ${wakerFlows.id} from ${wakerFlows} where ${wakerFlows.groupId} = ${groupTaskTemplates.groupId} limit 1)`;
 
 type RunRow = {
   id: string;
@@ -402,6 +414,18 @@ export function createPipelineStore(options: {
         "流程要写给一个小组，得先从「员工 › 小组」里挑一个。",
       );
     }
+    const [flowOwned] = await runAsTenant(input.tenantId, async () =>
+      database
+        .select({ id: wakerFlows.id })
+        .from(wakerFlows)
+        .where(eq(wakerFlows.groupId, input.groupId))
+        .limit(1),
+    );
+    if (flowOwned) {
+      throw new PipelineValidationError(
+        "这个小组属于 WakerFlow 内部，只能在 WakerFlow 里编辑它的流程。",
+      );
+    }
     /*
      * Every step goes to somebody IN this crew — the promise the pipeline screen makes in its own
      * description, so it is checked here rather than left to the picker. Reading the roster under the
@@ -431,7 +455,10 @@ export function createPipelineStore(options: {
     return name;
   }
 
-  /** One template of this workspace, or null — a malformed id is "not here", not a cast error. */
+  /**
+   * One template of this workspace, or null — a malformed id is "not here", not a cast error. A
+   * WakerFlow's compiled template is not here either (spec D10): it is edited only through its Flow.
+   */
   async function readTemplate(tenantId: string, templateId: string) {
     if (!isUuid(templateId)) return null;
     const [row] = await runAsTenant(tenantId, async () =>
@@ -445,6 +472,7 @@ export function createPipelineStore(options: {
           and(
             eq(groupTaskTemplates.tenantId, tenantId),
             eq(groupTaskTemplates.id, templateId),
+            isNull(owningFlow()),
           ),
         )
         .limit(1),
@@ -549,6 +577,8 @@ export function createPipelineStore(options: {
             and(
               eq(groupTaskTemplates.tenantId, input.tenantId),
               eq(groupTaskTemplates.id, input.templateId),
+              // A WakerFlow's compiled template goes away with its Flow, never on its own (spec D10).
+              isNull(owningFlow()),
             ),
           )
           .returning({ id: groupTaskTemplates.id }),
@@ -582,12 +612,13 @@ export function createPipelineStore(options: {
           })
           .from(groupTaskTemplates)
           .where(
-            input.groupId
-              ? and(
-                  eq(groupTaskTemplates.tenantId, input.tenantId),
-                  eq(groupTaskTemplates.groupId, input.groupId),
-                )
-              : eq(groupTaskTemplates.tenantId, input.tenantId),
+            and(
+              eq(groupTaskTemplates.tenantId, input.tenantId),
+              input.groupId
+                ? eq(groupTaskTemplates.groupId, input.groupId)
+                : undefined,
+              isNull(owningFlow()),
+            ),
           )
           .orderBy(desc(groupTaskTemplates.createdAt)),
       );
@@ -621,6 +652,7 @@ export function createPipelineStore(options: {
           .select({
             steps: groupTaskTemplates.steps,
             groupId: groupTaskTemplates.groupId,
+            flowId: owningFlow(),
           })
           .from(groupTaskTemplates)
           .where(
@@ -632,7 +664,8 @@ export function createPipelineStore(options: {
           .limit(1);
         return row ?? null;
       });
-      if (!template) {
+      // A Flow's template runs only as that Flow's run; to everyone else it is not here.
+      if (!template || (template.flowId && template.flowId !== input.flowId)) {
         throw new PipelineNotFoundError("这个工作区里没有这条模板。");
       }
       const declared = Array.isArray(template.steps)

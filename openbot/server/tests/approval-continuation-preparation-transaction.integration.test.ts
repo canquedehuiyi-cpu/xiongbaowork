@@ -42,13 +42,13 @@ const baseOptions: ContinuationStoreOptions = {
 };
 
 beforeAll(async () => {
-  const [identity] = await database.select({
+  const [identity] = await runAsTenant("platform", () => database.select({
     name: sql<string>`current_database()`,
     version: sql<number>`current_setting('server_version_num')::int`,
     parent: sql<string | null>`to_regclass('public.approval_requests')::text`,
     ledger: sql<string | null>`to_regclass('public.approval_continuations')::text`,
     fixturePrivilege: sql<boolean>`exists(select 1 from pg_roles where rolname = current_user and (rolsuper or rolbypassrls))`,
-  }).from(sql`(select 1) as fixture_identity`);
+  }).from(sql`(select 1) as fixture_identity`));
   if (!identity || identity.name !== databaseName || identity.version < 170_000 ||
       identity.version >= 180_000 || !identity.parent || !identity.ledger ||
       !identity.fixturePrivilege)

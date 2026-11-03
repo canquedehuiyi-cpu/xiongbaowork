@@ -4,9 +4,9 @@
 这是基于 CopilotKit OpenBot 开发的私有化版本：账号、对话、任务与审计数据存入自己的 PostgreSQL，
 模型由部署方或用户接入。当前目标是 v0.1；浏览器执行、真实模型成功路径及完整发布验收以验收记录为准。
 
-当前交付候选见 [PR #1](https://github.com/xiongpinji/xiongbao-Wake-/pull/1)。
-验收未合并候选时，克隆后先执行 `git -C xiongbao-Wake- switch feat/b-delivery-form`，再进入 `openbot/`。
-正式部署使用已合入交付改动的 main 或发布标签。
+正式部署拉取已发布镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork:<标签>`，不需要克隆源码或本机构建。
+每个发布的 GitHub Release 附带 `container-images.json`，记录该标签对应的镜像 digest。
+镜像在 GHCR 设为公开之前，未登录的 `docker pull` 会被拒绝；在此之前请向交付方确认镜像已公开。
 
 源码位于 `openbot/`。本仓库的交付路径是 Docker 镜像；Windows 使用 Docker Desktop 的 Linux 容器。
 开发环境、历史走查记录与交付部署分别见[部署手册](openbot/docs/deployment-qoderwake.md)、
@@ -19,58 +19,75 @@
 
 ## Linux 快速上手
 
-需要 Bash、Git、Docker Engine（含 Buildx）、curl 和 OpenSSL。
-当前仓库为私有仓库，需要有读取权限的 GitHub 账号，并提前完成 Git 认证；
-已安装 GitHub CLI 时可执行 `gh auth login` 和 `gh auth setup-git`。
+需要 Bash、Docker Engine、curl 和 OpenSSL；不需要 Git、GitHub 账号或 Bun。
 WSL 使用 Docker Desktop 时先启用该发行版的 WSL Integration，并确认 `docker version` 同时显示 Client / Server。
-下面只在本机开放 `127.0.0.1:3772`，不配置模型密钥。
+在一个新建的空目录中执行下面的命令。它拉取发布镜像、下载同一标签的配置模板、生成随机密钥，
+只在本机开放 `127.0.0.1:3772`，不配置模型密钥。换版本时先设置 `OPENBOT_TAG=<发布标签>`。
+这段命令在每次发布后由 CI 原样执行（Gate 7 Linux：干净机器、未登录 GHCR）。
 
+<!-- g7:linux:begin -->
 ```bash
-git clone https://github.com/xiongpinji/xiongbao-Wake-.git
-cd xiongbao-Wake-/openbot
-cp docker/delivery.env.example .env.delivery
-printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
-docker build -f Dockerfile -t xiongbao-digital-employee:local .
+OPENBOT_TAG=${OPENBOT_TAG:-v0.2.0-rc.1}
+OPENBOT_IMAGE=${OPENBOT_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OPENBOT_TAG}
+docker pull "$OPENBOT_IMAGE"
+if [ -e .env.delivery ]; then
+  echo '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
+else
+  curl --fail --silent --show-error --location -o .env.delivery \
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker/delivery.env.example"
+  chmod 600 .env.delivery
+  printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
+fi
 docker run -d --name xiongbao-local --env-file .env.delivery \
   -p 127.0.0.1:3772:3001 \
   -v xiongbao-local-db:/var/lib/postgresql \
   -v xiongbao-local-workspace:/workspace \
   -v xiongbao-local-profiles:/profiles \
-  xiongbao-digital-employee:local
+  "$OPENBOT_IMAGE"
 deadline=$((SECONDS+60))
 until curl --fail --silent --max-time 2 http://127.0.0.1:3772/health; do
   if [ "$SECONDS" -ge "$deadline" ]; then docker logs xiongbao-local; exit 1; fi
   sleep 1
 done
+echo
 ```
+<!-- g7:linux:end -->
 
-构建需要下载工具链、Chromium 与依赖，首次构建时间取决于网络和磁盘。
 浏览器打开 [本机入口](http://localhost:3772)。第一次启动会初始化数据库、运行迁移。
+`.env.delivery` 中的 `KEY_ENCRYPTION_KEY` 必须与数据卷一起保留；重复执行上面的命令不会覆盖它；重复执行前先 `docker rm -f xiongbao-local`（命名卷保留）。
 模型尚未接入时不能把“页面可打开”当作“对话已可用”；模型接入见部署手册。
+按 digest 固定版本、校验镜像来源和升级见[部署手册](openbot/docs/deployment-qoderwake.md)。
 
 ## Windows Docker Desktop 快速上手
 
-先启动 Docker Desktop，切换到 Linux containers；以下在 PowerShell 执行。
-不用在 Windows 宿主安装 Bun，也不用重建其他项目的 Compose 栈。
-先安装 Git，并完成有仓库读取权限的 GitHub 账号认证；有 GitHub CLI 时同样可用
-`gh auth login`、`gh auth setup-git`。确认 `docker version` 同时显示 Client / Server。
+先启动 Docker Desktop，切换到 Linux containers；以下在 PowerShell 的一个新建空目录中执行。
+不用安装 Git、Bun，也不用重建其他项目的 Compose 栈。确认 `docker version` 同时显示 Client / Server。
+这段命令目前由人工验收（Gate 7 Windows 一半），CI 只检查其内容不含源码构建步骤。
 
+<!-- g7:windows:begin -->
 ```powershell
-git clone https://github.com/xiongpinji/xiongbao-Wake-.git
-Set-Location xiongbao-Wake-/openbot
-Copy-Item docker/delivery.env.example .env.delivery
-$keyBytes = New-Object byte[] 32
-$keyGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$keyGenerator.GetBytes($keyBytes)
-$keyGenerator.Dispose()
-Add-Content .env.delivery ('KEY_ENCRYPTION_KEY=' + [Convert]::ToBase64String($keyBytes)) -Encoding ascii
-docker build -f Dockerfile -t xiongbao-digital-employee:local .
+$OpenbotTag = if ($env:OPENBOT_TAG) { $env:OPENBOT_TAG } else { 'v0.2.0-rc.1' }
+$OpenbotImage = if ($env:OPENBOT_IMAGE) { $env:OPENBOT_IMAGE } else { "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OpenbotTag" }
+docker pull $OpenbotImage
+if ($LASTEXITCODE -ne 0) { throw '拉取镜像失败' }
+if (Test-Path .env.delivery) {
+  Write-Output '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
+} else {
+  Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OpenbotTag/openbot/docker/delivery.env.example"
+  $keyBytes = New-Object byte[] 32
+  $keyGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $keyGenerator.GetBytes($keyBytes)
+  $keyGenerator.Dispose()
+  Add-Content .env.delivery ('KEY_ENCRYPTION_KEY=' + [Convert]::ToBase64String($keyBytes)) -Encoding ascii
+}
 docker run -d --name xiongbao-local --env-file .env.delivery `
   -p 127.0.0.1:3772:3001 `
   -v xiongbao-local-db:/var/lib/postgresql `
   -v xiongbao-local-workspace:/workspace `
   -v xiongbao-local-profiles:/profiles `
-  xiongbao-digital-employee:local
+  $OpenbotImage
+if ($LASTEXITCODE -ne 0) { throw '启动容器失败' }
 $healthReady = $false
 $healthDeadline = (Get-Date).AddSeconds(60)
 while ((Get-Date) -lt $healthDeadline) {
@@ -84,6 +101,7 @@ while ((Get-Date) -lt $healthDeadline) {
 if (!$healthReady) { docker logs xiongbao-local; throw '60 秒内未健康' }
 $healthResponse.StatusCode
 ```
+<!-- g7:windows:end -->
 
 成功应返回 200。浏览器入口也是 [localhost:3772](http://localhost:3772)。
 Git Bash 若使用 `docker -v/-w` 的绝对路径，先设置 `MSYS_NO_PATHCONV=1`。
@@ -113,14 +131,29 @@ Windows 宿主不能直接 `bun` 起 server，交付路径是**镜像或 Linux/W
 | 现象 | 处理 |
 | --- | --- |
 | 健康检查没返回 200 | `docker logs xiongbao-local`，检查迁移、密钥、登录配置和端口占用 |
+| `docker pull` 报 denied / unauthorized | 镜像尚未在 GHCR 公开，或标签拼写错误；核对 Release 中的标签 |
 | 日志出现 `rls-not-enforced` 并退出 | 改用非超级用户、无 BYPASSRLS 的运行期连接串；owner 只做迁移 |
 | 页面可打开但模型报错 | 核对 `BOT_MODEL`、兼容 API 地址及模型授权；修改后重建容器读取配置 |
-| 换品牌包后页面仍是旧品牌 | SPA 品牌在构建期注入，重新构建并更换镜像 |
+| 换品牌包后页面仍是旧品牌 | SPA 品牌在构建期注入，按附录从源码构建并更换镜像 |
 | 本机端口 3772 被占用 | 更改宿主映射和 `OPENBOT_PUBLIC_URL`，内部端口仍为 3001 |
 | Windows 宿主 server 无输出 | 使用镜像或 Linux/WSL，详见开发环境笔记 |
 
 停止体验容器可执行 `docker rm -f xiongbao-local`；命名卷仍然保留。
 备份前不要删除数据库卷，升级时不要使用 `docker compose down -v`。
+
+## 附录：从源码构建
+
+只有修改源码或更换构建期品牌包时才需要本机构建；客户部署使用上面的发布镜像。
+需要 Git 与 Docker Buildx；构建会下载工具链、Chromium 与依赖，首次耗时取决于网络和磁盘。
+
+```bash
+git clone https://github.com/canquedehuiyi-cpu/xiongbaowork.git
+cd xiongbaowork/openbot
+docker build -f Dockerfile -t xiongbao-digital-employee:local .
+```
+
+之后先设置 `OPENBOT_IMAGE=xiongbao-digital-employee:local`，再执行快速上手命令中除 `docker pull` 以外的各行。
+本机构建的镜像没有发布 digest 和来源证明，不能作为交付验收证据。
 
 ## 与上游及许可的关系
 

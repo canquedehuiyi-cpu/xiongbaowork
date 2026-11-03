@@ -1,6 +1,11 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { agents, wakerGroupMembers, wakerGroups } from "../db/schema";
+import {
+  agents,
+  wakerFlows,
+  wakerGroupMembers,
+  wakerGroups,
+} from "../db/schema";
 import { currentTenant } from "../tenant/context";
 
 /**
@@ -72,12 +77,31 @@ const shape = (
     ),
 });
 
+/**
+ * A crew a WakerFlow compiled (spec D10) is that Flow's internal form, not a crew a person arranged:
+ * it is not listed here, and its roster changes only through the Flow's own Save. To this store it
+ * reads as not being here at all, the same answer a foreign crew gets.
+ */
+const flowOwned = () =>
+  sql`exists (select 1 from ${wakerFlows} where ${wakerFlows.groupId} = ${wakerGroups.id})`;
+
 export function createWakerGroupStore(database: Database): WakerGroupStore {
+  /** A crew compiled by a WakerFlow is off limits to the generic crew API. */
+  async function ownedByFlow(groupId: string) {
+    const [owner] = await database
+      .select({ id: wakerFlows.id })
+      .from(wakerFlows)
+      .where(eq(wakerFlows.groupId, groupId))
+      .limit(1);
+    return Boolean(owner);
+  }
+
   return {
     async list() {
       const rows = await database
         .select()
         .from(wakerGroups)
+        .where(sql`not ${flowOwned()}`)
         .orderBy(asc(wakerGroups.name));
       if (rows.length === 0) return [];
       // One extra read rather than one read per group: a workspace with thirty crews would
@@ -150,6 +174,7 @@ export function createWakerGroupStore(database: Database): WakerGroupStore {
        * edit a crew every other workspace lists.
        */
       if (group.tenantId !== currentTenant()) return null;
+      if (await ownedByFlow(groupId)) return null;
       /*
        * A crew is a name over coworkers, so the only thing it can hold is coworkers this workspace
        * can point at. `waker_group_members.agent_id` is plain text with no foreign key, so until now a
@@ -200,6 +225,7 @@ export function createWakerGroupStore(database: Database): WakerGroupStore {
         .where(eq(wakerGroups.id, groupId))
         .limit(1);
       if (!target || target.tenantId !== currentTenant()) return false;
+      if (await ownedByFlow(groupId)) return false;
       const [removed] = await database
         .delete(wakerGroups)
         .where(eq(wakerGroups.id, groupId))

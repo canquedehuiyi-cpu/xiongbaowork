@@ -6,6 +6,7 @@ import {
   groupTaskRuns,
   groupTaskTemplates,
   tasks,
+  wakerFlows,
   wakerGroupMembers,
   wakerGroups,
 } from "../src/db/schema";
@@ -38,6 +39,7 @@ const tenant = `tpl-edit-${suite}`;
 const stranger = `tpl-edit-other-${suite}`;
 const groupId = randomUUID();
 const strangerGroupId = randomUUID();
+const flowGroupId = randomUUID();
 
 const DEV = `dev-${suite}`;
 const REVIEW = `review-${suite}`;
@@ -121,6 +123,19 @@ await runAsTenant(tenant, async () => {
     })),
   );
 });
+// A WakerFlow's compiled crew (spec D10): the generic pipeline API must leave its templates alone.
+await runAsTenant(tenant, async () => {
+  await database.insert(wakerGroups).values({
+    id: flowGroupId,
+    tenantId: tenant,
+    name: `流程内部小组-${suite}`,
+  });
+  await database.insert(wakerGroupMembers).values({
+    groupId: flowGroupId,
+    agentId: DEV,
+    position: "0",
+  });
+});
 await runAsTenant(stranger, async () => {
   await database.insert(wakerGroups).values({
     id: strangerGroupId,
@@ -135,8 +150,14 @@ await runAsTenant(stranger, async () => {
 });
 
 afterAll(async () => {
+  await runAsTenant(tenant, async () => {
+    await database
+      .delete(wakerFlows)
+      .where(eq(wakerFlows.groupId, flowGroupId));
+  });
   for (const [who, crew] of [
     [tenant, groupId],
+    [tenant, flowGroupId],
     [stranger, strangerGroupId],
   ] as const) {
     await runAsTenant(who, async () => {
@@ -460,4 +481,51 @@ test("another workspace's template is not here to edit or delete", async () => {
       .where(eq(groupTaskTemplates.id, theirs)),
   );
   expect(row).toEqual({ name: "别人的流程", steps: [STEPS[0]!] });
+});
+
+test("a WakerFlow's compiled template is edited only through its Flow", async () => {
+  const pipeline = build(done);
+  // Written while the crew was still a plain crew, then claimed by a Flow — the shape a compile leaves.
+  const compiled = await pipeline.createTemplate({
+    tenantId: tenant,
+    groupId: flowGroupId,
+    name: "流程编译出的模板",
+    steps: [STEPS[0]!],
+    createdBy: tenant,
+  });
+  await runAsTenant(tenant, async () => {
+    await database.insert(wakerFlows).values({
+      tenantId: tenant,
+      name: `流程-${suite}`,
+      groupId: flowGroupId,
+      templateId: compiled,
+    });
+  });
+
+  await expect(
+    pipeline.updateTemplate({
+      tenantId: tenant,
+      templateId: compiled,
+      name: "从流水线页改",
+      steps: [STEPS[0]!],
+    }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
+  await expect(
+    pipeline.deleteTemplate({ tenantId: tenant, templateId: compiled }),
+  ).rejects.toBeInstanceOf(PipelineNotFoundError);
+  await expect(
+    pipeline.createTemplate({
+      tenantId: tenant,
+      groupId: flowGroupId,
+      name: "再加一条",
+      steps: [STEPS[0]!],
+      createdBy: tenant,
+    }),
+  ).rejects.toBeInstanceOf(PipelineValidationError);
+
+  expect(await templateRow(compiled)).toEqual({
+    name: "流程编译出的模板",
+    groupId: flowGroupId,
+    steps: [STEPS[0]!],
+  });
 });

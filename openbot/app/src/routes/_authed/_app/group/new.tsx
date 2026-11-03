@@ -75,7 +75,7 @@ function RouteComponent() {
                 <span className="text-sm">{profile.name}</span>
                 {checked ? (
                   <span className="text-xs text-muted-foreground">
-                    answers {ordinal(chosen.indexOf(profile.id) + 1)}
+                    第 {chosen.indexOf(profile.id) + 1} 个回答
                   </span>
                 ) : null}
                 <span className="truncate text-sm text-muted-foreground">
@@ -101,8 +101,4 @@ function RouteComponent() {
       </div>
     </div>
   );
-}
-
-function ordinal(position: number) {
-  return ["first", "second", "third"][position - 1] ?? `#${position}`;
 }

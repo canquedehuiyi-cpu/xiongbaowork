@@ -7,6 +7,7 @@ import {
 } from "../src/computer/page-frames";
 import { createDatabase } from "../src/db/client";
 import { computerPageFrame } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -26,18 +27,30 @@ const store = createPageFrameStore(database);
 
 const COMPUTER = `frame-retention-${crypto.randomUUID().slice(0, 8)}`;
 
+/*
+ * Whose screenshots these are. A frame is kept on a person's turn, so the rows are written, aged and
+ * read back as that person. The sweep is nobody's: `startRetentionSweeps` runs it as the platform, and
+ * the direct `purge` calls below are framed the same way.
+ */
+const TENANT = `frame-retention-${crypto.randomUUID().slice(0, 8)}`;
+const asPerson = <T>(work: () => T) => runAsTenant(TENANT, work);
+const purge = (olderThanMs: number) =>
+  runAsTenant("platform", () => store.purge(olderThanMs));
+
 async function frame(daysAgo: number, index: number): Promise<void> {
-  await store.save({
-    computerId: COMPUTER,
-    toolCallId: `turn-${index}`,
-    url: `https://example.com/${index}`,
-    title: `page ${index}`,
-    frame: "iVBORw0KGgo=",
+  await asPerson(async () => {
+    await store.save({
+      computerId: COMPUTER,
+      toolCallId: `turn-${index}`,
+      url: `https://example.com/${index}`,
+      title: `page ${index}`,
+      frame: "iVBORw0KGgo=",
+    });
+    await database
+      .update(computerPageFrame)
+      .set({ capturedAt: sql`now() - make_interval(days => ${daysAgo})` })
+      .where(eq(computerPageFrame.toolCallId, `turn-${index}`));
   });
-  await database
-    .update(computerPageFrame)
-    .set({ capturedAt: sql`now() - make_interval(days => ${daysAgo})` })
-    .where(eq(computerPageFrame.toolCallId, `turn-${index}`));
 }
 
 /*
@@ -49,31 +62,37 @@ async function frame(daysAgo: number, index: number): Promise<void> {
  * were never broken. Two statements instead of eight hundred, with the same rows at the end.
  */
 async function manyFrames(daysAgo: number, count: number): Promise<void> {
-  await database.insert(computerPageFrame).values(
-    Array.from({ length: count }, (_unused, index) => ({
-      computerId: COMPUTER,
-      toolCallId: `turn-${index + 1}`,
-      url: `https://example.com/${index + 1}`,
-      title: `page ${index + 1}`,
-      frame: "iVBORw0KGgo=",
-    })),
-  );
-  await database
-    .update(computerPageFrame)
-    .set({ capturedAt: sql`now() - make_interval(days => ${daysAgo})` })
-    .where(eq(computerPageFrame.computerId, COMPUTER));
+  await asPerson(async () => {
+    await database.insert(computerPageFrame).values(
+      Array.from({ length: count }, (_unused, index) => ({
+        computerId: COMPUTER,
+        toolCallId: `turn-${index + 1}`,
+        url: `https://example.com/${index + 1}`,
+        title: `page ${index + 1}`,
+        frame: "iVBORw0KGgo=",
+      })),
+    );
+    await database
+      .update(computerPageFrame)
+      .set({ capturedAt: sql`now() - make_interval(days => ${daysAgo})` })
+      .where(eq(computerPageFrame.computerId, COMPUTER));
+  });
 }
 
 const kept = () =>
-  database
-    .select({ toolCallId: computerPageFrame.toolCallId })
-    .from(computerPageFrame)
-    .where(eq(computerPageFrame.computerId, COMPUTER));
+  asPerson(() =>
+    database
+      .select({ toolCallId: computerPageFrame.toolCallId })
+      .from(computerPageFrame)
+      .where(eq(computerPageFrame.computerId, COMPUTER)),
+  );
 
 afterEach(async () => {
-  await database
-    .delete(computerPageFrame)
-    .where(eq(computerPageFrame.computerId, COMPUTER));
+  await asPerson(() =>
+    database
+      .delete(computerPageFrame)
+      .where(eq(computerPageFrame.computerId, COMPUTER)),
+  );
 });
 
 describe("page frame retention", () => {
@@ -107,21 +126,21 @@ describe("page frame retention", () => {
     await frame(40, 1);
     await frame(29, 2);
 
-    await store.purge(FRAME_RETENTION_MS);
+    await purge(FRAME_RETENTION_MS);
     expect((await kept()).map((row) => row.toolCallId)).toEqual(["turn-2"]);
   });
 
   test("purge past its batch size removes every eligible row", async () => {
     await manyFrames(45, 205);
 
-    await store.purge(FRAME_RETENTION_MS);
+    await purge(FRAME_RETENTION_MS);
     expect(await kept()).toHaveLength(0);
   });
 
   test("purge leaves a frame inside the window alone", async () => {
     await frame(1, 1);
 
-    await store.purge(FRAME_RETENTION_MS);
+    await purge(FRAME_RETENTION_MS);
     expect(await kept()).toHaveLength(1);
   });
 
@@ -136,10 +155,7 @@ describe("page frame retention", () => {
   test("two sweeps at once remove each row once and neither stalls", async () => {
     await manyFrames(45, 400);
 
-    await Promise.all([
-      store.purge(FRAME_RETENTION_MS),
-      store.purge(FRAME_RETENTION_MS),
-    ]);
+    await Promise.all([purge(FRAME_RETENTION_MS), purge(FRAME_RETENTION_MS)]);
 
     expect(await kept()).toHaveLength(0);
   });
