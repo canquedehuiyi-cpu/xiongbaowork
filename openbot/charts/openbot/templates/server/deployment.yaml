@@ -43,6 +43,14 @@ spec:
           the old values, and the deployment looks upgraded while behaving exactly as it did.
         */}}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.postgresql.enabled }}
+        {{- /*
+          The bundled role writer's password. The migrations Job ALTERs the role to whatever was
+          rendered, and a running pod keeps the ROLE_WRITER_PASSWORD it started with, so a change has
+          to roll the pods or every role-writer connection fails until somebody restarts them.
+        */}}
+        checksum/role-writer: {{ include "openbot.roleWriterChecksum" . }}
+        {{- end }}
         {{- if eq .Values.computers.mode "sandbox" }}
         {{- /*
           The shape of a computer, which the server reads once and keeps.
