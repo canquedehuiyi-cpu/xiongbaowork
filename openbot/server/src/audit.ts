@@ -1116,7 +1116,8 @@ export type AgentTrailReader = {
  *
  * Served by `audit_events_target_time_idx` (`target_type, target_id, created_at desc, id desc`),
  * so it needs no index of its own. Read in the caller's tenant frame, so row-level security keeps it
- * to the tenant the request belongs to; nothing here names a tenant.
+ * to the tenant the request belongs to; nothing here names a tenant. Only an administrator's request
+ * reads it across tenants, by calling it inside `asAdminPlatform` (agents/lifecycle-routes.ts).
  *
  * Payloads were redacted when written and are redacted again on the way out, so a row written by a
  * path that bypassed `recordAuditEvent` still never hands a secret to the employee page.

@@ -16,7 +16,9 @@ import {
   agentTrailPageFromUrl,
   recordAuditEvent,
 } from "../audit";
+import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
+import { capabilityFor } from "../tenant/context";
 import {
   type BotLifecycleStore,
   type BotNotify,
@@ -50,6 +52,12 @@ export type BotLifecycleServices = {
 export function createBotLifecycleRoutes(
   services: BotLifecycleServices,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
+  /**
+   * How an administrator reads a Bot's whole trail (G01-E I5): every row is filed in the tenant of
+   * the person it is about, so only `platform` reads across them, and only an administrator who
+   * holds the capability in this request gets there. Absent, an administrator is answered as anyone.
+   */
+  adminScope?: Pick<AdminScope, "adminCapability" | "asAdminPlatform">,
 ) {
   const {
     lifecycle,
@@ -259,35 +267,60 @@ export function createBotLifecycleRoutes(
    * a row about one person's own relationship with the Bot — pausing, muting, resetting it — is shown
    * only to that person. 404 when the Bot is not reachable, 400 for a bad `limit` or `cursor`, 503
    * when no trail reader is wired.
+   *
+   * WHICH ROWS EXIST TO BE SEEN is the frame's (G01-E I1). The owner reads in their own frame, so
+   * "everybody" means every row filed in the owner's tenant: their own, the system's and background
+   * work's on their behalf, and an administrator's acting as them. What a colleague did to a shared
+   * Bot is filed in the colleague's tenant and stays out of the owner's page. Only an administrator
+   * holding the capability reads the Bot's rows across every tenant, as `platform`.
    */
-  routes.get("/:agentId/audit", requireUser, async (context) => {
-    const agent = await reachable(context);
-    if (agent instanceof Response) return agent;
-    if (!auditTrail)
-      return context.json({ error: "Audit logging is not configured." }, 503);
-    const actor = context.var.actor;
-    const seesEveryone =
-      actor.role === "admin" ||
-      (typeof agent.ownerUserId === "string" && agent.ownerUserId === actor.id);
-    try {
-      const page = agentTrailPageFromUrl(new URL(context.req.url));
-      const trail = await auditTrail.listAgentTrail({
-        agentId: agent.id,
-        viewerUserId: actor.id,
-        seesEveryone,
-        ...page,
-      });
-      return context.json({
-        scope: seesEveryone ? "everyone" : "own",
-        events: trail.events,
-        ...(trail.nextCursor ? { nextCursor: trail.nextCursor } : {}),
-      });
-    } catch (error) {
-      if (error instanceof AuditQueryError)
-        return context.json({ error: error.message }, 400);
-      throw error;
-    }
-  });
+  routes.get(
+    "/:agentId/audit",
+    requireUser,
+    adminScope?.adminCapability ?? ((_context, next) => next()),
+    async (context) => {
+      const agent = await reachable(context);
+      if (agent instanceof Response) return agent;
+      if (!auditTrail)
+        return context.json({ error: "Audit logging is not configured." }, 503);
+      const actor = context.var.actor;
+      // The admin door, only for an administrator who holds the capability in this request: a role
+      // removed since sign-in, or a deployment with no admin scope, is answered as anyone.
+      const admin =
+        adminScope &&
+        actor.role === "admin" &&
+        capabilityFor(actor.id) === "admin"
+          ? adminScope
+          : undefined;
+      const seesEveryone =
+        admin !== undefined ||
+        (typeof agent.ownerUserId === "string" &&
+          agent.ownerUserId === actor.id);
+      try {
+        const page = agentTrailPageFromUrl(new URL(context.req.url));
+        const query = {
+          agentId: agent.id,
+          viewerUserId: actor.id,
+          seesEveryone,
+          ...page,
+        };
+        const trail = admin
+          ? await admin.asAdminPlatform(actor, () =>
+              auditTrail.listAgentTrail(query),
+            )
+          : await auditTrail.listAgentTrail(query);
+        return context.json({
+          scope: seesEveryone ? "everyone" : "own",
+          events: trail.events,
+          ...(trail.nextCursor ? { nextCursor: trail.nextCursor } : {}),
+        });
+      } catch (error) {
+        if (error instanceof AuditQueryError)
+          return context.json({ error: error.message }, 400);
+        throw error;
+      }
+    },
+  );
 
   routes.post(
     "/:agentId/activity/handoffs/stop",
