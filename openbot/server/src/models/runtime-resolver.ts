@@ -15,7 +15,13 @@ import {
   platformModelPool,
   subscriptions,
 } from "../db/schema";
-import { runAsTenant, TenantContextError } from "../tenant/context";
+import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import {
+  currentTenant,
+  isPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import {
   databaseTokenCallSink,
   type ModelTokenCallSink,
@@ -135,6 +141,7 @@ async function bindingFor(
   const [profile] = await database
     .select({
       tenantId: agentProfiles.tenantId,
+      ownerUserId: agentProfiles.ownerUserId,
       modelRef: agentProfiles.modelRef,
       platformModelRef: agentProfiles.platformModelRef,
     })
@@ -142,16 +149,32 @@ async function bindingFor(
     .where(eq(agentProfiles.agentId, agentId))
     .limit(1);
   if (!profile) return null;
+  /*
+   * A TEAM Bot (G01-E, plan §2.4) is stamped `team`, which is nobody and cannot be billed. Its
+   * owner's private library model is the owner's key, so it is used only when the owner is the one
+   * asking; a teammate falls back to the deployment default. A pool model is paid by whoever invokes
+   * it — the person in the frame — and under `platform` (background work) by the owner.
+   */
+  const team = profile.tenantId === TEAM_TENANT;
+  // Asked only for a team Bot: a private Bot's binding never depends on who is asking.
+  const frame = team ? currentTenant() : "";
+  const owner = isPersonTenant(profile.ownerUserId)
+    ? profile.ownerUserId
+    : null;
   if (!profile.modelRef) {
-    return profile.platformModelRef
-      ? poolBindingFor(
-          database,
-          profile.tenantId,
-          profile.platformModelRef,
-          environment,
-        )
+    if (!profile.platformModelRef) return null;
+    const payer = !team
+      ? profile.tenantId
+      : isPersonTenant(frame)
+        ? frame
+        : frame === PLATFORM_TENANT
+          ? owner
+          : null;
+    return payer
+      ? poolBindingFor(database, payer, profile.platformModelRef, environment)
       : null;
   }
+  if (team && (!owner || frame !== owner)) return null;
   const [entry] = await database
     .select({
       tenantId: modelRegistry.tenantId,
@@ -165,7 +188,7 @@ async function bindingFor(
     .where(eq(modelRegistry.id, profile.modelRef))
     .limit(1);
   if (!entry?.enabled || !entry.credentialId) return null;
-  if (entry.tenantId !== profile.tenantId) return null;
+  if (entry.tenantId !== (team ? owner : profile.tenantId)) return null;
   return {
     kind: "library",
     tenantId: entry.tenantId,
@@ -209,7 +232,8 @@ async function planIdFor(
  * A pool binding, or `null` for every reason it may not hold: the row is gone or switched off, the
  * tenant's plan is not one of the row's tiers, the row names no pool key, or the deployment has no
  * value for that key. Each of those falls back to the deployment default, as a library binding does.
- * A coworker stamped `system` or `platform` gets none: its calls could not be metered to anybody.
+ * A tenant that is nobody's (`system`, `platform`, `team`) gets none: its calls could not be metered
+ * to anybody.
  */
 async function poolBindingFor(
   database: Database,
@@ -217,9 +241,7 @@ async function poolBindingFor(
   poolId: string,
   environment: PoolKeyEnvironment,
 ): Promise<PoolBinding | null> {
-  if (!tenantId || tenantId === "system" || tenantId === "platform") {
-    return null;
-  }
+  if (!isPersonTenant(tenantId)) return null;
   const [entry] = await database
     .select({
       id: platformModelPool.id,

@@ -4,7 +4,7 @@ import type { LanguageModel } from "ai";
 import { Observable } from "rxjs";
 import type { Database } from "../db/client";
 import { modelTokenCalls } from "../db/schema";
-import { runAsTenant } from "../tenant/context";
+import { isPersonTenant, runAsTenant } from "../tenant/context";
 
 /**
  * Token metering (audit defect #11): one `model_token_calls` row per model call that a bound model
@@ -213,11 +213,9 @@ function logWriteFailure(row: ModelTokenCallRow, reason: string): void {
 /** The production sink: inserts the row under its own tenant's frame, and never throws. */
 export function databaseTokenCallSink(database: Database): ModelTokenCallSink {
   return async (row) => {
-    if (
-      !row.tenantId ||
-      row.tenantId === "system" ||
-      row.tenantId === "platform"
-    ) {
+    // A person's own tenant only: never `system`, `platform` or `team`, whose frames nobody reads
+    // and which `runAsTenant` would refuse anyway (G01-E).
+    if (!isPersonTenant(row.tenantId)) {
       logWriteFailure(row, "no_owning_tenant");
       return;
     }

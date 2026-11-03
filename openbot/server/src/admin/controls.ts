@@ -20,6 +20,7 @@
 
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import postgres from "postgres";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import {
   type AuditStore,
   addAuditTap,
@@ -542,20 +543,13 @@ async function initializeEnterpriseControls(
       ).map((row) => row.agentId);
 
     /**
-     * Whose a Bot is: the tenant stamped on its own `agents` row (G01), or `platform` when that names
-     * nobody. The stopped-computer row is then filed in its owner's trail rather than in `system`'s,
-     * which every tenant reads. Same rule as the idle computer culler.
+     * Whose a Bot is: its owner (`agents/bot-owner.ts`) — the tenant stamped on its own `agents` row,
+     * or for a team Bot the person its profile names — or `platform` when that is nobody. The
+     * stopped-computer row is then filed in its owner's trail rather than in `system`'s or `team`'s.
+     * Same rule as the idle computer culler.
      */
-    const botTenant = async (botId: string): Promise<string> => {
-      const [row] = await runAsTenant("platform", () =>
-        deps.database
-          .select({ tenantId: agents.tenantId })
-          .from(agents)
-          .where(eq(agents.id, botId))
-          .limit(1),
-      );
-      return isPersonTenant(row?.tenantId) ? row.tenantId : "platform";
-    };
+    const botTenant = async (botId: string): Promise<string> =>
+      (await ownerTenantOfBot(deps.database, botId)) ?? "platform";
 
     const terminateMemberComputers: EnterpriseControls["terminateMemberComputers"] =
       async (userId, by) => {
@@ -1158,7 +1152,7 @@ export async function recordHeadlessModelUsage(input: {
 }): Promise<void> {
   const controls = installed;
   if (!controls) return;
-  if (input.tenantId === "system" || input.tenantId === "platform") {
+  if (!isPersonTenant(input.tenantId)) {
     console.error(
       JSON.stringify({
         type: "model-usage-without-tenant",

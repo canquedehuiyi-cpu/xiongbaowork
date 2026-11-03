@@ -16,6 +16,7 @@ import {
   headlessTurnRefusal,
   installEnterpriseControls,
 } from "./admin/controls";
+import { deviceTargetForBot } from "./agents/bot-owner";
 import {
   mintRunAssertion,
   type RunAssertion,
@@ -133,7 +134,6 @@ import { createThreadIdentity } from "./channels/thread-identity";
 import { createChannelTitler } from "./channels/titler";
 import { createSandboxedStore } from "./components/sandboxed";
 import { createComponentStore } from "./components/store";
-import { ComputerUnavailableError } from "./computer/client";
 import { createComputerGateway } from "./computer/gateway";
 import {
   createHeadlessComputerTools,
@@ -175,7 +175,6 @@ import {
 import { createDatabase } from "./db/client";
 import { ROLE_FACTS_SQL } from "./db/rls-role";
 import {
-  agents,
   channelAgents,
   channelMemberships,
   channels,
@@ -195,7 +194,6 @@ import { createDemonstrationRecorder } from "./demonstrations/recording";
 import { createDemonstrationStore } from "./demonstrations/store";
 import {
   createDeviceChannel,
-  DeviceOfflineError,
   type DispatchTarget,
 } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
@@ -850,8 +848,8 @@ await startupLifecycle.run(async (startup) => {
   /*
    * In device mode, whose machine a coworker's action runs on (ticket 017).
    *
-   * The coworker's own tenant, read from the row that already exists: a Bot belongs to the person who
-   * registered it, and the machines in `registered_devices` are theirs. Nothing here asks the caller
+   * The coworker's owner, read from the rows that already exist (`agents/bot-owner.ts`): a Bot belongs
+   * to the person who registered it, team Bot or not, and the machines in `registered_devices` are theirs. Nothing here asks the caller
    * which tenant or which device it meant — an address that came from a request body would be the
    * beginning of a very short product.
    *
@@ -860,27 +858,16 @@ await startupLifecycle.run(async (startup) => {
    * mode but a wrong answer, and the kind they would have no way to notice.
    */
   async function deviceForBot(botId: string): Promise<DispatchTarget> {
-    const [owner] = await runAsTenant("platform", () =>
-      database
-        .select({ tenantId: agents.tenantId })
-        .from(agents)
-        .where(eq(agents.id, botId))
-        .limit(1),
+    // The Bot's OWNER (G01-E): a team Bot is stamped `team`, which has no machines, so the stamp is
+    // not the answer for it; its profile's owner is.
+    return deviceTargetForBot(
+      {
+        database,
+        reachableDevice: (tenantId) => deviceChannel.reachableDevice(tenantId),
+        isRegistered: (target) => deviceStore.isRegistered(target),
+      },
+      botId,
     );
-    const tenantId = owner?.tenantId;
-    if (!tenantId) {
-      throw new ComputerUnavailableError(
-        `${botId} does not belong to a tenant with machines of its own.`,
-      );
-    }
-    const deviceId = deviceChannel.reachableDevice(tenantId);
-    if (
-      !deviceId ||
-      !(await deviceStore.isRegistered({ tenantId, deviceId }))
-    ) {
-      throw new DeviceOfflineError(tenantId);
-    }
-    return { tenantId, deviceId };
   }
 
   /**
