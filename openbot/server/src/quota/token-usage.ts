@@ -12,12 +12,14 @@ import { billingPeriod } from "./limits";
  * claim the meter cannot make. `complete` is true only when every call in the period is settled and
  * reported both sides, so a screen can tell "1 200 tokens" from "at least 1 200 tokens".
  *
- * `scope` names what the meter can see: calls through models bound in this product. A request an
- * agent makes to its own endpoint never passes through here and is not counted.
+ * `scope` names what the meter can see: every model call a coworker's run makes in this product,
+ * on a bound model or on the deployment's default model. The deployment's internal calls (intent
+ * routing, skill choice, conversation titles) are not metered, and a request an agent makes to its
+ * own endpoint never passes through here; neither is counted.
  */
 export type TokenUsage = {
   period: string;
-  scope: "bound-models";
+  scope: "coworker-calls";
   calls: number;
   reportedCalls: number;
   partialCalls: number;
@@ -92,7 +94,7 @@ export async function tokenUsageFor(
   const unsettledCalls = Number(row?.unsettledCalls ?? 0);
   return {
     period,
-    scope: "bound-models",
+    scope: "coworker-calls",
     calls,
     reportedCalls,
     partialCalls,
