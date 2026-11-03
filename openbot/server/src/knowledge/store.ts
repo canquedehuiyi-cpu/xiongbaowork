@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { type AuditEventInput, commitOwnerAssembly } from "../audit";
 import type { Database } from "../db/client";
 import { agentProfiles, agents } from "../db/schema";
@@ -8,7 +8,8 @@ import {
   knowledgeSources,
 } from "../db/schema/knowledge-foundations";
 import { knowledgeBindings } from "../db/schema/knowledge-write-foundations";
-import { currentTenant, runAsTenant } from "../tenant/context";
+import { TEAM_TENANT } from "../db/schema/tenant";
+import { isPersonTenant, runAsTenant, tenantFrame } from "../tenant/context";
 
 /**
  * A person's own knowledge base (D08, story RES1): notebooks, the text they keep in them, and which
@@ -18,7 +19,8 @@ import { currentTenant, runAsTenant } from "../tenant/context";
  * checked against the actor on every call: the tables' policies admit `owner_user_id = tenant_id`
  * under `app.tenant_id`, so a store that trusted a passed-in id while running in somebody else's
  * frame would be one forgotten guard away from writing into the wrong workspace. Nothing here falls
- * back to a default tenant; a call outside a frame (`system`) is refused.
+ * back to a default tenant; a call outside a person frame (none, `system`, `platform`, or the `team`
+ * stamp) is refused.
  *
  * WHAT IS NOT HERE YET. Directories, file/url/document sources and `read_write` bindings have tables
  * but no writer: a Waker may only ever be granted read access, and writes from a run need the claim
@@ -110,9 +112,8 @@ const wellFormed = (value: string) =>
 
 /** Refuses unless the caller frame is the actor's own workspace. */
 function assertFrame(actorId: string): void {
-  if (!actorId || actorId === "system" || actorId === "platform")
-    throw new KnowledgeScopeError();
-  if (actorId !== currentTenant()) throw new KnowledgeScopeError();
+  if (!isPersonTenant(actorId)) throw new KnowledgeScopeError();
+  if (actorId !== tenantFrame()) throw new KnowledgeScopeError();
 }
 
 /**
@@ -125,13 +126,13 @@ export function inActorTenant<T>(
   actorId: string,
   work: () => Promise<T>,
 ): Promise<T> {
-  const frame = currentTenant();
-  if (!actorId || (frame !== "system" && frame !== actorId)) {
+  // `tenantFrame()`, not `currentTenant()`: "no frame yet" is the case this exists for, and asking
+  // `currentTenant()` there throws.
+  const frame = tenantFrame();
+  if (!isPersonTenant(actorId))
     return Promise.reject(new KnowledgeScopeError());
-  }
-  if (actorId === "system" || actorId === "platform") {
+  if (frame !== undefined && frame !== "" && frame !== actorId)
     return Promise.reject(new KnowledgeScopeError());
-  }
   return runAsTenant(actorId, work);
 }
 
@@ -289,7 +290,13 @@ export function createKnowledgeStore(database: Database) {
     return row;
   };
 
-  /** Whether `agentId` is one of the actor's own, live Wakers in the actor's own workspace. */
+  /**
+   * Whether `agentId` is one of the actor's own, live Wakers: a private one in the actor's own
+   * workspace, or one they published to the team (G01-E stamps that Bot `team`, its profile keeps
+   * them as `owner_user_id`). The binding itself always stays in the owner's own tenant, which is
+   * what the `knowledge_binding_team_bot_*` policies of 0122 admit; a teammate running the published
+   * Waker holds no binding of their own, so nothing of the owner's is offered to their run.
+   */
   const ownsWaker = async (actorId: string, agentId: string) => {
     if (typeof agentId !== "string" || !agentId || agentId.length > 200)
       return false;
@@ -300,8 +307,16 @@ export function createKnowledgeStore(database: Database) {
       .where(
         and(
           eq(agents.id, agentId),
-          eq(agents.tenantId, actorId),
-          eq(agentProfiles.tenantId, actorId),
+          or(
+            and(
+              eq(agents.tenantId, actorId),
+              eq(agentProfiles.tenantId, actorId),
+            ),
+            and(
+              eq(agents.tenantId, TEAM_TENANT),
+              eq(agentProfiles.tenantId, TEAM_TENANT),
+            ),
+          ),
           eq(agentProfiles.ownerUserId, actorId),
           isNull(agentProfiles.deletedAt),
         ),

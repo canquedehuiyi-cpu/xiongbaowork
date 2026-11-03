@@ -47,6 +47,7 @@ function boundary(id: string, refusal?: "unauthenticated" | "forbidden") {
     avatarSeed: id,
     ownerUserId: actor.id,
     modelRef: null,
+    platformModelRef: null,
     persona: null,
     systemOwned: false,
     hidden: false,

@@ -24,10 +24,23 @@
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { actionPolicy } from "../db/schema";
+import { runAsTenant } from "../tenant/context";
 import type { ActionPolicy } from "./policy";
 
 /** There is one boundary per deployment, so there is one row. */
 const CURRENT = "current";
+
+/**
+ * The boundary is the deployment's, so it is read and written as `platform` (G01).
+ *
+ * Not the frame of whoever happens to call. The boot load and the listener's re-read have no frame
+ * at all, and from there the legacy fallback read as `system`; the administrator's save runs inside
+ * the administrator's own request frame, so the row it wrote was stamped with THEIR tenant. Under
+ * row-level security that row was then invisible to the boot load and to every other server's
+ * re-read: the rule was saved, the screen said so, and a restart or a second replica quietly went
+ * back to the configured default. Every statement here names the one tenant the row belongs to.
+ */
+const asDeployment = <T>(work: () => T): T => runAsTenant("platform", work);
 
 /**
  * What a server announces on when the boundary changes, and what every server listens to.
@@ -94,32 +107,34 @@ export function createPolicyStore(
         // The announcement goes in the same transaction, so it is delivered on commit: a write that
         // rolls back announces nothing, and there is no window where the row has changed and the
         // other servers have not been told. Same shape as `channels/routes.ts`.
-        await database.transaction(async (transaction) => {
-          await transaction
-            .insert(actionPolicy)
-            .values({
-              id: CURRENT,
-              mode: next.mode,
-              deny: next.deny,
-              allow: next.allow,
-              updatedBy: by ?? null,
-              updatedAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: actionPolicy.id,
-              set: {
+        await asDeployment(() =>
+          database.transaction(async (transaction) => {
+            await transaction
+              .insert(actionPolicy)
+              .values({
+                id: CURRENT,
                 mode: next.mode,
                 deny: next.deny,
                 allow: next.allow,
                 updatedBy: by ?? null,
                 updatedAt: new Date(),
-              },
-            });
+              })
+              .onConflictDoUpdate({
+                target: actionPolicy.id,
+                set: {
+                  mode: next.mode,
+                  deny: next.deny,
+                  allow: next.allow,
+                  updatedBy: by ?? null,
+                  updatedAt: new Date(),
+                },
+              });
 
-          // Every server hears it, including this one, which re-reads and arrives at what it
-          // already has.
-          await announce(transaction);
-        });
+            // Every server hears it, including this one, which re-reads and arrives at what it
+            // already has.
+            await announce(transaction);
+          }),
+        );
       }
       current = next;
     },
@@ -129,23 +144,27 @@ export function createPolicyStore(
       // this deployment has no boundary of its own again, and changing what configuration says then
       // changes what it enforces, which is what an operator expects of a reset.
       if (database) {
-        await database.transaction(async (transaction) => {
-          await transaction
-            .delete(actionPolicy)
-            .where(eq(actionPolicy.id, CURRENT));
-          await announce(transaction);
-        });
+        await asDeployment(() =>
+          database.transaction(async (transaction) => {
+            await transaction
+              .delete(actionPolicy)
+              .where(eq(actionPolicy.id, CURRENT));
+            await announce(transaction);
+          }),
+        );
       }
       current = clone(configured);
     },
 
     load: async () => {
       if (!database) return "configuration";
-      const [row] = await database
-        .select()
-        .from(actionPolicy)
-        .where(eq(actionPolicy.id, CURRENT))
-        .limit(1);
+      const [row] = await asDeployment(() =>
+        database
+          .select()
+          .from(actionPolicy)
+          .where(eq(actionPolicy.id, CURRENT))
+          .limit(1),
+      );
       if (!row) return "configuration";
 
       current = {
@@ -158,11 +177,13 @@ export function createPolicyStore(
 
     refresh: async () => {
       if (!database) return;
-      const [row] = await database
-        .select()
-        .from(actionPolicy)
-        .where(eq(actionPolicy.id, CURRENT))
-        .limit(1);
+      const [row] = await asDeployment(() =>
+        database
+          .select()
+          .from(actionPolicy)
+          .where(eq(actionPolicy.id, CURRENT))
+          .limit(1),
+      );
 
       // No row means somebody reset it, and reset means this deployment goes back to what
       // configuration says. Leaving the last saved rules in memory here would make a reset apply on

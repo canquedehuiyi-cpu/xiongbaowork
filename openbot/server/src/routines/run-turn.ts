@@ -1,4 +1,3 @@
-import { currentTenant } from "../tenant/context";
 /**
  * One headless turn, run into the Intelligence thread the person will open.
  *
@@ -56,12 +55,16 @@ import type {
   RunAgentInput,
 } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
-import { createLocalContinuationTarget } from "../approvals/continuation-target-local";
 import { NOT_SHOWN } from "../../../shared/component-markers";
 import { frameFiring } from "../../../shared/routine-firing";
-import { headlessTurnRefusal } from "../admin/controls";
+import {
+  headlessTurnRefusal,
+  modelNamedIn,
+  recordHeadlessModelUsage,
+} from "../admin/controls";
 import { sanitizeSeededHistory } from "../agents/history-sanitize";
 import { guardBotTurn } from "../agents/lifecycle";
+import { createLocalContinuationTarget } from "../approvals/continuation-target-local";
 import { OPENBOT_WAITING_METADATA } from "../approvals/native-context";
 import type { AuditInitiator, AuditStore } from "../audit";
 import {
@@ -75,6 +78,8 @@ import {
   HeadlessToolsMiddleware,
   type HeadlessWaiting,
 } from "../computer/headless-tools";
+import { producedAttachments } from "../tasks/projector";
+import { currentTenant } from "../tenant/context";
 import { suppressRunnerCard } from "../threads/unattended-card";
 import type { DrawnComponent, TurnRunner } from "./runner";
 
@@ -334,10 +339,15 @@ export function createTurnRunner(options: {
     signal,
     userMessage,
     runId: suppliedRunId,
+    runRef,
+    tenantId: suppliedTenantId,
     depth,
     onText,
   }: Parameters<TurnRunner>[0]) => {
     if (signal?.aborted) throw new Error("The headless turn was cancelled.");
+    // Whose run this is, read once at the entry: the usage row below is written here and nowhere else.
+    // A caller claimed off a timer names the tenant of the row it claimed; see `TurnRunner`.
+    const tenantId = suppliedTenantId ?? currentTenant();
     // Paused Bots do not start; a pause while running aborts this signal. See agents/lifecycle.ts.
     signal = await guardBotTurn({ ownerUserId, agentId, signal });
     // "Use Bots" and the model allowlist, which a browser run meets at the HTTP gate. No headless turn
@@ -551,6 +561,8 @@ export function createTurnRunner(options: {
     let backstop: ReturnType<typeof setTimeout> | undefined;
     let heartbeatError: unknown;
     let waiting: HeadlessToolSuspension | undefined;
+    /** The first model the stream named — what a remote Bot, which chooses its own, is recorded as. */
+    let observedModel: string | undefined;
     /** Whether the deadline stopped this turn. See the throw below the `finally`. */
     let stopped = false;
     /**
@@ -623,6 +635,14 @@ export function createTurnRunner(options: {
              * answered with nothing.
              */
             next: (event) => {
+              // Snapshots are skipped: they restate the whole conversation, and a model is named in an
+              // event of its own, not in the history.
+              if (
+                !observedModel &&
+                event.type !== EventType.MESSAGES_SNAPSHOT &&
+                event.type !== EventType.STATE_SNAPSHOT
+              )
+                observedModel = modelNamedIn(event);
               if (
                 event.type === EventType.CUSTOM &&
                 event.name === "openbot.headless.waiting"
@@ -753,8 +773,29 @@ export function createTurnRunner(options: {
       throw new Error("The turn finished without saying anything.");
     }
 
+    /*
+     * The model this run answered with, on the row its board card reads (story H4). A browser run gets
+     * this row from the HTTP gate; no headless turn crosses that gate, so without it a routine's card
+     * would name no model at all. Only here, once the turn has answered: a refused, failed or waiting
+     * turn did not finish on any model.
+     */
+    await recordHeadlessModelUsage({
+      tenantId,
+      ownerUserId,
+      agentId,
+      threadId,
+      runId: runRef ?? runId,
+      ...(observedModel ? { observedModel } : {}),
+    });
+
     const drawn = drawnComponents(added);
-    return drawn.length > 0 ? { replyText, components: drawn } : { replyText };
+    // What the Bot handed over as files, beside what it drew: the board's 查收 reads both (spec A9).
+    const attachments = producedAttachments(added);
+    return {
+      replyText,
+      ...(drawn.length > 0 ? { components: drawn } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
+    };
   };
 
   /*

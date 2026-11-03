@@ -20,7 +20,12 @@
 import { createVerify, X509Certificate } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { deliverToTrigger, type TriggerIngressDeps } from "./trigger-routes";
+import { runAsTenant } from "../tenant/context";
+import {
+  deliverToTrigger,
+  type TriggerIngressDeps,
+  triggerTenant,
+} from "./trigger-routes";
 import { matchesFilter } from "./triggers";
 
 export type InboundEmailConfig = { domain: string; topicArns: string[] };
@@ -357,19 +362,32 @@ export function createEmailTriggerRoutes(
         .join(""),
     };
     const results = [];
+    /*
+     * ONE MAIL, POSSIBLY SEVERAL OWNERS, EACH IN THEIR OWN FRAME (G01). The recipient address names a
+     * trigger, and which trigger that is gets asked as `platform`. Each delivery then runs in the
+     * tenant stamped on that trigger's row, confirmed by its owner; a trigger whose row names nobody
+     * is skipped exactly like an unknown address. Nothing in the mail chooses the tenant.
+     */
+    const messageId = mail.messageId;
     for (const id of triggerIds) {
-      const trigger = await deps.directory.resolve(id);
+      const trigger = await runAsTenant("platform", () =>
+        deps.directory.resolve(id),
+      );
       if (trigger?.config.kind !== "email") continue;
+      const tenant = triggerTenant(trigger);
+      if (!tenant) continue;
       const config = trigger.config;
       const allowed =
         config.allowedSenders.length === 0 ||
         (authenticated && senderAllowed(from, config.allowedSenders));
       results.push(
-        await deliverToTrigger(
-          deps,
-          trigger,
-          { deliveryId: mail.messageId, type: "received", payload },
-          allowed && matchesFilter(config.filter, "received", payload),
+        await runAsTenant(tenant, () =>
+          deliverToTrigger(
+            deps,
+            trigger,
+            { deliveryId: messageId, type: "received", payload },
+            allowed && matchesFilter(config.filter, "received", payload),
+          ),
         ),
       );
     }

@@ -109,13 +109,17 @@ const auditTypesFor = (tenant: string, targetId: string) =>
   );
 
 beforeAll(async () => {
-  await database
-    .insert(users)
-    .values([
-      { id: owner, email: `${owner}@example.test`, name: "Owner" },
-      { id: stranger, email: `${stranger}@example.test`, name: "Stranger" },
-    ])
-    .onConflictDoNothing();
+  // Each person is seeded in their own frame: a test has no unframed fallback since G01-E.
+  for (const [id, name] of [
+    [owner, "Owner"],
+    [stranger, "Stranger"],
+  ] as const)
+    await runAsTenant(id, () =>
+      database
+        .insert(users)
+        .values({ id, email: `${id}@example.test`, name })
+        .onConflictDoNothing(),
+    );
   await wakerFor(owner, ownerWaker);
   await wakerFor(owner, ownerOtherWaker);
   await wakerFor(stranger, strangerWaker);
@@ -136,7 +140,10 @@ afterAll(async () => {
       await database.delete(agents).where(inArray(agents.id, [...ids]));
     });
   }
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+  // Cleanup spans both people this file seeded, which only the platform reaches.
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [owner, stranger])),
+  );
   await database.$client.close();
 });
 

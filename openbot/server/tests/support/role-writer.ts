@@ -1,5 +1,6 @@
 import { initializeRoleWriter, stopRoleWriter } from "../../src/auth/roles";
 import { createDatabase, type Database } from "../../src/db/client";
+import { runAsTenant } from "../../src/tenant/context";
 
 /**
  * Bind the real restricted role writer to a test pool, the way `src/index.ts` does in production.
@@ -21,7 +22,10 @@ export async function bindTestRoleWriter(
   }
   const writer = createDatabase(url, { max: 1 });
   try {
-    await initializeRoleWriter(application, writer);
+    // Role and catalogue facts belong to no tenant: asked as `platform`, never by the fallback (G01-D).
+    await runAsTenant("platform", () =>
+      initializeRoleWriter(application, writer),
+    );
   } catch (error) {
     await writer.$client.close();
     throw error;

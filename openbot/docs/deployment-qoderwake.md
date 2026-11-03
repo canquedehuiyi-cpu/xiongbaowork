@@ -1,6 +1,7 @@
 # 熊宝数字员工部署手册
 
-本手册面向交付部署；从仓库根进入 `openbot/` 执行命令。
+本手册面向交付部署。客户部署拉取发布镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork`，
+不需要源码、Git 或本机构建；只有[附录：从源码构建](#附录从源码构建)需要进入 `openbot/`。
 本机历史端口、迁移研发与测试经验在[开发环境笔记](development-environment-qoderwake.md)。
 对外发布仍需 DoD-1/2/3/8 的证据，当前记录见[B 线交付验证](track-b-delivery-evidence.md)。
 全新 WSL、Windows PowerShell 与独立 Compose 的实际命令和耗时见
@@ -8,7 +9,9 @@
 
 ## 1. 单容器：Linux / Windows Docker Desktop
 
-按[根 README](../../README.md)对应平台步骤构建镜像、生成随机密钥，挂三个命名卷。
+按[根 README](../../README.md)对应平台步骤拉取发布镜像、下载同一标签的配置模板、生成随机密钥，挂三个命名卷。
+README 的 Linux 命令块在每次发布后由 `.github/workflows/clean-deploy.yml` 原样执行（Gate 7 Linux）；
+Windows 命令块由人工验收。GHCR 包设为公开之前，未登录的拉取会失败，该 CI 任务也会失败。
 内嵌 PostgreSQL 使用 16 + pgvector；CI 服务端测试使用独立 pgvector/pg17 service。
 镜像同一个 3001 端口提供 API 与 SPA，3772 是本机示例宿主端口。
 
@@ -23,7 +26,25 @@
 
 ## 2. Compose 形态
 
-同样先构建镜像、准备 `.env.delivery`；这个 Compose 文件只管理本产品独立服务与卷。
+这个 Compose 文件只管理本产品独立服务与卷。在新建空目录中下载同一标签的 Compose 文件、配置模板和
+Release 附件 `container-images.json`，生成密钥，并把 `OPENBOT_IMAGE` 设为其中的 digest 引用（见第 7 节）。
+需要 curl、OpenSSL 和 jq。不设置 `OPENBOT_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
+
+```bash
+OPENBOT_TAG=v0.2.0-rc.1
+raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker"
+mkdir -p docker
+curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
+curl --fail --silent --show-error --location -o .env.delivery "$raw/delivery.env.example"
+chmod 600 .env.delivery
+printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
+curl --fail --silent --show-error --location -o container-images.json \
+  "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/$OPENBOT_TAG/container-images.json"
+printf 'OPENBOT_IMAGE=%s\n' "$(jq -r .images.openbot.reference container-images.json)" >> .env.delivery
+grep -E '^OPENBOT_IMAGE=ghcr\.io/.+@sha256:[0-9a-f]{64}$' .env.delivery
+```
+
+Compose 文件按 `docker/` 目录相对读取上一级的 `.env.delivery`；最后一行应打印 digest 形式的镜像引用。
 
 ```bash
 docker compose --project-name xiongbao-local --env-file .env.delivery \
@@ -44,6 +65,16 @@ PowerShell 可把命令写在一行，或用反引号续行。修改宿主端口
 将下列配置写到只由部署方读取的 `.env.delivery`，生成的值请持久保管。
 配置 `BETTER_AUTH_SECRET` 和 `BETTER_AUTH_URL` 即启用邮箱密码登录；OAuth 可以按
 [配置参考](configuration.md)追加。首位管理员邮箱必须在 `INITIAL_ADMIN_EMAILS`。
+
+`INITIAL_ADMIN_EMAILS` 只对经过验证的地址生效，也就是通过身份提供方（Google、Microsoft、Okta 或已登记的 SSO）登录的账号。
+用邮箱密码注册的账号无人验证过，所以即使地址在名单里也不会自动成为管理员：否则谁先抢注这个地址，谁就拿到平台管理员。
+只用邮箱密码登录的部署，请先用该地址注册，再在服务器容器里执行一次：
+
+```bash
+docker exec -it <容器名> /command/with-contenv sh -c 'cd /app/server && bun scripts/grant-admin.ts admin@example.com'
+```
+
+能在容器里执行命令的人已经掌握数据库和全部密钥，所以由他指定首位管理员。这条命令会写一条审计记录。
 
 ```dotenv
 OPENBOT_SINGLE_USER=false
@@ -70,39 +101,48 @@ OPENBOT_SELF_HOST_BANNER=false
 ```dotenv
 EMBEDDED_POSTGRES=off
 DATABASE_URL=postgres://openbot_app:<URL编码口令>@db.example.com:5432/openbot_b?sslmode=require
+ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:<URL编码口令>@db.example.com:5432/openbot_b?sslmode=require
 ```
 
 **API 运行期必须是非超级用户、无 BYPASSRLS 的角色。owner 串只用于迁移。**
+`ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `openbot_role_writer`，唯一可以写入身份角色的登录；
+缺少它 API 拒绝启动（`ROLE_WRITER_DATABASE_URL is required`）。内嵌模式自动生成这两条连接串，外接模式需要自己配置。
 嵌入模式会自动导出 `MIGRATION_DATABASE_URL`，外接模式不会自动迁移，运维在发布流程中单独执行。
 创建临时的私密 `.env.migration`，其中 `DATABASE_URL` 是 owner 串；不要把该文件交给 API 容器。
+迁移与运行使用同一个 digest（`container-images.json` 的取得见第 7 节）。
+下面两段命令在每次发布后由 CI 原样执行（Gate 7 Linux 外接库：独立 pgvector/pg17 容器）。
 
+<!-- g7:external-migrate:begin -->
 ```bash
+OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
 docker run --rm --env-file .env.migration --entrypoint /bin/sh \
-  xiongbao-digital-employee:local \
+  "$OPENBOT_IMAGE" \
   -c 'cd /app/server && exec /usr/local/bin/bun scripts/migrate.ts'
 ```
+<!-- g7:external-migrate:end -->
 
-迁移后通过安全 SQL 会话设置独立随机 app 密码（覆盖迁移中的公开开发密码），并约束角色：
+迁移后用 owner 通过安全 SQL 会话为两个角色设置各自独立的随机密码（覆盖迁移中的公开开发密码），并约束角色：
 
+<!-- g7:external-roles:begin -->
 ```sql
-ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<随机口令>';
-SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'openbot_app';
--- 期望 openbot_app | f | f
+ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<app随机口令>';
+ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<role_writer随机口令>';
+SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
+  WHERE rolname IN ('openbot_app', 'openbot_role_writer') ORDER BY rolname;
+-- 期望 openbot_app | f | f 与 openbot_role_writer | f | f
 ```
+<!-- g7:external-roles:end -->
 
-将同一口令写入运行期 DATABASE_URL，启动 API。生产数据库依运营方的备份和 TLS 策略配置；
+将两个口令分别写入运行期 `DATABASE_URL` 与 `ROLE_WRITER_DATABASE_URL`，删除 `.env.migration`，
+再按 README 的单容器命令（`.env.delivery` 已存在时会保留）或第 2 节 Compose 启动 API。
+生产数据库依运营方的备份和 TLS 策略配置；
 若 API 日志出现 `rls-not-enforced`，容器会拒绝启动。不要通过关闭 refuse 绕过配置错误。
 
 ## 5. 品牌与模型配置
 
-```bash
-docker build --build-arg TENANT_PACKAGE_DIR=../examples/qoderwake \
-  -f Dockerfile -t xiongbao-digital-employee:local .
-```
-
-品牌包必须在 build context 内（这里是 `openbot/`）；相对路径以 server 为基准。
-自定义包要同时配置构建参数和运行期 TENANT_PACKAGE_DIR。SPA 首屏标题与主 JS 品牌由 C 线入口代码完成；
-只设置运行期变量不会重写 bundle。上游推广条在运行期由 `OPENBOT_SELF_HOST_BANNER=false` 关闭。
+发布镜像在构建期内置 `examples/qoderwake` 品牌包。SPA 首屏标题与主 JS 品牌在构建期注入，
+只设置运行期 TENANT_PACKAGE_DIR 不会重写 bundle；换品牌包需要按附录从源码构建。
+上游推广条在运行期由 `OPENBOT_SELF_HOST_BANNER=false` 关闭。
 
 模型可在产品模型库接入并绑定到员工；部署默认的 OpenAI 兼容接口配置为：
 
@@ -139,11 +179,30 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 恢复先在隔离新卷、新项目、新端口验证（3772 的 B 线测试不能与体验容器同时占用），确认健康、
 原数据可读、原凭据可解密，再切换。外接库使用数据库服务方的一致性备份和恢复流程。
 
-升级先备份，在新镜像上验证迁移；单容器重建时使用原命名卷和原 env-file。
-Compose 使用 `OPENBOT_IMAGE=新标签`、`up -d`；内嵌库每次启动自动迁移。
+升级先备份，按第 7 节取得新版本的 digest 并校验来源，在隔离环境验证迁移；
+单容器重建时使用原命名卷和原 env-file，镜像写成 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<新 digest>`。
+Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
+内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
 一旦有 schema 迁移，回滚镜像不一定足够，必要时恢复备份；不要把只回滚代码当成数据库回滚。
 
-## 7. 健康与交付断言
+## 7. 版本固定与来源校验
+
+每个 GitHub Release 附带 `container-images.json`，记录该标签发布时经过 Gate 1 验证的 digest。
+部署和升级使用 digest，而不是可移动的标签；部署前可校验镜像由本仓库的发布流程构建。
+
+```bash
+OPENBOT_TAG=v0.2.0-rc.1
+gh release download "$OPENBOT_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
+OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
+gh attestation verify "oci://$OPENBOT_IMAGE" -R canquedehuiyi-cpu/xiongbaowork
+docker pull "$OPENBOT_IMAGE"
+docker image inspect "$OPENBOT_IMAGE" --format '{{json .RepoDigests}}'
+```
+
+`reference` 形如 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<64 位十六进制>`；
+按标签拉取后 `RepoDigests` 应包含同一个引用。`gh attestation verify` 需要已登录的 GitHub CLI。
+
+## 8. 健康与交付断言
 
 ```bash
 curl --fail http://127.0.0.1:3772/health
@@ -156,11 +215,16 @@ docker logs xiongbao-local
 同时验证强制终止后复用原卷保留数据和口令、旧卷补齐 app 口令，以及登录模式下
 两人注册、私有员工跨租户读取 404、Free 档第三位员工 402；不发送模型请求。
 `bash scripts/ci/image-smoke.sh <镜像>` 只使用自己的临时容器/卷及 3772，结束自动清理。
+发布流程先对推送的 digest 执行上述检查（Gate 1），再打标签；随后 `clean-deploy.yml` 在全新 Linux
+runner 上、不登录 GHCR，原样执行 README 的 Linux 命令块，核对运行的镜像 digest 与 `container-images.json`
+一致，并运行同一组接口断言（Gate 7 Linux）。同一任务另有外接库一半：独立的 pgvector/pg17 容器，
+原样执行第 4 节的迁移与角色命令，再用同一 README 命令启动 `EMBEDDED_POSTGRES=off` 的 API，
+确认内嵌库未初始化、API 以 `openbot_app` 连接外接库。也可以在 Actions 中手动运行该 workflow 并填写标签。
 
 全套测试绿色必须读取日志的 `0 fail`，不能只读退出码。
 阶段 0–2 的测试 continue-on-error、构建成功、健康成功和完整验收是不同结果。
 
-## 8. 三条必须记住的配置坑（WP-0.3）
+## 9. 三条必须记住的配置坑（WP-0.3）
 
 1. **模型名用 BOT_MODEL；OPENAI_MODEL 全仓没有读取代码。** 兼容 OpenAI 路径还需 OPENAI_BASE_URL，
    供应商实际模型名从其账号目录确认。环境文件修改后重新创建服务容器。
@@ -168,3 +232,17 @@ docker logs xiongbao-local
    镜像默认 refuse 拒绝启动。不能用“接口返回 200”替代角色检查。
 3. **Windows 宿主不能直接 bun 起 server。** 交付路径是镜像或 Linux/WSL；宿主只调用 Docker 与 HTTP 检查。
    Git Bash 使用 Docker 的 -v/-w 绝对路径时设置 MSYS_NO_PATHCONV=1。
+
+## 附录：从源码构建
+
+只有修改源码或更换构建期品牌包时才在本机构建；这样得到的镜像没有发布 digest 和来源证明，
+不能作为交付验收证据。从仓库根进入 `openbot/`：
+
+```bash
+docker build --build-arg TENANT_PACKAGE_DIR=../examples/qoderwake \
+  -f Dockerfile -t xiongbao-digital-employee:local .
+```
+
+品牌包必须在 build context 内（这里是 `openbot/`）；相对路径以 server 为基准。
+自定义包要同时配置构建参数和运行期 TENANT_PACKAGE_DIR。之后把上文命令中的镜像换成
+`xiongbao-digital-employee:local`（单容器跳过 `docker pull`）；Compose 未设置 `OPENBOT_IMAGE` 时默认使用这个本机标签。
