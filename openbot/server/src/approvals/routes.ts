@@ -212,6 +212,12 @@ export function createApprovalRoutes(
       ),
     );
   });
+  // One request by id, owner-scoped like the inbox: another person's id is a 404 (spec D15).
+  routes.get("/:id", async (context) =>
+    context.json(
+      await service.request(context.var.actor.id, context.req.param("id")),
+    ),
+  );
   routes.post("/:id/decision", async (context) => {
     const input = z
       .strictObject({

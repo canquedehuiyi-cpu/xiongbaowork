@@ -77,6 +77,25 @@ export const approvalInboxOptions = () =>
     },
     refetchInterval: 10_000,
   });
+/** One request as the inbox lists it. */
+export type ApprovalRequestData = ApprovalInboxData["requests"][number];
+
+/**
+ * One of this person's requests by id (`GET /api/approvals/:id`). The inbox lists only the newest
+ * hundred, so a card parked on an older request asks for that request alone. Keyed under `approvals`,
+ * so a decision's refresh of the inbox refreshes this read too.
+ */
+export const approvalRequestOptions = (id: string) =>
+  queryOptions({
+    queryKey: ["approvals", "request", id],
+    queryFn: async (): Promise<ApprovalRequestData> => {
+      const response = await client(
+        `/api/approvals/${encodeURIComponent(id)}`,
+        { fallback: "读不到这条审批。" },
+      );
+      return response.json();
+    },
+  });
 export const decideApproval = (id: string, decision: ApprovalDecision) =>
   client(`/api/approvals/${encodeURIComponent(id)}/decision`, {
     method: "POST",
