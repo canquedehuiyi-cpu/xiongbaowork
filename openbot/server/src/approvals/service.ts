@@ -7,6 +7,7 @@ import { PERSON_INITIATOR } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import {
   applicableRules,
+  DEFAULT_SENSITIVE_PATHS,
   decideAction,
   effectiveHostCommandPolicy,
   type ReviewModel,
@@ -34,6 +35,9 @@ import {
   type ApprovalRuleInput,
   type ApprovalStore,
   type ApprovalTeamSettings,
+  type EmployeeSecuritySettings,
+  type EmployeeToolMode,
+  EMPLOYEE_TOOL_BEHAVIOUR,
   approvalAction,
   approvalPreview,
   currentApprovalContext,
@@ -633,6 +637,121 @@ export function createApprovalService(
       if (!store.policy)
         throw new ApprovalRefusedError("Team rules are unavailable here.");
       return store.policy.createTeamRule(by, input);
+    },
+    /**
+     * One Bot's permissions page (SEC1 §4.5): the tool modes and floors its owner set, the team's
+     * locked rows that name it, and whether the person asking may change them (only the owner may).
+     *
+     * Somebody else using the Bot sees the owner's settings read-only, because they apply to them
+     * too (D9): that is the semantic change the page labels "员工所有者设定".
+     */
+    async employeePermissions(actorId: string, botId: string) {
+      const policy = store.policy;
+      if (!policy?.employee)
+        throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+      const [employee, team, teamRules] = await Promise.all([
+        policy.employee(botId),
+        policy.teamSettings(),
+        policy.teamRules(),
+      ]);
+      const forThisBot = (rule: { botId: string; effect: string; scope: string }) =>
+        rule.botId === botId && rule.effect === "*" && rule.scope === "*";
+      return {
+        botId,
+        editable: employee.ownerUserId === actorId,
+        ownedByAnother:
+          employee.ownerUserId !== null && employee.ownerUserId !== actorId,
+        modes: employee.rules.filter(forThisBot).map((rule) => ({
+          id: rule.id,
+          toolRef: rule.toolRef,
+          behaviour: rule.behaviour,
+        })),
+        teamRules: teamRules
+          .filter((rule) => ruleMatches(rule, {
+            actorId,
+            botId,
+            toolRef: rule.toolRef,
+            effect: rule.effect,
+            scope: rule.scope,
+            args: null,
+          }))
+          .map((rule) => ({
+            id: rule.id,
+            toolRef: rule.toolRef,
+            effect: rule.effect,
+            scope: rule.scope,
+            behaviour: rule.behaviour,
+          })),
+        security: employee.security,
+        defaultSensitivePaths: [...DEFAULT_SENSITIVE_PATHS],
+        enforceDangerousCommands: team.enforceDangerousCommands,
+        customRulesEnabled: team.customRulesEnabled,
+      };
+    },
+    /**
+     * The owner sets one tool on one of their Bots to run directly, ask, or be disabled (SEC1 §4.5),
+     * or back to no rule. Saved as the owner's own rule `{botId, toolRef, effect: *, scope: *}`.
+     *
+     * The new rule is written before the old one is revoked, so for the moment both exist the
+     * stricter of the two applies and the tool is never briefly looser than either setting. With
+     * custom rules off only a tightening mode may be chosen (D6): "run directly" is refused.
+     */
+    async setEmployeeToolMode(
+      ownerUserId: string,
+      botId: string,
+      toolRef: string,
+      mode: EmployeeToolMode | "default",
+    ) {
+      const policy = store.policy;
+      if (!policy?.employee)
+        throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+      const employee = await policy.employee(botId);
+      if (employee.ownerUserId !== ownerUserId)
+        throw new ApprovalRefusedError(
+          "Only this Bot's owner can change what it may do.",
+        );
+      if (
+        mode === "direct" &&
+        !(await policy.teamSettings()).customRulesEnabled
+      )
+        throw new ApprovalRefusedError(
+          "Your workspace has switched custom rules off, so a tool can be set to ask or disabled, but not to run directly.",
+        );
+      const previous = (await store.rules(ownerUserId)).filter(
+        (rule) =>
+          rule.botId === botId &&
+          rule.toolRef === toolRef &&
+          rule.effect === "*" &&
+          rule.scope === "*",
+      );
+      const rule =
+        mode === "default"
+          ? undefined
+          : await policy.createRule(ownerUserId, {
+              botId,
+              toolRef,
+              effect: "*",
+              scope: "*",
+              behaviour: EMPLOYEE_TOOL_BEHAVIOUR[mode],
+            });
+      for (const old of previous) await store.revoke(ownerUserId, old.id);
+      if (rule) await withdrawAllowed(ownerUserId, rule);
+      return rule ?? null;
+    },
+    /** The owner changes one of their Bots' floors. Row security refuses anybody else's. */
+    async setEmployeeSecurity(
+      ownerUserId: string,
+      botId: string,
+      input: Partial<EmployeeSecuritySettings>,
+    ) {
+      const policy = store.policy;
+      if (!policy?.employee || !policy.setEmployeeSecurity)
+        throw new ApprovalRefusedError("Employee permissions are unavailable here.");
+      if ((await policy.employee(botId)).ownerUserId !== ownerUserId)
+        throw new ApprovalRefusedError(
+          "Only this Bot's owner can change what it may do.",
+        );
+      return policy.setEmployeeSecurity(ownerUserId, botId, input);
     },
     async revokeTeamRule(by: string, id: string) {
       if (!store.policy)
