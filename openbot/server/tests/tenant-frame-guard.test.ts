@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import {
+  assertPersonTenant,
+  asPlatform,
   currentTenant,
   forgetReportedUnframedSites,
+  isPersonTenant,
+  runAsClaimedTenant,
   runAsTenant,
   TenantContextError,
   tenantFrameGuard,
@@ -84,5 +89,66 @@ describe("tenant frame guard", () => {
         return currentTenant();
       }),
     ).toBe("user-2");
+  });
+});
+
+/*
+ * G01-E: rows shared by the whole team are stamped `team`, and `team` belongs to nobody. It is a
+ * stamp a row carries, never a frame anybody acts in, so it is refused everywhere a frame is opened.
+ */
+describe("team is nobody", () => {
+  test("it is not a person tenant", () => {
+    expect(TEAM_TENANT).toBe("team");
+    expect(isPersonTenant("team")).toBe(false);
+    expect(isPersonTenant("user-1")).toBe(true);
+  });
+
+  test("background work stamped team has nobody to run as", () => {
+    expect(() => assertPersonTenant("team")).toThrow("untrusted tenant");
+    expect(() => assertPersonTenant("team", "team")).toThrow(
+      TenantContextError,
+    );
+  });
+
+  test("a claimed item stamped team never runs", async () => {
+    let called = false;
+    const outcome = await runAsClaimedTenant(
+      { tenantId: "team" },
+      "team",
+      async () => {
+        called = true;
+      },
+    );
+    expect(outcome).toEqual({ ran: false, reason: "untrusted tenant" });
+    expect(called).toBe(false);
+  });
+
+  test("no frame can be opened as team, and the work is never called", () => {
+    let called = false;
+    expect(() =>
+      runAsTenant("team", () => {
+        called = true;
+      }),
+    ).toThrow(TenantContextError);
+    expect(() => runAsTenant(TEAM_TENANT, () => undefined)).toThrow(
+      "'team' is a stamp, never a frame",
+    );
+    expect(called).toBe(false);
+    // Nor from inside the platform's frame, which may otherwise open any tenant's.
+    expect(() =>
+      asPlatform(() => runAsTenant("team", () => undefined)),
+    ).toThrow(TenantContextError);
+  });
+
+  test("asPlatform opens the platform frame for exactly its own work", async () => {
+    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+    expect(asPlatform(() => currentTenant())).toBe("platform");
+    expect(
+      await asPlatform(async () => {
+        await Promise.resolve();
+        return currentTenant();
+      }),
+    ).toBe("platform");
+    expect(() => currentTenant()).toThrow(TenantContextError);
   });
 });
