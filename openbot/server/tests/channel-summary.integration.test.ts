@@ -24,6 +24,7 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -602,7 +603,7 @@ describe("naming a claimed conversation", () => {
  */
 describe("G01: whose conversation the loop is naming", () => {
   /** A conversation written straight to the tables from `frame`, stamped with whatever that is. */
-  async function rawChannel(owner: AgentActor, frame: string | null) {
+  async function rawChannel(owner: AgentActor, frame: string) {
     const id = `${testPrefix}-raw-${randomUUID()}`;
     const write = async () => {
       await database.insert(channels).values({
@@ -620,8 +621,10 @@ describe("G01: whose conversation the loop is naming", () => {
         threadId: `${id}-thread`,
       });
     };
-    // No frame is how a `system` row is made: the database stamps the session's tenant.
-    await (frame ? runAsTenant(frame, write) : write());
+    // The database stamps the session's tenant. A `system` row is made in an explicit `system`
+    // frame, the same stamp the legacy unframed fallback gave, so the file also runs with the guard
+    // set to `throw`.
+    await runAsTenant(frame, write);
     createdChannelIds.push(id);
     return id;
   }
@@ -706,19 +709,45 @@ describe("G01: whose conversation the loop is naming", () => {
 
   test("a conversation stamped as nobody's is never offered and never named, even when queued", async () => {
     const alice = await createUser();
-    const asSystem = await rawChannel(alice, null);
+    const asSystem = await rawChannel(alice, "system");
     const asPlatformRow = await rawChannel(alice, "platform");
-    const asSystemForAlice = await rawChannel(alice, null);
+    const asSystemForAlice = await rawChannel(alice, "system");
+    // The shared tenant is nobody's too (G01-E): a group conversation stamped `team` has no one
+    // person to name it for. Only `platform` may write a row stamped with another tenant.
+    const asTeam = `${testPrefix}-raw-${randomUUID()}`;
+    await asPlatform(async () => {
+      await database.insert(channels).values({
+        id: asTeam,
+        name: "Raw",
+        description: "Raw",
+        lastMessageAt: new Date(),
+        tenantId: TEAM_TENANT,
+      });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId: asTeam, userId: alice.id, tenantId: TEAM_TENANT });
+      await database.insert(intelligenceChannelMappings).values({
+        userId: alice.id,
+        channelId: asTeam,
+        threadId: `${asTeam}-thread`,
+        tenantId: TEAM_TENANT,
+      });
+    });
+    createdChannelIds.push(asTeam);
 
     // `offerAll`, not the bare offer: it takes back what it queued for other files' conversations, so
-    // the passes below claim only these three rows and title nobody else's conversation.
+    // the passes below claim only these four rows and title nobody else's conversation.
     const { offered } = await offerAll();
     expect(offered).not.toContain(asSystem);
     expect(offered).not.toContain(asPlatformRow);
     expect(offered).not.toContain(asSystemForAlice);
+    expect(offered).not.toContain(asTeam);
 
-    // Queued anyway: from no frame, from the platform's, and from Alice's for a `system` channel.
-    await queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asSystem });
+    // Queued anyway: from the `system` frame, from the platform's, and from Alice's for a `system`
+    // channel.
+    await runAsTenant("system", () =>
+      queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asSystem }),
+    );
     await asPlatform(() =>
       queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asPlatformRow }),
     );
@@ -726,8 +755,18 @@ describe("G01: whose conversation the loop is naming", () => {
       queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: asSystemForAlice }),
     );
 
+    // And one stamped `team`, which no frame can offer: written as the platform, stamped explicitly.
+    await asPlatform(() =>
+      database.insert(workItems).values({
+        kind: CHANNEL_SUMMARY_KIND,
+        key: asTeam,
+        payload: { channelId: asTeam },
+        tenantId: TEAM_TENANT,
+      }),
+    );
+
     const seen = watching("Nobody's title");
-    const ids = [asSystem, asPlatformRow, asSystemForAlice];
+    const ids = [asSystem, asPlatformRow, asSystemForAlice, asTeam];
     const reasons = await sweepUntilSettled(ids, seen);
 
     for (const id of ids) {

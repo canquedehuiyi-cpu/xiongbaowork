@@ -17,6 +17,7 @@
 import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
 import { readFiring } from "../../../shared/routine-firing";
 import type { Database } from "../db/client";
+import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {
   channelMemberships,
   channels,
@@ -93,7 +94,7 @@ export async function offerChannelsAwaitingSummary(
           isNull(channels.summary),
           isNull(channels.deletedAt),
           // Nobody's conversation has nobody to name it for, and must not take a place below.
-          notInArray(channels.tenantId, ["system", "platform"]),
+          notInArray(channels.tenantId, [...NOBODY_TENANTS]),
           sql`${channels.lastMessageAt} is not null`,
           /*
            * Not one the queue already holds a row for, pending or settled.

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 
 /**
  * Which tenant the current operation belongs to.
@@ -29,6 +30,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * The escape for work that genuinely belongs to nobody is NOT the fallback: it is an explicit
  * `runAsTenant("platform", ...)` (a question across tenants, or a deployment row) or, for the
  * catalogue rows every tenant must read, `runAsTenant("system", ...)`, at the call site.
+ * `asPlatform(work)` is the short spelling of the first.
+ *
+ * `team` IS A STAMP, NEVER A FRAME (G01-E). Rows shared by the whole team are stamped `team`, and
+ * who may touch one is decided by that row's ownership predicate in the frame of the person asking.
+ * Nobody acts as `team`: it is not a person tenant (`isPersonTenant` answers false, so background
+ * work stamped `team` has no owner to run as), and `runAsTenant("team", ...)` throws rather than
+ * open a frame in which every shared row would look like the caller's own.
  */
 const store = new AsyncLocalStorage<string>();
 
@@ -122,13 +130,14 @@ export function requireTenant(): string {
   return tenant;
 }
 
-/** A tenant that is a person's own: not empty, and not one of the two that belong to nobody. */
+/** A tenant that is a person's own: not empty, and not one of the three that belong to nobody. */
 export function isPersonTenant(tenant: unknown): tenant is string {
   return (
     typeof tenant === "string" &&
     tenant !== "" &&
     tenant !== "system" &&
-    tenant !== "platform"
+    tenant !== "platform" &&
+    tenant !== TEAM_TENANT
   );
 }
 
@@ -183,6 +192,9 @@ export async function runAsClaimedTenant<T>(
 }
 
 export function runAsTenant<T>(tenantId: string, fn: () => T): T {
+  // Checked before the frame opens, so `fn` never runs as the shared tenant.
+  if (tenantId === TEAM_TENANT)
+    throw new TenantContextError("'team' is a stamp, never a frame");
   const result = store.run(tenantId, fn);
   /*
    * drizzle builders are lazy and often awaited after the scope closes. Rather than replacing
@@ -208,3 +220,10 @@ export function runAsTenant<T>(tenantId: string, fn: () => T): T {
   }
   return result;
 }
+
+/**
+ * Run one question that belongs to nobody -- across every tenant, or about a deployment row -- as
+ * `platform`. For background, boot and admin code only; a member request path never opens it.
+ */
+export const asPlatform = <T>(work: () => T): T =>
+  runAsTenant(PLATFORM_TENANT, work);
