@@ -26,15 +26,20 @@ import type {
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 
 /**
- * Replacing the token of an MCP server that is already added.
+ * Changing an MCP server that is already added: its token, and its instance address.
  *
- * The token dialog's Save used to call the add only when the server was not here yet, and for a
- * server that was it closed the dialog and wrote nothing — so the one control on the page for a
- * deployment token could set it once and never change it. Replacing it is the same two writes as
- * adding: the credential (`POST /api/admin/credentials`, kind `mcp`), then the server re-added with
- * the new `credentialId`. The re-add is told everything the server already is, so nothing but the
- * credential moves: a catalogue server keeps its instance host, a server added by URL keeps its
- * title and address.
+ * Both dialogs' Save used to call the add only when the server was not here yet, and for a server
+ * that was they closed and wrote nothing — so a deployment token or an instance host could be set
+ * once and never changed.
+ *
+ * A token is replaced with ONE request, `POST /api/plugins/servers/:id/token`, which stores the new
+ * token and points the server at it in one transaction. Not `POST /api/admin/credentials` and then
+ * a re-add: storing a token for a key that holds one revokes the old one at once, so a re-add that
+ * failed after it left the server on a revoked credential. The server's url and settings are the
+ * row's own and nothing about them is sent.
+ *
+ * An instance host is moved by re-adding the catalogue server with the new host and no credential
+ * id, which keeps the token it holds.
  *
  * THE HARNESS IS THIS REPOSITORY'S, as in `plugin-read-failure.test.tsx`: `GlobalRegistrator`,
  * `cleanup`, a `QueryClient` with `retry: false`, the exported `Route` captured and restored around
@@ -46,14 +51,14 @@ afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
 const NEW_TOKEN = "fixture-token-not-a-secret";
-const NEW_CREDENTIAL = "cred-replacement";
+const NEW_HOST = "https://globex.vendor.example";
 
 type Sent = { method: string; path: string; body: unknown };
 
 const originalFetch = global.fetch;
 let sent: Sent[] = [];
 let page: PluginsPage;
-let refuseCredential = false;
+let refuseWrite = false;
 
 function pageWith(
   catalogue: CatalogueItem[],
@@ -93,7 +98,7 @@ function server(overrides: Partial<PluginServer>): PluginServer {
 
 beforeEach(() => {
   sent = [];
-  refuseCredential = false;
+  refuseWrite = false;
   global.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const path = String(input).split("?")[0] ?? "";
@@ -109,13 +114,10 @@ beforeEach(() => {
       if (path === "/api/plugins") return json(page);
       if (path === "/api/plugins/connections") return json({ connections: [] });
       if (path === "/api/agents") return json({ agents: [] });
-      if (path === "/api/admin/credentials" && method === "POST") {
-        if (refuseCredential) {
-          return json({ error: "The vault refused this token." }, 400);
-        }
-        return json({ credential: { id: NEW_CREDENTIAL } });
-      }
       if (path.startsWith("/api/plugins/servers") && method === "POST") {
+        if (refuseWrite) {
+          return json({ error: "The deployment refused this change." }, 400);
+        }
         return json({ server: {} });
       }
       return new Response(null, { status: 404 });
@@ -213,8 +215,9 @@ async function replaceToken(view: ReturnType<typeof render>) {
   await user.click(await view.findByText("保存"));
 }
 
-test("an added catalogue server's token is replaced and the server re-pointed at its own instance", async () => {
-  page = pageWith(
+/** A catalogue entry whose vendor gives every customer their own host, added at one of them. */
+const instancedPage = () =>
+  pageWith(
     [
       {
         key: "instanced",
@@ -234,79 +237,103 @@ test("an added catalogue server's token is replaced and the server re-pointed at
       }),
     ],
   );
+
+const customPage = () =>
+  pageWith(
+    [],
+    [
+      server({
+        id: "collector",
+        title: "Collector",
+        url: "https://collector.example/mcp",
+        provenance: "custom",
+      }),
+    ],
+  );
+
+test("an added catalogue server's token is replaced in one request, and nothing else is sent", async () => {
+  page = instancedPage();
   const view = renderAdmin("instanced");
   await replaceToken(view);
 
-  await waitFor(() => expect(sent).toHaveLength(2));
-  expect(sent[0]?.path).toBe("/api/admin/credentials");
-  expect(sent[0]?.body).toMatchObject({
-    kind: "mcp",
-    provider: "instanced",
-    plaintext: NEW_TOKEN,
-  });
-  expect(sent[1]).toEqual({
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toEqual({
     method: "POST",
-    path: "/api/plugins/servers",
-    body: {
-      key: "instanced",
-      instanceHost: "https://acme.vendor.example",
-      credentialId: NEW_CREDENTIAL,
-    },
+    path: "/api/plugins/servers/instanced/token",
+    body: { token: NEW_TOKEN },
   });
   await waitFor(() =>
     expect(document.getElementById("access-token")).toBeNull(),
   );
 });
 
-test("a server added by URL is re-added at its own address and title with the new token", async () => {
-  page = pageWith(
-    [],
-    [
-      server({
-        id: "collector",
-        title: "Collector",
-        url: "https://collector.example/mcp",
-        provenance: "custom",
-      }),
-    ],
-  );
+test("a server added by URL has its token replaced the same way", async () => {
+  page = customPage();
   const view = renderAdmin("collector");
   await replaceToken(view);
 
-  await waitFor(() => expect(sent).toHaveLength(2));
-  expect(sent[0]?.path).toBe("/api/admin/credentials");
-  expect(sent[1]).toEqual({
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toEqual({
     method: "POST",
-    path: "/api/plugins/servers/custom",
-    body: {
-      id: "collector",
-      title: "Collector",
-      url: "https://collector.example/mcp",
-      credentialId: NEW_CREDENTIAL,
-    },
+    path: "/api/plugins/servers/collector/token",
+    body: { token: NEW_TOKEN },
   });
 });
 
-test("a refused token is said on the page and the server is not re-added", async () => {
-  refuseCredential = true;
-  page = pageWith(
-    [],
-    [
-      server({
-        id: "collector",
-        title: "Collector",
-        url: "https://collector.example/mcp",
-        provenance: "custom",
-      }),
-    ],
-  );
+test("a refused token is said on the page and the dialog stays open", async () => {
+  refuseWrite = true;
+  page = customPage();
   const view = renderAdmin("collector");
   await replaceToken(view);
 
-  expect(await view.findByText("The vault refused this token.")).toBeTruthy();
+  expect(
+    await view.findByText("The deployment refused this change."),
+  ).toBeTruthy();
   expect(sent.map((request) => request.path)).toEqual([
-    "/api/admin/credentials",
+    "/api/plugins/servers/collector/token",
   ]);
   // Left open, so the administrator can correct the token rather than retype it from nothing.
   expect(document.getElementById("access-token")).not.toBeNull();
+});
+
+/** Open the instance row, type the new host, and press Save. */
+async function moveInstance(view: ReturnType<typeof render>) {
+  const user = userEvent.setup({ document });
+  await user.click(await view.findByText("实例地址"));
+  const input = await waitFor(() => {
+    const field = document.getElementById("instance-host");
+    if (!field) throw new Error("the instance field is not open");
+    return field;
+  });
+  await user.type(input, NEW_HOST);
+  await user.click(await view.findByText("保存"));
+}
+
+test("an added catalogue server is re-added at a new instance host, keeping its token", async () => {
+  page = instancedPage();
+  const view = renderAdmin("instanced");
+  await moveInstance(view);
+
+  await waitFor(() => expect(sent).toHaveLength(1));
+  // No credential id: the add keeps the token the server holds when it is sent none.
+  expect(sent[0]).toEqual({
+    method: "POST",
+    path: "/api/plugins/servers",
+    body: { key: "instanced", instanceHost: NEW_HOST },
+  });
+  await waitFor(() =>
+    expect(document.getElementById("instance-host")).toBeNull(),
+  );
+});
+
+test("a refused instance host is said on the page and the dialog stays open", async () => {
+  refuseWrite = true;
+  page = instancedPage();
+  const view = renderAdmin("instanced");
+  await moveInstance(view);
+
+  expect(
+    await view.findByText("The deployment refused this change."),
+  ).toBeTruthy();
+  expect(document.getElementById("instance-host")).not.toBeNull();
 });
