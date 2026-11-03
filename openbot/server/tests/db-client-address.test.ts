@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createDatabase } from "../src/db/client";
+import { runAsTenant } from "../src/tenant/context";
 import { testDatabaseUrl } from "./support/database";
 
 /**
@@ -118,8 +119,11 @@ describe("connection parameters on the URL", () => {
     const named = createDatabase(address.toString());
 
     try {
-      const rows = await named.execute(
-        "select application_name from pg_stat_activity where pid = pg_backend_pid()",
+      // A catalogue view about this session, not a tenant's row: read in the system frame.
+      const rows = await runAsTenant("system", () =>
+        named.execute(
+          "select application_name from pg_stat_activity where pid = pg_backend_pid()",
+        ),
       );
       expect(
         (rows as Array<{ application_name: string }>)[0]?.application_name,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { accessFor } from "../plugins/access";
 import { catalogueEntry } from "../plugins/catalogue";
 import { PluginRefusedError, type PluginStore } from "../plugins/store";
+import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import type { MemoryStore } from "./store";
 import {
   type ImportedMemory,
@@ -243,6 +244,43 @@ export function createMemoryIngestion(options: {
       ),
     };
   }
+  async function syncEachDue() {
+    for (const source of await store.dueSources()) {
+      try {
+        const synced = await runAsClaimedTenant(
+          source,
+          source.ownerUserId,
+          () => sync(source.ownerUserId, source.id),
+        );
+        if (!synced.ran) {
+          console.error(
+            JSON.stringify({
+              type: "memory-sync-untrusted-tenant",
+              reason: synced.reason,
+              context: { sourceId: source.id },
+              timestamp: new Date().toISOString(),
+            }),
+          );
+          await runAsTenant("platform", () =>
+            store.failSync(
+              source.ownerUserId,
+              source.id,
+              "This source has no owner to sync it as. Create it again from your memory settings.",
+            ),
+          );
+        }
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "memory-sync-error",
+            error: error instanceof Error ? error.name : "UnknownError",
+            context: { sourceId: source.id },
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      }
+    }
+  }
   return {
     async createSource(ownerUserId: string, input: unknown) {
       const parsed = parseMemorySourceInput(input);
@@ -251,21 +289,17 @@ export function createMemoryIngestion(options: {
       return sync(ownerUserId, source.id);
     },
     sync,
+    /*
+     * A TIMER WITH NO PERSON BEHIND IT (G01). What is due is nobody's question, so it is asked as
+     * `platform`; every source is then synced in its OWN row's tenant, the one the database stamped
+     * when its owner created it, never the platform's and never one a previous source left behind.
+     * A source stamped `system`, `platform` or nothing, or stamped with someone other than its
+     * owner, names nobody to read the connected app as: it is not synced, and is marked failed from
+     * the operator's frame so it stops coming back every minute and holding one of the few slots a
+     * pass has.
+     */
     async syncDue() {
-      for (const source of await store.dueSources()) {
-        try {
-          await sync(source.ownerUserId, source.id);
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              type: "memory-sync-error",
-              error: error instanceof Error ? error.name : "UnknownError",
-              context: { sourceId: source.id },
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }
+      await runAsTenant("platform", () => syncEachDue());
     },
     async recall(ownerUserId: string, botId: string, search = "") {
       return store.retrieve(

@@ -1,4 +1,5 @@
 import { currentTenant } from "../tenant/context";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
@@ -23,6 +24,10 @@ import {
   type ApprovalTeamSettings,
 } from "./types";
 
+/**
+ * The id of the one team settings row (its primary key). Not the tenant: that the row is stamped
+ * `team` as well is {@link TEAM_TENANT}, which happens to be spelled the same.
+ */
 const TEAM = "team";
 const DEFAULT_PREFERENCES: ApprovalPreferences = {
   enabled: false,
@@ -353,7 +358,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
     const [row] = await database
       .select()
       .from(approvalTeamSettings)
-      .where(eq(approvalTeamSettings.id, TEAM))
+      .where(
+        and(
+          eq(approvalTeamSettings.id, TEAM),
+          eq(approvalTeamSettings.tenantId, TEAM_TENANT),
+        ),
+      )
       .limit(1);
     return row
       ? {
@@ -386,11 +396,18 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return next;
     },
     teamSettings,
+    /*
+     * Team rows are stamped `team` from the admin's own frame (G01-E "team-rules"), which RLS admits
+     * only with the admin capability, so every member's gate reads one row and any admin can change
+     * it. The conflict update never names `tenantId`: 0123 moved the existing row, and changing it
+     * here would be a re-stamp, which the row guard refuses outside `platform`. The audit row stays
+     * in the acting admin's frame.
+     */
     async setTeamSettings(by, input) {
       const next = { ...(await teamSettings()), ...input };
       await database
         .insert(approvalTeamSettings)
-        .values({ id: TEAM, ...next, updatedBy: by })
+        .values({ id: TEAM, ...next, updatedBy: by, tenantId: TEAM_TENANT })
         .onConflictDoUpdate({
           target: approvalTeamSettings.id,
           set: { ...next, updatedBy: by, updatedAt: sql`now()` },
@@ -408,7 +425,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return database
         .select()
         .from(approvalTeamRules)
-        .where(isNull(approvalTeamRules.revokedAt))
+        .where(
+          and(
+            eq(approvalTeamRules.tenantId, TEAM_TENANT),
+            isNull(approvalTeamRules.revokedAt),
+          ),
+        )
         .orderBy(desc(approvalTeamRules.createdAt));
     },
     async createRule(owner, input) {
@@ -429,7 +451,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
     async createTeamRule(by, input) {
       const [row] = await database
         .insert(approvalTeamRules)
-        .values({ id: crypto.randomUUID(), createdBy: by, ...input })
+        .values({
+          id: crypto.randomUUID(),
+          createdBy: by,
+          ...input,
+          tenantId: TEAM_TENANT,
+        })
         .returning();
       if (!row) throw new ApprovalNotFoundError();
       await recordAuditEvent(audit, {
@@ -470,6 +497,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         .where(
           and(
             eq(approvalTeamRules.id, id),
+            eq(approvalTeamRules.tenantId, TEAM_TENANT),
             isNull(approvalTeamRules.revokedAt),
           ),
         )
@@ -491,6 +519,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         .where(
           and(
             eq(approvalTeamRules.id, id),
+            eq(approvalTeamRules.tenantId, TEAM_TENANT),
             isNull(approvalTeamRules.revokedAt),
           ),
         )

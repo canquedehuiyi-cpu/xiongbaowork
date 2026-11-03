@@ -1,8 +1,10 @@
 import { isDeepStrictEqual } from "node:util";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { components, sandboxedComponents } from "../db/schema";
+import { TEAM_TENANT } from "../db/schema/tenant";
+import { capabilityFor, currentTenant } from "../tenant/context";
 
 /**
  * Components authored in a browser rather than compiled into the build.
@@ -23,6 +25,13 @@ import { components, sandboxedComponents } from "../db/schema";
  * the entire point of this table and it is also what puts an editor one keystroke from changing what
  * every Bot draws in production. A draft absorbs that: edited freely, previewed against sample
  * arguments, and reaching nobody until somebody publishes it.
+ *
+ * Every source row is the team's (G01-E): it is stamped `team`, not with the administrator who saved
+ * it, so any administrator holding the admin capability can list, edit, publish and delete it, and
+ * every member reads what is published. Row-level security admits the writes only with that
+ * capability; a write it refuses matches no row, and every update and delete here checks its row
+ * count, so a refused change is reported rather than mistaken for success. Members never see a draft
+ * through this store: `published()` and the `/published` route project published columns only.
  */
 
 export type SandboxedRecord = {
@@ -104,6 +113,23 @@ export function sandboxedNameFor(slug: string): string {
   return `${SANDBOXED_PREFIX}${slug}`;
 }
 
+/** The one playground source row called `name`: the team's, never a person's or the catalogue's. */
+const teamRow = (name: string) =>
+  and(
+    eq(sandboxedComponents.name, name),
+    eq(sandboxedComponents.tenantId, TEAM_TENANT),
+  );
+
+/**
+ * Whether this frame can see every team source row, drafts included: `platform`, or an administrator
+ * holding the capability. Anyone else is shown at most the published ones, so "no row" proves
+ * nothing about whether one exists.
+ */
+function seesEveryTeamDraft(): boolean {
+  const frame = currentTenant();
+  return frame === "platform" || capabilityFor(frame) === "admin";
+}
+
 export function createSandboxedStore(
   database: Database,
   auditStore: AuditStore,
@@ -112,7 +138,7 @@ export function createSandboxedStore(
     const [row] = await database
       .select()
       .from(sandboxedComponents)
-      .where(eq(sandboxedComponents.name, name))
+      .where(teamRow(name))
       .limit(1);
     if (!row) throw new SandboxedNotFoundError(name);
     return row;
@@ -152,6 +178,7 @@ export function createSandboxedStore(
       const rows = await database
         .select()
         .from(sandboxedComponents)
+        .where(eq(sandboxedComponents.tenantId, TEAM_TENANT))
         .orderBy(asc(sandboxedComponents.title));
       return rows.map(toRecord);
     },
@@ -185,6 +212,9 @@ export function createSandboxedStore(
         .insert(sandboxedComponents)
         .values({
           name,
+          // The team's, whoever saved it. Not repeated in the conflict update below: changing a
+          // row's tenant is a re-stamp, which the row guard refuses outside `platform`.
+          tenantId: TEAM_TENANT,
           title: input.title,
           draftDescription: input.description,
           draftHtml: input.html,
@@ -255,7 +285,7 @@ export function createSandboxedStore(
         const [row] = await transaction
           .select()
           .from(sandboxedComponents)
-          .where(eq(sandboxedComponents.name, name))
+          .where(teamRow(name))
           .limit(1)
           .for("update");
         if (!row) {
@@ -299,7 +329,7 @@ export function createSandboxedStore(
 
         const now = new Date();
         const revision = row.revision + 1;
-        await transaction
+        const source = await transaction
           .update(sandboxedComponents)
           .set({
             publishedDescription: row.draftDescription,
@@ -312,9 +342,13 @@ export function createSandboxedStore(
             revision,
             updatedAt: now,
           })
-          .where(eq(sandboxedComponents.name, name));
+          .where(teamRow(name))
+          .returning({ name: sandboxedComponents.name });
+        // A row read but not written was refused by row-level security (a published row is readable
+        // by everyone, writable only with the admin capability). Throwing rolls back the transaction.
+        if (source.length === 0) throw new SandboxedNotFoundError(name);
 
-        await transaction
+        const governed = await transaction
           .update(components)
           .set({
             publishedDescription: row.draftDescription,
@@ -323,12 +357,14 @@ export function createSandboxedStore(
             updatedBy: by,
             updatedAt: now,
           })
-          .where(eq(components.name, name));
+          .where(eq(components.name, name))
+          .returning({ name: components.name });
+        if (governed.length === 0) throw new SandboxedNotFoundError(name);
 
         const [updated] = await transaction
           .select()
           .from(sandboxedComponents)
-          .where(eq(sandboxedComponents.name, name))
+          .where(teamRow(name))
           .limit(1);
         if (!updated) {
           throw new SandboxedPublicationRefusedError(
@@ -375,22 +411,32 @@ export function createSandboxedStore(
         const [row] = await transaction
           .select()
           .from(sandboxedComponents)
-          .where(eq(sandboxedComponents.name, name))
+          .where(teamRow(name))
           .limit(1)
           .for("update");
         if (!governance.published && !row?.published) return false;
 
         const now = new Date();
         if (row) {
-          await transaction
+          const source = await transaction
             .update(sandboxedComponents)
             .set({ published: false, updatedAt: now })
-            .where(eq(sandboxedComponents.name, name));
+            .where(teamRow(name))
+            .returning({ name: sandboxedComponents.name });
+          // Visible (it is published) but refused by row-level security: no admin capability.
+          if (source.length === 0) throw new SandboxedNotFoundError(name);
+        } else if (!seesEveryTeamDraft()) {
+          // The governance row says published and no source is visible here. Without the capability
+          // that may be a source this frame may not change, so withdrawing only the governance half
+          // would be a half-withdrawn publication made by someone not allowed to make it.
+          throw new SandboxedNotFoundError(name);
         }
-        await transaction
+        const governed = await transaction
           .update(components)
           .set({ published: false, updatedBy: by, updatedAt: now })
-          .where(eq(components.name, name));
+          .where(eq(components.name, name))
+          .returning({ name: components.name });
+        if (governed.length === 0) throw new SandboxedNotFoundError(name);
         return true;
       });
 
@@ -438,10 +484,21 @@ export function createSandboxedStore(
 
       // Delete both rows; a governance row pointing at a component with no source is the visible
       // "catalogue disagrees with the build" state.
-      await database
+      const source = await database
         .delete(sandboxedComponents)
-        .where(eq(sandboxedComponents.name, name));
-      await database.delete(components).where(eq(components.name, name));
+        .where(teamRow(name))
+        .returning({ name: sandboxedComponents.name });
+      // No source deleted is the orphan above only when this frame could have seen one. Without the
+      // admin capability row-level security deletes nothing, so going on would remove the governance
+      // row and leave the team's source behind it: refused, as not found, instead.
+      if (source.length === 0 && !seesEveryTeamDraft()) {
+        throw new SandboxedNotFoundError(name);
+      }
+      const governed = await database
+        .delete(components)
+        .where(eq(components.name, name))
+        .returning({ name: components.name });
+      if (governed.length === 0) throw new SandboxedNotFoundError(name);
 
       await recordAuditEvent(auditStore, {
         eventType: "component.unpublished",

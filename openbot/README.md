@@ -322,7 +322,10 @@ provider's discovery document listed in `TRUSTED_ORIGINS`, not only the issuer.
 - `INITIAL_ADMIN_EMAILS` is required, because it is what grants the first administrator. After that
   `/admin/people` can promote others, but an address named here stays an administrator and cannot be
   demoted or removed from that screen. It is re-read on every sign-in, so editing it takes effect
-  the next time that person signs in.
+  the next time that person signs in. Only a verified address is promoted (an identity provider's,
+  or one arriving through a registered SSO connection); an account that signed up with a password is
+  never promoted by this list, because nobody verified who registered it. On a password-only
+  deployment, sign up first and then run `bun scripts/grant-admin.ts <email>` in the server.
 - `MICROSOFT_OAUTH_TENANT_ID` defaults to `common`, which admits personal Microsoft accounts as well
   as work ones. On a multi-tenant app registration Entra may send no `email` claim at all, so
   OpenBot falls back to `upn` and then `preferred_username`. If none of the three arrives the
