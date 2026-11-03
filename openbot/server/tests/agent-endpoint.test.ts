@@ -620,7 +620,7 @@ describe("dialling a stored agent endpoint", () => {
         method: "POST",
         body: new ReadableStream(),
       }),
-    ).rejects.toThrow(/will not forward/i);
+    ).rejects.toThrow(/不会把这次运行转发/);
     expect(calls.length).toBe(1);
   });
 
@@ -636,7 +636,7 @@ describe("dialling a stored agent endpoint", () => {
         method: "POST",
         body: "not json at all",
       }),
-    ).rejects.toThrow(/will not forward/i);
+    ).rejects.toThrow(/不会把这次运行转发/);
     expect(calls.length).toBe(1);
   });
 
