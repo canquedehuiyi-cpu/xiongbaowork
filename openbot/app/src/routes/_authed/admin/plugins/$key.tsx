@@ -44,6 +44,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { storeMcpToken } from "@/lib/credentials/mutations";
 import {
   addCuratedServerMutationOptions,
+  addCustomServerMutationOptions,
   connectAccountMutationOptions,
   grantPlugin,
   invalidatePlugins,
@@ -247,6 +248,10 @@ function RouteComponent() {
     ...addCuratedServerMutationOptions(queryClient),
     ...report,
   });
+  const addCustom = useMutation({
+    ...addCustomServerMutationOptions(queryClient),
+    ...report,
+  });
   const registerClient = useMutation({
     ...registerOAuthClientMutationOptions(queryClient),
     ...report,
@@ -370,6 +375,53 @@ function RouteComponent() {
       }
       setToken("");
       setClient({ clientId: "", clientSecret: "" });
+      setDialog(null);
+    } catch (thrown) {
+      setError((thrown as Error).message);
+    }
+  };
+
+  /*
+   * Replacing the token of a server that is already here: the same two writes as adding, with the
+   * re-add told everything the server already is so that the credential is the only thing it moves.
+   *
+   * The vault replaces a key's live credential rather than adding a second (`createCredential`
+   * rotates), so the server's row is left naming the revoked one until the re-add points it at the
+   * new id — which is why both writes are needed, and why a refused re-add is reported rather than
+   * the dialog closing over it.
+   *
+   * A server added by URL is re-added at the address and under the title it has, through its own
+   * endpoint; the store refuses a credential carried to a different address, and this sends the
+   * same one. A catalogue server keeps its instance host, read back off the url it was resolved to
+   * (`host + path`, so the origin is the host). An entry with a fixed host ignores the field.
+   *
+   * Nothing typed is nothing to replace, so the dialog closes having written nothing.
+   */
+  const replaceToken = async (existing: PluginServer) => {
+    setError(null);
+    if (!token.trim()) {
+      setDialog(null);
+      return;
+    }
+    try {
+      const credentialId = await storeMcpToken(key, token);
+      if (existing.provenance === "custom") {
+        await addCustom.mutateAsync({
+          id: existing.id,
+          title: existing.title,
+          url: existing.url,
+          credentialId,
+        });
+      } else {
+        await addCurated.mutateAsync({
+          key,
+          instanceHost: entry?.perInstance
+            ? new URL(existing.url).origin
+            : undefined,
+          credentialId,
+        });
+      }
+      setToken("");
       setDialog(null);
     } catch (thrown) {
       setError((thrown as Error).message);
@@ -1118,6 +1170,10 @@ function RouteComponent() {
               onClick={() => {
                 if (!server) {
                   void add();
+                  return;
+                }
+                if (dialog === "token") {
+                  void replaceToken(server);
                   return;
                 }
                 if (dialog === "client") {
