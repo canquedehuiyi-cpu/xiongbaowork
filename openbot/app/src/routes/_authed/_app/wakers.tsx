@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
 import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
 import {
@@ -112,6 +113,15 @@ function RouteComponent() {
   const attention = useQuery(botAttentionQueryOptions());
   /** Spec F4: this person's machines and whether each is online, for the device line on each card. */
   const devices = useQuery(devicesQueryOptions());
+  /*
+   * Story F1 (spec D2): the person's 分身 reads 待配置 until they save its first information source.
+   * Only said when the read answered: a failed read is not "unconfigured", so it says nothing.
+   */
+  const avatarSources = useQuery(avatarSourcesQueryOptions());
+  const unconfiguredAvatar =
+    avatarSources.data && avatarSources.data.configuredAt === null
+      ? avatarSources.data.agentId
+      : null;
   /*
    * Spec F4's device line on a coworker's card. A running task bound to a machine names THAT machine
    * and whether it is online (the task's own `deviceId`). Without one there is no binding to read, so
@@ -256,6 +266,7 @@ function RouteComponent() {
           roster={visible}
           deviceLineOf={deviceLineOf}
           statusOf={status}
+          unconfiguredAvatar={unconfiguredAvatar}
         />
       ) : (
         <CrewTab
@@ -309,6 +320,7 @@ function CoworkerTab({
   queryClient,
   roster,
   statusOf,
+  unconfiguredAvatar,
 }: {
   agents: boolean;
   deviceLineOf: (agent: AgentProfile) => DeviceLine | null;
@@ -323,6 +335,8 @@ function CoworkerTab({
   queryClient: ReturnType<typeof useQueryClient>;
   roster: AgentProfile[];
   statusOf: (agent: AgentProfile) => WakerStatus;
+  /** The 分身's id while it has no information source saved yet, else null. */
+  unconfiguredAvatar: string | null;
 }) {
   const lifecycle = useMutation(setBotPausedMutationOptions(queryClient));
   const [problem, setProblem] = useState<string | null>(null);
@@ -383,6 +397,15 @@ function CoworkerTab({
                       data-hidden="true"
                     >
                       已隐藏
+                    </span>
+                  ) : null}
+                  {agent.id === unconfiguredAvatar ? (
+                    <span
+                      className="rounded border border-dashed border-amber-500/60 px-1.5 py-0.5 text-xs font-normal text-amber-600 dark:text-amber-400"
+                      data-unconfigured="true"
+                      title="还没有登记信息来源，可以在详情页配置。"
+                    >
+                      待配置
                     </span>
                   ) : null}
                 </ItemTitle>
