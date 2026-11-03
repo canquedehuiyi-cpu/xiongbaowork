@@ -1856,6 +1856,39 @@ export function createApp(
             });
           }
 
+          /*
+           * AND ON THE ACCOUNT ITS IN-PROCESS TURN WOULD USE (G01-E PCB2).
+           *
+           * A Team Bot reaches its owner's connected account, and a teammate's own only with their
+           * consent: `teamBots.credentialActorFor`, the function `loadToolsForActor` hands the
+           * in-process door, asked here for the same Bot, person and tool. Without it a teammate's
+           * external-agent call went out on the teammate's own account with no consent asked. A
+           * missing consent throws the card's `PluginRefusedError`, answered below as a refusal
+           * before anything is sent, exactly as in process.
+           *
+           * Only for a Bot's own token. The deployment-wide token proves no Bot of its own, so it
+           * never borrows an owner's account. And only for a tool this Bot holds (the same grant
+           * question `callTool` asks first): the in-process door only ever offers a granted tool, so
+           * an ungranted one is still refused and recorded by `callTool`, with no one-time consent
+           * spent on a call that was never going to go out.
+           */
+          const teamBots = coworker?.teamBots;
+          const credentialActorId =
+            teamBots &&
+            verdict.botTenant !== undefined &&
+            (
+              await pluginStore.decide(
+                "mcp",
+                parsedCall.value.ref,
+                verdict.botId,
+              )
+            ).allowed
+              ? await teamBots.credentialActorFor(
+                  verdict.actorId,
+                  verdict.botId,
+                )(parsedCall.value.ref)
+              : verdict.actorId;
+
           const result = await pluginStore.callTool({
             ref: parsedCall.value.ref,
             args: parsedCall.value.args,
@@ -1863,6 +1896,9 @@ export function createApp(
             // From the assertion, never the body: this is the name the audit row will carry.
             actorId: verdict.actorId,
             ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
+            ...(credentialActorId === verdict.actorId
+              ? {}
+              : { credentialActorId }),
           });
           // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
           // error as the vendor's and not as a result. Neither Bot words it on its way through.

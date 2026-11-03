@@ -21,6 +21,11 @@ import {
 } from "../src/db/schema";
 import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { createPluginStore } from "../src/plugins/store";
+import { REFUSAL_MARKER } from "../src/plugins/tools";
+import {
+  createTeamBots,
+  TEAM_BOT_CONSENT_MARKER,
+} from "../src/team-bots/team-bots";
 import { asPlatform, currentTenant, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
@@ -46,14 +51,17 @@ const profiles = createAgentProfileStore(
 const auditStore = createAuditStore(database);
 /** Which frame each vendor call went out from. */
 const vendorFrames: string[] = [];
+/** Whose account each vendor call went out on: the store's credential actor for the call. */
+const vendorAccounts: string[] = [];
 const plugins = createPluginStore({
   database,
   auditStore,
   credentials: { readSecret: async () => null },
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
-  callVendor: async () => {
+  callVendor: async (target) => {
     vendorFrames.push(currentTenant());
+    vendorAccounts.push(target.actorId ?? "");
     return { text: "ledger line 42", isError: false };
   },
 });
@@ -68,27 +76,59 @@ const toolRef = `${server}/lookup`;
 const toolName = `mcp__${server}__lookup`;
 const createdAgentIds: string[] = [];
 
+/** Which servers each person has their own account on, for the Team Bot consent rule. */
+const connected = new Map<string, Set<string>>();
+/** The real Team Bots service: publication, consent, and whose account a Team Bot's call uses. */
+const teamBots = createTeamBots({
+  database,
+  connectedServers: async (userId) => connected.get(userId) ?? new Set(),
+});
+
 const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-const config = loadConfig(testEnvironment({ KEY_ENCRYPTION_KEY: KEY }));
+const LEGACY_TOKEN = `legacy-${randomUUID()}`;
 
 /** The real route, with the real stores in the positions `createApp` takes them. */
-const app = createApp(
-  config,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  profiles,
-  undefined,
-  undefined,
-  auditStore,
-  undefined,
-  plugins,
-);
+function appWith(environment: Record<string, string>) {
+  return createApp(
+    loadConfig(testEnvironment({ KEY_ENCRYPTION_KEY: KEY, ...environment })),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    profiles,
+    undefined,
+    undefined,
+    auditStore,
+    undefined,
+    plugins,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { teamBots },
+  );
+}
+const app = appWith({});
+/** The same route on a deployment that also accepts the deployment-wide token. */
+const legacyApp = appWith({ AGENT_TOOL_TOKEN: LEGACY_TOKEN });
 
 const as = <T>(actor: AgentActor, fn: () => T): T => runAsTenant(actor.id, fn);
 
@@ -110,9 +150,32 @@ async function createBot(visibility: "public" | "private") {
   return { botId: profile.id, token };
 }
 
+/** A private Bot its owner then publishes to the whole team, as the Team Bots page does. */
+async function createTeamBot() {
+  const bot = await createBot("private");
+  await as(owner, () =>
+    teamBots.publish(owner, bot.botId, {
+      audience: "team",
+      emails: [],
+      groups: [],
+    }),
+  );
+  return bot;
+}
+
+/** Whose account the in-process door's call to this suite's tool goes out on, for `actor`. */
+function inProcessAccount(actor: AgentActor, botId: string) {
+  return as(actor, () => teamBots.credentialActorFor(actor.id, botId)(toolRef));
+}
+
 /** One callback, exactly as an external agent sends it: token header, signed run, no session. */
-async function callBack(token: string, botId: string, actorId: string) {
-  const response = await app.request(
+async function callBack(
+  token: string,
+  botId: string,
+  actorId: string,
+  via = app,
+) {
+  const response = await via.request(
     "http://openbot.local/api/agent-tools/call",
     {
       method: "POST",
@@ -325,5 +388,148 @@ describe("a callback whose token proves no Bot", () => {
       { tenantId: "platform", refusal: "Not authorised.", status: 401 },
       { tenantId: "platform", refusal: "Not authorised.", status: 401 },
     ]);
+  });
+});
+
+describe("a `team` Bot's callback reaches the account its in-process turn would (G01-E PCB2)", () => {
+  test("a teammate's call goes out on the owner's account where the owner connected it", async () => {
+    const { botId, token } = await createTeamBot();
+    connected.set(owner.id, new Set([server]));
+    connected.set(teammate.id, new Set([server]));
+    // What the in-process door decides for this Bot, this person and this tool.
+    expect(await inProcessAccount(teammate, botId)).toBe(owner.id);
+    vendorFrames.length = 0;
+    vendorAccounts.length = 0;
+
+    const { status, body } = await underThrowGuard(() =>
+      callBack(token, botId, teammate.id),
+    );
+
+    expect(status).toBe(200);
+    expect(body.isError).toBe(false);
+    expect(body.text).toContain("ledger line 42");
+    // The owner's account, in the teammate's frame, with the teammate's name on the row.
+    expect(vendorAccounts).toEqual([owner.id]);
+    expect(vendorFrames).toEqual([teammate.id]);
+    expect(await callRows(botId)).toEqual([
+      { eventType: "mcp.call_succeeded", tenantId: teammate.id },
+    ]);
+  });
+
+  test("a teammate's call is refused for consent where only their own account is connected, and spends a one-time consent once", async () => {
+    const { botId, token } = await createTeamBot();
+    connected.set(owner.id, new Set());
+    connected.set(teammate.id, new Set([server]));
+    vendorAccounts.length = 0;
+
+    const refused = await callBack(token, botId, teammate.id);
+
+    expect(refused.status).toBe(200);
+    expect(refused.body.isError).toBe(true);
+    expect(refused.body.text).toStartWith(
+      `${REFUSAL_MARKER} ${TEAM_BOT_CONSENT_MARKER}`,
+    );
+    // Nothing was sent, and nothing was called: the refusal comes before the store's call.
+    expect(vendorAccounts).toEqual([]);
+    expect(await callRows(botId)).toEqual([]);
+
+    await as(teammate, () =>
+      teamBots.consent(teammate, botId, server, "allow_once"),
+    );
+    const allowed = await callBack(token, botId, teammate.id);
+    const again = await callBack(token, botId, teammate.id);
+
+    expect(allowed.body.isError).toBe(false);
+    expect(vendorAccounts).toEqual([teammate.id]);
+    expect(again.body.isError).toBe(true);
+    expect(again.body.text).toStartWith(
+      `${REFUSAL_MARKER} ${TEAM_BOT_CONSENT_MARKER}`,
+    );
+    expect(vendorAccounts).toEqual([teammate.id]);
+  });
+
+  test("a server nobody has their own account on, and the owner's own call, go out as the asker", async () => {
+    const { botId, token } = await createTeamBot();
+    connected.set(owner.id, new Set());
+    connected.set(teammate.id, new Set());
+    vendorAccounts.length = 0;
+
+    const shared = await callBack(token, botId, teammate.id);
+    connected.set(owner.id, new Set([server]));
+    const own = await callBack(token, botId, owner.id);
+
+    expect([shared.body.isError, own.body.isError]).toEqual([false, false]);
+    expect(vendorAccounts).toEqual([teammate.id, owner.id]);
+  });
+
+  test("a tool the Bot was never given is still refused and recorded by the store, spending no consent", async () => {
+    const { botId, token } = await createTeamBot();
+    connected.set(owner.id, new Set());
+    connected.set(teammate.id, new Set([server]));
+    await as(teammate, () =>
+      teamBots.consent(teammate, botId, server, "allow_once"),
+    );
+    vendorAccounts.length = 0;
+
+    const response = await app.request(
+      "http://openbot.local/api/agent-tools/call",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-openbot-agent-token": token,
+        },
+        body: JSON.stringify({
+          name: `mcp__${server}__erase`,
+          args: {},
+          run: mintRunAssertion(
+            { botId, actorId: teammate.id, runId: `${suite}-${randomUUID()}` },
+            KEY,
+          ),
+        }),
+      },
+    );
+    const body = (await response.json()) as { text?: string };
+
+    expect(body.text).toBe(
+      `${REFUSAL_MARKER} This Bot has not been given the tool ${server}/erase.`,
+    );
+    const [rejected] = await asPlatform(() =>
+      database
+        .select({ tenantId: auditEvents.tenantId })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "mcp.call_rejected"),
+            eq(auditEvents.targetId, `${server}/erase`),
+            sql`${auditEvents.payload}->>'bot' = ${botId}`,
+          ),
+        ),
+    );
+    expect(rejected?.tenantId).toBe(teammate.id);
+    // The one-time consent is still there for the granted tool's call.
+    const granted = await callBack(token, botId, teammate.id);
+    expect(granted.body.isError).toBe(false);
+    expect(vendorAccounts).toEqual([teammate.id]);
+  });
+
+  test("a private Bot and the deployment-wide token are unchanged: the asker's account", async () => {
+    const privateBot = await createBot("private");
+    const teamBot = await createTeamBot();
+    connected.set(owner.id, new Set([server]));
+    connected.set(teammate.id, new Set([server]));
+    vendorAccounts.length = 0;
+
+    const answers = await underThrowGuard(async () => [
+      await callBack(privateBot.token, privateBot.botId, owner.id),
+      // The deployment-wide token proves no Bot of its own, so it never borrows an owner's account.
+      await callBack(LEGACY_TOKEN, teamBot.botId, teammate.id, legacyApp),
+    ]);
+
+    expect(answers.map((answer) => answer.body.isError)).toEqual([
+      false,
+      false,
+    ]);
+    expect(vendorAccounts).toEqual([owner.id, teammate.id]);
   });
 });
