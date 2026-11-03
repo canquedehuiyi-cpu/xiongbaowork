@@ -8,6 +8,7 @@ import { createEnterpriseGate } from "./admin/gate";
 import { createEnterpriseAdminRoutes } from "./admin/routes";
 import {
   authoriseAgentCall,
+  callbackFrameFor,
   parseAgentToolCallInput,
   type RunAssertion,
   sameToken,
@@ -126,7 +127,7 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { PackageStatusReader } from "./tenant-package";
-import { capabilityFor, isPersonTenant, runAsTenant } from "./tenant/context";
+import { capabilityFor, runAsTenant } from "./tenant/context";
 import {
   INSTRUCTIONS_LIMIT,
   InstructionsTooLongError,
@@ -1826,9 +1827,17 @@ export function createApp(
        * from the body, so it is the one trusted answer to "whose work is this". An assertion that
        * names nobody's tenant is refused rather than run as the platform or as `system`.
        */
-      if (!isPersonTenant(verdict.actorId))
+      /*
+       * AND IN THE BOT'S RIGHT FRAME (G01-E PCB). The token lookup above is a narrow `platform` read,
+       * so it now finds a person's private Bot and a `team` Bot; which frame the call then runs in
+       * is decided by `callbackFrameFor` from the Bot's stamp and the signed person. A private Bot
+       * runs in its owner's tenant and only for its owner; a `team` Bot (a stamp, never a frame) and
+       * a catalogue Bot run in the asking person's own frame, exactly as their in-process turn does.
+       */
+      const frame = callbackFrameFor(verdict);
+      if (frame === null)
         return context.json({ error: "Not authorised." }, 403);
-      return runAsTenant(verdict.actorId, async () => {
+      return runAsTenant(frame, async () => {
         try {
           const deploymentResult = await deploymentToolCaller?.({
             name: parsedCall.value.ref,

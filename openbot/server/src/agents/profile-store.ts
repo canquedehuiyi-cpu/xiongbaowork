@@ -11,7 +11,7 @@ import {
 } from "../db/schema";
 import { teamBotPublications } from "../db/schema/team-bots";
 import { TEAM_TENANT } from "../db/schema/tenant";
-import { currentTenant, isPersonTenant } from "../tenant/context";
+import { asPlatform, currentTenant, isPersonTenant } from "../tenant/context";
 import {
   assignedCondition,
   assignedToActor,
@@ -23,6 +23,7 @@ import {
   storeAgentAuth,
 } from "./auth-header";
 import {
+  type CallbackTokenHolder,
   hashCallbackToken,
   mintCallbackToken,
   sameToken,
@@ -100,12 +101,14 @@ export type AgentProfileStore = {
   /** Take the credential away. The agent may talk, and may no longer call anything back. */
   revokeCallbackToken(actor: AgentActor, id: string): Promise<void>;
   /**
-   * Which agent holds this token, if any.
+   * Which agent holds this token, if any, and the tenant its profile is stamped with.
    *
    * By hash, because that is all this side keeps. Not scoped to an actor: the caller is a machine
-   * presenting a credential, and the credential is the whole of its claim.
+   * presenting a credential, and the credential is the whole of its claim. So it is asked as
+   * `platform` (G01-E PCB), the one frame that sees a person's private Bot and a `team` Bot alike:
+   * the route asking has no person to frame it, and the legacy unframed `system` answer sees neither.
    */
-  agentForCallbackToken(hash: string): Promise<{ id: string } | null>;
+  agentForCallbackToken(hash: string): Promise<CallbackTokenHolder | null>;
 };
 
 export class AgentNotFoundError extends Error {
@@ -594,10 +597,11 @@ async function refuseOwnerlessPrivate(
 async function findByTokenHash(
   database: Database,
   hash: string,
-): Promise<{ id: string } | null> {
+): Promise<CallbackTokenHolder | null> {
   const rows = await database
     .select({
       agentId: agentProfiles.agentId,
+      tenantId: agentProfiles.tenantId,
       hash: agentProfiles.callbackTokenHash,
     })
     .from(agentProfiles)
@@ -611,7 +615,9 @@ async function findByTokenHash(
 
   const row = rows[0];
   if (!row?.hash) return null;
-  return sameToken(row.hash, hash) ? { id: row.agentId } : null;
+  return sameToken(row.hash, hash)
+    ? { id: row.agentId, tenantId: row.tenantId }
+    : null;
 }
 
 /** Hiding a Team Bot an administrator assigned to this person, which they cannot do. */
@@ -1128,7 +1134,12 @@ export function createAgentProfileStore(
     },
 
     agentForCallbackToken(hash) {
-      return findByTokenHash(database, hash);
+      /*
+       * A NARROW PLATFORM READ (G01-E PCB). The one non-deleted profile whose stored hash is this
+       * one, and only its id and stamp: what the route needs to decide which frame the call then runs
+       * in. Everything after that runs in a person's frame, never in this one.
+       */
+      return asPlatform(() => findByTokenHash(database, hash));
     },
   };
 }
