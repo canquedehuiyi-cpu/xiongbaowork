@@ -1506,7 +1506,15 @@ async fn start_stack_inner<R: tauri::Runtime>(
             picked.as_ref(),
             // What a previous start of this deployment already minted. Without it every Start writes a
             // new KEY_ENCRYPTION_KEY and orphans everything the server had encrypted under the old one.
-            &existing_secrets,
+            // Plus the settings a previous start chose and the next one keeps (the tenant package).
+            &{
+                let mut kept = existing_secrets.clone();
+                kept.extend(openbot_env::already_set(
+                    &root.join(".env"),
+                    &openbot_env::CARRIED_SETTINGS[..],
+                ));
+                kept
+            },
         );
         if let Some(authority) = organization_auth_url {
             settings.insert("OPENBOT_ORGANIZATION_AUTH_URL".into(), authority);
@@ -7430,7 +7438,7 @@ fn main() {
         .unwrap();
         assert_eq!(
             settings.get("TENANT_PACKAGE_DIR").map(String::as_str),
-            Some("../examples/fintech")
+            Some(openbot_env::DEFAULT_TENANT_PACKAGE_DIR)
         );
         let bundled_url = settings
             .get("MANAGED_AGENT_AG_UI_URL")
@@ -7482,7 +7490,7 @@ fn main() {
             serde_json::json!({
                 "case":case, "composeUp":up, "commands":commands, "intentionalMigrationBarrier":true,
                 "publicSettings":settings,
-                "defaultPackage":"../examples/fintech", "remoteEndpointPersistedAndConsumed":asked,
+                "defaultPackage":openbot_env::DEFAULT_TENANT_PACKAGE_DIR, "remoteEndpointPersistedAndConsumed":asked,
                 "actualAskIpcResponse":asked.then_some("D53-BYO-REMOTE-ANSWER"),
                 "noHostStartup":true, "nativeGui":false, "realEngineOrDatabase":false,
             })
