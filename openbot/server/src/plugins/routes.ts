@@ -460,6 +460,47 @@ export function createPluginRoutes(
   });
 
   /**
+   * Replace the deployment token of a server that is already added, and point the server at it.
+   *
+   * Its own endpoint rather than `POST /api/admin/credentials` followed by a re-add, because those
+   * are two requests and the first revokes the token the server is using: a failure between them
+   * left the server on a revoked credential. The store writes both in one transaction — see
+   * `replaceServerToken`. Nothing else about the server is taken from the request.
+   */
+  routes.post("/servers/:id/token", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+
+    const body = (await context.req.json().catch(() => null)) as {
+      token?: unknown;
+    } | null;
+    if (typeof body?.token !== "string" || !body.token.trim()) {
+      return context.json({ error: "A token is required." }, 400);
+    }
+
+    try {
+      const server = await store.replaceServerToken({
+        serverId: context.req.param("id"),
+        token: body.token,
+        by: actorEmail(context),
+      });
+      return context.json({ server });
+    } catch (error) {
+      if (
+        error instanceof CatalogueEntryUnknownError ||
+        error instanceof CustomServerRefusedError
+      ) {
+        return context.json({ error: error.message }, 400);
+      }
+      // As on the add routes: this refreshes before it answers, over a row that now holds the token.
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
    * Register this deployment's OAuth client for a server reached as the person asking.
    *
    * Its own endpoint rather than a field on `POST /servers`, because it is a separate act with a

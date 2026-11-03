@@ -219,3 +219,72 @@ describe("POST /api/plugins/servers/:id/oauth-client", () => {
     ]);
   });
 });
+
+/**
+ * `POST /servers/:id/token` replaces an added server's token and re-points the server in one store
+ * call (G01-E P22). The body is JSON, so a token that is not a non-empty string is the same 400 the
+ * routes above answer, before the store or the vault is touched; and the server is named by the
+ * path alone — nothing else about it is read from the request.
+ */
+describe("POST /api/plugins/servers/:id/token", () => {
+  function tokenApp(replaced: unknown[]) {
+    const store = {
+      replaceServerToken: async (input: unknown) => {
+        replaced.push(input);
+        return { id: (input as { serverId: string }).serverId };
+      },
+    } as unknown as PluginStore;
+    const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+      context,
+      next,
+    ) => {
+      context.set("actor", {
+        id: "user-1",
+        email: "user@openbot.test",
+        role: "admin",
+      });
+      await next();
+    };
+    const canUseBot: BotAccessCheck = async () => true;
+    return createPluginRoutes(store, requireUser, canUseBot);
+  }
+
+  const send = (replaced: unknown[], body: unknown) =>
+    tokenApp(replaced).request("http://openbot.test/servers/collector/token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  test.each([
+    ["a missing token", {}],
+    ["a number token", { token: 12345 }],
+    ["an object token", { token: {} }],
+    ["a whitespace token", { token: "   " }],
+  ])("refuses %s with 400 and never reaches the store", async (_n, body) => {
+    const replaced: unknown[] = [];
+    const response = await send(replaced, body);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "A token is required." });
+    expect(replaced).toEqual([]);
+  });
+
+  test("names the server by its path and nothing else from the body", async () => {
+    const replaced: unknown[] = [];
+    const response = await send(replaced, {
+      token: "fixture-token",
+      url: "https://elsewhere.example/mcp",
+      credentialId: "not-read",
+    });
+
+    expect(response.status).toBe(200);
+    expect(replaced).toEqual([
+      {
+        serverId: "collector",
+        token: "fixture-token",
+        by: "user@openbot.test",
+      },
+    ]);
+  });
+});
