@@ -123,3 +123,30 @@ export async function handleComputerStreamUpgrade(
     return new Response("Expected a WebSocket upgrade.", { status: 400 });
   });
 }
+
+/**
+ * Saves one step of the owner's recording that arrived on an upgraded live-screen socket.
+ *
+ * Bun runs WebSocket handlers outside the upgrade's frame (it does not carry AsyncLocalStorage
+ * across), so the `runAsTenant` above has ended by the time a `demonstration.action` comes in. The
+ * socket's `ownerUserId` is the person `handleComputerStreamUpgrade` signed in, and the recording is
+ * theirs, so the step is saved in their frame: unframed it read as `system`, which cannot see the
+ * owner's recording, and under the frame guard it throws (G01-E P4).
+ */
+export function captureInFrame(
+  data: Pick<
+    ComputerStreamSocketData,
+    "ownerUserId" | "botId" | "recordingId"
+  >,
+  action: unknown,
+  capture: (
+    ownerUserId: string,
+    botId: string,
+    recordingId: string,
+    action: unknown,
+  ) => Promise<void>,
+): Promise<void> {
+  return runAsTenant(data.ownerUserId, () =>
+    capture(data.ownerUserId, data.botId, data.recordingId ?? "", action),
+  );
+}

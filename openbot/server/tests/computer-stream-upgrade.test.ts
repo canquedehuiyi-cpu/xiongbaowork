@@ -6,11 +6,13 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { OpenBotRole } from "../src/auth/roles";
 import {
   type ComputerStreamSocketData,
+  captureInFrame,
   handleComputerStreamUpgrade,
 } from "../src/computer/stream-upgrade";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
+import { createDemonstrationRecorder } from "../src/demonstrations/recording";
 import { createDemonstrationStore } from "../src/demonstrations/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -171,6 +173,40 @@ test("the owner's active recording rides along on the socket", async () => {
     expect(server.upgraded[0]?.upstream).toEndWith(
       `&recording=${encodeURIComponent(recording.id)}`,
     );
+  } finally {
+    await runAsTenant(owner, () => demonstrations.stop(owner, recording.id));
+  }
+});
+
+test("a step of the owner's recording that arrives on the socket is saved in the owner's frame", async () => {
+  const recorder = createDemonstrationRecorder({
+    store: demonstrations,
+    ownsBot: async (person, target) => person === owner && target === bot,
+    ownsSkill: async () => false,
+  });
+  const recording = await runAsTenant(owner, () =>
+    demonstrations.start(owner, bot, "Recorded workflow"),
+  );
+  try {
+    const server = fakeServer();
+    await handleComputerStreamUpgrade(deps(), streamRequest(owner), server);
+    const socket = server.upgraded[0];
+    expect(socket?.recordingId).toBe(recording.id);
+    if (!socket) throw new Error("the socket was not upgraded");
+    // Outside any frame, as Bun runs the socket's handlers: the guard would throw on an unframed read.
+    await captureInFrame(
+      socket,
+      {
+        kind: "click",
+        url: "https://example.test/invoices",
+        target: { role: "button", name: "Search", sensitive: false },
+      },
+      (...args) => recorder.capture(...args),
+    );
+    const saved = await runAsTenant(owner, () =>
+      demonstrations.get(owner, recording.id),
+    );
+    expect(saved.actions.map((action) => action.kind)).toEqual(["click"]);
   } finally {
     await runAsTenant(owner, () => demonstrations.stop(owner, recording.id));
   }

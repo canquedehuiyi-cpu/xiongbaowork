@@ -152,7 +152,10 @@ import {
 import { createRunnerTransport } from "./computer/runner-transport";
 import { createSnapshotStore } from "./computer/snapshot-store";
 import { streamPathBotId } from "./computer/stream-path";
-import { handleComputerStreamUpgrade } from "./computer/stream-upgrade";
+import {
+  captureInFrame,
+  handleComputerStreamUpgrade,
+} from "./computer/stream-upgrade";
 import { loadConfig } from "./config";
 import {
   type IdentifyActor,
@@ -4008,14 +4011,10 @@ await startupLifecycle.run(async (startup) => {
                     );
                     return;
                   }
-                  demonstrationRecorder
-                    .capture(
-                      data.ownerUserId,
-                      data.botId,
-                      data.recordingId ?? "",
-                      message.action,
-                    )
-                    .catch((error) => {
+                  // In the owner's frame: Bun runs this handler outside the upgrade's frame.
+                  captureInFrame(data, message.action, (...args) =>
+                    demonstrationRecorder.capture(...args),
+                  ).catch((error) => {
                       console.error(
                         JSON.stringify({
                           type: "demonstration-capture-error",
