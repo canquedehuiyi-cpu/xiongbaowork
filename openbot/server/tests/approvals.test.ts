@@ -16,6 +16,7 @@ import { createComputerGateway } from "../src/computer/gateway";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { CatalogueEntryUnknownError } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 
 const context = {
   runId: "run",
@@ -38,6 +39,11 @@ const candidate = {
   target: { ref: "e1", snapshotId: 7, name: "Submit" },
   continuation: context,
 };
+/**
+ * The approval's own steps run in the owner's tenant frame, as a signed-in request or the owner's
+ * claimed resume does: the producer freezes that tenant and recovery checks it.
+ */
+const asOwner = <T>(work: () => T) => runAsTenant("owner", work);
 
 function storeFixture() {
   const records = new Map<string, ApprovalRecord>();
@@ -165,253 +171,261 @@ function storeFixture() {
   return store;
 }
 
-test("personal approval forwards the exact side effect once and continues its original AG-UI tool result after service restart", async () => {
-  expect(typeof serviceModule.createApprovalService).toBe("function");
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toMatchObject({
-    name: "HeadlessToolSuspension",
-  });
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await expect(
-    service.decide("intruder", row.id, "allow_once"),
-  ).rejects.toThrow();
-  await service.decide("owner", row.id, "allow_once");
-  const restarted = createApprovalFixtureService(store);
-  let effects = 0;
-  const continued: unknown[] = [];
-  const dependencies = {
-    validate: async () => approvalAction(candidate),
-    execute: async () => {
-      effects += 1;
-      return "clicked";
-    },
-    continue: async (value: unknown) => {
-      continued.push(value);
-    },
-  };
-  await restarted.resume("owner", row.id, dependencies);
-  await restarted.resume("owner", row.id, dependencies);
-  expect(effects).toBe(1);
-  expect(continued).toHaveLength(1);
-  expect(continued[0]).toMatchObject({
-    continuation: { runId: "run", threadId: "thread", toolCallId: "call" },
-    result: { content: "clicked" },
-  });
-});
-
-test("current authority and a changed resolved target defeat an earlier approval", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  let effects = 0;
-  await expect(
-    service.resume("owner", row.id, {
-      validate: async () => {
-        throw new Error("grant revoked");
+test("personal approval forwards the exact side effect once and continues its original AG-UI tool result after service restart", () =>
+  asOwner(async () => {
+    expect(typeof serviceModule.createApprovalService).toBe("function");
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toMatchObject({
+      name: "HeadlessToolSuspension",
+    });
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await expect(
+      service.decide("intruder", row.id, "allow_once"),
+    ).rejects.toThrow();
+    await service.decide("owner", row.id, "allow_once");
+    const restarted = createApprovalFixtureService(store);
+    let effects = 0;
+    const continued: unknown[] = [];
+    const dependencies = {
+      validate: async () => approvalAction(candidate),
+      execute: async () => {
+        effects += 1;
+        return "clicked";
       },
+      continue: async (value: unknown) => {
+        continued.push(value);
+      },
+    };
+    await restarted.resume("owner", row.id, dependencies);
+    await restarted.resume("owner", row.id, dependencies);
+    expect(effects).toBe(1);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]).toMatchObject({
+      continuation: { runId: "run", threadId: "thread", toolCallId: "call" },
+      result: { content: "clicked" },
+    });
+  }));
+
+test("current authority and a changed resolved target defeat an earlier approval", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    let effects = 0;
+    await expect(
+      service.resume("owner", row.id, {
+        validate: async () => {
+          throw new Error("grant revoked");
+        },
+        execute: async () => {
+          effects += 1;
+        },
+        continue: async () => undefined,
+      }),
+    ).rejects.toThrow("grant revoked");
+    // A changed target is not retried: the Bot is told, and nothing is done.
+    const continued: { result: { error?: string } }[] = [];
+    await service.resume("owner", row.id, {
+      validate: async () =>
+        approvalAction({
+          ...candidate,
+          target: { ref: "e1", name: "Delete", snapshotId: 8 },
+        }),
       execute: async () => {
         effects += 1;
       },
-      continue: async () => undefined,
-    }),
-  ).rejects.toThrow("grant revoked");
-  // A changed target is not retried: the Bot is told, and nothing is done.
-  const continued: { result: { error?: string } }[] = [];
-  await service.resume("owner", row.id, {
-    validate: async () =>
-      approvalAction({
-        ...candidate,
-        target: { ref: "e1", name: "Delete", snapshotId: 8 },
-      }),
-    execute: async () => {
-      effects += 1;
-    },
-    continue: async (input) => {
-      continued.push(input);
-    },
-  });
-  expect(continued[0]?.result.error).toContain("changed");
-  expect(effects).toBe(0);
-});
-
-test("always is scoped and revocable, while deny stays durable", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_always");
-  await service.gate({
-    ...candidate,
-    continuation: { ...context, runId: "new-run", toolCallId: "new-call" },
-  });
-  const [rule] = await store.rules("owner");
-  if (!rule) throw new Error("missing rule");
-  await service.revoke("owner", rule.id);
-  await expect(
-    service.gate({
-      ...candidate,
-      continuation: { ...context, runId: "third-run" },
-    }),
-  ).rejects.toThrow();
-  const pending = (await store.list("owner")).find(
-    (request) => request.status === "pending",
-  );
-  if (!pending) throw new Error("missing pending");
-  await service.decide("owner", pending.id, "deny");
-  await expect(
-    service.gate({
-      ...candidate,
-      continuation: { ...context, runId: "third-run" },
-    }),
-  ).rejects.toThrow("declined");
-});
-
-test("computer policy runs before personal approval and simultaneous once requests forward only one real command", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  let forwards = 0;
-  let denied = false;
-  const gateway = createComputerGateway({
-    provider: {
-      name: "test",
-      isolation: "per-bot",
-      locate: async () => "http://computer:4100",
-      status: async (botId) => ({ botId, state: "ready" }),
-      list: async () => [],
-      stop: async () => ({ wasRunning: true }),
-      reset: async () => ({ cleared: true }),
-    },
-    policy: () => ({
-      mode: "enforce",
-      allow: ["true"],
-      deny: denied ? ["true"] : [],
-    }),
-    auditStore: { insert: async () => undefined },
-    approvalGate: service.gate,
-    fetchImpl: async () => {
-      forwards += 1;
-      return Response.json({
-        command: "pwd",
-        exitCode: 0,
-        stdout: "workspace",
-        stderr: "",
-        elapsedMs: 1,
-        timedOut: false,
-        truncated: false,
-      });
-    },
-  });
-  const invoke = () =>
-    withApprovalContext(
-      {
-        ...context,
-        toolName: "computer_run_command",
-        args: { command: "pwd" },
+      continue: async (input) => {
+        continued.push(input);
       },
-      () =>
-        gateway.runCommand(
-          "bot",
-          { id: "owner", userId: "owner" },
-          { command: "pwd" },
-        ),
-    );
-  await expect(invoke()).rejects.toMatchObject({
-    name: "HeadlessToolSuspension",
-  });
-  expect(forwards).toBe(0);
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing approval");
-  await service.decide("owner", row.id, "allow_once");
-  const outcomes = await Promise.allSettled([invoke(), invoke()]);
-  expect(
-    outcomes.filter((outcome) => outcome.status === "fulfilled"),
-  ).toHaveLength(1);
-  expect(forwards).toBe(1);
-  const stored = await store.get("owner", row.id);
-  const validated = await service.validateReentry(stored.action, invoke);
-  expect(validated.actionDigest).toBe(stored.action.actionDigest);
-  expect(forwards).toBe(1);
-  denied = true;
-  await expect(
-    withApprovalContext({ ...context, runId: "other" }, () =>
-      gateway.runCommand("bot", { id: "owner" }, { command: "pwd" }),
-    ),
-  ).rejects.toThrow();
-  expect(await store.list("owner")).toHaveLength(1);
-});
+    });
+    expect(continued[0]?.result.error).toContain("changed");
+    expect(effects).toBe(0);
+  }));
 
-test("native host approval queues one operation, replays its saved result, and respects revoked grants", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  const broker = createHostAccessBroker(Date.now, {
-    approvalGate: service.gate,
-  });
-  broker.nextDesktopOperation();
-  broker.rememberGrant({
-    id: "folder",
-    actorId: "owner",
-    botId: "bot",
-    displayName: "Project",
-    revoked: false,
-  });
-  const args = {
-    kind: "write_file" as const,
-    botId: "bot",
-    actorId: "owner",
-    grantId: "folder",
-    relativePath: "notes.txt",
-    content: "private file",
-  };
-  const invoke = () =>
-    withApprovalContext({ ...context, toolName: "host_write_file", args }, () =>
-      broker.callHost(args),
+test("always is scoped and revocable, while deny stays durable", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_always");
+    await service.gate({
+      ...candidate,
+      continuation: { ...context, runId: "new-run", toolCallId: "new-call" },
+    });
+    const [rule] = await store.rules("owner");
+    if (!rule) throw new Error("missing rule");
+    await service.revoke("owner", rule.id);
+    await expect(
+      service.gate({
+        ...candidate,
+        continuation: { ...context, runId: "third-run" },
+      }),
+    ).rejects.toThrow();
+    const pending = (await store.list("owner")).find(
+      (request) => request.status === "pending",
     );
-  await expect(invoke()).rejects.toMatchObject({
-    name: "HeadlessToolSuspension",
-  });
-  expect(broker.statusFor("owner").pending).toHaveLength(0);
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  const running = invoke();
-  for (
-    let attempt = 0;
-    attempt < 20 && broker.statusFor("owner").pending.length === 0;
-    attempt += 1
-  )
-    await Bun.sleep(1);
-  const operation = broker.nextDesktopOperation()?.operations[0];
-  if (!operation) throw new Error("missing operation");
-  broker.resolveDesktopOperation({
-    operationId: operation.operationId,
-    ok: true,
-    result: { saved: true },
-  });
-  await expect(running).resolves.toEqual({ saved: true });
-  await expect(invoke()).resolves.toEqual({ saved: true });
-  expect(broker.statusFor("owner").pending).toHaveLength(0);
-  broker.revokeGrant("folder", "owner");
-  await expect(invoke()).rejects.toThrow("no longer available");
-});
+    if (!pending) throw new Error("missing pending");
+    await service.decide("owner", pending.id, "deny");
+    await expect(
+      service.gate({
+        ...candidate,
+        continuation: { ...context, runId: "third-run" },
+      }),
+    ).rejects.toThrow("declined");
+  }));
+
+test("computer policy runs before personal approval and simultaneous once requests forward only one real command", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    let forwards = 0;
+    let denied = false;
+    const gateway = createComputerGateway({
+      provider: {
+        name: "test",
+        isolation: "per-bot",
+        locate: async () => "http://computer:4100",
+        status: async (botId) => ({ botId, state: "ready" }),
+        list: async () => [],
+        stop: async () => ({ wasRunning: true }),
+        reset: async () => ({ cleared: true }),
+      },
+      policy: () => ({
+        mode: "enforce",
+        allow: ["true"],
+        deny: denied ? ["true"] : [],
+      }),
+      auditStore: { insert: async () => undefined },
+      approvalGate: service.gate,
+      fetchImpl: async () => {
+        forwards += 1;
+        return Response.json({
+          command: "pwd",
+          exitCode: 0,
+          stdout: "workspace",
+          stderr: "",
+          elapsedMs: 1,
+          timedOut: false,
+          truncated: false,
+        });
+      },
+    });
+    const invoke = () =>
+      withApprovalContext(
+        {
+          ...context,
+          toolName: "computer_run_command",
+          args: { command: "pwd" },
+        },
+        () =>
+          gateway.runCommand(
+            "bot",
+            { id: "owner", userId: "owner" },
+            { command: "pwd" },
+          ),
+      );
+    await expect(invoke()).rejects.toMatchObject({
+      name: "HeadlessToolSuspension",
+    });
+    expect(forwards).toBe(0);
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing approval");
+    await service.decide("owner", row.id, "allow_once");
+    const outcomes = await Promise.allSettled([invoke(), invoke()]);
+    expect(
+      outcomes.filter((outcome) => outcome.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(forwards).toBe(1);
+    const stored = await store.get("owner", row.id);
+    const validated = await service.validateReentry(stored.action, invoke);
+    expect(validated.actionDigest).toBe(stored.action.actionDigest);
+    expect(forwards).toBe(1);
+    denied = true;
+    await expect(
+      withApprovalContext({ ...context, runId: "other" }, () =>
+        gateway.runCommand("bot", { id: "owner" }, { command: "pwd" }),
+      ),
+    ).rejects.toThrow();
+    expect(await store.list("owner")).toHaveLength(1);
+  }));
+
+test("native host approval queues one operation, replays its saved result, and respects revoked grants", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    const broker = createHostAccessBroker(Date.now, {
+      approvalGate: service.gate,
+    });
+    broker.nextDesktopOperation();
+    broker.rememberGrant({
+      id: "folder",
+      actorId: "owner",
+      botId: "bot",
+      displayName: "Project",
+      revoked: false,
+    });
+    const args = {
+      kind: "write_file" as const,
+      botId: "bot",
+      actorId: "owner",
+      grantId: "folder",
+      relativePath: "notes.txt",
+      content: "private file",
+    };
+    const invoke = () =>
+      withApprovalContext(
+        { ...context, toolName: "host_write_file", args },
+        () => broker.callHost(args),
+      );
+    await expect(invoke()).rejects.toMatchObject({
+      name: "HeadlessToolSuspension",
+    });
+    expect(broker.statusFor("owner").pending).toHaveLength(0);
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    const running = invoke();
+    for (
+      let attempt = 0;
+      attempt < 20 && broker.statusFor("owner").pending.length === 0;
+      attempt += 1
+    )
+      await Bun.sleep(1);
+    const operation = broker.nextDesktopOperation()?.operations[0];
+    if (!operation) throw new Error("missing operation");
+    broker.resolveDesktopOperation({
+      operationId: operation.operationId,
+      ok: true,
+      result: { saved: true },
+    });
+    await expect(running).resolves.toEqual({ saved: true });
+    await expect(invoke()).resolves.toEqual({ saved: true });
+    expect(broker.statusFor("owner").pending).toHaveLength(0);
+    broker.revokeGrant("folder", "owner");
+    await expect(invoke()).rejects.toThrow("no longer available");
+  }));
 
 test("owner inbox exposes sanitized context and rejects another owner's decisions", async () => {
   const store = storeFixture();
   const service = createApprovalFixtureService(store);
   await expect(
-    service.gate({
-      ...candidate,
-      args: {
-        token: "secret-value",
-        content: "private-body",
-        command: "API_TOKEN=credential echo ok",
-      },
-    }),
+    asOwner(() =>
+      service.gate({
+        ...candidate,
+        args: {
+          token: "secret-value",
+          content: "private-body",
+          command: "API_TOKEN=credential echo ok",
+        },
+      }),
+    ),
   ).rejects.toThrow();
   const routesFor = (owner: string) =>
     createApprovalRoutes(service, async (ctx, next) => {
@@ -420,7 +434,8 @@ test("owner inbox exposes sanitized context and rejects another owner's decision
         email: `${owner}@example.com`,
         role: "user",
       });
-      await next();
+      // The real session guard runs each signed-in request as that person's tenant.
+      await runAsTenant(owner, () => next());
     });
   const own = routesFor("owner");
   const other = routesFor("intruder");
@@ -447,89 +462,92 @@ test("owner inbox exposes sanitized context and rejects another owner's decision
   });
 });
 
-test("an approved action whose re-check refuses tells the Bot and continues the conversation", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  let effects = 0;
-  const continued: { result: { content: string; error?: string } }[] = [];
-  await service.resume("owner", row.id, {
-    validate: async () => {
-      throw new ApprovalRefusedError(
-        "That computer tool is no longer available.",
-      );
-    },
-    execute: async () => {
-      effects += 1;
-    },
-    continue: async (input) => {
-      continued.push(input);
-    },
-  });
-  expect(effects).toBe(0);
-  expect(continued).toHaveLength(1);
-  expect(continued[0]?.result.error).toContain(
-    "That computer tool is no longer available.",
-  );
-  expect((await store.get("owner", row.id)).status).toBe("completed");
-});
+test("an approved action whose re-check refuses tells the Bot and continues the conversation", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    let effects = 0;
+    const continued: { result: { content: string; error?: string } }[] = [];
+    await service.resume("owner", row.id, {
+      validate: async () => {
+        throw new ApprovalRefusedError(
+          "That computer tool is no longer available.",
+        );
+      },
+      execute: async () => {
+        effects += 1;
+      },
+      continue: async (input) => {
+        continued.push(input);
+      },
+    });
+    expect(effects).toBe(0);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.result.error).toContain(
+      "That computer tool is no longer available.",
+    );
+    expect((await store.get("owner", row.id)).status).toBe("completed");
+  }));
 
-test("an approved action whose target changed tells the Bot and continues the conversation", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  let effects = 0;
-  const continued: { result: { content: string; error?: string } }[] = [];
-  await service.resume("owner", row.id, {
-    validate: async () =>
-      approvalAction({
-        ...candidate,
-        target: { ref: "e1", name: "Delete", snapshotId: 8 },
-      }),
-    execute: async () => {
-      effects += 1;
-    },
-    continue: async (input) => {
-      continued.push(input);
-    },
-  });
-  expect(effects).toBe(0);
-  expect(continued[0]?.result.error).toContain("changed");
-  expect((await store.get("owner", row.id)).status).toBe("completed");
-});
+test("an approved action whose target changed tells the Bot and continues the conversation", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    let effects = 0;
+    const continued: { result: { content: string; error?: string } }[] = [];
+    await service.resume("owner", row.id, {
+      validate: async () =>
+        approvalAction({
+          ...candidate,
+          target: { ref: "e1", name: "Delete", snapshotId: 8 },
+        }),
+      execute: async () => {
+        effects += 1;
+      },
+      continue: async (input) => {
+        continued.push(input);
+      },
+    });
+    expect(effects).toBe(0);
+    expect(continued[0]?.result.error).toContain("changed");
+    expect((await store.get("owner", row.id)).status).toBe("completed");
+  }));
 
-test("an always-allowed action whose rule was revoked before it ran tells the Bot and continues", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_always");
-  const [rule] = await store.rules("owner");
-  if (!rule) throw new Error("missing rule");
-  await service.revoke("owner", rule.id);
-  let effects = 0;
-  const continued: { result: { content: string; error?: string } }[] = [];
-  await service.resume("owner", row.id, {
-    validate: async (action) => action,
-    execute: async () => {
-      effects += 1;
-    },
-    continue: async (input) => {
-      continued.push(input);
-    },
-  });
-  expect(effects).toBe(0);
-  expect(continued).toHaveLength(1);
-  expect(continued[0]?.result.error).toBeDefined();
-  expect((await store.get("owner", row.id)).status).toBe("completed");
-});
+test("an always-allowed action whose rule was revoked before it ran tells the Bot and continues", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_always");
+    const [rule] = await store.rules("owner");
+    if (!rule) throw new Error("missing rule");
+    await service.revoke("owner", rule.id);
+    let effects = 0;
+    const continued: { result: { content: string; error?: string } }[] = [];
+    await service.resume("owner", row.id, {
+      validate: async (action) => action,
+      execute: async () => {
+        effects += 1;
+      },
+      continue: async (input) => {
+        continued.push(input);
+      },
+    });
+    expect(effects).toBe(0);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.result.error).toBeDefined();
+    expect((await store.get("owner", row.id)).status).toBe("completed");
+  }));
 
 test("an approval preview shows what will be typed, written or sent, and still hides secrets", async () => {
   const { approvalPreview } = await import("../src/approvals/types");
@@ -565,124 +583,128 @@ test("an approval preview shows what will be typed, written or sent, and still h
   });
 });
 
-test("an approved action interrupted before its result was saved continues the conversation once, without repeating", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  // The process that took it started the action and stopped before saving what happened.
-  expect(await store.consume("owner", row.id, row.action.actionDigest)).toBe(
-    true,
-  );
-  let effects = 0;
-  const continued: { result: { content: string; error?: string } }[] = [];
-  const dependencies = {
-    validate: async (action: ApprovalAction) => action,
-    execute: async () => {
-      effects += 1;
-    },
-    continue: async (input: {
-      result: { content: string; error?: string };
-    }) => {
-      continued.push(input);
-    },
-  };
-  // Two replicas pick it up: the Bot hears once that the outcome is unknown, and nothing reruns.
-  await Promise.all([
-    service.resume("owner", row.id, dependencies),
-    service.resume("owner", row.id, dependencies),
-  ]);
-  expect(effects).toBe(0);
-  expect(continued).toHaveLength(1);
-  expect(continued[0]?.result.error).toContain("outcome is unknown");
-  expect((await store.get("owner", row.id)).status).toBe("completed");
-});
+test("an approved action interrupted before its result was saved continues the conversation once, without repeating", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    // The process that took it started the action and stopped before saving what happened.
+    expect(await store.consume("owner", row.id, row.action.actionDigest)).toBe(
+      true,
+    );
+    let effects = 0;
+    const continued: { result: { content: string; error?: string } }[] = [];
+    const dependencies = {
+      validate: async (action: ApprovalAction) => action,
+      execute: async () => {
+        effects += 1;
+      },
+      continue: async (input: {
+        result: { content: string; error?: string };
+      }) => {
+        continued.push(input);
+      },
+    };
+    // Two replicas pick it up: the Bot hears once that the outcome is unknown, and nothing reruns.
+    await Promise.all([
+      service.resume("owner", row.id, dependencies),
+      service.resume("owner", row.id, dependencies),
+    ]);
+    expect(effects).toBe(0);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.result.error).toContain("outcome is unknown");
+    expect((await store.get("owner", row.id)).status).toBe("completed");
+  }));
 
-test("an approved action the deployment no longer allows is not carried out, and is final", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  let effects = 0;
-  const continued: unknown[] = [];
-  await service.resume("owner", row.id, {
-    refusal: async () => "Use Bots is turned off for you.",
-    validate: async (action: ApprovalAction) => action,
-    execute: async () => {
-      effects += 1;
-    },
-    continue: async (input: unknown) => {
-      continued.push(input);
-    },
-  });
-  // Checked before the action: with Use Bots off nothing runs, and the Bot cannot answer either.
-  expect(effects).toBe(0);
-  expect(continued).toEqual([]);
-  const stored = await store.get("owner", row.id);
-  expect(stored.status).toBe("completed");
-  expect(stored.result?.error).toContain("Use Bots is turned off");
-});
+test("an approved action the deployment no longer allows is not carried out, and is final", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    let effects = 0;
+    const continued: unknown[] = [];
+    await service.resume("owner", row.id, {
+      refusal: async () => "Use Bots is turned off for you.",
+      validate: async (action: ApprovalAction) => action,
+      execute: async () => {
+        effects += 1;
+      },
+      continue: async (input: unknown) => {
+        continued.push(input);
+      },
+    });
+    // Checked before the action: with Use Bots off nothing runs, and the Bot cannot answer either.
+    expect(effects).toBe(0);
+    expect(continued).toEqual([]);
+    const stored = await store.get("owner", row.id);
+    expect(stored.status).toBe("completed");
+    expect(stored.result?.error).toContain("Use Bots is turned off");
+  }));
 
-test("a permanent failure during the re-check is an answer for the Bot, not a retry", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  const continued: { result: { error?: string } }[] = [];
-  await service.resume("owner", row.id, {
-    // A saved argument that no longer parses: the same on every try.
-    validate: async () => {
-      z.object({ url: z.string() }).parse({ url: 7 });
-      throw new Error("unreachable");
-    },
-    execute: async () => undefined,
-    continue: async (input: { result: { error?: string } }) => {
-      continued.push(input);
-    },
-  });
-  expect(continued).toHaveLength(1);
-  expect(continued[0]?.result.error).toContain("Not done");
-});
+test("a permanent failure during the re-check is an answer for the Bot, not a retry", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    const continued: { result: { error?: string } }[] = [];
+    await service.resume("owner", row.id, {
+      // A saved argument that no longer parses: the same on every try.
+      validate: async () => {
+        z.object({ url: z.string() }).parse({ url: 7 });
+        throw new Error("unreachable");
+      },
+      execute: async () => undefined,
+      continue: async (input: { result: { error?: string } }) => {
+        continued.push(input);
+      },
+    });
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.result.error).toContain("Not done");
+  }));
 
-test("an approved action that ran out of tries tells the Bot once, across replicas", async () => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  const continued: { result: { error?: string } }[] = [];
-  const dependencies = {
-    validate: async (action: ApprovalAction) => action,
-    execute: async () => undefined,
-    continue: async (input: { result: { error?: string } }) => {
-      continued.push(input);
-    },
-  };
-  await Promise.all([
-    service.abandon(
-      "owner",
-      row.id,
-      "the platform was unreachable",
-      dependencies,
-    ),
-    service.abandon(
-      "owner",
-      row.id,
-      "the platform was unreachable",
-      dependencies,
-    ),
-  ]);
-  expect(continued).toHaveLength(1);
-  expect(continued[0]?.result.error).toContain("could not be carried out");
-  expect((await store.get("owner", row.id)).status).toBe("completed");
-});
+test("an approved action that ran out of tries tells the Bot once, across replicas", () =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    const continued: { result: { error?: string } }[] = [];
+    const dependencies = {
+      validate: async (action: ApprovalAction) => action,
+      execute: async () => undefined,
+      continue: async (input: { result: { error?: string } }) => {
+        continued.push(input);
+      },
+    };
+    await Promise.all([
+      service.abandon(
+        "owner",
+        row.id,
+        "the platform was unreachable",
+        dependencies,
+      ),
+      service.abandon(
+        "owner",
+        row.id,
+        "the platform was unreachable",
+        dependencies,
+      ),
+    ]);
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.result.error).toContain("could not be carried out");
+    expect((await store.get("owner", row.id)).status).toBe("completed");
+  }));
 
 test.each([
   [
@@ -697,26 +719,28 @@ test.each([
         approvalId: "share-1",
       }),
   ],
-])("%s is an answer for the Bot, not a retry", async (_name, failure) => {
-  const store = storeFixture();
-  const service = createApprovalFixtureService(store);
-  await expect(service.gate(candidate)).rejects.toThrow();
-  const [row] = await store.list("owner");
-  if (!row) throw new Error("missing request");
-  await service.decide("owner", row.id, "allow_once");
-  const continued: { result: { error?: string } }[] = [];
-  await service.resume("owner", row.id, {
-    validate: async () => {
-      throw failure();
-    },
-    execute: async () => undefined,
-    continue: async (input: { result: { error?: string } }) => {
-      continued.push(input);
-    },
-  });
-  expect(continued).toHaveLength(1);
-  expect(continued[0]?.result.error).toContain("Not done");
-});
+])("%s is an answer for the Bot, not a retry", (_name, failure) =>
+  asOwner(async () => {
+    const store = storeFixture();
+    const service = createApprovalFixtureService(store);
+    await expect(service.gate(candidate)).rejects.toThrow();
+    const [row] = await store.list("owner");
+    if (!row) throw new Error("missing request");
+    await service.decide("owner", row.id, "allow_once");
+    const continued: { result: { error?: string } }[] = [];
+    await service.resume("owner", row.id, {
+      validate: async () => {
+        throw failure();
+      },
+      execute: async () => undefined,
+      continue: async (input: { result: { error?: string } }) => {
+        continued.push(input);
+      },
+    });
+    expect(continued).toHaveLength(1);
+    expect(continued[0]?.result.error).toContain("Not done");
+  }),
+);
 
 test("a request body that is not JSON answers 400, not a 500 with the parser's message", async () => {
   const routes = createApprovalRoutes(

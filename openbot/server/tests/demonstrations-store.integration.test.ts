@@ -23,6 +23,7 @@ import {
 } from "../src/demonstrations/types";
 import { createPluginStore } from "../src/plugins/store";
 import { createRoutineStore } from "../src/routines/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -54,190 +55,227 @@ const click = {
   url: "https://example.test/invoices",
   target: { role: "button", name: "Search", sensitive: false },
 };
+/** The owner's own work, in the owner's frame — as every request of theirs runs. */
+const asOwner = <T>(work: () => T): T => runAsTenant(owner, work);
+/** The other person's attempts, in their own frame. */
+const asOther = <T>(work: () => T): T => runAsTenant(other, work);
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: other, email: `${other}@example.test` },
-  ]);
-  await database.insert(agents).values({
-    id: bot,
-    name: "Demonstration Bot",
-    type: "built_in",
-    configuration: {},
-  });
-  await database.insert(agentProfiles).values({
-    agentId: bot,
-    ownerUserId: owner,
-    title: "Demonstration Bot",
-    roleDescription: "Assist",
-    avatarSeed: bot,
-    visibility: "private",
+  await asOther(() =>
+    database
+      .insert(users)
+      .values({ id: other, email: `${other}@example.test` }),
+  );
+  await asOwner(async () => {
+    await database
+      .insert(users)
+      .values({ id: owner, email: `${owner}@example.test` });
+    await database.insert(agents).values({
+      id: bot,
+      name: "Demonstration Bot",
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: bot,
+      ownerUserId: owner,
+      title: "Demonstration Bot",
+      roleDescription: "Assist",
+      avatarSeed: bot,
+      visibility: "private",
+    });
   });
 });
 afterAll(async () => {
-  await database.delete(routines).where(eq(routines.agentId, bot));
-  await database.delete(channels).where(eq(channels.id, channelId));
-  await database.delete(skills).where(eq(skills.slug, skillSlug));
-  await database.delete(users).where(inArray(users.id, [owner, other]));
-  await database.delete(agents).where(eq(agents.id, bot));
+  await asOwner(async () => {
+    await database.delete(routines).where(eq(routines.agentId, bot));
+    await database.delete(channels).where(eq(channels.id, channelId));
+    await database.delete(skills).where(eq(skills.slug, skillSlug));
+    await database.delete(users).where(inArray(users.id, [owner]));
+    await database.delete(agents).where(eq(agents.id, bot));
+  });
+  await asOther(() => database.delete(users).where(inArray(users.id, [other])));
   await database.$client.close();
 });
 test("recording binds owner and Bot and rejects cross-owner capture", async () => {
-  await expect(
-    recorder.start(other, bot, "Steal workflow"),
-  ).rejects.toBeInstanceOf(DemonstrationRefusedError);
-  const value = await recorder.start(owner, bot, "Owned workflow");
-  await expect(store.get(other, value.id)).rejects.toBeInstanceOf(
-    DemonstrationNotFoundError,
-  );
-  await expect(
-    recorder.capture(other, bot, value.id, click),
-  ).rejects.toBeInstanceOf(DemonstrationNotFoundError);
-  await store.stop(owner, value.id);
+  await asOwner(async () => {
+    await asOther(() =>
+      expect(
+        recorder.start(other, bot, "Steal workflow"),
+      ).rejects.toBeInstanceOf(DemonstrationRefusedError),
+    );
+    const value = await recorder.start(owner, bot, "Owned workflow");
+    await asOther(async () => {
+      await expect(store.get(other, value.id)).rejects.toBeInstanceOf(
+        DemonstrationNotFoundError,
+      );
+      await expect(
+        recorder.capture(other, bot, value.id, click),
+      ).rejects.toBeInstanceOf(DemonstrationNotFoundError);
+    });
+    await store.stop(owner, value.id);
+  });
 });
 test("real source identity retains ordered actions and groups typing without values", async () => {
-  const value = await recorder.start(owner, bot, "Find invoice");
-  await recorder.capture(owner, bot, value.id, click);
-  await recorder.capture(owner, bot, value.id, { ...click, kind: "type" });
-  await recorder.capture(owner, bot, value.id, { ...click, kind: "type" });
-  await recorder.capture(owner, bot, value.id, {
-    ...click,
-    kind: "key",
-    key: "Enter",
+  await asOwner(async () => {
+    const value = await recorder.start(owner, bot, "Find invoice");
+    await recorder.capture(owner, bot, value.id, click);
+    await recorder.capture(owner, bot, value.id, { ...click, kind: "type" });
+    await recorder.capture(owner, bot, value.id, { ...click, kind: "type" });
+    await recorder.capture(owner, bot, value.id, {
+      ...click,
+      kind: "key",
+      key: "Enter",
+    });
+    expect(
+      (await store.get(owner, value.id)).actions.map((action) => action.kind),
+    ).toEqual(["click", "type", "key"]);
+    await store.stop(owner, value.id);
+    const draft = await store.draft(owner, value.id);
+    expect(draft.sourceRecordingId).toBe(value.id);
+    expect(draft.instructions).toContain("{{input_1}}");
   });
-  expect(
-    (await store.get(owner, value.id)).actions.map((action) => action.kind),
-  ).toEqual(["click", "type", "key"]);
-  await store.stop(owner, value.id);
-  const draft = await store.draft(owner, value.id);
-  expect(draft.sourceRecordingId).toBe(value.id);
-  expect(draft.instructions).toContain("{{input_1}}");
 });
 test("stopped recording ignores late successful events instead of changing its draft", async () => {
-  const value = await recorder.start(owner, bot, "Completed workflow");
-  await recorder.capture(owner, bot, value.id, click);
-  await store.stop(owner, value.id);
-  await recorder.capture(owner, bot, value.id, {
-    ...click,
-    kind: "scroll",
-    deltaY: 500,
+  await asOwner(async () => {
+    const value = await recorder.start(owner, bot, "Completed workflow");
+    await recorder.capture(owner, bot, value.id, click);
+    await store.stop(owner, value.id);
+    await recorder.capture(owner, bot, value.id, {
+      ...click,
+      kind: "scroll",
+      deltaY: 500,
+    });
+    expect((await store.get(owner, value.id)).actions).toHaveLength(1);
   });
-  expect((await store.get(owner, value.id)).actions).toHaveLength(1);
 });
 test("concurrent starts produce one active recording", async () => {
-  const attempts = await Promise.allSettled([
-    recorder.start(owner, bot, "One"),
-    recorder.start(owner, bot, "Two"),
-  ]);
-  expect(
-    attempts.filter((attempt) => attempt.status === "fulfilled"),
-  ).toHaveLength(1);
-  const active = await store.active(owner, bot);
-  if (!active) throw new Error("Expected active recording.");
-  await store.stop(owner, active.id);
+  await asOwner(async () => {
+    const attempts = await Promise.allSettled([
+      recorder.start(owner, bot, "One"),
+      recorder.start(owner, bot, "Two"),
+    ]);
+    expect(
+      attempts.filter((attempt) => attempt.status === "fulfilled"),
+    ).toHaveLength(1);
+    const active = await store.active(owner, bot);
+    if (!active) throw new Error("Expected active recording.");
+    await store.stop(owner, active.id);
+  });
 });
 test("publication links only an actual owned saved skill", async () => {
-  const value = await recorder.start(owner, bot, "Reviewed workflow");
-  await recorder.capture(owner, bot, value.id, click);
-  await store.stop(owner, value.id);
-  await store.draft(owner, value.id);
-  await expect(
-    recorder.markPublished(owner, value.id, "foreign-skill"),
-  ).rejects.toBeInstanceOf(DemonstrationRefusedError);
-  const draft = await store.draft(owner, value.id);
-  await plugins.installSkill({
-    ...draft,
-    slug: skillSlug,
-    ownerUserId: owner,
-    by: `${owner}@example.test`,
+  await asOwner(async () => {
+    const value = await recorder.start(owner, bot, "Reviewed workflow");
+    await recorder.capture(owner, bot, value.id, click);
+    await store.stop(owner, value.id);
+    await store.draft(owner, value.id);
+    await expect(
+      recorder.markPublished(owner, value.id, "foreign-skill"),
+    ).rejects.toBeInstanceOf(DemonstrationRefusedError);
+    const draft = await store.draft(owner, value.id);
+    await plugins.installSkill({
+      ...draft,
+      slug: skillSlug,
+      ownerUserId: owner,
+      by: `${owner}@example.test`,
+    });
+    await plugins.grant("skill", skillSlug, bot, owner);
+    const saved = await recorder.markPublished(owner, value.id, skillSlug);
+    expect(saved.status).toBe("published");
+    expect(saved.skillSlug).toBe(skillSlug);
+    const granted = await plugins.listForAgent(bot);
+    expect(
+      granted.skills.some(
+        (skill) =>
+          skill.slug === skillSlug && skill.instructions === draft.instructions,
+      ),
+    ).toBe(true);
+    expect(granted.tools).toHaveLength(0);
   });
-  await plugins.grant("skill", skillSlug, bot, owner);
-  const saved = await recorder.markPublished(owner, value.id, skillSlug);
-  expect(saved.status).toBe("published");
-  expect(saved.skillSlug).toBe(skillSlug);
-  const granted = await plugins.listForAgent(bot);
-  expect(
-    granted.skills.some(
-      (skill) =>
-        skill.slug === skillSlug && skill.instructions === draft.instructions,
-    ),
-  ).toBe(true);
-  expect(granted.tools).toHaveLength(0);
 });
 
 test("a recording past ten minutes is stopped at its limit and keeps no later step", async () => {
-  const value = await recorder.start(owner, bot, "Long workflow");
-  expect(value.expiresAt.getTime() - value.createdAt.getTime()).toBe(600_000);
-  await recorder.capture(owner, bot, value.id, click);
-  await database
-    .update(demonstrations)
-    .set({ createdAt: new Date(Date.now() - 11 * 60 * 1000) })
-    .where(eq(demonstrations.id, value.id));
-  // Like any stopped recording, a gesture after the limit is ignored rather than kept.
-  await recorder.capture(owner, bot, value.id, { ...click, kind: "scroll" });
-  const stopped = await store.get(owner, value.id);
-  expect(stopped.status).toBe("stopped");
-  expect(stopped.reachedTimeLimit).toBe(true);
-  expect(stopped.actions).toHaveLength(1);
-  expect(await store.active(owner, bot)).toBeNull();
+  await asOwner(async () => {
+    const value = await recorder.start(owner, bot, "Long workflow");
+    expect(value.expiresAt.getTime() - value.createdAt.getTime()).toBe(600_000);
+    await recorder.capture(owner, bot, value.id, click);
+    await database
+      .update(demonstrations)
+      .set({ createdAt: new Date(Date.now() - 11 * 60 * 1000) })
+      .where(eq(demonstrations.id, value.id));
+    // Like any stopped recording, a gesture after the limit is ignored rather than kept.
+    await recorder.capture(owner, bot, value.id, { ...click, kind: "scroll" });
+    const stopped = await store.get(owner, value.id);
+    expect(stopped.status).toBe("stopped");
+    expect(stopped.reachedTimeLimit).toBe(true);
+    expect(stopped.actions).toHaveLength(1);
+    expect(await store.active(owner, bot)).toBeNull();
+  });
 });
 test("reads expire an overdue recording even when no step arrives", async () => {
-  const value = await recorder.start(owner, bot, "Idle workflow");
-  await database
-    .update(demonstrations)
-    .set({ createdAt: new Date(Date.now() - 11 * 60 * 1000) })
-    .where(eq(demonstrations.id, value.id));
-  expect(await store.active(owner, bot)).toBeNull();
-  const listed = (await store.list(owner, bot)).find(
-    (row) => row.id === value.id,
-  );
-  expect(listed?.status).toBe("stopped");
-  expect(listed?.reachedTimeLimit).toBe(true);
+  await asOwner(async () => {
+    const value = await recorder.start(owner, bot, "Idle workflow");
+    await database
+      .update(demonstrations)
+      .set({ createdAt: new Date(Date.now() - 11 * 60 * 1000) })
+      .where(eq(demonstrations.id, value.id));
+    expect(await store.active(owner, bot)).toBeNull();
+    const listed = (await store.list(owner, bot)).find(
+      (row) => row.id === value.id,
+    );
+    expect(listed?.status).toBe("stopped");
+    expect(listed?.reachedTimeLimit).toBe(true);
+  });
 });
 test("a published demonstration skill runs on a schedule as the owner's routine", async () => {
-  await database
-    .insert(channels)
-    .values({ id: channelId, name: "Invoices", description: "" });
-  await database
-    .insert(channelMemberships)
-    .values({ channelId, userId: owner });
-  await database.insert(channelAgents).values({ channelId, agentId: bot });
-  const published = (await store.list(owner, bot)).find(
-    (row) => row.status === "published",
-  );
-  if (!published) throw new Error("Expected the published demonstration.");
-  await expect(
-    recorder.schedule(other, published.id, { cron: "0 9 * * 1-5" }),
-  ).rejects.toBeInstanceOf(DemonstrationNotFoundError);
-  await expect(
-    recorder.schedule(owner, published.id, { cron: "* * * * *" }),
-  ).rejects.toBeInstanceOf(DemonstrationRefusedError);
-  const routine = await recorder.schedule(owner, published.id, {
-    cron: "0 9 * * 1-5",
-    timezone: "Europe/London",
+  await asOwner(async () => {
+    await database
+      .insert(channels)
+      .values({ id: channelId, name: "Invoices", description: "" });
+    await database
+      .insert(channelMemberships)
+      .values({ channelId, userId: owner });
+    await database.insert(channelAgents).values({ channelId, agentId: bot });
+    const published = (await store.list(owner, bot)).find(
+      (row) => row.status === "published",
+    );
+    if (!published) throw new Error("Expected the published demonstration.");
+    await asOther(() =>
+      expect(
+        recorder.schedule(other, published.id, { cron: "0 9 * * 1-5" }),
+      ).rejects.toBeInstanceOf(DemonstrationNotFoundError),
+    );
+    await expect(
+      recorder.schedule(owner, published.id, { cron: "* * * * *" }),
+    ).rejects.toBeInstanceOf(DemonstrationRefusedError);
+    const routine = await recorder.schedule(owner, published.id, {
+      cron: "0 9 * * 1-5",
+      timezone: "Europe/London",
+    });
+    expect(routine.channelId).toBe(channelId);
+    const listed = (await routineStore.listFor(owner)).find(
+      (row) => row.id === routine.id,
+    );
+    expect(listed?.agentId).toBe(bot);
+    expect(listed?.enabled).toBe(true);
+    expect(listed?.instruction).toContain(`/${skillSlug}`);
+    expect(await asOther(() => routineStore.listFor(other))).toHaveLength(0);
   });
-  expect(routine.channelId).toBe(channelId);
-  const listed = (await routineStore.listFor(owner)).find(
-    (row) => row.id === routine.id,
-  );
-  expect(listed?.agentId).toBe(bot);
-  expect(listed?.enabled).toBe(true);
-  expect(listed?.instruction).toContain(`/${skillSlug}`);
-  expect(await routineStore.listFor(other)).toHaveLength(0);
 });
 test("a step racing the limit is refused inside the locked append", async () => {
-  const value = await recorder.start(owner, bot, "Racing workflow");
-  await database
-    .update(demonstrations)
-    .set({ createdAt: new Date(Date.now() - 11 * 60 * 1000) })
-    .where(eq(demonstrations.id, value.id));
-  await expect(store.append(owner, value.id, click)).rejects.toThrow(
-    "ten-minute limit",
-  );
-  const stopped = await store.get(owner, value.id);
-  expect(stopped.status).toBe("stopped");
-  expect(stopped.reachedTimeLimit).toBe(true);
-  expect(stopped.actions).toHaveLength(0);
+  await asOwner(async () => {
+    const value = await recorder.start(owner, bot, "Racing workflow");
+    await database
+      .update(demonstrations)
+      .set({ createdAt: new Date(Date.now() - 11 * 60 * 1000) })
+      .where(eq(demonstrations.id, value.id));
+    await expect(store.append(owner, value.id, click)).rejects.toThrow(
+      "ten-minute limit",
+    );
+    const stopped = await store.get(owner, value.id);
+    expect(stopped.status).toBe("stopped");
+    expect(stopped.reachedTimeLimit).toBe(true);
+    expect(stopped.actions).toHaveLength(0);
+  });
 });
 test("the schedule route parses its body over HTTP and answers with the routine and limits", async () => {
   const routes = createDemonstrationRoutes(
@@ -249,10 +287,11 @@ test("the schedule route parses its body over HTTP and answers with the routine 
         email: `${owner}@example.test`,
         role: "member",
       } as never);
-      await next();
+      // The stub stands in for the sign-in middleware, which runs the request in the actor's frame.
+      await asOwner(() => next());
     },
   );
-  const published = (await store.list(owner, bot)).find(
+  const published = (await asOwner(() => store.list(owner, bot))).find(
     (row) => row.status === "published",
   );
   if (!published) throw new Error("Expected the published demonstration.");

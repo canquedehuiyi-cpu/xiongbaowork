@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { CredentialStore } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -7,8 +7,13 @@ import {
   agents,
   deploymentPackages,
   modelRegistry,
+  platformModelPool,
+  pluginGrants,
+  subscriptions,
 } from "../db/schema";
 import { teamBotPublications } from "../db/schema/team-bots";
+import { TEAM_TENANT } from "../db/schema/tenant";
+import { asPlatform, currentTenant, isPersonTenant } from "../tenant/context";
 import {
   assignedCondition,
   assignedToActor,
@@ -20,6 +25,7 @@ import {
   storeAgentAuth,
 } from "./auth-header";
 import {
+  type CallbackTokenHolder,
   hashCallbackToken,
   mintCallbackToken,
   sameToken,
@@ -97,12 +103,14 @@ export type AgentProfileStore = {
   /** Take the credential away. The agent may talk, and may no longer call anything back. */
   revokeCallbackToken(actor: AgentActor, id: string): Promise<void>;
   /**
-   * Which agent holds this token, if any.
+   * Which agent holds this token, if any, and the tenant its profile is stamped with.
    *
    * By hash, because that is all this side keeps. Not scoped to an actor: the caller is a machine
-   * presenting a credential, and the credential is the whole of its claim.
+   * presenting a credential, and the credential is the whole of its claim. So it is asked as
+   * `platform` (G01-E PCB), the one frame that sees a person's private Bot and a `team` Bot alike:
+   * the route asking has no person to frame it, and the legacy unframed `system` answer sees neither.
    */
-  agentForCallbackToken(hash: string): Promise<{ id: string } | null>;
+  agentForCallbackToken(hash: string): Promise<CallbackTokenHolder | null>;
 };
 
 export class AgentNotFoundError extends Error {
@@ -142,6 +150,49 @@ export class ModelNotInLibraryError extends Error {
   }
 }
 
+/**
+ * A platform pool model this coworker may not be bound to (stories H1, K1): no such row, switched
+ * off, or not offered on the plan the coworker's tenant is on.
+ */
+export class PlatformModelNotAvailableError extends Error {
+  constructor() {
+    super("该平台体验模型不存在、已停用，或不在当前套餐内。");
+    this.name = "PlatformModelNotAvailableError";
+  }
+}
+
+/** A library model and a pool model named in one save: a coworker speaks with exactly one. */
+export class ModelBindingConflictError extends Error {
+  constructor() {
+    super("一个员工只能绑定一个模型：请在模型库与平台体验模型之间二选一。");
+    this.name = "ModelBindingConflictError";
+  }
+}
+
+/**
+ * A Bot nobody owns any more may not be made private (G01-E P9).
+ *
+ * When a person's account is deleted, their Bots keep living with `owner_user_id` set null. A public
+ * or published one is stamped `team`, and `team` rows are read only where `openbot_team_bot_visible`
+ * says so: public, the owner, or a published audience. Private and unpublished, with no owner, that
+ * is nobody: the Bot would stay in the database, unreachable from every chat, and no person's frame
+ * could ever change it back. So the change is refused. An administrator takes such a Bot down by
+ * deleting it on the admin pages, which still works.
+ *
+ * The account deletion itself can reach that state: it also deletes the person's publications
+ * (`published_by` ON DELETE CASCADE), so a Bot they had published while private is left ownerless,
+ * private and unpublished at once. No app path deletes accounts; the operator note on Team Bots'
+ * `unpublish` says how an administrator finds and removes such a Bot.
+ */
+export class OwnerlessBotPrivateError extends Error {
+  constructor(id: string) {
+    super(
+      `Nobody owns Bot ${id} any more, so it cannot be made private or unpublished: nobody could reach it. Keep it shared, or delete it.`,
+    );
+    this.name = "OwnerlessBotPrivateError";
+  }
+}
+
 export class ModelBindingNotApplicableError extends Error {
   constructor(id: string) {
     super(`Agent ${id} runs on another server, so its model is chosen there.`);
@@ -162,6 +213,7 @@ const joinedProjection = {
   pinnedAt: agentPreferences.pinnedAt,
   deletedAt: agentProfiles.deletedAt,
   modelRef: agentProfiles.modelRef,
+  platformModelRef: agentProfiles.platformModelRef,
   persona: agentProfiles.persona,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
@@ -219,6 +271,7 @@ function mapProfile(
     deletedAt: row.deletedAt,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
+    platformModelRef: row.platformModelRef,
     persona: (row.persona as Persona | null) ?? null,
     // Whether a key is set, never which. The form needs to show "a key is set" so a person does not
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
@@ -384,8 +437,240 @@ function requireManageable(actor: AgentActor, profile: AgentProfile) {
   }
 }
 
+/**
+ * Refuses a pool row the coworker's tenant may not bind: absent, switched off, or outside its plan.
+ *
+ * The tenant is the one stamped on the profile row (for a `team` Bot, the person saving it), never
+ * the caller's guess or a default. The pool is platform-owned and readable by the application; the
+ * subscription is read under row-level security on the same transaction, filtered to that tenant.
+ */
+async function assertPoolModelAllowed(
+  transaction: Transaction,
+  agentId: string,
+  poolId: string,
+): Promise<void> {
+  const [record] = await transaction
+    .select({ tenantId: agentProfiles.tenantId })
+    .from(agentProfiles)
+    .where(eq(agentProfiles.agentId, agentId))
+    .limit(1);
+  if (!record) throw new AgentNotFoundError(agentId);
+  /*
+   * Whose plan decides. A person's coworker: that person's. A shared Bot stamped `team` (G01-E) is
+   * nobody's to bill; the resolver charges a pool call to the person who invokes it, so the binding
+   * is checked against the plan of the person saving it, in whose frame this transaction runs.
+   * A coworker stamped `system` or `platform`, or a save outside a person's frame, has no tenant to
+   * meter a pool call to, so the resolver never honours its pool binding; storing one would report
+   * a binding that silently falls back.
+   */
+  const planTenant =
+    record.tenantId === TEAM_TENANT ? currentTenant() : record.tenantId;
+  if (!isPersonTenant(planTenant)) {
+    throw new PlatformModelNotAvailableError();
+  }
+  const [entry] = await transaction
+    .select({ tiers: platformModelPool.tiers })
+    .from(platformModelPool)
+    .where(
+      and(
+        eq(platformModelPool.id, poolId),
+        eq(platformModelPool.enabled, true),
+      ),
+    )
+    .limit(1);
+  if (!entry) throw new PlatformModelNotAvailableError();
+  const [subscription] = await transaction
+    .select({ planId: subscriptions.planId })
+    .from(subscriptions)
+    .where(
+      and(
+        eq(subscriptions.tenantId, planTenant),
+        eq(subscriptions.status, "active"),
+      ),
+    )
+    .orderBy(
+      desc(subscriptions.updatedAt),
+      desc(subscriptions.createdAt),
+      desc(subscriptions.id),
+    )
+    .limit(1);
+  const plan = subscription?.planId ?? "free";
+  if (!(entry.tiers as readonly string[]).includes(plan)) {
+    throw new PlatformModelNotAvailableError();
+  }
+}
+
 function newAgentId() {
   return `agent_${crypto.randomUUID()}`;
+}
+
+/**
+ * A write that must change exactly one row, or the caller learns it did not (G01-E, I9).
+ *
+ * Row security does not raise on a row the frame may read but not write: the UPDATE matches nothing
+ * and reports success. A Bot the caller can see (a teammate's public Bot, a catalogue Bot) and an
+ * administrator's role both used to pass the store's own checks and then change nothing, and the
+ * route answered with the old row as if it had been saved.
+ */
+function exactlyOne(rows: unknown[], id: string) {
+  if (rows.length !== 1) throw new AgentNotManageableError(id);
+}
+
+/** The owner's explicit move of one Bot (0122 row guard): the only re-stamp outside `platform`. */
+async function withTeamMove(
+  transaction: Transaction,
+  agentId: string,
+  work: () => Promise<void>,
+) {
+  await transaction.execute(
+    sql`select set_config('app.team_move', ${agentId}, true)`,
+  );
+  await work();
+  // Transaction-local already; cleared anyway, so nothing later in this transaction moves a row.
+  await transaction.execute(sql`select set_config('app.team_move', '', true)`);
+}
+
+/**
+ * Move a Bot its owner made public into the shared `team` tenant (G01-E P8b), in the owner's frame.
+ *
+ * The profile first: the `agents` row's team policy asks whether the PROFILE is the caller's and
+ * already `team`. Then the Bot's grants, so it keeps the tools it was granted wherever it runs. The
+ * Bot's child rows (security policy, knowledge bindings, device projects) stay with the owner (I8).
+ *
+ * Only the owner moves a Bot: in any other frame the profile is invisible or unwritable, nothing
+ * matches, and this throws. Setting `app.team_move` by hand opens nothing more.
+ */
+export async function moveToTeam(
+  transaction: Transaction,
+  agentId: string,
+): Promise<void> {
+  await withTeamMove(transaction, agentId, async () => {
+    const profiles = await transaction
+      .update(agentProfiles)
+      .set({ tenantId: TEAM_TENANT })
+      .where(
+        and(
+          eq(agentProfiles.agentId, agentId),
+          ne(agentProfiles.tenantId, TEAM_TENANT),
+        ),
+      )
+      .returning({ agentId: agentProfiles.agentId });
+    if (profiles.length !== 1) throw new AgentNotFoundError(agentId);
+    const moved = await transaction
+      .update(agents)
+      .set({ tenantId: TEAM_TENANT })
+      .where(and(eq(agents.id, agentId), ne(agents.tenantId, TEAM_TENANT)))
+      .returning({ id: agents.id });
+    if (moved.length !== 1) throw new AgentNotFoundError(agentId);
+    await transaction
+      .update(pluginGrants)
+      .set({ tenantId: TEAM_TENANT })
+      .where(
+        and(
+          eq(pluginGrants.agentId, agentId),
+          ne(pluginGrants.tenantId, TEAM_TENANT),
+        ),
+      );
+  });
+}
+
+/**
+ * The reverse of {@link moveToTeam}: a team Bot made private again goes back to its owner, in the
+ * owner's frame. Grants first and the profile last, because every `team` policy on the way asks
+ * whether the profile is still the caller's `team` profile.
+ */
+export async function moveToOwner(
+  transaction: Transaction,
+  agentId: string,
+  ownerId: string,
+): Promise<void> {
+  await withTeamMove(transaction, agentId, async () => {
+    await transaction
+      .update(pluginGrants)
+      .set({ tenantId: ownerId })
+      .where(
+        and(
+          eq(pluginGrants.agentId, agentId),
+          eq(pluginGrants.tenantId, TEAM_TENANT),
+        ),
+      );
+    const moved = await transaction
+      .update(agents)
+      .set({ tenantId: ownerId })
+      .where(and(eq(agents.id, agentId), eq(agents.tenantId, TEAM_TENANT)))
+      .returning({ id: agents.id });
+    if (moved.length !== 1) throw new AgentNotFoundError(agentId);
+    const profiles = await transaction
+      .update(agentProfiles)
+      .set({ tenantId: ownerId })
+      .where(
+        and(
+          eq(agentProfiles.agentId, agentId),
+          eq(agentProfiles.tenantId, TEAM_TENANT),
+        ),
+      )
+      .returning({ agentId: agentProfiles.agentId });
+    if (profiles.length !== 1) throw new AgentNotFoundError(agentId);
+  });
+}
+
+/**
+ * Where a Bot's rows belong after a write that set its visibility, decided in the frame that wrote it.
+ *
+ * Public moves the owner's own Bot to `team`, in the owner's frame. Private moves a `team` Bot back to its owner, unless it
+ * is published: a publication is a separate, revocable fact (`team-bots`), and its audience reads the
+ * Bot through `team`. Nothing moves outside a person frame: a `system` or `platform` stamp is the
+ * catalogue's, and only the owner's frame may re-stamp (the row guard refuses any other).
+ */
+async function settleStamp(
+  transaction: Transaction,
+  agentId: string,
+  stamp: string,
+  visibility: CreateAgentInput["visibility"],
+  ownerUserId: string | null,
+) {
+  const frame = currentTenant();
+  if (visibility === "public") {
+    if (isPersonTenant(frame) && stamp === frame && ownerUserId === frame) {
+      await moveToTeam(transaction, agentId);
+    }
+    return;
+  }
+  if (stamp !== TEAM_TENANT || !isPersonTenant(ownerUserId)) return;
+  if (await publishedToTeam(transaction, agentId)) return;
+  await moveToOwner(transaction, agentId, ownerUserId);
+}
+
+/** Whether the Bot has a publication, counted only when stamped `team` as every publication is (0126). */
+async function publishedToTeam(transaction: Transaction, agentId: string) {
+  const [published] = await transaction
+    .select({ agentId: teamBotPublications.agentId })
+    .from(teamBotPublications)
+    .where(
+      and(
+        eq(teamBotPublications.agentId, agentId),
+        eq(teamBotPublications.tenantId, TEAM_TENANT),
+      ),
+    )
+    .limit(1);
+  return Boolean(published);
+}
+
+/**
+ * Refuse the write that would leave a `team` Bot without an owner reachable by nobody: private and
+ * unpublished ({@link OwnerlessBotPrivateError}). Asked before anything is written.
+ */
+async function refuseOwnerlessPrivate(
+  transaction: Transaction,
+  agentId: string,
+  stamp: string | undefined,
+  visibility: CreateAgentInput["visibility"],
+  ownerUserId: string | null,
+) {
+  if (stamp !== TEAM_TENANT || visibility !== "private") return;
+  if (isPersonTenant(ownerUserId)) return;
+  if (await publishedToTeam(transaction, agentId)) return;
+  throw new OwnerlessBotPrivateError(agentId);
 }
 
 /**
@@ -398,10 +683,11 @@ function newAgentId() {
 async function findByTokenHash(
   database: Database,
   hash: string,
-): Promise<{ id: string } | null> {
+): Promise<CallbackTokenHolder | null> {
   const rows = await database
     .select({
       agentId: agentProfiles.agentId,
+      tenantId: agentProfiles.tenantId,
       hash: agentProfiles.callbackTokenHash,
     })
     .from(agentProfiles)
@@ -415,7 +701,9 @@ async function findByTokenHash(
 
   const row = rows[0];
   if (!row?.hash) return null;
-  return sameToken(row.hash, hash) ? { id: row.agentId } : null;
+  return sameToken(row.hash, hash)
+    ? { id: row.agentId, tenantId: row.tenantId }
+    : null;
 }
 
 /** Hiding a Team Bot an administrator assigned to this person, which they cannot do. */
@@ -532,6 +820,14 @@ export function createAgentProfileStore(
           visibility: input.visibility,
           persona: input.persona ?? null,
         });
+        // Both rows took this frame's stamp; a public Bot then moves to `team` in the same transaction.
+        await settleStamp(
+          transaction,
+          id,
+          currentTenant(),
+          input.visibility,
+          actor.id,
+        );
 
         const profile = await findAccessibleProfile(transaction, actor, id);
         if (!profile) throw new AgentNotFoundError(id);
@@ -558,10 +854,21 @@ export function createAgentProfileStore(
            * it alone" rather than "remove it".
            */
           const [row] = await transaction
-            .select({ configuration: agents.configuration, type: agents.type })
+            .select({
+              configuration: agents.configuration,
+              type: agents.type,
+              tenantId: agents.tenantId,
+            })
             .from(agents)
             .where(eq(agents.id, id))
             .limit(1);
+          await refuseOwnerlessPrivate(
+            transaction,
+            id,
+            row?.tenantId,
+            input.visibility,
+            profile.ownerUserId,
+          );
           const previous = (row?.configuration ?? {}) as Record<
             string,
             unknown
@@ -620,16 +927,24 @@ export function createAgentProfileStore(
            * returns: editing a Bot's key would hang until the statement timed out, and the timeout
            * would then be reported as a key that is still live.
            */
-          await transaction
-            .update(agents)
-            .set({ name: input.name, configuration, updatedAt })
-            .where(eq(agents.id, id));
+          exactlyOne(
+            await transaction
+              .update(agents)
+              .set({ name: input.name, configuration, updatedAt })
+              .where(eq(agents.id, id))
+              .returning({ id: agents.id }),
+            id,
+          );
           /*
            * The model binding is checked against the library instead of trusted, because a foreign
            * key is not stopped by row-level security: the constraint alone would accept another
            * tenant's model id, and the coworker would then answer on a model this person never
            * connected and never holds a key for.
            */
+          // One model per coworker; refused before either id is looked up.
+          if (input.modelRef && input.platformModelRef) {
+            throw new ModelBindingConflictError();
+          }
           if (input.modelRef) {
             if (row?.type !== "built_in") {
               throw new ModelBindingNotApplicableError(id);
@@ -646,7 +961,23 @@ export function createAgentProfileStore(
               .limit(1);
             if (!model) throw new ModelNotInLibraryError();
           }
-          await transaction
+          /*
+           * A platform pool binding (stories H1, K1), checked the same way: the foreign key alone
+           * would take a switched-off row, or a Pro-only row for a Free tenant. The plan is the one
+           * the RECORD's tenant is on, read on this transaction (whose session is that tenant's), and
+           * no active subscription is Free — never Pro, never "no limit".
+           */
+          if (input.platformModelRef) {
+            if (row?.type !== "built_in") {
+              throw new ModelBindingNotApplicableError(id);
+            }
+            await assertPoolModelAllowed(
+              transaction,
+              id,
+              input.platformModelRef,
+            );
+          }
+          const written = await transaction
             .update(agentProfiles)
             .set({
               title: input.title,
@@ -655,6 +986,12 @@ export function createAgentProfileStore(
               ...(input.modelRef === undefined
                 ? {}
                 : { modelRef: input.modelRef }),
+              ...(input.platformModelRef === undefined
+                ? {}
+                : { platformModelRef: input.platformModelRef }),
+              // Binding one clears the other, so the one-binding CHECK is never what refuses a save.
+              ...(input.modelRef ? { platformModelRef: null } : {}),
+              ...(input.platformModelRef ? { modelRef: null } : {}),
               // Written whole rather than merged: a persona is read as one character, and a line the
               // person deleted should stop being said on the next turn.
               ...(input.persona === undefined
@@ -662,7 +999,18 @@ export function createAgentProfileStore(
                 : { persona: input.persona }),
               updatedAt,
             })
-            .where(eq(agentProfiles.agentId, id));
+            .where(eq(agentProfiles.agentId, id))
+            .returning({ agentId: agentProfiles.agentId });
+          exactlyOne(written, id);
+          if (row) {
+            await settleStamp(
+              transaction,
+              id,
+              row.tenantId,
+              input.visibility,
+              profile.ownerUserId,
+            );
+          }
 
           const updated = await findAccessibleProfile(transaction, actor, id);
           if (!updated) throw new AgentNotFoundError(id);
@@ -796,10 +1144,14 @@ export function createAgentProfileStore(
           requireManageable(actor, profile);
 
           const deletedAt = new Date();
-          await transaction
-            .update(agentProfiles)
-            .set({ deletedAt, updatedAt: deletedAt })
-            .where(eq(agentProfiles.agentId, id));
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({ deletedAt, updatedAt: deletedAt })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
 
           /*
            * And its key stops working.
@@ -846,14 +1198,19 @@ export function createAgentProfileStore(
 
           const token = mintCallbackToken();
           const issuedAt = new Date();
-          await transaction
-            .update(agentProfiles)
-            .set({
-              callbackTokenHash: hashCallbackToken(token),
-              callbackTokenIssuedAt: issuedAt,
-              updatedAt: issuedAt,
-            })
-            .where(eq(agentProfiles.agentId, id));
+          // A token that was not stored is never handed out: it would authenticate nothing.
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({
+                callbackTokenHash: hashCallbackToken(token),
+                callbackTokenIssuedAt: issuedAt,
+                updatedAt: issuedAt,
+              })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
 
           // The only time it is readable. Nothing here writes it to a log.
           return token;
@@ -871,21 +1228,30 @@ export function createAgentProfileStore(
           requireManageable(actor, profile);
 
           const now = new Date();
-          await transaction
-            .update(agentProfiles)
-            .set({
-              callbackTokenHash: null,
-              callbackTokenIssuedAt: null,
-              updatedAt: now,
-            })
-            .where(eq(agentProfiles.agentId, id));
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({
+                callbackTokenHash: null,
+                callbackTokenIssuedAt: null,
+                updatedAt: now,
+              })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
         },
         { isolationLevel: "read committed" },
       );
     },
 
     agentForCallbackToken(hash) {
-      return findByTokenHash(database, hash);
+      /*
+       * A NARROW PLATFORM READ (G01-E PCB). The one non-deleted profile whose stored hash is this
+       * one, and only its id and stamp: what the route needs to decide which frame the call then runs
+       * in. Everything after that runs in a person's frame, never in this one.
+       */
+      return asPlatform(() => findByTokenHash(database, hash));
     },
   };
 }

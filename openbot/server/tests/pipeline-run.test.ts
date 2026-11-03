@@ -153,10 +153,12 @@ await runAsTenant(tenant, async () => {
  * id does double duty, and the row is written in the deployment's own frame the way every other user row
  * in these suites is.
  */
-await database.insert(users).values({
-  id: tenant,
-  email: `${tenant}@example.test`,
-});
+await runAsTenant("platform", () =>
+  database.insert(users).values({
+    id: tenant,
+    email: `${tenant}@example.test`,
+  }),
+);
 
 /** The gate's own store, with the board attached: opening a request is what parks a card. */
 const approvals = createApprovalStore(database, board);
@@ -164,17 +166,21 @@ const approvalKeys: string[] = [];
 
 afterAll(async () => {
   if (approvalKeys.length) {
-    await database
-      .delete(workItems)
-      .where(
-        and(
-          eq(workItems.kind, "approval.resume"),
-          inArray(workItems.key, approvalKeys),
+    await runAsTenant(tenant, () =>
+      database
+        .delete(workItems)
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            inArray(workItems.key, approvalKeys),
+          ),
         ),
-      );
+    );
   }
   // The user goes last: `approval_requests.owner_user_id` cascades, so deleting it takes the rows with it.
-  await database.delete(users).where(eq(users.id, tenant));
+  await runAsTenant("platform", () =>
+    database.delete(users).where(eq(users.id, tenant)),
+  );
   await runAsTenant(tenant, async () => {
     await database.delete(tasks);
     await database.delete(groupTaskRuns);
@@ -827,26 +833,28 @@ test("a step parked on an approval is answerable from the board, and one answer 
       return { status: "done", output: "批准后做完了" } as const;
     // Mid-turn, exactly as the governed channel does it: the coworker wants to write something, and the
     // request is filed against the run it is wanting it in.
-    const request = await approvals.open(
-      approvalAction({
-        actorId: tenant,
-        botId: agentId,
-        toolRef: "computer_write_file",
-        effect: "write",
-        scope: "workspace",
-        args: { path: "notes.txt", contents: "saved" },
-        continuation: {
-          runId: stepRunRef,
-          threadId: `pipe-thread-${suite}`,
-          toolCallId: `pipe-call-${stepRunRef}`,
-          toolName: "computer_write_file",
+    const request = await runAsTenant(tenant, () =>
+      approvals.open(
+        approvalAction({
+          actorId: tenant,
+          botId: agentId,
+          toolRef: "computer_write_file",
+          effect: "write",
+          scope: "workspace",
           args: { path: "notes.txt", contents: "saved" },
-          messages: [],
-          state: {},
-          context: [],
-          forwardedProps: {},
-        },
-      }),
+          continuation: {
+            runId: stepRunRef,
+            threadId: `pipe-thread-${suite}`,
+            toolCallId: `pipe-call-${stepRunRef}`,
+            toolName: "computer_write_file",
+            args: { path: "notes.txt", contents: "saved" },
+            messages: [],
+            state: {},
+            context: [],
+            forwardedProps: {},
+          },
+        }),
+      ),
     );
     asked = request.id;
     approvalKeys.push(request.id);
@@ -879,13 +887,15 @@ test("a step parked on an approval is answerable from the board, and one answer 
    * the card and the approval are talking about different work, and the lane promises a decision that
    * unlocks nothing.
    */
-  const [request] = await database
-    .select({
-      runId: approvalRequests.runId,
-      status: approvalRequests.status,
-    })
-    .from(approvalRequests)
-    .where(eq(approvalRequests.id, asked));
+  const [request] = await runAsTenant(tenant, () =>
+    database
+      .select({
+        runId: approvalRequests.runId,
+        status: approvalRequests.status,
+      })
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, asked)),
+  );
   expect(request?.runId).toBe(stepRunRef);
   expect(request?.status).toBe("pending");
 
@@ -898,7 +908,9 @@ test("a step parked on an approval is answerable from the board, and one answer 
   expect(parent?.status).toBe("needs_action");
   expect(parent?.pendingApprovalId).toBe(asked);
 
-  await approvals.decide(tenant, asked, "allow_once");
+  await runAsTenant(tenant, () =>
+    approvals.decide(tenant, asked, "allow_once"),
+  );
   // One decision moves both cards, because `resumed` matches on the approval row they were parked against.
   const freed = await boardShows((rows) =>
     rows
@@ -948,26 +960,28 @@ test("a denied approval stops the run and takes the ask off the board", async ()
   const pipeline = build(async ({ agentId, stepRunRef }) => {
     if (agentId !== STEPS[1]!.agentId)
       return { status: "done", output: `ok:${agentId}` } as const;
-    const request = await approvals.open(
-      approvalAction({
-        actorId: tenant,
-        botId: agentId,
-        toolRef: "computer_run_command",
-        effect: "write",
-        scope: "workspace",
-        args: { command: "rm -rf build" },
-        continuation: {
-          runId: stepRunRef,
-          threadId: `pipe-thread-${suite}`,
-          toolCallId: `pipe-deny-${stepRunRef}`,
-          toolName: "computer_run_command",
+    const request = await runAsTenant(tenant, () =>
+      approvals.open(
+        approvalAction({
+          actorId: tenant,
+          botId: agentId,
+          toolRef: "computer_run_command",
+          effect: "write",
+          scope: "workspace",
           args: { command: "rm -rf build" },
-          messages: [],
-          state: {},
-          context: [],
-          forwardedProps: {},
-        },
-      }),
+          continuation: {
+            runId: stepRunRef,
+            threadId: `pipe-thread-${suite}`,
+            toolCallId: `pipe-deny-${stepRunRef}`,
+            toolName: "computer_run_command",
+            args: { command: "rm -rf build" },
+            messages: [],
+            state: {},
+            context: [],
+            forwardedProps: {},
+          },
+        }),
+      ),
     );
     asked = request.id;
     approvalKeys.push(request.id);
@@ -992,7 +1006,7 @@ test("a denied approval stops the run and takes the ask off the board", async ()
   expect(parked.status).toBe("awaiting_action");
   const stepRunRef = parked.steps[1]?.runRef;
 
-  await approvals.decide(tenant, asked, "deny");
+  await runAsTenant(tenant, () => approvals.decide(tenant, asked, "deny"));
 
   /*
    * The refusal reaches the run through the same door an approval does: the replayed turn's own

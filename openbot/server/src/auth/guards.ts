@@ -58,10 +58,17 @@ export function createRequireUser(
   roleRepository: RoleRepository,
 ): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {
-    const session = await auth.api.getSession({
-      headers: context.req.raw.headers,
-      query: { disableCookieCache: true },
-    });
+    /*
+     * Who is asking is answered before there is anybody to act as, from the identity tables, which
+     * are the deployment's and carry no tenant. So as `platform` (G01), not in no frame at all; the
+     * request itself then runs as the person the session names, below.
+     */
+    const session = await runAsTenant("platform", () =>
+      auth.api.getSession({
+        headers: context.req.raw.headers,
+        query: { disableCookieCache: true },
+      }),
+    );
 
     if (!session) {
       return context.json({ error: "Authentication required." }, 401);
@@ -69,7 +76,9 @@ export function createRequireUser(
 
     const roles = session.user.role
       ? [session.user.role]
-      : await roleRepository.rolesForUser(session.user.id);
+      : await runAsTenant("platform", () =>
+          roleRepository.rolesForUser(session.user.id),
+        );
     const role = roles.includes("admin")
       ? "admin"
       : roles.includes("user")

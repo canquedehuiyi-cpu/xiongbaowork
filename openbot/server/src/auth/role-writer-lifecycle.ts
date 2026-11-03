@@ -1,8 +1,85 @@
 import { judgeRlsEnforcement } from "../db/rls-role";
+import { runAsTenant } from "../tenant/context";
 
 export type ReadinessDiagnostic =
   | { type: "rls-role-check-unavailable"; reason: string }
-  | { type: "rls-not-enforced"; role: string; reason: string; fix: string };
+  | { type: "rls-not-enforced"; role: string; reason: string; fix: string }
+  | { type: "database-password-public-default"; role: string; fix: string };
+
+export type RlsEnforcementMode = "refuse" | "warn";
+
+/**
+ * Whether an unenforced or unconfirmed RLS role stops the server (audit defect #8).
+ *
+ * Refuse unless somebody wrote `OPENBOT_RLS_ENFORCE=warn`, or `NODE_ENV` says development or test.
+ * Not "warn unless production": `NODE_ENV` is unset on a hand-written server env file, which is
+ * exactly the deployment that connects with the owner string by mistake (see dev-actor.ts for the
+ * same lesson). Anything other than the two words refuses to start rather than being read as warn,
+ * so a typo cannot switch the first isolation layer off.
+ */
+export function resolveRlsEnforcementMode(
+  environment: Record<string, string | undefined>,
+): RlsEnforcementMode {
+  const written = environment.OPENBOT_RLS_ENFORCE?.trim().toLowerCase();
+  if (written === "refuse" || written === "warn") return written;
+  if (written)
+    throw new Error(
+      `OPENBOT_RLS_ENFORCE must be "refuse" or "warn" (got "${written}"). Leave it unset to refuse.`,
+    );
+  const nodeEnvironment = environment.NODE_ENV?.trim();
+  return nodeEnvironment === "development" || nodeEnvironment === "test"
+    ? "warn"
+    : "refuse";
+}
+
+/** The password `0054_app_role.sql` gives `openbot_app`, and the compose owner's; both are public. */
+const PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot";
+
+/** The role name when `url` authenticates with the public default password, else undefined. */
+function publicDefaultCredentialRole(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    if (decodeURIComponent(parsed.password) !== PUBLIC_DEFAULT_DATABASE_PASSWORD)
+      return undefined;
+    return decodeURIComponent(parsed.username) || "unknown";
+  } catch {
+    return undefined;
+  }
+}
+
+export function usesPublicDefaultDatabasePassword(
+  url: string | undefined,
+): boolean {
+  return publicDefaultCredentialRole(url) !== undefined;
+}
+
+/**
+ * Refuse, in production, a DATABASE_URL whose password is the one printed in this repository.
+ *
+ * A migration cannot do this: PostgreSQL does not hand a password back, so it cannot tell a role an
+ * operator secured from one still on 0054's default, and resetting it would lock the second kind out
+ * silently. The connection string is the one credential the server holds, and with password
+ * authentication a role has exactly one password, so a URL that authenticates with `openbot` means
+ * the role still accepts it from anywhere that can reach the database. Never echoes the URL.
+ */
+export function checkDatabaseCredential(options: {
+  url: string | undefined;
+  production: boolean;
+  report: (event: ReadinessDiagnostic) => void;
+}): void {
+  const role = publicDefaultCredentialRole(options.url);
+  if (role === undefined) return;
+  options.report({
+    type: "database-password-public-default",
+    role,
+    fix: `set a new password (ALTER ROLE ${role} PASSWORD '<random>') and put it in DATABASE_URL; the default from 0054_app_role.sql is public.`,
+  });
+  if (options.production)
+    throw new Error(
+      "DATABASE_URL uses the public default database password; refusing to start in production.",
+    );
+}
 
 /** Read real role facts before consumers start; unknown is not a false privilege flag. */
 export async function checkServerReadiness(options: {
@@ -10,10 +87,17 @@ export async function checkServerReadiness(options: {
   mode: string | undefined;
   report: (event: ReadinessDiagnostic) => void;
 }): Promise<void> {
-  const strict = options.mode === "refuse";
+  // Only an explicit "warn" relaxes the gate; a missing mode refuses.
+  const strict = options.mode !== "warn";
   let rows: unknown;
   try {
-    rows = await options.read();
+    /*
+     * As `platform` (G01): the role facts are the deployment's, and boot has no frame. Unframed, the
+     * read took the legacy `system` fallback today and a `TenantContextError` once the fallback is
+     * gone, which this catch would turn into "role facts unavailable" and, under `refuse`, a server
+     * that will not start for a reason that has nothing to do with its role.
+     */
+    rows = await runAsTenant("platform", () => options.read());
   } catch {
     rows = undefined;
   }
@@ -126,8 +210,17 @@ export function createRoleWriterLifecycle<Connection>(options: {
           if (!dedicatedUrl?.trim()) {
             throw new Error("Missing dedicated role writer URL.");
           }
-          writer = await options.create(dedicatedUrl);
-          await options.initialize(options.application, writer);
+          // Role and catalogue facts belong to no tenant: the boot path asks as `platform`, never
+          // through the legacy unframed fallback (G01-E P3). Creating the pool is framed too:
+          // resolving a promise with a `Database` reads its `then`, which the tenant proxy answers
+          // from the current frame, so an unframed `await` of the new pool is itself a frame read.
+          const created = await runAsTenant("platform", () =>
+            Promise.resolve(options.create(dedicatedUrl)),
+          );
+          writer = created;
+          await runAsTenant("platform", () =>
+            options.initialize(options.application, created),
+          );
           bound = true;
         } catch {
           const failure = new Error("Role writer initialization failed.");

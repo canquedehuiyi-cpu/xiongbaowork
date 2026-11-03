@@ -4,11 +4,12 @@ import {
   beforeEach,
   describe,
   expect,
+  setSystemTime,
   spyOn,
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createChannelStore } from "../src/channels/routes";
@@ -25,6 +26,7 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
 import { MINIMUM_INTERVAL_MS } from "../src/routines/schedule";
 import { createRoutineStore } from "../src/routines/store";
 import {
@@ -33,6 +35,7 @@ import {
   offerDueRoutines,
   ROUTINE_FIRE_KIND,
 } from "../src/routines/sweep";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue, DEFAULT_MAX_ATTEMPTS } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -71,8 +74,10 @@ const queue = createWorkQueue(database);
 
 const testPrefix = `routine-sweep-${randomUUID()}`;
 const createdUserIds: string[] = [];
-const createdAgentIds: string[] = [];
-const createdChannelIds: string[] = [];
+// Each Bot and channel with the frame it was made in (its owner's, or `system` for the one seed the
+// catalogue frame must see), so cleanup runs in that same frame.
+const createdAgentIds: { id: string; ownerId: string }[] = [];
+const createdChannelIds: { id: string; ownerId: string }[] = [];
 
 /** Every day at 09:00 UTC: comfortably above the floor, and one occurrence is one day. */
 const DAILY = "0 9 * * *";
@@ -89,6 +94,19 @@ const dispatch = async (routineRunId: string) => {
   dispatched.push(routineRunId);
 };
 
+/**
+ * WHOSE FRAME (G01). A routine is created by its owner, inside that person's tenant frame, the way
+ * the routes create it, so its row is stamped with that person and the sweep will offer it. The
+ * test's own reads and writes of rows across tenants (stamps, ages, cleanup) go as `platform`, the
+ * operator's view: unframed they would run as the legacy `system` and see none of a person's rows.
+ * The offering pass itself runs as `platform`, as `scripts/fire-routines.ts` runs it.
+ */
+const asPlatform = <T>(fn: () => T): T => runAsTenant("platform", fn);
+const asOwnerOf = <T>(owner: { id: string }, fn: () => T): T =>
+  runAsTenant(owner.id, fn);
+const asRoutineOwner = <T>(routine: { ownerUserId: string }, fn: () => T): T =>
+  runAsTenant(routine.ownerUserId, fn);
+
 function sweepOptions(overrides: Record<string, unknown> = {}) {
   return {
     routineStore: store,
@@ -101,62 +119,94 @@ function sweepOptions(overrides: Record<string, unknown> = {}) {
 
 beforeEach(async () => {
   dispatched.length = 0;
-  await database.delete(workItems).where(eq(workItems.kind, ROUTINE_FIRE_KIND));
+  await asPlatform(() =>
+    database.delete(workItems).where(eq(workItems.kind, ROUTINE_FIRE_KIND)),
+  );
 });
 
 afterEach(async () => {
   // Routines first, so a failure part-way through cleanup leaves nothing pointing at rows this file
   // is about to delete.
   for (const userId of createdUserIds) {
-    await database.delete(routines).where(eq(routines.ownerUserId, userId));
+    await asPlatform(() =>
+      database.delete(routines).where(eq(routines.ownerUserId, userId)),
+    );
   }
-  for (const channelId of createdChannelIds.splice(0)) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, channelId));
-    await database.delete(channels).where(eq(channels.id, channelId));
+  // A person's own channel, Bot and account, each deleted in that person's frame.
+  for (const { id: channelId, ownerId } of createdChannelIds.splice(0)) {
+    await runAsTenant(ownerId, async () => {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, channelId));
+      await database.delete(channels).where(eq(channels.id, channelId));
+    });
   }
-  for (const agentId of createdAgentIds.splice(0)) {
-    await database
-      .delete(agentProfiles)
-      .where(eq(agentProfiles.agentId, agentId));
-    await database.delete(agents).where(eq(agents.id, agentId));
+  for (const { id: agentId, ownerId } of createdAgentIds.splice(0)) {
+    await runAsTenant(ownerId, async () => {
+      await database
+        .delete(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId));
+      await database.delete(agents).where(eq(agents.id, agentId));
+    });
   }
   for (const userId of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, userId));
+    await asOwnerOf({ id: userId }, () =>
+      database.delete(users).where(eq(users.id, userId)),
+    );
   }
 });
 
 afterAll(async () => {
-  await database.delete(workItems).where(eq(workItems.kind, ROUTINE_FIRE_KIND));
+  await asPlatform(() =>
+    database.delete(workItems).where(eq(workItems.kind, ROUTINE_FIRE_KIND)),
+  );
   await database.$client.close();
 });
 
 async function createUser(): Promise<AgentActor> {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Routine Sweep Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Routine Sweep Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
 
-async function createAgent(owner: AgentActor, name = "Expense Manager") {
-  const profile = await profileStore.create(owner, {
-    name,
-    title: "Finance Operations",
-    roleDescription: "Review receipts.",
-    visibility: "private",
-  });
-  createdAgentIds.push(profile.id);
+/**
+ * `frame` is the tenant the Bot and channel are made in: their owner's, except in the one test that
+ * writes a routine as `system` (see "offering only a person's routine"), which seeds them in the
+ * `system` frame too, so that frame can see what its routine names.
+ */
+async function createAgent(
+  owner: AgentActor,
+  name = "Expense Manager",
+  frame: string = owner.id,
+) {
+  const profile = await runAsTenant(frame, () =>
+    profileStore.create(owner, {
+      name,
+      title: "Finance Operations",
+      roleDescription: "Review receipts.",
+      visibility: "private",
+    }),
+  );
+  createdAgentIds.push({ id: profile.id, ownerId: frame });
   return profile.id;
 }
 
-async function createChannel(owner: AgentActor, agentIds: string[]) {
-  const channel = await channelStore.create(owner, agentIds);
-  createdChannelIds.push(channel.id);
+async function createChannel(
+  owner: AgentActor,
+  agentIds: string[],
+  frame: string = owner.id,
+) {
+  const channel = await runAsTenant(frame, () =>
+    channelStore.create(owner, agentIds),
+  );
+  createdChannelIds.push({ id: channel.id, ownerId: frame });
   return channel;
 }
 
@@ -165,13 +215,15 @@ async function makeRoutine(instruction = "Summarise the day.") {
   const owner = await createUser();
   const agentId = await createAgent(owner);
   const channel = await createChannel(owner, [agentId]);
-  const routine = await store.create({
-    ownerUserId: owner.id,
-    agentId,
-    channelId: channel.id,
-    instruction,
-    cron: DAILY,
-  });
+  const routine = await asOwnerOf(owner, () =>
+    store.create({
+      ownerUserId: owner.id,
+      agentId,
+      channelId: channel.id,
+      instruction,
+      cron: DAILY,
+    }),
+  );
   return { owner, agentId, channel, routine };
 }
 
@@ -185,47 +237,96 @@ async function makeRoutine(instruction = "Summarise the day.") {
  * "a month late" mean anything in a row stamped in 2001.
  */
 async function makeDueAt(routineId: string, nextRunAt: Date): Promise<Date> {
-  await database
-    .update(routines)
-    .set({ nextRunAt })
-    .where(eq(routines.id, routineId));
-  const [row] = await database
-    .select({ nextRunAt: routines.nextRunAt })
-    .from(routines)
-    .where(eq(routines.id, routineId))
-    .limit(1);
+  await asPlatform(() =>
+    database
+      .update(routines)
+      .set({ nextRunAt })
+      .where(eq(routines.id, routineId)),
+  );
+  const [row] = await asPlatform(() =>
+    database
+      .select({ nextRunAt: routines.nextRunAt })
+      .from(routines)
+      .where(eq(routines.id, routineId))
+      .limit(1),
+  );
   // Read back rather than trusting the Date we wrote: the stamp the sweep keys on is Postgres's.
   return row?.nextRunAt as Date;
 }
 
+/**
+ * The database's own clock: the one `dueRoutines` decides "due" by (`next_run_at <= now()`).
+ *
+ * A test that stamps a row in 2001 and tells the sweep it is 2001 has two clocks that disagree —
+ * Postgres still thinks it is today, so every 2001 stamp is due to it however far the sweep's `now`
+ * says the routine has moved on. Where a test is about what the DATABASE lets through (a race, a
+ * second pass after an advance), its stamps are taken from this instead and no `now` is injected,
+ * so both clocks agree the way they do in production.
+ */
+async function databaseNow(): Promise<Date> {
+  const [clock] = await asPlatform(() =>
+    database.execute<{ now: Date | string }>(sql`select now() as now`),
+  );
+  if (!clock) throw new Error("the database would not say what time it is");
+  return new Date(clock.now);
+}
+
+/**
+ * A routine whose most recent occurrence was a whole minute ago by the database's clock, stamped due
+ * at exactly that occurrence — the row a real sweep finds on a real morning.
+ *
+ * The routine is made daily at that minute (UTC), so the stamp is a genuine occurrence, it is inside
+ * the grace window, and the next occurrence is a full day away: no second occurrence can fall due
+ * while the test runs, whatever the time of day it runs at.
+ */
+async function makeDueAMinuteAgo(
+  routineId: string,
+): Promise<{ stamp: Date; next: Date }> {
+  const now = await databaseNow();
+  const due = new Date(Math.floor(now.getTime() / 60_000) * 60_000 - 60_000);
+  await asPlatform(() =>
+    database
+      .update(routines)
+      .set({
+        cron: `${due.getUTCMinutes()} ${due.getUTCHours()} * * *`,
+        timezone: "UTC",
+      })
+      .where(eq(routines.id, routineId)),
+  );
+  const stamp = await makeDueAt(routineId, due);
+  return { stamp, next: new Date(stamp.getTime() + 24 * 60 * 60_000) };
+}
+
 async function readRoutine(routineId: string) {
-  const [row] = await database
-    .select()
-    .from(routines)
-    .where(eq(routines.id, routineId))
-    .limit(1);
+  const [row] = await asPlatform(() =>
+    database.select().from(routines).where(eq(routines.id, routineId)).limit(1),
+  );
   return row;
 }
 
 /** Every queued firing of one routine, whatever minute it was keyed on. */
 async function firingsFor(routineId: string) {
-  return await database
-    .select()
-    .from(workItems)
-    .where(
-      and(
-        eq(workItems.kind, ROUTINE_FIRE_KIND),
-        like(workItems.key, `${routineId}:%`),
+  return await asPlatform(() =>
+    database
+      .select()
+      .from(workItems)
+      .where(
+        and(
+          eq(workItems.kind, ROUTINE_FIRE_KIND),
+          like(workItems.key, `${routineId}:%`),
+        ),
       ),
-    );
+  );
 }
 
 /** Every run row this routine has, in-flight ones included: `status` is null until something ends. */
 async function runsFor(routineId: string) {
-  return await database
-    .select()
-    .from(routineRuns)
-    .where(eq(routineRuns.routineId, routineId));
+  return await asPlatform(() =>
+    database
+      .select()
+      .from(routineRuns)
+      .where(eq(routineRuns.routineId, routineId)),
+  );
 }
 
 /**
@@ -237,7 +338,7 @@ async function runsFor(routineId: string) {
  */
 async function offerFiring(routineId: string, due: Date, at: Date) {
   await makeDueAt(routineId, due);
-  await offerDueRoutines(sweepOptions({ now: () => at }));
+  await asPlatform(() => offerDueRoutines(sweepOptions({ now: () => at })));
 }
 
 /**
@@ -252,10 +353,14 @@ async function backdate(
   key: string,
   values: Partial<typeof workItems.$inferInsert>,
 ) {
-  await database
-    .update(workItems)
-    .set(values)
-    .where(and(eq(workItems.kind, ROUTINE_FIRE_KIND), eq(workItems.key, key)));
+  await asPlatform(() =>
+    database
+      .update(workItems)
+      .set(values)
+      .where(
+        and(eq(workItems.kind, ROUTINE_FIRE_KIND), eq(workItems.key, key)),
+      ),
+  );
 }
 
 test("the grace window stays under the schedule floor, as a compile/test-time fact rather than prose", () => {
@@ -274,12 +379,39 @@ describe("offering the firings that are due", () => {
    */
   test("two sweeps racing on one due routine offer it exactly once", async () => {
     const { routine } = await makeRoutine();
-    const from = await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
-    const now = () => new Date("2001-01-01T09:26:00Z");
+    // On the database's clock, with no `now` injected: what is due, how late it is and where the
+    // clock lands are all measured on one clock, as they are in production.
+    const { stamp, next } = await makeDueAMinuteAgo(routine.id);
+
+    /*
+     * THE RACE, MADE CERTAIN. Each sweep reads what is due from the real store, then waits until the
+     * other has read too, so both hold the same stamp before either offers or advances — the case of
+     * three replicas waking on one minute. Left to `Promise.all` alone, the second read could land
+     * after the first sweep advanced, which is a different interleaving, pinned by the next test.
+     */
+    let read = 0;
+    let bothRead: () => void = () => {};
+    const together = new Promise<void>((resolve) => {
+      bothRead = resolve;
+    });
+    const racing = {
+      ...store,
+      dueRoutines: async (limit: number) => {
+        const rows = await store.dueRoutines(limit);
+        read += 1;
+        if (read === 2) bothRead();
+        await together;
+        return rows;
+      },
+    };
 
     const outcomes = await Promise.all([
-      offerDueRoutines(sweepOptions({ now })),
-      offerDueRoutines(sweepOptions({ now })),
+      asPlatform(() =>
+        offerDueRoutines(sweepOptions({ routineStore: racing })),
+      ),
+      asPlatform(() =>
+        offerDueRoutines(sweepOptions({ routineStore: racing })),
+      ),
     ]);
 
     // Both sweeps saw it as due and both offered it, which is the honest report: each did put the
@@ -287,13 +419,45 @@ describe("offering the firings that are due", () => {
     for (const outcome of outcomes) {
       expect(outcome.offered).toContain(routine.id);
     }
-    expect(await firingsFor(routine.id)).toHaveLength(1);
+    const firings = await firingsFor(routine.id);
+    expect(firings).toHaveLength(1);
+    expect(firings[0]?.key).toBe(
+      `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
+    );
 
     const after = await readRoutine(routine.id);
-    expect(after?.nextRunAt.getTime()).toBeGreaterThan(from.getTime());
+    expect(after?.nextRunAt.getTime()).toBeGreaterThan(stamp.getTime());
     // One occurrence on from the stamp it was given, not two: a second advance would have moved it
-    // to the 3rd of January.
-    expect(after?.nextRunAt.toISOString()).toBe("2001-01-02T09:00:00.000Z");
+    // a further day.
+    expect(after?.nextRunAt.toISOString()).toBe(next.toISOString());
+  });
+
+  /**
+   * THE SAME RACE, SERIALISED: the second sweep reads the row only after the first has offered it and
+   * moved its clock. This is the interleaving `Promise.all` above may or may not produce, so it is
+   * pinned here on its own. The advanced stamp is a day ahead of the database's clock, so the second
+   * pass finds nothing due and offers nothing — no second key, and no second advance.
+   */
+  test("a second sweep that reads after the first advanced offers nothing more", async () => {
+    const { routine } = await makeRoutine();
+    const { stamp, next } = await makeDueAMinuteAgo(routine.id);
+
+    const first = await asPlatform(() => offerDueRoutines(sweepOptions()));
+    expect(first.offered).toContain(routine.id);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      next.toISOString(),
+    );
+
+    const second = await asPlatform(() => offerDueRoutines(sweepOptions()));
+    expect(second.offered).not.toContain(routine.id);
+
+    const firings = await firingsFor(routine.id);
+    expect(firings.map((firing) => firing.key)).toEqual([
+      `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
+    ]);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      next.toISOString(),
+    );
   });
 
   /**
@@ -305,8 +469,10 @@ describe("offering the firings that are due", () => {
     const { routine } = await makeRoutine();
     await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
 
-    await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+    await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+      ),
     );
 
     const [firing] = await firingsFor(routine.id);
@@ -330,11 +496,11 @@ describe("offering the firings that are due", () => {
     const from = await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
     const now = () => new Date("2001-01-01T09:26:00Z");
 
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
     expect(await firingsFor(routine.id)).toHaveLength(1);
 
     await makeDueAt(routine.id, from);
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
     expect(await firingsFor(routine.id)).toHaveLength(1);
 
     /*
@@ -358,7 +524,7 @@ describe("offering the firings that are due", () => {
     ).toBe(true);
 
     await makeDueAt(routine.id, from);
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
 
     const firings = await firingsFor(routine.id);
     expect(firings).toHaveLength(1);
@@ -368,15 +534,19 @@ describe("offering the firings that are due", () => {
   test("a routine that is switched off, or not due yet, is not offered", async () => {
     const { owner: offOwner, routine: off } =
       await makeRoutine("Switched off.");
-    await store.setEnabled(offOwner.id, off.id, false);
+    await asOwnerOf(offOwner, () =>
+      store.setEnabled(offOwner.id, off.id, false),
+    );
     await makeDueAt(off.id, new Date("2001-01-01T09:25:00Z"));
 
     const { routine: ahead } = await makeRoutine("Still ahead.");
     // The create path already put this in the future; nothing rounds it down.
     const aheadStamp = (await readRoutine(ahead.id))?.nextRunAt as Date;
 
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+      ),
     );
 
     expect(offered).not.toContain(off.id);
@@ -400,8 +570,10 @@ describe("offering the firings that are due", () => {
     await makeDueAt(second.id, new Date("2001-01-01T09:26:00Z"));
     await makeDueAt(third.id, new Date("2001-01-01T09:27:00Z"));
 
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ limit: 2, now: () => new Date("2001-01-01T09:28:00Z") }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ limit: 2, now: () => new Date("2001-01-01T09:28:00Z") }),
+      ),
     );
 
     // Oldest due first, so a backlog drains in the order it built up.
@@ -410,6 +582,103 @@ describe("offering the firings that are due", () => {
     expect((await readRoutine(third.id))?.nextRunAt.getTime()).toBe(
       new Date("2001-01-01T09:27:00Z").getTime(),
     );
+  });
+});
+
+/**
+ * THE ROUTINE'S OWN STAMP DECIDES WHOSE FIRING IT IS (G01), and a stamp that names nobody is never
+ * offered. A routine written outside any person's frame — as `system` (what an unframed write used
+ * to land as), as `platform`, or stamped `team` — would otherwise queue a work item every consumer
+ * runs as nobody, or as everybody.
+ */
+describe("offering only a person's routine", () => {
+  test("a routine stamped system, platform or team is never offered, and stops holding a slot", async () => {
+    const owner = await createUser();
+    // The `system` routine below is written in an explicit `system` frame (G01-E: an unframed write
+    // no longer falls back to it), and it has to see the Bot and channel it names, so they are seeded
+    // in that frame too.
+    const agentId = await createAgent(owner, undefined, SYSTEM_TENANT);
+    const channel = await createChannel(owner, [agentId], SYSTEM_TENANT);
+    const input = {
+      ownerUserId: owner.id,
+      agentId,
+      channelId: channel.id,
+      cron: DAILY,
+    };
+    const systems = await runAsTenant(SYSTEM_TENANT, () =>
+      store.create({ ...input, instruction: "Nobody's." }),
+    );
+    const operators = await asPlatform(() =>
+      store.create({ ...input, instruction: "The operator's." }),
+    );
+    // `team` is a stamp no frame writes, so the row is put there the only way it can be: written by
+    // `platform` and re-stamped (`routines` is not a team table, so no guard trigger stands between).
+    const teams = await asPlatform(async () => {
+      const routine = await store.create({
+        ...input,
+        instruction: "The team's.",
+      });
+      await database
+        .update(routines)
+        .set({ tenantId: TEAM_TENANT })
+        .where(eq(routines.id, routine.id));
+      return routine;
+    });
+    // And one the same person really owns, so the pass is shown to carry on past the refusals.
+    const mine = await asOwnerOf(owner, () =>
+      store.create({ ...input, instruction: "Mine." }),
+    );
+    expect((await readRoutine(systems.id))?.tenantId).toBe(SYSTEM_TENANT);
+    expect((await readRoutine(operators.id))?.tenantId).toBe("platform");
+    expect((await readRoutine(teams.id))?.tenantId).toBe(TEAM_TENANT);
+    expect((await readRoutine(mine.id))?.tenantId).toBe(owner.id);
+
+    await makeDueAt(systems.id, new Date("2001-01-01T09:25:00Z"));
+    await makeDueAt(operators.id, new Date("2001-01-01T09:25:00Z"));
+    await makeDueAt(teams.id, new Date("2001-01-01T09:25:00Z"));
+    await makeDueAt(mine.id, new Date("2001-01-01T09:25:00Z"));
+
+    const lines: string[] = [];
+    const warn = spyOn(console, "warn").mockImplementation((...args) => {
+      lines.push(String(args[0]));
+    });
+    let offered: string[] = [];
+    try {
+      ({ offered } = await asPlatform(() =>
+        offerDueRoutines(
+          sweepOptions({ now: () => new Date("2001-01-01T09:26:00Z") }),
+        ),
+      ));
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(offered).toContain(mine.id);
+    expect(offered).not.toContain(systems.id);
+    expect(offered).not.toContain(operators.id);
+    expect(offered).not.toContain(teams.id);
+    expect(await firingsFor(systems.id)).toHaveLength(0);
+    expect(await firingsFor(operators.id)).toHaveLength(0);
+    expect(await firingsFor(teams.id)).toHaveLength(0);
+    // The one that was offered is stamped with its owner, which is what the consumer checks.
+    const [firing] = await firingsFor(mine.id);
+    expect(firing?.tenantId).toBe(owner.id);
+
+    // Said out loud, per routine.
+    for (const refused of [systems.id, operators.id, teams.id]) {
+      const line = lines.find((entry) => entry.includes(refused));
+      expect(JSON.parse(line as string).type).toBe(
+        "routine-sweep-untrusted-tenant",
+      );
+    }
+    // Moved past the stale stamp without a firing, so the row does not sit at the head of every
+    // later pass: no run row, and no longer due at the 2001 stamp.
+    for (const refused of [systems.id, teams.id]) {
+      expect(await runsFor(refused)).toHaveLength(0);
+      expect((await readRoutine(refused))?.nextRunAt.getTime()).toBeGreaterThan(
+        new Date("2001-01-01T09:25:00Z").getTime(),
+      );
+    }
   });
 });
 
@@ -432,8 +701,10 @@ describe("draining a stale stamp instead of replaying it", () => {
     );
     await makeDueAt(fresh.id, new Date("2001-02-01T08:58:00Z"));
 
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-02-01T09:00:00Z") }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-02-01T09:00:00Z") }),
+      ),
     );
 
     expect(offered).toEqual([fresh.id]);
@@ -455,12 +726,12 @@ describe("draining a stale stamp instead of replaying it", () => {
 
     // Twenty minutes late. Outside the default window, inside a thirty-minute one.
     const now = () => new Date("2001-01-01T09:20:00Z");
-    await offerDueRoutines(sweepOptions({ now }));
+    await asPlatform(() => offerDueRoutines(sweepOptions({ now })));
     expect(await firingsFor(routine.id)).toHaveLength(0);
 
     await makeDueAt(routine.id, new Date("2001-01-01T09:00:00Z"));
-    const { offered } = await offerDueRoutines(
-      sweepOptions({ now, graceMs: 30 * 60_000 }),
+    const { offered } = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now, graceMs: 30 * 60_000 })),
     );
     expect(offered).toContain(routine.id);
     expect(await firingsFor(routine.id)).toHaveLength(1);
@@ -476,6 +747,213 @@ describe("draining a stale stamp instead of replaying it", () => {
  * saw a routine that quietly stopped. So the pass survives it, says so, and switches the routine off
  * with the reason written where the routines page reads it.
  */
+/**
+ * ONE CLOCK, THE DATABASE'S. `dueRoutines` decides what is due on Postgres's `now()`; the sweep
+ * measures lateness and lands a stale clock on that same `now()`, returned with each row, and never
+ * on its own process clock. The process clock is moved here with `setSystemTime` — the sweep is given
+ * no `now` — to stand for a node whose clock disagrees with the database's.
+ */
+describe("measuring every moment on the database's clock", () => {
+  const EVERY_QUARTER_HOUR = "*/15 * * * *";
+
+  async function setSchedule(routineId: string, cron: string) {
+    await asPlatform(() =>
+      database
+        .update(routines)
+        .set({ cron, timezone: "UTC" })
+        .where(eq(routines.id, routineId)),
+    );
+  }
+
+  /** Run `work` with the process clock `offsetMs` away from the database's, then put it back. */
+  async function withProcessClockOff<T>(
+    offsetMs: number,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    setSystemTime(new Date((await databaseNow()).getTime() + offsetMs));
+    try {
+      return await work();
+    } finally {
+      setSystemTime();
+    }
+  }
+
+  /*
+   * THE BACKLOG REPLAY. A quarter-hourly routine a month behind, swept by a node whose clock is half
+   * an hour behind the database's — more than the floor less the window, so where the old shape
+   * landed the stale clock (the next quarter hour after the NODE's now) was a moment the database
+   * still called due. The next pass measured that row on the node's clock, found it "not late at
+   * all" and offered it, and the one after offered the next: the month's backlog, replayed a quarter
+   * hour at a time. On the database's clock the first pass lands the routine after the database's
+   * now, and nothing older than the passes is ever offered.
+   */
+  test("a node whose clock is behind the database's does not replay a stale backlog", async () => {
+    const { routine } = await makeRoutine("A month behind, on a slow node.");
+    await setSchedule(routine.id, EVERY_QUARTER_HOUR);
+    const started = await databaseNow();
+    const quarter = 15 * 60_000;
+    await makeDueAt(
+      routine.id,
+      new Date(
+        Math.floor(started.getTime() / quarter) * quarter -
+          30 * 24 * 60 * 60_000,
+      ),
+    );
+
+    await withProcessClockOff(-30 * 60_000, async () => {
+      await asPlatform(() => offerDueRoutines(sweepOptions()));
+      // Landed in the database's future in one move, not at the node's now.
+      expect(
+        (await readRoutine(routine.id))?.nextRunAt.getTime(),
+      ).toBeGreaterThan(started.getTime());
+
+      await asPlatform(() => offerDueRoutines(sweepOptions()));
+      await asPlatform(() => offerDueRoutines(sweepOptions()));
+    });
+
+    // No occurrence from before the passes began was offered: the backlog was skipped, not replayed.
+    const replayed = (await firingsFor(routine.id)).filter(
+      (firing) =>
+        new Date(String(firing.payload.scheduledFor)).getTime() <
+        started.getTime(),
+    );
+    expect(replayed).toEqual([]);
+  });
+
+  /*
+   * The other direction. A node whose clock runs ahead of the database's by more than the window
+   * used to measure a firing the database had just let through as already stale, and skip it: the
+   * person's routine silently missed its morning. On the database's clock it is a minute late, and
+   * it fires.
+   */
+  test("a node whose clock is ahead of the database's does not drop a firing that is due", async () => {
+    const { routine } = await makeRoutine("Due a minute ago, on a fast node.");
+    const { stamp, next } = await makeDueAMinuteAgo(routine.id);
+
+    const { offered } = await withProcessClockOff(30 * 60_000, () =>
+      asPlatform(() => offerDueRoutines(sweepOptions())),
+    );
+
+    expect(offered).toContain(routine.id);
+    expect((await firingsFor(routine.id)).map((firing) => firing.key)).toEqual([
+      `${routine.id}:${stamp.toISOString().slice(0, 16)}Z`,
+    ]);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      next.toISOString(),
+    );
+  });
+
+  /*
+   * A test's clock is used end to end. The serialised race from above, on a clock in 2001: the first
+   * sweep offers 09:25 and moves the routine to 09:00 the next day. When only the sweep's arithmetic
+   * used the injected clock and Postgres judged "due" by its own, that 2001 stamp was still due to
+   * Postgres, measured nearly a day "early" by the sweep, taken as fresh — and a second key offered.
+   */
+  test("an injected clock is the database's clock too, so a second pass offers nothing", async () => {
+    const { routine } = await makeRoutine();
+    await makeDueAt(routine.id, new Date("2001-01-01T09:25:00Z"));
+    const now = () => new Date("2001-01-01T09:26:00Z");
+
+    const first = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now })),
+    );
+    const second = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now })),
+    );
+
+    expect(first.offered).toContain(routine.id);
+    expect(second.offered).not.toContain(routine.id);
+    expect((await firingsFor(routine.id)).map((firing) => firing.key)).toEqual([
+      `${routine.id}:2001-01-01T09:25Z`,
+    ]);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      "2001-01-02T09:00:00.000Z",
+    );
+  });
+
+  /*
+   * An offered firing's clock moves to the next occurrence after the later of its stamp and now, so
+   * it is never due again the moment it moves. With the default window that is the stamp's own next
+   * occurrence; with a window wider than the schedule, measuring from the stamp landed on 09:15,
+   * already past at 09:20, and the next pass offered that too.
+   */
+  test("with a window wider than the schedule, an offered routine's clock still lands after now", async () => {
+    const { routine } = await makeRoutine("Every quarter hour.");
+    await setSchedule(routine.id, EVERY_QUARTER_HOUR);
+    await makeDueAt(routine.id, new Date("2001-01-01T09:00:00Z"));
+    const now = () => new Date("2001-01-01T09:20:00Z");
+    const graceMs = 30 * 60_000;
+
+    const first = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now, graceMs })),
+    );
+    expect(first.offered).toContain(routine.id);
+    expect((await readRoutine(routine.id))?.nextRunAt.toISOString()).toBe(
+      "2001-01-01T09:30:00.000Z",
+    );
+
+    const second = await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ now, graceMs })),
+    );
+    expect(second.offered).not.toContain(routine.id);
+    expect((await firingsFor(routine.id)).map((firing) => firing.key)).toEqual([
+      `${routine.id}:2001-01-01T09:00Z`,
+    ]);
+  });
+
+  /*
+   * A row handed over as due by a clock that says it is not. The real store cannot do this — it
+   * admits a row only at or before the clock it returns — so the store is wrapped to report a clock
+   * a minute behind the stamp. Taken as "fresh", the old shape, it was offered and its clock moved;
+   * now it is left exactly where it was, and the skew is said out loud.
+   */
+  test("a row the returned clock says is not yet due is warned about as skew, not offered", async () => {
+    const { routine } = await makeRoutine("Seen by a clock behind it.");
+    const { stamp } = await makeDueAMinuteAgo(routine.id);
+    const skewed = {
+      ...store,
+      dueRoutines: async (limit: number, asOf?: Date) =>
+        (await store.dueRoutines(limit, asOf)).map((row) =>
+          row.id === routine.id
+            ? { ...row, asOf: new Date(row.nextRunAt.getTime() - 60_000) }
+            : row,
+        ),
+    };
+    const warnings: Record<string, unknown>[] = [];
+    const warn = spyOn(console, "warn").mockImplementation((...args) => {
+      try {
+        warnings.push(JSON.parse(String(args[0])));
+      } catch {
+        // Not a structured line; not what this test is about.
+      }
+    });
+    try {
+      const { offered } = await asPlatform(() =>
+        offerDueRoutines(sweepOptions({ routineStore: skewed })),
+      );
+      expect(offered).not.toContain(routine.id);
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(await firingsFor(routine.id)).toHaveLength(0);
+    expect((await readRoutine(routine.id))?.nextRunAt.getTime()).toBe(
+      stamp.getTime(),
+    );
+    expect(
+      warnings.filter((line) => line.type === "routine-sweep-clock-skew"),
+    ).toEqual([
+      {
+        type: "routine-sweep-clock-skew",
+        routineId: routine.id,
+        scheduledFor: stamp.toISOString(),
+        asOf: new Date(stamp.getTime() - 60_000).toISOString(),
+        aheadByMs: 60_000,
+      },
+    ]);
+  });
+});
+
 describe("surviving a routine that cannot be scheduled", () => {
   test("a poisoned cron is warned about, switched off with its reason on the page, and the next routine still offered", async () => {
     const { owner: poisonedOwner, routine: poisoned } =
@@ -483,10 +961,12 @@ describe("surviving a routine that cannot be scheduled", () => {
     const { routine: healthy } = await makeRoutine("Perfectly fine.");
     // Only a direct write can make this row: `create` and `update` both refuse a cron the schedule
     // module cannot read, which is exactly why the bad row has to be simulated rather than created.
-    await database
-      .update(routines)
-      .set({ cron: "not a cron" })
-      .where(eq(routines.id, poisoned.id));
+    await asPlatform(() =>
+      database
+        .update(routines)
+        .set({ cron: "not a cron" })
+        .where(eq(routines.id, poisoned.id)),
+    );
     // The poisoned one is due FIRST, so a pass that dies on it never reaches the healthy one.
     await makeDueAt(poisoned.id, new Date("2001-01-01T09:25:00Z"));
     await makeDueAt(healthy.id, new Date("2001-01-01T09:26:00Z"));
@@ -499,8 +979,10 @@ describe("surviving a routine that cannot be scheduled", () => {
     });
     let offered: string[] = [];
     try {
-      ({ offered } = await offerDueRoutines(
-        sweepOptions({ now: () => new Date("2001-01-01T09:27:00Z") }),
+      ({ offered } = await asPlatform(() =>
+        offerDueRoutines(
+          sweepOptions({ now: () => new Date("2001-01-01T09:27:00Z") }),
+        ),
       ));
     } finally {
       warn.mockRestore();
@@ -527,7 +1009,9 @@ describe("surviving a routine that cannot be scheduled", () => {
     expect(after?.nextRunAt.getTime()).toBe(
       new Date("2001-01-01T09:25:00Z").getTime(),
     );
-    const [summary] = await store.listFor(poisonedOwner.id);
+    const [summary] = await asOwnerOf(poisonedOwner, () =>
+      store.listFor(poisonedOwner.id),
+    );
     expect(summary?.enabled).toBe(false);
     expect(summary?.lastRun?.status).toBe("skipped");
 
@@ -545,22 +1029,26 @@ describe("surviving a routine that cannot be scheduled", () => {
    */
   test("a sub-floor cron already in the table is switched off instead of wedging the sweep", async () => {
     const { owner, routine } = await makeRoutine("Grandfathered in.");
-    await database
-      .update(routines)
-      .set({ cron: "45,55 8 * * *" })
-      .where(eq(routines.id, routine.id));
+    await asPlatform(() =>
+      database
+        .update(routines)
+        .set({ cron: "45,55 8 * * *" })
+        .where(eq(routines.id, routine.id)),
+    );
     await makeDueAt(routine.id, new Date("2001-01-01T08:45:00Z"));
 
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      await offerDueRoutines(
-        sweepOptions({ now: () => new Date("2001-01-01T08:46:00Z") }),
+      await asPlatform(() =>
+        offerDueRoutines(
+          sweepOptions({ now: () => new Date("2001-01-01T08:46:00Z") }),
+        ),
       );
     } finally {
       warn.mockRestore();
     }
 
-    const [summary] = await store.listFor(owner.id);
+    const [summary] = await asOwnerOf(owner, () => store.listFor(owner.id));
     expect(summary?.enabled).toBe(false);
     expect(summary?.lastRun?.status).toBe("skipped");
     // The reason on the run row is the schedule's own sentence, so the owner (and their Bot) can
@@ -687,7 +1175,7 @@ describe("consuming a claimed firing", () => {
       new Date("2001-01-01T09:25:00Z"),
       new Date("2001-01-01T09:26:00Z"),
     );
-    await store.setEnabled(owner.id, routine.id, false);
+    await asOwnerOf(owner, () => store.setEnabled(owner.id, routine.id, false));
 
     const report = await dispatchClaimedRoutines(
       sweepOptions({ now: at("2001-01-01T09:26:00Z") }),
@@ -710,7 +1198,7 @@ describe("consuming a claimed firing", () => {
       new Date("2001-01-01T09:26:00Z"),
     );
     // A hard delete, which is what `remove` does — and it takes the routine's runs with it.
-    await store.remove(owner.id, routine.id);
+    await asOwnerOf(owner, () => store.remove(owner.id, routine.id));
 
     const report = await dispatchClaimedRoutines(
       sweepOptions({ now: at("2001-01-01T09:26:00Z") }),
@@ -722,6 +1210,79 @@ describe("consuming a claimed firing", () => {
     // Finished, not released: no number of retries will make a deleted routine exist.
     const [row] = await firingsFor(routine.id);
     expect(row?.finishedAt).not.toBeNull();
+  });
+
+  /**
+   * THE CLAIMED ITEM'S STAMP HAS TO BE THE ROUTINE'S OWN (G01). The item names a routine in its
+   * payload, but the tenant the firing would run as is the item's stamp; one stamped with another
+   * person, or with nobody, is finished without a run row or a dispatch, in anybody's tenant.
+   */
+  test("a firing stamped with another tenant, or none, ends without firing", async () => {
+    const { routine } = await makeRoutine();
+    const stranger = await createUser();
+    const payload = {
+      routineId: routine.id,
+      scheduledFor: "2001-01-01T09:25:00.000Z",
+    };
+    await asOwnerOf(stranger, () =>
+      queue.offer({
+        kind: ROUTINE_FIRE_KIND,
+        key: `${routine.id}:2001-01-01T09:25Z`,
+        payload,
+      }),
+    );
+    // One offered as `system`, the stamp an offer from no frame used to get (G01-E: an unframed
+    // offer is now an error, so the frame is named).
+    await runAsTenant(SYSTEM_TENANT, () =>
+      queue.offer({
+        kind: ROUTINE_FIRE_KIND,
+        key: `${routine.id}:2001-01-01T09:24Z`,
+        payload: { ...payload, scheduledFor: "2001-01-01T09:24:00.000Z" },
+      }),
+    );
+    // And one stamped `team`, which no frame offers as: written by `platform`, the only way it can be.
+    await asPlatform(() =>
+      database.insert(workItems).values({
+        kind: ROUTINE_FIRE_KIND,
+        key: `${routine.id}:2001-01-01T09:23Z`,
+        payload: { ...payload, scheduledFor: "2001-01-01T09:23:00.000Z" },
+        tenantId: TEAM_TENANT,
+      }),
+    );
+    const stamps = (await firingsFor(routine.id)).map((row) => row.tenantId);
+    expect(stamps.sort()).toEqual(
+      [stranger.id, SYSTEM_TENANT, TEAM_TENANT].sort(),
+    );
+
+    const lines: string[] = [];
+    const warn = spyOn(console, "warn").mockImplementation((...args) => {
+      lines.push(String(args[0]));
+    });
+    let report: Awaited<ReturnType<typeof dispatchClaimedRoutines>>;
+    try {
+      report = await dispatchClaimedRoutines(
+        sweepOptions({ now: at("2001-01-01T09:26:00Z") }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(report.considered).toBe(3);
+    expect(report.fired).toEqual([]);
+    expect(report.skipped).toHaveLength(3);
+    for (const skipped of report.skipped) {
+      expect(skipped.routineId).toBe(routine.id);
+      expect(skipped.reason).toContain("refused");
+    }
+    expect(dispatched).toEqual([]);
+    expect(await runsFor(routine.id)).toHaveLength(0);
+    // Finished, not released: no redelivery can change the stamp on the row.
+    const firings = await firingsFor(routine.id);
+    expect(firings).toHaveLength(3);
+    expect(firings.every((row) => row.finishedAt !== null)).toBe(true);
+    expect(
+      lines.filter((line) => line.includes("routine-fire-untrusted-tenant")),
+    ).toHaveLength(3);
   });
 
   /**
@@ -761,8 +1322,10 @@ describe("consuming a claimed firing", () => {
 
     // The window is still a setting, so a caller that wants the late firing can have it.
     await makeDueAt(routine.id, new Date("2001-02-01T09:25:00Z"));
-    await offerDueRoutines(
-      sweepOptions({ now: () => new Date("2001-02-01T09:26:00Z") }),
+    await asPlatform(() =>
+      offerDueRoutines(
+        sweepOptions({ now: () => new Date("2001-02-01T09:26:00Z") }),
+      ),
     );
     const generous = await dispatchClaimedRoutines(
       sweepOptions({
@@ -940,10 +1503,12 @@ describe("consuming a claimed firing", () => {
       // Old enough that no turn could still be running it; the reaper compares on the database's
       // clock, so the age is written rather than waited for.
       const [leaked] = await runsFor(routine.id);
-      await database
-        .update(routineRuns)
-        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-        .where(eq(routineRuns.id, leaked?.id as string));
+      await asPlatform(() =>
+        database
+          .update(routineRuns)
+          .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+          .where(eq(routineRuns.id, leaked?.id as string)),
+      );
 
       await dispatchClaimedRoutines(
         sweepOptions({ now: at("2001-01-01T09:40:00Z") }),
@@ -960,10 +1525,14 @@ describe("consuming a claimed firing", () => {
     // The page-facing read agrees, and it reads "skipped", not "failed": the turn never ran, so the
     // routine's own failure streak must not grow — ten flapping dispatches used to read as ten turn
     // failures, enough to trip the fatigue rule and switch a perfectly healthy routine off.
-    const [summary] = await store.listFor(owner.id);
+    const [summary] = await asOwnerOf(owner, () => store.listFor(owner.id));
     expect(summary?.lastRun?.status).toBe("skipped");
     expect(summary?.lastRun?.finishedAt).toBeInstanceOf(Date);
-    expect(await store.consecutiveFailures(routine.id)).toBe(0);
+    expect(
+      await asRoutineOwner(routine, () =>
+        store.consecutiveFailures(routine.id),
+      ),
+    ).toBe(0);
   });
 
   /**
@@ -978,7 +1547,9 @@ describe("consuming a claimed firing", () => {
   test("giving up leaves a genuinely in-flight run from an earlier firing untouched", async () => {
     const { routine } = await makeRoutine();
     // The earlier firing: already dispatched, its turn still running on the server, its row open.
-    const inFlight = await store.insertRun(routine.id);
+    const inFlight = await asRoutineOwner(routine, () =>
+      store.insertRun(routine.id),
+    );
 
     await offerFiring(
       routine.id,
@@ -1007,7 +1578,9 @@ describe("consuming a claimed firing", () => {
 
     // The in-flight turn now completes, and its outcome lands rather than no-oping against a row
     // the give-up already closed — which is exactly what the old cleanup caused.
-    await store.finishRun(inFlight.runId, "succeeded");
+    await asRoutineOwner(routine, () =>
+      store.finishRun(inFlight.runId, "succeeded"),
+    );
     expect(
       (await runsFor(routine.id)).find((run) => run.id === inFlight.runId)
         ?.status,
@@ -1016,10 +1589,12 @@ describe("consuming a claimed firing", () => {
     // And once the abandoned attempt's row is old enough that no turn could still be running it,
     // the reaper closes it — as skipped, never touching the finished run beside it.
     const attempt = runs.find((run) => run.id !== inFlight.runId);
-    await database
-      .update(routineRuns)
-      .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-      .where(eq(routineRuns.id, attempt?.id as string));
+    await asPlatform(() =>
+      database
+        .update(routineRuns)
+        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+        .where(eq(routineRuns.id, attempt?.id as string)),
+    );
     const warnAgain = spyOn(console, "warn").mockImplementation(() => {});
     try {
       await dispatchClaimedRoutines(
@@ -1066,10 +1641,12 @@ describe("consuming a claimed firing", () => {
       runAt: new Date("2001-01-01T09:27:00Z"),
     });
     const [leaked] = await runsFor(routine.id);
-    await database
-      .update(routineRuns)
-      .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-      .where(eq(routineRuns.id, leaked?.id as string));
+    await asPlatform(() =>
+      database
+        .update(routineRuns)
+        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+        .where(eq(routineRuns.id, leaked?.id as string)),
+    );
 
     // Attempt two, claimed twenty minutes after the occurrence: outside the window, so the firing
     // is finished without dispatching — and the same pass's reaper closes the leaked row.
@@ -1090,7 +1667,11 @@ describe("consuming a claimed firing", () => {
     const runs = await runsFor(routine.id);
     expect(runs).toHaveLength(1);
     expect(runs[0]?.status).toBe("skipped");
-    expect(await store.consecutiveFailures(routine.id)).toBe(0);
+    expect(
+      await asRoutineOwner(routine, () =>
+        store.consecutiveFailures(routine.id),
+      ),
+    ).toBe(0);
     const [finished] = await firingsFor(routine.id);
     expect(finished?.finishedAt).not.toBeNull();
   });
@@ -1103,13 +1684,17 @@ describe("consuming a claimed firing", () => {
    */
   test("a run abandoned by a dead server is closed by the next pass, as skipped, with an honest reason", async () => {
     const { owner, routine } = await makeRoutine();
-    const { runId } = await store.insertRun(routine.id);
+    const { runId } = await asRoutineOwner(routine, () =>
+      store.insertRun(routine.id),
+    );
     // Aged past the reaper's cutoff (twice the server's five-minute turn timeout) by hand: the run
     // was opened by a server that died eleven minutes ago.
-    await database
-      .update(routineRuns)
-      .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
-      .where(eq(routineRuns.id, runId));
+    await asPlatform(() =>
+      database
+        .update(routineRuns)
+        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+        .where(eq(routineRuns.id, runId)),
+    );
 
     // Nothing is claimed in this pass; the reaper alone does the work.
     const warn = spyOn(console, "warn").mockImplementation(() => {});
@@ -1124,7 +1709,7 @@ describe("consuming a claimed firing", () => {
     const runs = await runsFor(routine.id);
     expect(runs[0]?.status).toBe("skipped");
     expect(runs[0]?.error).toContain("never finished this run");
-    const [summary] = await store.listFor(owner.id);
+    const [summary] = await asOwnerOf(owner, () => store.listFor(owner.id));
     expect(summary?.lastRun?.status).toBe("skipped");
     expect(summary?.lastRun?.finishedAt).toBeInstanceOf(Date);
   });
@@ -1266,25 +1851,29 @@ describe("consuming a claimed firing", () => {
 
 describe("saying that a sweep happened at all", () => {
   test("records the pass, so a deployment with no worker is not silence", async () => {
-    await database.delete(routineSweeps);
+    await asPlatform(() => database.delete(routineSweeps));
 
-    const before = await store.lastSweptAt();
+    const before = await asPlatform(() => store.lastSweptAt());
     expect(before).toBeNull();
 
-    await offerDueRoutines(sweepOptions());
+    await asPlatform(() => offerDueRoutines(sweepOptions()));
 
-    const after = await store.lastSweptAt();
+    const after = await asPlatform(() => store.lastSweptAt());
     expect(after).not.toBeNull();
     expect(Date.now() - (after as Date).getTime()).toBeLessThan(60_000);
   });
 
   test("keeps one row however many passes run, and names the last sweeper", async () => {
-    await database.delete(routineSweeps);
+    await asPlatform(() => database.delete(routineSweeps));
 
-    await offerDueRoutines(sweepOptions({ owner: "sweeper-one" }));
-    await offerDueRoutines(sweepOptions({ owner: "sweeper-two" }));
+    await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ owner: "sweeper-one" })),
+    );
+    await asPlatform(() =>
+      offerDueRoutines(sweepOptions({ owner: "sweeper-two" })),
+    );
 
-    const rows = await database.select().from(routineSweeps);
+    const rows = await asPlatform(() => database.select().from(routineSweeps));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.owner).toBe("sweeper-two");
   });

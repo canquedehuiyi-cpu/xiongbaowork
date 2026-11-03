@@ -8,13 +8,21 @@ import type {
   AgentTrailReader,
   AuditEventInput,
 } from "../src/audit";
+import { createAdminScope } from "../src/auth/admin-scope";
+import type { OpenBotRole } from "../src/auth/roles";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 
 const ACTOR = { id: "u1", email: "person@openbot.test", role: "user" } as const;
 
 type Actor = { id: string; email: string; role: "admin" | "user" };
 
 function app(
-  options: { actor?: Actor; auditTrail?: AgentTrailReader | null } = {},
+  options: {
+    actor?: Actor;
+    auditTrail?: AgentTrailReader | null;
+    /** The roles the admin scope re-reads for the actor; absent means no admin scope is wired. */
+    roles?: OpenBotRole[];
+  } = {},
 ) {
   const rows: AuditEventInput[] = [];
   const calls: string[] = [];
@@ -91,12 +99,18 @@ function app(
     context: { set: (k: string, v: unknown) => void },
     next: () => Promise<void>,
   ) => {
-    context.set("actor", options.actor ?? ACTOR);
-    await next();
+    const actor = options.actor ?? ACTOR;
+    context.set("actor", actor);
+    // In the signed-in person's own frame, as `createRequireUser` runs every request.
+    await runAsTenant(actor.id, () => next());
   };
+  const roles = options.roles;
+  const adminScope = roles
+    ? createAdminScope({ roleRepository: { rolesForUser: async () => roles } })
+    : undefined;
   const hono = new Hono().route(
     "/api/bots",
-    createBotLifecycleRoutes(services, requireUser as never),
+    createBotLifecycleRoutes(services, requireUser as never, adminScope),
   );
   return { rows, calls, hono, state };
 }
@@ -216,13 +230,16 @@ describe("an agent's audit trail route", () => {
 
   function trail(nextCursor?: string) {
     const queries: AgentTrailQuery[] = [];
+    // The frame each read ran in: the caller's own, or `platform` for an administrator.
+    const frames: string[] = [];
     const reader: AgentTrailReader = {
       listAgentTrail: async (query) => {
         queries.push(query);
+        frames.push(currentTenant());
         return { events: [EVENT], ...(nextCursor ? { nextCursor } : {}) };
       },
     };
-    return { queries, reader };
+    return { queries, frames, reader };
   }
 
   test("a Bot the caller cannot reach is not found, and the trail is never read", async () => {
@@ -259,7 +276,7 @@ describe("an agent's audit trail route", () => {
   });
 
   test("a colleague who does not own the Bot is limited to their own rows", async () => {
-    const { queries, reader } = trail("next-page");
+    const { queries, frames, reader } = trail("next-page");
     const { hono } = app({ auditTrail: reader });
     const response = await hono.request("http://t/api/bots/bot-1/audit");
     expect(response.status).toBe(200);
@@ -271,10 +288,11 @@ describe("an agent's audit trail route", () => {
     expect(queries).toEqual([
       { agentId: "bot-1", viewerUserId: "u1", seesEveryone: false, limit: 50 },
     ]);
+    expect(frames).toEqual(["u1"]);
   });
 
   test("the owner sees everyone's rows, and the page it asked for is forwarded", async () => {
-    const { queries, reader } = trail();
+    const { queries, frames, reader } = trail();
     const { hono } = app({
       actor: { id: "owner-1", email: "owner@openbot.test", role: "user" },
       auditTrail: reader,
@@ -295,13 +313,16 @@ describe("an agent's audit trail route", () => {
         cursor: VALID_CURSOR,
       },
     ]);
+    // In the owner's own frame: row-level security keeps it to the rows filed in their tenant.
+    expect(frames).toEqual(["owner-1"]);
   });
 
-  test("an administrator sees everyone's rows on a Bot they do not own", async () => {
-    const { queries, reader } = trail();
+  test("an administrator holding the capability sees everyone's rows on a Bot they do not own, as platform", async () => {
+    const { queries, frames, reader } = trail();
     const { hono } = app({
       actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
       auditTrail: reader,
+      roles: ["admin"],
     });
     const response = await hono.request("http://t/api/bots/bot-1/audit");
     expect(((await response.json()) as { scope: string }).scope).toBe(
@@ -311,6 +332,32 @@ describe("an agent's audit trail route", () => {
       viewerUserId: "admin-1",
       seesEveryone: true,
     });
+    expect(frames).toEqual(["platform"]);
+  });
+
+  test("an administrator whose role was removed since sign-in is answered as anyone", async () => {
+    const { queries, frames, reader } = trail();
+    const { hono } = app({
+      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      auditTrail: reader,
+      roles: ["user"],
+    });
+    const response = await hono.request("http://t/api/bots/bot-1/audit");
+    expect(((await response.json()) as { scope: string }).scope).toBe("own");
+    expect(queries[0]).toMatchObject({ seesEveryone: false });
+    expect(frames).toEqual(["admin-1"]);
+  });
+
+  test("with no admin scope wired an administrator is answered as anyone, in their own frame", async () => {
+    const { queries, frames, reader } = trail();
+    const { hono } = app({
+      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      auditTrail: reader,
+    });
+    const response = await hono.request("http://t/api/bots/bot-1/audit");
+    expect(((await response.json()) as { scope: string }).scope).toBe("own");
+    expect(queries[0]).toMatchObject({ seesEveryone: false });
+    expect(frames).toEqual(["admin-1"]);
   });
 });
 
@@ -322,22 +369,37 @@ describe("follow-up runner", () => {
     dueAt: new Date().toISOString(),
     scheduledAt: new Date().toISOString(),
   };
-  function runner(runTurn: () => Promise<{ replyText: string }>) {
+  function runner(
+    runTurn: () => Promise<{ replyText: string }>,
+    claimed: { tenantId?: string } = {},
+  ) {
     const settled: string[] = [];
     const said: string[] = [];
     const notified: string[] = [];
     const instructions: string[] = [];
+    /** The tenant the turn and the settle each ran as. */
+    const tenants = { turn: [] as string[], settle: [] as string[] };
     const wake = createWakeUpRunner({
       queue: {
         claim: async () => [
-          { kind: "bot.wakeup", key: "w1", payload, attempts: 1 },
+          {
+            kind: "bot.wakeup",
+            // The stamp on the row is the trusted tenant; the payload's owner only has to agree.
+            tenantId:
+              "tenantId" in claimed ? claimed.tenantId : payload.ownerUserId,
+            key: "w1",
+            payload,
+            attempts: 1,
+          },
         ],
         finish: async () => true,
         purge: async () => 0,
       },
       store: {
-        settle: async (_id: string, outcome: { status: string }) =>
-          void settled.push(outcome.status),
+        settle: async (_id: string, outcome: { status: string }) => {
+          tenants.settle.push(currentTenant());
+          settled.push(outcome.status);
+        },
       } as never,
       owner: "replica",
       actorFor: async (id) => ({ id, role: "user" }),
@@ -356,11 +418,12 @@ describe("follow-up runner", () => {
       },
       runTurn: async (input) => {
         instructions.push(input.instruction);
+        tenants.turn.push(currentTenant());
         return runTurn();
       },
       notify: async (_scope, input) => void notified.push(input.text),
     });
-    return { wake, settled, said, notified, instructions };
+    return { wake, settled, said, notified, instructions, tenants };
   }
 
   test("a due follow-up runs one turn in the person's conversation and tells them", async () => {
@@ -391,6 +454,40 @@ describe("follow-up runner", () => {
       throw new Error("model refused");
     });
     await wake.sweep();
+    expect(settled).toEqual(["failed"]);
+  });
+
+  /*
+   * G01: the follow-up runs as the person on its row. The sweep is a timer with no tenant of its
+   * own, so without this the turn, the settle and the reply all ran as `system`.
+   */
+  test("a follow-up runs as the tenant stamped on its row", async () => {
+    const { wake, tenants } = runner(async () => ({ replyText: "Done." }));
+    expect(await wake.sweep()).toEqual({ ran: ["w1"], skipped: [] });
+    expect(tenants.turn).toEqual(["u1"]);
+    expect(tenants.settle).toEqual(["u1"]);
+  });
+
+  test("a follow-up stamped as nobody's is failed and never run", async () => {
+    for (const stamped of ["system", "platform", undefined]) {
+      const { wake, settled, said, instructions } = runner(
+        async () => ({ replyText: "should not run" }),
+        { tenantId: stamped },
+      );
+      expect(await wake.sweep()).toEqual({ ran: [], skipped: ["w1"] });
+      expect(instructions).toEqual([]);
+      expect(said).toEqual([]);
+      expect(settled).toEqual(["failed"]);
+    }
+  });
+
+  test("a follow-up whose owner is not the tenant on its row is refused", async () => {
+    const { wake, settled, instructions } = runner(
+      async () => ({ replyText: "should not run" }),
+      { tenantId: "u2" },
+    );
+    expect(await wake.sweep()).toEqual({ ran: [], skipped: ["w1"] });
+    expect(instructions).toEqual([]);
     expect(settled).toEqual(["failed"]);
   });
 });

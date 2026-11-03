@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { QuotaGuidanceDialog } from "../components/quota/quota-guidance-dialog";
 import { currentUserQueryOptions, needsOnboarding } from "../lib/auth/queries";
 import { CopilotProvider } from "../lib/copilot/provider";
 import { AppHotkeys } from "../lib/hotkeys/app-hotkeys";
@@ -26,6 +27,11 @@ export const Route = createFileRoute("/_authed")({
     <CopilotProvider>
       <AppHotkeys />
       <Outlet />
+      {/*
+       * Every structured quota refusal lands here, once (K4). Here rather than in `_app`, so a refusal
+       * met on settings, admin or onboarding gets the same way out as one met in the app shell.
+       */}
+      <QuotaGuidanceDialog />
     </CopilotProvider>
   ),
 });
