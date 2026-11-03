@@ -83,6 +83,19 @@ import {
   recordPlatformAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
+import { createAutomationRoutes } from "./automations/routes";
+import {
+  type AutomationFiring,
+  createAutomationStore,
+} from "./automations/store";
+import {
+  dispatchClaimedAutomations,
+  offerDueAutomations,
+} from "./automations/sweep";
+import {
+  createWakerAutomationExecutor,
+  firingOfInitiator,
+} from "./automations/waker-executor";
 import { createAuth } from "./auth";
 import {
   createDevRequireUser,
@@ -2491,6 +2504,8 @@ await startupLifecycle.run(async (startup) => {
     refusalMarker: REFUSAL_MARKER,
     personInitiator: PERSON_INITIATOR,
   });
+  // Declared before the approval-resume loop, which settles an automation firing an approval held.
+  const automationStore = createAutomationStore(database);
   const approvalContinuationRunner = createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
@@ -2690,6 +2705,15 @@ await startupLifecycle.run(async (startup) => {
                           sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
                         ),
                       );
+                    /*
+                     * An automation firing that stopped for this approval (D06) is settled the same
+                     * way, allowed or declined: the turn has now continued with the person's answer.
+                     * The firing is named by the snapshot's initiator, and settled in this owner's
+                     * frame, so another person's firing id matches nothing.
+                     */
+                    const waitingFiring = firingOfInitiator(snapshot.initiator);
+                    if (waitingFiring)
+                      await automationStore.settleWaitingFiring(waitingFiring);
                   },
                 };
                 abandon = (reason) =>
@@ -2973,6 +2997,60 @@ await startupLifecycle.run(async (startup) => {
           );
         }
       }, 60_000),
+    (resource) => resource.stop(),
+  );
+  /*
+   * Automations (D06 AUT1/AUT3/AUT4, C2/C3): a person's standing "run this Waker when..." rules.
+   *
+   * One loop, both halves of `automations/sweep.ts`: due triggers become work items in their owner's
+   * frame, then claimed items become firings, each run by the Waker executor through the same
+   * unattended turn runner as a routine (same gates, same card, same ceiling). WakerFlow targets have
+   * no executor until D10, so the store refuses them at save time.
+   */
+  const automationQueue = createWorkQueue(database);
+  const wakerAutomationExecutor = createWakerAutomationExecutor({
+    store: automationStore,
+    channels: channelStore,
+    actorFor,
+    runTurn: unattendedTurnRunner,
+    board: taskProjector,
+    quota,
+    deviceIdOf: deviceIdForBot,
+    accessRevokedOf: (userId: string) => isAccessRevoked(database, userId),
+  });
+  const automationSweep = {
+    store: automationStore,
+    queue: automationQueue,
+    owner: workOwner("automation"),
+    executors: {
+      waker: (firing: AutomationFiring) => wakerAutomationExecutor.run(firing),
+    },
+    // A turn can take minutes; it must not hold the next pass's offers past their grace window.
+    background: (run: () => Promise<void>) => {
+      void run();
+    },
+  };
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await offerDueAutomations(automationSweep);
+          const report = await dispatchClaimedAutomations(automationSweep);
+          if (report.fired.length || report.skipped.length) {
+            console.info(
+              JSON.stringify({ type: "automation-dispatch", ...report }),
+            );
+          }
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "automation-sweep-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 30_000),
     (resource) => resource.stop(),
   );
   /*
@@ -3966,6 +4044,17 @@ await startupLifecycle.run(async (startup) => {
     "/api/agents",
     createAutonomousRoutes(
       createAutonomousStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // A person's automations (D06): per-route session guard, tenant from the session frame only.
+  app.route(
+    "/api/automations",
+    createAutomationRoutes(
+      automationStore,
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),

@@ -61,7 +61,10 @@ tests/audit-retention.integration.test.ts
 tests/audit.test.ts
 tests/auth-audit-tenant.integration.test.ts
 tests/auth-mobile-scheme.integration.test.ts
+tests/automation-routes.test.ts
+tests/automation-sweep.integration.test.ts
 tests/automation-tenant-policies.test.ts
+tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts

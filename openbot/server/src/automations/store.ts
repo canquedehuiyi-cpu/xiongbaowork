@@ -13,12 +13,26 @@
  * adding a fifth. Inside a transaction callback only the transaction handle is used: the client reads
  * the tenant when the transaction opens, and the async frame is gone by the time the callback runs.
  *
- * NO SCHEDULER HERE. Firing, the failure breaker and the hook entry point are later packages; this
- * store keeps the data they act on and the one rule they must share — `exhausted()` — so an
- * automation stops at its run cap or end date however it was started.
+ * THE SCHEDULER'S DATA (D06-3). `./sweep.ts` decides when and `./waker-executor.ts` runs; this store
+ * keeps what they act on and the rules they must share. `dueTriggers` is the one cross-tenant read
+ * (as `platform`, like every queue sweep); everything after it — advancing a trigger, beginning a
+ * firing, recording its outcome, tripping the breaker — runs in the automation's own tenant frame,
+ * which the sweep takes from the claimed row. `exhausted()` stops an automation at its run cap or end
+ * date however it was started, and `beginFiring` is where a firing is counted exactly once: the
+ * firing's identity (trigger + due minute) is a unique key, so a redelivered work item does nothing.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../db/client";
 import {
@@ -29,7 +43,7 @@ import {
 } from "../db/schema";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import { nextOccurrence, ScheduleRefusedError } from "../routines/schedule";
-import { currentTenant } from "../tenant/context";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import {
   type Automation,
   type AutomationCreateInput,
@@ -40,10 +54,11 @@ import {
   type AutomationTargetRegistry,
   type AutomationTrigger,
   type AutomationTriggerConfig,
+  type AutomationTriggerKind,
+  type AutomationUpdateInput,
   automationCreateSchema,
   automationTargetSchema,
   automationTriggerConfigSchema,
-  type AutomationUpdateInput,
   automationUpdateSchema,
   createAutomationTargetRegistry,
   MAX_ACTIVE_TRIGGERS,
@@ -58,6 +73,49 @@ type TriggerRow = typeof automationTriggers.$inferSelect;
 export type AutomationRunClaim =
   | { status: "claimed"; runCount: number; remaining: number | null }
   | { status: "stopped"; reason: AutomationExhaustion | "disabled" };
+
+/** A trigger whose moment has come, as the platform-wide sweep reads it. */
+export type DueAutomationTrigger = {
+  id: string;
+  automationId: string;
+  /** The owner, from the trigger row itself: the frame everything after the read runs in. */
+  tenantId: string;
+  /** `unreadable`: a config this server cannot parse. Never offered; advancing it switches it off. */
+  kind: Exclude<AutomationTriggerKind, "webhook"> | "unreadable";
+  nextRunAt: Date;
+  /**
+   * The clock this row was judged due by: the database's `now()` (or the caller's `asOf`). How late
+   * the firing is, and where a stale clock lands, are measured on it, never on a replica's clock.
+   */
+  asOf: Date;
+};
+
+/** One firing that has begun: counted against the limits and recorded, not yet carried out. */
+export type AutomationFiring = {
+  id: string;
+  /** The automation as it stands after this firing was counted. */
+  automation: Automation;
+  triggerId: string;
+  triggerKind: AutomationTriggerKind;
+  externalId: string;
+};
+
+/** The outcome of asking to begin one firing. */
+export type AutomationFiringBegin =
+  | { status: "started"; firing: AutomationFiring }
+  /** This trigger already fired for this moment: a redelivery, which does nothing. */
+  | { status: "duplicate" }
+  | {
+      status: "stopped";
+      reason: AutomationExhaustion | "disabled" | "deleted";
+    };
+
+/** How a firing ended. `circuit_breaker` is written only by `tripBreaker`. */
+export type AutomationFiringOutcome =
+  | "succeeded"
+  | "failed"
+  | "skipped"
+  | "waiting";
 
 export type AutomationStore = {
   create(input: AutomationCreateInput): Promise<Automation>;
@@ -92,6 +150,74 @@ export type AutomationStore = {
    * tenant frame, which a background caller takes from the automation row it claimed.
    */
   claimRun(automationId: string, now?: Date): Promise<AutomationRunClaim>;
+  /**
+   * Every tenant's switched-on triggers that are due by the database's clock (or `asOf`, for a test),
+   * oldest first, each with the moment it was judged due by. One of the two cross-tenant statements:
+   * it runs as `platform` itself, whatever frame it is called from.
+   */
+  dueTriggers(limit: number, asOf?: Date): Promise<DueAutomationTrigger[]>;
+  /**
+   * Move a trigger past the moment `from`, once (compare-and-set on `next_run_at`). False when it
+   * had already moved. A one-off switches itself off; `missed` says the moment was too stale to fire,
+   * which is recorded on a one-off and makes a schedule land on its next occurrence after `now`.
+   */
+  advanceTrigger(
+    triggerId: string,
+    from: Date,
+    options?: { now?: Date; missed?: boolean },
+  ): Promise<boolean>;
+  /**
+   * AUT4 + idempotence: record one firing of `triggerId` identified by `externalId` and count it
+   * against the limits, in one transaction under the automation's row lock.
+   */
+  beginFiring(input: {
+    automationId: string;
+    triggerId: string;
+    externalId: string;
+    fingerprint: string;
+    now?: Date;
+  }): Promise<AutomationFiringBegin>;
+  /** Close a running firing. Finish-once: false when it was not running any more. */
+  finishFiring(
+    firingId: string,
+    status: AutomationFiringOutcome,
+    error?: string | null,
+  ): Promise<boolean>;
+  /**
+   * Failed firings in a row, newest first, up to `window`. Skipped and in-flight firings neither
+   * count nor break the streak; a success, a wait, or the firing that tripped the breaker ends it.
+   */
+  consecutiveFailures(automationId: string, window?: number): Promise<number>;
+  /**
+   * C3, single winner: under the automation's row lock, count the failed streak again and, only when
+   * it has reached `limit`, switch the automation off and mark `firingId` as the firing that tripped
+   * the breaker. True for the one caller that tripped it; a concurrent failure that arrives after
+   * finds the streak already ended by that mark and gets false, so it neither trips nor notifies.
+   */
+  tripBreaker(
+    automationId: string,
+    firingId: string,
+    limit: number,
+  ): Promise<boolean>;
+  /**
+   * The executor is about to carry out `firingId`: true while it is still `running` (its clock for
+   * the abandoned-firing reaper restarts here), false when it was closed meanwhile — reaped after a
+   * long wait for its thread — and must not run at all.
+   */
+  startFiring(firingId: string): Promise<boolean>;
+  /**
+   * A firing that stopped for a person's approval (`waiting`) is settled once that approval was
+   * answered and the turn continued, allowed or declined alike: `succeeded`. False when it was not
+   * waiting.
+   */
+  settleWaitingFiring(firingId: string): Promise<boolean>;
+  /**
+   * Close every tenant's firings left `running` for longer than `olderThanMs` as `failed`, with
+   * `error` (WF-F: mark failed, never replay). The other cross-tenant statement, as `platform`. A
+   * server that died between finishing the queue item and recording the outcome leaves such a row,
+   * and nothing else ever comes back for it.
+   */
+  reapAbandonedFirings(olderThanMs: number, error: string): Promise<number>;
 };
 
 const MAX_RUNS_REACHED = "已达到最大运行次数，请先调高上限再启用。";
@@ -104,6 +230,10 @@ const TOO_MANY_TRIGGERS = `每个自动任务最多同时启用 ${MAX_ACTIVE_TRI
 const WAKER_NOT_VISIBLE = "找不到这位 Waker，或你无权使用它。";
 const WAKERFLOW_NOT_AVAILABLE =
   "WakerFlow 自动执行尚未开放，暂时只能选择 Waker。";
+const ONCE_MISSED = "一次性触发错过了预定时间，没有执行。";
+const TRIGGER_UNREADABLE = "这个触发条件无法读取，已停用。";
+/** A firing's error is a sentence for a person, not a stack: kept to a length a row can show. */
+const MAX_FIRING_ERROR = 2000;
 
 /**
  * AUT4: whether an automation has run out, and why.
@@ -188,7 +318,8 @@ function toTrigger(row: TriggerRow): AutomationTrigger {
     automationId: row.automationId,
     config: config.data,
     enabled: row.enabled,
-    nextRunAt: row.nextRunAt,
+    // A switched-off trigger has no next run, whatever its row still remembers (see `setTriggerEnabled`).
+    nextRunAt: row.enabled ? row.nextRunAt : null,
     hasSecret: row.secretHash !== null,
     lastError: row.lastError,
   };
@@ -314,6 +445,56 @@ export function createAutomationStore(
       .for("update");
     if (!row) throw new AutomationNotFoundError(TRIGGER_NOT_FOUND);
     return row;
+  }
+
+  /**
+   * AUT4 after the end date moved: a switched-on schedule whose clock stopped because its next
+   * occurrence fell on or after the old end date (`next_run_at` null) starts again from `now` inside
+   * the new one, and one whose next occurrence is now past the new end date stops. Without this an
+   * end date pushed later never woke a schedule that had already reached the earlier one.
+   */
+  async function realignSchedules(
+    tx: Transaction,
+    automation: AutomationRow,
+    now: Date,
+  ) {
+    const rows = await tx
+      .select()
+      .from(automationTriggers)
+      .where(
+        and(
+          eq(automationTriggers.automationId, automation.id),
+          eq(automationTriggers.tenantId, automation.tenantId),
+          eq(automationTriggers.enabled, true),
+        ),
+      )
+      .for("update");
+    for (const row of rows) {
+      const config = automationTriggerConfigSchema.safeParse(row.config);
+      if (!config.success || config.data.kind !== "schedule") continue;
+      const stale =
+        row.nextRunAt === null ||
+        (automation.endDate !== null &&
+          row.nextRunAt.getTime() >= automation.endDate.getTime());
+      if (!stale) continue;
+      let next: Date | null;
+      try {
+        next = firstRun(config.data, now, automation.endDate);
+      } catch (error) {
+        if (!(error instanceof AutomationRefusedError)) throw error;
+        continue;
+      }
+      if (next?.getTime() === row.nextRunAt?.getTime()) continue;
+      await tx
+        .update(automationTriggers)
+        .set({ nextRunAt: next })
+        .where(
+          and(
+            eq(automationTriggers.id, row.id),
+            eq(automationTriggers.tenantId, automation.tenantId),
+          ),
+        );
+    }
   }
 
   async function activeTriggers(
@@ -444,6 +625,9 @@ export function createAutomationStore(
           )
           .returning();
         if (!updated) throw new AutomationNotFoundError();
+        if (parsed.endDate !== undefined) {
+          await realignSchedules(tx, updated, new Date());
+        }
         return updated;
       });
       return toAutomation(row);
@@ -587,7 +771,17 @@ export function createAutomationStore(
         const automation = await lockAutomation(tx, tenant, automationId);
         const trigger = await lockTrigger(tx, automation, triggerId);
         if (trigger.enabled === enabled) return trigger;
-        let nextRunAt: Date | null = null;
+        /*
+         * Switched off by a person, a one-off keeps its stamp. A one-off the scheduler consumed is
+         * switched off with NO stamp (`advanceTrigger`), and that difference is how `beginFiring`
+         * tells "it fired, carry it out" from "the person stopped it, do not". Never shown: a
+         * switched-off trigger reads as having no next run.
+         */
+        const parsed = automationTriggerConfigSchema.safeParse(trigger.config);
+        let nextRunAt: Date | null =
+          !enabled && parsed.success && parsed.data.kind === "once"
+            ? (trigger.nextRunAt ?? new Date(parsed.data.at))
+            : null;
         if (enabled) {
           if ((await activeTriggers(tx, automation)) >= MAX_ACTIVE_TRIGGERS) {
             throw new AutomationRefusedError(TOO_MANY_TRIGGERS);
@@ -714,6 +908,434 @@ export function createAutomationStore(
             automation.maxRuns === null ? null : automation.maxRuns - runCount,
         };
       });
+    },
+
+    async dueTriggers(limit, asOf) {
+      // The operator's view, said here rather than trusted to the caller: which triggers are due is
+      // a question about every tenant, and nothing read here is written back in this frame.
+      const rows = await runAsTenant("platform", async () => {
+        return await database
+          .select({
+            id: automationTriggers.id,
+            automationId: automationTriggers.automationId,
+            tenantId: automationTriggers.tenantId,
+            config: automationTriggers.config,
+            nextRunAt: automationTriggers.nextRunAt,
+            /*
+             * The same `now()` the WHERE below compares against, handed back with every row so the
+             * sweep measures lateness on the database's clock too (`routines/store.ts` does the
+             * same). Floored to the millisecond, the precision of every stamp a Date can hold.
+             */
+            databaseNowMs:
+              sql<number>`floor(extract(epoch from now()) * 1000)::bigint`.mapWith(
+                Number,
+              ),
+          })
+          .from(automationTriggers)
+          .innerJoin(
+            automations,
+            and(
+              eq(automations.id, automationTriggers.automationId),
+              eq(automations.tenantId, automationTriggers.tenantId),
+            ),
+          )
+          .where(
+            and(
+              eq(automationTriggers.enabled, true),
+              isNotNull(automationTriggers.nextRunAt),
+              asOf
+                ? sql`${automationTriggers.nextRunAt} <= ${asOf}`
+                : sql`${automationTriggers.nextRunAt} <= now()`,
+              eq(automations.enabled, true),
+              isNull(automations.deletedAt),
+            ),
+          )
+          .orderBy(
+            asc(automationTriggers.nextRunAt),
+            asc(automationTriggers.id),
+          )
+          .limit(limit);
+      });
+      const due: DueAutomationTrigger[] = [];
+      for (const row of rows) {
+        const config = automationTriggerConfigSchema.safeParse(row.config);
+        // An unreadable config is still handed on, so `advanceTrigger` switches it off with a reason
+        // instead of it being re-read as due on every pass.
+        const kind = config.success ? config.data.kind : "unreadable";
+        if (kind === "webhook" || !row.nextRunAt) continue;
+        due.push({
+          id: row.id,
+          automationId: row.automationId,
+          tenantId: row.tenantId,
+          kind,
+          nextRunAt: row.nextRunAt,
+          asOf: asOf ?? new Date(row.databaseNowMs),
+        });
+      }
+      return due;
+    },
+
+    async advanceTrigger(triggerId, from, options = {}) {
+      const tenant = callerTenant();
+      if (!isUuid(triggerId)) return false;
+      const now = options.now ?? new Date();
+      return await database.transaction(async (tx) => {
+        const [row] = await tx
+          .select({
+            trigger: automationTriggers,
+            endDate: automations.endDate,
+          })
+          .from(automationTriggers)
+          .innerJoin(
+            automations,
+            and(
+              eq(automations.id, automationTriggers.automationId),
+              eq(automations.tenantId, automationTriggers.tenantId),
+            ),
+          )
+          .where(
+            and(
+              eq(automationTriggers.id, triggerId),
+              eq(automationTriggers.tenantId, tenant),
+            ),
+          )
+          .for("update", { of: automationTriggers });
+        // Only a switched-on trigger moves. One a person switched off after it was read as due keeps
+        // what they left (a one-off keeps its stamp, see `setTriggerEnabled`), so it never reads as
+        // a one-off the scheduler consumed.
+        if (
+          !row?.trigger.enabled ||
+          row.trigger.nextRunAt?.getTime() !== from.getTime()
+        ) {
+          return false;
+        }
+        const config = automationTriggerConfigSchema.safeParse(
+          row.trigger.config,
+        );
+        let changes: Partial<typeof automationTriggers.$inferInsert>;
+        if (!config.success) {
+          changes = {
+            enabled: false,
+            nextRunAt: null,
+            lastError: TRIGGER_UNREADABLE,
+          };
+        } else if (config.data.kind === "schedule") {
+          try {
+            // From the stamp, so a firing that was late by seconds keeps its cadence; from now when
+            // the stamp was too stale to fire, so one pass makes the clock current.
+            let next: Date | null = nextOccurrence(
+              config.data.cron,
+              config.data.timezone,
+              options.missed ? now : from,
+            );
+            if (
+              row.endDate !== null &&
+              next.getTime() >= row.endDate.getTime()
+            ) {
+              next = null;
+            }
+            changes = { nextRunAt: next };
+          } catch (error) {
+            if (!(error instanceof ScheduleRefusedError)) throw error;
+            changes = {
+              enabled: false,
+              nextRunAt: null,
+              lastError: SCHEDULE_REFUSED,
+            };
+          }
+        } else if (config.data.kind === "once") {
+          // 一次性: it fired (or was missed) and has nothing left to do, so it frees its slot.
+          changes = {
+            enabled: false,
+            nextRunAt: null,
+            ...(options.missed ? { lastError: ONCE_MISSED } : {}),
+          };
+        } else {
+          changes = { nextRunAt: null };
+        }
+        const moved = await tx
+          .update(automationTriggers)
+          .set(changes)
+          .where(
+            and(
+              eq(automationTriggers.id, row.trigger.id),
+              eq(automationTriggers.tenantId, row.trigger.tenantId),
+              eq(automationTriggers.nextRunAt, from),
+            ),
+          )
+          .returning({ id: automationTriggers.id });
+        return moved.length > 0;
+      });
+    },
+
+    async beginFiring(input) {
+      const tenant = callerTenant();
+      const now = input.now ?? new Date();
+      return await database.transaction(
+        async (tx): Promise<AutomationFiringBegin> => {
+          let automation: AutomationRow;
+          let trigger: TriggerRow;
+          try {
+            automation = await lockAutomation(tx, tenant, input.automationId);
+            trigger = await lockTrigger(tx, automation, input.triggerId);
+          } catch (error) {
+            if (error instanceof AutomationNotFoundError) {
+              return { status: "stopped", reason: "deleted" };
+            }
+            throw error;
+          }
+          if (!automation.enabled) {
+            return { status: "stopped", reason: "disabled" };
+          }
+          /*
+           * The trigger, as it stands now rather than when the item was offered: one a person switched
+           * off (or removed: `lockTrigger` above) since then does not fire. The one exception is a
+           * one-off the scheduler itself consumed when it offered this item — switched off with no
+           * stamp and no error (`advanceTrigger`) — which is exactly the firing it was consumed for;
+           * a person switching a one-off off leaves its stamp, so the two never look alike.
+           */
+          const triggerConfig = automationTriggerConfigSchema.safeParse(
+            trigger.config,
+          );
+          const consumedOnce =
+            triggerConfig.success &&
+            triggerConfig.data.kind === "once" &&
+            trigger.nextRunAt === null &&
+            trigger.lastError === null;
+          if (!trigger.enabled && !consumedOnce) {
+            return { status: "stopped", reason: "disabled" };
+          }
+          const reason = exhausted(automation, now);
+          if (reason !== null) {
+            // 到期停止: found spent at the moment of firing, so it switches itself off.
+            await tx
+              .update(automations)
+              .set({ enabled: false })
+              .where(
+                and(
+                  eq(automations.id, automation.id),
+                  eq(automations.tenantId, automation.tenantId),
+                ),
+              );
+            return { status: "stopped", reason };
+          }
+          const triggerKind = toTrigger(trigger).config.kind;
+          const [firing] = await tx
+            .insert(automationFirings)
+            .values({
+              // Copied from the locked automation, never from the session or the work item.
+              tenantId: automation.tenantId,
+              automationId: automation.id,
+              triggerId: trigger.id,
+              externalId: input.externalId,
+              fingerprint: input.fingerprint,
+              target: automation.target,
+              status: "running",
+            })
+            .onConflictDoNothing()
+            .returning({ id: automationFirings.id });
+          // The unique (tenant, trigger, external id) said this moment already fired: count nothing.
+          if (!firing) return { status: "duplicate" };
+          const runCount = automation.runCount + 1;
+          const spent =
+            automation.maxRuns !== null && runCount >= automation.maxRuns;
+          const [updated] = await tx
+            .update(automations)
+            .set(spent ? { runCount, enabled: false } : { runCount })
+            .where(
+              and(
+                eq(automations.id, automation.id),
+                eq(automations.tenantId, automation.tenantId),
+              ),
+            )
+            .returning();
+          if (!updated) throw new AutomationNotFoundError();
+          return {
+            status: "started",
+            firing: {
+              id: firing.id,
+              automation: toAutomation(updated),
+              triggerId: trigger.id,
+              triggerKind,
+              externalId: input.externalId,
+            },
+          };
+        },
+      );
+    },
+
+    async finishFiring(firingId, status, error = null) {
+      const tenant = callerTenant();
+      if (!isUuid(firingId)) return false;
+      const rows = await database
+        .update(automationFirings)
+        .set({
+          status,
+          error:
+            error === null
+              ? null
+              : Array.from(error).slice(0, MAX_FIRING_ERROR).join(""),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(automationFirings.id, firingId),
+            eq(automationFirings.tenantId, tenant),
+            eq(automationFirings.status, "running"),
+          ),
+        )
+        .returning({ id: automationFirings.id });
+      return rows.length > 0;
+    },
+
+    async consecutiveFailures(automationId, window = 50) {
+      const tenant = callerTenant();
+      if (!isUuid(automationId)) return 0;
+      const rows = await database
+        .select({ status: automationFirings.status })
+        .from(automationFirings)
+        .where(
+          and(
+            eq(automationFirings.tenantId, tenant),
+            eq(automationFirings.automationId, automationId),
+            inArray(automationFirings.status, [
+              "failed",
+              "succeeded",
+              "waiting",
+              "circuit_breaker",
+            ]),
+          ),
+        )
+        .orderBy(desc(automationFirings.createdAt), desc(automationFirings.id))
+        .limit(window);
+      let failures = 0;
+      for (const row of rows) {
+        if (row.status !== "failed") break;
+        failures += 1;
+      }
+      return failures;
+    },
+
+    async tripBreaker(automationId, firingId, limit) {
+      const tenant = callerTenant();
+      return await database.transaction(async (tx) => {
+        // The row lock is what makes this single-winner: a second failure waits here, then counts a
+        // streak the first one's `circuit_breaker` mark has already ended.
+        const automation = await lockAutomation(tx, tenant, automationId);
+        const rows = await tx
+          .select({ status: automationFirings.status })
+          .from(automationFirings)
+          .where(
+            and(
+              eq(automationFirings.tenantId, automation.tenantId),
+              eq(automationFirings.automationId, automation.id),
+              inArray(automationFirings.status, [
+                "failed",
+                "succeeded",
+                "waiting",
+                "circuit_breaker",
+              ]),
+            ),
+          )
+          .orderBy(
+            desc(automationFirings.createdAt),
+            desc(automationFirings.id),
+          )
+          .limit(limit);
+        let failures = 0;
+        for (const row of rows) {
+          if (row.status !== "failed") break;
+          failures += 1;
+        }
+        if (failures < limit) return false;
+        // The tripping firing must be one of the streak, still recorded as failed.
+        const marked = await tx
+          .update(automationFirings)
+          .set({ status: "circuit_breaker", updatedAt: new Date() })
+          .where(
+            and(
+              eq(automationFirings.id, firingId),
+              eq(automationFirings.tenantId, automation.tenantId),
+              eq(automationFirings.automationId, automation.id),
+              eq(automationFirings.status, "failed"),
+            ),
+          )
+          .returning({ id: automationFirings.id });
+        if (marked.length === 0) return false;
+        await tx
+          .update(automations)
+          .set({ enabled: false })
+          .where(
+            and(
+              eq(automations.id, automation.id),
+              eq(automations.tenantId, automation.tenantId),
+            ),
+          );
+        return true;
+      });
+    },
+
+    async startFiring(firingId) {
+      const tenant = callerTenant();
+      if (!isUuid(firingId)) return false;
+      const rows = await database
+        .update(automationFirings)
+        .set({ updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(automationFirings.id, firingId),
+            eq(automationFirings.tenantId, tenant),
+            eq(automationFirings.status, "running"),
+          ),
+        )
+        .returning({ id: automationFirings.id });
+      return rows.length > 0;
+    },
+
+    async settleWaitingFiring(firingId) {
+      const tenant = callerTenant();
+      if (!isUuid(firingId)) return false;
+      const rows = await database
+        .update(automationFirings)
+        .set({ status: "succeeded", error: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(automationFirings.id, firingId),
+            eq(automationFirings.tenantId, tenant),
+            eq(automationFirings.status, "waiting"),
+          ),
+        )
+        .returning({ id: automationFirings.id });
+      return rows.length > 0;
+    },
+
+    async reapAbandonedFirings(olderThanMs, error) {
+      /*
+       * One UPDATE across every tenant, as `platform`, like `routines/store.ts`'s reaper. Both sides
+       * of the age comparison are the database's clock: `updated_at` is restarted by `startFiring`
+       * in SQL when the executor takes the firing up, so a firing still waiting for its thread, or a
+       * turn still inside its timeout, is never reaped from under the server running it.
+       */
+      const closed = await runAsTenant("platform", () =>
+        database
+          .update(automationFirings)
+          .set({
+            status: "failed",
+            error: Array.from(error).slice(0, MAX_FIRING_ERROR).join(""),
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(automationFirings.status, "running"),
+              lte(
+                automationFirings.updatedAt,
+                sql`now() - (${olderThanMs} * interval '1 millisecond')`,
+              ),
+            ),
+          )
+          .returning({ id: automationFirings.id }),
+      );
+      return closed.length;
     },
   };
 }
