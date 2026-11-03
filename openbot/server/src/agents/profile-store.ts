@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { CredentialStore } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -7,8 +7,11 @@ import {
   agents,
   deploymentPackages,
   modelRegistry,
+  pluginGrants,
 } from "../db/schema";
 import { teamBotPublications } from "../db/schema/team-bots";
+import { TEAM_TENANT } from "../db/schema/tenant";
+import { currentTenant, isPersonTenant } from "../tenant/context";
 import {
   assignedCondition,
   assignedToActor,
@@ -389,6 +392,148 @@ function newAgentId() {
 }
 
 /**
+ * A write that must change exactly one row, or the caller learns it did not (G01-E, I9).
+ *
+ * Row security does not raise on a row the frame may read but not write: the UPDATE matches nothing
+ * and reports success. A Bot the caller can see (a teammate's public Bot, a catalogue Bot) and an
+ * administrator's role both used to pass the store's own checks and then change nothing, and the
+ * route answered with the old row as if it had been saved.
+ */
+function exactlyOne(rows: unknown[], id: string) {
+  if (rows.length !== 1) throw new AgentNotManageableError(id);
+}
+
+/** The owner's explicit move of one Bot (0122 row guard): the only re-stamp outside `platform`. */
+async function withTeamMove(
+  transaction: Transaction,
+  agentId: string,
+  work: () => Promise<void>,
+) {
+  await transaction.execute(
+    sql`select set_config('app.team_move', ${agentId}, true)`,
+  );
+  await work();
+  // Transaction-local already; cleared anyway, so nothing later in this transaction moves a row.
+  await transaction.execute(sql`select set_config('app.team_move', '', true)`);
+}
+
+/**
+ * Move a Bot its owner made public into the shared `team` tenant (G01-E P8b), in the owner's frame.
+ *
+ * The profile first: the `agents` row's team policy asks whether the PROFILE is the caller's and
+ * already `team`. Then the Bot's grants, so it keeps the tools it was granted wherever it runs. The
+ * Bot's child rows (security policy, knowledge bindings, device projects) stay with the owner (I8).
+ *
+ * Only the owner moves a Bot: in any other frame the profile is invisible or unwritable, nothing
+ * matches, and this throws. Setting `app.team_move` by hand opens nothing more.
+ */
+export async function moveToTeam(
+  transaction: Transaction,
+  agentId: string,
+): Promise<void> {
+  await withTeamMove(transaction, agentId, async () => {
+    const profiles = await transaction
+      .update(agentProfiles)
+      .set({ tenantId: TEAM_TENANT })
+      .where(
+        and(
+          eq(agentProfiles.agentId, agentId),
+          ne(agentProfiles.tenantId, TEAM_TENANT),
+        ),
+      )
+      .returning({ agentId: agentProfiles.agentId });
+    if (profiles.length !== 1) throw new AgentNotFoundError(agentId);
+    const moved = await transaction
+      .update(agents)
+      .set({ tenantId: TEAM_TENANT })
+      .where(and(eq(agents.id, agentId), ne(agents.tenantId, TEAM_TENANT)))
+      .returning({ id: agents.id });
+    if (moved.length !== 1) throw new AgentNotFoundError(agentId);
+    await transaction
+      .update(pluginGrants)
+      .set({ tenantId: TEAM_TENANT })
+      .where(
+        and(
+          eq(pluginGrants.agentId, agentId),
+          ne(pluginGrants.tenantId, TEAM_TENANT),
+        ),
+      );
+  });
+}
+
+/**
+ * The reverse of {@link moveToTeam}: a team Bot made private again goes back to its owner, in the
+ * owner's frame. Grants first and the profile last, because every `team` policy on the way asks
+ * whether the profile is still the caller's `team` profile.
+ */
+export async function moveToOwner(
+  transaction: Transaction,
+  agentId: string,
+  ownerId: string,
+): Promise<void> {
+  await withTeamMove(transaction, agentId, async () => {
+    await transaction
+      .update(pluginGrants)
+      .set({ tenantId: ownerId })
+      .where(
+        and(
+          eq(pluginGrants.agentId, agentId),
+          eq(pluginGrants.tenantId, TEAM_TENANT),
+        ),
+      );
+    const moved = await transaction
+      .update(agents)
+      .set({ tenantId: ownerId })
+      .where(and(eq(agents.id, agentId), eq(agents.tenantId, TEAM_TENANT)))
+      .returning({ id: agents.id });
+    if (moved.length !== 1) throw new AgentNotFoundError(agentId);
+    const profiles = await transaction
+      .update(agentProfiles)
+      .set({ tenantId: ownerId })
+      .where(
+        and(
+          eq(agentProfiles.agentId, agentId),
+          eq(agentProfiles.tenantId, TEAM_TENANT),
+        ),
+      )
+      .returning({ agentId: agentProfiles.agentId });
+    if (profiles.length !== 1) throw new AgentNotFoundError(agentId);
+  });
+}
+
+/**
+ * Where a Bot's rows belong after a write that set its visibility, decided in the frame that wrote it.
+ *
+ * Public moves the owner's own Bot to `team`, in the owner's frame. Private moves a `team` Bot back to its owner, unless it
+ * is published: a publication is a separate, revocable fact (`team-bots`), and its audience reads the
+ * Bot through `team`. Nothing moves outside a person frame: a `system` or `platform` stamp is the
+ * catalogue's, and only the owner's frame may re-stamp (the row guard refuses any other).
+ */
+async function settleStamp(
+  transaction: Transaction,
+  agentId: string,
+  stamp: string,
+  visibility: CreateAgentInput["visibility"],
+  ownerUserId: string | null,
+) {
+  const frame = currentTenant();
+  if (visibility === "public") {
+    if (isPersonTenant(frame) && stamp === frame && ownerUserId === frame) {
+      await moveToTeam(transaction, agentId);
+    }
+    return;
+  }
+  if (stamp !== TEAM_TENANT || !isPersonTenant(ownerUserId)) return;
+  const [published] = await transaction
+    .select({ agentId: teamBotPublications.agentId })
+    .from(teamBotPublications)
+    .where(eq(teamBotPublications.agentId, agentId))
+    .limit(1);
+  if (published) return;
+  await moveToOwner(transaction, agentId, ownerUserId);
+}
+
+/**
  * Which agent a token belongs to.
  *
  * Selected by hash and then compared in constant time. The lookup alone would be enough to identify
@@ -532,6 +677,14 @@ export function createAgentProfileStore(
           visibility: input.visibility,
           persona: input.persona ?? null,
         });
+        // Both rows took this frame's stamp; a public Bot then moves to `team` in the same transaction.
+        await settleStamp(
+          transaction,
+          id,
+          currentTenant(),
+          input.visibility,
+          actor.id,
+        );
 
         const profile = await findAccessibleProfile(transaction, actor, id);
         if (!profile) throw new AgentNotFoundError(id);
@@ -558,7 +711,11 @@ export function createAgentProfileStore(
            * it alone" rather than "remove it".
            */
           const [row] = await transaction
-            .select({ configuration: agents.configuration, type: agents.type })
+            .select({
+              configuration: agents.configuration,
+              type: agents.type,
+              tenantId: agents.tenantId,
+            })
             .from(agents)
             .where(eq(agents.id, id))
             .limit(1);
@@ -620,10 +777,14 @@ export function createAgentProfileStore(
            * returns: editing a Bot's key would hang until the statement timed out, and the timeout
            * would then be reported as a key that is still live.
            */
-          await transaction
-            .update(agents)
-            .set({ name: input.name, configuration, updatedAt })
-            .where(eq(agents.id, id));
+          exactlyOne(
+            await transaction
+              .update(agents)
+              .set({ name: input.name, configuration, updatedAt })
+              .where(eq(agents.id, id))
+              .returning({ id: agents.id }),
+            id,
+          );
           /*
            * The model binding is checked against the library instead of trusted, because a foreign
            * key is not stopped by row-level security: the constraint alone would accept another
@@ -646,7 +807,7 @@ export function createAgentProfileStore(
               .limit(1);
             if (!model) throw new ModelNotInLibraryError();
           }
-          await transaction
+          const written = await transaction
             .update(agentProfiles)
             .set({
               title: input.title,
@@ -662,7 +823,18 @@ export function createAgentProfileStore(
                 : { persona: input.persona }),
               updatedAt,
             })
-            .where(eq(agentProfiles.agentId, id));
+            .where(eq(agentProfiles.agentId, id))
+            .returning({ agentId: agentProfiles.agentId });
+          exactlyOne(written, id);
+          if (row) {
+            await settleStamp(
+              transaction,
+              id,
+              row.tenantId,
+              input.visibility,
+              profile.ownerUserId,
+            );
+          }
 
           const updated = await findAccessibleProfile(transaction, actor, id);
           if (!updated) throw new AgentNotFoundError(id);
@@ -796,10 +968,14 @@ export function createAgentProfileStore(
           requireManageable(actor, profile);
 
           const deletedAt = new Date();
-          await transaction
-            .update(agentProfiles)
-            .set({ deletedAt, updatedAt: deletedAt })
-            .where(eq(agentProfiles.agentId, id));
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({ deletedAt, updatedAt: deletedAt })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
 
           /*
            * And its key stops working.
@@ -846,14 +1022,19 @@ export function createAgentProfileStore(
 
           const token = mintCallbackToken();
           const issuedAt = new Date();
-          await transaction
-            .update(agentProfiles)
-            .set({
-              callbackTokenHash: hashCallbackToken(token),
-              callbackTokenIssuedAt: issuedAt,
-              updatedAt: issuedAt,
-            })
-            .where(eq(agentProfiles.agentId, id));
+          // A token that was not stored is never handed out: it would authenticate nothing.
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({
+                callbackTokenHash: hashCallbackToken(token),
+                callbackTokenIssuedAt: issuedAt,
+                updatedAt: issuedAt,
+              })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
 
           // The only time it is readable. Nothing here writes it to a log.
           return token;
@@ -871,14 +1052,18 @@ export function createAgentProfileStore(
           requireManageable(actor, profile);
 
           const now = new Date();
-          await transaction
-            .update(agentProfiles)
-            .set({
-              callbackTokenHash: null,
-              callbackTokenIssuedAt: null,
-              updatedAt: now,
-            })
-            .where(eq(agentProfiles.agentId, id));
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({
+                callbackTokenHash: null,
+                callbackTokenIssuedAt: null,
+                updatedAt: now,
+              })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
         },
         { isolationLevel: "read committed" },
       );

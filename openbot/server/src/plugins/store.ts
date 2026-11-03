@@ -47,9 +47,9 @@ import {
   type InstallListingKind,
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
-import { SYSTEM_TENANT } from "../db/schema/tenant";
+import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import { currentTenant, runAsTenant } from "../tenant/context";
+import { currentTenant, isPersonTenant, runAsTenant } from "../tenant/context";
 import {
   accessFor,
   type ServerAccess,
@@ -4972,29 +4972,48 @@ export function createPluginStore(options: PluginStoreOptions) {
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
       /*
-       * Whose slugs this Bot's skill grants name: the Bot's own workspace, read from the Bot's row
-       * and stated in every query below rather than left to row security.
+       * Whose grants these are, and whose slugs the skill grants name: read from the Bot's row and
+       * stated in every query below rather than left to row security.
        *
        * Not refused in the platform frame, unlike the other slug lookups, because this one has an
        * answer there: a Bot belongs to exactly one tenant (`agents.id` is the key), so its grants can
        * only mean that tenant's skills. And background work calls it in exactly that frame —
        * `repeatAfterEach` runs every body as `platform`, and the scheduled memory sync authorizes each
-       * due source through here — so refusing would stop every one of them. In a tenant frame the
-       * Bot must be that tenant's (row security already hides any other); in the platform frame it
-       * is whichever tenant owns it, never "every tenant at once".
+       * due source through here — so refusing would stop every one of them. In a tenant frame a
+       * private Bot must be that tenant's (row security already hides any other); in the platform
+       * frame it is whichever tenant owns it, never "every tenant at once".
+       *
+       * A team Bot (G01-E P8b) is stamped `team`, and so are its grants, wherever it runs: its owner's
+       * frame, a teammate's (`team_read` shows the Bot and its grants only where the Bot is visible to
+       * them), or `platform`. Its skill slugs are its OWNER's, as they were before it moved: they
+       * resolve in the owner's frame and under `platform`, and a teammate's row security shows them
+       * only the deployment's own. A teammate's own skill of the same name never stands in for the
+       * owner's inside the owner's Bot.
        */
       const frame = currentTenant();
+      const [bot] = await database
+        .select({
+          tenantId: agents.tenantId,
+          ownerUserId: agentProfiles.ownerUserId,
+        })
+        .from(agents)
+        .leftJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+        .where(eq(agents.id, agentId))
+        .limit(1);
       let tenant: string;
-      if (frame === "platform") {
-        const [owner] = await database
-          .select({ tenantId: agents.tenantId })
-          .from(agents)
-          .where(eq(agents.id, agentId))
-          .limit(1);
-        if (!owner) return { tools: [], skills: [] };
-        tenant = owner.tenantId;
+      let skillTenant: string;
+      if (bot?.tenantId === TEAM_TENANT) {
+        tenant = TEAM_TENANT;
+        skillTenant = isPersonTenant(bot.ownerUserId)
+          ? bot.ownerUserId
+          : TEAM_TENANT;
+      } else if (frame === "platform") {
+        if (!bot) return { tools: [], skills: [] };
+        tenant = bot.tenantId;
+        skillTenant = tenant;
       } else {
         tenant = frame;
+        skillTenant = frame;
       }
       const held = await database
         .select()
@@ -5072,7 +5091,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 .where(
                   and(
                     inArray(skills.slug, skillSlugs),
-                    inArray(skills.tenantId, skillTenants(tenant)),
+                    inArray(skills.tenantId, skillTenants(skillTenant)),
                   ),
                 ),
             );

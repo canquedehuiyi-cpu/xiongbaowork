@@ -1,7 +1,10 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createAgentProfileStore } from "../src/agents/profile-store";
+import {
+  createAgentProfileStore,
+  moveToTeam,
+} from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
 import { createChannelStore } from "../src/channels/routes";
@@ -16,9 +19,11 @@ import {
   channelMemberships,
   channels,
   intelligenceChannelMappings,
+  teamBotAudience,
+  teamBotPublications,
   users,
 } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const databaseUrl = testDatabaseUrl();
@@ -237,22 +242,100 @@ describe("runtime agent loading", () => {
     const owner = await createUser();
     const otherUser = await createUser();
     const administrator = await createUser("admin");
-    const profile = await createCoworker(owner);
+    const profile = await as(owner, () => createCoworker(owner));
 
-    expect(idsOf(await loadAgents(owner))).toContain(profile.id);
-    expect(idsOf(await loadAgents(otherUser))).not.toContain(profile.id);
-    expect(idsOf(await loadAgents(administrator))).toContain(profile.id);
+    expect(idsOf(await as(owner, () => loadAgents(owner)))).toContain(
+      profile.id,
+    );
+    expect(
+      idsOf(await as(otherUser, () => loadAgents(otherUser))),
+    ).not.toContain(profile.id);
+    // An administrator reaches it as `platform`, which is where the admin pages read (Q1)...
+    expect(idsOf(await asPlatform(() => loadAgents(administrator)))).toContain(
+      profile.id,
+    );
+    // ...and their own chat runtime, in their own frame, does not offer it.
+    expect(
+      idsOf(await as(administrator, () => loadAgents(administrator))),
+    ).not.toContain(profile.id);
   });
 
   test("shares a public coworker with everybody", async () => {
     const owner = await createUser();
     const otherUser = await createUser();
-    const profile = await createCoworker(owner, {
-      name: "Company Helper",
-      visibility: "public",
+    const profile = await as(owner, () =>
+      createCoworker(owner, {
+        name: "Company Helper",
+        visibility: "public",
+      }),
+    );
+    const stampOf = async () =>
+      (
+        await asPlatform(() =>
+          database
+            .select({ tenantId: agentProfiles.tenantId })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, profile.id)),
+        )
+      )[0]?.tenantId;
+
+    expect(idsOf(await as(otherUser, () => loadAgents(otherUser)))).toContain(
+      profile.id,
+    );
+    expect(await stampOf()).toBe("team");
+
+    // Made private again: back to its owner, and nobody else's runtime offers it.
+    await as(owner, () =>
+      profileStore.update(owner, profile.id, {
+        name: "Company Helper",
+        title: profile.title,
+        roleDescription: profile.roleDescription,
+        visibility: "private",
+      }),
+    );
+    expect(
+      idsOf(await as(otherUser, () => loadAgents(otherUser))),
+    ).not.toContain(profile.id);
+    expect(idsOf(await as(owner, () => loadAgents(owner)))).toContain(
+      profile.id,
+    );
+    expect(await stampOf()).toBe(owner.id);
+  });
+
+  test("offers a Team Bot published to named people only to those people", async () => {
+    const owner = await createUser();
+    const audience = await createUser();
+    const outsider = await createUser();
+    const profile = await as(owner, async () => {
+      const created = await createCoworker(owner, { name: "Payroll Desk" });
+      // Published to one person, as the team-bots publication stamps it in `team`.
+      await database.transaction(async (transaction) => {
+        await moveToTeam(transaction, created.id);
+        await transaction.insert(teamBotPublications).values({
+          agentId: created.id,
+          publishedBy: owner.id,
+          audience: "people",
+          tenantId: "team",
+        });
+        await transaction.insert(teamBotAudience).values({
+          agentId: created.id,
+          kind: "user",
+          value: audience.id,
+          tenantId: "team",
+        });
+      });
+      return created;
     });
 
-    expect(idsOf(await loadAgents(otherUser))).toContain(profile.id);
+    expect(idsOf(await as(audience, () => loadAgents(audience)))).toContain(
+      profile.id,
+    );
+    expect(idsOf(await as(owner, () => loadAgents(owner)))).toContain(
+      profile.id,
+    );
+    expect(idsOf(await as(outsider, () => loadAgents(outsider)))).not.toContain(
+      profile.id,
+    );
   });
 
   test("drops a deleted coworker that has no history to restore", async () => {

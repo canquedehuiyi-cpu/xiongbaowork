@@ -869,6 +869,13 @@
       "when": 1793629800000,
       "tag": "0124_team_sandboxed_components",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793630100000,
+      "tag": "0125_team_bots",
+      "breakpoints": true
     }
   ]
 }
