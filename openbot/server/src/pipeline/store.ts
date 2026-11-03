@@ -109,6 +109,30 @@ export class PipelineValidationError extends Error {
   }
 }
 
+/**
+ * The person who pressed run may not use one or more of the template's coworkers (spec I6).
+ *
+ * Thrown by `start` before anything is written: no quota is asked, no parent card opens and no run row
+ * exists, because a plan whose middle the person cannot run is not a plan they can start. `refused`
+ * names every step that stopped it, not just the first, so one answer tells the person everything they
+ * have to fix — `index` is the step's position in the template (0-based), `stepId` its id and
+ * `agentId` the coworker the person has no use of.
+ */
+export class PipelineStepForbiddenError extends Error {
+  readonly refused: { index: number; stepId: string; agentId: string }[];
+  constructor(refused: { index: number; stepId: string; agentId: string }[]) {
+    super(
+      `第 ${refused.map((step) => step.index + 1).join("、")} 步的员工（${[
+        ...new Set(refused.map((step) => step.agentId)),
+      ].join(
+        "、",
+      )}）你没有使用权，这次没有派出去。先给这些员工开通使用权，或把模板里的这几步换成你能用的员工，再运行。`,
+    );
+    this.name = "PipelineStepForbiddenError";
+    this.refused = refused;
+  }
+}
+
 /** How many steps one template may hold. A pipeline is a machine for spending turns, so the number that
  * bounds it has to live somewhere other than the person's patience. */
 const MAX_STEPS = 10;
@@ -157,8 +181,15 @@ export function createPipelineStore(options: {
    * sequence is tested here, the channel's own suites test the governance.
    */
   executeStep: PipelineStepRunner;
-  /** Spec I6: may THIS person use THIS coworker? Never substituted, never run as the platform. */
-  canUse: (tenantId: string, agentId: string) => Promise<boolean>;
+  /**
+   * Spec I6: may THIS person use THIS coworker? Never substituted, never run as the platform.
+   *
+   * Asked with the run's initiator — the person who pressed run, as recorded on the run row — and not
+   * with the workspace id: "who may dispatch" is a question about a person, and a workspace default is
+   * how it quietly becomes "anyone in here may". Asked for every step before the run opens anything,
+   * and again for each step as it is reached, because a use can be revoked while a run is in flight.
+   */
+  canUse: (initiatedBy: string, agentId: string) => Promise<boolean>;
   /**
    * The monthly ceiling, asked before the run opens anything (spec 022's rule: refuse before the work,
    * not after). Optional because a deployment without plans still runs pipelines.
@@ -432,9 +463,12 @@ export function createPipelineStore(options: {
     /**
      * Put a task in front of the crew and get the card that owns it.
      *
-     * The parent card opens before any step runs, because the person's question has to be on the board
-     * even when the first step is refused — a run that failed its authorization check would otherwise
-     * leave nothing behind, which is the silent-failure shape ticket 030 closed for chat.
+     * Every step's coworker is checked against the person who pressed run before anything is written
+     * (spec I6): a refusal is answered to that person right away, as `PipelineStepForbiddenError`
+     * naming the steps, rather than as a card that opens and fails — the answer is not silent, it is
+     * the response to the press. Once the check passes, the parent card opens before any step runs, so
+     * a coworker revoked mid-run still leaves the run's failure on the board (the silent-failure shape
+     * ticket 030 closed for chat).
      */
     async start(input: {
       tenantId: string;
@@ -445,13 +479,6 @@ export function createPipelineStore(options: {
       flowId?: string;
       runId?: string;
     }): Promise<{ runId: string; parentTaskId: string }> {
-      /*
-       * The ceiling is asked before anything is opened or run, because a pipeline is a machine for
-       * spending: one press starts N turns. A refusal after the first card would charge for work that
-       * happened (ticket 022's rule, restated in `tasks/projector.ts`), and a template of a hundred
-       * steps is a hundred cards a month nobody agreed to.
-       */
-      await options.quota?.assertCapacity(input.tenantId, "tasksPerMonth");
       const template = await runAsTenant(input.tenantId, async () => {
         const [row] = await database
           .select({
@@ -481,6 +508,31 @@ export function createPipelineStore(options: {
           `一条流水线最多 ${MAX_STEPS} 步，这条有 ${declared.length} 步。`,
         );
       }
+      /*
+       * Spec I6, asked for the whole plan before any of it is dispatched: may the person who pressed run
+       * use EVERY coworker the template names? Being in the crew grants nothing. A refusal here writes
+       * nothing at all — no quota spent, no parent card, no run row — and names every step that stopped
+       * it, because a run that opened and then failed on step 2 would have run step 1 for a plan the
+       * person could never finish. A check that errors counts as a refusal: failing open is how a
+       * flaky lookup becomes "the platform ran it anyway".
+       */
+      const refused: { index: number; stepId: string; agentId: string }[] = [];
+      for (const [index, step] of declared.entries()) {
+        const allowed = await canUse(input.initiatedBy, step.agentId).catch(
+          () => false,
+        );
+        if (!allowed) {
+          refused.push({ index, stepId: step.id, agentId: step.agentId });
+        }
+      }
+      if (refused.length > 0) throw new PipelineStepForbiddenError(refused);
+      /*
+       * The ceiling is asked before anything is opened or run, because a pipeline is a machine for
+       * spending: one press starts N turns. A refusal after the first card would charge for work that
+       * happened (ticket 022's rule, restated in `tasks/projector.ts`), and a template of a hundred
+       * steps is a hundred cards a month nobody agreed to.
+       */
+      await options.quota?.assertCapacity(input.tenantId, "tasksPerMonth");
       await options.quota?.assertCapacity(
         input.tenantId,
         "tasksPerMonth",
@@ -558,6 +610,12 @@ export function createPipelineStore(options: {
         };
       }
       let cursor = run.cursor;
+      /*
+       * Whose authority each step runs under: the person recorded on the run row when it started, never
+       * the workspace or the caller of this method. A run with no initiator on record cannot answer
+       * spec I6's question, so its next step is refused rather than run on somebody's default.
+       */
+      const initiator = run.initiatedBy;
       /*
        * A run parked on a person stays parked until that person's answer is delivered.
        *
@@ -665,10 +723,10 @@ export function createPipelineStore(options: {
           }
           // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
           const record = records[cursor]!;
-          const allowed = await canUse(input.tenantId, record.agentId).catch(
-            () => false,
-          );
-          if (!allowed) {
+          const allowed =
+            initiator !== null &&
+            (await canUse(initiator, record.agentId).catch(() => false));
+          if (initiator === null || !allowed) {
             /*
              * Spec I6, and the shape of the answer is the point: the run stops naming the coworker it
              * stopped on. Choosing another member of the crew, or running as the deployment's own Bot, is
@@ -685,7 +743,10 @@ export function createPipelineStore(options: {
                * rather than protocol. The id stays because the person's next action is to go grant that
                * one coworker — "无权限" alone would be a dead end.
                */
-              error: `${record.agentId} 你没有使用权，所以第 ${cursor + 1} 步没有执行。`,
+              error:
+                initiator === null
+                  ? `这次运行没有记录发起人，无法核对谁能用 ${record.agentId}，所以第 ${cursor + 1} 步没有执行。`
+                  : `${record.agentId} 你没有使用权，所以第 ${cursor + 1} 步没有执行。`,
             };
             if (
               !(await writeRun(
@@ -776,7 +837,7 @@ export function createPipelineStore(options: {
                     "（此输入未产生）",
                 )
               : prior,
-            initiatedBy: run.initiatedBy ?? input.tenantId,
+            initiatedBy: initiator,
             runId: input.runId,
             stepRunRef: runRef,
             signal: controller.signal,
