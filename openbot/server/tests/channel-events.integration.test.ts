@@ -1,9 +1,11 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { PgRaw } from "drizzle-orm/pg-core/query-builders/raw";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import {
+  announceTaskUpdate,
   CHANNEL_ACTIVITY_TOPIC,
   type ChannelActivityEvent,
   type ChannelEventHub,
@@ -16,7 +18,7 @@ import {
   createChannelStore,
 } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
-import { createDatabase } from "../src/db/client";
+import { createDatabase, type Database } from "../src/db/client";
 import {
   agentProfiles,
   agents,
@@ -664,3 +666,153 @@ async function until(
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 }
+
+/**
+ * The task board rides the same rail. drizzle's `execute` is lazy — a `PgRaw` whose statement runs
+ * only when `then` is called — so the projector's old `void database.execute(...)` built a NOTIFY
+ * and never sent it: a second instance's board never moved.
+ */
+describe("task board announcements", () => {
+  /** A real drizzle `PgRaw`, the object `execute` answers with, around a statement we can watch. */
+  function rawExecuting(run: () => Promise<unknown>) {
+    return {
+      execute: () =>
+        new PgRaw(
+          run,
+          sql`select 1`,
+          { sql: "select 1", params: [] },
+          (r) => r,
+        ),
+    } as unknown as Pick<Database, "execute">;
+  }
+
+  test("drizzle's raw query runs nothing until it is awaited, and the helper runs it", async () => {
+    let runs = 0;
+    const run = async () => {
+      runs += 1;
+      return [];
+    };
+    // The premise: a voided `PgRaw` never executes.
+    void new PgRaw(
+      run,
+      sql`select 1`,
+      { sql: "select 1", params: [] },
+      (r) => r,
+    );
+    await Promise.resolve();
+    expect(runs).toBe(0);
+
+    await announceTaskUpdate(rawExecuting(run), "tenant-lazy");
+    expect(runs).toBe(1);
+  });
+
+  test("a failed announcement is logged as one JSON line, never thrown or left unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const secret = "password=do-not-log-me";
+      const failing = rawExecuting(() =>
+        Promise.reject(Object.assign(new Error(secret), { code: "57P01" })),
+      );
+      await expect(
+        announceTaskUpdate(failing, "tenant-failing"),
+      ).resolves.toBeUndefined();
+
+      const throwing = {
+        execute: () => {
+          throw new Error(secret);
+        },
+      } as unknown as Pick<Database, "execute">;
+      await expect(
+        announceTaskUpdate(throwing, "tenant-throwing"),
+      ).resolves.toBeUndefined();
+
+      // A rejection nobody handled is reported after the microtask queue drains.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(logged).toHaveBeenCalledTimes(2);
+      const lines = logged.mock.calls.map((call) => String(call[0]));
+      expect(JSON.parse(lines[0] as string)).toEqual({
+        type: "task-board-announce-failed",
+        tenantId: "tenant-failing",
+        error: "Error",
+        code: "57P01",
+      });
+      expect(JSON.parse(lines[1] as string)).toEqual({
+        type: "task-board-announce-failed",
+        tenantId: "tenant-throwing",
+        error: "Error",
+      });
+      for (const line of lines) expect(line).not.toContain(secret);
+      expect(unhandled).toEqual([]);
+    } finally {
+      logged.mockRestore();
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
+  test("reaches a listener on its own connection, from inside a tenant frame", async () => {
+    const tenantId = `${testPrefix}-tenant-${randomUUID()}`;
+    const hub = createChannelEventHub();
+    const received: ChannelActivityEvent[] = [];
+    hub.register(tenantId, (payload) => received.push(JSON.parse(payload)));
+    const listener = await startChannelActivityListener(databaseUrl, hub);
+
+    try {
+      // Called the way the projector calls it: synchronously, inside the tenant's frame, and not
+      // awaited by the caller. The helper must still send the NOTIFY.
+      const sent = runAsTenant(tenantId, () =>
+        announceTaskUpdate(database, tenantId),
+      );
+      await until(() => received.length > 0);
+      await sent;
+    } finally {
+      await listener.stop();
+    }
+
+    expect(received).toEqual([
+      {
+        channelId: "",
+        memberIds: [tenantId],
+        lastMessage: null,
+        lastMessageAt: null,
+        lastMessageAgentId: null,
+        taskUpdated: true,
+      },
+    ]);
+  });
+
+  test("reaches a listener when its caller has no tenant frame at all", async () => {
+    // The projector announces after its own frame has closed, so a background caller with no frame
+    // of its own is the case that matters: with no frame the statement would be refused unsent.
+    const tenantId = `${testPrefix}-tenant-${randomUUID()}`;
+    const hub = createChannelEventHub();
+    const received: ChannelActivityEvent[] = [];
+    hub.register(tenantId, (payload) => received.push(JSON.parse(payload)));
+    const listener = await startChannelActivityListener(databaseUrl, hub);
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const sent = announceTaskUpdate(database, tenantId);
+      await until(() => received.length > 0);
+      await sent;
+      expect(logged).not.toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+      await listener.stop();
+    }
+
+    expect(received).toEqual([
+      {
+        channelId: "",
+        memberIds: [tenantId],
+        lastMessage: null,
+        lastMessageAt: null,
+        lastMessageAgentId: null,
+        taskUpdated: true,
+      },
+    ]);
+  });
+});

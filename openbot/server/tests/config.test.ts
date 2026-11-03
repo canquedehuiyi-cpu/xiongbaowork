@@ -64,7 +64,7 @@ describe("deployment configuration", () => {
       endpoint: new URL("http://localhost:4200/ag-ui"),
       token: "managed-agent-token",
     });
-    expect(config.tenantPackageDirectory).toBe("../examples/fintech");
+    expect(config.tenantPackageDirectory).toBe("../examples/qoderwake");
   });
 
   test("allows deployment without an authentication provider, when asked to", () => {
@@ -822,6 +822,26 @@ describe("deployment configuration", () => {
         ...productionEnvironment,
         NODE_ENV: "production ",
         AGENT_COMPUTER_URL: "http://localhost:4100",
+        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+      }),
+    ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
+  });
+
+  // A local model provider (audit defect #6) is reached under the same switch, and needs no Bot
+  // computer: read through `computer`, the switch did nothing for a laptop that had none configured.
+  test("opens model endpoints to private hosts locally, with or without a computer", () => {
+    const withoutComputer = loadConfig({
+      ...baseEnvironment,
+      AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+    });
+    expect(withoutComputer.computer).toBeUndefined();
+    expect(withoutComputer.modelEndpointsAllowPrivateHosts).toBe(true);
+    expect(loadConfig(baseEnvironment).modelEndpointsAllowPrivateHosts).toBe(
+      false,
+    );
+    expect(() =>
+      loadConfig({
+        ...productionEnvironment,
         AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
       }),
     ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");

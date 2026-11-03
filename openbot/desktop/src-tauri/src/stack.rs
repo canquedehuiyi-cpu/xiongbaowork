@@ -4533,12 +4533,7 @@ fn main() {
     fn ipv6_loopback_listener() -> Option<std::net::TcpListener> {
         match std::net::TcpListener::bind("[::1]:0") {
             Ok(listener) => Some(listener),
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
-                ) =>
-            {
+            Err(error) if crate::env::ipv6_loopback_unavailable(&error) => {
                 eprintln!("IPv6 loopback unavailable; skipping IPv6 socket regression: {error}");
                 None
             }
@@ -7451,7 +7446,9 @@ fn main() {
     // same status on both loopbacks so the regression tests HTTP state, not that delay.
     match std::net::TcpListener::bind(("::1", port)) {
         Ok(listener) => listeners.push(listener),
-        Err(error) if matches!(error.kind(), std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported) => {}
+        // EAFNOSUPPORT (IPv6 disabled in the kernel) is uncategorized by std.
+        Err(error) if matches!(error.kind(), std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported)
+            || error.raw_os_error() == Some(if cfg!(windows) { 10047 } else if cfg!(target_os = "linux") { 97 } else { 47 }) => {}
         Err(error) => panic!("could not bind fixture IPv6 loopback: {}", error),
     }
     for listener in &listeners { listener.set_nonblocking(true).unwrap(); }

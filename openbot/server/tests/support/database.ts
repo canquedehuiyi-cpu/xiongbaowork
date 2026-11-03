@@ -67,6 +67,17 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 const DISPOSABLE_NAME = /^openbot_continuation_test_[0-9a-f]{16}$/;
 const TEMPLATE_NAME = /^openbot_continuation_template$/;
 
+/**
+ * The timeout for an `afterAll` that calls `drop()`, instead of Bun's 5 s hook default.
+ *
+ * `DROP DATABASE` requests an immediate checkpoint and waits for it (the drop bumps
+ * `pg_stat_bgwriter.checkpoints_req`), so it lasts as long as flushing every dirty buffer in the
+ * cluster takes, not as long as this suite's own work: on a CI shard, after the baseline run and the
+ * shard's other suites have written to the same server, that has exceeded 5 s and failed a suite
+ * whose tests had all passed. `WITH (FORCE)` may also wait up to 5 s more for terminated backends.
+ */
+export const DISPOSABLE_DROP_TIMEOUT_MS = 30_000;
+
 export interface DisposableTestDatabase {
   /** Same credentials as the chosen role, pointed at the new one-time database. */
   readonly url: string;
@@ -190,8 +201,12 @@ export async function createDisposableTestDatabase(
     async drop() {
       if (dropped) return;
       dropped = true;
+      const started = Date.now();
       try {
         await client.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+        const ms = Date.now() - started;
+        // Said only when slow, so a hook close to its timeout shows where the time went.
+        if (ms > 1_000) console.log(JSON.stringify({ type: "disposable-drop-slow", databaseName, ms }));
       } finally {
         await client.close();
       }

@@ -111,6 +111,30 @@ describe("the probe", () => {
     expect(network.calls).toHaveLength(0);
   });
 
+  test("a resolver that never answers is bounded by the probe's deadline, and nothing is sent", async () => {
+    const network = recordingFetch(() => new Response("{}"));
+    const started = Date.now();
+    const answer = await probe(
+      "custom",
+      "https://stalled.example.test/v1",
+      "m",
+      "sk-custom-secret",
+      {
+        // Never settles: the deadline has to cover resolution, not only the request after it.
+        lookup: () => new Promise(() => undefined),
+        viaProxy: () => false,
+        fetchImpl: network.impl,
+        timeoutMs: 50,
+      },
+    );
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(answer).toEqual({
+      ok: false,
+      error: "The provider did not answer in time.",
+    });
+    expect(network.calls).toHaveLength(0);
+  });
+
   test("a custom endpoint that redirects is not followed, and the key goes no further", async () => {
     const network = recordingFetch(
       () =>
