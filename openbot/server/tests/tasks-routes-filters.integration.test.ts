@@ -4,7 +4,12 @@ import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "../src/app-variables";
 import { createDatabase } from "../src/db/client";
-import { tasks } from "../src/db/schema";
+import {
+  groupTaskRuns,
+  tasks,
+  wakerGroupMembers,
+  wakerGroups,
+} from "../src/db/schema";
 import type { TaskProjector } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
@@ -95,9 +100,14 @@ const ids = await runAsTenant(tenant, async () => {
   return rows.map((row) => row.id);
 });
 
+const crewIds: string[] = [];
+
 afterAll(async () => {
   await runAsTenant(tenant, async () => {
     await database.delete(tasks).where(eq(tasks.tenantId, tenant));
+    // The runs and the roster follow their crew by cascade.
+    for (const crewId of crewIds)
+      await database.delete(wakerGroups).where(eq(wakerGroups.id, crewId));
   });
 });
 
@@ -195,4 +205,234 @@ test("the axes compose rather than overwrite each other", async () => {
     `?source=routine&status=running&deviceId=dev-${suite}-desktop`,
   );
   expect(composed.map((task) => task.id)).toEqual([extras[2]]);
+});
+
+/*
+ * Spec A4/C2: 触发方式 as the screen asks for it. 自主工作 is two sources at once — a routine firing
+ * and a responsibility firing — and that pair is also the board's 无人值守 filter, so `source=` takes a
+ * comma list. Run in its own coworker ids, for the reason `historian` gives above, and next to a second
+ * workspace holding the very same sources: the list is narrowed inside the caller's tenant, and a
+ * neighbour's routine is never part of "my unattended work".
+ */
+const neighbour = `w-${suite}-neighbour`;
+const steward = `${suite}-steward`;
+const triggers = await runAsTenant(tenant, async () => {
+  const rows = await database
+    .insert(tasks)
+    .values([
+      {
+        title: "Nightly digest",
+        executorAgentId: steward,
+        source: "routine",
+        status: "done",
+      },
+      {
+        title: "Inbox duty",
+        executorAgentId: steward,
+        source: "responsibility",
+        status: "running",
+      },
+      {
+        title: "Asked in chat",
+        executorAgentId: steward,
+        source: "chat",
+        status: "running",
+      },
+      {
+        title: "Passed along",
+        executorAgentId: steward,
+        source: "handoff",
+        status: "running",
+      },
+    ])
+    .returning({ id: tasks.id });
+  return rows.map((row) => row.id);
+});
+const theirs = await runAsTenant(neighbour, async () => {
+  const rows = await database
+    .insert(tasks)
+    .values([
+      {
+        title: "Their nightly digest",
+        executorAgentId: steward,
+        source: "routine",
+        status: "done",
+      },
+      {
+        title: "Their inbox duty",
+        executorAgentId: steward,
+        source: "responsibility",
+        status: "running",
+      },
+    ])
+    .returning({ id: tasks.id });
+  return rows.map((row) => row.id);
+});
+
+/** The neighbour's own signed-in caller, so its read is a whole request of its own and not a borrowed one. */
+const neighbourRoutes = createTaskRoutes(
+  database,
+  async (context, next) => {
+    context.set("actor", { id: neighbour, role: "user" as const });
+    await next();
+  },
+  projector,
+);
+
+afterAll(async () => {
+  await runAsTenant(neighbour, async () => {
+    await database.delete(tasks).where(eq(tasks.tenantId, neighbour));
+  });
+});
+
+test("source takes a comma list: 自主工作 is routine and responsibility, in this tenant only", async () => {
+  const unattended = await get(
+    `?executors=${steward}&source=routine,responsibility`,
+  );
+  expect(unattended.map((task) => task.id).sort()).toEqual(
+    [triggers[0]!, triggers[1]!].sort(),
+  );
+  // The neighbour's rows match the same two sources and the same coworker id, and still are not here.
+  for (const id of theirs) {
+    expect(unattended.map((task) => task.id)).not.toContain(id);
+  }
+  // Without the coworker narrowing too: no row of another workspace rides in on a source match.
+  const everyUnattended = await get("?source=routine,responsibility");
+  for (const id of theirs) {
+    expect(everyUnattended.map((task) => task.id)).not.toContain(id);
+  }
+  expect(everyUnattended.map((task) => task.id)).toEqual(
+    expect.arrayContaining([triggers[0]!, triggers[1]!]),
+  );
+
+  // And the neighbour, asking the same question, sees only its own two.
+  const theirView = await runAsTenant(neighbour, async () => {
+    const response = await neighbourRoutes.request(
+      new Request(
+        `http://openbot.test/?executors=${steward}&source=routine,responsibility`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { tasks: { id: string }[] }).tasks;
+  });
+  expect(theirView.map((task) => task.id).sort()).toEqual([...theirs].sort());
+});
+
+test("a single source still narrows to that one, and the list composes with status", async () => {
+  const chat = await get(`?executors=${steward}&source=chat`);
+  expect(chat.map((task) => task.id)).toEqual([triggers[2]]);
+
+  const runningUnattended = await get(
+    `?executors=${steward}&source=routine,responsibility&status=running`,
+  );
+  expect(runningUnattended.map((task) => task.id)).toEqual([triggers[1]]);
+});
+
+test("unknown sources are dropped, and a list that names nothing matches nothing", async () => {
+  // An enum value Postgres does not know used to reach it as 22P02 — a 500 on a typed address.
+  const mixed = await get(
+    `?executors=${steward}&source=handoff,carrier-pigeon`,
+  );
+  expect(mixed.map((task) => task.id)).toEqual([triggers[3]]);
+
+  expect(await get(`?executors=${steward}&source=carrier-pigeon`)).toEqual([]);
+  expect(await get("?source=")).toEqual([]);
+  expect(await get("?source=,,")).toEqual([]);
+});
+
+/*
+ * Spec A4's Group choice. A crew run's parent card names no coworker (its executor is null), so a
+ * filter that only matched the roster against `executor_agent_id` dropped the one card that stands for
+ * the whole run, from the board and from its stat bar alike (both read this endpoint). `group=` is the
+ * crew by id: its members' cards, its runs' parent cards, and those runs' step cards.
+ */
+test("group answers to a crew by id: its members' cards, its runs' parent cards and their steps", async () => {
+  const crewId = randomUUID();
+  crewIds.push(crewId);
+  const member = `${suite}-crew-member`;
+  const departed = `${suite}-crew-departed`;
+  const stranger = `${suite}-crew-stranger`;
+  const cards = await runAsTenant(tenant, async () => {
+    await database
+      .insert(wakerGroups)
+      .values({ id: crewId, tenantId: tenant, name: `crew-${suite}` });
+    await database
+      .insert(wakerGroupMembers)
+      .values({ groupId: crewId, agentId: member, position: "0" });
+    const [parent] = await database
+      .insert(tasks)
+      .values({
+        title: "The crew's ask",
+        executorAgentId: null,
+        source: "group_run",
+        status: "running",
+      })
+      .returning({ id: tasks.id });
+    const rows = await database
+      .insert(tasks)
+      .values([
+        {
+          title: "A member's own chat",
+          executorAgentId: member,
+          source: "chat",
+          status: "done",
+        },
+        {
+          // A step of this crew's run whose coworker has since left the crew.
+          title: "A step by a coworker who left",
+          executorAgentId: departed,
+          source: "group_run",
+          status: "done",
+          parentTaskId: parent!.id,
+        },
+        {
+          title: "Not the crew's",
+          executorAgentId: stranger,
+          source: "chat",
+          status: "done",
+        },
+        {
+          // Another ask with no coworker that is not one of this crew's runs.
+          title: "Somebody else's parent",
+          executorAgentId: null,
+          source: "group_run",
+          status: "running",
+        },
+      ])
+      .returning({ id: tasks.id });
+    await database
+      .insert(groupTaskRuns)
+      .values({ groupId: crewId, parentTaskId: parent!.id, steps: [] });
+    return { parent: parent!.id, rows: rows.map((row) => row.id) };
+  });
+
+  const crew = await get(`?group=${crewId}`);
+  expect(crew.map((task) => task.id).sort()).toEqual(
+    [cards.parent, cards.rows[0]!, cards.rows[1]!].sort(),
+  );
+  // The stat bar's read is the same endpoint without status or words: the parent card counts there too.
+  const summary = await get(`?period=all&group=${crewId}`);
+  expect(summary.map((task) => task.id)).toContain(cards.parent);
+
+  // A malformed id, and a crew id this workspace has no rows for, name nothing.
+  expect(await get("?group=not-a-uuid")).toEqual([]);
+  expect(await get(`?group=${randomUUID()}`)).toEqual([]);
+});
+
+test("executor answers to one coworker by its whole id, commas and all", async () => {
+  // A package coworker's id may contain a comma; as `executors=` it would be split into two ids.
+  const comma = `${suite}-pkg,with-comma`;
+  const [card] = await runAsTenant(tenant, () =>
+    database
+      .insert(tasks)
+      .values({
+        title: "A package coworker's card",
+        executorAgentId: comma,
+        source: "chat",
+        status: "done",
+      })
+      .returning({ id: tasks.id }),
+  );
+  const one = await get(`?executor=${encodeURIComponent(comma)}`);
+  expect(one.map((task) => task.id)).toEqual([card!.id]);
 });

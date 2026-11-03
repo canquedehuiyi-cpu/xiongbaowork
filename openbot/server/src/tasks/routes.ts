@@ -8,6 +8,7 @@ import {
   inArray,
   isNull,
   like,
+  or,
   sql,
 } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -21,13 +22,23 @@ import {
   groupTaskRuns,
   intelligenceChannelMappings,
   modelUsage,
+  taskSource,
   tasks,
   wakerFlows,
+  wakerGroupMembers,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
+
+/**
+ * What may be asked of `tasks.source`, and nothing else. The column is a Postgres enum, so a value
+ * outside it would reach the database as `22P02` and come back as a 500 on input anyone can type.
+ */
+type TaskSource = (typeof taskSource.enumValues)[number];
+const isTaskSource = (value: string): value is TaskSource =>
+  (taskSource.enumValues as readonly string[]).includes(value);
 
 const PERIODS: Record<string, number> = {
   week: 7 * 86400000,
@@ -342,8 +353,37 @@ export function createTaskRoutes(
      * has.
      */
     const executors = context.req.query("executors");
+    /*
+     * Spec A4's Group choice, by the crew's own id. Its roster alone is not the crew's work: a crew
+     * run's parent card names no coworker (`tasks.executor_agent_id` is null on it, see the schema), so
+     * an `executors=` roster filter drops exactly the card that stands for the whole run. A group is
+     * therefore its members' cards, the parent card of every run of this crew, and those runs' step
+     * cards (a step whose coworker has since left the crew is still part of that run). Read under the
+     * caller's own scope like the rest; a malformed id names no crew and matches nothing.
+     */
+    const group = context.req.query("group");
     if (status) conditions.push(eq(tasks.status, status as never));
-    if (source) conditions.push(eq(tasks.source, source as never));
+    /*
+     * Spec A4/C2: 触发方式 is one choice on the screen and more than one value here — 自主工作 is a
+     * routine OR a responsibility firing, and that pair is also the board's 无人值守 filter. So the
+     * parameter is a comma list. Values the enum does not know are dropped rather than sent on, and a
+     * list left with nothing in it (`?source=`, or only unknown words) matches nothing — the same rule
+     * `executors=` keeps below: a filter that was asked for and names nothing is an answer, not the
+     * absence of a filter.
+     */
+    if (source !== undefined) {
+      const sources = [
+        ...new Set(
+          source
+            .split(",")
+            .map((value) => value.trim())
+            .filter(isTaskSource),
+        ),
+      ];
+      conditions.push(
+        sources.length > 0 ? inArray(tasks.source, sources) : sql`false`,
+      );
+    }
     if (executor) conditions.push(eq(tasks.executorAgentId, executor));
     // `!== undefined` rather than truthiness: `?executors=` with nothing after it is a crew that has
     // nobody in it, which is an answer — no work — and not the same as never being asked.
@@ -352,6 +392,29 @@ export function createTaskRoutes(
       conditions.push(
         ids.length > 0 ? inArray(tasks.executorAgentId, ids) : sql`false`,
       );
+    }
+    if (group !== undefined) {
+      if (!UUID_PATTERN.test(group)) {
+        conditions.push(sql`false`);
+      } else {
+        const runParents = database
+          .select({ id: groupTaskRuns.parentTaskId })
+          .from(groupTaskRuns)
+          .where(eq(groupTaskRuns.groupId, group));
+        conditions.push(
+          or(
+            inArray(
+              tasks.executorAgentId,
+              database
+                .select({ id: wakerGroupMembers.agentId })
+                .from(wakerGroupMembers)
+                .where(eq(wakerGroupMembers.groupId, group)),
+            ),
+            inArray(tasks.id, runParents),
+            inArray(tasks.parentTaskId, runParents),
+          ),
+        );
+      }
     }
     if (search) conditions.push(like(tasks.title, `%${search}%`));
     if (deviceId) conditions.push(eq(tasks.deviceId, deviceId));

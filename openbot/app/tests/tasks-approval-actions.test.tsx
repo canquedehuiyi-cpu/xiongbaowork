@@ -438,7 +438,7 @@ test("批准 flips every card sharing the approval to 进行中 before the serve
   view.unmount();
 });
 
-test("拒绝 flips every card sharing the approval to 失败", async () => {
+test("拒绝 flips every card sharing the approval to 已结束-失败", async () => {
   const server = installServer();
   const view = draw();
   await ready(view, server.requests);
@@ -449,7 +449,8 @@ test("拒绝 flips every card sharing the approval to 失败", async () => {
     expect(badge(view, "parent")?.getAttribute("data-status")).toBe("failed");
     expect(badge(view, "step")?.getAttribute("data-status")).toBe("failed");
   });
-  expect(badge(view, "step")?.textContent).toBe("失败");
+  // Spec A3's wording for a failure (was "失败" before D05 P7 relabelled the board).
+  expect(badge(view, "step")?.textContent).toBe("已结束-失败");
   expect(badge(view, "other")?.getAttribute("data-status")).toBe(
     "needs_action",
   );

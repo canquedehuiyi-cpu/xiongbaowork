@@ -14,6 +14,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 /**
  * The board address, in full: which machine, which crew, which status, which words, how far back,
@@ -29,14 +30,50 @@ import { taskAction } from "@/lib/tasks/actions";
  */
 type View = "list" | "lanes";
 
+/**
+ * Spec A4's 触发方式, as the address names it: one word per choice on the screen, each of which is
+ * one or more of the server's `source` values (see `TRIGGERS`). Empty is every way work can start.
+ */
+export type Trigger = "" | "chat" | "autonomous" | "handoff";
+
 type BoardSearch = {
   machineId: string;
+  /** A roster, comma-joined, as a /wakers link writes it. Sent as `executors=`. */
   crew: string;
+  /** One coworker chosen in the Waker/Group dropdown, by its whole id (it may contain a comma). */
+  executor: string;
+  /** One crew chosen in the Waker/Group dropdown, by the crew's id: its runs' cards come with it. */
+  group: string;
   status: string;
   q: string;
   period: Period;
   view: View;
+  source: Trigger;
 };
+
+/**
+ * The 触发方式 choices and what each one asks of the server (A3's three sources, C2's 无人值守).
+ *
+ * 自主工作 is a routine firing OR a responsibility firing — nobody was at the keyboard for either — so
+ * it is also the board's 无人值守 filter, and the option says so. 交接 is work one coworker passed to
+ * another: a hand-off, and a crew's step, which is a hand-off the template planned (I2).
+ */
+export const TRIGGERS: {
+  key: Exclude<Trigger, "">;
+  label: string;
+  sources: string[];
+}[] = [
+  { key: "chat", label: "对话触发", sources: ["chat"] },
+  {
+    key: "autonomous",
+    label: "自主工作（无人值守）",
+    sources: ["routine", "responsibility"],
+  },
+  { key: "handoff", label: "交接", sources: ["handoff", "group_run"] },
+];
+
+const triggerOf = (value: string): Trigger =>
+  TRIGGERS.some((entry) => entry.key === value) ? (value as Trigger) : "";
 
 export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
   const text = (key: string): string => {
@@ -48,19 +85,50 @@ export const boardSearch = (search: Record<string, unknown>): BoardSearch => {
   return {
     machineId: text("machineId"),
     crew: text("crew"),
+    executor: text("executor"),
+    group: text("group"),
     status: text("status"),
     q: text("q"),
     period: period === "week" || period === "all" ? period : "month",
     view: view === "lanes" ? view : "list",
+    source: triggerOf(text("source")),
   };
+};
+
+/**
+ * The board's address, put on the wire. One function for both reads so the page and its tests agree
+ * on the request format by construction rather than by two copies of it.
+ *
+ * `scope` is the part of the address the stat bar is also read under — which machine, which crew,
+ * which 触发方式, how far back — and `list` adds the two things a person narrows the list by (status
+ * and the words in the search box), which the bar must not move with.
+ */
+export const boardQuery = (
+  search: BoardSearch,
+): { list: string; scope: string } => {
+  const scope = [`period=${search.period}`];
+  if (search.machineId)
+    scope.push(`deviceId=${encodeURIComponent(search.machineId)}`);
+  if (search.crew) scope.push(`executors=${encodeURIComponent(search.crew)}`);
+  if (search.executor)
+    scope.push(`executor=${encodeURIComponent(search.executor)}`);
+  if (search.group) scope.push(`group=${encodeURIComponent(search.group)}`);
+  const trigger = TRIGGERS.find((entry) => entry.key === search.source);
+  if (trigger) scope.push(`source=${trigger.sources.join(",")}`);
+  const list = [...scope];
+  // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
+  if (search.status && search.status !== "ended")
+    list.push(`status=${encodeURIComponent(search.status)}`);
+  if (search.q) list.push(`q=${encodeURIComponent(search.q)}`);
+  return { list: list.join("&"), scope: scope.join("&") };
 };
 
 export const Route = createFileRoute("/_authed/_app/tasks")({
   component: TasksPage,
   /**
-   * boardSearch always answers all six fields, but any one of them may be absent from an incoming
+   * boardSearch always answers all seven fields, but any one of them may be absent from an incoming
    * link: the sidebar pointing at /tasks and a wakers page pointing at one crew are both already
-   * complete questions. Declaring the schema required here would make unrelated links carry six keys
+   * complete questions. Declaring the schema required here would make unrelated links carry seven keys
    * nobody chose, so the route accepts a partial address and boardSearch fills in the rest.
    */
   validateSearch: (search: Record<string, unknown>): Partial<BoardSearch> =>
@@ -85,6 +153,12 @@ type Task = {
   title: string;
   executorAgentId: string | null;
   source: string;
+  /**
+   * What exactly fired an unattended card (a routine, a duty, a proactive check-in, an automation),
+   * when the writer recorded it. Absent from an older server and null on most rows today; the sub-label
+   * then falls back to what `source` alone can say. See `sourceLabelOf`.
+   */
+  triggerSource?: string | null;
   status: string;
   channelRef: string | null;
   /**
@@ -138,9 +212,14 @@ const NOTHING_DECIDING: ReadonlySet<string> = new Set();
  */
 export const LANES: { key: string; label: string; statuses: string[] }[] = [
   { key: "running", label: "进行中", statuses: ["running"] },
+  /*
+   * Spec A5 names the middle column 需要操作, the same words the stat bar and the region's first tab
+   * use. What it holds is unchanged: an approval or question, a result to accept, a failure not yet
+   * filed away — each of them waits on a person doing something.
+   */
   {
     key: "attention",
-    label: "需要关注",
+    label: "需要操作",
     statuses: ["needs_action", "awaiting_review", "failed"],
   },
   { key: "finished", label: "已结束", statuses: ["done"] },
@@ -159,16 +238,56 @@ const STATUS_LABEL: Record<string, string> = {
   running: "进行中",
   needs_action: "需要操作",
   awaiting_review: "待查收",
-  done: "已完成",
-  failed: "失败",
+  // Spec A3: both ways work ends say that it ended first, and then how.
+  done: "已结束-已完成",
+  failed: "已结束-失败",
 };
 
+/**
+ * Spec A3's three sources. `routine` and `responsibility` are the same answer to "who started this" —
+ * nobody, it ran on its own — so they share 自主工作 and differ in the sub-label; a crew's step is a
+ * hand-off the template planned, so it reads 交接 like any other.
+ */
 const SOURCE_LABEL: Record<string, string> = {
-  chat: "对话",
+  chat: "对话触发",
+  routine: "自主工作",
+  responsibility: "自主工作",
+  handoff: "交接",
+  group_run: "交接",
+};
+
+/**
+ * Which kind of unattended work it was. `triggerSource` is the precise answer when the writer left
+ * one; otherwise the source itself still tells a routine from a duty.
+ */
+const AUTONOMOUS_DETAIL: Record<string, string> = {
   routine: "例行",
   responsibility: "职责",
-  handoff: "交接",
-  group_run: "组团",
+  proactive: "巡检",
+  automation: "自动任务",
+  wake_up: "唤醒跟进",
+};
+
+/** The stored trigger may carry a suffix (`automation:<kind>`); its kind is the part before it. */
+const triggerKindOf = (trigger: string) => trigger.split(":", 1)[0] ?? trigger;
+
+/**
+ * A card's source, as the board prints it: the A3 label, and for 自主工作 what kind of it. An unknown
+ * source falls through to itself, for the reason `STATUS_LABEL` gives.
+ */
+export const sourceLabelOf = (task: {
+  source: string;
+  triggerSource?: string | null;
+}): { label: string; detail: string | null } => {
+  const label = SOURCE_LABEL[task.source] ?? task.source;
+  if (label !== "自主工作") return { label, detail: null };
+  const detail =
+    (task.triggerSource
+      ? AUTONOMOUS_DETAIL[triggerKindOf(task.triggerSource)]
+      : undefined) ??
+    AUTONOMOUS_DETAIL[task.source] ??
+    null;
+  return { label, detail };
 };
 
 /** The board's two shapes of the same list. Rendered from the enum, which reads as English. */
@@ -259,8 +378,8 @@ const FILTERS = [
   { key: "running", label: "进行中" },
   { key: "needs_action", label: "需要操作" },
   { key: "awaiting_review", label: "查收结果" },
-  { key: "done", label: "已完成" },
-  { key: "failed", label: "失败" },
+  { key: "done", label: "已结束-已完成" },
+  { key: "failed", label: "已结束-失败" },
 ] as const;
 
 /**
@@ -331,6 +450,8 @@ export const boardEmptySentence = (filters: {
   crew: string;
   status: string;
   q: string;
+  /** The 触发方式 axis (spec A4); optional because the sentence predates it. */
+  source?: string;
   /**
    * Whether `machineId` names one of this person's registered devices: `false` only once the device
    * list has answered and the id is not on it. While that list is loading or has failed the answer
@@ -338,7 +459,9 @@ export const boardEmptySentence = (filters: {
    */
   machineRegistered?: boolean;
 }): string => {
-  const narrowed = Boolean(filters.status || filters.q || filters.crew);
+  const narrowed = Boolean(
+    filters.status || filters.q || filters.crew || filters.source,
+  );
   /*
    * Spec F5: an address naming a machine this person does not have is not an idle machine -- there
    * is no machine. No filter can bring work back from it, so this answer comes before the others.
@@ -591,6 +714,17 @@ function TaskCard({
     (coworker) => coworker.id === task.executorAgentId,
   );
   const breaker = breakerOf(task);
+  const origin = sourceLabelOf(task);
+  const executorFace = executor ? (
+    <>
+      <AbstractAvatar
+        name={executor.name}
+        seed={executor.avatarSeed}
+        size={16}
+      />
+      {executor.name}
+    </>
+  ) : null;
   const deliverable = deliverableSummary(task.deliverableRef);
 
   return (
@@ -651,28 +785,42 @@ function TaskCard({
        * broke one character per line; each item keeps its own line and the row takes a second one.
        */}
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs opacity-60 [&>*]:shrink-0 [&>*]:whitespace-nowrap">
+        {executor ? (
+          /*
+           * Spec A3: the executor is a way into that coworker's own page (D5). Only a coworker the
+           * roster knows is a link — an id with no row behind it would open a page that can only say
+           * it found nobody.
+           */
+          <Link
+            className="flex items-center gap-1 hover:underline"
+            data-executor={executor.id}
+            params={{ agentId: executor.id }}
+            title={executor.id}
+            to="/wakers/$agentId"
+          >
+            {executorFace}
+          </Link>
+        ) : (
+          <span
+            className="flex items-center gap-1"
+            title={task.executorAgentId ?? undefined}
+          >
+            {
+              /*
+               * No coworker named, so say who it belongs to rather than printing half an id. A crew's
+               * parent card is the whole group's ask; the steps underneath it name the one who does
+               * each part. An unknown id still falls back to its prefix, because there a coworker row
+               * really is missing and the number is the only lead somebody has.
+               */
+              task.executorAgentId ? task.executorAgentId.slice(0, 8) : "整组"
+            }
+          </span>
+        )}
         <span
-          className="flex items-center gap-1"
-          title={task.executorAgentId ?? undefined}
+          className="rounded bg-foreground/5 px-1.5"
+          data-source={task.source}
         >
-          {executor ? (
-            <AbstractAvatar
-              name={executor.name}
-              seed={executor.avatarSeed}
-              size={16}
-            />
-          ) : null}
-          {executor?.name ??
-            /*
-             * No coworker named, so say who it belongs to rather than printing half an id. A crew's
-             * parent card is the whole group's ask; the steps underneath it name the one who does
-             * each part. An unknown id still falls back to its prefix, because there a coworker row
-             * really is missing and the number is the only lead somebody has.
-             */
-            (task.executorAgentId ? task.executorAgentId.slice(0, 8) : "整组")}
-        </span>
-        <span className="rounded bg-foreground/5 px-1.5 capitalize">
-          {SOURCE_LABEL[task.source] ?? task.source}
+          {origin.detail ? `${origin.label} · ${origin.detail}` : origin.label}
         </span>
         {/*
          * Which model answered it. The board can hold a developer's task and its reviewer's task in
@@ -836,6 +984,55 @@ export function AttentionRegion({
 
 type Period = "week" | "month" | "all";
 
+/**
+ * Spec A4's Waker/Group dropdown. Each option's value says which axis of the address it writes: a
+ * coworker is `executor` by its whole id (sent as `executor=`, never split, so an id with a comma in it
+ * still names one coworker), and a crew is `group` by the crew's id (sent as `group=`, which the server
+ * answers with the members' cards AND the crew's run cards, whose parent names no coworker). A crew
+ * with nobody in it is still offered: its runs are still its work.
+ */
+export const executorOptions = (
+  coworkers: { id: string; name: string }[],
+  crews: { id: string; name: string }[],
+): { kind: "waker" | "group"; value: string; label: string }[] => [
+  ...coworkers.map((coworker) => ({
+    kind: "waker" as const,
+    value: `waker:${coworker.id}`,
+    label: coworker.name,
+  })),
+  ...crews.map((group) => ({
+    kind: "group" as const,
+    value: `group:${group.id}`,
+    label: `小组 · ${group.name}`,
+  })),
+];
+
+/** The dropdown's value for an address: whichever of the three "who" axes it carries. */
+export const whoValue = (
+  search: Pick<BoardSearch, "crew" | "executor" | "group">,
+): string =>
+  search.group
+    ? `group:${search.group}`
+    : search.executor
+      ? `waker:${search.executor}`
+      : search.crew
+        ? `crew:${search.crew}`
+        : "";
+
+/** The address a dropdown value writes: one "who" axis set, the other two cleared. */
+export const whoAddress = (
+  value: string,
+): Pick<BoardSearch, "crew" | "executor" | "group"> => {
+  const cut = value.indexOf(":");
+  const kind = cut < 0 ? "" : value.slice(0, cut);
+  const id = cut < 0 ? "" : value.slice(cut + 1);
+  return {
+    crew: kind === "crew" ? id : "",
+    executor: kind === "waker" ? id : "",
+    group: kind === "group" ? id : "",
+  };
+};
+
 const PERIODS: { label: string; value: Period }[] = [
   { label: "一周", value: "week" },
   { label: "一月", value: "month" },
@@ -844,14 +1041,18 @@ const PERIODS: { label: string; value: Period }[] = [
 
 function TasksPage() {
   const queryClient = useQueryClient();
+  const address = boardSearch(Route.useSearch());
   const {
     machineId,
     crew,
+    executor,
+    group,
     status,
     q: search,
     period,
     view,
-  } = boardSearch(Route.useSearch());
+    source: trigger,
+  } = address;
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
   /*
@@ -870,7 +1071,7 @@ function TasksPage() {
   const patch = (over: Partial<BoardSearch>) =>
     navigate({
       replace: true,
-      search: { machineId, crew, status, q: search, period, view, ...over },
+      search: { ...address, ...over },
       to: "/tasks",
     });
   /* Each control writes one axis of the address; the other axes ride along unchanged. */
@@ -878,16 +1079,30 @@ function TasksPage() {
   const setStatus = (next: string) => patch({ status: next });
   const setSearch = (next: string) => patch({ q: next });
   const setPeriod = (next: Period) => patch({ period: next });
-  const query = [`period=${period}`];
-  // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
-  if (status && status !== "ended") query.push(`status=${status}`);
-  if (search) query.push(`q=${encodeURIComponent(search)}`);
-  if (machineId) query.push(`deviceId=${encodeURIComponent(machineId)}`);
-  if (crew) query.push(`executors=${encodeURIComponent(crew)}`);
+  const wire = boardQuery(address);
+  /*
+   * Spec A4's two dropdowns read the coworkers and crews this person already has. A choice made here
+   * is one coworker (`executor`) or one crew (`group`); a /wakers link still arrives as a roster
+   * (`crew`) and is shown as the filter it is.
+   */
+  const coworkers = useQuery(agentListQueryOptions());
+  const crews = useQuery(wakerGroupsQueryOptions());
+  const crewOptions = executorOptions(coworkers.data ?? [], crews.data ?? []);
+  const who = whoValue(address);
+  /*
+   * The 触发方式 axis joins both keys only when it is chosen. An unfiltered board keeps the exact keys
+   * it always had, which other screens and suites address by value; a chosen trigger makes a longer,
+   * still distinct key, and `["tasks"]` / `["tasks-summary"]` prefix invalidation reaches both.
+   */
+  const byTrigger = [
+    ...(trigger ? [trigger] : []),
+    ...(executor ? [`executor:${executor}`] : []),
+    ...(group ? [`group:${group}`] : []),
+  ];
   const tasks = useQuery({
-    queryKey: ["tasks", period, status, search, machineId, crew],
+    queryKey: ["tasks", period, status, search, machineId, crew, ...byTrigger],
     queryFn: () =>
-      client<Task[]>(`/api/tasks?${query.join("&")}`, "tasks", {
+      client<Task[]>(`/api/tasks?${wire.list}`, "tasks", {
         fallback: "无法读取任务，请稍后重试。",
       }),
     refetchInterval: 5000,
@@ -904,15 +1119,11 @@ function TasksPage() {
    * workspace, which is the one thing a summary has to stay out of.
    */
   const summary = useQuery({
-    queryKey: ["tasks-summary", period, machineId, crew],
-    queryFn: async () => {
-      const scope = [`period=${period}`];
-      if (machineId) scope.push(`deviceId=${encodeURIComponent(machineId)}`);
-      if (crew) scope.push(`executors=${encodeURIComponent(crew)}`);
-      return client<Task[]>(`/api/tasks?${scope.join("&")}`, "tasks", {
+    queryKey: ["tasks-summary", period, machineId, crew, ...byTrigger],
+    queryFn: () =>
+      client<Task[]>(`/api/tasks?${wire.scope}`, "tasks", {
         fallback: "无法读取任务统计，请稍后重试。",
-      });
-    },
+      }),
     refetchInterval: 30000,
   });
   /*
@@ -1147,6 +1358,40 @@ function TasksPage() {
           className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         {/*
+         * Spec A4: who did it — one coworker or a whole crew — and how it started. Both are axes of
+         * the address like the rest, so a narrowed board can be bookmarked and shared.
+         */}
+        <select
+          aria-label="Waker/Group"
+          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          onChange={(event) => patch(whoAddress(event.target.value))}
+          value={who}
+        >
+          <option value="">全部 Waker/Group</option>
+          {who && !crewOptions.some((option) => option.value === who) ? (
+            // A link from elsewhere may name a roster no option spells; it is still what is applied.
+            <option value={who}>当前筛选的员工</option>
+          ) : null}
+          {crewOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="触发方式"
+          className="bg-foreground/5 rounded-full px-3 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          onChange={(event) => patch({ source: triggerOf(event.target.value) })}
+          value={trigger}
+        >
+          <option value="">全部触发方式</option>
+          {TRIGGERS.map((entry) => (
+            <option key={entry.key} value={entry.key}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+        {/*
          * A crew arrived at from /wakers, shown as the thing it was filtered by and dismissible
          * without losing the machine alongside it: two axes, each cleared on its own.
          */}
@@ -1243,9 +1488,10 @@ function TasksPage() {
             <li className="py-10 text-center text-sm opacity-50">
               {boardEmptySentence({
                 machineId,
-                crew,
+                crew: crew || executor || group,
                 status,
                 q: search,
+                source: trigger,
                 machineRegistered,
               })}
             </li>
@@ -1297,9 +1543,10 @@ function TasksPage() {
                 ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
                 : boardEmptySentence({
                     machineId,
-                    crew,
+                    crew: crew || executor || group,
                     status,
                     q: search,
+                    source: trigger,
                     machineRegistered,
                   })}
             </p>
