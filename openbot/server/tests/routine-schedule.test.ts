@@ -79,6 +79,25 @@ describe("nextOccurrence", () => {
     ).toThrow("Routines may run at most every 15 minutes.");
   });
 
+  test("accepts a once-every-leap-year schedule without walking centuries of calendar", () => {
+    // 09:00 every 29 February: 200 occurrences would be 800 years of day-by-day iteration, which
+    // blocked the event loop for seconds on the first request that named it (AUT4 timed out on it).
+    const started = performance.now();
+    const next = nextOccurrence(
+      "0 9 29 2 *",
+      "Asia/Shanghai",
+      new Date("2026-11-03T00:00:00Z"),
+    );
+    expect(next.toISOString()).toBe("2028-02-29T01:00:00.000Z");
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  test("still refuses a sub-floor pair on 29 February", () => {
+    expect(() =>
+      nextOccurrence("0,10 9 29 2 *", "UTC", new Date("2026-11-03T00:00:00Z")),
+    ).toThrow("Routines may run at most every 15 minutes.");
+  });
+
   test("refuses a sub-floor gap that only appears across midnight", () => {
     // 00:00, 00:50, 23:00 and 23:50 every day: every same-day gap clears the floor, but 23:50 to
     // the next day's 00:00 is ten minutes. A scan that stopped at one day's occurrences would

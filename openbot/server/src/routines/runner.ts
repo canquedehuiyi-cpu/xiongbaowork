@@ -31,7 +31,7 @@ import type { ChannelStore } from "../channels/routes";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
-import { runAsTenant } from "../tenant/context";
+import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import type { RoutineRunContext, RoutineStore } from "./store";
 
 /** Everything a headless turn needs, injectable so tests never dial a model. */
@@ -51,6 +51,23 @@ export type TurnRunner = (input: {
   userMessage?: Message;
   /** Durable inbound delivery id; reused by lock, runner and emitted events. */
   runId?: string;
+  /**
+   * The board card this turn answers for, when the caller keyed it by something other than `runId`.
+   *
+   * A routine firing files its card under the firing's own id (`routine_run_…`) and lets the turn mint
+   * a fresh run id for the lock, so the usage row that names the model has to be told which card it
+   * belongs to — the card reads the model back by exactly this reference. Absent, it is `runId`.
+   */
+  runRef?: string;
+  /**
+   * Whose run this is, when the caller does its work outside that tenant's frame.
+   *
+   * A follow-up, a delivery, a proactive run and a resumed question are each claimed by a worker on a
+   * timer, which has no tenant of its own, so the turn's own frame would file the usage row that names
+   * its model under nobody. Such a caller names the tenant of the row it claimed instead. Absent, the
+   * turn's own frame decides, which is right for every caller that already runs inside one.
+   */
+  tenantId?: string;
   /**
    * The caller has opened, and will close, this turn's card on the task board.
    *
@@ -162,8 +179,31 @@ export function createRoutineRunner(options: {
      * routine rather than from the run id's owner column, because a runner told whose rows they were
      * by an id alone could be told the wrong answer.
      */
-    return runAsTenant(context.tenantId, () =>
+    /*
+     * And only when that tenant is the owner's (G01-C). A routine stamped `system`, `platform` or
+     * nothing, or stamped with somebody other than its owner, names nobody to act as: it is not run,
+     * and its run row is closed from the platform frame, which is the one that can reach a row the
+     * routine's stamp does not admit. The sweep refuses such a routine before it is ever offered;
+     * this is the same guard on the worker and Run-now entries, which arrive with an id alone.
+     */
+    const ran = await runAsClaimedTenant(context, context.ownerUserId, () =>
       runAsOwner(routineRunId, context),
+    );
+    if (ran.ran) return;
+    console.warn(
+      JSON.stringify({
+        type: "routine-run-untrusted-tenant",
+        routineId: context.routineId,
+        routineRunId,
+        reason: ran.reason,
+      }),
+    );
+    await runAsTenant("platform", () =>
+      routineStore.finishRun(
+        routineRunId,
+        "failed",
+        "This routine has no owner to run as. Create it again.",
+      ),
     );
   }
 
@@ -323,6 +363,8 @@ export function createRoutineRunner(options: {
         agentId,
         threadId: channel.threadId,
         instruction,
+        // The card's key, so the model this turn ran on is read back onto the card.
+        runRef: routineRunId,
         // The card opened above is this firing's record; the runner files nothing. When that write
         // failed, the runner's own card is the only mark the month's work leaves.
         cardOwnedByCaller: carded,

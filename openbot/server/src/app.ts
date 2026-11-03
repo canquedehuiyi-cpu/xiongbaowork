@@ -1,4 +1,4 @@
-import type { Hono as HonoApp, MiddlewareHandler } from "hono";
+import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
@@ -8,6 +8,7 @@ import { createEnterpriseGate } from "./admin/gate";
 import { createEnterpriseAdminRoutes } from "./admin/routes";
 import {
   authoriseAgentCall,
+  callbackFrameFor,
   parseAgentToolCallInput,
   type RunAssertion,
   sameToken,
@@ -21,6 +22,7 @@ import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
 import { createApprovalRoutes } from "./approvals/routes";
+import { createAdminScope } from "./auth/admin-scope";
 import type { ApprovalService } from "./approvals/service";
 import {
   type AuditEventType,
@@ -31,6 +33,8 @@ import {
   auditQueryFromUrl,
   DEPLOYMENT_INITIATOR,
   recordAuditEvent,
+  recordPersonAuditEvent,
+  recordPlatformAuditEvent,
 } from "./audit";
 import { createDevRequireUser } from "./auth/dev-actor";
 import {
@@ -123,6 +127,7 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { PackageStatusReader } from "./tenant-package";
+import { capabilityFor, runAsTenant } from "./tenant/context";
 import {
   INSTRUCTIONS_LIMIT,
   InstructionsTooLongError,
@@ -478,8 +483,18 @@ export function createApp(
        * A count, not a list. The sign-in screen only needs to know whether to offer the email box
        * that routes by domain; naming the providers would tell anybody who loads the page which
        * companies use this deployment, which is not theirs to have before they sign in.
+       *
+       * Read as `platform` (G01-E): the providers are deployment rows, and this route runs before
+       * anybody has signed in, so there is no person's frame to read them in, the same reason the
+       * identity layer below runs as `platform`. With no frame it used to read as the legacy
+       * `system` fallback, and once that was removed it answered this whole route with a 500.
+       * Only the count leaves.
        */
-      ssoConfigured: ((await identityProviders?.list()) ?? []).length > 0,
+      ssoConfigured:
+        (identityProviders === undefined
+          ? []
+          : await runAsTenant("platform", () => identityProviders.list())
+        ).length > 0,
       /*
        * Whether an administrator requires SSO. The screen then leads with SSO and keeps social
        * sign-in only as the administrators' audited break-glass; the server refuses everybody else.
@@ -516,6 +531,16 @@ export function createApp(
     "/api/auth/sso/delete-provider": "identity_provider.removed",
   };
 
+  /*
+   * The identity layer is the deployment's, not any one person's, and these routes are reached before
+   * anybody is signed in. Its tables (users, sessions, accounts, SSO, SCIM) carry no tenant, so the
+   * handler and every hook it calls run as `platform` (G01) rather than in no frame at all; each hook
+   * that writes a person's own rows or trail names that person itself (`provisionTenant`, the audit
+   * rows in `auth/index.ts` and `auth/scim.ts`).
+   */
+  const asIdentityLayer = <T>(work: () => T): T =>
+    runAsTenant("platform", work);
+
   app.on(["GET", "POST"], "/api/auth/*", async (context) => {
     if (
       context.req.method === "GET" &&
@@ -535,13 +560,17 @@ export function createApp(
     }
 
     if (ADMIN_ONLY_AUTH_ROUTES.has(new URL(context.req.url).pathname)) {
-      const session = await auth.api.getSession({
-        headers: context.req.raw.headers,
-        // Fresh, not the cookie cache: a role changed a moment ago has to apply to this request.
-        query: { disableCookieCache: true },
-      });
+      const session = await asIdentityLayer(() =>
+        auth.api.getSession({
+          headers: context.req.raw.headers,
+          // Fresh, not the cookie cache: a role changed a moment ago has to apply to this request.
+          query: { disableCookieCache: true },
+        }),
+      );
       const roles = session?.user
-        ? ((await roleRepository?.rolesForUser(session.user.id)) ?? [])
+        ? ((await asIdentityLayer(() =>
+            roleRepository?.rolesForUser(session.user.id),
+          )) ?? [])
         : [];
       if (!roles.includes("admin")) {
         return context.json(
@@ -564,14 +593,17 @@ export function createApp(
             .catch(() => null)) as { providerId?: unknown } | null)
         : null;
 
-    const answer = await auth.handler(context.req.raw);
+    const answer = await asIdentityLayer(() => auth.handler(context.req.raw));
 
     if (auditStore && eventType && answer.ok) {
-      const session = await auth.api.getSession({
-        headers: context.req.raw.headers,
-        query: { disableCookieCache: true },
-      });
-      await recordAuditEvent(auditStore, {
+      const session = await asIdentityLayer(() =>
+        auth.api.getSession({
+          headers: context.req.raw.headers,
+          query: { disableCookieCache: true },
+        }),
+      );
+      // The administrator's own act, filed in their trail like every other admin route's rows.
+      const identityProviderEvent = {
         eventType,
         targetType: "identity_provider",
         ...(typeof named?.providerId === "string"
@@ -584,7 +616,14 @@ export function createApp(
             : {}),
           ...(session?.user?.email ? { by: session.user.email } : {}),
         },
-      });
+      };
+      await (session?.user
+        ? recordPersonAuditEvent(
+            auditStore,
+            session.user.id,
+            identityProviderEvent,
+          )
+        : recordPlatformAuditEvent(auditStore, identityProviderEvent));
     }
 
     return answer;
@@ -601,13 +640,30 @@ export function createApp(
     : auth && roleRepository
       ? createRequireUser(auth, roleRepository)
       : authenticationUnavailable;
+  // The admin capability (G01-E I10), switched on per route for the writes that need it.
+  const adminScope = roleRepository
+    ? createAdminScope({ roleRepository })
+    : undefined;
+  // Mounted on the admin routes below that read across people (G01-E P7). Without a role repository
+  // nobody can be shown to be an administrator, so it passes through and those routes refuse.
+  const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminScope?.adminCapability ?? ((_context, next) => next());
+  // The session's role is decided at sign-in; the capability is decided per request from the role
+  // repository. A role removed since then fails here as a 403, not as a refused platform read.
+  const capabilityMissing = (context: Context<{ Variables: AppVariables }>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: "Administrator access required." }, 403);
   // Enterprise controls: capability switches and the model allowlist in front of the routes they
   // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
   app.use("/api/*", createEnterpriseGate(requireUser));
-  app.route("/api/admin/enterprise", createEnterpriseAdminRoutes(requireUser));
+  app.route(
+    "/api/admin/enterprise",
+    createEnterpriseAdminRoutes(requireUser, adminScope),
+  );
   app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
     auth
-      ? auth.handler(context.req.raw)
+      ? asIdentityLayer(() => auth.handler(context.req.raw))
       : context.json({ error: "No identity provider is configured." }, 503),
   );
 
@@ -769,26 +825,48 @@ export function createApp(
     const denied = requireAdmin(context);
     return denied ?? context.json({ status: "ok" });
   });
-  app.get("/api/admin/audit-events", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) {
-      return denied;
-    }
-    if (!auditReader) {
-      return context.json({ error: "Audit logging is not configured." }, 503);
-    }
-
-    try {
-      return context.json(
-        await auditReader.list(auditQueryFromUrl(new URL(context.req.url))),
-      );
-    } catch (error) {
-      if (error instanceof AuditQueryError) {
-        return context.json({ error: error.message }, 400);
+  app.get(
+    "/api/admin/audit-events",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
       }
-      throw error;
-    }
-  });
+      if (!auditReader) {
+        return context.json({ error: "Audit logging is not configured." }, 503);
+      }
+      if (!adminScope) {
+        return context.json(
+          { error: "Administrator access is not configured." },
+          503,
+        );
+      }
+      const withoutCapability = capabilityMissing(context);
+      if (withoutCapability) return withoutCapability;
+
+      try {
+        const query = auditQueryFromUrl(new URL(context.req.url));
+        /*
+         * The whole deployment's trail, as `platform` (G01-E P7). Every row is stamped with the person
+         * it is about, so in the administrator's own frame this read answered with their rows only and
+         * the screen looked like a quiet deployment. Only an administrator holding the capability, which
+         * `adminCapability` grants after re-reading their role, gets past `asAdminPlatform`.
+         */
+        return context.json(
+          await adminScope.asAdminPlatform(context.var.actor, () =>
+            auditReader.list(query),
+          ),
+        );
+      } catch (error) {
+        if (error instanceof AuditQueryError) {
+          return context.json({ error: error.message }, 400);
+        }
+        throw error;
+      }
+    },
+  );
   /*
    * Who is here, and what they may do.
    *
@@ -914,66 +992,93 @@ export function createApp(
     return context.json({ person: await peopleStore.find(userId) });
   });
 
-  app.post("/api/admin/people/:userId/access", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) {
-      return denied;
-    }
-    if (!peopleStore) {
-      return context.json({ error: "People are not available." }, 503);
-    }
-
-    const body = await context.req.json().catch(() => null);
-    const revoked = (body as { revoked?: unknown } | null)?.revoked;
-    if (typeof revoked !== "boolean") {
-      return context.json({ error: "revoked must be true or false." }, 400);
-    }
-
-    const userId = context.req.param("userId");
-    const person = await peopleStore.find(userId);
-    if (!person) {
-      return context.json({ error: "That person is not here." }, 404);
-    }
-
-    // The same floor, for the same reason: removing somebody the configuration names would last
-    // until their next sign-in and no longer.
-    if (person.configuredAdmin && revoked) {
-      return context.json(
-        {
-          error:
-            "This deployment names that address in INITIAL_ADMIN_EMAILS, so they cannot be removed here. Change the configuration instead.",
-        },
-        409,
-      );
-    }
-
-    // Nobody can remove themselves. An administrator who does has locked themselves out of the
-    // screen that would undo it.
-    if (revoked && context.var.actor.id === userId) {
-      return context.json({ error: "You cannot remove your own access." }, 409);
-    }
-
-    if (person.revoked !== revoked) {
-      if (revoked) {
-        await peopleStore.revoke(userId, context.var.actor.id);
-      } else {
-        await peopleStore.restore(userId);
+  app.post(
+    "/api/admin/people/:userId/access",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
       }
-      await recordPersonEvent(
-        auditStore,
-        context,
-        revoked ? "person.access_revoked" : "person.access_restored",
-        person,
-        {},
-      );
-    }
+      if (!peopleStore) {
+        return context.json({ error: "People are not available." }, 503);
+      }
+      // Checked before anything is written: removing somebody without retiring what they own is the
+      // half-done removal the retirement below exists to prevent.
+      if (!adminScope) {
+        return context.json(
+          { error: "Administrator access is not configured." },
+          503,
+        );
+      }
+      const withoutCapability = capabilityMissing(context);
+      if (withoutCapability) return withoutCapability;
 
-    if (revoked) {
-      await peopleStore.retireOwned(userId, context.var.actor.id);
-    }
+      const body = await context.req.json().catch(() => null);
+      const revoked = (body as { revoked?: unknown } | null)?.revoked;
+      if (typeof revoked !== "boolean") {
+        return context.json({ error: "revoked must be true or false." }, 400);
+      }
 
-    return context.json({ person: await peopleStore.find(userId) });
-  });
+      const userId = context.req.param("userId");
+      const person = await peopleStore.find(userId);
+      if (!person) {
+        return context.json({ error: "That person is not here." }, 404);
+      }
+
+      // The same floor, for the same reason: removing somebody the configuration names would last
+      // until their next sign-in and no longer.
+      if (person.configuredAdmin && revoked) {
+        return context.json(
+          {
+            error:
+              "This deployment names that address in INITIAL_ADMIN_EMAILS, so they cannot be removed here. Change the configuration instead.",
+          },
+          409,
+        );
+      }
+
+      // Nobody can remove themselves. An administrator who does has locked themselves out of the
+      // screen that would undo it.
+      if (revoked && context.var.actor.id === userId) {
+        return context.json(
+          { error: "You cannot remove your own access." },
+          409,
+        );
+      }
+
+      if (person.revoked !== revoked) {
+        if (revoked) {
+          await peopleStore.revoke(userId, context.var.actor.id);
+        } else {
+          await peopleStore.restore(userId);
+        }
+        await recordPersonEvent(
+          auditStore,
+          context,
+          revoked ? "person.access_revoked" : "person.access_restored",
+          person,
+          {},
+        );
+      }
+
+      if (revoked && adminScope) {
+        /*
+         * In the removed person's own frame (G01-E I6). Their credentials and brokered connections are
+         * stamped with them, so from the administrator's frame the sweep found none, retired nothing
+         * and reported that as done. `adminActAsOwner` refuses without the capability, and the trail
+         * rows the retirement writes are the person's.
+         */
+        const actorId = context.var.actor.id;
+        await adminScope.adminActAsOwner(context.var.actor, userId, () =>
+          peopleStore.retireOwned(userId, actorId),
+        );
+      }
+
+      return context.json({ person: await peopleStore.find(userId) });
+    },
+  );
 
   /*
    * The identity providers this deployment has registered.
@@ -1042,7 +1147,13 @@ export function createApp(
     },
   );
 
-  app.get("/api/admin/credentials", requireUser, async (context) => {
+  /*
+   * The credentials screen holds the admin capability (G01-E P10): an MCP server's own token is sealed
+   * to `team` (Q3), which only an administrator holding it may write, rotate, revoke or list. Model
+   * and connector keys stay in the administrator's own frame, as they were.
+   */
+  const CREDENTIALS = "/api/admin/credentials";
+  app.get(CREDENTIALS, requireUser, adminCapability, async (context) => {
     const denied = requireAdmin(context);
     if (denied) {
       return denied;
@@ -1056,7 +1167,7 @@ export function createApp(
 
     return context.json({ credentials: await credentialService.list() });
   });
-  app.post("/api/admin/credentials", requireUser, async (context) => {
+  app.post(CREDENTIALS, requireUser, adminCapability, async (context) => {
     const denied = requireAdmin(context);
     if (denied) {
       return denied;
@@ -1074,14 +1185,23 @@ export function createApp(
       return context.json({ error: "Credential input is invalid." }, 400);
     }
 
-    return context.json(
-      { credential: await credentialService.create(input) },
-      201,
-    );
+    try {
+      return context.json(
+        { credential: await credentialService.create(input) },
+        201,
+      );
+    } catch (error) {
+      // A team server token without the capability (a role removed since sign-in).
+      if (error instanceof CredentialRefusedError) {
+        return context.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
   });
   app.post(
     "/api/admin/credentials/:credentialId/rotate",
     requireUser,
+    adminCapability,
     async (context) => {
       const denied = requireAdmin(context);
       if (denied) {
@@ -1118,6 +1238,7 @@ export function createApp(
   app.post(
     "/api/admin/credentials/:credentialId/revoke",
     requireUser,
+    adminCapability,
     async (context) => {
       const denied = requireAdmin(context);
       if (denied) {
@@ -1187,19 +1308,23 @@ export function createApp(
          */
         if (auditStore) {
           try {
-            await recordAuditEvent(auditStore, {
-              eventType: "routines.dispatch_refused",
-              targetType: "worker",
-              initiator: DEPLOYMENT_INITIATOR,
-              payload: {
-                reason: !expected
-                  ? "unconfigured"
-                  : !offered
-                    ? "missing-header"
-                    : "mismatch",
-                note: "A worker's bearer secret did not check out, so no routine run was dispatched.",
-              },
-            });
+            // Nobody's row, so written as `platform` like `mcp.callback_refused`: unframed it was
+            // `system`, which every tenant's trail shows (G01-C).
+            await runAsTenant("platform", () =>
+              recordAuditEvent(auditStore, {
+                eventType: "routines.dispatch_refused",
+                targetType: "worker",
+                initiator: DEPLOYMENT_INITIATOR,
+                payload: {
+                  reason: !expected
+                    ? "unconfigured"
+                    : !offered
+                      ? "missing-header"
+                      : "mismatch",
+                  note: "A worker's bearer secret did not check out, so no routine run was dispatched.",
+                },
+              }),
+            );
           } catch (error) {
             // Never fatal: the 401 above is already decided and sent. A trail that is briefly
             // unavailable is not a reason to turn a refusal into a 500.
@@ -1272,6 +1397,7 @@ export function createApp(
         agentProfileStore ? computerAccessCheck(agentProfileStore) : canUseBot,
         pageFrames,
         auditReader,
+        adminScope,
       ),
     );
   }
@@ -1332,6 +1458,9 @@ export function createApp(
         // stores as running at this address — can be told apart from one a person hosts.
         config.managedAgent?.endpoint?.toString(),
         quota,
+        // An administrator reaches another person's Bot here as `platform`, and changes it in the
+        // owner's frame (G01-E P8b).
+        adminScope,
       ),
     );
     // Choosing a coworker for an untagged message needs the same permission-filtered roster the
@@ -1480,12 +1609,16 @@ export function createApp(
   if (coworker?.teamBots)
     app.route(
       "/api/team-bots",
-      createTeamBotRoutes(coworker.teamBots, requireUser),
+      createTeamBotRoutes(coworker.teamBots, requireUser, adminScope),
     );
   if (coworker?.approvals)
     app.route(
       "/api/approvals",
-      createApprovalRoutes(coworker.approvals, requireUser),
+      createApprovalRoutes(
+        coworker.approvals,
+        requireUser,
+        adminScope?.adminCapability,
+      ),
     );
   if (coworker?.passwords) {
     app.route(
@@ -1561,6 +1694,7 @@ export function createApp(
         auditStore,
         canUseBot,
         sandboxedStore,
+        adminScope?.adminCapability,
       ),
     );
   }
@@ -1600,6 +1734,12 @@ export function createApp(
           appUrl: config.appUrl,
         },
         composio,
+        /*
+         * A team Bot's grants are `team`, and an MCP server, its tools and its secret are `team` too:
+         * an administrator writes them with the capability, and acts on somebody else's Bot in its
+         * owner's frame (G01-E P8b, P10).
+         */
+        adminScope,
       ),
     );
   }
@@ -1661,20 +1801,23 @@ export function createApp(
          * reached for" is the useful half of the question.
          */
         if (auditStore) {
-          await recordAuditEvent(auditStore, {
-            eventType: "mcp.callback_refused",
-            targetType: "mcp_tool",
-            initiator: DEPLOYMENT_INITIATOR,
-            targetId:
-              typeof body?.name === "string"
-                ? body.name.slice(0, 120)
-                : "unknown",
-            payload: {
-              refusal: verdict.reason,
-              status: verdict.status,
-              note: "A caller could not prove which Bot it was, so no grant was consulted.",
-            },
-          });
+          // Nobody's: the caller proved no person, so the row is the platform's, not `system`'s.
+          await runAsTenant("platform", () =>
+            recordAuditEvent(auditStore, {
+              eventType: "mcp.callback_refused",
+              targetType: "mcp_tool",
+              initiator: DEPLOYMENT_INITIATOR,
+              targetId:
+                typeof body?.name === "string"
+                  ? body.name.slice(0, 120)
+                  : "unknown",
+              payload: {
+                refusal: verdict.reason,
+                status: verdict.status,
+                note: "A caller could not prove which Bot it was, so no grant was consulted.",
+              },
+            }),
+          );
         }
         return context.json({ error: verdict.reason }, verdict.status);
       }
@@ -1684,92 +1827,154 @@ export function createApp(
         return context.json({ error: parsedCall.error }, 400);
       }
 
-      try {
-        const deploymentResult = await deploymentToolCaller?.({
-          name: parsedCall.value.ref,
-          args: parsedCall.value.args,
-          botId: verdict.botId,
-          actorId: verdict.actorId,
-          initiator: verdict.initiator,
-          run: verdict.run,
-        });
-        if (deploymentResult) return context.json(deploymentResult);
+      /*
+       * EVERYTHING AFTER THE VERDICT RUNS AS THE PERSON THE SIGNED RUN NAMES (G01).
+       *
+       * This route has a shared secret instead of a session, so no guard ever framed it, and every
+       * row the call wrote — the follow-up a Bot schedules for itself, the hop it offers another Bot,
+       * the memory it keeps, the audit row of the tool it ran — was stamped `system`, which every
+       * tenant can read. The actor comes from the assertion this deployment signed for the run, never
+       * from the body, so it is the one trusted answer to "whose work is this". An assertion that
+       * names nobody's tenant is refused rather than run as the platform or as `system`.
+       */
+      /*
+       * AND IN THE BOT'S RIGHT FRAME (G01-E PCB). The token lookup above is a narrow `platform` read,
+       * so it now finds a person's private Bot and a `team` Bot; which frame the call then runs in
+       * is decided by `callbackFrameFor` from the Bot's stamp and the signed person. A private Bot
+       * runs in its owner's tenant and only for its owner; a `team` Bot (a stamp, never a frame) and
+       * a catalogue Bot run in the asking person's own frame, exactly as their in-process turn does.
+       */
+      const frame = callbackFrameFor(verdict);
+      if (frame === null)
+        return context.json({ error: "Not authorised." }, 403);
+      return runAsTenant(frame, async () => {
+        try {
+          const deploymentResult = await deploymentToolCaller?.({
+            name: parsedCall.value.ref,
+            args: parsedCall.value.args,
+            botId: verdict.botId,
+            actorId: verdict.actorId,
+            initiator: verdict.initiator,
+            run: verdict.run,
+          });
+          if (deploymentResult) return context.json(deploymentResult);
 
-        if (!pluginStore) {
+          if (!pluginStore) {
+            return context.json({
+              text: `${REFUSAL_MARKER} That tool is not registered in this deployment.`,
+              isError: true,
+            });
+          }
+
+          /*
+           * AND ON THE ACCOUNT ITS IN-PROCESS TURN WOULD USE (G01-E PCB2).
+           *
+           * A Team Bot reaches its owner's connected account, and a teammate's own only with their
+           * consent: `teamBots.credentialActorFor`, the function `loadToolsForActor` hands the
+           * in-process door, asked here for the same Bot, person and tool. Without it a teammate's
+           * external-agent call went out on the teammate's own account with no consent asked. A
+           * missing consent throws the card's `PluginRefusedError`, answered below as a refusal
+           * before anything is sent, exactly as in process.
+           *
+           * Only for a Bot's own token. The deployment-wide token proves no Bot of its own, so it
+           * never borrows an owner's account. And only for a tool this Bot holds (the same grant
+           * question `callTool` asks first): the in-process door only ever offers a granted tool, so
+           * an ungranted one is still refused and recorded by `callTool`, with no one-time consent
+           * spent on a call that was never going to go out.
+           */
+          const teamBots = coworker?.teamBots;
+          const credentialActorId =
+            teamBots &&
+            verdict.botTenant !== undefined &&
+            (
+              await pluginStore.decide(
+                "mcp",
+                parsedCall.value.ref,
+                verdict.botId,
+              )
+            ).allowed
+              ? await teamBots.credentialActorFor(
+                  verdict.actorId,
+                  verdict.botId,
+                )(parsedCall.value.ref)
+              : verdict.actorId;
+
+          const result = await pluginStore.callTool({
+            ref: parsedCall.value.ref,
+            args: parsedCall.value.args,
+            botId: verdict.botId,
+            // From the assertion, never the body: this is the name the audit row will carry.
+            actorId: verdict.actorId,
+            ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
+            ...(credentialActorId === verdict.actorId
+              ? {}
+              : { credentialActorId }),
+          });
+          // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
+          // error as the vendor's and not as a result. Neither Bot words it on its way through.
           return context.json({
-            text: `${REFUSAL_MARKER} That tool is not registered in this deployment.`,
+            text: vendorAnswer(result),
+            isError: result.isError,
+          });
+        } catch (error) {
+          /*
+           * A refusal is an answer, not a failure: the Bot says what was blocked and carries on. The
+           * marker leads it so a transcript can draw a refusal without reading the wording.
+           *
+           * AND THE SAME QUESTION THE IN-PROCESS DOOR ASKS, which this one asked of nothing at all.
+           *
+           * CRITERION. Nothing on the `isDeploymentFault` shelf has its message relayed from here,
+           * and nothing leaving here carries a statement or a value bound to one.
+           *
+           * WHAT THIS SURFACE IS. The answer goes into the calling Bot's model as the tool result, so
+           * it is the widest audience an error message in this deployment reaches: a model repeats
+           * what it is handed — to the person asking, into whatever it writes next, and to the next
+           * tool it calls. `plugins/tools.ts` wraps the identical `callTool` for a Bot running in
+           * this process and has refused that shelf for exactly this reason since the
+           * `ServerRowAmbiguousError` finding; the two doors to one store disagreeing meant a query
+           * failure came back as `Failed query: … params: linear, usr_…` through one of them and as a
+           * fixed sentence through the other. Which door a Bot arrives at is a deployment topology
+           * decision and was never a disclosure decision.
+           *
+           * AND THROUGH {@link withoutStatement} AS WELL, because the two answer different questions
+           * and `isDeploymentFault` says so itself: it "settles who may be told, not what". The shelf
+           * decides whether this audience may hear a sentence at all; the door decides what any
+           * sentence is allowed to contain. Today the two overlap on a query failure and this arm can
+           * only be reached by something neither recognises — which is exactly the state the last two
+           * findings in this area were found in, one predicate apart from a leak.
+           *
+           * AND ONLY A REFUSAL CARRIES THE MARKER, which is the in-process door's third question. The
+           * transcript draws an answer that starts with it as a boundary holding, and the model reads
+           * "Refused." as "not allowed". `callTool` throws `PluginRefusedError` for that, and rethrows
+           * a vendor that broke after recording `mcp.call_failed`; marking every throw drew a vendor
+           * outage, or a fault of this deployment's own, as a policy refusing.
+           */
+          if (error instanceof PluginRefusedError) {
+            return context.json({
+              text: `${REFUSAL_MARKER} ${withoutStatement(error)}`,
+              isError: true,
+            });
+          }
+          return context.json({
+            text:
+              error instanceof Error && !isDeploymentFault(error)
+                ? `That tool could not be called: ${withoutStatement(error)}`
+                : "That tool could not be called.",
             isError: true,
           });
         }
-
-        const result = await pluginStore.callTool({
-          ref: parsedCall.value.ref,
-          args: parsedCall.value.args,
-          botId: verdict.botId,
-          // From the assertion, never the body: this is the name the audit row will carry.
-          actorId: verdict.actorId,
-          ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
-        });
-        // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
-        // error as the vendor's and not as a result. Neither Bot words it on its way through.
-        return context.json({
-          text: vendorAnswer(result),
-          isError: result.isError,
-        });
-      } catch (error) {
-        /*
-         * A refusal is an answer, not a failure: the Bot says what was blocked and carries on. The
-         * marker leads it so a transcript can draw a refusal without reading the wording.
-         *
-         * AND THE SAME QUESTION THE IN-PROCESS DOOR ASKS, which this one asked of nothing at all.
-         *
-         * CRITERION. Nothing on the `isDeploymentFault` shelf has its message relayed from here,
-         * and nothing leaving here carries a statement or a value bound to one.
-         *
-         * WHAT THIS SURFACE IS. The answer goes into the calling Bot's model as the tool result, so
-         * it is the widest audience an error message in this deployment reaches: a model repeats
-         * what it is handed — to the person asking, into whatever it writes next, and to the next
-         * tool it calls. `plugins/tools.ts` wraps the identical `callTool` for a Bot running in
-         * this process and has refused that shelf for exactly this reason since the
-         * `ServerRowAmbiguousError` finding; the two doors to one store disagreeing meant a query
-         * failure came back as `Failed query: … params: linear, usr_…` through one of them and as a
-         * fixed sentence through the other. Which door a Bot arrives at is a deployment topology
-         * decision and was never a disclosure decision.
-         *
-         * AND THROUGH {@link withoutStatement} AS WELL, because the two answer different questions
-         * and `isDeploymentFault` says so itself: it "settles who may be told, not what". The shelf
-         * decides whether this audience may hear a sentence at all; the door decides what any
-         * sentence is allowed to contain. Today the two overlap on a query failure and this arm can
-         * only be reached by something neither recognises — which is exactly the state the last two
-         * findings in this area were found in, one predicate apart from a leak.
-         *
-         * AND ONLY A REFUSAL CARRIES THE MARKER, which is the in-process door's third question. The
-         * transcript draws an answer that starts with it as a boundary holding, and the model reads
-         * "Refused." as "not allowed". `callTool` throws `PluginRefusedError` for that, and rethrows
-         * a vendor that broke after recording `mcp.call_failed`; marking every throw drew a vendor
-         * outage, or a fault of this deployment's own, as a policy refusing.
-         */
-        if (error instanceof PluginRefusedError) {
-          return context.json({
-            text: `${REFUSAL_MARKER} ${withoutStatement(error)}`,
-            isError: true,
-          });
-        }
-        return context.json({
-          text:
-            error instanceof Error && !isDeploymentFault(error)
-              ? `That tool could not be called: ${withoutStatement(error)}`
-              : "That tool could not be called.",
-          isError: true,
-        });
-      }
+      });
     });
   }
 
   if (sandboxedStore) {
     app.route(
       "/api/sandboxed",
-      createSandboxedRoutes(sandboxedStore, requireUser),
+      createSandboxedRoutes(
+        sandboxedStore,
+        requireUser,
+        adminScope?.adminCapability,
+      ),
     );
   }
 
