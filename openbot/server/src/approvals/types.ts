@@ -26,16 +26,17 @@ export type RuleBehaviour =
   | "hand_off"
   /**
    * SEC1 (spec §4.1): the tool is disabled. A matching `deny` refuses the action at the gate with no
-   * request to approve, and is the strictest behaviour of all. Read by the gate before the database
-   * accepts it (the CHECK comes with the migration), so a row carrying it is never misread as allow.
+   * request to approve, and is the strictest behaviour of all. The gate read it before the database
+   * accepted it (0131), so a row carrying it is never misread as allow.
    */
   | "deny";
-/** The behaviours a rule may be saved with. `deny` joins once the database accepts it (0130). */
+/** The behaviours a rule may be saved with. `deny` (disable the tool) is accepted from 0131. */
 export const RULE_BEHAVIOURS = [
   "allow",
   "pre_approved",
   "ask",
   "hand_off",
+  "deny",
 ] as const satisfies readonly RuleBehaviour[];
 /** The behaviours that only ever make the gate stricter: kept when custom rules are off (D6). */
 export const TIGHTENING_BEHAVIOURS = [
@@ -269,6 +270,12 @@ export type ApprovalPolicyStore = {
    * rule applies and the floors are their defaults.
    */
   employee?(botId: string): Promise<EmployeePolicy>;
+  /** The owner changes one of their Bots' floors, in their own frame. Another person's Bot is refused. */
+  setEmployeeSecurity?(
+    by: string,
+    botId: string,
+    input: Partial<EmployeeSecuritySettings>,
+  ): Promise<EmployeeSecuritySettings>;
   /** One audit row per settled action, so every verdict can be read back. */
   recordDecision(input: {
     ownerUserId: string;
