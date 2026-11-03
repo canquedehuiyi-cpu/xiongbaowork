@@ -394,6 +394,16 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   value: {{ ternary "on" "off" .Values.server.embeddedComputer | quote }}
 - name: TENANT_PACKAGE_DIR
   value: {{ .Values.config.tenantPackageDir | quote }}
+{{- /*
+  Where a coworker's actions run. Always set, so `helm get values` says it rather than leaving it to
+  the server's own default for NODE_ENV=production above, which is also `device` (F6). Refused here
+  rather than at boot, so a typo fails the release instead of crash-looping the pods.
+*/}}
+{{- if not (has .Values.config.tenantRuntime (list "device" "cloud")) }}
+{{- fail (printf "config.tenantRuntime must be \"device\" or \"cloud\". Received %q." (toString .Values.config.tenantRuntime)) }}
+{{- end }}
+- name: TENANT_RUNTIME
+  value: {{ .Values.config.tenantRuntime | quote }}
 {{- if .Values.config.publicUrl }}
 - name: OPENBOT_PUBLIC_URL
   value: {{ .Values.config.publicUrl | quote }}
