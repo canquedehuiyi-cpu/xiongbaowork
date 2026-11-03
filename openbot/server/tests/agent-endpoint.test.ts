@@ -119,6 +119,44 @@ describe("the agent form", () => {
     expect(parsed.ok).toBe(true);
     if (parsed.ok) expect(parsed.value.endpoint).toBeUndefined();
   });
+
+  test("an avatar seed is optional, and absent stays absent so an edit cannot redraw the face", () => {
+    const parsed = parseAgentInput(base);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect("avatarSeed" in parsed.value).toBe(false);
+  });
+
+  test("a chosen avatar seed is carried through exactly as it was picked", () => {
+    for (const seed of [
+      "a",
+      "k3f9x2q1",
+      "agent_0f8e-12:ab.cd",
+      "s".repeat(64),
+    ]) {
+      const parsed = parseAgentInput({ ...base, avatarSeed: seed });
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok) expect(parsed.value.avatarSeed).toBe(seed);
+    }
+  });
+
+  test("an avatar seed outside 1-64 safe characters fails the whole form", () => {
+    for (const seed of [
+      "",
+      "s".repeat(65),
+      "has space",
+      "熊宝",
+      "<script>",
+      "a/b",
+      " padded ",
+      null,
+      42,
+      { seed: "x" },
+    ]) {
+      const parsed = parseAgentInput({ ...base, avatarSeed: seed });
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) expect(parsed.error).toContain("Avatar seed");
+    }
+  });
 });
 
 describe("the connection test", () => {

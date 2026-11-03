@@ -3,10 +3,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
-  grantPlugin,
-  invalidatePlugins,
-  setPluginGrantMutationOptions,
-} from "@/lib/plugins/mutations";
+  crewMembers,
+  crewSummary,
+  grantToMembers,
+} from "@/lib/plugins/crew-grant";
+import { setPluginGrantMutationOptions } from "@/lib/plugins/mutations";
 import {
   type WakerGroup,
   wakerGroupsQueryOptions,
@@ -58,42 +59,20 @@ export function SkillAgents({
     setBatch(null);
     setBusy(true);
     /*
-     * One invalidation after the writes rather than one per write. The screen is showing which
-     * Agents hold this, and refetching it between grants would show a half-applied crew — a state
-     * that never existed on the server and cannot be read back.
+     * The shared batch: one grant per member, every refusal kept, one refetch at the end. See
+     * `crew-grant.ts` for why each of those is the rule rather than a preference.
      */
-    const settled = await Promise.allSettled(
-      agentIds.map((agentId) =>
-        grantPlugin({ kind: "skill", ref: slug, agentId }),
-      ),
-    );
-    await invalidatePlugins(queryClient);
-    setBusy(false);
-    const refused = settled.filter(
-      (entry) => entry.status === "rejected",
-    ).length;
-    if (refused === 0) {
-      setBatch({
-        text: `${crew.name}：全部 ${settled.length} 位员工都已拿到 /${slug}。`,
-        failed: false,
+    try {
+      const outcome = await grantToMembers({
+        queryClient,
+        kind: "skill",
+        refs: [slug],
+        agentIds,
       });
-      return;
+      setBatch(crewSummary(outcome, { label: crew.name, what: `/${slug}` }));
+    } finally {
+      setBusy(false);
     }
-    /*
-     * The first refusal's own sentence, because "3 of 5" without a reason is the shape of a bug
-     * report nobody can act on. The rest are counted, not listed: they are the same write.
-     */
-    const first = settled.find((entry) => entry.status === "rejected") as
-      | PromiseRejectedResult
-      | undefined;
-    const reason =
-      first?.reason instanceof Error
-        ? first.reason.message
-        : String(first?.reason ?? "没有给出原因");
-    setBatch({
-      text: `${crew.name}：${settled.length} 位里有 ${settled.length - refused} 位拿到 /${slug}，${refused} 位被拒绝（${reason}）。`,
-      failed: true,
-    });
   }
 
   return (
@@ -133,11 +112,10 @@ export function SkillAgents({
                 或者交给一个小组：
               </span>
               {(crews.data ?? []).map((crew) => {
-                const missing = crew.members
-                  .map((member) => member.agentId)
-                  .filter(
-                    (agentId) => owned.has(agentId) && !held.has(agentId),
-                  );
+                const missing = crewMembers(
+                  crew,
+                  (agentId) => owned.has(agentId) && !held.has(agentId),
+                );
                 return (
                   <Button
                     aria-label={`把 /${slug} 交给${crew.name}`}
