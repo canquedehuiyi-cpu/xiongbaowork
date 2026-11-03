@@ -8,20 +8,60 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Before upgrading: merge any catalogue server two administrators each added.** Migration
+  `0127_team_connectors` makes every administrator's MCP server the team's, and the team holds one
+  row per catalogue entry, so it stops before changing anything when two administrators' rows share a
+  catalogue key. The error's DETAIL names each key and the rows that hold it (`tenant: server id`).
+  To find them beforehand, run as the migration role:
+
+  ```sql
+  SELECT s.catalogue_key, array_agg(s.tenant_id || ': ' || s.id ORDER BY s.created_at) AS rows
+    FROM mcp_servers s
+   WHERE s.catalogue_key IS NOT NULL AND s.tenant_id <> 'system'
+     AND (s.tenant_id IN ('team', 'platform', '')
+          OR EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = s.tenant_id AND r.role = 'admin'))
+   GROUP BY s.catalogue_key HAVING count(*) > 1;
+  ```
+
+  Do **not** remove the extra row from the Plugins page: removing a server revokes every person's
+  connection to that catalogue entry and releases its grants, including the ones made through the row
+  you keep. Merge directly instead, as the migration role, once per extra row (`<keep>` and `<drop>`
+  are server ids from the query):
+
+  ```sql
+  BEGIN;
+  -- People connected only through the dropped row keep their connection, now on the kept row.
+  UPDATE mcp_user_credentials SET server_id = '<keep>', updated_at = now()
+   WHERE server_id = '<drop>'
+     AND user_id NOT IN (SELECT user_id FROM mcp_user_credentials WHERE server_id = '<keep>');
+  -- The dropped row's own token or OAuth client is no longer used by anything.
+  UPDATE credentials SET revoked_at = now(), updated_at = now()
+   WHERE id = (SELECT credential_id FROM mcp_servers WHERE id = '<drop>') AND revoked_at IS NULL;
+  DELETE FROM mcp_servers WHERE id = '<drop>';
+  COMMIT;
+  ```
+
+  Grants are keyed by catalogue entry, not by row, so every Bot's grants are kept. What is lost: the
+  dropped row's own tool list (the kept row has its own) and, for a person connected through both
+  rows, the dropped row's connection (their connection through the kept row stays).
+
 - **Before upgrading: re-enter each MCP server's token and OAuth client once after deploying.** An
   administrator's MCP servers and their tools now belong to the whole team (migration
   `0127_team_connectors`): every person's Bots can be granted them, and only an administrator
   changes them. Their secrets are sealed to the team too, and a person's call reaches a server's
   secret only for that server. Secrets stored before cannot be moved, because each one is
-  cryptographically bound to where it was stored, so a server added before this release answers
-  "needs a credential this deployment no longer holds" until an administrator stores its token again
-  on the credentials screen and re-adds the server with it, or registers its OAuth client again.
-  Model and connector keys are unchanged. Two administrators who each added the same catalogue
-  server stop the migration with the step to take: remove all but one first. For a vendor that
-  registers itself (Notion), the first connect after the upgrade has to be an administrator's; a
-  person who connects first is told so. A Bot's tool grants now always carry the Bot's own owner (or
-  the team, for a shared Bot), and grants somebody else had written onto it are removed, except an
-  administrator's, which are kept.
+  cryptographically bound to where it was stored, so the migration revokes the token or OAuth client
+  each moved server pointed at, and such a server answers "needs a credential this deployment no
+  longer holds" until an administrator stores its token again on the credentials screen and re-adds
+  the server with it, or registers its OAuth client again. Model and connector keys are unchanged.
+  Only rows somebody could legitimately have written move: a server stamped with a current
+  administrator (or the platform), and a tool carrying its server's stamp. A server or tool row any
+  other person had written for themselves is deleted (with the people's connections to that server),
+  and from now on only an administrator writes either. For a vendor that registers itself (Notion),
+  the first connect after the upgrade has to be an administrator's; a person who connects first is
+  told so. A Bot's tool grants now always carry the Bot's own owner (or the team, for a shared Bot),
+  and grants somebody else had written onto it are removed, except an administrator's, which are
+  kept.
 
 - The platform-hosted runtime and Automatic Learning are gone from this build. Threads, memory and
   what a Bot keeps live in this deployment's own PostgreSQL, so nothing has to be provisioned before

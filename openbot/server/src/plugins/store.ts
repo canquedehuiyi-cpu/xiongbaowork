@@ -645,10 +645,13 @@ function storableSchema(
 function storableTools(
   serverId: string,
   listed: ListedTool[],
-  /** The server row's stamp: a `team` server's tools are `team` too (G01-E P10). */
+  /**
+   * The server row's stamp, which its tools carry (G01-E P10: migration 0127 refuses a tool stamped
+   * other than its server, so a `team` server's tools are `team` and a catalogue server's `system`).
+   */
   serverTenant?: string,
 ) {
-  const stamp = serverTenant === TEAM_TENANT ? { tenantId: TEAM_TENANT } : {};
+  const stamp = serverTenant ? { tenantId: serverTenant } : {};
   const byName = new Map<
     string,
     {
