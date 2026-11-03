@@ -74,6 +74,8 @@ tests/bunfig-preload.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
 tests/channel-cursor.test.ts
+tests/channel-dispatch.integration.test.ts
+tests/channel-dispatch.test.ts
 tests/channel-events.integration.test.ts
 tests/channel-one-line.test.ts
 tests/channel-routes.test.ts
