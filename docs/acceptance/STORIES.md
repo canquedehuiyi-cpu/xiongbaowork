@@ -2,7 +2,7 @@
 
 规则不变：**一个故事只有在 `main` 上有对应测试通过，才算"已验收"。** 本表没有任何一行是"已验收"。集成分支 `claude/magical-archimedes-8a6ljj` 还没有合进 `main`（走 canquedehuiyi-cpu/xiongbaowork#1 → canquedehuiyi-cpu/xiongbaowork#2），所以已经做完的故事一律写 `integrated (pending main)`。
 
-数据截至 2026-11-03，集成分支 `9e05e09`。状态是读集成分支上的代码和测试得出的，不是照抄 PR 标题：每行的"证据"列只列集成分支上确实存在的测试文件，"备注"写读代码时看到的缺口。PR 编号的出处是 GitHub 上已合并 PR 的 head 是否已在集成分支里（逐个用 `git merge-base --is-ancestor` 核对过）。
+数据截至 2026-11-03，集成分支 `38a2c1f`。状态是读集成分支上的代码和测试得出的，不是照抄 PR 标题：每行的"证据"列只列集成分支上确实存在的测试文件，"备注"写读代码时看到的缺口。PR 编号的出处是 GitHub 上已合并 PR 的 head 是否已在集成分支里（逐个用 `git merge-base --is-ancestor` 核对过）。
 
 ## 取值
 
@@ -17,15 +17,15 @@
 
 | 集成分支状态 | 故事数 |
 | --- | --- |
-| implemented | 63 |
-| partial | 9 |
+| implemented | 68 |
+| partial | 4 |
 | not started | 5 |
 | 合计 | 77 |
 
-- partial：A4、F1、F2、F4、F6、J5、K4、AUT3、SEC1。
+- partial：F1、F2、F6、SEC1。
 - not started：RES2、ROLE1、WF7、WF8、WF9。这 5 个都按 11-02 的 MVP 决定移到 v1.0 后。
 
-仍未合并、与故事有关的 PR（截至 `9e05e09`）只剩一个，且按决定不合并：
+仍未合并、与故事有关的 PR（截至 `38a2c1f`）只剩一个，且按决定不合并：
 
 | PR | 内容 | 涉及故事 |
 | --- | --- | --- |
@@ -38,7 +38,7 @@
 | A1 | D05 | 作为用户，我在侧边栏看到"工作管理 > 任务看板"，进入后看到统计条：任务总数 / 进行中 / 需要操作 / 已结束（默认数据周期=一个月，… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#48 | G3 | `app/tests/tasks-stat-bar.test.tsx`<br>`app/tests/tasks-workbench-filters.test.ts`<br>`server/tests/tasks-routes-filters.integration.test.ts` | integrated (pending main) | 侧边栏「工作管理」标题与统计条联动来自 #48 |
 | A2 | D05 | 我可以点统计条任一数字过滤下方任务列表（按下态高亮）。 | implemented | 基线（main 上已有） | G3 | `app/tests/tasks-stat-bar.test.tsx`<br>`app/tests/tasks-workbench-board-consistency.test.tsx` | integrated (pending main) | 统计数字是按钮，`aria-pressed` 表示按下态 |
 | A3 | D05 | 任务列表含列：任务名、执行者（Waker 头像+名，可点进员工详情）、来源（对话触发/自主工作/交接）、状态（进行中/需要操作/已结束-已完… | implemented | canquedehuiyi-cpu/xiongbaowork#26<br>canquedehuiyi-cpu/xiongbaowork#48 | G3 | `app/tests/tasks-workbench-filters.test.ts`<br>`app/tests/tasks-workbench-board-consistency.test.tsx` | integrated (pending main) |  |
-| A4 | D05 | 我可以用搜索框按任务名过滤，用下拉按 Waker/Group、触发方式、状态、数据周期组合过滤。 | partial | canquedehuiyi-cpu/xiongbaowork#48 | G3 | `app/tests/tasks-workbench-filters.test.ts`<br>`app/tests/tasks-workbench-board-consistency.test.tsx`<br>`server/tests/tasks-routes-filters.integration.test.ts` | partly integrated (pending main) | 四个条件都能组合过滤；但只有 Waker/Group 和触发方式是下拉框（`tasks.tsx` 的 `<select>`），状态和数据周期仍是按钮组，与故事写的「下拉」不同 |
+| A4 | D05 | 我可以用搜索框按任务名过滤，用下拉按 Waker/Group、触发方式、状态、数据周期组合过滤。 | implemented | canquedehuiyi-cpu/xiongbaowork#48<br>canquedehuiyi-cpu/xiongbaowork#165 | G3 | `app/tests/tasks-workbench-navigation.test.tsx`<br>`app/tests/tasks-workbench-filters.test.ts`<br>`app/tests/tasks-workbench-board-consistency.test.tsx`<br>`server/tests/tasks-routes-filters.integration.test.ts` | integrated (pending main) | Waker/Group、触发方式来自 #48；状态和数据周期改为下拉框来自 #165（`tasks.tsx` 的 `select[aria-label="状态"]`、`select[aria-label="数据周期"]`） |
 | A5 | D05 | 我可以切换"列表/泳道"两个视图；泳道视图按状态分三列（进行中/需要操作/已结束），卡片可拖拽仅进入"已结束"（归档语义），其余方向拖拽无效… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#26<br>canquedehuiyi-cpu/xiongbaowork#48 | G3 | `app/tests/tasks-attention-lane.test.ts`<br>`app/tests/tasks-workbench-mutations.test.tsx` | integrated (pending main) | 只有「已结束」泳道接受拖放（`onDragOver` 只对 `finished` 放行） |
 | A6 | D05 | 我点任务行"查看详情"，进入该任务关联的执行会话（channel 或 routineRun 详情），看到完整过程。 | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#92 | G3 | `app/tests/tasks-open-link.test.tsx`<br>`server/tests/tasks-open-target.integration.test.ts` | integrated (pending main) |  |
 | A7 | D05 | "需要关注"区固定在看板上方，含两个 Tab：需要操作(n)/查收结果(n)；空态文案"暂无需要操作的任务——需要你确认、回答或补充信息的任… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#26<br>canquedehuiyi-cpu/xiongbaowork#42 | G3 | `app/tests/tasks-attention-region.test.tsx`<br>`app/tests/tasks-attention-lane.test.ts` | integrated (pending main) | 空态文案原样在 `tasks.tsx`，并有测试断言 |
@@ -55,7 +55,7 @@
 | H1 | D09 | 租户在"能力与资源 > 模型库"**自助接入**任意多个模型：从平台 provider 模板（OpenAI 兼容/Anthropic/Goo… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#51<br>canquedehuiyi-cpu/xiongbaowork#55<br>canquedehuiyi-cpu/xiongbaowork#57 | G3 | `server/tests/model-library-routes.test.ts`<br>`server/tests/platform-model-pool.integration.test.ts`<br>`server/tests/platform-model-pool-routes.test.ts`<br>`app/tests/platform-model-pool.test.tsx` | integrated (pending main) |  |
 | H2 | D09 | 我创建/编辑 Waker 时，可为其从模型库**单选**一个默认模型（存 `agent_profiles` 扩展字段）；未选则回落部署默认（… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#55<br>canquedehuiyi-cpu/xiongbaowork#57 | G3 | `server/tests/platform-model-pool-routes.test.ts`<br>`app/tests/agent-dialog-built-in-edit.test.tsx`<br>`app/tests/platform-model-pool.test.tsx` | integrated (pending main) | 同时绑两个模型被拒（`parseAgentInput`） |
 | H3 | D09 | 一次运行（对话触发/@派活/routine 触发/交接接手）以**执行者员工的绑定模型**起跑——即"开发 GPT-6、审核 GLM-5.3… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#147 | G3、G6 | `server/tests/copilot.test.ts`<br>`server/tests/deployment-model-metering.test.ts`<br>`server/tests/team-bot-owner.integration.test.ts` | integrated (pending main) | 按员工 `model_ref` 起跑在 `models/runtime-resolver.ts`；真实模型调用要靠门 6 |
-| H4 | D09 | 我可以在任务详情/员工详情看到该次运行实际使用的模型；审计行记录模型标识（沿用 `modelUsage` 表扩展）。 | implemented | canquedehuiyi-cpu/xiongbaowork#93<br>canquedehuiyi-cpu/xiongbaowork#97 | G3、G6 | `server/tests/headless-model-usage.integration.test.ts`<br>`server/tests/headless-model-usage-callers.integration.test.ts`<br>`app/tests/tasks-model-chip.test.tsx` | integrated (pending main) | 模型显示在任务卡上；员工详情页（`wakers_.$agentId.tsx`）不显示模型 |
+| H4 | D09 | 我可以在任务详情/员工详情看到该次运行实际使用的模型；审计行记录模型标识（沿用 `modelUsage` 表扩展）。 | implemented | canquedehuiyi-cpu/xiongbaowork#93<br>canquedehuiyi-cpu/xiongbaowork#97<br>canquedehuiyi-cpu/xiongbaowork#162 | G3、G6 | `server/tests/headless-model-usage.integration.test.ts`<br>`server/tests/headless-model-usage-callers.integration.test.ts`<br>`app/tests/tasks-model-chip.test.tsx`<br>`app/tests/waker-detail.test.tsx` | integrated (pending main) | 任务卡上的模型来自 #93；员工详情页的「模型」行（库模型、平台体验模型、部署默认模型、外部托管模型）来自 #162 |
 | H5 | D09 | 模型库条目被员工引用时不可删除，提示"3 位 Waker 正在使用"（引用计数保护）。 | implemented | canquedehuiyi-cpu/xiongbaowork#5 | G3 | `server/tests/model-library-routes.test.ts` | integrated (pending main) | 服务端 409 + 引用数；前端 `/api/models/:id/references` 列出员工名 |
 | H6 | D09 | 远程 AG-UI Bot（自带端点的员工）不受 H2 约束（模型在它自己端点），UI 明示"外部托管模型"。 | implemented | canquedehuiyi-cpu/xiongbaowork#57 | G3 | `app/tests/platform-model-pool.test.tsx`<br>`app/tests/tasks-model-chip.test.tsx` | integrated (pending main) |  |
 | I1 | D05 | 我可以创建 Group（如"编程小组"）并为它定义**任务模板**：有序步骤，每步绑定成员 Waker+指令，例如 步骤1 开发（GPT-6… | implemented | canquedehuiyi-cpu/xiongbaowork#38 | G3 | `server/tests/pipeline-template-edit.test.ts`<br>`server/tests/pipeline-routes.test.ts`<br>`app/tests/pipelines-template-edit.test.tsx` | integrated (pending main) |  |
@@ -78,19 +78,19 @@
 | F1 | D11 | 首次登录进入"我的分身"引导：选择信息来源（本地文件夹/知识源声明），保存后生成特殊 built-in Waker"我的分身"，其角色描述注… | partial | 基线（main 上已有） | G3、G5 | `server/tests/dev-actor.integration.test.ts` | partly integrated (pending main) | 注册时 `tenant/provisioning.ts` 会建「我的分身」；选择信息来源的引导没有做，规格 `docs/specs/2026-11-02-f1-avatar-info-sources.md` 是含待决项的草案 |
 | F2 | D11 | **runner 桌面客户端**：将 `agent-computer`（Chromium + workspace + shell + 录屏）… | partial | 基线（main 上已有） | G5、G7 | `server/tests/runner-channel.test.ts`<br>`server/tests/runner-dispatch.test.ts`<br>`server/tests/runner-browser.test.ts` | partly integrated (pending main) | `openbot/runner` 是 Bun 命令行（配对、出站长连、执行）；打包成桌面客户端没开始，`desktop/` 与 runner 无集成；规格 `docs/specs/2026-11-02-f2-runner-desktop-client.md` 是草案 |
 | F3 | D11 | Waker 的浏览器/shell/文件动作由服务端策略网关决策后，按任务绑定的 device_id **下发到对应 runner 执行**；… | implemented | canquedehuiyi-cpu/xiongbaowork#19 | G3、G5 | `server/tests/device-selection.test.ts`<br>`server/tests/device-safety.integration.test.ts` | integrated (pending main) | 缺陷 #12；真实设备动作要靠门 5 |
-| F4 | D11 | 设备在线/离线：员工卡片与看板显示设备状态；设备离线时新任务进入等待队列（复用 `work_items` 租约机制），设备回线自动续跑；离线… | partial | canquedehuiyi-cpu/xiongbaowork#19 | G3、G5 | `server/tests/device-safety.integration.test.ts`<br>`server/tests/devices.test.ts` | partly integrated (pending main) | 离线排队、回线续跑已有；员工卡片和看板上没有设备在线状态 |
+| F4 | D11 | 设备在线/离线：员工卡片与看板显示设备状态；设备离线时新任务进入等待队列（复用 `work_items` 租约机制），设备回线自动续跑；离线… | implemented | canquedehuiyi-cpu/xiongbaowork#19<br>canquedehuiyi-cpu/xiongbaowork#166 | G3、G5 | `server/tests/device-safety.integration.test.ts`<br>`server/tests/devices.test.ts`<br>`app/tests/device-presence.test.ts`<br>`app/tests/tasks-board-resting.test.tsx`<br>`app/tests/wakers-screen.test.tsx` | integrated (pending main) | 离线排队、回线续跑来自 #19；任务卡、看板设备筛选和员工卡片上的在线/离线来自 #166（`app/src/lib/devices/presence.ts`，读 `GET /api/devices` 的 `online`）。真实设备断线重连要靠门 5 |
 | F5 | D11 | Web 端 URL 支持 `?machineId=` 过滤"只看待本机执行的任务"（与 QoderWake 行为一致）；无匹配设备时显示"W… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#92 | G3 | `app/tests/tasks-board-resting.test.tsx` | integrated (pending main) |  |
 | F6 | D11 | 服务端 Docker 电脑（底座 supervisor 链路）**降级为开发/演示回退**：`TENANT_RUNTIME=cloud` 时… | partial | 基线（main 上已有） | G3 | `server/tests/config.test.ts` | partly integrated (pending main) | `TENANT_RUNTIME` 有 cloud/device 两值，但不设时默认 `cloud`（`config.ts` 的 `tenantRuntime`），故事要求生产默认 `device` |
 | J1 | D04 | 注册/登录：邮箱+密码（Better Auth 自有凭据路径）+ 可选 Google/GitHub OAuth；注册成功即开通租户（初始化：… | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#4<br>canquedehuiyi-cpu/xiongbaowork#94 | G2、G3 | `server/tests/email-signup.test.ts`<br>`server/tests/github-oauth-signup.test.ts` | integrated (pending main) |  |
 | J2 | D03 | 全部业务表加 `tenant_id` 并启用 PostgreSQL **Row-Level Security**：连接会话注入 `app.t… | implemented | canquedehuiyi-cpu/xiongbaowork#10<br>canquedehuiyi-cpu/xiongbaowork#53<br>G01：#8、#11、#14、#17、#22、#24、#68、#71，测试 #72–#87<br>G01-E：#101–#146 | G2、G3 | `server/tests/rls-role.test.ts`<br>`server/tests/rls-write-scope.test.ts`<br>`server/tests/team-tenant-rls.integration.test.ts`<br>`server/tests/tenant-invariants.test.ts` | integrated (pending main) |  |
 | J3 | D03 | 我的 Waker、任务、审批、技能、连接器授权、模型 key、设备仅我可见；本期无跨租户共享/协作。 | implemented | 同 J2 | G2、G3 | `server/tests/team-tenant-rls.integration.test.ts`<br>`server/tests/tenant-invariants.test.ts` | integrated (pending main) | G01-E 起，发布的 Team Bot、多人群组、连接器等记为 `team` 行，在同一部署内跨人共享（见待决事项） |
 | J4 | D03 | 模型凭据、连接器 token 按租户入加密 vault；底座"管理员上架目录"升级为**平台级目录**（provider 模板、官方技能/连… | implemented | canquedehuiyi-cpu/xiongbaowork#9<br>canquedehuiyi-cpu/xiongbaowork#12<br>canquedehuiyi-cpu/xiongbaowork#15<br>G01-E P10：#120–#124 | G2、G3 | `server/tests/credentials.test.ts`<br>`server/tests/credential-rotation-leak.integration.test.ts`<br>`server/tests/skill-tenant-slugs.integration.test.ts` | integrated (pending main) |  |
-| J5 | D04 | 平台运营后台（原 admin 页面收敛为平台工具）：租户列表/封禁恢复/封禁即冻结其任务队列与 runner 连接、按租户查用量与审计。 | partial | 基线（main 上已有） | G2、G3 | `server/tests/ban-freezes-execution.test.ts`<br>`server/tests/platform-store.test.ts` | partly integrated (pending main) | 租户列表、暂停/恢复、暂停即冻结任务队列和 runner 已有；平台页（`platform.tsx`）只列员工数和定时任务数，没有按租户查用量（token）和审计 |
+| J5 | D04 | 平台运营后台（原 admin 页面收敛为平台工具）：租户列表/封禁恢复/封禁即冻结其任务队列与 runner 连接、按租户查用量与审计。 | implemented | 基线（main 上已有）<br>canquedehuiyi-cpu/xiongbaowork#168 | G2、G3 | `server/tests/ban-freezes-execution.test.ts`<br>`server/tests/platform-store.test.ts`<br>`app/tests/platform-tenant-usage.test.tsx`<br>`server/tests/tenant-invariants.test.ts` | integrated (pending main) | 租户列表、暂停/恢复、冻结任务队列和 runner 是基线；按租户的 Token 用量和单租户审计来自 #168（`platform/routes.ts`，管理员经 `asAdminPlatform`/`adminActAsOwner`，已登记在 `tenant-invariants`） |
 | J6 | D04 | 原 `OPENBOT_SINGLE_USER` 仅保留为开发模式；产品默认注册制，公网部署强制登录。 | implemented | 基线（main 上已有） | G2、G3 | `server/tests/single-user.test.ts` | integrated (pending main) | `OPENBOT_SINGLE_USER` 遇到公网地址时拒绝启动 |
 | K1 | D09 | 套餐定义（seed 数据，可配置）：Free = 2 Wakers / 50 任务·月 / 1 设备 / 平台目录基础模型；Pro = 10… | implemented | canquedehuiyi-cpu/xiongbaowork#5<br>canquedehuiyi-cpu/xiongbaowork#51<br>canquedehuiyi-cpu/xiongbaowork#55<br>canquedehuiyi-cpu/xiongbaowork#57<br>canquedehuiyi-cpu/xiongbaowork#148 | G3 | `server/tests/quota.test.ts`<br>`server/tests/platform-model-pool.integration.test.ts` | integrated (pending main) | Free 2/50/1、无自定义模型，写路径拦截；平台池没有种子行，Free 档放哪些模型由部署配置（池行的 `apiKeyEnv`）决定 |
 | K2 | D09 | 用量面板（对应 QoderWake 左下角"用量"）：当前档位、本周期 Waker 数/任务数/模型 token 估算（聚合自 `model… | implemented | canquedehuiyi-cpu/xiongbaowork#18<br>canquedehuiyi-cpu/xiongbaowork#49<br>canquedehuiyi-cpu/xiongbaowork#147 | G3、G6 | `server/tests/model-token-metering.test.ts`<br>`server/tests/quota-token-usage.integration.test.ts`<br>`app/tests/quota-panel.test.tsx` | integrated (pending main) | 缺陷 #11 |
 | K3 | D09 | 升级入口：档位对比页 + 手动/种子切换订阅；**不接支付渠道**（预留 provider 接口）。 | implemented | canquedehuiyi-cpu/xiongbaowork#3<br>canquedehuiyi-cpu/xiongbaowork#89 | G3 | `server/tests/quota.test.ts`<br>`server/tests/plan-change-audit.integration.test.ts`<br>`app/tests/quota-panel.test.tsx` | integrated (pending main) | 按「只手动切换」决定交付：档位页 `/plans` + 管理员切换 + 审计；支付 provider 接口（#54）按决定不合并 |
-| K4 | D09 | 超额返回结构化错误码（含"已用/上限/升级链接"），前端统一引导升级或清理。 | partial | canquedehuiyi-cpu/xiongbaowork#50 | G3 | `app/tests/quota-guidance.test.tsx`<br>`app/tests/query-client.test.ts`<br>`server/tests/quota-error-contract.test.ts` | partly integrated (pending main) | 结构化错误码和引导只接在 react-query 请求上（`query-client.ts`）；对话轮次超额不走引导（#50 自述的 K4b） |
+| K4 | D09 | 超额返回结构化错误码（含"已用/上限/升级链接"），前端统一引导升级或清理。 | implemented | canquedehuiyi-cpu/xiongbaowork#50<br>canquedehuiyi-cpu/xiongbaowork#167 | G3 | `app/tests/quota-guidance.test.tsx`<br>`app/tests/query-client.test.ts`<br>`app/tests/chat-quota-guidance.test.tsx`<br>`server/tests/quota-error-contract.test.ts` | integrated (pending main) | 请求类超额引导来自 #50；对话轮次超额在流上返回 `quota_exceeded`（`copilot.ts` 的 `withQuotaRunErrors`）并打开同一引导，来自 #167 |
 | G1 | D12 | 通过租户包 `examples/qoderwake`（brand.yaml/theme.css/agents.yaml/skills.yam… | implemented | canquedehuiyi-cpu/xiongbaowork#21<br>canquedehuiyi-cpu/xiongbaowork#95<br>canquedehuiyi-cpu/xiongbaowork#96<br>canquedehuiyi-cpu/xiongbaowork#98<br>canquedehuiyi-cpu/xiongbaowork#154<br>canquedehuiyi-cpu/xiongbaowork#158<br>canquedehuiyi-cpu/xiongbaowork#159 | G1、G3、G7 | `server/tests/qoderwake-package.test.ts`<br>`app/tests/chinese-ui-copy.test.ts` | integrated (pending main) | 默认 `TENANT_PACKAGE_DIR=../examples/qoderwake`；缺陷 #14 |
 | G2 | D04 | 开发模式保留 `OPENBOT_SINGLE_USER=true` 一键起全栈（联调用），生产为注册制多租户（见 J6）；开发期 runne… | implemented | 基线（main 上已有） | G3、G7 | `server/tests/single-user.test.ts` | integrated (pending main) | `bun run dev` 起 app + server |
 | WF1 | D10 | 能力与资源中独立 WakerFlow 管理，列表空态与新建入口 | implemented | canquedehuiyi-cpu/xiongbaowork#33<br>canquedehuiyi-cpu/xiongbaowork#45<br>canquedehuiyi-cpu/xiongbaowork#47 | G3、G4 | `server/tests/wakerflows-store.integration.test.ts`<br>`server/tests/wakerflow-routes.test.ts`<br>`app/tests/wakerflows-screen.test.tsx` | integrated (pending main) | 入口在「能力与资源」的 WakerFlow 区 |
@@ -101,7 +101,7 @@
 | WF6 | D10 | 同一运行并发推进只有一个执行者，避免重复执行和重复计费 | implemented | canquedehuiyi-cpu/xiongbaowork#45 | G3、G4 | `server/tests/wakerflow-run.integration.test.ts` | integrated (pending main) |  |
 | AUT1 | D06 | 定期与一次性调度，多个触发条件（原版显示上限5） | implemented | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64<br>canquedehuiyi-cpu/xiongbaowork#161 | G3 | `server/tests/automations-store.integration.test.ts`<br>`server/tests/automation-sweep.integration.test.ts`<br>`server/tests/automation-routes.test.ts`<br>`app/tests/automation-form.test.tsx` | integrated (pending main) |  |
 | AUT2 | D06 | 事件 Hook/API 入口及触发行为 | implemented | canquedehuiyi-cpu/xiongbaowork#63<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automation-ingress.test.ts`<br>`server/tests/automation-ingress.integration.test.ts`<br>`app/tests/automations-section.test.tsx` | integrated (pending main) |  |
-| AUT3 | D06 | 执行对象可选 Waker 或已创建 WakerFlow | partial | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automation-waker-executor.test.ts`<br>`server/tests/automation-routes.test.ts`<br>`app/tests/automation-form.test.tsx` | partly integrated (pending main) | 只有 Waker 目标能跑：没有注册 `wakerflow` 执行器，WakerFlow 目标保存时被拒（`automations/types.ts`）；表单要 `/api/capabilities` 返回 `wakerflowAutomations: true` 才给选 WakerFlow，服务端目前不返回这个字段 |
+| AUT3 | D06 | 执行对象可选 Waker 或已创建 WakerFlow | implemented | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64<br>canquedehuiyi-cpu/xiongbaowork#164 | G3、G4 | `server/tests/automation-waker-executor.test.ts`<br>`server/tests/automation-routes.test.ts`<br>`app/tests/automation-form.test.tsx`<br>`server/tests/health.test.ts` | integrated (pending main) | WakerFlow 执行器已注册（`index.ts` 的 `wakerflowAutomationTarget`），`/api/capabilities` 返回 `wakerflowAutomations: true`，来自 #164。仍缺：自动任务启动 Flow 时不传输入参数（`automations/waker-executor.ts` 固定 `inputs: {}`），需要输入的 Flow 会被拒 |
 | AUT4 | D06 | 自动任务最大运行次数、截止日期、到期停止 | implemented | canquedehuiyi-cpu/xiongbaowork#40<br>canquedehuiyi-cpu/xiongbaowork#58<br>canquedehuiyi-cpu/xiongbaowork#64 | G3 | `server/tests/automation-sweep.integration.test.ts`<br>`server/tests/automations-store.integration.test.ts`<br>`app/tests/automations-section.test.tsx` | integrated (pending main) |  |
 | RES1 | D08 | 独立知识库创建与后续知识维护/授权 | implemented | canquedehuiyi-cpu/xiongbaowork#46<br>canquedehuiyi-cpu/xiongbaowork#61 | G3 | `server/tests/knowledge-base.integration.test.ts`<br>`server/tests/knowledge-tools.test.ts`<br>`app/tests/knowledge-screen.test.tsx` | integrated (pending main) |  |
 | RES2 | D08 | 公开项目支持名称、简介、本地目录或Git仓库和分支，当前设备下共享给全部Waker，并在任务上下文中可选；员工专属项目具备独立范围 | not started | — | — | — | — | v1.0 后。只有休眠的 `resource_projects` 表（`db/schema/resource-project-foundations.ts`），没有代码读写 |
@@ -161,12 +161,9 @@
 5. **K1 平台池放哪些模型。** 平台池没有种子行，每行用 `apiKeyEnv` 指向一个部署环境变量；Free 档实际能用哪些模型、预算多少，由运维配置决定。
 6. **K3 只手动。** 按决定交付手动切换和审计，支付 provider 接口（#54）不合并。故事原文里的"预留 provider 接口"相应不做。
 
-代码缺口（已知、尚未排 PR 的）：
+代码缺口：
 
-7. **AUT3**：没有注册 `wakerflow` 自动任务执行器，WakerFlow 目标保存时就被拒；只有 Waker 目标能跑。表单等 `/api/capabilities` 的 `wakerflowAutomations`，服务端目前不返回它，所以界面也不提供 WakerFlow 选项。
-8. **K4**：超额引导只接在 react-query 请求上，对话轮次的超额错误不走引导（K4b）。
-9. **J5**：平台页没有按租户查 token 用量和审计。
-10. **F4**：员工卡片和看板上没有设备在线状态。
-11. **H4**：员工详情页不显示模型（任务卡上有）。
-12. **A4**：状态和数据周期是按钮组，不是故事写的下拉框。
-13. **canquedehuiyi-cpu/xiongbaowork#88**（G01-D：在 `requireUser` 打开的租户帧里治理运行）在它的 base 分支已经合并之后才合进去，它的 head 不在集成分支上。同一意图现在由 G01-E 覆盖：`auth/guards.ts` 的 `createRequireUser` 让每个请求跑在 `runAsTenant(session.user.id)` 里。这里只作记录，不需要再合。
+7. **AUT3 的 Flow 输入参数。** 自动任务启动 WakerFlow 时固定传 `inputs: {}`（`automations/waker-executor.ts`），需要输入参数的 Flow 会被拒。自动任务表单也没有填 Flow 输入的地方。
+8. 上一版列出的 H4、AUT3（执行器）、A4、F4、K4、J5 缺口已分别由 canquedehuiyi-cpu/xiongbaowork#162、#164、#165、#166、#167、#168 补上，见各自的故事行。
+
+9. **canquedehuiyi-cpu/xiongbaowork#88**（G01-D：在 `requireUser` 打开的租户帧里治理运行）在它的 base 分支已经合并之后才合进去，它的 head 不在集成分支上。同一意图现在由 G01-E 覆盖：`auth/guards.ts` 的 `createRequireUser` 让每个请求跑在 `runAsTenant(session.user.id)` 里。这里只作记录，不需要再合。
