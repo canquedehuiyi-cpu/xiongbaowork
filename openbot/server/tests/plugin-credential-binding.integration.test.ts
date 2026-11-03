@@ -7,15 +7,20 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
-import { encryptSecret } from "../src/credentials";
+import {
+  createCredentialAdminService,
+  createCredentialStore,
+  encryptSecret,
+} from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { credentials, mcpServers, mcpTools } from "../src/db/schema";
 import {
   CustomServerRefusedError,
   createPluginStore,
 } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -392,5 +397,210 @@ describe("a token does not outlive the server it was given to", () => {
     ).rejects.toBeInstanceOf(CustomServerRefusedError);
 
     expect(sent).toEqual([]);
+  });
+});
+
+/**
+ * Replacing the token of a server that is already added, against a real vault (G01-E P22).
+ *
+ * The plugins screen used to do it in two requests: `POST /api/admin/credentials` for the new token,
+ * then a re-add pointing the server at it. A key holds one live credential, so the first request
+ * ROTATES — the token the server was using is revoked the moment the new one is stored — and the
+ * server goes on naming that revoked row until the second request lands. When the second one failed,
+ * the server was left configured on every screen and unable to make a call, with the token that
+ * worked gone. `replaceServerToken` stores and re-points in one transaction, so a failure anywhere
+ * in it leaves the vault and the server exactly as they were.
+ *
+ * No vendor is reached: `fetch` is a recorder that answers 500, so the refresh after a replacement
+ * shows which token went out and to where, and nothing more.
+ */
+
+const SWAP_SERVER = `binding-swap-${tag}`;
+const SWAP_BROKERED = `binding-swap-brokered-${tag}`;
+const SWAP_URL = "https://swap.vendor.example/mcp";
+const OLD_TOKEN = `sk-old-${tag}`;
+const NEW_TOKEN = `sk-new-${tag}`;
+const policy = () => ({ mode: "enforce" as const, deny: [], allow: ["true"] });
+
+const vault = createCredentialStore(database);
+const auditStore = createAuditStore(database);
+/** A store over the real vault: the swap is a rotation, which a stub cannot show to be atomic. */
+const swapStore = createPluginStore({
+  database,
+  auditStore,
+  credentials: vault,
+  encryptionKey: KEY,
+  policy,
+});
+/** The credentials screen's own service, for the token the server starts with. */
+const admin = createCredentialAdminService(KEY, vault, auditStore);
+
+async function serverRow() {
+  const [row] = await asAdmin(() =>
+    database
+      .select({ url: mcpServers.url, credentialId: mcpServers.credentialId })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, SWAP_SERVER)),
+  );
+  return row;
+}
+
+async function credentialRow(id: string | null | undefined) {
+  if (!id) return undefined;
+  const [row] = await asAdmin(() =>
+    database
+      .select({
+        tenantId: credentials.tenantId,
+        kind: credentials.kind,
+        provider: credentials.provider,
+        keyId: credentials.keyId,
+        revokedAt: credentials.revokedAt,
+      })
+      .from(credentials)
+      .where(eq(credentials.id, id)),
+  );
+  return row;
+}
+
+/** The server as the credentials screen and the add path leave it: at its URL, on a live token. */
+async function addWithToken(token: string) {
+  const stored = await asAdmin(() =>
+    admin.create({
+      kind: "mcp",
+      provider: SWAP_SERVER,
+      keyId: `mcp-${SWAP_SERVER}`,
+      metadata: { server: SWAP_SERVER },
+      plaintext: token,
+    }),
+  );
+  await asAdmin(() =>
+    swapStore.addCustomServer({
+      id: SWAP_SERVER,
+      title: "Swap",
+      url: SWAP_URL,
+      credentialId: stored.id,
+      by: "admin@example.com",
+    }),
+  );
+  return stored.id;
+}
+
+afterAll(async () => {
+  await runAsTenant("platform", () =>
+    database
+      .delete(credentials)
+      .where(like(credentials.provider, `binding-swap-%${tag}`)),
+  );
+});
+
+describe("replacing an added server's token", () => {
+  test("a replacement that fails part-way leaves the server on its old token, still live", async () => {
+    const oldId = await addWithToken(OLD_TOKEN);
+
+    // The vault swap succeeds and then something after it fails, inside the same request: the
+    // position the second of the screen's two requests used to be in.
+    const interrupted = createPluginStore({
+      database,
+      auditStore,
+      credentials: {
+        ...vault,
+        rotate: async (...args: Parameters<typeof vault.rotate>) => {
+          await vault.rotate(...args);
+          throw new Error("interrupted after the vault swap");
+        },
+      },
+      encryptionKey: KEY,
+      policy,
+    });
+    await expect(
+      asAdmin(() =>
+        interrupted.replaceServerToken({
+          serverId: SWAP_SERVER,
+          token: NEW_TOKEN,
+          by: "admin@example.com",
+        }),
+      ),
+    ).rejects.toThrow("interrupted after the vault swap");
+
+    const row = await serverRow();
+    expect(row?.credentialId).toBe(oldId);
+    expect((await credentialRow(oldId))?.revokedAt).toBeNull();
+    // And no second token was left behind for the key.
+    const live = await asAdmin(() =>
+      database
+        .select({ id: credentials.id })
+        .from(credentials)
+        .where(
+          and(
+            eq(credentials.keyId, `mcp-${SWAP_SERVER}`),
+            isNull(credentials.revokedAt),
+          ),
+        ),
+    );
+    expect(live.map((credential) => credential.id)).toEqual([oldId]);
+  });
+
+  test("a replacement points the server at the new token, retires the old one, and moves nothing else", async () => {
+    const before = await serverRow();
+    const oldId = before?.credentialId;
+    expect(oldId).toBeTruthy();
+    sent = [];
+
+    const replaced = await asAdmin(() =>
+      swapStore.replaceServerToken({
+        serverId: SWAP_SERVER,
+        token: NEW_TOKEN,
+        by: "admin@example.com",
+      }),
+    );
+
+    expect(replaced.id).toBe(SWAP_SERVER);
+    const row = await serverRow();
+    expect(row?.url).toBe(SWAP_URL);
+    expect(row?.credentialId).not.toBe(oldId);
+    expect(await credentialRow(row?.credentialId)).toEqual({
+      // Beside its `team` server, under the key the plugins screen mints.
+      tenantId: "team",
+      kind: "mcp",
+      provider: SWAP_SERVER,
+      keyId: `mcp-${SWAP_SERVER}`,
+      revokedAt: null,
+    });
+    expect((await credentialRow(oldId))?.revokedAt).not.toBeNull();
+    // The refresh after it spent the new token, at the server's own address.
+    expect(sent[0]?.url).toContain("swap.vendor.example");
+    expect(sent[0]?.authorization).toContain(NEW_TOKEN);
+  });
+
+  test("a brokered app takes no token, and nothing is stored for it", async () => {
+    await runAsTenant("platform", () =>
+      database.insert(mcpServers).values({
+        id: SWAP_BROKERED,
+        tenantId: "team",
+        title: "Brokered",
+        vendor: "composio",
+        url: `composio://bindingswap${tag}`,
+        provenance: "composio",
+        authScheme: "OAUTH2",
+      }),
+    );
+
+    await expect(
+      asAdmin(() =>
+        swapStore.replaceServerToken({
+          serverId: SWAP_BROKERED,
+          token: NEW_TOKEN,
+          by: "admin@example.com",
+        }),
+      ),
+    ).rejects.toBeInstanceOf(CustomServerRefusedError);
+
+    const stored = await asAdmin(() =>
+      database
+        .select({ id: credentials.id })
+        .from(credentials)
+        .where(eq(credentials.provider, SWAP_BROKERED)),
+    );
+    expect(stored).toEqual([]);
   });
 });
