@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useState } from "react";
 import useMeasure from "react-use-measure";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldTitle,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +33,7 @@ import {
   agentFormSchema,
   agentInputFrom,
   emptyAgentForm,
+  randomAvatarSeed,
 } from "@/lib/agents/form";
 import { createAgentMutationOptions } from "@/lib/agents/mutations";
 import {
@@ -167,7 +170,14 @@ function CreateAgentWizard({
   const [direction, setDirection] = useState(1);
   /** Whether this step's Continue was pressed, which is when its errors become worth showing. */
   const [tried, setTried] = useState(false);
-  const [values, setValues] = useState<AgentFormValues>(emptyAgentForm);
+  /*
+   * The avatar is drawn up front from a fresh seed, so the person sees a face before they type a name
+   * and the face they see is the one that is created: the seed rides in `values` into the POST.
+   */
+  const [values, setValues] = useState<AgentFormValues>(() => ({
+    ...emptyAgentForm,
+    avatarSeed: randomAvatarSeed(),
+  }));
   /** Deliberately unanswered to start with: revealing endpoint fields is the point of asking. */
   const [kind, setKind] = useState<AgentKind | null>(null);
 
@@ -307,6 +317,7 @@ function CreateAgentWizard({
                     {STEPS[step] === "identity" ? (
                       <IdentityStep
                         errors={identityErrors}
+                        onReroll={() => set("avatarSeed", randomAvatarSeed())}
                         set={set}
                         values={values}
                       />
@@ -399,9 +410,12 @@ function IdentityStep({
   values,
   errors,
   set,
+  onReroll,
 }: {
   values: AgentFormValues;
   errors: Partial<Record<IdentityField, string>>;
+  /** Draw a different face. The preview and the eventual create both follow `values.avatarSeed`. */
+  onReroll: () => void;
   set: <K extends keyof AgentFormValues>(
     key: K,
     value: AgentFormValues[K],
@@ -414,6 +428,30 @@ function IdentityStep({
         这里写的角色，在这位员工参与的每个频道里都生效。
       </QuestionnaireDescription>
       <FieldGroup>
+        {values.avatarSeed ? (
+          <Field>
+            <FieldTitle>头像</FieldTitle>
+            <div
+              className="flex items-center gap-3"
+              data-avatar-seed={values.avatarSeed}
+              data-testid="create-agent-avatar-preview"
+            >
+              <AbstractAvatar
+                name={`${values.name.trim() || "新员工"}的头像`}
+                seed={values.avatarSeed}
+                size={48}
+              />
+              <Button
+                onClick={onReroll}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                换一个
+              </Button>
+            </div>
+          </Field>
+        ) : null}
         <Field data-invalid={errors.name ? true : undefined}>
           <FieldLabel htmlFor="create-agent-name">名字</FieldLabel>
           <Input

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createAuth } from "../src/auth";
+import { createAuth, LINK_REFUSAL_MESSAGE } from "../src/auth";
 import type { DeploymentConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import {
@@ -197,5 +197,33 @@ describe("email and password registration", () => {
      * reason every real sign-in worked while this case sat red.
      */
     expect(body.token).toBeString();
+  });
+
+  /*
+   * A provider reporting this address must not join the unverified password row: whoever registered
+   * it first would keep their password and gain the real person's provider sign-in. Driven through
+   * Better Auth's own adapter so the real `account.create` hook decides.
+   */
+  test("a provider is not linked onto the unverified password account", async () => {
+    expect(userId).not.toBe("");
+    const context = await auth.$context;
+    // As the identity layer (`platform`), the frame `app.ts` runs every Better Auth request in; the
+    // refusal must be the hook's own, not a missing frame.
+    await expect(
+      runAsTenant("platform", () =>
+        context.internalAdapter.linkAccount({
+          userId,
+          providerId: "google",
+          accountId: `google-${suite}`,
+        }),
+      ),
+    ).rejects.toThrow(LINK_REFUSAL_MESSAGE);
+    const linked = await runAsTenant("platform", () =>
+      database
+        .select({ providerId: accounts.providerId })
+        .from(accounts)
+        .where(eq(accounts.userId, userId)),
+    );
+    expect(linked.map((row) => row.providerId)).toEqual(["credential"]);
   });
 });
