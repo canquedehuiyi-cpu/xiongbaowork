@@ -519,7 +519,8 @@ await startupLifecycle.run(async (startup) => {
    * output. A model allowlist, if one is ever wanted, is its own setting, empty by default.
    */
   const modelOutbound = {
-    allowPrivateHosts: config.computer?.allowPrivateHosts === true,
+    // Read on its own, not through `config.computer`: a local model needs no Bot computer.
+    allowPrivateHosts: config.modelEndpointsAllowPrivateHosts,
   };
   const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,

@@ -357,6 +357,27 @@ describe("sending through the guard", () => {
     expect(network.calls[0]?.init?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  test("a stalled name resolution is bounded by the deadline and by the caller's abort", async () => {
+    const network = fakeFetch(() => new Response("{}"));
+    const stalled = () => new Promise<never>(() => undefined);
+    const timedOut = await guardedFetch(
+      "https://stalled.example.com/v1",
+      { method: "POST" },
+      { lookup: stalled, fetchImpl: network.impl, timeoutMs: 50 },
+    ).catch((error: unknown) => error);
+    expect((timedOut as Error).name).toBe("TimeoutError");
+
+    const caller = new AbortController();
+    const cancelled = guardedFetch(
+      "https://stalled.example.com/v1",
+      { method: "POST", signal: caller.signal },
+      { lookup: stalled, fetchImpl: network.impl },
+    ).catch((error: unknown) => error);
+    caller.abort(new Error("run stopped"));
+    expect(((await cancelled) as Error).message).toBe("run stopped");
+    expect(network.calls).toHaveLength(0);
+  });
+
   test("the refusal does not repeat the credential", async () => {
     const network = fakeFetch(() => new Response("{}"));
     const refusal = await guardedFetch(

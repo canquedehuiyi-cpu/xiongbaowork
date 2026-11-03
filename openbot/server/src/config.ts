@@ -330,6 +330,14 @@ export type DeploymentConfig = {
    */
   computer?: ComputerConfig;
   /**
+   * Whether a tenant's model base URL may point at a private or loopback address over plain http
+   * (audit defect #6): the same development-only `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` switch, read
+   * on its own rather than through {@link computer}, so a laptop running a local model provider
+   * (Ollama on the LAN, say) with no Bot computer configured still reaches it. Refused in production
+   * like the switch itself.
+   */
+  modelEndpointsAllowPrivateHosts: boolean;
+  /**
    * Where a coworker's actions are carried out: this deployment's own container, or a machine the
    * tenant owns. `device` refuses when no machine is reachable rather than running the work here.
    */
@@ -1360,6 +1368,7 @@ export function loadConfig(
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
       : {}),
     computer: computerConfig(environment),
+    modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
      * container, which is what a development machine and every existing install already run.

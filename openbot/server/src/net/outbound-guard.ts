@@ -354,8 +354,9 @@ export async function guardedFetch(
         : input.url;
   const verdict = checkOutboundUrl(raw, policy);
   if (!verdict.allowed) throw new OutboundRefusedError(verdict.reason);
-  await assertResolvesPublic(verdict.url, policy);
 
+  // One deadline for the whole request, name resolution included: a resolver that never answers
+  // must not hold a probe past its timeout, and the caller's own abort must stop it too.
   const signals = [
     init?.signal,
     policy.timeoutMs ? AbortSignal.timeout(policy.timeoutMs) : undefined,
@@ -366,6 +367,7 @@ export async function guardedFetch(
       : signals.length === 1
         ? signals[0]
         : AbortSignal.any(signals);
+  await untilAborted(assertResolvesPublic(verdict.url, policy), signal);
 
   const response = await (policy.fetchImpl ?? fetch)(input, {
     ...init,
@@ -383,6 +385,32 @@ export async function guardedFetch(
     );
   }
   return response;
+}
+
+/**
+ * `work`, or the signal's reason if it aborts first. The lookup itself cannot be cancelled, so a
+ * stalled one is abandoned rather than awaited; its eventual answer is ignored.
+ */
+export function untilAborted<T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) return work;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 /** {@link guardedFetch} with its policy bound, in the shape an SDK's `fetch` option takes. */
