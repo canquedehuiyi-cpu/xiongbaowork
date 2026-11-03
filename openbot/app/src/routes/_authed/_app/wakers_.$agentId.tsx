@@ -287,9 +287,11 @@ function RunningTasksSection({ agentId }: { agentId: string }) {
               /*
                * `period: "all"`: the board defaults to the last month, and this section reads
                * running work with no window, so the link must ask the same question or a task
-               * started more than a month ago would be here and missing there.
+               * started more than a month ago would be here and missing there. `executor`, not
+               * `crew`: one coworker by its whole id, which a package id with a comma in it would
+               * not survive as a comma-split roster.
                */
-              search={{ crew: agentId, period: "all", status: "running" }}
+              search={{ executor: agentId, period: "all", status: "running" }}
               to="/tasks"
               {...props}
             />
