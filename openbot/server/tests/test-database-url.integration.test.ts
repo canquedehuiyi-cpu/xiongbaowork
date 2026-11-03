@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDatabase } from "../src/db/client";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 describe("TEST_DATABASE_URL isolation", () => {
@@ -11,15 +12,16 @@ describe("TEST_DATABASE_URL isolation", () => {
 
     const first = createDatabase(databaseUrl, TEST_POOL);
     try {
-      const [firstRow] = await first.execute<{ name: string }>(
-        "select current_database() as name",
+      // `current_database()` names the connection, not a tenant's row: the system frame.
+      const [firstRow] = await runAsTenant("system", () =>
+        first.execute<{ name: string }>("select current_database() as name"),
       );
       expect(process.env.DATABASE_URL).toBeUndefined();
 
       const second = createDatabase(testDatabaseUrl(), TEST_POOL);
       try {
-        const [secondRow] = await second.execute<{ name: string }>(
-          "select current_database() as name",
+        const [secondRow] = await runAsTenant("system", () =>
+          second.execute<{ name: string }>("select current_database() as name"),
         );
 
         expect(firstRow?.name).toBe(databaseName);

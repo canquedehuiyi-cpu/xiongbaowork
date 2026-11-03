@@ -3,10 +3,12 @@ import { Hono } from "hono";
 import { downloadHeaders } from "../../../shared/file-download";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AuditReader } from "../audit";
+import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
+import { capabilityFor } from "../tenant/context";
 import { computerActionIdentity } from "./action-identity";
 import { DEPLOYMENT_ROUTES } from "./deployment-routes";
 import {
@@ -56,8 +58,16 @@ export function createComputerRoutes(
    * endpoint says it cannot answer rather than answering from nothing.
    */
   auditReader?: AuditReader,
+  /**
+   * The admin capability, for the dry-run's read of the whole trail as `platform` (G01-E P7).
+   * Absent (a router built on its own in a test) the read stays in the caller's frame, which sees
+   * only that caller's own rows; `createApp` always passes it when it can recognise an administrator.
+   */
+  adminScope?: Pick<AdminScope, "adminCapability" | "asAdminPlatform">,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminScope?.adminCapability ?? ((_context, next) => next());
 
   /**
    * Every route under a Bot id, in one place.
@@ -759,63 +769,78 @@ export function createComputerRoutes(
    * DEPLOYMENT_ROUTES beside `/policy`, and admin-gated the same way, because history is the
    * administrator's view.
    */
-  routes.post("/policy-dry-run", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) return denied;
+  routes.post(
+    "/policy-dry-run",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) return denied;
 
-    if (!auditReader) {
-      return context.json(
-        {
-          error:
-            "This deployment records no readable trail, so there is no history to test against.",
-        },
-        501,
-      );
-    }
-
-    const body = (await context.req.json().catch(() => null)) as {
-      policy?: unknown;
-      limit?: unknown;
-    } | null;
-    const parsed = parseActionPolicy(body?.policy);
-    if (!parsed.ok) {
-      return context.json({ error: parsed.error }, 400);
-    }
-
-    // Bounded, and biased to recency: the question is what this rule does to the traffic the
-    // deployment actually has, and last week's traffic answers that better than a full scan.
-    //
-    // Strict on purpose. This used to read `typeof limit === "number" ? limit : 200` and clamp,
-    // so `"abc"`, `null` and `true` silently became 200, `Infinity` silently became 500, and
-    // `NaN` became `NaN` and travelled into `auditReader.list` as one. A what-if answered from
-    // the wrong slice of history is worse than no answer, because it is believed.
-    const rawLimit = body?.limit;
-    let limit = 200;
-    if (rawLimit !== undefined) {
-      if (
-        typeof rawLimit !== "number" ||
-        !Number.isInteger(rawLimit) ||
-        rawLimit < 1 ||
-        rawLimit > 500
-      ) {
+      if (!auditReader) {
         return context.json(
-          { error: "limit must be a whole number between 1 and 500." },
-          400,
+          {
+            error:
+              "This deployment records no readable trail, so there is no history to test against.",
+          },
+          501,
         );
       }
-      limit = rawLimit;
-    }
 
-    const { events } = await auditReader.list({
-      limit,
-      eventType: REPLAYABLE_EVENT_TYPES.join(","),
-      targetType: "computer",
-    });
+      const body = (await context.req.json().catch(() => null)) as {
+        policy?: unknown;
+        limit?: unknown;
+      } | null;
+      const parsed = parseActionPolicy(body?.policy);
+      if (!parsed.ok) {
+        return context.json({ error: parsed.error }, 400);
+      }
 
-    return context.json({
-      report: dryRunAgainstHistory(parsed.policy, events),
-    });
-  });
+      // Bounded, and biased to recency: the question is what this rule does to the traffic the
+      // deployment actually has, and last week's traffic answers that better than a full scan.
+      //
+      // Strict on purpose. This used to read `typeof limit === "number" ? limit : 200` and clamp,
+      // so `"abc"`, `null` and `true` silently became 200, `Infinity` silently became 500, and
+      // `NaN` became `NaN` and travelled into `auditReader.list` as one. A what-if answered from
+      // the wrong slice of history is worse than no answer, because it is believed.
+      const rawLimit = body?.limit;
+      let limit = 200;
+      if (rawLimit !== undefined) {
+        if (
+          typeof rawLimit !== "number" ||
+          !Number.isInteger(rawLimit) ||
+          rawLimit < 1 ||
+          rawLimit > 500
+        ) {
+          return context.json(
+            { error: "limit must be a whole number between 1 and 500." },
+            400,
+          );
+        }
+        limit = rawLimit;
+      }
+
+      // A role removed since sign-in holds no capability: a 403, not a refused platform read.
+      if (adminScope && capabilityFor(context.var.actor.id) !== "admin") {
+        return context.json({ error: "Administrator access required." }, 403);
+      }
+      const recent = () =>
+        auditReader.list({
+          limit,
+          eventType: REPLAYABLE_EVENT_TYPES.join(","),
+          targetType: "computer",
+        });
+      // The deployment's traffic, not the administrator's own: every judged action is stamped with the
+      // person whose Bot took it, so the replay reads the trail as `platform`.
+      const { events } = adminScope
+        ? await adminScope.asAdminPlatform(context.var.actor, recent)
+        : await recent();
+
+      return context.json({
+        report: dryRunAgainstHistory(parsed.policy, events),
+      });
+    },
+  );
 
   return routes;
 }

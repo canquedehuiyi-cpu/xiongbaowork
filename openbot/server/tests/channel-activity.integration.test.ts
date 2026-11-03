@@ -19,6 +19,7 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const databaseUrl = testDatabaseUrl();
@@ -39,34 +40,44 @@ const createdAgentIds: string[] = [];
 const createdChannelIds: string[] = [];
 
 afterEach(async () => {
-  for (const channelId of createdChannelIds.splice(0)) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, channelId));
-    await database.delete(channels).where(eq(channels.id, channelId));
-  }
-  for (const agentId of createdAgentIds.splice(0)) {
-    await database
-      .delete(agentProfiles)
-      .where(eq(agentProfiles.agentId, agentId));
-    await database.delete(agents).where(eq(agents.id, agentId));
-  }
-  for (const userId of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, userId));
-  }
+  // Cleanup spans several people's rows, which only the platform reaches.
+  await runAsTenant("platform", async () => {
+    for (const channelId of createdChannelIds.splice(0)) {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, channelId));
+      await database.delete(channels).where(eq(channels.id, channelId));
+    }
+    for (const agentId of createdAgentIds.splice(0)) {
+      await database
+        .delete(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId));
+      await database.delete(agents).where(eq(agents.id, agentId));
+    }
+    for (const userId of createdUserIds.splice(0)) {
+      await database.delete(users).where(eq(users.id, userId));
+    }
+  });
 });
 
 afterAll(async () => {
   await database.$client.close();
 });
 
+/** As a signed-in request runs: inside the person's own tenant. */
+function as<T>(actor: AgentActor, work: () => T): T {
+  return runAsTenant(actor.id, work);
+}
+
 async function createUser(): Promise<AgentActor> {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Channel Activity Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Channel Activity Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role: "user" };
 }
@@ -102,68 +113,74 @@ async function createChannel(owner: AgentActor, agentIds: string[]) {
 describe("reading a person's channels", () => {
   test("answers a page rather than everything", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    for (let index = 0; index < 5; index += 1) {
-      await createChannel(owner, [agentId]);
-    }
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      for (let index = 0; index < 5; index += 1) {
+        await createChannel(owner, [agentId]);
+      }
 
-    const page = await store.list(owner, { limit: 2 });
+      const page = await store.list(owner, { limit: 2 });
 
-    expect(page.channels).toHaveLength(2);
-    expect(page.nextCursor).not.toBeNull();
+      expect(page.channels).toHaveLength(2);
+      expect(page.nextCursor).not.toBeNull();
+    });
   });
 
   test("walking the cursor reaches every channel exactly once", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const expected: string[] = [];
-    for (let index = 0; index < 5; index += 1) {
-      expected.push((await createChannel(owner, [agentId])).id);
-    }
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const expected: string[] = [];
+      for (let index = 0; index < 5; index += 1) {
+        expected.push((await createChannel(owner, [agentId])).id);
+      }
 
-    const seen: string[] = [];
-    let cursor: string | undefined;
-    for (let page = 0; page < 10; page += 1) {
-      const result = await store.list(owner, {
-        limit: 2,
-        ...(cursor ? { cursor } : {}),
-      });
-      seen.push(...result.channels.map((channel) => channel.id));
-      if (!result.nextCursor) break;
-      cursor = result.nextCursor;
-    }
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 10; page += 1) {
+        const result = await store.list(owner, {
+          limit: 2,
+          ...(cursor ? { cursor } : {}),
+        });
+        seen.push(...result.channels.map((channel) => channel.id));
+        if (!result.nextCursor) break;
+        cursor = result.nextCursor;
+      }
 
-    expect(new Set(seen).size).toBe(seen.length);
-    expect(seen.sort()).toEqual(expected.sort());
+      expect(new Set(seen).size).toBe(seen.length);
+      expect(seen.sort()).toEqual(expected.sort());
+    });
   });
 
   test("channels made in the same millisecond are each on a page", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const expected: string[] = [];
-    for (let index = 0; index < 5; index += 1) {
-      expected.push((await createChannel(owner, [agentId])).id);
-    }
-    // One transaction's worth of channels, as a package sync or an import makes them: the same
-    // instant, kept by PostgreSQL to the microsecond and by a JavaScript `Date` to the millisecond.
-    await database
-      .update(channels)
-      .set({ createdAt: sql`'2026-01-01 00:00:00.123456+00'::timestamptz` })
-      .where(inArray(channels.id, expected));
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const expected: string[] = [];
+      for (let index = 0; index < 5; index += 1) {
+        expected.push((await createChannel(owner, [agentId])).id);
+      }
+      // One transaction's worth of channels, as a package sync or an import makes them: the same
+      // instant, kept by PostgreSQL to the microsecond and by a JavaScript `Date` to the millisecond.
+      await database
+        .update(channels)
+        .set({ createdAt: sql`'2026-01-01 00:00:00.123456+00'::timestamptz` })
+        .where(inArray(channels.id, expected));
 
-    const seen: string[] = [];
-    let cursor: string | undefined;
-    for (let page = 0; page < 10; page += 1) {
-      const result = await store.list(owner, {
-        limit: 2,
-        ...(cursor ? { cursor } : {}),
-      });
-      seen.push(...result.channels.map((channel) => channel.id));
-      if (!result.nextCursor) break;
-      cursor = result.nextCursor;
-    }
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 10; page += 1) {
+        const result = await store.list(owner, {
+          limit: 2,
+          ...(cursor ? { cursor } : {}),
+        });
+        seen.push(...result.channels.map((channel) => channel.id));
+        if (!result.nextCursor) break;
+        cursor = result.nextCursor;
+      }
 
-    expect(seen.sort()).toEqual(expected.sort());
+      expect(seen.sort()).toEqual(expected.sort());
+    });
   });
 
   test("a channel with two Bots is never split across pages", async () => {
@@ -173,59 +190,66 @@ describe("reading a person's channels", () => {
      * sharing an id, and the sidebar would render the same conversation twice with half its Bots.
      */
     const owner = await createUser();
-    const first = await createAgent(owner, "First");
-    const second = await createAgent(owner, "Second");
-    const shared = await createChannel(owner, [first, second]);
-    await createChannel(owner, [first]);
+    await as(owner, async () => {
+      const first = await createAgent(owner, "First");
+      const second = await createAgent(owner, "Second");
+      const shared = await createChannel(owner, [first, second]);
+      await createChannel(owner, [first]);
 
-    const seen: { id: string; agentIds: string[] }[] = [];
-    let cursor: string | undefined;
-    for (let page = 0; page < 5; page += 1) {
-      const result = await store.list(owner, {
-        limit: 1,
-        ...(cursor ? { cursor } : {}),
-      });
-      // One channel per page, whatever it holds. A row limit would put two here.
-      expect(result.channels.length).toBeLessThanOrEqual(1);
-      seen.push(...result.channels);
-      if (!result.nextCursor) break;
-      cursor = result.nextCursor;
-    }
+      const seen: { id: string; agentIds: string[] }[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 5; page += 1) {
+        const result = await store.list(owner, {
+          limit: 1,
+          ...(cursor ? { cursor } : {}),
+        });
+        // One channel per page, whatever it holds. A row limit would put two here.
+        expect(result.channels.length).toBeLessThanOrEqual(1);
+        seen.push(...result.channels);
+        if (!result.nextCursor) break;
+        cursor = result.nextCursor;
+      }
 
-    // Which of the two sorts first is incidental; that the shared one arrives once and whole is not.
-    const found = seen.filter((channel) => channel.id === shared.id);
-    expect(found).toHaveLength(1);
-    expect(found[0]?.agentIds.sort()).toEqual([first, second].sort());
+      // Which of the two sorts first is incidental; that the shared one arrives once and whole is not.
+      const found = seen.filter((channel) => channel.id === shared.id);
+      expect(found).toHaveLength(1);
+      expect(found[0]?.agentIds.sort()).toEqual([first, second].sort());
+    });
   });
 
   test("a caller cannot ask for every channel in one page", async () => {
     // The limit arrives over HTTP, so the ceiling is what makes paging a property of the endpoint.
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      await createChannel(owner, [agentId]);
 
-    const page = await store.list(owner, { limit: 100_000 });
+      const page = await store.list(owner, { limit: 100_000 });
 
-    expect(page.channels.length).toBeLessThanOrEqual(200);
+      expect(page.channels.length).toBeLessThanOrEqual(200);
+    });
   });
 
   test("a nonsense cursor reads as the first page", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      await createChannel(owner, [agentId]);
 
-    const page = await store.list(owner, { cursor: "not-a-cursor" });
+      const page = await store.list(owner, { cursor: "not-a-cursor" });
 
-    expect(page.channels).toHaveLength(1);
+      expect(page.channels).toHaveLength(1);
+    });
   });
 
   test("somebody with no channels gets an empty page and no cursor", async () => {
     const owner = await createUser();
+    await as(owner, async () => {
+      const page = await store.list(owner);
 
-    const page = await store.list(owner);
-
-    expect(page.channels).toEqual([]);
-    expect(page.nextCursor).toBeNull();
+      expect(page.channels).toEqual([]);
+      expect(page.nextCursor).toBeNull();
+    });
   });
 });
 
@@ -237,170 +261,188 @@ describe("reading a person's channels", () => {
 describe("channel activity", () => {
   test("records the last message and returns it on the roster", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const channel = await createChannel(owner, [agentId]);
-    const at = new Date();
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const channel = await createChannel(owner, [agentId]);
+      const at = new Date();
 
-    await store.recordActivity(owner, channel.id, {
-      agentId,
-      at,
-      text: "Categorized three expenses.",
+      await store.recordActivity(owner, channel.id, {
+        agentId,
+        at,
+        text: "Categorized three expenses.",
+      });
+
+      expect((await store.list(owner)).channels).toEqual([
+        {
+          ...channel,
+          // Nothing has named this conversation: the sweep that does runs outside this store.
+          summary: null,
+          lastMessage: "Categorized three expenses.",
+          lastMessageAgentId: agentId,
+          lastMessageAt: at,
+          createdAt: expect.any(Date),
+          pinned: false,
+          lastReadAt: null,
+        },
+      ]);
     });
-
-    expect((await store.list(owner)).channels).toEqual([
-      {
-        ...channel,
-        // Nothing has named this conversation: the sweep that does runs outside this store.
-        summary: null,
-        lastMessage: "Categorized three expenses.",
-        lastMessageAgentId: agentId,
-        lastMessageAt: at,
-        createdAt: expect.any(Date),
-        pinned: false,
-        lastReadAt: null,
-      },
-    ]);
   });
 
   test("keeps a person's roster to the channels they belong to", async () => {
     const owner = await createUser();
     const otherUser = await createUser();
-    const agentId = await createAgent(owner);
-    const channel = await createChannel(owner, [agentId]);
+    const agentId = await as(owner, () => createAgent(owner));
+    const channel = await as(owner, () => createChannel(owner, [agentId]));
 
-    expect((await store.list(otherUser)).channels).toEqual([]);
+    expect((await as(otherUser, () => store.list(otherUser))).channels).toEqual(
+      [],
+    );
     await expect(
-      store.recordActivity(otherUser, channel.id, {
-        agentId: null,
-        at: new Date(),
-        text: "Not mine.",
-      }),
+      as(otherUser, () =>
+        store.recordActivity(otherUser, channel.id, {
+          agentId: null,
+          at: new Date(),
+          text: "Not mine.",
+        }),
+      ),
     ).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
 
   test("ignores a report older than what is already stored", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const channel = await createChannel(owner, [agentId]);
-    const newest = new Date();
-    const older = new Date(newest.getTime() - 60_000);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const channel = await createChannel(owner, [agentId]);
+      const newest = new Date();
+      const older = new Date(newest.getTime() - 60_000);
 
-    await store.recordActivity(owner, channel.id, {
-      agentId,
-      at: newest,
-      text: "The reply.",
-    });
-    // A person's message and the agent's reply are two separate reports. A slow one must not
-    // overwrite a newer one that already landed.
-    await store.recordActivity(owner, channel.id, {
-      agentId: null,
-      at: older,
-      text: "The question.",
-    });
+      await store.recordActivity(owner, channel.id, {
+        agentId,
+        at: newest,
+        text: "The reply.",
+      });
+      // A person's message and the agent's reply are two separate reports. A slow one must not
+      // overwrite a newer one that already landed.
+      await store.recordActivity(owner, channel.id, {
+        agentId: null,
+        at: older,
+        text: "The question.",
+      });
 
-    expect((await store.list(owner)).channels[0]?.lastMessage).toBe(
-      "The reply.",
-    );
+      expect((await store.list(owner)).channels[0]?.lastMessage).toBe(
+        "The reply.",
+      );
+    });
   });
 
   test("stores at most 200 code points, without control characters", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const channel = await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const channel = await createChannel(owner, [agentId]);
 
-    await store.recordActivity(owner, channel.id, {
-      agentId,
-      at: new Date(),
-      // A terminal escape and a newline: a preview is rendered as text, not replayed as control.
-      text: `line one\nline two \u001b[31m ${"x".repeat(400)}`,
+      await store.recordActivity(owner, channel.id, {
+        agentId,
+        at: new Date(),
+        // A terminal escape and a newline: a preview is rendered as text, not replayed as control.
+        text: `line one\nline two \u001b[31m ${"x".repeat(400)}`,
+      });
+
+      const stored = (await store.list(owner)).channels[0]?.lastMessage ?? "";
+      expect(Array.from(stored).length).toBeLessThanOrEqual(200);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: asserting they were removed.
+      expect(stored).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+      expect(stored.startsWith("line one line two")).toBe(true);
     });
-
-    const stored = (await store.list(owner)).channels[0]?.lastMessage ?? "";
-    expect(Array.from(stored).length).toBeLessThanOrEqual(200);
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: asserting they were removed.
-    expect(stored).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
-    expect(stored.startsWith("line one line two")).toBe(true);
   });
 
   test("refuses an agent that is not in the channel", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const strangerId = await createAgent(owner, "Stranger");
-    const channel = await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const strangerId = await createAgent(owner, "Stranger");
+      const channel = await createChannel(owner, [agentId]);
 
-    await expect(
-      store.recordActivity(owner, channel.id, {
-        agentId: strangerId,
-        at: new Date(),
-        text: "Not from this channel.",
-      }),
-    ).rejects.toBeInstanceOf(AgentNotFoundError);
+      await expect(
+        store.recordActivity(owner, channel.id, {
+          agentId: strangerId,
+          at: new Date(),
+          text: "Not from this channel.",
+        }),
+      ).rejects.toBeInstanceOf(AgentNotFoundError);
+    });
   });
 
   test("puts a channel just created above one that has already been used", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const used = await createChannel(owner, [agentId]);
-    await store.recordActivity(owner, used.id, {
-      agentId,
-      // A minute back, not `now`. The activity time comes from this process and `created_at` comes
-      // from Postgres, so two events written in the same instant are ordered by whichever clock is
-      // marginally ahead. The property under test is the ordering rule, not the tie-break.
-      at: new Date(Date.now() - 60_000),
-      text: "Said something a minute ago.",
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const used = await createChannel(owner, [agentId]);
+      await store.recordActivity(owner, used.id, {
+        agentId,
+        // A minute back, not `now`. The activity time comes from this process and `created_at` comes
+        // from Postgres, so two events written in the same instant are ordered by whichever clock is
+        // marginally ahead. The property under test is the ordering rule, not the tie-break.
+        at: new Date(Date.now() - 60_000),
+        text: "Said something a minute ago.",
+      });
+
+      // Starting a conversation is the most recent thing this person did, and it is the one they are
+      // about to type in. Sorting it under every channel that has a message would bury it.
+      const fresh = await createChannel(owner, [agentId]);
+
+      expect(
+        (await store.list(owner)).channels.map((channel) => channel.id),
+      ).toEqual([fresh.id, used.id]);
     });
-
-    // Starting a conversation is the most recent thing this person did, and it is the one they are
-    // about to type in. Sorting it under every channel that has a message would bury it.
-    const fresh = await createChannel(owner, [agentId]);
-
-    expect(
-      (await store.list(owner)).channels.map((channel) => channel.id),
-    ).toEqual([fresh.id, used.id]);
   });
 
   test("sorts by recency and leaves silent channels below, not absent", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const quiet = await createChannel(owner, [agentId]);
-    const busy = await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const quiet = await createChannel(owner, [agentId]);
+      const busy = await createChannel(owner, [agentId]);
 
-    await store.recordActivity(owner, busy.id, {
-      agentId,
-      at: new Date(),
-      text: "Said something.",
+      await store.recordActivity(owner, busy.id, {
+        agentId,
+        at: new Date(),
+        text: "Said something.",
+      });
+
+      expect(
+        (await store.list(owner)).channels.map((channel) => channel.id),
+      ).toEqual([busy.id, quiet.id]);
     });
-
-    expect(
-      (await store.list(owner)).channels.map((channel) => channel.id),
-    ).toEqual([busy.id, quiet.id]);
   });
 
   test("a title rides along on the roster without touching its order", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner);
-    const quiet = await createChannel(owner, [agentId]);
-    const busy = await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner);
+      const quiet = await createChannel(owner, [agentId]);
+      const busy = await createChannel(owner, [agentId]);
 
-    await store.recordActivity(owner, busy.id, {
-      agentId,
-      at: new Date(),
-      text: "Said something.",
+      await store.recordActivity(owner, busy.id, {
+        agentId,
+        at: new Date(),
+        text: "Said something.",
+      });
+      // Named the older, quieter conversation, which is the case that would expose a summary leaking
+      // into the ordering: it sorts second before and must still sort second after.
+      await database
+        .update(channels)
+        .set({ summary: "An older subject", summaryAt: new Date() })
+        .where(eq(channels.id, quiet.id));
+
+      const roster = (await store.list(owner)).channels;
+
+      expect(roster.map((channel) => channel.id)).toEqual([busy.id, quiet.id]);
+      expect(roster.map((channel) => channel.summary)).toEqual([
+        null,
+        "An older subject",
+      ]);
     });
-    // Named the older, quieter conversation, which is the case that would expose a summary leaking
-    // into the ordering: it sorts second before and must still sort second after.
-    await database
-      .update(channels)
-      .set({ summary: "An older subject", summaryAt: new Date() })
-      .where(eq(channels.id, quiet.id));
-
-    const roster = (await store.list(owner)).channels;
-
-    expect(roster.map((channel) => channel.id)).toEqual([busy.id, quiet.id]);
-    expect(roster.map((channel) => channel.summary)).toEqual([
-      null,
-      "An older subject",
-    ]);
   });
 });
 
@@ -451,52 +493,58 @@ describe("a pinned channel in a paged roster", () => {
 
   test("lifts a pinned channel onto the first page, however old it is", async () => {
     const owner = await createUser();
-    const ids = await channelsWithActivity(owner, 6);
-    const oldest = ids[0] as string;
+    await as(owner, async () => {
+      const ids = await channelsWithActivity(owner, 6);
+      const oldest = ids[0] as string;
 
-    await store.setPinned(owner, oldest, true);
+      await store.setPinned(owner, oldest, true);
 
-    // Two per page, six channels: on recency alone this one is the last row of the last page.
-    const page = await store.list(owner, { limit: 2 });
-    expect(page.channels.map((channel) => channel.id)[0]).toBe(oldest);
+      // Two per page, six channels: on recency alone this one is the last row of the last page.
+      const page = await store.list(owner, { limit: 2 });
+      expect(page.channels.map((channel) => channel.id)[0]).toBe(oldest);
+    });
   });
 
   test("walks every channel exactly once across pinned and unpinned", async () => {
     const owner = await createUser();
-    const ids = await channelsWithActivity(owner, 6);
-    // Two pins, chosen so the group boundary does not line up with a page boundary.
-    await store.setPinned(owner, ids[0] as string, true);
-    await store.setPinned(owner, ids[3] as string, true);
+    await as(owner, async () => {
+      const ids = await channelsWithActivity(owner, 6);
+      // Two pins, chosen so the group boundary does not line up with a page boundary.
+      await store.setPinned(owner, ids[0] as string, true);
+      await store.setPinned(owner, ids[3] as string, true);
 
-    const seen = await walk(owner, 2);
+      const seen = await walk(owner, 2);
 
-    // Pinned first, and recency within each group: the cursor has to order pages the same way the
-    // first page is ordered, or a channel is served twice and another never at all.
-    expect(seen).toEqual([
-      ids[3] as string,
-      ids[0] as string,
-      ids[5] as string,
-      ids[4] as string,
-      ids[2] as string,
-      ids[1] as string,
-    ]);
-    expect(new Set(seen).size).toBe(seen.length);
+      // Pinned first, and recency within each group: the cursor has to order pages the same way the
+      // first page is ordered, or a channel is served twice and another never at all.
+      expect(seen).toEqual([
+        ids[3] as string,
+        ids[0] as string,
+        ids[5] as string,
+        ids[4] as string,
+        ids[2] as string,
+        ids[1] as string,
+      ]);
+      expect(new Set(seen).size).toBe(seen.length);
+    });
   });
 
   test("unpinning puts the channel back where recency alone would have it", async () => {
     const owner = await createUser();
-    const ids = await channelsWithActivity(owner, 4);
-    const oldest = ids[0] as string;
+    await as(owner, async () => {
+      const ids = await channelsWithActivity(owner, 4);
+      const oldest = ids[0] as string;
 
-    await store.setPinned(owner, oldest, true);
-    await store.setPinned(owner, oldest, false);
+      await store.setPinned(owner, oldest, true);
+      await store.setPinned(owner, oldest, false);
 
-    expect(await walk(owner, 2)).toEqual([
-      ids[3] as string,
-      ids[2] as string,
-      ids[1] as string,
-      oldest,
-    ]);
+      expect(await walk(owner, 2)).toEqual([
+        ids[3] as string,
+        ids[2] as string,
+        ids[1] as string,
+        oldest,
+      ]);
+    });
   });
 });
 
@@ -511,26 +559,30 @@ describe("a pinned channel in a paged roster", () => {
 describe("finding or making a person's channel with one Bot", () => {
   test("two at once get the same conversation, not one each", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner, "Knowledge");
+    await as(owner, async () => {
+      const agentId = await createAgent(owner, "Knowledge");
 
-    const [first, second] = await Promise.all([
-      store.direct(owner, agentId),
-      store.direct(owner, agentId),
-    ]);
-    createdChannelIds.push(first.id, second.id);
+      const [first, second] = await Promise.all([
+        store.direct(owner, agentId),
+        store.direct(owner, agentId),
+      ]);
+      createdChannelIds.push(first.id, second.id);
 
-    expect(second.id).toBe(first.id);
-    expect(second.threadId).toBe(first.threadId);
+      expect(second.id).toBe(first.id);
+      expect(second.threadId).toBe(first.threadId);
+    });
   });
 
   test("an existing conversation is reused rather than added to", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner, "Knowledge");
-    const made = await createChannel(owner, [agentId]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner, "Knowledge");
+      const made = await createChannel(owner, [agentId]);
 
-    const found = await store.direct(owner, agentId);
+      const found = await store.direct(owner, agentId);
 
-    expect(found.id).toBe(made.id);
+      expect(found.id).toBe(made.id);
+    });
   });
 
   /*
@@ -539,14 +591,16 @@ describe("finding or making a person's channel with one Bot", () => {
    */
   test("a channel with a second Bot in it is not that person's direct one", async () => {
     const owner = await createUser();
-    const agentId = await createAgent(owner, "Knowledge");
-    const other = await createAgent(owner, "Research");
-    const shared = await createChannel(owner, [agentId, other]);
+    await as(owner, async () => {
+      const agentId = await createAgent(owner, "Knowledge");
+      const other = await createAgent(owner, "Research");
+      const shared = await createChannel(owner, [agentId, other]);
 
-    const found = await store.direct(owner, agentId);
-    createdChannelIds.push(found.id);
+      const found = await store.direct(owner, agentId);
+      createdChannelIds.push(found.id);
 
-    expect(found.id).not.toBe(shared.id);
-    expect(found.agentIds).toEqual([agentId]);
+      expect(found.id).not.toBe(shared.id);
+      expect(found.agentIds).toEqual([agentId]);
+    });
   });
 });

@@ -16,6 +16,11 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { cutAtCodeUnits } from "../channels/text";
+import {
+  assertPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { HANDOFF_KIND } from "./handoff";
 import { ThreadBusyError } from "./handoff-delivery";
@@ -296,100 +301,67 @@ export function createHandoffRunner(options: {
             report.skipped.push({ key: item.key, reason: "not a hop" });
             continue;
           }
-          // A hop to a Bot its person paused is dropped, not delivered. See agents/lifecycle.ts.
-          if (await isBotPaused(work.actorId, work.toBotId)) {
+          /*
+           * WHOSE HOP THIS IS comes from the row, never from the payload alone (G01). The tenant
+           * stamped on the claimed row is what the database wrote from the run that offered it; the
+           * payload's person may only agree with it. A hop stamped as nobody's has no person to
+           * deliver for or tell, so it is ended here: run on, its trail and its follow-on hops would
+           * be filed as `system`, which every tenant can read. It still leaves one row, the
+           * platform's, so a dropped hop is a fact somebody can find rather than a silence. That row
+           * names no person: the only one on offer is the payload's, which is exactly what was not
+           * trusted.
+           */
+          let tenant: string;
+          try {
+            tenant = assertPersonTenant(item.tenantId, work.actorId ?? null);
+          } catch (error) {
+            if (!(error instanceof TenantContextError)) throw error;
             await queue.finish({ kind: HANDOFF_KIND, key: item.key, owner });
             ours.delete(item.key);
-            report.skipped.push({ key: item.key, reason: BOT_PAUSED_REASON });
+            console.warn(
+              JSON.stringify({ type: "handoff-untrusted-tenant", key: item.key }),
+            );
+            await runAsTenant("platform", () =>
+              recordAuditEvent(auditStore, {
+                eventType: "agent.handoff_failed",
+                targetType: "agent",
+                targetId: work.toBotId,
+                initiator: { kind: "handoff", id: work.fromBotId },
+                payload: {
+                  bot: work.fromBotId,
+                  from: work.fromBotId,
+                  to: work.toBotId,
+                  run: work.runId,
+                  attempt: item.attempts,
+                  reason: "tenant_unresolved",
+                },
+              }),
+            ).catch((failure: unknown) =>
+              console.warn(
+                "Could not record a hop dropped for want of a tenant.",
+                failure,
+              ),
+            );
+            report.skipped.push({ key: item.key, reason: "tenant_unresolved" });
             continue;
           }
+          await runAsTenant(tenant, async () => {
+            // A hop to a Bot its person paused is dropped, not delivered. See agents/lifecycle.ts.
+            if (await isBotPaused(work.actorId, work.toBotId)) {
+              await queue.finish({ kind: HANDOFF_KIND, key: item.key, owner });
+              ours.delete(item.key);
+              report.skipped.push({ key: item.key, reason: BOT_PAUSED_REASON });
+              return;
+            }
 
-          /*
-           * A hop that has already been tried is not a fresh one, and the difference matters here more
-           * than anywhere else this queue is used: a first attempt has certainly not run the other
-           * Bot, while a second may already have run it, spent a model call and posted an answer
-           * before its owner died. Recorded rather than guessed at, so somebody reading the trail can
-           * tell a duplicate answer from a mystery.
-           */
-          if (item.attempts > 1) {
-            await recordAuditEvent(auditStore, {
-              eventType: "agent.handoff_retried",
-              targetType: "agent",
-              targetId: work.toBotId,
-              ...(work.actorId ? { actorUserId: work.actorId } : {}),
-              initiator: { kind: "handoff", id: work.fromBotId },
-              payload: {
-                // See the same key on `agent.handoff_delivered` below: the Audit screen's Bot
-                // column reads `payload.bot`, so a row without it names no Bot.
-                bot: work.fromBotId,
-                from: work.fromBotId,
-                to: work.toBotId,
-                run: work.runId,
-                attempt: item.attempts,
-                note: "A previous attempt may already have run this Bot.",
-              },
-            });
-          }
-
-          /*
-           * How long the hop took, recorded either way. A hop is a run nobody is watching, so the
-           * trail is the only place its duration is visible: "delivered in 4s" and "delivered in 4m"
-           * are the same row otherwise, and the second is what a person waiting was actually shown.
-           */
-          const startedAt = Date.now();
-          /*
-           * Still ours, ASKED OF THE DATABASE, immediately before a model call rather than after it.
-           *
-           * Consulting the heartbeat's own set would only catch a renewal that had been attempted
-           * and refused. A process paused long enough for the lease to lapse never attempted one, so
-           * its set still says the hop is his, and he delivers it on top of whoever has since taken
-           * it. The renewal is the question and the answer at once, and it puts a fresh lease under
-           * the delivery about to start, which is the moment one is most needed.
-           *
-           * Running a hop that is no longer ours is the expensive half of a duplicate: a whole agent
-           * turn, billed, ending in a second answer in somebody's conversation.
-           */
-          const stillOurs = await queue.renew({
-            kind: HANDOFF_KIND,
-            key: item.key,
-            owner,
-            leaseMs,
-          });
-          if (!stillOurs) {
-            ours.delete(item.key);
-            report.skipped.push({
-              key: item.key,
-              reason: "the lease went elsewhere",
-            });
-            continue;
-          }
-
-          try {
-            const shown = summarise(work);
-            const { answer } = await delivery.deliver({
-              work,
-              message: attribute(work),
-              ...(shown ? { shown } : {}),
-              assertion: sign(work, { key: item.key, owner }),
-            });
-            const kept = await queue.finish({
-              kind: HANDOFF_KIND,
-              key: item.key,
-              owner,
-            });
-            ours.delete(item.key);
             /*
-             * `finish` answering false means the lease went elsewhere while this ran, so another
-             * replica may have delivered the same hop. The turn happened either way and the trail has
-             * to say so; what it must not say is that this replica finished the work, because it did
-             * not, and a person reading two similar answers would have nothing to tell a duplicate
-             * from a mystery.
+             * A hop that has already been tried is not a fresh one, and the difference matters here more
+             * than anywhere else this queue is used: a first attempt has certainly not run the other
+             * Bot, while a second may already have run it, spent a model call and posted an answer
+             * before its owner died. Recorded rather than guessed at, so somebody reading the trail can
+             * tell a duplicate answer from a mystery.
              */
-            if (!kept) {
-              report.skipped.push({
-                key: item.key,
-                reason: "delivered, but the lease had gone elsewhere",
-              });
+            if (item.attempts > 1) {
               await recordAuditEvent(auditStore, {
                 eventType: "agent.handoff_retried",
                 targetType: "agent",
@@ -397,119 +369,198 @@ export function createHandoffRunner(options: {
                 ...(work.actorId ? { actorUserId: work.actorId } : {}),
                 initiator: { kind: "handoff", id: work.fromBotId },
                 payload: {
-                  // See the same key on `agent.handoff_delivered` below.
+                  // See the same key on `agent.handoff_delivered` below: the Audit screen's Bot
+                  // column reads `payload.bot`, so a row without it names no Bot.
                   bot: work.fromBotId,
                   from: work.fromBotId,
                   to: work.toBotId,
                   run: work.runId,
                   attempt: item.attempts,
-                  note: "This replica delivered a hop whose lease had already gone elsewhere. Another may have delivered it too.",
+                  note: "A previous attempt may already have run this Bot.",
                 },
               });
-              continue;
             }
-            report.delivered.push(work.toBotId);
+
             /*
-             * The answer goes home through the queue, like the turn that produced it: durable, so a
-             * pod dying between the turn and the relay loses the relay to a retry rather than for
-             * ever. Only for a forward hop with words to carry — a relay of a relay is the loop the
-             * `answerIn` check exists to stop, and a wordless turn has nothing to say.
+             * How long the hop took, recorded either way. A hop is a run nobody is watching, so the
+             * trail is the only place its duration is visible: "delivered in 4s" and "delivered in 4m"
+             * are the same row otherwise, and the second is what a person waiting was actually shown.
              */
-            if (!work.answerIn && answer) {
-              await relay(work, item.key, answer).catch((failure) => {
-                // The turn happened and is on record; a relay that cannot be queued must not undo
-                // that by failing the hop into a retry and a second turn.
-                console.warn(
-                  "Could not queue the relay for a delivered hop.",
-                  failure,
-                );
-              });
-            }
-            await recordAuditEvent(auditStore, {
-              eventType: "agent.handoff_delivered",
-              targetType: "agent",
-              targetId: work.toBotId,
-              ...(work.actorId ? { actorUserId: work.actorId } : {}),
-              initiator: { kind: "handoff", id: work.fromBotId },
-              payload: {
-                // See the same key on `agent.handoff_offered`: the Audit screen's Bot column reads
-                // `payload.bot`, so a row without it names no Bot.
-                bot: work.fromBotId,
-                from: work.fromBotId,
-                to: work.toBotId,
-                run: work.runId,
-                depth: work.depth,
-                ms: Date.now() - startedAt,
-              },
-            });
-          } catch (error) {
-            const reason =
-              error instanceof Error ? error.message : "could not be delivered";
+            const startedAt = Date.now();
             /*
-             * The last try, so the person is told rather than left waiting.
+             * Still ours, ASKED OF THE DATABASE, immediately before a model call rather than after it.
              *
-             * Enqueued before the release, because the release is what makes this attempt the last
-             * one: after it the row will never be claimed again and nothing else will ever look at
-             * this hop. A person who was told their question had been handed on, and then hears
-             * nothing for ever, has no way to tell a slow Bot from a broken one.
+             * Consulting the heartbeat's own set would only catch a renewal that had been attempted
+             * and refused. A process paused long enough for the lease to lapse never attempted one, so
+             * its set still says the hop is his, and he delivers it on top of whoever has since taken
+             * it. The renewal is the question and the answer at once, and it puts a fresh lease under
+             * the delivery about to start, which is the moment one is most needed.
+             *
+             * Running a hop that is no longer ours is the expensive half of a duplicate: a whole agent
+             * turn, billed, ending in a second answer in somebody's conversation.
              */
-            // The deployment's controls refused it (Use Bots, the model allowlist). Trying again in a
-            // minute gets the same answer, so this is the last try, whatever the count says.
-            const refused =
-              error instanceof Error && error.name === "CapabilityRefusedError";
-            if ((refused || item.attempts >= maxAttempts) && !work.answerIn) {
-              await tell(work, item.key, reason).catch((failure) => {
-                // A notice that cannot be queued must not take the release with it: leaving the row
-                // claimed would be worse than a hop nobody was told about.
-                console.warn(
-                  "Could not queue the notice for a hop that failed for good.",
-                  failure,
-                );
+            const stillOurs = await queue.renew({
+              kind: HANDOFF_KIND,
+              key: item.key,
+              owner,
+              leaseMs,
+            });
+            if (!stillOurs) {
+              ours.delete(item.key);
+              report.skipped.push({
+                key: item.key,
+                reason: "the lease went elsewhere",
               });
+              return;
             }
-            /*
-             * Released and pushed out rather than dropped. The work still wants doing, and whatever
-             * refused it once will probably refuse it again in the next second. A refusal by the
-             * controls is the exception: it is final, so the work ends here.
-             */
-            if (refused)
-              await queue.finish({ kind: HANDOFF_KIND, key: item.key, owner });
-            else
-              await queue.release({
+
+            try {
+              const shown = summarise(work);
+              const { answer } = await delivery.deliver({
+                work,
+                message: attribute(work),
+                ...(shown ? { shown } : {}),
+                assertion: sign(work, { key: item.key, owner }),
+              });
+              const kept = await queue.finish({
                 kind: HANDOFF_KIND,
                 key: item.key,
                 owner,
-                // A busy conversation on the first try is almost always the asking Bot finishing its
-                // own reply, a second or two from free. Later tries keep the minute, so a person
-                // mid-conversation still gets the same few minutes of patience.
-                delayMs:
-                  error instanceof ThreadBusyError && item.attempts <= 1
-                    ? 5_000
-                    : 60_000,
-                reason,
               });
-            ours.delete(item.key);
-            report.skipped.push({ key: item.key, reason });
-            await recordAuditEvent(auditStore, {
-              eventType: "agent.handoff_failed",
-              targetType: "agent",
-              targetId: work.toBotId,
-              ...(work.actorId ? { actorUserId: work.actorId } : {}),
-              initiator: { kind: "handoff", id: work.fromBotId },
-              payload: {
-                // See the same key on `agent.handoff_delivered` above. This row is the one a
-                // person's unanswered question ends on, so a Bot column showing a dash on it is
-                // the worst place in the set to have one.
-                bot: work.fromBotId,
-                from: work.fromBotId,
-                to: work.toBotId,
-                run: work.runId,
-                attempt: item.attempts,
-                reason,
-                ms: Date.now() - startedAt,
-              },
-            });
-          }
+              ours.delete(item.key);
+              /*
+               * `finish` answering false means the lease went elsewhere while this ran, so another
+               * replica may have delivered the same hop. The turn happened either way and the trail has
+               * to say so; what it must not say is that this replica finished the work, because it did
+               * not, and a person reading two similar answers would have nothing to tell a duplicate
+               * from a mystery.
+               */
+              if (!kept) {
+                report.skipped.push({
+                  key: item.key,
+                  reason: "delivered, but the lease had gone elsewhere",
+                });
+                await recordAuditEvent(auditStore, {
+                  eventType: "agent.handoff_retried",
+                  targetType: "agent",
+                  targetId: work.toBotId,
+                  ...(work.actorId ? { actorUserId: work.actorId } : {}),
+                  initiator: { kind: "handoff", id: work.fromBotId },
+                  payload: {
+                    // See the same key on `agent.handoff_delivered` below.
+                    bot: work.fromBotId,
+                    from: work.fromBotId,
+                    to: work.toBotId,
+                    run: work.runId,
+                    attempt: item.attempts,
+                    note: "This replica delivered a hop whose lease had already gone elsewhere. Another may have delivered it too.",
+                  },
+                });
+                return;
+              }
+              report.delivered.push(work.toBotId);
+              /*
+               * The answer goes home through the queue, like the turn that produced it: durable, so a
+               * pod dying between the turn and the relay loses the relay to a retry rather than for
+               * ever. Only for a forward hop with words to carry — a relay of a relay is the loop the
+               * `answerIn` check exists to stop, and a wordless turn has nothing to say.
+               */
+              if (!work.answerIn && answer) {
+                await relay(work, item.key, answer).catch((failure) => {
+                  // The turn happened and is on record; a relay that cannot be queued must not undo
+                  // that by failing the hop into a retry and a second turn.
+                  console.warn(
+                    "Could not queue the relay for a delivered hop.",
+                    failure,
+                  );
+                });
+              }
+              await recordAuditEvent(auditStore, {
+                eventType: "agent.handoff_delivered",
+                targetType: "agent",
+                targetId: work.toBotId,
+                ...(work.actorId ? { actorUserId: work.actorId } : {}),
+                initiator: { kind: "handoff", id: work.fromBotId },
+                payload: {
+                  // See the same key on `agent.handoff_offered`: the Audit screen's Bot column reads
+                  // `payload.bot`, so a row without it names no Bot.
+                  bot: work.fromBotId,
+                  from: work.fromBotId,
+                  to: work.toBotId,
+                  run: work.runId,
+                  depth: work.depth,
+                  ms: Date.now() - startedAt,
+                },
+              });
+            } catch (error) {
+              const reason =
+                error instanceof Error ? error.message : "could not be delivered";
+              /*
+               * The last try, so the person is told rather than left waiting.
+               *
+               * Enqueued before the release, because the release is what makes this attempt the last
+               * one: after it the row will never be claimed again and nothing else will ever look at
+               * this hop. A person who was told their question had been handed on, and then hears
+               * nothing for ever, has no way to tell a slow Bot from a broken one.
+               */
+              // The deployment's controls refused it (Use Bots, the model allowlist). Trying again in a
+              // minute gets the same answer, so this is the last try, whatever the count says.
+              const refused =
+                error instanceof Error && error.name === "CapabilityRefusedError";
+              if ((refused || item.attempts >= maxAttempts) && !work.answerIn) {
+                await tell(work, item.key, reason).catch((failure) => {
+                  // A notice that cannot be queued must not take the release with it: leaving the row
+                  // claimed would be worse than a hop nobody was told about.
+                  console.warn(
+                    "Could not queue the notice for a hop that failed for good.",
+                    failure,
+                  );
+                });
+              }
+              /*
+               * Released and pushed out rather than dropped. The work still wants doing, and whatever
+               * refused it once will probably refuse it again in the next second. A refusal by the
+               * controls is the exception: it is final, so the work ends here.
+               */
+              if (refused)
+                await queue.finish({ kind: HANDOFF_KIND, key: item.key, owner });
+              else
+                await queue.release({
+                  kind: HANDOFF_KIND,
+                  key: item.key,
+                  owner,
+                  // A busy conversation on the first try is almost always the asking Bot finishing its
+                  // own reply, a second or two from free. Later tries keep the minute, so a person
+                  // mid-conversation still gets the same few minutes of patience.
+                  delayMs:
+                    error instanceof ThreadBusyError && item.attempts <= 1
+                      ? 5_000
+                      : 60_000,
+                  reason,
+                });
+              ours.delete(item.key);
+              report.skipped.push({ key: item.key, reason });
+              await recordAuditEvent(auditStore, {
+                eventType: "agent.handoff_failed",
+                targetType: "agent",
+                targetId: work.toBotId,
+                ...(work.actorId ? { actorUserId: work.actorId } : {}),
+                initiator: { kind: "handoff", id: work.fromBotId },
+                payload: {
+                  // See the same key on `agent.handoff_delivered` above. This row is the one a
+                  // person's unanswered question ends on, so a Bot column showing a dash on it is
+                  // the worst place in the set to have one.
+                  bot: work.fromBotId,
+                  from: work.fromBotId,
+                  to: work.toBotId,
+                  run: work.runId,
+                  attempt: item.attempts,
+                  reason,
+                  ms: Date.now() - startedAt,
+                },
+              });
+            }
+          });
         }
       } finally {
         clearInterval(heartbeat);
