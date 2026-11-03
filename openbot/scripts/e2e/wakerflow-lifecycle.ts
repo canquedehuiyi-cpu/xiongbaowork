@@ -58,6 +58,12 @@ import {
   type Locator,
   type Page,
 } from "playwright-core";
+// What the product writes on a step closed by restart recovery: read from the product, so a reworded
+// (or translated) sentence is asserted as it is, not as it once was.
+import {
+  FLOW_STEP_INTERRUPTED,
+  FLOW_STEP_NOT_STARTED,
+} from "../../server/src/wakerflows/recovery";
 
 // ---------------------------------------------------------------------------------------------
 // Configuration
@@ -94,11 +100,6 @@ if (!existsSync(resolve(APP_DIST_DIR, "index.html")))
   );
 mkdirSync(ARTIFACTS, { recursive: true });
 
-/** What the product writes on a step closed by restart recovery (`wakerflows/recovery.ts`). */
-const FLOW_STEP_INTERRUPTED =
-  "The server restarted during this step. It may already have acted; it was not replayed.";
-const FLOW_STEP_NOT_STARTED =
-  "The server restarted before this step started; the run stopped and this step was not run.";
 /** The recovery horizon (`routines/sweep.ts` ABANDONED_RUN_MS) plus a minute of margin. */
 const PAST_HORIZON = "11 minutes";
 
