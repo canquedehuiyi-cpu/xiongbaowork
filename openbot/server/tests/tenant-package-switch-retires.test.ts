@@ -184,11 +184,13 @@ const liveProfile = async (agentId: string) =>
       ),
   );
 
-await database.insert(users).values({
-  id: person,
-  email: `${person}@example.test`,
-  name: "Package switch fixture",
-});
+await runAsTenant(person, () =>
+  database.insert(users).values({
+    id: person,
+    email: `${person}@example.test`,
+    name: "Package switch fixture",
+  }),
+);
 await applyPackage(alpha());
 
 /*
@@ -247,7 +249,9 @@ afterAll(async () => {
         inArray(skillTable.slug, [shippedSkill, personalSkill, rivalSkill]),
       );
   });
-  await database.delete(users).where(eq(users.id, person));
+  await runAsTenant(person, () =>
+    database.delete(users).where(eq(users.id, person)),
+  );
   await database.$client.close();
 });
 

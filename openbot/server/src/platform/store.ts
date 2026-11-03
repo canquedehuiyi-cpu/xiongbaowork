@@ -39,8 +39,10 @@ export async function listTenants(database: Database): Promise<TenantRow[]> {
         createdAt: users.createdAt,
         plan: subscriptions.planId,
         suspended: sql<boolean>`${revokedAccess.email} is not null`,
+        // By owner, as the quota counts them: a public or published Bot is stamped `team`
+        // (G01-E P8b) and is still its owner's Waker.
         wakers: sql<number>`(select count(*)::int from agent_profiles ap
-          where ap.tenant_id = ${users.id} and ap.deleted_at is null)`,
+          where ap.owner_user_id = ${users.id} and ap.deleted_at is null)`,
         activeRoutines: sql<number>`(select count(*)::int from routines r
           where r.tenant_id = ${users.id} and r.enabled)`,
       })

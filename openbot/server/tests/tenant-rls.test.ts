@@ -2,18 +2,60 @@ import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents } from "../src/db/schema";
-import { currentTenant, runAsTenant } from "../src/tenant/context";
+import {
+  asPlatform,
+  currentTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * Ticket 003 acceptance (spec test decision #7): two tenants cannot see each other's rows at the
- * SQL layer, a context-free caller sees only the platform's own `system` partition, and inserts
- * default into the running tenant without the call site naming it.
+ * SQL layer, and inserts default into the running tenant without the call site naming it.
+ *
+ * Who else may look (G01-E, decision-tests): a caller with no frame at all is an error, because
+ * every access needs a frame (the legacy `system` answer is gone); the `system` frame sees only the
+ * platform's own catalogue, so not a person's row; `team` is a stamp and never a frame, so asking as
+ * `team` throws before any statement runs; and `platform`, the explicit cross-tenant reader, sees the
+ * row exactly as its owner stamped it.
  */
 const url = testDatabaseUrl();
 const db = createDatabase(url, TEST_POOL);
 
 const marker = `rls-test-${Date.now()}`;
+
+/**
+ * The four answers for a row owned by `${marker}-a`, from everybody who is not its owner or a
+ * stranger tenant: no frame, `system`, `team`, and `platform`.
+ */
+async function expectOnlyPlatformReaches(id: string) {
+  const unframed = () =>
+    db.select({ id: agents.id }).from(agents).where(eq(agents.id, id));
+  // Building the statement already reads the frame, so it is asked inside the promise.
+  await expect(
+    Promise.resolve().then(async () => await unframed()),
+  ).rejects.toThrow(TenantContextError);
+
+  const seenBySystem = await runAsTenant("system", () =>
+    db.select({ id: agents.id }).from(agents).where(eq(agents.id, id)),
+  );
+  expect(seenBySystem).toEqual([]);
+
+  expect(() =>
+    runAsTenant("team", () =>
+      db.select({ id: agents.id }).from(agents).where(eq(agents.id, id)),
+    ),
+  ).toThrow(TenantContextError);
+
+  const seenByPlatform = await asPlatform(() =>
+    db
+      .select({ id: agents.id, tenant: agents.tenantId })
+      .from(agents)
+      .where(eq(agents.id, id)),
+  );
+  expect(seenByPlatform).toEqual([{ id, tenant: `${marker}-a` }]);
+}
 const agentId = `${marker}-agent-a`;
 
 test("tenant isolation holds at the row level", async () => {
@@ -44,11 +86,7 @@ test("tenant isolation holds at the row level", async () => {
       .every((row) => row.tenant === `${marker}-a`),
   ).toBeTrue();
 
-  const seenWithoutContext = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(eq(agents.id, agentId));
-  expect(seenWithoutContext).toEqual([]);
+  await expectOnlyPlatformReaches(agentId);
 
   await runAsTenant(`${marker}-a`, () =>
     db.delete(agents).where(eq(agents.id, agentId)),
@@ -94,11 +132,7 @@ test("a transaction writes and reads as the tenant that opened it", async () => 
   );
   expect(seenByB).toEqual([]);
 
-  const seenWithoutContext = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(eq(agents.id, txAgentId));
-  expect(seenWithoutContext).toEqual([]);
+  await expectOnlyPlatformReaches(txAgentId);
 
   await runAsTenant(`${marker}-a`, () =>
     db.delete(agents).where(eq(agents.id, txAgentId)),

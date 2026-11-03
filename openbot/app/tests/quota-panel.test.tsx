@@ -12,6 +12,7 @@ import {
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UsagePanel } from "@/components/quota/usage-panel";
+import { authKeys } from "@/lib/auth/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { Route as PlansRoute } from "@/routes/_authed/_app/plans";
 
@@ -104,8 +105,11 @@ function seed() {
  * Both screens are rendered inside a router: the panel carries a `Link` and the page a shell, and a
  * `Link` outside a provider does not degrade quietly — it throws on the first render.
  */
-/** The plans page on its own, at the address the panel links to. */
-function draw(at = "/plans") {
+/**
+ * The plans page on its own, at the address the panel links to, as a viewer with this role. Moving a
+ * plan is a platform administrator's act, so the role decides whether the page offers a switch.
+ */
+function draw(role: "admin" | "user", at = "/plans") {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
@@ -119,8 +123,15 @@ function draw(at = "/plans") {
       } as never),
     ]),
   });
+  const queryClient = seed();
+  queryClient.setQueryData(authKeys.currentUser(), {
+    id: `${role}-1`,
+    email: `${role}@openbot.test`,
+    role,
+    onboarding: null,
+  });
   return render(
-    <QueryClientProvider client={seed()}>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
@@ -186,7 +197,7 @@ test("a workspace with no subscription shows nothing rather than a made-up tier"
 });
 
 test("choosing a tier posts the switch and nothing else", async () => {
-  const view = draw();
+  const view = draw("admin");
 
   const buttons = await view.findAllByRole("button");
   const toPro = buttons.find((button) => button.textContent === "切换");
@@ -214,4 +225,18 @@ test("choosing a tier posts the switch and nothing else", async () => {
       .getAllByRole("button")
       .some((button) => button.textContent === "使用中"),
   ).toBeTrue();
+});
+
+test("a member who is not an administrator is shown the tiers but no switch", async () => {
+  const view = draw("user");
+
+  expect(await view.findByText(/套餐由平台管理员调整/)).toBeTruthy();
+  expect(view.getByText("Pro")).toBeTruthy();
+  // The server answers 403 to anybody else, so a button here could only ever fail.
+  expect(
+    view
+      .queryAllByRole("button")
+      .some((button) => ["切换", "使用中"].includes(button.textContent ?? "")),
+  ).toBeFalse();
+  expect(calls.some((entry) => entry.method === "POST")).toBeFalse();
 });

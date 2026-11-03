@@ -33,20 +33,23 @@ import {
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { expectUnframedRefused } from "./support/frame-guard";
 
 /**
  * N13 / WP-1.6: work that runs for nobody must still find the work that belongs to somebody.
  *
  * Every background entry in this server — the routine cron, the group turn poller, the responsibility
  * engine, the culler — starts from a timer. A timer outlives every session, so the connection it
- * queries on has no tenant in its async-local context, and `currentTenant()` answers that with
- * `system`. Row-level security then does exactly what it was built to do and shows that worker only
- * the platform's own rows: not one due routine, not one queued turn. Nothing errors. The queue is
- * healthy, the cron runs on schedule, and no work is ever done.
+ * queries on has no tenant in its async-local context, and `currentTenant()` used to answer that
+ * with `system`. Row-level security then does exactly what it was built to do and shows that worker
+ * only the platform's own rows: not one due routine, not one queued turn. Nothing errors. The queue
+ * is healthy, the cron runs on schedule, and no work is ever done. (G01-E: there is no unframed
+ * fallback any more, so the unframed statement is refused outright; the first test asserts that, and
+ * asks the old fallback frame, `system`, explicitly.)
  *
  * Until the delivery image connects as a role that can be governed, a superuser with `BYPASSRLS`
  * answers those same queries with every row and the whole defect is invisible — which is why this file
- * is written against `openbot_app`, and why the first test asserts the EMPTY answer. That assertion
+ * is written against `openbot_app`, and why the first test asserts the EMPTY answer under `system`. That assertion
  * is what makes the rest of the file worth reading: on a connection that enforces nothing every test
  * here would pass, and the fix could be reverted without anybody noticing.
  *
@@ -114,12 +117,15 @@ afterAll(async () => {
       await database.delete(users).where(eq(users.id, tenant));
     }
   });
-  for (const id of created.channels) {
+  for (const [index, id] of created.channels.entries()) {
     // One tenant's own channel, deleted in that tenant's frame — the platform may not rewrite a
-    // workspace's roster, and `channels` cascades its memberships with it.
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(sql`${intelligenceChannelMappings.channelId} = ${id}`);
+    // workspace's roster, and `channels` cascades its memberships with it. `workspace()` pushes one
+    // tenant and one channel together, so the same index names the channel's owner.
+    await runAsTenant(created.tenants[index] ?? "platform", () =>
+      database
+        .delete(intelligenceChannelMappings)
+        .where(sql`${intelligenceChannelMappings.channelId} = ${id}`),
+    );
   }
   await runAsTenant(created.tenants[0] ?? "platform", async () => {
     for (const id of created.channels) {
@@ -203,17 +209,27 @@ describe("an unattended worker against row level security", () => {
       space.channelId,
     );
 
+    const sweepSelect = () =>
+      database
+        .select({ id: routines.id })
+        .from(routines)
+        .where(eq(routines.id, routine.id));
+
     /*
      * THE NEGATIVE HALF. This is the statement the sweep issues — one select on one table, one
-     * connection — with nothing in its context, which is what a timer looks like to the database. It
-     * must answer empty. If it answers a row, this connection is a superuser or holds `BYPASSRLS`, and
-     * every other test in this file is checking an enforcement that was never switched on.
+     * connection — with nothing in its context, which is what a timer looks like to the database.
+     * G01-E: such a statement no longer quietly runs as `system`; with the unframed fallback gone,
+     * `currentTenant()` refuses it before it reaches the database.
      */
-    const asNoTenant = await database
-      .select({ id: routines.id })
-      .from(routines)
-      .where(eq(routines.id, routine.id));
-    expect(asNoTenant).toEqual([]);
+    await expectUnframedRefused(sweepSelect);
+
+    /*
+     * And the frame that statement used to fall back to, asked for explicitly, must answer empty. If
+     * it answers a row, this connection is a superuser or holds `BYPASSRLS`, and every other test in
+     * this file is checking an enforcement that was never switched on.
+     */
+    const asSystem = await runAsTenant("system", sweepSelect);
+    expect(asSystem).toEqual([]);
 
     const asStranger = await runAsTenant(`${suite}-stranger`, () =>
       database
@@ -246,7 +262,10 @@ describe("an unattended worker against row level security", () => {
       dispatch: async () => {},
     };
 
-    const { offered } = await offerDueRoutines(options);
+    // The sweep's own question belongs to nobody, so it is asked as `platform`, explicitly.
+    const { offered } = await runAsTenant("platform", () =>
+      offerDueRoutines(options),
+    );
     expect(offered).toContain(routine.id);
 
     /*
@@ -320,7 +339,10 @@ describe("an unattended worker against row level security", () => {
       },
     };
 
-    await offerDueRoutines(options);
+    // The offer's heartbeat and due-list belong to nobody: `platform`, explicitly, as the cron script
+    // asks it. The dispatch is left as this test always called it, with no frame; each firing it
+    // claims opens its run in the claimed item's tenant, never in the caller's.
+    await runAsTenant("platform", () => offerDueRoutines(options));
     const report = await dispatchClaimedRoutines(options);
     expect(report.fired).toContain(routine.id);
 
