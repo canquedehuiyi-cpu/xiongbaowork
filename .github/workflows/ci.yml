@@ -7,6 +7,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # release.yml runs these same checks on the tagged commit before it builds.
+  workflow_call:
+    inputs:
+      skip_image:
+        description: The caller builds and smoke-tests the image itself (release.yml builds once).
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,7 +46,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx biome lint --error-on-warnings --diagnostic-level=warn .
       - run: bun run typecheck
-      - run: bun test test-report.test.mjs
+      - run: bun test test-report.test.mjs release-tag.test.mjs
         working-directory: openbot/scripts/ci
 
   server-test:
@@ -150,6 +157,7 @@ jobs:
           path: ${{ runner.temp }}/*.log
 
   image:
+    if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
