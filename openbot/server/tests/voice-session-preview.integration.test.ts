@@ -15,6 +15,7 @@ import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
 import { agents, channels, users } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { createVoiceSessionRoutes } from "../src/voice/session-routes";
 import { createVoiceSessionStore } from "../src/voice/sessions";
 import type { VoiceSummarizer } from "../src/voice/summary";
@@ -47,27 +48,33 @@ hub.register(owner.id, (payload) => {
 });
 
 beforeAll(async () => {
-  await database.insert(users).values({
-    id: owner.id,
-    email: `${owner.id}@example.test`,
-    name: "Voice preview test",
+  // The owner's own rows, written as the owner's request would write them.
+  await runAsTenant(owner.id, async () => {
+    await database.insert(users).values({
+      id: owner.id,
+      email: `${owner.id}@example.test`,
+      name: "Voice preview test",
+    });
+    const profile = await profiles.create(owner, {
+      name: "Voice preview",
+      title: "Assistant",
+      roleDescription: "Help plan.",
+      visibility: "private",
+    });
+    agentId = profile.id;
   });
-  const profile = await profiles.create(owner, {
-    name: "Voice preview",
-    title: "Assistant",
-    roleDescription: "Help plan.",
-    visibility: "private",
-  });
-  agentId = profile.id;
   listener = await startChannelActivityListener(databaseUrl, hub);
 });
 
 afterAll(async () => {
   await listener?.stop();
-  if (channelIds.length)
-    await database.delete(channels).where(inArray(channels.id, channelIds));
-  if (agentId) await database.delete(agents).where(eq(agents.id, agentId));
-  await database.delete(users).where(eq(users.id, owner.id));
+  // Cleanup reaches past any one request's frame: the platform.
+  await runAsTenant("platform", async () => {
+    if (channelIds.length)
+      await database.delete(channels).where(inArray(channels.id, channelIds));
+    if (agentId) await database.delete(agents).where(eq(agents.id, agentId));
+    await database.delete(users).where(eq(users.id, owner.id));
+  });
   await database.$client.close();
 });
 
@@ -86,7 +93,8 @@ async function fixture() {
     const app = new Hono<{ Variables: AppVariables }>();
     app.use("*", async (context, next) => {
       context.set("actor", owner);
-      await next();
+      // As the real guard does: the rest of the request runs inside the signed-in person's tenant.
+      await runAsTenant(owner.id, () => next());
     });
     return app.route(
       "/sessions",
@@ -155,83 +163,89 @@ async function flushNotifications() {
 }
 
 test("failed summary retries enrich the durable preview and notify once across replicas", async () => {
-  const f = await fixture();
-  await f.fail();
-  expect(await f.row()).toMatchObject({
-    lastMessage: "Voice chat",
-    lastMessageSourceId: `voice:${f.input.id}`,
+  await runAsTenant(owner.id, async () => {
+    const f = await fixture();
+    await f.fail();
+    expect(await f.row()).toMatchObject({
+      lastMessage: "Voice chat",
+      lastMessageSourceId: `voice:${f.input.id}`,
+    });
+    let started = 0;
+    const gate = Promise.withResolvers<void>();
+    const summarize =
+      (summary: string): VoiceSummarizer =>
+      async () => {
+        if (++started === 2) gate.resolve();
+        await gate.promise;
+        return summary;
+      };
+    const first = f.router(summarize("Discussed launch plans."));
+    const second = f.router(summarize("Planned the release."));
+    const responses = await Promise.all([f.post(first), f.post(second)]);
+    const durable = (await store.list(owner, f.input.channelId)).sessions[0];
+    expect(durable?.summaryStatus).toBe("ready");
+    expect(responses.map((response) => response.session.summary)).toEqual([
+      durable?.summary,
+      durable?.summary,
+    ]);
+    expect(await f.row()).toMatchObject({
+      lastMessage: `Voice chat: ${durable?.summary}`,
+      lastMessageAt: new Date(f.input.endedAt),
+    });
+    await Promise.all([f.post(first), f.post(second)]);
+    await flushNotifications();
+    expect(f.events().map((event) => event.lastMessage)).toEqual([
+      "Voice chat",
+      `Voice chat: ${durable?.summary}`,
+    ]);
+    expect(
+      f.events().every((event) => event.lastMessageAt === f.input.endedAt),
+    ).toBe(true);
   });
-  let started = 0;
-  const gate = Promise.withResolvers<void>();
-  const summarize =
-    (summary: string): VoiceSummarizer =>
-    async () => {
-      if (++started === 2) gate.resolve();
-      await gate.promise;
-      return summary;
-    };
-  const first = f.router(summarize("Discussed launch plans."));
-  const second = f.router(summarize("Planned the release."));
-  const responses = await Promise.all([f.post(first), f.post(second)]);
-  const durable = (await store.list(owner, f.input.channelId)).sessions[0];
-  expect(durable?.summaryStatus).toBe("ready");
-  expect(responses.map((response) => response.session.summary)).toEqual([
-    durable?.summary,
-    durable?.summary,
-  ]);
-  expect(await f.row()).toMatchObject({
-    lastMessage: `Voice chat: ${durable?.summary}`,
-    lastMessageAt: new Date(f.input.endedAt),
-  });
-  await Promise.all([f.post(first), f.post(second)]);
-  await flushNotifications();
-  expect(f.events().map((event) => event.lastMessage)).toEqual([
-    "Voice chat",
-    `Voice chat: ${durable?.summary}`,
-  ]);
-  expect(
-    f.events().every((event) => event.lastMessageAt === f.input.endedAt),
-  ).toBe(true);
 });
 
 test("a retry preserves and does not announce over newer conversation activity", async () => {
-  const f = await fixture();
-  await f.fail();
-  const at = new Date(Date.parse(f.input.endedAt) + 1000);
-  await channelStore.recordActivity(owner, f.input.channelId, {
-    text: "A newer message",
-    agentId,
-    at,
-  });
-  await f.post(f.router(async () => "Discussed launch plans."));
-  await flushNotifications();
-  expect(await f.row()).toMatchObject({
-    lastMessage: "A newer message",
-    lastMessageAt: at,
-    lastMessageSourceId: null,
-  });
-  expect(f.events().map((event) => event.lastMessage)).toEqual([
-    "Voice chat",
-    "A newer message",
-  ]);
-});
-
-test("equal timestamps and placeholder text cannot enrich another source's activity", async () => {
-  for (const source of [undefined, { id: `voice:${randomUUID()}` }]) {
+  await runAsTenant(owner.id, async () => {
     const f = await fixture();
-    await channelStore.recordActivity(
-      owner,
-      f.input.channelId,
-      { text: "Voice chat", agentId: null, at: new Date(f.input.endedAt) },
-      source,
-    );
     await f.fail();
+    const at = new Date(Date.parse(f.input.endedAt) + 1000);
+    await channelStore.recordActivity(owner, f.input.channelId, {
+      text: "A newer message",
+      agentId,
+      at,
+    });
     await f.post(f.router(async () => "Discussed launch plans."));
     await flushNotifications();
     expect(await f.row()).toMatchObject({
-      lastMessage: "Voice chat",
-      lastMessageSourceId: source?.id ?? null,
+      lastMessage: "A newer message",
+      lastMessageAt: at,
+      lastMessageSourceId: null,
     });
-    expect(f.events()).toHaveLength(1);
-  }
+    expect(f.events().map((event) => event.lastMessage)).toEqual([
+      "Voice chat",
+      "A newer message",
+    ]);
+  });
+});
+
+test("equal timestamps and placeholder text cannot enrich another source's activity", async () => {
+  await runAsTenant(owner.id, async () => {
+    for (const source of [undefined, { id: `voice:${randomUUID()}` }]) {
+      const f = await fixture();
+      await channelStore.recordActivity(
+        owner,
+        f.input.channelId,
+        { text: "Voice chat", agentId: null, at: new Date(f.input.endedAt) },
+        source,
+      );
+      await f.fail();
+      await f.post(f.router(async () => "Discussed launch plans."));
+      await flushNotifications();
+      expect(await f.row()).toMatchObject({
+        lastMessage: "Voice chat",
+        lastMessageSourceId: source?.id ?? null,
+      });
+      expect(f.events()).toHaveLength(1);
+    }
+  });
 });

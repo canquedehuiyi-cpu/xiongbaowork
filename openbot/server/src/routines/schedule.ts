@@ -84,6 +84,18 @@ const FLOOR_SCAN_START = new Date("2024-01-01T00:00:00Z");
  */
 const FLOOR_SCAN_OCCURRENCES = 200;
 
+/**
+ * How far past the scan start the floor scan may walk, whatever the occurrence count.
+ *
+ * A five-field cron repeats its calendar every year (29 February aside), so a year and a bit past
+ * the start has shown every within-day gap, every midnight wrap and every DST transition the zone
+ * has. Without this bound a sparse expression walks its 200 occurrences however far apart they are:
+ * `0 9 29 2 *` is 800 years of day-by-day iteration, about six seconds of blocked event loop on the
+ * first request that names it. Dense expressions reach 200 occurrences long before the horizon, so
+ * for them nothing changes.
+ */
+const FLOOR_SCAN_HORIZON_MS = 400 * 24 * 60 * 60 * 1000;
+
 /** null means the expression cleared the floor; a string is the refusal to throw. */
 const floorVerdicts = new Map<string, string | null>();
 
@@ -118,6 +130,7 @@ function refuseSubFloorCycle(cron: string, timezone: string): void {
         verdict = TOO_FREQUENT_MESSAGE;
         break;
       }
+      if (current - FLOOR_SCAN_START.getTime() > FLOOR_SCAN_HORIZON_MS) break;
       previous = current;
     }
   } catch {

@@ -620,6 +620,13 @@ pub fn compose(
             ports.postgres
         ),
     );
+    // The URL above is the compose owner, a superuser, which row-level security does not bind.
+    // The server refuses that by default (audit defect #8), so this install says, in its own file,
+    // that it runs it anyway: one machine, one person, a database published on loopback only. The
+    // server still prints `rls-not-enforced` on every boot. Written every time, like
+    // `DATABASE_URL`, because the two belong together; moving the server to `openbot_app` is the
+    // fix that would let this go, and it also moves the worker, which shares this file.
+    env.insert("OPENBOT_RLS_ENFORCE".into(), "warn".into());
     // Every address the app is actually reachable at, because it is reachable at more than one.
     //
     // The app's dev server binds `[::1]` and not `127.0.0.1`, so a browser sent to one of those
@@ -1558,6 +1565,24 @@ HTTPS_PROXY=http://proxy:8080
         assert_eq!(
             env.get("OPENBOT_SINGLE_USER").map(String::as_str),
             Some("true")
+        );
+    }
+
+    #[test]
+    fn the_owner_database_url_says_rls_is_not_enforced_or_the_server_refuses_to_start() {
+        let env = compose(
+            &intelligence(),
+            &Model::default(),
+            &engine_status(None),
+            &Ports::default(),
+            &pinned(),
+            None,
+            &BTreeMap::new(),
+        );
+        assert!(env["DATABASE_URL"].starts_with("postgres://openbot:"));
+        assert_eq!(
+            env.get("OPENBOT_RLS_ENFORCE").map(String::as_str),
+            Some("warn")
         );
     }
 

@@ -23,6 +23,7 @@
  * Dedup is by the Events API envelope `event_id`, per trigger, so Slack's retries are harmless.
  */
 import { z } from "zod";
+import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import {
   type DeliveryOutcome,
   deliverToTrigger,
@@ -115,50 +116,72 @@ export function slackTriggerMatches(
 export function createSlackTriggerIngest(
   deps: TriggerIngressDeps & { slackAccess?: () => SlackAccess | undefined },
 ) {
-  return async function ingestSlackEvent(
-    input: unknown,
+  /*
+   * ONE EVENT, MANY OWNERS, EACH IN THEIR OWN FRAME (G01). A Slack delivery is nobody's: it fans
+   * out to every owner's listener in the workspace. Which listeners exist is therefore asked as
+   * `platform`, the operator's read across tenants, and nothing else is. Each matching trigger is
+   * then handled in the tenant the database stamped on ITS row — the owner's access check, the
+   * event + run + queue insert and the audit row all land as that person, never as the platform,
+   * never as the previous trigger's owner, and never as whatever frame the pairing request arrived
+   * in. A trigger stamped `system`, `platform` or nothing, or stamped with somebody other than its
+   * owner, names nobody to deliver to: it is skipped, logged, and reported `ignored`.
+   */
+  async function deliverAll(
+    event: SlackTriggerEvent,
   ): Promise<SlackIngestResult> {
-    const event = slackTriggerEventSchema.parse(input);
     const triggers = await deps.directory.slackTriggers(event.teamId);
     const deliveries: SlackIngestResult["deliveries"] = [];
     const verdicts = new Map<string, Promise<string | null>>();
     for (const trigger of triggers) {
       if (!slackTriggerMatches(trigger, event)) continue;
-      // Access is re-checked for every event, not only when the trigger was saved: an owner who
-      // unlinked Slack or left the channel stops hearing it. Fail closed.
-      let verdict = verdicts.get(trigger.ownerUserId);
-      if (!verdict) {
-        verdict = slackAccessAllows(
-          deps.slackAccess?.(),
-          trigger.ownerUserId,
-          event.teamId,
-          [event.channelId],
+      const handled = await runAsClaimedTenant(
+        trigger,
+        trigger.ownerUserId,
+        async (): Promise<DeliveryOutcome> => {
+          // Access is re-checked for every event, not only when the trigger was saved: an owner who
+          // unlinked Slack or left the channel stops hearing it. Fail closed. Cached per owner for
+          // this event only, and only ever asked from that owner's own frame.
+          let verdict = verdicts.get(trigger.ownerUserId);
+          if (!verdict) {
+            verdict = slackAccessAllows(
+              deps.slackAccess?.(),
+              trigger.ownerUserId,
+              event.teamId,
+              [event.channelId],
+            );
+            verdicts.set(trigger.ownerUserId, verdict);
+          }
+          const refusal = await verdict;
+          if (refusal) return { status: "ignored", reason: refusal };
+          return deliverToTrigger(
+            deps,
+            trigger,
+            {
+              deliveryId: event.eventId,
+              type: event.type,
+              payload: { ...event, text: event.text?.slice(0, 16_000) },
+            },
+            true,
+          );
+        },
+      );
+      if (!handled.ran)
+        console.warn(
+          JSON.stringify({
+            type: "slack-trigger-untrusted-tenant",
+            triggerId: trigger.id,
+            reason: handled.reason,
+          }),
         );
-        verdicts.set(trigger.ownerUserId, verdict);
-      }
-      const refusal = await verdict;
-      if (refusal) {
-        deliveries.push({
-          triggerId: trigger.id,
-          responsibilityId: trigger.responsibilityId,
-          outcome: { status: "ignored", reason: refusal },
-        });
-        continue;
-      }
-      const payload = event;
       deliveries.push({
         triggerId: trigger.id,
         responsibilityId: trigger.responsibilityId,
-        outcome: await deliverToTrigger(
-          deps,
-          trigger,
-          {
-            deliveryId: event.eventId,
-            type: event.type,
-            payload: { ...payload, text: event.text?.slice(0, 16_000) },
-          },
-          true,
-        ),
+        outcome: handled.ran
+          ? handled.value
+          : {
+              status: "ignored",
+              reason: `This trigger has no owner to deliver to (${handled.reason}). Create it again from the responsibility.`,
+            },
       });
     }
     return {
@@ -167,6 +190,12 @@ export function createSlackTriggerIngest(
       ).length,
       deliveries,
     };
+  }
+  return async function ingestSlackEvent(
+    input: unknown,
+  ): Promise<SlackIngestResult> {
+    const event = slackTriggerEventSchema.parse(input);
+    return runAsTenant("platform", () => deliverAll(event));
   };
 }
 

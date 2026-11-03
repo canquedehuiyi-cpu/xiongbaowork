@@ -495,6 +495,11 @@ export const skills = pgTable(
   "skills",
   {
     tenantId: tenantId(),
+    /**
+     * The slug for a `system` row, which the package sync upserts on and `plugin_grants.ref` names;
+     * a uuid for every tenant row (migration 0113), so a tenant row can never hold the id a catalogue
+     * skill of the same slug needs.
+     */
     id: text("id").primaryKey(),
     /**
      * Whose skill this is. Null means the deployment's: written by an administrator, or shipped,
@@ -507,11 +512,13 @@ export const skills = pgTable(
       onDelete: "cascade",
     }),
     /**
-     * What a person types after `/`, and unique across the deployment rather than per person.
+     * What a person types after `/`, unique within one tenant rather than across the deployment.
      *
-     * The `/` namespace is shared because Bots are shared: two different behaviours answering to
-     * `/standup` in one deployment is confusing wherever the second one came from. First to take a
-     * name keeps it, and the refusal says so.
+     * Global uniqueness let the first tenant to write `/standup` take the name from every other one
+     * (audit #9). A tenant's row under a slug the platform ships shadows the platform's row for that
+     * tenant only; the platform's row is never edited by it. Every read by slug must therefore name
+     * the tenant explicitly (`plugins/store.ts`), never lean on row security alone: the platform
+     * frame sees every tenant's row under the same slug.
      */
     slug: text("slug").notNull(),
     title: text("title").notNull(),
@@ -543,7 +550,7 @@ export const skills = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
-    uniqueIndex("skills_slug_key").on(table.slug),
+    uniqueIndex("skills_tenant_slug_key").on(table.tenantId, table.slug),
     index("skills_owner_idx").on(table.ownerUserId),
     index("skills_package_idx").on(table.packageId),
   ],
@@ -577,7 +584,11 @@ export const skillTools = pgTable(
     tenantId: tenantId(),
     skillId: text("skill_id")
       .notNull()
-      .references(() => skills.id, { onDelete: "cascade" }),
+      // ON UPDATE CASCADE so the re-key in migration 0113 carries every declaration along.
+      .references(() => skills.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
     /** `<serverId>/<toolName>`, the same key a grant is written against. */
     ref: text("ref").notNull(),
     declaredBy: text("declared_by"),
