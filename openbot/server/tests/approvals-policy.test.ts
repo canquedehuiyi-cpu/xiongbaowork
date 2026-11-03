@@ -38,7 +38,11 @@ import {
   type EmployeePolicy,
   withApprovalContext,
 } from "../src/approvals/types";
-import { HeadlessToolSuspension } from "../src/computer/headless-tools";
+import { createComputerGateway } from "../src/computer/gateway";
+import {
+  createHeadlessComputerTools,
+  HeadlessToolSuspension,
+} from "../src/computer/headless-tools";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
 import { runAsTenant } from "../src/tenant/context";
@@ -1641,4 +1645,244 @@ describe("SEC1: the gate", () => {
     expect(seen.actionDigest).toBe(plain.actionDigest);
     expect(seen).not.toHaveProperty("subject");
   });
+});
+
+describe("SEC1: every gate site leaves a refused or waiting action undone", () => {
+  const cloud = (gate: Parameters<typeof createComputerGateway>[0]["approvalGate"]) => {
+    const sent: string[] = [];
+    const gateway = createComputerGateway({
+      provider: {
+        name: "test",
+        isolation: "per-bot",
+        locate: async () => "http://computer:4100",
+        status: async (botId) => ({ botId, state: "ready" }),
+        list: async () => [],
+        stop: async () => ({ wasRunning: true }),
+        reset: async () => ({ cleared: true }),
+      },
+      policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+      auditStore: { insert: async () => undefined },
+      ...(gate ? { approvalGate: gate } : {}),
+      fetchImpl: async (url) => {
+        sent.push(new URL(String(url)).pathname);
+        return Response.json(
+          new URL(String(url)).pathname === "/exec"
+            ? {
+                command: "x",
+                exitCode: 0,
+                stdout: "",
+                stderr: "",
+                elapsedMs: 1,
+                timedOut: false,
+                truncated: false,
+              }
+            : { path: ".env", content: "", bytes: 0 },
+        );
+      },
+    });
+    return { gateway, sent };
+  };
+  const inRun = <T>(toolName: string, args: unknown, work: () => Promise<T>, call = "c1") =>
+    withApprovalContext({ ...context, toolCallId: call, toolName, args }, work);
+
+  test("cloud: a disabled command is refused and nothing is sent to the computer", () =>
+    asOwner(async () => {
+      const { store, requests } = memoryStore({
+        rules: [rule("deny", { toolRef: "computer_run_command" })],
+      });
+      const service = createApprovalService(store);
+      const { gateway, sent } = cloud(service.gate);
+      await expect(
+        inRun("computer_run_command", { command: "ls" }, () =>
+          gateway.runCommand("bot", { id: "owner" }, { command: "ls" }),
+        ),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(sent).toEqual([]);
+      expect(requests.size).toBe(0);
+    }));
+
+  test("cloud: a dangerous command and a sensitive file wait, nothing is sent, and an approved command runs once", () =>
+    asOwner(async () => {
+      const { store, requests } = memoryStore({});
+      const service = createApprovalService(store);
+      const { gateway, sent } = cloud(service.gate);
+      const remove = () =>
+        inRun("computer_run_command", { command: "rm -rf ~" }, () =>
+          gateway.runCommand("bot", { id: "owner" }, { command: "rm -rf ~" }),
+        );
+      await expect(remove()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      await expect(
+        inRun(
+          "computer_read_file",
+          { path: ".env" },
+          () => gateway.readFile("bot", { id: "owner" }, { path: ".env" }),
+          "c2",
+        ),
+      ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      expect(sent).toEqual([]);
+      expect(
+        [...requests.values()].map((row) => row.action.policy?.source).sort(),
+      ).toEqual(["dangerous_command", "sensitive_path"]);
+      const waiting = [...requests.values()].find(
+        (row) => row.action.toolCallId === "c1",
+      );
+      await service.decide("owner", waiting?.id as string, "allow_once");
+      await remove();
+      expect(sent).toEqual(["/exec"]);
+      await remove().catch(() => undefined);
+      expect(sent).toEqual(["/exec"]);
+    }));
+
+  test("cloud: the team's host-command cap does not reach this deployment's own container (D5 is for paired machines)", () =>
+    asOwner(async () => {
+      const { store } = memoryStore({ team: { hostCommandsCap: "never" } });
+      const service = createApprovalService(store);
+      const { gateway, sent } = cloud(service.gate);
+      await inRun("computer_run_command", { command: "ls" }, () =>
+        gateway.runCommand("bot", { id: "owner" }, { command: "ls" }),
+      );
+      expect(sent).toEqual(["/exec"]);
+    }));
+
+  test("host: a disabled or dangerous command queues nothing for the desktop", () =>
+    asOwner(async () => {
+      const grant = {
+        id: "grant-1",
+        botId: "bot",
+        actorId: "owner",
+        displayName: "Project",
+        revoked: false,
+      };
+      const call = (command: string, call: string) => ({
+        kind: "run_command" as const,
+        botId: "bot",
+        actorId: "owner",
+        grantId: "grant-1",
+        command,
+        call,
+      });
+      const disabled = memoryStore({
+        rules: [rule("deny", { toolRef: "host/run_command" })],
+      });
+      const refusing = createHostAccessBroker(Date.now, {
+        approvalGate: createApprovalService(disabled.store).gate,
+        commandPolicy: async () => "allow",
+      });
+      refusing.rememberGrant(grant);
+      const { call: _a, ...ls } = call("ls", "h1");
+      await expect(
+        inRun("host_run_command", ls, () => refusing.callHost(ls), "h1"),
+      ).rejects.toThrow(TOOL_DISABLED);
+      expect(refusing.nextDesktopOperation()).toBeNull();
+
+      const asking = memoryStore({});
+      const holding = createHostAccessBroker(Date.now, {
+        approvalGate: createApprovalService(asking.store).gate,
+        commandPolicy: async () => "allow",
+      });
+      holding.rememberGrant(grant);
+      const { call: _b, ...reboot } = call("sudo reboot", "h2");
+      await expect(
+        inRun("host_run_command", reboot, () => holding.callHost(reboot), "h2"),
+      ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      expect(holding.nextDesktopOperation()).toBeNull();
+      expect([...asking.requests.values()][0]?.action.policy?.source).toBe(
+        "dangerous_command",
+      );
+    }));
+
+  test("hand-off: a disabled delegation is a sentence and nothing is sent", () =>
+    asOwner(async () => {
+      const { store } = memoryStore({
+        rules: [rule("deny", { toolRef: "bot/message_bot" })],
+      });
+      let sent = 0;
+      const tool = handoffTool({
+        desk: {
+          send: async () => {
+            sent += 1;
+            return { ok: true as const, toName: "Research" };
+          },
+        } as never,
+        from: {
+          actorId: "owner",
+          botId: "bot",
+          runId: "run",
+          threadId: "thread",
+          depth: 0,
+        } as never,
+        hasSomebodyToAsk: true,
+        maxDepth: 2,
+        maxPerRun: 3,
+        approvalGate: createApprovalService(store).gate,
+      });
+      const answer = await withApprovalContext(context, () =>
+        tool?.execute({ bot: "Research", task: "Look it up" }) as Promise<string>,
+      );
+      expect(answer).toContain("That handoff was not sent");
+      expect(answer).toContain("disabled");
+      expect(sent).toBe(0);
+    }));
+});
+
+describe("SEC1: disabled tools are not offered to the model (D4)", () => {
+  const employee: EmployeePolicy = {
+    ownerUserId: "owner",
+    rules: [rule("deny", { botId: "bot", toolRef: "computer_run_command" })],
+    security: DEFAULT_EMPLOYEE_SECURITY,
+  };
+  test("the owner's disabled tool is hidden from another person's run, and the rest stay", () =>
+    runAsTenant("member", async () => {
+      const { store } = memoryStore({ employee });
+      const disabled = await createApprovalService(store).disabledTools(
+        "member",
+        "bot",
+      );
+      expect(disabled("computer_run_command")).toBeTrue();
+      expect(disabled("computer_click")).toBeFalse();
+      const tools = createHeadlessComputerTools({
+        gateway: {} as never,
+        botId: "bot",
+        actor: { id: "member" },
+        disabled,
+      }).map((tool) => tool.definition.name);
+      expect(tools).not.toContain("computer_run_command");
+      expect(tools).toContain("computer_click");
+      expect(
+        createHeadlessComputerTools({
+          gateway: {} as never,
+          botId: "bot",
+          actor: { id: "member" },
+        }).map((tool) => tool.definition.name),
+      ).toContain("computer_run_command");
+    }));
+  test("a deny for one target only, or an ask, is not hidden: the gate decides those per call", () =>
+    asOwner(async () => {
+      const { store } = memoryStore({
+        rules: [
+          rule("deny", { toolRef: "mcp/gmail/send_email", scope: "gmail" }),
+          rule("ask", { toolRef: "mcp/drive/*" }),
+        ],
+        teamRules: [team("deny", { toolRef: "host/*" })],
+      });
+      const disabled = await createApprovalService(store).disabledTools(
+        "owner",
+        "bot",
+      );
+      expect(disabled("mcp/gmail/send_email")).toBeFalse();
+      expect(disabled("mcp/drive/share")).toBeFalse();
+      expect(disabled("host/run_command")).toBeTrue();
+    }));
+  test("with custom rules off, a person's own deny still hides the tool (D6)", () =>
+    asOwner(async () => {
+      const { store } = memoryStore({
+        team: { customRulesEnabled: false },
+        rules: [rule("deny", { toolRef: "bot/message_bot" })],
+      });
+      const disabled = await createApprovalService(store).disabledTools(
+        "owner",
+        "bot",
+      );
+      expect(disabled("bot/message_bot")).toBeTrue();
+    }));
 });

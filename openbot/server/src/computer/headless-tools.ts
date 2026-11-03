@@ -377,6 +377,25 @@ export function createHeadlessComputerTools(options: {
   auditStore?: AuditStore;
   /** The private sign-in request. Absent leaves the Bot with help and secret requests only. */
   signIn?: HeadlessSignInRequester;
+  /**
+   * The tools disabled for this person and Bot (SEC1 D4), left out of the list so the model is not
+   * offered them. The gateway's approval gate still refuses each of them if called anyway.
+   */
+  disabled?: (toolRef: string) => boolean;
+}): HeadlessTool[] {
+  const tools = headlessComputerTools(options);
+  const { disabled } = options;
+  return disabled
+    ? tools.filter((tool) => !disabled(tool.definition.name))
+    : tools;
+}
+
+function headlessComputerTools(options: {
+  gateway: ComputerGateway;
+  botId: string;
+  actor: ActionActor;
+  auditStore?: AuditStore;
+  signIn?: HeadlessSignInRequester;
 }): HeadlessTool[] {
   const { gateway, botId, actor, auditStore, signIn } = options;
   const snapshotId = z.number().int().positive();

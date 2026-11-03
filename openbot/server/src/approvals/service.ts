@@ -6,10 +6,12 @@ import { isDeepStrictEqual } from "node:util";
 import { PERSON_INITIATOR } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import {
+  applicableRules,
   decideAction,
   effectiveHostCommandPolicy,
   type ReviewModel,
   ruleMatches,
+  toolDisabled,
 } from "./policy";
 import type { ApprovalQuestions } from "./questions";
 import {
@@ -524,6 +526,35 @@ export function createApprovalService(
           : {}),
         questions: (await questions?.list(ownerUserId)) ?? [],
       };
+    },
+    /**
+     * Which tools to leave out of what the model is offered for this person and Bot (SEC1 D4): those
+     * a `deny` disables outright in any layer the gate weighs, the team's, the Bot owner's and the
+     * person's own, filtered exactly as the gate filters them. The gate still refuses each of them
+     * (the second half of D4), so this only decides what the model is shown. A read that fails
+     * throws, as the gate's own would.
+     */
+    async disabledTools(
+      actorId: string,
+      botId: string,
+    ): Promise<(toolRef: string) => boolean> {
+      const policy = store.policy;
+      if (!policy) return () => false;
+      const [team, teamRules, personal, employee] = await Promise.all([
+        policy.teamSettings(),
+        policy.teamRules(),
+        store.rules(actorId),
+        policy.employee?.(botId),
+      ]);
+      const layers = applicableRules({
+        personal,
+        ...(employee?.ownerUserId && employee.ownerUserId !== actorId
+          ? { owner: employee.rules }
+          : {}),
+        customRulesEnabled: team.customRulesEnabled,
+      });
+      const rules = [teamRules, layers.owner, layers.personal];
+      return (toolRef) => toolDisabled({ botId, toolRef }, rules);
     },
     /** Commands on this person's own computer, after the team cap: the stricter setting applies. */
     async hostCommandPolicy(ownerUserId: string): Promise<HostCommandPolicy> {

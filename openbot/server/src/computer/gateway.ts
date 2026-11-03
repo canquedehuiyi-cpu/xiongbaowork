@@ -654,6 +654,14 @@ export function createComputerGateway(
     };
 
     const decision = evaluateActionPolicy(options.policy(), context);
+    /*
+     * Which of the tenant's machines this is carried out on, asked once for both the row below and
+     * the approval gate. A resolver that fails is not "this deployment's container": in device mode
+     * the action can only go to a machine, so the gate is told it is one (SEC1 D5, fail closed).
+     */
+    const target = options.resolveDevice
+      ? await options.resolveDevice(botId).catch(() => "unknown" as const)
+      : null;
     await write(auditStore, {
       toolName,
       botId,
@@ -673,12 +681,7 @@ export function createComputerGateway(
        * person could not see would be worse than one that omits it, and the refusal for an unreachable
        * machine is already in the outcome of the action itself.
        */
-      device: options.resolveDevice
-        ? await options
-            .resolveDevice(botId)
-            .then((target) => target?.deviceId ?? null)
-            .catch(() => null)
-        : null,
+      device: target && target !== "unknown" ? target.deviceId : null,
     });
     if (!decision.forward) {
       throw new ActionRefusedError(decision.reason, decision.matched);
@@ -739,6 +742,16 @@ export function createComputerGateway(
           pageUrl,
           ...(element ? { element, snapshotId } : {}),
           ...(filePath ? { filePath } : {}),
+        },
+        /*
+         * What this call will actually run and touch, from this call site rather than from the
+         * model's arguments, for the gate's dangerous-command and sensitive-path floors and the
+         * team's host-command cap on a paired machine (SEC1 §4.3, §4.4, D5).
+         */
+        subject: {
+          ...(subject.command !== undefined ? { command: subject.command } : {}),
+          ...(filePath !== undefined ? { path: filePath } : {}),
+          runner: target !== null,
         },
         continuation,
       });

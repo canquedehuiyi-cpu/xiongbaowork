@@ -280,6 +280,13 @@ export function createHostAccessBroker(
             displayName: grant.displayName,
             relativePath: input.relativePath ?? "",
           },
+          // For the gate's dangerous-command and sensitive-path floors (SEC1 §4.3, §4.4).
+          subject: {
+            ...(input.command !== undefined ? { command: input.command } : {}),
+            ...(input.relativePath !== undefined
+              ? { path: input.relativePath }
+              : {}),
+          },
           continuation: currentApprovalContext(),
         }));
       if (approval && "replay" in approval) return approval.replay;

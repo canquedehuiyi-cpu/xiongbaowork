@@ -1460,9 +1460,25 @@ await startupLifecycle.run(async (startup) => {
       ),
   });
 
+  /*
+   * Every tool a run is granted, less the ones disabled for this person and Bot (SEC1 D4): a `deny`
+   * in the team's, the Bot owner's or the person's own rules leaves it out of what the model is
+   * offered, and the approval gate behind each one still refuses it if it is called anyway.
+   */
   const loadToolsForActor =
     (actorId: string, initiator: AuditInitiator = PERSON_INITIATOR) =>
-    async (botId: string) => [
+    async (botId: string) => {
+      const [tools, disabled] = await Promise.all([
+        loadGrantedToolsForActor(actorId, initiator, botId),
+        approvalService.disabledTools(actorId, botId),
+      ]);
+      return tools.filter((tool) => !disabled(tool.ref));
+    };
+  const loadGrantedToolsForActor = async (
+    actorId: string,
+    initiator: AuditInitiator,
+    botId: string,
+  ) => [
       ...wakeUpTools({
         store: wakeUpStore,
         ownerUserId: actorId,
@@ -1930,7 +1946,12 @@ await startupLifecycle.run(async (startup) => {
             depth: assertion?.depth ?? baseDepth,
             initiator: assertion?.initiator ?? initiator,
           };
-      const tools = await coordination.toolsForRun(run);
+      // Handing work on and asking a person are tools too: disabled ones are not offered (SEC1 D4).
+      const [offered, disabled] = await Promise.all([
+        coordination.toolsForRun(run),
+        approvalService.disabledTools(actorId, botId),
+      ]);
+      const tools = offered.filter((tool) => !disabled(tool.ref));
       return tools.map((tool) => ({
         ...tool,
         execute: async (args: unknown) => {
@@ -2098,6 +2119,7 @@ await startupLifecycle.run(async (startup) => {
         actor: { id: actor.id, userId: actor.id, initiator },
         auditStore: bootAuditStore,
         ...(signInService ? { signIn: signInService } : {}),
+        disabled: await approvalService.disabledTools(actor.id, agentId),
       });
     },
   });
@@ -2349,6 +2371,7 @@ await startupLifecycle.run(async (startup) => {
                     actor: { id: actor.id, userId: actor.id, initiator },
                     auditStore: bootAuditStore,
                     ...(signInService ? { signIn: signInService } : {}),
+                    disabled: await approvalService.disabledTools(actor.id, context.agentId),
                   })
                 : [];
             return [
@@ -3177,6 +3200,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
     }),
@@ -3268,6 +3292,7 @@ await startupLifecycle.run(async (startup) => {
           actor: { id: actor.id, userId: actor.id, initiator },
           auditStore: bootAuditStore,
           ...(signInService ? { signIn: signInService } : {}),
+          disabled: await approvalService.disabledTools(actor.id, agentId),
         });
       },
     }),
