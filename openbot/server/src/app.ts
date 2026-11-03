@@ -1582,7 +1582,7 @@ export function createApp(
   if (coworker?.teamBots)
     app.route(
       "/api/team-bots",
-      createTeamBotRoutes(coworker.teamBots, requireUser),
+      createTeamBotRoutes(coworker.teamBots, requireUser, adminScope),
     );
   if (coworker?.approvals)
     app.route(

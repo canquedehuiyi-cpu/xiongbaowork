@@ -1,12 +1,23 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { Hono, type MiddlewareHandler } from "hono";
 import { computerAccessCheck } from "../src/agents/computer-access";
 import {
   AgentAssignedError,
   createAgentProfileStore,
 } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import { createAdminScope } from "../src/auth/admin-scope";
+import { type AppVariables, createRoleRepository } from "../src/auth/guards";
+import { setRole } from "../src/auth/roles";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
@@ -17,14 +28,35 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import {
+  teamBotAssignments,
+  teamBotAudience,
+  teamBotPublications,
+} from "../src/db/schema/team-bots";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { PluginRefusedError } from "../src/plugins/store";
+import { teamBotAccess } from "../src/team-bots/access";
+import { createTeamBotRoutes } from "../src/team-bots/routes";
 import {
   createTeamBots,
   TEAM_BOT_CONSENT_MARKER,
+  TeamBotNotFoundError,
   TeamBotRefusedError,
 } from "../src/team-bots/team-bots";
-import { runAsTenant } from "../src/tenant/context";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
+
+/**
+ * Team Bots in PostgreSQL, every person acting in their own frame (G01-E P9).
+ *
+ * A published Bot lives in `team`, moved there by its owner when they publish it, and its
+ * publication, audience and assignment rows are stamped `team`: row security shows them to exactly
+ * the people the publication names. An administrator reaches Team Bots that are not theirs only
+ * through the routes' admin doors (the capability `adminCapability` grants after re-reading
+ * `user_roles`): assignments and the full list as `platform`, another person's unpublish in that
+ * owner's frame. Only fixtures, cleanup and the stamp checks use `platform` directly.
+ */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const profiles = createAgentProfileStore(
@@ -46,6 +78,88 @@ const teamBots = createTeamBots({
   database,
   connectedServers: async (userId) => connected.get(userId) ?? new Set(),
 });
+const adminScope = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+
+beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
+});
+
+/** As a signed-in request runs: inside the person's own tenant. */
+function as<T>(actor: AgentActor, work: () => T): T {
+  return runAsTenant(actor.id, work);
+}
+
+/** One request to the Team Bot routes, signed in as `actor`, with the admin doors mounted. */
+function teamBotRequest(
+  actor: AgentActor,
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+) {
+  const signedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", { ...actor, email: `${actor.id}@example.test` });
+    await runAsTenant(actor.id, () => next());
+  };
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.route("/", createTeamBotRoutes(teamBots, signedIn, adminScope));
+  return app.request(`http://test${path}`, {
+    method,
+    ...(body === undefined
+      ? {}
+      : {
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json" },
+        }),
+  });
+}
+
+/** The stamps on a Bot's rows and its publication, as `platform` sees them. */
+async function stampsOf(botId: string) {
+  return asPlatform(async () => {
+    const [agent] = await database
+      .select({ tenantId: agents.tenantId })
+      .from(agents)
+      .where(eq(agents.id, botId));
+    const [profile] = await database
+      .select({ tenantId: agentProfiles.tenantId })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, botId));
+    const publications = await database
+      .select({ tenantId: teamBotPublications.tenantId })
+      .from(teamBotPublications)
+      .where(eq(teamBotPublications.agentId, botId));
+    const audience = await database
+      .select({ tenantId: teamBotAudience.tenantId })
+      .from(teamBotAudience)
+      .where(eq(teamBotAudience.agentId, botId));
+    const assignments = await database
+      .select({ tenantId: teamBotAssignments.tenantId })
+      .from(teamBotAssignments)
+      .where(eq(teamBotAssignments.agentId, botId));
+    return {
+      agent: agent?.tenantId,
+      profile: profile?.tenantId,
+      publications: publications.map((row) => row.tenantId),
+      audience: audience.map((row) => row.tenantId),
+      assignments: assignments.map((row) => row.tenantId),
+    };
+  });
+}
+
+/** Publish as the owner does: in the owner's own frame. */
+function publish(
+  owner: AgentActor,
+  botId: string,
+  input: { audience: "team" | "people"; emails: string[]; groups: string[] },
+) {
+  return as(owner, () => teamBots.publish(owner, botId, input));
+}
 
 afterEach(async () => {
   // Cleanup spans several people's rows, which only the platform reaches.
@@ -69,6 +183,7 @@ afterEach(async () => {
   connected.clear();
 });
 afterAll(async () => {
+  await releaseRoleWriter?.();
   await database.$client.close();
 });
 
@@ -82,15 +197,19 @@ async function person(
     database.insert(users).values({ id, email, name: "Team Bot Test", groups }),
   );
   createdUsers.push(id);
+  // `user_roles` is what the admin doors re-read; a session's role alone opens nothing.
+  await asPlatform(() => setRole(database, id, role));
   return { id, role, email };
 }
 async function privateBot(owner: AgentActor, roleDescription = "Answers.") {
-  const profile = await profileStore().create(owner, {
-    name: "Release Helper",
-    title: "Releases",
-    roleDescription,
-    visibility: "private",
-  });
+  const profile = await as(owner, () =>
+    profileStore().create(owner, {
+      name: "Release Helper",
+      title: "Releases",
+      roleDescription,
+      visibility: "private",
+    }),
+  );
   createdAgents.push(profile.id);
   return profile.id;
 }
@@ -102,21 +221,23 @@ describe("Team Bots in PostgreSQL", () => {
     const teammate = await person();
     const admin = await person("admin");
     const bot = await privateBot(owner);
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "team",
       emails: [],
       groups: [],
     });
     // The teammate can see and use the Bot...
-    expect(await profiles.get(teammate, bot)).not.toBeNull();
+    expect(
+      await as(teammate, () => profiles.get(teammate, bot)),
+    ).not.toBeNull();
     // ...but the computer, which carries the owner's signed-in browser, stays with the owner.
     const mayUseComputer = computerAccessCheck(profiles);
-    expect(await mayUseComputer(teammate, bot)).toBe(false);
-    expect(await mayUseComputer(owner, bot)).toBe(true);
-    expect(await mayUseComputer(admin, bot)).toBe(true);
+    expect(await as(teammate, () => mayUseComputer(teammate, bot))).toBe(false);
+    expect(await as(owner, () => mayUseComputer(owner, bot))).toBe(true);
+    expect(await as(admin, () => mayUseComputer(admin, bot))).toBe(true);
     // The check the computer routes were given before: seeing the Bot was enough.
     const canUseBot = async (actor: AgentActor, botId: string) =>
-      (await profiles.get(actor, botId)) !== null;
+      (await as(actor, () => profiles.get(actor, botId))) !== null;
     expect(await canUseBot(teammate, bot)).toBe(true);
   });
 
@@ -125,68 +246,165 @@ describe("Team Bots in PostgreSQL", () => {
     const teammate = await person();
     const engineer = await person("user", ["eng"]);
     const bot = await privateBot(owner);
-    expect(await profiles.get(teammate, bot)).toBeNull();
+    const get = (actor: AgentActor) =>
+      as(actor, () => profiles.get(actor, bot));
+    expect(await get(teammate)).toBeNull();
+    expect(await stampsOf(bot)).toMatchObject({
+      agent: owner.id,
+      profile: owner.id,
+    });
 
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "team",
       emails: [],
       groups: [],
     });
-    expect(await profiles.get(teammate, bot)).not.toBeNull();
-    expect(await profiles.get(engineer, bot)).not.toBeNull();
+    expect(await get(teammate)).not.toBeNull();
+    expect(await get(engineer)).not.toBeNull();
+    // Published, the Bot and its publication live in `team` (G01-E P9).
+    expect(await stampsOf(bot)).toEqual({
+      agent: TEAM_TENANT,
+      profile: TEAM_TENANT,
+      publications: [TEAM_TENANT],
+      audience: [],
+      assignments: [],
+    });
 
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "people",
       emails: [teammate.email.toUpperCase()],
       groups: [],
     });
-    expect(await profiles.get(teammate, bot)).not.toBeNull();
-    expect(await profiles.get(engineer, bot)).toBeNull();
+    expect(await get(teammate)).not.toBeNull();
+    expect(await get(engineer)).toBeNull();
+    expect((await stampsOf(bot)).audience).toEqual([TEAM_TENANT]);
 
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "people",
       emails: [],
       groups: ["eng"],
     });
-    expect(await profiles.get(teammate, bot)).toBeNull();
-    expect(await profiles.get(engineer, bot)).not.toBeNull();
+    expect(await get(teammate)).toBeNull();
+    expect(await get(engineer)).not.toBeNull();
 
-    await teamBots.unpublish(owner, bot);
-    expect(await profiles.get(engineer, bot)).toBeNull();
+    await as(owner, () => teamBots.unpublish(owner, bot));
+    expect(await get(engineer)).toBeNull();
+    // Unpublished, a private Bot goes back to its owner, with nothing of the roster left behind.
+    expect(await stampsOf(bot)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+      publications: [],
+      audience: [],
+      assignments: [],
+    });
+    expect(await get(owner)).not.toBeNull();
     // Only the owner publishes, and an undescribed Bot is not published at all.
     await expect(
-      teamBots.publish(teammate, bot, {
-        audience: "team",
-        emails: [],
-        groups: [],
-      }),
+      as(teammate, () =>
+        teamBots.publish(teammate, bot, {
+          audience: "team",
+          emails: [],
+          groups: [],
+        }),
+      ),
     ).rejects.toThrow();
     const bare = await privateBot(owner, "  ");
     await expect(
-      teamBots.publish(owner, bare, {
+      publish(owner, bare, {
         audience: "team",
         emails: [],
         groups: [],
       }),
     ).rejects.toThrow(TeamBotRefusedError);
+    // Neither refusal moved anything.
+    expect((await stampsOf(bot)).profile).toBe(owner.id);
+    expect((await stampsOf(bare)).profile).toBe(owner.id);
+  });
+
+  test("a teammate in the audience reads the publication; one outside it cannot select the Bot at all", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const outsider = await person();
+    const bot = await privateBot(owner);
+    await publish(owner, bot, {
+      audience: "people",
+      emails: [teammate.email],
+      groups: [],
+    });
+    const seen = (actor: AgentActor) =>
+      as(actor, async () => ({
+        agents: (
+          await database
+            .select({ id: agents.id })
+            .from(agents)
+            .where(eq(agents.id, bot))
+        ).length,
+        profiles: (
+          await database
+            .select({ id: agentProfiles.agentId })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, bot))
+        ).length,
+        publications: (
+          await database
+            .select({ id: teamBotPublications.agentId })
+            .from(teamBotPublications)
+            .where(eq(teamBotPublications.agentId, bot))
+        ).length,
+        access: (
+          await database
+            .select({ id: agents.id })
+            .from(agents)
+            .where(and(eq(agents.id, bot), teamBotAccess(actor.id, agents.id)))
+        ).length,
+      }));
+    expect(await seen(teammate)).toEqual({
+      agents: 1,
+      profiles: 1,
+      publications: 1,
+      access: 1,
+    });
+    expect(await seen(outsider)).toEqual({
+      agents: 0,
+      profiles: 0,
+      publications: 0,
+      access: 0,
+    });
+    // The owner manages it and sees the audience; a teammate sees neither the roster nor the switch.
+    const mine = await as(owner, () => teamBots.list(owner));
+    expect(mine.find((row) => row.id === bot)).toMatchObject({
+      mine: true,
+      people: [teammate.email],
+    });
+    const theirs = await as(teammate, () => teamBots.list(teammate));
+    expect(theirs.find((row) => row.id === bot)).not.toHaveProperty("people");
+    expect(
+      (await as(outsider, () => teamBots.list(outsider))).find(
+        (row) => row.id === bot,
+      ),
+    ).toBeUndefined();
   });
 
   test("a teammate's chat is private from the owner, and the Bot can join the teammate's group", async () => {
     const owner = await person();
     const teammate = await person();
     const bot = await privateBot(owner);
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "team",
       emails: [],
       groups: [],
     });
-    const chat = await channelStore.create(teammate, [bot]);
+    const chat = await as(teammate, () => channelStore.create(teammate, [bot]));
     createdChannels.push(chat.id);
-    expect(await channelStore.get(teammate, chat.id)).not.toBeNull();
-    expect(await channelStore.get(owner, chat.id)).toBeNull();
+    expect(
+      await as(teammate, () => channelStore.get(teammate, chat.id)),
+    ).not.toBeNull();
+    expect(await as(owner, () => channelStore.get(owner, chat.id))).toBeNull();
 
     const own = await privateBot(teammate);
-    const group = await channelStore.create(teammate, [bot, own]);
+    const group = await as(teammate, () =>
+      channelStore.create(teammate, [bot, own]),
+    );
     createdChannels.push(group.id);
     expect(group.agentIds.sort()).toEqual([bot, own].sort());
   });
@@ -197,66 +415,178 @@ describe("Team Bots in PostgreSQL", () => {
     const member = await person("user", ["support"]);
     const outsider = await person();
     const bot = await privateBot(owner);
-    await expect(teamBots.assign(admin, bot, "support")).rejects.toThrow(
-      TeamBotRefusedError,
-    );
-    await teamBots.publish(owner, bot, {
+    await expect(
+      as(admin, () => teamBots.assign(admin, bot, "support")),
+    ).rejects.toThrow(TeamBotRefusedError);
+    // The same refusal through the admin page, before anything is published.
+    expect(
+      (
+        await teamBotRequest(admin, "POST", `/${bot}/assignments`, {
+          group: "support",
+        })
+      ).status,
+    ).toBe(400);
+    await publish(owner, bot, {
       audience: "people",
       emails: [],
       groups: ["nobody"],
     });
-    await expect(teamBots.assign(member, bot, "support")).rejects.toThrow(
-      TeamBotRefusedError,
+    await expect(
+      as(member, () => teamBots.assign(member, bot, "support")),
+    ).rejects.toThrow(TeamBotRefusedError);
+    expect(
+      (
+        await teamBotRequest(member, "POST", `/${bot}/assignments`, {
+          group: "support",
+        })
+      ).status,
+    ).toBe(400);
+    // The administrator is not in the audience: their own frame cannot see the publication...
+    await expect(
+      as(admin, () => teamBots.assign(admin, bot, "support")),
+    ).rejects.toThrow(TeamBotRefusedError);
+    // ...and a raw assignment from it is refused without the capability.
+    await expect(
+      as(admin, async () => {
+        await database.insert(teamBotAssignments).values({
+          agentId: bot,
+          groupName: "support",
+          assignedBy: admin.id,
+          tenantId: TEAM_TENANT,
+        });
+      }),
+    ).rejects.toThrow();
+    // The admin page assigns, holding the capability.
+    expect(
+      (
+        await teamBotRequest(admin, "POST", `/${bot}/assignments`, {
+          group: "support",
+        })
+      ).status,
+    ).toBe(204);
+    expect((await stampsOf(bot)).assignments).toEqual([TEAM_TENANT]);
+    expect(await as(member, () => teamBots.isAssignedTo(member.id, bot))).toBe(
+      true,
     );
-    await teamBots.assign(admin, bot, "support");
-    expect(await teamBots.isAssignedTo(member.id, bot)).toBe(true);
-    expect(await teamBots.isAssignedTo(outsider.id, bot)).toBe(false);
-    expect(await profiles.get(member, bot)).not.toBeNull();
-    expect(await profiles.get(outsider, bot)).toBeNull();
-    await expect(profiles.setHidden(member, bot, true)).rejects.toThrow(
-      AgentAssignedError,
-    );
-    const listed = await teamBots.list(member);
+    expect(
+      await as(outsider, () => teamBots.isAssignedTo(outsider.id, bot)),
+    ).toBe(false);
+    expect(await as(member, () => profiles.get(member, bot))).not.toBeNull();
+    expect(await as(outsider, () => profiles.get(outsider, bot))).toBeNull();
+    await expect(
+      as(member, () => profiles.setHidden(member, bot, true)),
+    ).rejects.toThrow(AgentAssignedError);
+    const listed = await as(member, () => teamBots.list(member));
     expect(listed.find((row) => row.id === bot)).toMatchObject({
       assigned: true,
     });
     expect(listed.find((row) => row.id === bot)).not.toHaveProperty("people");
+    // The admin page lists it with its roster, though the administrator is in no audience.
+    const page = (await (await teamBotRequest(admin, "GET", "/")).json()) as {
+      teamBots: { id: string; assignments?: string[] }[];
+    };
+    expect(page.teamBots.find((row) => row.id === bot)).toMatchObject({
+      assignments: ["support"],
+    });
+
+    // And takes it back.
+    expect(
+      (await teamBotRequest(admin, "DELETE", `/${bot}/assignments/support`))
+        .status,
+    ).toBe(204);
+    expect(await as(member, () => teamBots.isAssignedTo(member.id, bot))).toBe(
+      false,
+    );
+    expect(await as(member, () => profiles.get(member, bot))).toBeNull();
+  });
+
+  test("an administrator unpublishes another person's Bot in the owner's frame, and the owner keeps it", async () => {
+    const owner = await person();
+    const admin = await person("admin");
+    const teammate = await person();
+    const bot = await privateBot(owner);
+    await publish(owner, bot, {
+      audience: "team",
+      emails: [],
+      groups: [],
+    });
+    expect(
+      await as(teammate, () => profiles.get(teammate, bot)),
+    ).not.toBeNull();
+
+    // From the administrator's own frame the rows are not theirs to delete: refused, nothing changes.
+    await expect(
+      as(admin, () => teamBots.unpublish(admin, bot)),
+    ).rejects.toThrow(TeamBotNotFoundError);
+    expect((await stampsOf(bot)).publications).toEqual([TEAM_TENANT]);
+    // A person who is not the owner is refused by the route as well.
+    expect(
+      (await teamBotRequest(teammate, "DELETE", `/${bot}/publication`)).status,
+    ).toBe(404);
+    expect((await stampsOf(bot)).publications).toEqual([TEAM_TENANT]);
+
+    // The admin page: in the owner's frame, so the Bot goes back to its owner, private.
+    expect(
+      (await teamBotRequest(admin, "DELETE", `/${bot}/publication`)).status,
+    ).toBe(204);
+    expect(await stampsOf(bot)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+      publications: [],
+      audience: [],
+      assignments: [],
+    });
+    expect(await as(teammate, () => profiles.get(teammate, bot))).toBeNull();
+    expect(await as(owner, () => profiles.get(owner, bot))).toMatchObject({
+      ownerUserId: owner.id,
+      visibility: "private",
+    });
+    // The owner may publish it again.
+    expect(
+      (await as(owner, () => teamBots.publishable(owner))).map((row) => row.id),
+    ).toContain(bot);
   });
 
   test("the Bot reaches the owner's accounts, and a teammate's own only with consent", async () => {
     const owner = await person();
     const teammate = await person();
     const bot = await privateBot(owner);
-    await teamBots.publish(owner, bot, {
+    await publish(owner, bot, {
       audience: "team",
       emails: [],
       groups: [],
     });
     connected.set(owner.id, new Set(["github"]));
     connected.set(teammate.id, new Set(["github", "gmail"]));
-    const as = teamBots.credentialActorFor(teammate.id, bot);
-    expect(await as("github/search")).toBe(owner.id);
-    expect(await as("shared-docs/search")).toBe(teammate.id);
-    expect(await teamBots.credentialActorFor(owner.id, bot)("gmail/send")).toBe(
-      owner.id,
-    );
+    const ask = teamBots.credentialActorFor(teammate.id, bot);
+    // A teammate's call runs in the teammate's frame.
+    const as_ = (ref: string) => as(teammate, () => ask(ref));
+    expect(await as_("github/search")).toBe(owner.id);
+    expect(await as_("shared-docs/search")).toBe(teammate.id);
+    expect(
+      await as(owner, () =>
+        teamBots.credentialActorFor(owner.id, bot)("gmail/send"),
+      ),
+    ).toBe(owner.id);
 
-    const refusal = await as("gmail/send").catch((error: unknown) => error);
+    const refusal = await as_("gmail/send").catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(PluginRefusedError);
     expect((refusal as Error).message).toStartWith(TEAM_BOT_CONSENT_MARKER);
 
-    await teamBots.consent(teammate, bot, "gmail", "allow_once");
-    expect(await as("gmail/send")).toBe(teammate.id);
-    await expect(as("gmail/send")).rejects.toThrow(PluginRefusedError);
+    const consent = (decision: Parameters<typeof teamBots.consent>[3]) =>
+      as(teammate, () => teamBots.consent(teammate, bot, "gmail", decision));
+    await consent("allow_once");
+    expect(await as_("gmail/send")).toBe(teammate.id);
+    await expect(as_("gmail/send")).rejects.toThrow(PluginRefusedError);
 
-    await teamBots.consent(teammate, bot, "gmail", "allow_always");
-    expect(await as("gmail/send")).toBe(teammate.id);
-    expect(await as("gmail/read")).toBe(teammate.id);
-    await teamBots.consent(teammate, bot, "gmail", "skip");
-    await expect(as("gmail/send")).rejects.toThrow(PluginRefusedError);
-    await teamBots.consent(teammate, bot, "gmail", "allow_always");
-    await teamBots.clearConsents(teammate);
-    await expect(as("gmail/send")).rejects.toThrow(PluginRefusedError);
+    await consent("allow_always");
+    expect(await as_("gmail/send")).toBe(teammate.id);
+    expect(await as_("gmail/read")).toBe(teammate.id);
+    await consent("skip");
+    await expect(as_("gmail/send")).rejects.toThrow(PluginRefusedError);
+    await consent("allow_always");
+    await as(teammate, () => teamBots.clearConsents(teammate));
+    await expect(as_("gmail/send")).rejects.toThrow(PluginRefusedError);
   });
   test("always allow for all Team Bots, and a Bot nobody described stays hidden", async () => {
     const owner = await person();
@@ -264,46 +594,54 @@ describe("Team Bots in PostgreSQL", () => {
     const first = await privateBot(owner);
     const second = await privateBot(owner);
     for (const bot of [first, second])
-      await teamBots.publish(owner, bot, {
+      await publish(owner, bot, {
         audience: "team",
         emails: [],
         groups: [],
       });
     connected.set(teammate.id, new Set(["gmail"]));
-    await expect(
-      teamBots.credentialActorFor(teammate.id, second)("gmail/send"),
-    ).rejects.toThrow(PluginRefusedError);
-    await teamBots.consent(teammate, first, "gmail", "allow_all_team_bots");
-    expect(
-      await teamBots.credentialActorFor(teammate.id, second)("gmail/send"),
-    ).toBe(teammate.id);
-    await teamBots.clearConsents(teammate);
-    await expect(
-      teamBots.credentialActorFor(teammate.id, second)("gmail/send"),
-    ).rejects.toThrow(PluginRefusedError);
+    const ask = (bot: string) =>
+      as(teammate, () =>
+        teamBots.credentialActorFor(teammate.id, bot)("gmail/send"),
+      );
+    await expect(ask(second)).rejects.toThrow(PluginRefusedError);
+    await as(teammate, () =>
+      teamBots.consent(teammate, first, "gmail", "allow_all_team_bots"),
+    );
+    expect(await ask(second)).toBe(teammate.id);
+    await as(teammate, () => teamBots.clearConsents(teammate));
+    await expect(ask(second)).rejects.toThrow(PluginRefusedError);
 
     // A published Bot whose description was later emptied, or that still has a placeholder name,
-    // is invisible to teammates and says so to its owner.
-    expect(await profiles.get(teammate, first)).not.toBeNull();
-    await database
-      .update(agentProfiles)
-      .set({ roleDescription: "" })
-      .where(eq(agentProfiles.agentId, first));
-    expect(await profiles.get(teammate, first)).toBeNull();
-    await database
-      .update(agents)
-      .set({ name: "New Bot" })
-      .where(eq(agents.id, second));
-    expect(await profiles.get(teammate, second)).toBeNull();
-    const own = await teamBots.list(owner);
+    // is invisible to teammates and says so to its owner. The owner edits their own `team` rows.
+    expect(
+      await as(teammate, () => profiles.get(teammate, first)),
+    ).not.toBeNull();
+    await as(owner, () =>
+      database
+        .update(agentProfiles)
+        .set({ roleDescription: "" })
+        .where(eq(agentProfiles.agentId, first)),
+    );
+    expect(await as(teammate, () => profiles.get(teammate, first))).toBeNull();
+    await as(owner, () =>
+      database
+        .update(agents)
+        .set({ name: "New Bot" })
+        .where(eq(agents.id, second)),
+    );
+    expect(await as(teammate, () => profiles.get(teammate, second))).toBeNull();
+    const own = await as(owner, () => teamBots.list(owner));
     expect(own.find((row) => row.id === first)?.visibleToTeam).toBe(false);
     const placeholder = await privateBot(owner);
-    await database
-      .update(agents)
-      .set({ name: "Untitled" })
-      .where(eq(agents.id, placeholder));
+    await as(owner, () =>
+      database
+        .update(agents)
+        .set({ name: "Untitled" })
+        .where(eq(agents.id, placeholder)),
+    );
     await expect(
-      teamBots.publish(owner, placeholder, {
+      publish(owner, placeholder, {
         audience: "team",
         emails: [],
         groups: [],

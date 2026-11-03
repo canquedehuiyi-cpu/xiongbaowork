@@ -145,6 +145,25 @@ export class ModelNotInLibraryError extends Error {
   }
 }
 
+/**
+ * A Bot nobody owns any more may not be made private (G01-E P9).
+ *
+ * When a person's account is deleted, their Bots keep living with `owner_user_id` set null. A public
+ * or published one is stamped `team`, and `team` rows are read only where `openbot_team_bot_visible`
+ * says so: public, the owner, or a published audience. Private and unpublished, with no owner, that
+ * is nobody: the Bot would stay in the database, unreachable from every chat, and no person's frame
+ * could ever change it back. So the change is refused. An administrator takes such a Bot down by
+ * deleting it on the admin pages, which still works.
+ */
+export class OwnerlessBotPrivateError extends Error {
+  constructor(id: string) {
+    super(
+      `Nobody owns Bot ${id} any more, so it cannot be made private or unpublished: nobody could reach it. Keep it shared, or delete it.`,
+    );
+    this.name = "OwnerlessBotPrivateError";
+  }
+}
+
 export class ModelBindingNotApplicableError extends Error {
   constructor(id: string) {
     super(`Agent ${id} runs on another server, so its model is chosen there.`);
@@ -524,13 +543,40 @@ async function settleStamp(
     return;
   }
   if (stamp !== TEAM_TENANT || !isPersonTenant(ownerUserId)) return;
+  if (await publishedToTeam(transaction, agentId)) return;
+  await moveToOwner(transaction, agentId, ownerUserId);
+}
+
+/** Whether the Bot has a publication, counted only when stamped `team` as every publication is (0126). */
+async function publishedToTeam(transaction: Transaction, agentId: string) {
   const [published] = await transaction
     .select({ agentId: teamBotPublications.agentId })
     .from(teamBotPublications)
-    .where(eq(teamBotPublications.agentId, agentId))
+    .where(
+      and(
+        eq(teamBotPublications.agentId, agentId),
+        eq(teamBotPublications.tenantId, TEAM_TENANT),
+      ),
+    )
     .limit(1);
-  if (published) return;
-  await moveToOwner(transaction, agentId, ownerUserId);
+  return Boolean(published);
+}
+
+/**
+ * Refuse the write that would leave a `team` Bot without an owner reachable by nobody: private and
+ * unpublished ({@link OwnerlessBotPrivateError}). Asked before anything is written.
+ */
+async function refuseOwnerlessPrivate(
+  transaction: Transaction,
+  agentId: string,
+  stamp: string | undefined,
+  visibility: CreateAgentInput["visibility"],
+  ownerUserId: string | null,
+) {
+  if (stamp !== TEAM_TENANT || visibility !== "private") return;
+  if (isPersonTenant(ownerUserId)) return;
+  if (await publishedToTeam(transaction, agentId)) return;
+  throw new OwnerlessBotPrivateError(agentId);
 }
 
 /**
@@ -719,6 +765,13 @@ export function createAgentProfileStore(
             .from(agents)
             .where(eq(agents.id, id))
             .limit(1);
+          await refuseOwnerlessPrivate(
+            transaction,
+            id,
+            row?.tenantId,
+            input.visibility,
+            profile.ownerUserId,
+          );
           const previous = (row?.configuration ?? {}) as Record<
             string,
             unknown

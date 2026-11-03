@@ -10,6 +10,7 @@ import {
   createAgentProfileStore,
   ManagedAgentUnavailableError,
   moveToTeam,
+  OwnerlessBotPrivateError,
   ProtectedAgentError,
 } from "../src/agents/profile-store";
 import type {
@@ -1214,6 +1215,89 @@ describe("agent profile store integration", () => {
     expect(await trail("bot.deleted")).toEqual([
       { tenantId: "platform", actorUserId: admin.id },
     ]);
+    expect(
+      (await agentRequest(member, "GET", `/${source.agentId}`)).status,
+    ).toBe(404);
+  });
+
+  test("a Bot nobody owns cannot be made private, which would hide it from everybody; the admin still deletes it", async () => {
+    /*
+     * G01-E P9. A shared Bot whose owner's account was deleted stays `team` with no owner. `team`
+     * rows are read only where `openbot_team_bot_visible` admits them (public, the owner, a published
+     * audience), so the same Bot made private would be visible to nobody and changeable by no person.
+     * The change is refused with a sentence that says so; taking it down is a delete.
+     */
+    const owner = await createUser();
+    const member = await createUser();
+    const admin = await createUser("admin");
+    const source = await createProfileFixture({
+      owner,
+      visibility: "public",
+      frame: owner.id,
+    });
+    await asPlatform(() =>
+      database.delete(users).where(eq(users.id, owner.id)),
+    );
+    const profileRow = async () =>
+      (
+        await asPlatform(() =>
+          database
+            .select({
+              ownerUserId: agentProfiles.ownerUserId,
+              tenantId: agentProfiles.tenantId,
+              visibility: agentProfiles.visibility,
+              title: agentProfiles.title,
+              deletedAt: agentProfiles.deletedAt,
+            })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, source.agentId)),
+        )
+      )[0];
+    const before = await profileRow();
+    expect(before).toMatchObject({
+      ownerUserId: null,
+      tenantId: "team",
+      visibility: "public",
+      deletedAt: null,
+    });
+    const makePrivate: CreateAgentInput = {
+      name: "Orphan Hidden",
+      title: "Orphan Hidden Title",
+      roleDescription: "Nobody would see this.",
+      visibility: "private",
+    };
+
+    // The admin page refuses, and says why; nothing of the edit is written.
+    const refused = await agentRequest(
+      admin,
+      "PATCH",
+      `/${source.agentId}`,
+      makePrivate,
+    );
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error: string }).error).toContain(
+      "Nobody owns",
+    );
+    expect(await profileRow()).toEqual(before);
+    // The store itself refuses, as `platform` too, not only the route.
+    const thrown = await onAdminPage(admin, () =>
+      store.update(admin, source.agentId, makePrivate).then(
+        () => null,
+        (error: unknown) => error,
+      ),
+    );
+    expect(thrown).toBeInstanceOf(OwnerlessBotPrivateError);
+    expect(await profileRow()).toEqual(before);
+    // Still reachable, by everybody, as before.
+    expect(
+      (await agentRequest(member, "GET", `/${source.agentId}`)).status,
+    ).toBe(200);
+
+    // The platform takedown is still the admin's: delete it.
+    expect(
+      (await agentRequest(admin, "DELETE", `/${source.agentId}`)).status,
+    ).toBe(204);
+    expect((await profileRow())?.deletedAt).not.toBeNull();
     expect(
       (await agentRequest(member, "GET", `/${source.agentId}`)).status,
     ).toBe(404);
