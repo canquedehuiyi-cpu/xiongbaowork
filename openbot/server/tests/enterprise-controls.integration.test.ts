@@ -36,6 +36,7 @@ import {
 } from "../src/db/schema";
 import { createTurnRunner } from "../src/routines/run-turn";
 import { createTeamBots } from "../src/team-bots/team-bots";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
 
@@ -81,38 +82,58 @@ const provider: ComputerProvider = {
 
 let controls: EnterpriseControls;
 
+/**
+ * The deployment's settings, the identity rows, and every read or cleanup that spans tenants (an
+ * audit row filed in the administrator's trail, a usage row the gate wrote): as `platform`.
+ */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
+/** What the member's own work does, in the member's frame, as a routine or a computer runs it. */
+const asMemberTenant = <T>(work: () => T): T => runAsTenant(member.id, work);
+
 async function clean() {
-  await database.delete(capabilitySettings);
-  await database.delete(enterpriseSettings);
-  await database.delete(networkPolicies);
-  await database
-    .delete(actionRecords)
-    .where(like(actionRecords.botId, `ent-bot-${suite}%`));
-  await database
-    .delete(modelUsage)
-    .where(like(modelUsage.agentId, `ent-%${suite}%`));
+  await asPlatform(async () => {
+    await database.delete(capabilitySettings);
+    await database.delete(enterpriseSettings);
+    await database.delete(networkPolicies);
+    await database
+      .delete(actionRecords)
+      .where(like(actionRecords.botId, `ent-bot-${suite}%`));
+    await database
+      .delete(modelUsage)
+      .where(like(modelUsage.agentId, `ent-%${suite}%`));
+  });
 }
 
 beforeAll(async () => {
   releaseRoleWriter = await bindTestRoleWriter(database);
   await clean();
-  await database.insert(users).values([
-    { ...admin, name: "Admin" },
-    { ...member, name: "Member", groups: ["sales"] },
-  ]);
-  await database.insert(agents).values({
-    id: bot,
-    name: "Enterprise test Bot",
-    type: "built_in",
-    configuration: {},
-  });
-  await database.insert(agentProfiles).values({
-    agentId: bot,
-    ownerUserId: member.id,
-    title: "Test",
-    roleDescription: "Test",
-    avatarSeed: "x",
-    visibility: "private",
+  await asPlatform(() =>
+    database.insert(users).values([
+      { ...admin, name: "Admin" },
+      { ...member, name: "Member", groups: ["sales"] },
+    ]),
+  );
+  /*
+   * The member's Bot is a person's row, so it is seeded in the member's own frame. The HTTP gate's
+   * model allowlist (`governRun`, src/admin/gate.ts) now runs inside the frame `requireUser` opens
+   * (G01-D), so it finds the Bot under the member's tenant and holds a member-owned built-in Bot to
+   * the allowlist.
+   */
+  await asMemberTenant(async () => {
+    await database.insert(agents).values({
+      id: bot,
+      name: "Enterprise test Bot",
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: bot,
+      ownerUserId: member.id,
+      title: "Test",
+      roleDescription: "Test",
+      avatarSeed: "x",
+      visibility: "private",
+    });
   });
   controls = await installEnterpriseControls({
     database,
@@ -127,14 +148,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await controls?.stop();
   await clean();
-  await database.delete(agents).where(eq(agents.id, bot));
-  await database
-    .delete(revokedAccess)
-    .where(like(revokedAccess.email, `%${suite}%`));
-  await database
-    .delete(scimGroups)
-    .where(like(scimGroups.displayName, `%${suite}%`));
-  await database.delete(users).where(like(users.email, `%${suite}%`));
+  await asPlatform(async () => {
+    await database.delete(agents).where(eq(agents.id, bot));
+    await database
+      .delete(revokedAccess)
+      .where(like(revokedAccess.email, `%${suite}%`));
+    await database
+      .delete(scimGroups)
+      .where(like(scimGroups.displayName, `%${suite}%`));
+    await database.delete(users).where(like(users.email, `%${suite}%`));
+  });
   await releaseRoleWriter?.();
   await database.$client.end({ timeout: 5 });
 });
@@ -146,7 +169,10 @@ function appFor(actor: { id: string; email: string; role: "admin" | "user" }) {
     next: () => Promise<void>,
   ) => {
     context.set("actor", actor);
-    await next();
+    // As the real `requireUser` does: the request runs as the person it names, and only inside
+    // `next`. The gate's own work after `requireUser` returns is left exactly as unframed as it is
+    // in production.
+    await runAsTenant(actor.id, () => next());
   };
   app.use("/api/*", createEnterpriseGate(requireUser));
   app.route("/api/admin/enterprise", createEnterpriseAdminRoutes(requireUser));
@@ -197,15 +223,17 @@ describe("capability switches", () => {
       allowed: false,
     });
     expect(saved.status).toBe(200);
-    const rows = await database
-      .select()
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "capability.changed"),
-          eq(auditEvents.actorUserId, admin.id),
+    const rows = await asPlatform(() =>
+      database
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "capability.changed"),
+            eq(auditEvents.actorUserId, admin.id),
+          ),
         ),
-      );
+    );
     expect(rows.length).toBeGreaterThan(0);
   });
 
@@ -259,20 +287,25 @@ describe("capability switches", () => {
       auditStore,
       (message) => new Error(message),
     );
+    // Linking a channel is the member's own request, run in the member's frame.
     await expect(
+      asMemberTenant(() =>
+        store.bind({
+          ownerUserId: member.id,
+          transport: "slack",
+          realm: "T1",
+          identity: "U1",
+        }),
+      ),
+    ).rejects.toThrow(/Slack and Teams/);
+    await asMemberTenant(() =>
       store.bind({
         ownerUserId: member.id,
-        transport: "slack",
-        realm: "T1",
-        identity: "U1",
+        transport: "sms",
+        realm: "+1",
+        identity: "+1555",
       }),
-    ).rejects.toThrow(/Slack and Teams/);
-    await store.bind({
-      ownerUserId: member.id,
-      transport: "sms",
-      realm: "+1",
-      identity: "+1555",
-    });
+    );
     expect(bound).toEqual(["+1555"]);
   });
 
@@ -312,10 +345,9 @@ describe("models", () => {
       body: JSON.stringify({ threadId: "t", runId: "r2" }),
     });
     expect(ran.status).toBe(200);
-    const usage = await database
-      .select()
-      .from(modelUsage)
-      .where(eq(modelUsage.agentId, bot));
+    const usage = await asPlatform(() =>
+      database.select().from(modelUsage).where(eq(modelUsage.agentId, bot)),
+    );
     expect(usage.map((row) => [row.model, row.allowed]).sort()).toEqual([
       ["openai/gpt-test", false],
       ["openai/gpt-test", true],
@@ -475,7 +507,9 @@ describe("headless turns obey the same switches", () => {
     });
     try {
       const turn = headlessTurn(bot);
-      await expect(turn.run()).rejects.toThrow(/Use Bots|use Bots|Bots/);
+      await expect(asMemberTenant(() => turn.run())).rejects.toThrow(
+        /Use Bots|use Bots|Bots/,
+      );
       expect(turn.ran).toEqual([]);
     } finally {
       await put(asAdmin, "/api/admin/enterprise/capabilities", {
@@ -492,7 +526,9 @@ describe("headless turns obey the same switches", () => {
     });
     try {
       const turn = headlessTurn(bot);
-      await expect(turn.run()).rejects.toThrow(/allowlist/);
+      await expect(asMemberTenant(() => turn.run())).rejects.toThrow(
+        /allowlist/,
+      );
       expect(turn.ran).toEqual([]);
     } finally {
       await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
@@ -500,7 +536,9 @@ describe("headless turns obey the same switches", () => {
       });
     }
     const allowed = headlessTurn(bot);
-    await expect(allowed.run()).resolves.toMatchObject({ replyText: "Done." });
+    await expect(asMemberTenant(() => allowed.run())).resolves.toMatchObject({
+      replyText: "Done.",
+    });
   });
 
   test("a Bot-to-Bot hand-off meets the same switches", async () => {
@@ -543,8 +581,11 @@ describe("headless turns obey the same switches", () => {
       allowed: false,
     });
     try {
+      // The hand-off runner delivers inside the tenant stamped on the claimed hop: the member's.
       await expect(
-        hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
+        asMemberTenant(() =>
+          hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
+        ),
       ).rejects.toThrow(/Bots/);
     } finally {
       await put(asAdmin, "/api/admin/enterprise/capabilities", {
@@ -558,7 +599,9 @@ describe("headless turns obey the same switches", () => {
     });
     try {
       await expect(
-        hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
+        asMemberTenant(() =>
+          hop.deliver({ work, message: "m", shown: "s", assertion: "a" }),
+        ),
       ).rejects.toThrow(/allowlist/);
     } finally {
       await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
@@ -582,21 +625,27 @@ describe("Team Bots switch", () => {
     });
     try {
       await expect(
-        teamBots.publish({ id: member.id, role: "user" }, bot, {
-          audience: "team",
-          emails: [],
-          groups: [],
-        }),
+        asMemberTenant(() =>
+          teamBots.publish({ id: member.id, role: "user" }, bot, {
+            audience: "team",
+            emails: [],
+            groups: [],
+          }),
+        ),
       ).rejects.toThrow(/Team Bots/);
-      const rows = await database
-        .select()
-        .from(teamBotPublications)
-        .where(eq(teamBotPublications.agentId, bot));
+      const rows = await asPlatform(() =>
+        database
+          .select()
+          .from(teamBotPublications)
+          .where(eq(teamBotPublications.agentId, bot)),
+      );
       expect(rows).toEqual([]);
     } finally {
-      await database
-        .delete(teamBotPublications)
-        .where(eq(teamBotPublications.agentId, bot));
+      await asPlatform(() =>
+        database
+          .delete(teamBotPublications)
+          .where(eq(teamBotPublications.agentId, bot)),
+      );
       await put(asAdmin, "/api/admin/enterprise/capabilities", {
         scopeKind: "organization",
         capability: "teamBots",
@@ -614,7 +663,7 @@ describe("SSO required", () => {
       token: randomUUID(),
       expiresAt: new Date(Date.now() + 86_400_000),
     };
-    await database.insert(sessions).values(signedIn);
+    await asPlatform(() => database.insert(sessions).values(signedIn));
     const providerId = `ent-idp-${suite}`;
     try {
       // With nothing to sign in through, requiring SSO is refused rather than locking people out.
@@ -625,17 +674,21 @@ describe("SSO required", () => {
       );
       expect(refused.status).toBe(409);
       expect(
-        await database
-          .select({ id: sessions.id })
-          .from(sessions)
-          .where(eq(sessions.id, signedIn.id)),
+        await asPlatform(() =>
+          database
+            .select({ id: sessions.id })
+            .from(sessions)
+            .where(eq(sessions.id, signedIn.id)),
+        ),
       ).toHaveLength(1);
-      await database.insert(ssoProviders).values({
-        id: providerId,
-        issuer: "https://idp.acme.test",
-        providerId,
-        domain: "acme.test",
-      });
+      await asPlatform(() =>
+        database.insert(ssoProviders).values({
+          id: providerId,
+          issuer: "https://idp.acme.test",
+          providerId,
+          domain: "acme.test",
+        }),
+      );
       const response = await put(
         asAdmin,
         "/api/admin/enterprise/settings/ssoRequired",
@@ -643,29 +696,35 @@ describe("SSO required", () => {
       );
       expect(response.status).toBe(200);
       expect(
-        await database
-          .select({ id: sessions.id })
-          .from(sessions)
-          .where(eq(sessions.id, signedIn.id)),
+        await asPlatform(() =>
+          database
+            .select({ id: sessions.id })
+            .from(sessions)
+            .where(eq(sessions.id, signedIn.id)),
+        ),
       ).toEqual([]);
-      const [revoked] = await database
-        .select({ payload: auditEvents.payload })
-        .from(auditEvents)
-        .where(
-          and(
-            eq(auditEvents.eventType, "auth.sessions_revoked"),
-            eq(auditEvents.actorUserId, admin.id),
+      const [revoked] = await asPlatform(() =>
+        database
+          .select({ payload: auditEvents.payload })
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.eventType, "auth.sessions_revoked"),
+              eq(auditEvents.actorUserId, admin.id),
+            ),
           ),
-        );
+      );
       expect(revoked?.payload).toMatchObject({ reason: "sso_required" });
     } finally {
-      await database.delete(sessions).where(eq(sessions.id, signedIn.id));
+      await asPlatform(() =>
+        database.delete(sessions).where(eq(sessions.id, signedIn.id)),
+      );
       await put(asAdmin, "/api/admin/enterprise/settings/ssoRequired", {
         value: false,
       });
-      await database
-        .delete(ssoProviders)
-        .where(eq(ssoProviders.id, providerId));
+      await asPlatform(() =>
+        database.delete(ssoProviders).where(eq(ssoProviders.id, providerId)),
+      );
     }
   });
 });
@@ -707,15 +766,17 @@ describe("offboarding", () => {
       { method: "POST" },
     );
     expect((await response.json()).stopped).toEqual([bot]);
-    const [row] = await database
-      .select()
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "computer.terminated"),
-          eq(auditEvents.targetId, member.id),
+    const [row] = await asPlatform(() =>
+      database
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "computer.terminated"),
+            eq(auditEvents.targetId, member.id),
+          ),
         ),
-      );
+    );
     expect(row?.actorUserId).toBe(admin.id);
   });
 
@@ -728,24 +789,29 @@ describe("offboarding", () => {
 
 describe("action recording", () => {
   test("off records nothing; on records the command scrubbed", async () => {
+    // The computer boundary files a member's command in the member's own trail.
     const write = (command: string) =>
-      recordAuditEvent(auditStore, {
-        eventType: "computer.action_allowed",
-        targetType: "computer",
-        targetId: bot,
-        actorUserId: member.id,
-        payload: { bot, action: "computer_run_command", command },
-      });
+      asMemberTenant(() =>
+        recordAuditEvent(auditStore, {
+          eventType: "computer.action_allowed",
+          targetType: "computer",
+          targetId: bot,
+          actorUserId: member.id,
+          payload: { bot, action: "computer_run_command", command },
+        }),
+      );
     await write("echo off");
     await put(asAdmin, "/api/admin/enterprise/settings/actionRecording", {
       value: true,
     });
     await write("curl -H 'Authorization: Bearer s3cr3t' https://x.test");
     await Bun.sleep(100);
-    const rows = await database
-      .select()
-      .from(actionRecords)
-      .where(inArray(actionRecords.botId, [bot]));
+    const rows = await asPlatform(() =>
+      database
+        .select()
+        .from(actionRecords)
+        .where(inArray(actionRecords.botId, [bot])),
+    );
     expect(rows.map((row) => row.command)).toEqual([
       "curl -H 'Authorization: Bearer [REDACTED]' https://x.test",
     ]);
@@ -771,12 +837,14 @@ describe("OpenTelemetry export", () => {
     });
     expect(exporter).toBeDefined();
     const remove = addAuditTap((event) => exporter?.emit(event));
-    await recordAuditEvent(auditStore, {
-      eventType: "computer.action_refused",
-      targetType: "computer",
-      targetId: bot,
-      payload: { bot, tool: "computer_navigate" },
-    });
+    await asMemberTenant(() =>
+      recordAuditEvent(auditStore, {
+        eventType: "computer.action_refused",
+        targetType: "computer",
+        targetId: bot,
+        payload: { bot, tool: "computer_navigate" },
+      }),
+    );
     remove();
     await exporter?.shutdown();
     collector.stop(true);
@@ -815,16 +883,19 @@ describe("SCIM 2.0 through Better Auth", () => {
     delete process.env.SCIM_BEARER_TOKEN;
   });
 
+  // The Better Auth handler runs as the identity layer (`platform`), as app.ts mounts it.
   const scim = (method: string, path: string, body?: unknown, bearer = token) =>
-    auth.handler(
-      new Request(`http://127.0.0.1:3000/api/auth/scim/v2${path}`, {
-        method,
-        headers: {
-          authorization: `Bearer ${bearer}`,
-          "content-type": "application/scim+json",
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      }),
+    asPlatform(() =>
+      auth.handler(
+        new Request(`http://127.0.0.1:3000/api/auth/scim/v2${path}`, {
+          method,
+          headers: {
+            authorization: `Bearer ${bearer}`,
+            "content-type": "application/scim+json",
+          },
+          ...(body ? { body: JSON.stringify(body) } : {}),
+        }),
+      ),
     );
 
   test("a wrong token is refused", async () => {
@@ -842,10 +913,9 @@ describe("SCIM 2.0 through Better Auth", () => {
     });
     const createdBody = await created.json();
     expect(created.status, JSON.stringify(createdBody)).toBe(201);
-    const [person] = await database
-      .select()
-      .from(users)
-      .where(eq(users.email, scimEmail));
+    const [person] = await asPlatform(() =>
+      database.select().from(users).where(eq(users.email, scimEmail)),
+    );
     expect(person).toBeDefined();
 
     const group = await scim("POST", "/Groups", {
@@ -854,10 +924,9 @@ describe("SCIM 2.0 through Better Auth", () => {
       members: [{ value: createdBody.id }],
     });
     expect(group.status, await group.clone().text()).toBe(201);
-    const [grouped] = await database
-      .select()
-      .from(users)
-      .where(eq(users.email, scimEmail));
+    const [grouped] = await asPlatform(() =>
+      database.select().from(users).where(eq(users.email, scimEmail)),
+    );
     expect(grouped?.groups).toEqual([`engineering-${suite}`]);
 
     const deactivated = await scim("PATCH", `/Users/${createdBody.id}`, {
@@ -865,20 +934,24 @@ describe("SCIM 2.0 through Better Auth", () => {
       Operations: [{ op: "replace", path: "active", value: false }],
     });
     expect(deactivated.status, await deactivated.clone().text()).toBe(200);
-    const [denied] = await database
-      .select()
-      .from(revokedAccess)
-      .where(eq(revokedAccess.email, scimEmail));
+    const [denied] = await asPlatform(() =>
+      database
+        .select()
+        .from(revokedAccess)
+        .where(eq(revokedAccess.email, scimEmail)),
+    );
     expect(denied?.revokedBy).toBe("scim:directory");
 
     await scim("PATCH", `/Users/${createdBody.id}`, {
       schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
       Operations: [{ op: "replace", path: "active", value: true }],
     });
-    const after = await database
-      .select()
-      .from(revokedAccess)
-      .where(eq(revokedAccess.email, scimEmail));
+    const after = await asPlatform(() =>
+      database
+        .select()
+        .from(revokedAccess)
+        .where(eq(revokedAccess.email, scimEmail)),
+    );
     expect(after).toEqual([]);
   });
 });

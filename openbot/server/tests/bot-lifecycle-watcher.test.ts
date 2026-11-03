@@ -7,6 +7,7 @@ import {
   resetBotLifecycleForTests,
 } from "../src/agents/lifecycle";
 import type { Database } from "../src/db/client";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 
 /**
  * The pause watcher against a database that can fail on demand. A turn must not start while the
@@ -34,15 +35,21 @@ test("a turn does not start while the pause cannot be read", async () => {
   configureBotLifecycle({ database });
   state.fail = true;
   await expect(
-    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+    runAsTenant("ada", () =>
+      guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+    ),
   ).rejects.toBeInstanceOf(BotPausedError);
 });
 
 test("one failed read in the watcher leaves running turns alone", async () => {
   const { database, state } = flakyDatabase();
   configureBotLifecycle({ database });
-  const ada = await guardBotTurn({ ownerUserId: "ada", agentId: "bot" });
-  const grace = await guardBotTurn({ ownerUserId: "grace", agentId: "other" });
+  const ada = await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
+  const grace = await runAsTenant("grace", () =>
+    guardBotTurn({ ownerUserId: "grace", agentId: "other" }),
+  );
 
   state.fail = true;
   await checkRunningTurnsForTests();
@@ -61,14 +68,50 @@ test("one failed read in the watcher leaves running turns alone", async () => {
 test("a database that stays unreadable stops the turns, and a pause stops them at once", async () => {
   const { database, state } = flakyDatabase();
   configureBotLifecycle({ database });
-  const signal = await guardBotTurn({ ownerUserId: "ada", agentId: "bot" });
+  const signal = await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
   state.fail = true;
   for (let check = 0; check < 3; check += 1) await checkRunningTurnsForTests();
   expect(signal.aborted).toBe(true);
 
   state.fail = false;
-  const next = await guardBotTurn({ ownerUserId: "ada", agentId: "bot" });
+  const next = await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
   state.pausedAt = new Date();
   await checkRunningTurnsForTests();
   expect(next.aborted).toBe(true);
+});
+
+/*
+ * G01-D: the watcher's interval has no frame of its own (or the frame of whoever's turn started it),
+ * so each pause is re-read as the tenant its turn was started in. Every access needs a frame, so a
+ * read left to the interval's frame fails instead of answering as `system`.
+ */
+test("the watcher re-reads each pause as the tenant its turn was started in", async () => {
+  const reads: string[] = [];
+  const query = {
+    from: () => query,
+    where: () => query,
+    limit: async () => {
+      reads.push(currentTenant());
+      return [{ pausedAt: null }];
+    },
+  };
+  configureBotLifecycle({
+    database: { select: () => query } as unknown as Database,
+  });
+  await runAsTenant("ada", () =>
+    guardBotTurn({ ownerUserId: "ada", agentId: "bot" }),
+  );
+  await runAsTenant("grace", () =>
+    guardBotTurn({ ownerUserId: "grace", agentId: "other" }),
+  );
+  reads.length = 0;
+
+  // From grace's frame too: the interval inherits whichever frame first started it.
+  await checkRunningTurnsForTests();
+  await runAsTenant("grace", () => checkRunningTurnsForTests());
+  expect(reads).toEqual(["ada", "grace", "ada", "grace"]);
 });

@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm";
 import postgres from "postgres";
+import type { Database } from "../db/client";
+import { runAsTenant } from "../tenant/context";
 
 /**
  * Live channel activity, from whoever ran an agent to everybody else in the channel.
@@ -54,6 +57,67 @@ export type ChannelActivityEvent = {
    */
   taskUpdated?: true;
 };
+
+/**
+ * Tell every instance that a tenant's task board changed, so each one's sockets refetch it.
+ *
+ * Executed here, not merely built: drizzle's `execute` answers with a lazy query whose statement
+ * runs only when `then` is called, so `void database.execute(...)` sends nothing at all — the board
+ * moved on the instance that made the change and on no other. The returned promise settles once the
+ * NOTIFY has been sent or has failed, and never rejects: a lost announcement leaves other
+ * instances' boards stale until their next refetch, but loses no data, so the caller can fire and
+ * forget it.
+ *
+ * `pg_notify` reads no table, so its frame grants and withholds nothing; the recipients are named by
+ * `memberIds` alone. It still runs in the board owner's own frame, opened here: the projector
+ * announces after its own frame has closed, from whatever frame its caller had (a background run may
+ * have none), and a statement with no frame is refused before it is sent (G01-E). The failure line
+ * carries the error's name and SQLSTATE, not its message, which can quote the statement and its
+ * payload.
+ */
+export function announceTaskUpdate(
+  database: Pick<Database, "execute">,
+  tenantId: string,
+): Promise<void> {
+  const event = {
+    channelId: "",
+    memberIds: [tenantId],
+    lastMessage: null,
+    lastMessageAt: null,
+    lastMessageAgentId: null,
+    taskUpdated: true,
+  } satisfies ChannelActivityEvent;
+  const failed = (error: unknown) => {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : undefined;
+    console.error(
+      JSON.stringify({
+        type: "task-board-announce-failed",
+        tenantId,
+        error: error instanceof Error ? error.name : typeof error,
+        ...(code === undefined ? {} : { code }),
+      }),
+    );
+  };
+  try {
+    // `then` is called inside the frame, so the statement starts while the frame is open.
+    return runAsTenant(tenantId, () =>
+      database
+        .execute(
+          sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
+        )
+        .then(() => undefined, failed),
+    );
+  } catch (error) {
+    // Opening the frame or building the statement threw before there was a query to run.
+    failed(error);
+    return Promise.resolve();
+  }
+}
 
 /** "The roster you hold may be wrong." Carries no delta, because what was lost is not recoverable. */
 export type ChannelResyncEvent = { resync: true };
