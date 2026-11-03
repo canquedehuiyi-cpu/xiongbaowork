@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { asc, eq, inArray, like } from "drizzle-orm";
+import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import type { AuditEventInput } from "../src/audit";
@@ -13,7 +13,10 @@ import {
   GroupRefusedError,
   groupSourceForRun,
 } from "../src/channels/group";
-import { createChannelStore } from "../src/channels/routes";
+import {
+  ChannelNotFoundError,
+  createChannelStore,
+} from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 import { createDatabase } from "../src/db/client";
@@ -91,12 +94,16 @@ async function person(): Promise<AgentActor> {
 function as<T>(actor: AgentActor, work: () => T): T {
   return runAsTenant(actor.id, work);
 }
-async function bot(owner: AgentActor, name: string) {
+async function bot(
+  owner: AgentActor,
+  name: string,
+  visibility: "private" | "public" = "private",
+) {
   const profile = await profileStore.create(owner, {
     name,
     title: "Tester",
     roleDescription: "Answer briefly.",
-    visibility: "private",
+    visibility,
   });
   createdAgents.push(profile.id);
   return profile.id;
@@ -150,10 +157,11 @@ function service(options: {
         audit.push(event);
       },
     },
-    createChannel: async (ownerUserId, agentIds) => {
+    createChannel: async (ownerUserId, agentIds, channelOptions) => {
       const channel = await channelStore.create(
         { id: ownerUserId, role: "user" },
         agentIds,
+        channelOptions,
       );
       createdChannels.push(channel.id);
       return channel;
@@ -171,6 +179,17 @@ function service(options: {
 
 async function drain(conversations: { sweep(): Promise<boolean> }) {
   for (let i = 0; i < 10 && (await conversations.sweep()); i++) {}
+}
+
+/** A person's sign-in email, read in their own frame as their request would. */
+async function emailOf(actor: AgentActor) {
+  const [row] = await as(actor, () =>
+    database
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, actor.id)),
+  );
+  return row?.email ?? "";
 }
 
 describe("group conversations in PostgreSQL", () => {
@@ -545,38 +564,44 @@ describe("group conversations in PostgreSQL", () => {
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {
     const owner = await person();
     const teammate = await person();
-    const ada = await bot(owner, "Ada");
-    const grace = await bot(owner, "Grace");
+    // Each person's request runs in their own frame; the group is stamped `team` (G01-E P11).
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
     const { conversations } = service({
       replies: { [ada]: () => "a", [grace]: () => "g" },
     });
-    const channel = await conversations.create(owner.id, {
-      agentIds: [ada, grace],
-    });
-    await expect(conversations.list(teammate.id, channel.id)).rejects.toThrow(
-      GroupNotFoundError,
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, {
+        agentIds: [ada, grace],
+      }),
     );
-    const [row] = await database
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, teammate.id));
-    await conversations.addMember(owner.id, channel.id, {
-      email: row?.email.toUpperCase(),
-    });
-    const seen = await conversations.list(teammate.id, channel.id);
+    await expect(
+      as(teammate, () => conversations.list(teammate.id, channel.id)),
+    ).rejects.toThrow(GroupNotFoundError);
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, {
+        email: email.toUpperCase(),
+      }),
+    );
+    const seen = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
     // The owner's private Bots stay private: the teammate reads, but cannot run them.
     expect(seen.bots).toEqual([]);
     await expect(
-      conversations.addMember(teammate.id, channel.id, {
-        email: "nobody@example.test",
-      }),
+      as(teammate, () =>
+        conversations.addMember(teammate.id, channel.id, {
+          email: "nobody@example.test",
+        }),
+      ),
     ).rejects.toThrow(GroupRefusedError);
   });
   test("with another person in the group, a reply waits for the owner's permission before anyone sees it", async () => {
     const owner = await person();
     const teammate = await person();
-    const ada = await bot(owner, "Ada");
-    const grace = await bot(owner, "Grace");
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
     let decision: "pending" | "approved" | "denied" = "pending";
     const opened: unknown[] = [];
     const privateShare = createPrivateShareCheck({
@@ -598,40 +623,52 @@ describe("group conversations in PostgreSQL", () => {
       },
       privateShare,
     });
-    const channel = await conversations.create(owner.id, {
-      agentIds: [ada, grace],
-    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, {
+        agentIds: [ada, grace],
+      }),
+    );
 
     // Alone in the group, nothing is asked.
-    await conversations.send(owner.id, channel.id, {
-      id: `${prefix}-alone`,
-      text: "status?",
-      agentId: ada,
-    });
-    await drain(conversations);
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-alone`,
+        text: "status?",
+        agentId: ada,
+      }),
+    );
+    await as(owner, () => drain(conversations));
     expect(opened).toHaveLength(0);
 
-    const [row] = await database
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, teammate.id));
-    await conversations.addMember(owner.id, channel.id, { email: row?.email });
-    await conversations.send(owner.id, channel.id, {
-      id: `${prefix}-shared`,
-      text: "status for everyone?",
-      agentId: ada,
-    });
-    await drain(conversations);
-    const seen = await conversations.list(teammate.id, channel.id);
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-shared`,
+        text: "status for everyone?",
+        agentId: ada,
+      }),
+    );
+    await as(owner, () => drain(conversations));
+    const seen = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
     const held = seen.messages.at(-1);
     expect(held).toMatchObject({ agentId: ada, status: "waiting", text: "" });
     expect(JSON.stringify(seen)).not.toContain("launch slipped");
 
     decision = "approved";
-    await conversations.continueWaiting(`${prefix}-share`, async () => {
-      throw new Error("a held reply is shown, not re-run");
-    });
-    const after = await conversations.list(teammate.id, channel.id);
+    // The owner decides, in their own frame: the waiting row is theirs.
+    await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-share`, async () => {
+        throw new Error("a held reply is shown, not re-run");
+      }),
+    );
+    const after = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
     expect(after.messages.at(-1)).toMatchObject({
       status: "completed",
       text: "From your notes: the launch slipped.",
@@ -725,8 +762,11 @@ describe("group conversations in PostgreSQL", () => {
               if (Date.now() > deadline) break;
               await new Promise((resolve) => setTimeout(resolve, 10));
             }
+            // Read as the teammate's own request would be: in their frame.
             teammateMidRun = JSON.stringify(
-              await conversations.list(teammate.id, channelId),
+              await as(teammate, () =>
+                conversations.list(teammate.id, channelId),
+              ),
             );
             return "From your notes: the launch slipped.";
           },
@@ -760,13 +800,10 @@ describe("group conversations in PostgreSQL", () => {
     const owner = await person();
     const teammate = await person();
     await as(owner, async () => {
-      const ada = await bot(owner, "Ada");
-      const grace = await bot(owner, "Grace");
-      // Bots the teammate may use too, so the teammate can address them in the group.
-      await database
-        .update(agentProfiles)
-        .set({ visibility: "public" })
-        .where(inArray(agentProfiles.agentId, [ada, grace]));
+      // Bots the teammate may use too, so the teammate can address them in the group. Made public
+      // by their owner, which moves them to `team` (G01-E P8b) where the teammate's frame reads them.
+      const ada = await bot(owner, "Ada", "public");
+      const grace = await bot(owner, "Grace", "public");
       const privateShare = createPrivateShareCheck({
         approvals: {
           open: async () =>
@@ -782,12 +819,15 @@ describe("group conversations in PostgreSQL", () => {
           [ada]: async (input) => {
             input.onText?.("From your notes: the launch slipped.");
             await new Promise((resolve) => setTimeout(resolve, 30));
-            // Meanwhile the teammate asks Grace, and another replica runs that turn.
-            await conversations.send(teammate.id, channelId, {
-              id: `${prefix}-handed-teammate`,
-              text: "what is the status?",
-              agentId: grace,
-            });
+            // Meanwhile the teammate asks Grace from their own request, and another replica runs
+            // that turn (in the teammate's frame, from the queued item's stamp).
+            await as(teammate, () =>
+              conversations.send(teammate.id, channelId, {
+                id: `${prefix}-handed-teammate`,
+                text: "what is the status?",
+                agentId: grace,
+              }),
+            );
             await conversations.sweep();
             return "From your notes: the launch slipped.";
           },
@@ -942,45 +982,299 @@ describe("group conversations in PostgreSQL", () => {
     const owner = await person();
     const second = await person();
     const third = await person();
-    const ada = await bot(owner, "Ada");
-    const grace = await bot(owner, "Grace");
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
     const { conversations } = service({
       replies: { [ada]: () => "a", [grace]: () => "g" },
     });
-    const channel = await conversations.create(owner.id, {
-      agentIds: [ada, grace],
-    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, {
+        agentIds: [ada, grace],
+      }),
+    );
     for (const member of [second, third]) {
-      const [row] = await database
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.id, member.id));
-      await conversations.addMember(owner.id, channel.id, {
-        email: row?.email,
-      });
+      const email = await emailOf(member);
+      await as(owner, () =>
+        conversations.addMember(owner.id, channel.id, {
+          email,
+        }),
+      );
     }
     expect(
-      (await conversations.list(owner.id, channel.id)).people.map((p) => [
-        p.userId,
-        p.creator,
-      ]),
+      (
+        await as(owner, () => conversations.list(owner.id, channel.id))
+      ).people.map((p) => [p.userId, p.creator]),
     ).toEqual([
       [owner.id, true],
       [second.id, false],
       [third.id, false],
     ]);
     await expect(
-      conversations.removeMember(second.id, channel.id, third.id),
+      as(second, () =>
+        conversations.removeMember(second.id, channel.id, third.id),
+      ),
     ).rejects.toThrow(GroupRefusedError);
     await expect(
-      conversations.removeMember(owner.id, channel.id, owner.id),
+      as(owner, () =>
+        conversations.removeMember(owner.id, channel.id, owner.id),
+      ),
     ).rejects.toThrow(GroupRefusedError);
-    await conversations.removeMember(second.id, channel.id, second.id);
-    await conversations.removeMember(owner.id, channel.id, third.id);
+    await as(second, () =>
+      conversations.removeMember(second.id, channel.id, second.id),
+    );
+    await as(owner, () =>
+      conversations.removeMember(owner.id, channel.id, third.id),
+    );
     for (const gone of [second, third])
-      await expect(conversations.list(gone.id, channel.id)).rejects.toThrow(
-        GroupNotFoundError,
-      );
+      await expect(
+        as(gone, () => conversations.list(gone.id, channel.id)),
+      ).rejects.toThrow(GroupNotFoundError);
+  });
+
+  /**
+   * G01-E P11: a group is a `team` conversation, read by each member in their own frame. Every
+   * call below runs as the person whose request it would be, so row security (not the store's
+   * joins alone) is what decides who reads what.
+   */
+  test("an invitee reads the group, its people and its transcript; a stranger and a removed member read nothing", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const stranger = await person();
+    const ada = await as(owner, () => bot(owner, "Ada", "public"));
+    const grace = await as(owner, () => bot(owner, "Grace", "public"));
+    const { conversations } = service({
+      replies: { [ada]: () => "Ada here.", [grace]: () => "Grace here." },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-shared-transcript`,
+        text: "hello, both",
+      }),
+    );
+    await as(owner, () => drain(conversations));
+
+    // Stamped `team`, every row of it, and the creator recorded by the database.
+    const stamps = await runAsTenant("platform", () =>
+      database.execute(
+        sql`select (select tenant_id from channels where id = ${channel.id}) as channel,
+                   (select created_by from channels where id = ${channel.id}) as creator,
+                   (select array_agg(distinct tenant_id) from channel_memberships where channel_id = ${channel.id}) as memberships,
+                   (select array_agg(distinct tenant_id) from channel_agents where channel_id = ${channel.id}) as bots,
+                   (select array_agg(distinct tenant_id) from group_messages where channel_id = ${channel.id}) as messages,
+                   (select array_agg(distinct tenant_id) from group_bot_threads where channel_id = ${channel.id}) as threads`,
+      ),
+    );
+    expect(stamps[0]).toEqual({
+      channel: "team",
+      creator: owner.id,
+      memberships: ["team"],
+      bots: ["team"],
+      messages: ["team"],
+      threads: ["team"],
+    });
+
+    const seen = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(seen.bots.map((entry) => entry.id).sort()).toEqual(
+      [ada, grace].sort(),
+    );
+    expect(seen.people.map((entry) => [entry.userId, entry.creator])).toEqual([
+      [owner.id, true],
+      [teammate.id, false],
+    ]);
+    expect(seen.messages.map((message) => message.text)).toEqual([
+      "hello, both",
+      "Ada here.",
+      "Grace here.",
+    ]);
+    // The teammate's roster has it too, through a mapping written in the teammate's own frame.
+    expect(
+      (await as(teammate, () => channelStore.list(teammate))).channels.map(
+        (entry) => entry.id,
+      ),
+    ).toContain(channel.id);
+    const [mapping] = await runAsTenant("platform", () =>
+      database
+        .select({ tenantId: intelligenceChannelMappings.tenantId })
+        .from(intelligenceChannelMappings)
+        .where(
+          and(
+            eq(intelligenceChannelMappings.channelId, channel.id),
+            eq(intelligenceChannelMappings.userId, teammate.id),
+          ),
+        ),
+    );
+    expect(mapping?.tenantId).toBe(teammate.id);
+
+    // The teammate posts too, and their line is theirs.
+    await as(teammate, () =>
+      conversations.send(teammate.id, channel.id, {
+        id: `${prefix}-teammate-line`,
+        text: "and me",
+        agentId: ada,
+      }),
+    );
+    await drain(conversations);
+    expect(
+      (
+        await as(owner, () => conversations.list(owner.id, channel.id))
+      ).messages.some(
+        (message) =>
+          message.text === "and me" && message.ownerUserId === teammate.id,
+      ),
+    ).toBe(true);
+
+    // A stranger reads none of it, through the service or straight from the tables.
+    await expect(
+      as(stranger, () => conversations.list(stranger.id, channel.id)),
+    ).rejects.toThrow(GroupNotFoundError);
+    await expect(
+      as(stranger, () =>
+        conversations.send(stranger.id, channel.id, {
+          id: `${prefix}-stranger-line`,
+          text: "let me in",
+        }),
+      ),
+    ).rejects.toThrow(GroupNotFoundError);
+    const strangerSees = await as(stranger, () =>
+      database.execute(
+        sql`select (select count(*) from channels where id = ${channel.id})::int as channels,
+                   (select count(*) from channel_memberships where channel_id = ${channel.id})::int as memberships,
+                   (select count(*) from group_messages where channel_id = ${channel.id})::int as messages,
+                   (select count(*) from group_bot_threads where channel_id = ${channel.id})::int as threads`,
+      ),
+    );
+    expect(strangerSees[0]).toEqual({
+      channels: 0,
+      memberships: 0,
+      messages: 0,
+      threads: 0,
+    });
+    expect(
+      await as(stranger, () => channelStore.get(stranger, channel.id)),
+    ).toBeNull();
+
+    // Taken out by the person who started it, the teammate loses all of it.
+    await as(owner, () =>
+      conversations.removeMember(owner.id, channel.id, teammate.id),
+    );
+    await expect(
+      as(teammate, () => conversations.list(teammate.id, channel.id)),
+    ).rejects.toThrow(GroupNotFoundError);
+    const removedSees = await as(teammate, () =>
+      database.execute(
+        sql`select (select count(*) from channels where id = ${channel.id})::int as channels,
+                   (select count(*) from group_messages where channel_id = ${channel.id})::int as messages`,
+      ),
+    );
+    expect(removedSees[0]).toEqual({ channels: 0, messages: 0 });
+    expect(
+      (await as(teammate, () => channelStore.list(teammate))).channels.map(
+        (entry) => entry.id,
+      ),
+    ).not.toContain(channel.id);
+  });
+
+  test("only the person who started a group deletes it; a member cannot, and a non-owner resumes no one's wait", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const approvalId = `${prefix}-owners-wait`;
+    const { conversations } = service({
+      replies: {
+        [ada]: () => {
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId,
+          });
+        },
+        [grace]: () => "g",
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-owners-wait-send`,
+        text: "do the thing",
+        agentId: ada,
+      }),
+    );
+    await as(owner, () => drain(conversations));
+
+    // The waiting row is the owner's to resume: the teammate reads it, but it is not theirs.
+    expect(
+      (await as(owner, () => conversations.store.waitingFor(approvalId)))
+        ?.ownerUserId,
+    ).toBe(owner.id);
+    expect(
+      await as(teammate, () => conversations.store.waitingFor(approvalId)),
+    ).toBeNull();
+    let ran = false;
+    await as(teammate, () =>
+      conversations.continueWaiting(approvalId, async () => {
+        ran = true;
+        return { replyText: "resumed by the wrong person" };
+      }),
+    );
+    // Not a group turn of the teammate's, so it ran as a plain continuation and wrote nothing here.
+    expect(ran).toBe(true);
+    expect(
+      JSON.stringify(
+        await as(owner, () => conversations.list(owner.id, channel.id)),
+      ),
+    ).not.toContain("resumed by the wrong person");
+
+    // A member cannot delete the group for everybody, through the store or straight at the row.
+    await expect(
+      as(teammate, () => channelStore.softDelete(teammate, channel.id)),
+    ).rejects.toBeInstanceOf(ChannelNotFoundError);
+    const refusal = await as(teammate, async () => {
+      await database
+        .update(channels)
+        .set({ deletedAt: new Date() })
+        .where(eq(channels.id, channel.id));
+    }).then(
+      () => null,
+      (error: { cause?: { message?: string } }) => error.cause?.message,
+    );
+    // The row guard's refusal (0122), not some unrelated failure.
+    expect(refusal).toContain("only the creator deletes or restores");
+    expect(
+      await as(teammate, () => channelStore.get(teammate, channel.id)),
+    ).not.toBeNull();
+    // They can leave it, which takes it off their roster only.
+    await as(teammate, () =>
+      conversations.removeMember(teammate.id, channel.id, teammate.id),
+    );
+    expect(
+      await as(teammate, () => channelStore.get(teammate, channel.id)),
+    ).toBeNull();
+    expect(
+      await as(owner, () => channelStore.get(owner, channel.id)),
+    ).not.toBeNull();
+
+    // The person who started it can.
+    await expect(
+      as(owner, () => channelStore.softDelete(owner, channel.id)),
+    ).resolves.toBe(true);
+    expect(
+      await as(owner, () => channelStore.get(owner, channel.id)),
+    ).toBeNull();
   });
 
   /**

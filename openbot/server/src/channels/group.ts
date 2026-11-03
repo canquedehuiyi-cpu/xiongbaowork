@@ -41,11 +41,12 @@ import {
   users,
 } from "../db/schema/core";
 import { groupBotThreads, groupMessages } from "../db/schema/group";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import type { TurnRunner } from "../routines/runner";
 import type { TaskProjector } from "../tasks/projector";
-import { runAsTenant } from "../tenant/context";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 
 export const GROUP_TURN_KIND = "group.turn";
@@ -141,7 +142,10 @@ export type GroupStore = {
     status?: GroupMessage["status"];
     details: Record<string, unknown>;
   }): Promise<boolean>;
-  /** Add a person who has signed in here to the group, as the channel's own membership. */
+  /**
+   * Add a person who has signed in here to a shared group, as the channel's own membership. Their
+   * mapping to it is written by the channel store the first time they read it, in their own frame.
+   */
   addMember(channelId: string, email: string): Promise<{ userId: string }>;
   /** Everyone who can read this group's transcript. */
   members(channelId: string): Promise<string[]>;
@@ -149,9 +153,33 @@ export type GroupStore = {
   people(
     channelId: string,
   ): Promise<{ userId: string; email: string; name: string | null }[]>;
-  /** Take a person out of the group: their membership and their mapping to it. */
+  /** Take a person out of the group: their membership, and their own mapping when they leave. */
   removeMember(channelId: string, userId: string): Promise<void>;
 };
+
+/** The executor `database.transaction` hands its callback, which reads like the database itself. */
+type GroupExecutor =
+  | Database
+  | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * The stamp a group's own rows carry: `team` when the channel is a shared group (G01-E), so every
+ * member reads the transcript and the threads in their own frame; otherwise nothing, and the row
+ * takes the writer's frame as it always did (a person's own multi-Bot channel). Read through the
+ * writer's row security, so a channel they cannot see stamps nothing and the write is refused by
+ * the policies rather than filed somewhere else.
+ */
+async function stampFor(
+  database: GroupExecutor,
+  channelId: string,
+): Promise<{ tenantId?: typeof TEAM_TENANT }> {
+  const [row] = await database
+    .select({ tenantId: channels.tenantId })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+  return row?.tenantId === TEAM_TENANT ? { tenantId: TEAM_TENANT } : {};
+}
 
 export function createGroupStore(
   database: Database,
@@ -175,7 +203,13 @@ export function createGroupStore(
       );
       await database
         .insert(groupBotThreads)
-        .values({ ownerUserId, channelId, agentId, threadId: mintThread() })
+        .values({
+          ownerUserId,
+          channelId,
+          agentId,
+          threadId: mintThread(),
+          ...(await stampFor(database, channelId)),
+        })
         .onConflictDoNothing();
       const [row] = await database
         .select()
@@ -217,7 +251,9 @@ export function createGroupStore(
           channelId: turn.channelId,
           text: turn.text,
           details: { agentIds: turn.agentIds },
+          ...(await stampFor(tx, turn.channelId)),
         });
+        // The turn is the sender's work, stamped with them by the frame: it runs as them.
         await tx
           .insert(workItems)
           .values({ kind: GROUP_TURN_KIND, key: turn.messageId, payload: turn })
@@ -239,6 +275,7 @@ export function createGroupStore(
           threadId,
           text: "",
           status: "running",
+          ...(await stampFor(database, turn.channelId)),
         })
         .onConflictDoNothing()
         .returning({ id: groupMessages.id });
@@ -267,6 +304,7 @@ export function createGroupStore(
     async seedOrder(ownerUserId, channelId, agentIds) {
       // Explicit timestamps a millisecond apart, so the order survives rows written in one instant.
       const base = Date.now();
+      const stamp = await stampFor(database, channelId);
       for (const [index, agentId] of agentIds.entries())
         await database
           .insert(groupBotThreads)
@@ -276,6 +314,7 @@ export function createGroupStore(
             agentId,
             threadId: mintThread(),
             createdAt: new Date(base + index),
+            ...stamp,
           })
           .onConflictDoNothing();
     },
@@ -302,6 +341,12 @@ export function createGroupStore(
           and(
             eq(groupMessages.status, "waiting"),
             sql`${groupMessages.details}->>'approvalId' = ${approvalId}`,
+            /*
+             * The decider's own row only. In a shared group every member reads every row, and an
+             * approval id is the one thing that ties a decision to the turn it resumes: another
+             * member's waiting row is theirs to resume, in their frame, never this one's.
+             */
+            eq(groupMessages.ownerUserId, currentTenant()),
           ),
         )
         .limit(1);
@@ -322,7 +367,11 @@ export function createGroupStore(
     async append(row) {
       const created = await database
         .insert(groupMessages)
-        .values({ status: "completed", ...row })
+        .values({
+          status: "completed",
+          ...row,
+          ...(await stampFor(database, row.channelId)),
+        })
         .onConflictDoNothing()
         .returning({ id: groupMessages.id });
       return created.length > 0;
@@ -348,22 +397,35 @@ export function createGroupStore(
     },
     async removeMember(channelId, userId) {
       await database.transaction(async (tx) => {
-        await tx
+        /*
+         * Row security decides who may: the member themselves, or the person who started the group
+         * while still in it (0122). A refusal deletes nothing and says so, rather than reporting a
+         * removal that did not happen.
+         */
+        const removed = await tx
           .delete(channelMemberships)
           .where(
             and(
               eq(channelMemberships.channelId, channelId),
               eq(channelMemberships.userId, userId),
             ),
-          );
-        await tx
-          .delete(intelligenceChannelMappings)
-          .where(
-            and(
-              eq(intelligenceChannelMappings.channelId, channelId),
-              eq(intelligenceChannelMappings.userId, userId),
-            ),
-          );
+          )
+          .returning({ userId: channelMemberships.userId });
+        if (removed.length === 0) throw new GroupNotFoundError();
+        /*
+         * The mapping is the person's own row, stamped with them, so only they can delete it: when
+         * they leave. Someone taken out keeps a mapping that leads nowhere (every read joins the
+         * membership), and finds it again if they are added back.
+         */
+        if (userId === currentTenant())
+          await tx
+            .delete(intelligenceChannelMappings)
+            .where(
+              and(
+                eq(intelligenceChannelMappings.channelId, channelId),
+                eq(intelligenceChannelMappings.userId, userId),
+              ),
+            );
       });
     },
     async addMember(channelId, email) {
@@ -376,17 +438,20 @@ export function createGroupStore(
         throw new GroupRefusedError(
           "Nobody with that email has signed in to this deployment yet.",
         );
-      await database.transaction(async (tx) => {
-        await tx
-          .insert(channelMemberships)
-          .values({ channelId, userId: person.id })
-          .onConflictDoNothing();
-        // The channel store reads a member's channel through their own mapping row.
-        await tx
-          .insert(intelligenceChannelMappings)
-          .values({ userId: person.id, channelId, threadId: mintThread() })
-          .onConflictDoNothing();
-      });
+      /*
+       * Only a shared group takes other people (G01-E). A person's own channel is stamped with them,
+       * so a membership written into it for somebody else would be a row that somebody else can
+       * never read: they would be "in" a conversation they cannot open.
+       */
+      if ((await stampFor(database, channelId)).tenantId !== TEAM_TENANT)
+        throw new GroupRefusedError(
+          "Only a group conversation started here can have other people added to it.",
+        );
+      // Stamped `team` from the inviter's frame; the inviter is a member, which is what admits it.
+      await database
+        .insert(channelMemberships)
+        .values({ channelId, userId: person.id, tenantId: TEAM_TENANT })
+        .onConflictDoNothing();
       return { userId: person.id };
     },
   };
@@ -552,6 +617,7 @@ export function createGroupConversations(deps: {
   createChannel?: (
     ownerUserId: string,
     agentIds: string[],
+    options: { shared: true },
   ) => Promise<{ id: string }>;
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
@@ -1088,7 +1154,10 @@ export function createGroupConversations(deps: {
         throw new GroupRefusedError("Each Bot can be in a group once.");
       if (!deps.createChannel)
         throw new GroupRefusedError("Groups cannot be created here.");
-      const channel = await deps.createChannel(owner, body.agentIds);
+      // Shared, so the people later added to it read it in their own frames (G01-E).
+      const channel = await deps.createChannel(owner, body.agentIds, {
+        shared: true,
+      });
       await deps.store.seedOrder(owner, channel.id, body.agentIds);
       return channel;
     },
