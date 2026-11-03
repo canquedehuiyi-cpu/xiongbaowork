@@ -1601,6 +1601,7 @@ export function createApp(
         auditStore,
         canUseBot,
         sandboxedStore,
+        adminScope?.adminCapability,
       ),
     );
   }
@@ -1826,7 +1827,11 @@ export function createApp(
   if (sandboxedStore) {
     app.route(
       "/api/sandboxed",
-      createSandboxedRoutes(sandboxedStore, requireUser),
+      createSandboxedRoutes(
+        sandboxedStore,
+        requireUser,
+        adminScope?.adminCapability,
+      ),
     );
   }
 
