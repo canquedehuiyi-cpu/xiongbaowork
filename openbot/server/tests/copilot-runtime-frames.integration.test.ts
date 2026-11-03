@@ -599,3 +599,91 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
     expect(hers.length).toBe(2);
   });
 });
+
+/*
+ * G01-E P17: `/threads/clear` empties the caller's own conversations out of the in-memory store and
+ * nobody else's. The inherited method wipes the whole process-wide store, so one signed-in person's
+ * Clear button emptied every person's live history (and their connect replays) until a restart.
+ *
+ * Last in the file on purpose: it clears every thread Alice and Bob hold here.
+ */
+describe("clearing threads clears only the caller's own (G01-E P17)", () => {
+  async function turn(person: string, bot: string): Promise<string> {
+    const threadId = `rtf-p17-clear-${randomUUID()}`;
+    threadIds.push(threadId);
+    const ran = await post(
+      `/api/copilotkit/agent/${bot}/run`,
+      person,
+      runInput(threadId),
+    );
+    expect(ran.text).toContain("RUN_FINISHED");
+    await eventually(() =>
+      runAsTenant(person, () =>
+        database
+          .select({ id: threadRuns.id })
+          .from(threadRuns)
+          .where(eq(threadRuns.threadId, threadId)),
+      ),
+    );
+    return threadId;
+  }
+
+  /** What `person` can still read of `threadId` out of the runtime. */
+  async function readable(person: string, threadId: string, bot: string) {
+    const listed = threadIdsIn(
+      (await get(`/api/copilotkit/threads`, person)).body,
+    );
+    const events = (
+      await get(`/api/copilotkit/threads/${threadId}/events`, person)
+    ).body?.events as unknown[] | undefined;
+    const connected = await post(
+      `/api/copilotkit/agent/${bot}/connect`,
+      person,
+      runInput(threadId),
+    );
+    return {
+      listed: listed.includes(threadId),
+      events: events?.length ?? 0,
+      replays: connected.text.includes("frames answer"),
+    };
+  }
+
+  test("Bob's clear leaves Alice's threads intact; Alice's own clear empties hers and leaves Bob's", async () => {
+    const hers = await turn(alice, bots.aliceRemote);
+    const his = await turn(bob, bots.catalogue);
+    const intact = { listed: true, replays: true };
+
+    const cleared = await post(`/api/copilotkit/threads/clear`, bob, {});
+    expect(cleared.status).toBe(204);
+    expect(await readable(alice, hers, bots.aliceRemote)).toMatchObject(intact);
+    expect(
+      (await readable(alice, hers, bots.aliceRemote)).events,
+    ).toBeGreaterThan(0);
+    // His own clear did clear his own.
+    expect(await readable(bob, his, bots.catalogue)).toEqual({
+      listed: false,
+      events: 0,
+      replays: false,
+    });
+
+    const his2 = await turn(bob, bots.catalogue);
+    expect(
+      (await post(`/api/copilotkit/threads/clear`, alice, {})).status,
+    ).toBe(204);
+    expect(await readable(alice, hers, bots.aliceRemote)).toEqual({
+      listed: false,
+      events: 0,
+      replays: false,
+    });
+    expect(await readable(bob, his2, bots.catalogue)).toMatchObject(intact);
+
+    // Memory only, as the inherited clear is: the stored record of her thread is untouched.
+    const rows = await runAsTenant(alice, () =>
+      database
+        .select({ id: threadRuns.id })
+        .from(threadRuns)
+        .where(eq(threadRuns.threadId, hers)),
+    );
+    expect(rows.length).toBe(1);
+  });
+});

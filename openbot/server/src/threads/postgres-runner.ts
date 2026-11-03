@@ -675,4 +675,29 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       return Promise.resolve(false);
     return super.stop(request);
   }
+  /**
+   * `/threads/clear`: the caller's own conversations out of the in-memory store, and nobody else's.
+   *
+   * The inherited method empties the whole process-wide store — every tenant's live history and
+   * connect replay, for whoever pressed Clear. Like it, this touches memory only (the stored rows
+   * are the record and stay), and takes the write scope: a thread the index gives exactly this
+   * tenant, not `system`'s. The ownership entries stay, so a cleared id is still this tenant's and
+   * nobody else can take it. Outside a frame nothing is cleared.
+   */
+  override clearThreads(): void {
+    if (!isTenantFramed()) return;
+    const tenant = currentTenant();
+    // The store's own removal, so its byte accounting stays right. Private in its typings; a
+    // runtime without it clears nothing rather than everything.
+    const store = ɵGLOBAL_STORE as unknown as {
+      peek(threadId: string): object | undefined;
+      removeThread?: (threadId: string, entry: object) => void;
+    };
+    if (typeof store.removeThread !== "function") return;
+    for (const [threadId, owner] of threadOwners) {
+      if (owner !== tenant) continue;
+      const entry = store.peek(threadId);
+      if (entry) store.removeThread(threadId, entry);
+    }
+  }
 }
