@@ -537,10 +537,17 @@ describe("group conversations in PostgreSQL", () => {
         replies: {
           [ada]: async (input) => {
             input.onText?.("Hal");
-            await new Promise((resolve) => setTimeout(resolve, 30));
-            seenMidRun =
-              (await conversations.list(owner.id, channelId)).messages.at(-1)
-                ?.text ?? "";
+            // The partial text is written asynchronously (flush() does not await store.progress), so
+            // a fixed sleep could read the row before it lands. Wait (bounded) for it instead; if it
+            // never lands the assertion below still fails.
+            const deadline = Date.now() + 2000;
+            for (;;) {
+              seenMidRun =
+                (await conversations.list(owner.id, channelId)).messages.at(-1)
+                  ?.text ?? "";
+              if (seenMidRun === "Hal" || Date.now() > deadline) break;
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
             return "Hallo";
           },
           [grace]: () => {
