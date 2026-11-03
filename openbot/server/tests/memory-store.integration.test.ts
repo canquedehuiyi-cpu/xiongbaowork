@@ -27,8 +27,9 @@ const server = `${prefix}-connector`;
 const ref = `${server}/read_documents`;
 /**
  * Each person's memory is reached from their own requests, so whatever one of them does here runs in
- * their own tenant: the owner's Bot, connector, grants and facts in theirs, the other person's Bot and
- * reads in theirs. Account rows and the sweep after the file are the deployment's, as `platform`.
+ * their own tenant: the owner's Bot, grants and facts in theirs, the other person's Bot and reads in
+ * theirs. The connector is the team's, as an administrator's add writes it (G01-E P10). Account rows,
+ * the connector and the sweep after the file are the deployment's, as `platform`.
  */
 const asOwner = <T>(fn: () => Promise<T>) => runAsTenant(owner, fn);
 const asOther = <T>(fn: () => Promise<T>) => runAsTenant(other, fn);
@@ -72,6 +73,34 @@ beforeAll(async () => {
       visibility: "private",
     });
   });
+  // The connector as an administrator's add leaves it: the team's server and tools (G01-E P10; a
+  // person's frame can no longer write either, 0127).
+  await runAsTenant("platform", async () => {
+    await database.insert(mcpServers).values({
+      tenantId: "team",
+      id: server,
+      title: "Memory connector",
+      vendor: "Fixture",
+      url: "https://memory.example.test/mcp",
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values([
+      {
+        tenantId: "team",
+        serverId: server,
+        name: "read_documents",
+        effect: "read",
+        inputSchema: {},
+      },
+      {
+        tenantId: "team",
+        serverId: server,
+        name: "write_document",
+        effect: "write",
+        inputSchema: {},
+      },
+    ]);
+  });
   await asOwner(async () => {
     await database.insert(agents).values({
       id: bot,
@@ -87,27 +116,6 @@ beforeAll(async () => {
       avatarSeed: bot,
       visibility: "private",
     });
-    await database.insert(mcpServers).values({
-      id: server,
-      title: "Memory connector",
-      vendor: "Fixture",
-      url: "https://memory.example.test/mcp",
-      provenance: "custom",
-    });
-    await database.insert(mcpTools).values([
-      {
-        serverId: server,
-        name: "read_documents",
-        effect: "read",
-        inputSchema: {},
-      },
-      {
-        serverId: server,
-        name: "write_document",
-        effect: "write",
-        inputSchema: {},
-      },
-    ]);
     await plugins.grant("mcp", ref, bot, owner);
     await plugins.grant("mcp", `${server}/write_document`, bot, owner);
   });

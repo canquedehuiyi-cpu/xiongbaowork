@@ -130,6 +130,10 @@ const store = createPluginStore({
         .select({
           encryptedValue: credentials.encryptedValue,
           revokedAt: credentials.revokedAt,
+          // What the vault's own reader reports, which the store checks a server's secret against.
+          id: credentials.id,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
         })
         .from(credentials)
         .where(eq(credentials.id, id));

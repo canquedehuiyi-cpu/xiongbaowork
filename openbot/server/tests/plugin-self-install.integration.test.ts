@@ -169,6 +169,37 @@ beforeAll(async () => {
       .onConflictDoNothing();
   }
 
+  /*
+   * Written as rows rather than through `addServer`, which refreshes the app's tool list from the
+   * vendor before it answers: nothing here may reach a vendor, so the tool a Waker is offered is
+   * seeded beside the server. `listForAgent` offers only a tool the server advertises. Stamped as an
+   * administrator's add stamps them: the team's (G01-E P10; a person's frame can no longer write
+   * either, 0127), which is a deployment write, so as `platform`.
+   */
+  await runAsTenant("platform", async () => {
+    await database
+      .insert(mcpServers)
+      .values({
+        tenantId: "team",
+        id: appKey,
+        title: appKey,
+        vendor: "test",
+        url: "https://example.invalid/mcp",
+        provenance: "custom",
+        addedBy: adminEmail,
+      })
+      .onConflictDoNothing();
+    await database
+      .insert(mcpTools)
+      .values({
+        tenantId: "team",
+        serverId: appKey,
+        name: toolName,
+        description: "Search.",
+      })
+      .onConflictDoNothing();
+  });
+
   await runAsTenant(tenant, async () => {
     for (const [id, owner] of [
       [aliceBot, alice],
@@ -194,26 +225,6 @@ beforeAll(async () => {
         .onConflictDoNothing();
     }
 
-    /*
-     * Written as rows rather than through `addServer`, which refreshes the app's tool list from the
-     * vendor before it answers: nothing here may reach a vendor, so the tool a Waker is offered is
-     * seeded beside the server. `listForAgent` offers only a tool the server advertises.
-     */
-    await database
-      .insert(mcpServers)
-      .values({
-        id: appKey,
-        title: appKey,
-        vendor: "test",
-        url: "https://example.invalid/mcp",
-        provenance: "custom",
-        addedBy: adminEmail,
-      })
-      .onConflictDoNothing();
-    await database
-      .insert(mcpTools)
-      .values({ serverId: appKey, name: toolName, description: "Search." })
-      .onConflictDoNothing();
     await store.installSkill({
       slug: deploymentSkill,
       title: deploymentSkill,
@@ -244,6 +255,9 @@ afterAll(async () => {
           inArray(pluginInstallListings.ref, [appKey, deploymentSkill]),
         ),
       );
+    // The team's server and tool, which only the platform (or a capable administrator) removes.
+    await database.delete(mcpTools).where(eq(mcpTools.serverId, appKey));
+    await database.delete(mcpServers).where(eq(mcpServers.id, appKey));
   });
   await runAsTenant(tenant, async () => {
     await database
@@ -253,8 +267,6 @@ afterAll(async () => {
       .delete(skills)
       .where(inArray(skills.slug, [deploymentSkill, aliceSkill]));
     await database.delete(agents).where(inArray(agents.id, bots));
-    await database.delete(mcpTools).where(eq(mcpTools.serverId, appKey));
-    await database.delete(mcpServers).where(eq(mcpServers.id, appKey));
   });
   await database
     .delete(users)

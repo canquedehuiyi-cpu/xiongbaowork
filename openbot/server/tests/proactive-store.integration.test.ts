@@ -53,10 +53,11 @@ const memory = createMemoryStore(database);
 const ingestion = createMemoryIngestion({ store: memory, plugins });
 
 /*
- * Settings, suggestions, memories, the Bots and the connector they read are the owner's, so each
- * case runs inside the owner's tenant, as the owner's own requests and their runs do (G01). Where a
- * case asks as `other`, it still asks from inside the owner's tenant, so what refuses `other` is the
- * store's own owner check, not the row policy. People and teardown are the deployment's: `platform`.
+ * Settings, suggestions, memories and the Bots are the owner's, so each case runs inside the owner's
+ * tenant, as the owner's own requests and their runs do (G01). Where a case asks as `other`, it still
+ * asks from inside the owner's tenant, so what refuses `other` is the store's own owner check, not
+ * the row policy. People, the connector the Bots read (the team's, as an administrator's add writes
+ * it, G01-E P10) and teardown are the deployment's: `platform`.
  */
 function asOwner<T>(work: () => T): T {
   return runAsTenant(owner, work);
@@ -72,6 +73,25 @@ beforeAll(async () => {
       { id: other, email: `${other}@example.test` },
     ]),
   );
+  // The connector as an administrator's add leaves it: the team's server and tool (G01-E P10; a
+  // person's frame can no longer write either, 0127).
+  await asDeployment(async () => {
+    await database.insert(mcpServers).values({
+      tenantId: "team",
+      id: server,
+      title: "Issue tracker",
+      vendor: "Fixture",
+      url: "https://issues.example.test/mcp",
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values({
+      tenantId: "team",
+      serverId: server,
+      name: "list_issues",
+      effect: "read",
+      inputSchema: {},
+    });
+  });
   await asOwner(async () => {
     await database.insert(agents).values([
       { id: bot, name: "Research Bot", type: "built_in", configuration: {} },
@@ -92,19 +112,6 @@ beforeAll(async () => {
         visibility: "private" as const,
       })),
     );
-    await database.insert(mcpServers).values({
-      id: server,
-      title: "Issue tracker",
-      vendor: "Fixture",
-      url: "https://issues.example.test/mcp",
-      provenance: "custom",
-    });
-    await database.insert(mcpTools).values({
-      serverId: server,
-      name: "list_issues",
-      effect: "read",
-      inputSchema: {},
-    });
     await plugins.grant("mcp", ref, bot, owner);
   });
 });

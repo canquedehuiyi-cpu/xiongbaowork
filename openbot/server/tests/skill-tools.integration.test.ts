@@ -51,9 +51,10 @@ const withheldRef = `${server}/delete_everything`;
 const actor = { id: author, isAdmin: true };
 
 /**
- * The author's own tenant, which holds the Bot, the server and every skill here: each save, grant and
- * read is a request they make, so it runs in their frame. Their account row and the sweep after the
- * file are the deployment's, and run as `platform`.
+ * The author's own tenant, which holds the Bot and every skill here: each save, grant and read is a
+ * request they make, so it runs in their frame. Their account row, the server (the team's, as an
+ * administrator's add writes it, G01-E P10) and the sweep after the file are the deployment's, and run
+ * as `platform`.
  */
 const asAuthor = <T>(fn: () => Promise<T>) => runAsTenant(author, fn);
 
@@ -64,14 +65,13 @@ beforeAll(async () => {
       .values({ id: author, email: `${author}@example.test`, name: author })
       .onConflictDoNothing(),
   );
-  await asAuthor(async () => {
-    await database
-      .insert(agents)
-      .values({ id: bot, name: bot, type: "remote_ag_ui", configuration: {} })
-      .onConflictDoNothing();
+  // The server as an administrator's add leaves it: the team's, with its two tools (G01-E P10; a
+  // person's frame can no longer write either, 0127).
+  await runAsTenant("platform", async () => {
     await database
       .insert(mcpServers)
       .values({
+        tenantId: "team",
         id: server,
         title: "A test server",
         vendor: "Test",
@@ -81,13 +81,25 @@ beforeAll(async () => {
     await database
       .insert(mcpTools)
       .values([
-        { serverId: server, name: "search", description: "Find things." },
         {
+          tenantId: "team",
+          serverId: server,
+          name: "search",
+          description: "Find things.",
+        },
+        {
+          tenantId: "team",
           serverId: server,
           name: "delete_everything",
           description: "Do not.",
         },
       ])
+      .onConflictDoNothing();
+  });
+  await asAuthor(async () => {
+    await database
+      .insert(agents)
+      .values({ id: bot, name: bot, type: "remote_ag_ui", configuration: {} })
       .onConflictDoNothing();
 
     // The Bot holds exactly one of the two.

@@ -83,13 +83,17 @@ test("catalogue errors preserve the saved app and propagate to the startup warni
 
 /*
  * G01-D: the backfill is boot maintenance across every tenant, so it runs as `platform`. Unframed it
- * read as `system` and never saw an app a person enabled in their own workspace.
+ * read as `system` and never saw an app somebody enabled for the deployment. Since G01-E P10 that app
+ * is the team's (an administrator's add stamps it `team`, and no person's frame may write one), which
+ * the `system` frame does not see either (I4).
  */
-test("fills an app a person enabled in their own workspace, and leaves it theirs", async () => {
-  const tenant = `logo-tenant-${randomUUID()}`;
+test("fills an app the team enabled, and leaves it the team's", async () => {
+  const tenant = "team";
   const id = `logo-${randomUUID()}`;
-  await runAsTenant(tenant, () =>
+  // As the administrator's add leaves it, written as the deployment (`team` is nobody's frame).
+  await runAsTenant("platform", () =>
     database.insert(mcpServers).values({
+      tenantId: tenant,
       id,
       title: "Example",
       vendor: "Composio",
