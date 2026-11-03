@@ -348,7 +348,9 @@ tests/task-card-run-error.test.ts
 tests/tasks-open-target.integration.test.ts
 tests/tasks-projector.test.ts
 tests/tasks-routes-filters.integration.test.ts
+tests/team-bot-visibility-parity.integration.test.ts
 tests/team-bots.integration.test.ts
+tests/team-tenant-rls.integration.test.ts
 tests/tenant-cross-tenant-404.test.ts
 tests/tenant-cross-tenant-agents.test.ts
 tests/tenant-cross-tenant-approvals.test.ts
