@@ -13,6 +13,7 @@ import {
 } from "../src/db/schema";
 import { createPluginRoutes } from "../src/plugins/routes";
 import { createPluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -39,52 +40,67 @@ const unwrittenSlug = `unwritten-${suite}`;
 const botlessSlug = `botless-${suite}`;
 const missingBot = `agent_missing_${suite}`;
 
+/**
+ * The one tenant Alice, Bob and their administrator share: a skill name reused inside it is what this
+ * file is about, so every person's row and request is in this frame, as the route would run it. The
+ * Bot the deployment publishes for everybody is catalogue every tenant reads, written as `system`;
+ * account rows and the sweep after the file are the deployment's, as `platform`.
+ */
+const workspace = `tenant_skill_uninstall_${suite}`;
+const inWorkspace = <T>(fn: () => Promise<T>) => runAsTenant(workspace, fn);
+
 beforeAll(async () => {
   for (const id of [alice, bob]) {
-    await database
-      .insert(users)
-      .values({ id, email: `${id}@example.test`, name: id })
-      .onConflictDoNothing();
+    await runAsTenant("platform", () =>
+      database
+        .insert(users)
+        .values({ id, email: `${id}@example.test`, name: id })
+        .onConflictDoNothing(),
+    );
   }
-  for (const [id, owner] of [
-    [aliceBot, alice],
-    [sharedBot, null],
+  for (const [id, owner, tenant] of [
+    [aliceBot, alice, workspace],
+    [sharedBot, null, "system"],
   ] as const) {
-    await database
-      .insert(agents)
-      .values({ id, name: id, type: "remote_ag_ui", configuration: {} })
-      .onConflictDoNothing();
-    await database
-      .insert(agentProfiles)
-      .values({
-        agentId: id,
-        ownerUserId: owner,
-        title: id,
-        roleDescription: "For a test.",
-        avatarSeed: id,
-        visibility: "private",
-      })
-      .onConflictDoNothing();
+    await runAsTenant(tenant, async () => {
+      await database
+        .insert(agents)
+        .values({ id, name: id, type: "remote_ag_ui", configuration: {} })
+        .onConflictDoNothing();
+      await database
+        .insert(agentProfiles)
+        .values({
+          agentId: id,
+          ownerUserId: owner,
+          title: id,
+          roleDescription: "For a test.",
+          avatarSeed: id,
+          visibility: "private",
+        })
+        .onConflictDoNothing();
+    });
   }
 });
 
-afterAll(async () => {
-  await database
-    .delete(skills)
-    .where(
-      inArray(skills.slug, [
-        personalSlug,
-        keptSlug,
-        deploymentSlug,
-        unwrittenSlug,
-        botlessSlug,
-      ]),
-    );
-  await database
-    .delete(agents)
-    .where(inArray(agents.id, [aliceBot, sharedBot]));
-  await database.delete(users).where(inArray(users.id, [alice, bob]));
-});
+afterAll(() =>
+  runAsTenant("platform", async () => {
+    await database
+      .delete(skills)
+      .where(
+        inArray(skills.slug, [
+          personalSlug,
+          keptSlug,
+          deploymentSlug,
+          unwrittenSlug,
+          botlessSlug,
+        ]),
+      );
+    await database
+      .delete(agents)
+      .where(inArray(agents.id, [aliceBot, sharedBot]));
+    await database.delete(users).where(inArray(users.id, [alice, bob]));
+  }),
+);
 
 function routesAs(actor: {
   id: string;
@@ -145,65 +161,74 @@ const offered = async (routes: Routes, agentId: string) => {
 };
 
 describe("a skill name written again after the skill was uninstalled", () => {
-  test("a person's Bot does not take on the next author's instructions", async () => {
-    expect(
-      (await writeSkill(asAlice(), personalSlug, "Alice's standup.")).status,
-    ).toBe(200);
-    expect(
-      (await writeSkill(asAlice(), keptSlug, "Alice's other skill.")).status,
-    ).toBe(200);
-    expect((await grant(asAlice(), personalSlug, aliceBot)).status).toBe(200);
-    expect((await grant(asAlice(), keptSlug, aliceBot)).status).toBe(200);
+  test("a person's Bot does not take on the next author's instructions", () =>
+    inWorkspace(async () => {
+      expect(
+        (await writeSkill(asAlice(), personalSlug, "Alice's standup.")).status,
+      ).toBe(200);
+      expect(
+        (await writeSkill(asAlice(), keptSlug, "Alice's other skill.")).status,
+      ).toBe(200);
+      expect((await grant(asAlice(), personalSlug, aliceBot)).status).toBe(200);
+      expect((await grant(asAlice(), keptSlug, aliceBot)).status).toBe(200);
 
-    expect((await uninstall(asAlice(), personalSlug)).status).toBe(200);
-    expect(
-      (await writeSkill(asBob(), personalSlug, "Bob's words.")).status,
-    ).toBe(200);
-    expect((await grant(asBob(), personalSlug, aliceBot)).status).toBe(403);
+      expect((await uninstall(asAlice(), personalSlug)).status).toBe(200);
+      expect(
+        (await writeSkill(asBob(), personalSlug, "Bob's words.")).status,
+      ).toBe(200);
+      expect((await grant(asBob(), personalSlug, aliceBot)).status).toBe(403);
 
-    expect(await offered(asAlice(), aliceBot)).toEqual([
-      { slug: keptSlug, instructions: "Alice's other skill." },
-    ]);
-  });
+      expect(await offered(asAlice(), aliceBot)).toEqual([
+        { slug: keptSlug, instructions: "Alice's other skill." },
+      ]);
+    }));
 
-  test("a Bot the deployment shares does not take on a person's instructions", async () => {
-    expect(
-      (await writeSkill(asAdmin(), deploymentSlug, "Triage by severity.", true))
-        .status,
-    ).toBe(200);
-    expect((await grant(asAdmin(), deploymentSlug, sharedBot)).status).toBe(
-      200,
-    );
+  test("a Bot the deployment shares does not take on a person's instructions", () =>
+    inWorkspace(async () => {
+      expect(
+        (
+          await writeSkill(
+            asAdmin(),
+            deploymentSlug,
+            "Triage by severity.",
+            true,
+          )
+        ).status,
+      ).toBe(200);
+      expect((await grant(asAdmin(), deploymentSlug, sharedBot)).status).toBe(
+        200,
+      );
 
-    expect((await uninstall(asAdmin(), deploymentSlug)).status).toBe(200);
-    expect(
-      (await writeSkill(asAlice(), deploymentSlug, "Alice's words.")).status,
-    ).toBe(200);
-    expect((await grant(asAlice(), deploymentSlug, sharedBot)).status).toBe(
-      403,
-    );
+      expect((await uninstall(asAdmin(), deploymentSlug)).status).toBe(200);
+      expect(
+        (await writeSkill(asAlice(), deploymentSlug, "Alice's words.")).status,
+      ).toBe(200);
+      expect((await grant(asAlice(), deploymentSlug, sharedBot)).status).toBe(
+        403,
+      );
 
-    expect(await offered(asAdmin(), sharedBot)).toEqual([]);
-  });
+      expect(await offered(asAdmin(), sharedBot)).toEqual([]);
+    }));
 
   /*
    * The same room, entered before any skill exists rather than after one is uninstalled. An
    * administrator's grant skipped the existence check every other caller gets, and a Bot's skills are
    * read by slug alone, so the grant waited for whoever wrote a skill under that name next.
    */
-  test("a shared Bot cannot be granted a skill nobody has written yet", async () => {
-    const refused = await grant(asAdmin(), unwrittenSlug, sharedBot);
-    expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({
-      error: `There is no skill called ${unwrittenSlug}.`,
-    });
+  test("a shared Bot cannot be granted a skill nobody has written yet", () =>
+    inWorkspace(async () => {
+      const refused = await grant(asAdmin(), unwrittenSlug, sharedBot);
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toEqual({
+        error: `There is no skill called ${unwrittenSlug}.`,
+      });
 
-    expect(
-      (await writeSkill(asAlice(), unwrittenSlug, "Alice's words.")).status,
-    ).toBe(200);
+      expect(
+        (await writeSkill(asAlice(), unwrittenSlug, "Alice's words.")).status,
+      ).toBe(200);
 
-    expect(await offered(asAdmin(), sharedBot)).toEqual([]);
-  });
+      expect(await offered(asAdmin(), sharedBot)).toEqual([]);
+    }));
 
   /*
    * The other half of a grant that could never do anything: the skill is there and the Bot is not.
@@ -211,35 +236,37 @@ describe("a skill name written again after the skill was uninstalled", () => {
    * to fail at the insert and answer 500 with no body. It is a refusal with a sentence now, and
    * nothing is stored.
    */
-  test("a skill cannot be granted to a Bot nobody has", async () => {
-    expect(
-      (await writeSkill(asAdmin(), botlessSlug, "Triage by severity.", true))
-        .status,
-    ).toBe(200);
+  test("a skill cannot be granted to a Bot nobody has", () =>
+    inWorkspace(async () => {
+      expect(
+        (await writeSkill(asAdmin(), botlessSlug, "Triage by severity.", true))
+          .status,
+      ).toBe(200);
 
-    const refused = await grant(asAdmin(), botlessSlug, missingBot);
+      const refused = await grant(asAdmin(), botlessSlug, missingBot);
 
-    expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({ error: "There is no such Bot." });
-    expect(
-      await database
-        .select({ ref: pluginGrants.ref })
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toEqual({ error: "There is no such Bot." });
+      expect(
+        await database
+          .select({ ref: pluginGrants.ref })
+          .from(pluginGrants)
+          .where(eq(pluginGrants.agentId, missingBot)),
+      ).toEqual([]);
+    }));
+
+  test("uninstalling removes that skill's grants and no other", () =>
+    inWorkspace(async () => {
+      const held = await database
+        .select({ ref: pluginGrants.ref, agentId: pluginGrants.agentId })
         .from(pluginGrants)
-        .where(eq(pluginGrants.agentId, missingBot)),
-    ).toEqual([]);
-  });
+        .where(
+          and(
+            eq(pluginGrants.kind, "skill"),
+            inArray(pluginGrants.agentId, [aliceBot, sharedBot]),
+          ),
+        );
 
-  test("uninstalling removes that skill's grants and no other", async () => {
-    const held = await database
-      .select({ ref: pluginGrants.ref, agentId: pluginGrants.agentId })
-      .from(pluginGrants)
-      .where(
-        and(
-          eq(pluginGrants.kind, "skill"),
-          inArray(pluginGrants.agentId, [aliceBot, sharedBot]),
-        ),
-      );
-
-    expect(held).toEqual([{ ref: keptSlug, agentId: aliceBot }]);
-  });
+      expect(held).toEqual([{ ref: keptSlug, agentId: aliceBot }]);
+    }));
 });

@@ -7,6 +7,14 @@ import {
 } from "../src/agents/handoff-runner";
 import { signHandoffDeliveryRun } from "../src/agents/handoff-signing";
 import type { AuditStore } from "../src/audit";
+import {
+  assertPersonTenant,
+  currentTenant,
+  requireTenant,
+  runAsClaimedTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../src/tenant/context";
 import type { WorkItem, WorkQueue } from "../src/work/queue";
 
 /**
@@ -48,11 +56,17 @@ function runner(options?: {
   const delivered: Array<{ message: string; assertion: string }> = [];
   const offered: HandoffWork[] = [];
   const delays: number[] = [];
+  /** The tenant each outside effect ran as: the claimed row's, or nobody's. */
+  const tenants = {
+    deliver: [] as string[],
+    audit: [] as string[],
+    offer: [] as string[],
+  };
 
   const queue = {
     claim: async () =>
       options?.claimed ?? [
-        { kind: "bot.message", key: "run-1:abc", payload: WORK, attempts: 1 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 1 },
       ],
     renew: async () => true,
     finish: async ({ key, owner }: { key: string; owner: string }) => {
@@ -80,12 +94,14 @@ function runner(options?: {
       payload?: Record<string, unknown>;
     }) => {
       calls.push({ verb: "offer", key });
+      tenants.offer.push(currentTenant());
       offered.push(payload as unknown as HandoffWork);
     },
   } as unknown as WorkQueue;
 
   const auditStore: AuditStore = {
     insert: async (event) => {
+      tenants.audit.push(currentTenant());
       events.push(event.eventType);
       written.push({
         eventType: event.eventType,
@@ -101,6 +117,7 @@ function runner(options?: {
     delivered,
     offered,
     delays,
+    tenants,
     runner: createHandoffRunner({
       queue,
       owner: "replica-a",
@@ -110,6 +127,7 @@ function runner(options?: {
       delivery: {
         deliver: async ({ work, message, shown, assertion }) => {
           delivered.push({ message, assertion });
+          tenants.deliver.push(currentTenant());
           await options?.deliver?.({ work, message, shown });
           return { answer: options?.answer ?? null };
         },
@@ -164,6 +182,7 @@ describe("delivering a hop", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "run-1:abc",
           payload: {
             ...WORK,
@@ -230,7 +249,7 @@ describe("delivering a hop", () => {
 
     const later = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:abc", payload: WORK, attempts: 2 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 2 },
       ] as unknown as WorkItem[],
       deliver: async () => {
         throw new ThreadBusyError("thread-1 is busy with another run");
@@ -255,7 +274,7 @@ describe("delivering a hop", () => {
   test("a second attempt says so, before it runs anything", async () => {
     const { runner: sweep, events } = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:abc", payload: WORK, attempts: 2 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 2 },
       ],
     });
 
@@ -295,7 +314,7 @@ describe("delivering a hop", () => {
   test("a hop that was retried or that failed names the Bot too", async () => {
     const retried = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:abc", payload: WORK, attempts: 2 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 2 },
       ],
     });
     await retried.runner.sweep();
@@ -323,7 +342,7 @@ describe("delivering a hop", () => {
   test("a row that is not a hop is finished rather than released", async () => {
     const { runner: sweep, calls } = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:junk", payload: {}, attempts: 1 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:junk", payload: {}, attempts: 1 },
       ],
     });
 
@@ -350,6 +369,7 @@ describe("a hop that failed for good", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "run-1:abc",
           payload: { ...WORK, initiator: { kind: "routine", id: "routine_7" } },
           attempts: 5,
@@ -412,7 +432,7 @@ describe("a hop that failed for good", () => {
       offered,
     } = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:abc", payload: WORK, attempts: 5 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 5 },
       ] as unknown as WorkItem[],
       deliver: async () => {
         throw new Error("nope");
@@ -435,8 +455,8 @@ describe("a hop that failed for good", () => {
   test("two lost questions to one Bot leave two notices", async () => {
     const { runner: sweeper, calls } = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:aaa", payload: WORK, attempts: 5 },
-        { kind: "bot.message", key: "run-1:bbb", payload: WORK, attempts: 5 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:aaa", payload: WORK, attempts: 5 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:bbb", payload: WORK, attempts: 5 },
       ] as unknown as WorkItem[],
       deliver: async () => {
         throw new Error("nope");
@@ -461,6 +481,7 @@ describe("a hop that failed for good", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "run-1:notice:researcher",
           payload: { ...WORK, answerIn: "thread-1" },
           attempts: 5,
@@ -483,7 +504,7 @@ describe("a hop that failed for good", () => {
       calls,
     } = runner({
       claimed: [
-        { kind: "bot.message", key: "run-1:abc", payload: WORK, attempts: 2 },
+        { kind: "bot.message", tenantId: "user-1", key: "run-1:abc", payload: WORK, attempts: 2 },
       ] as unknown as WorkItem[],
       deliver: async () => {
         throw new Error("busy");
@@ -511,6 +532,7 @@ describe("relaying the answer home", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "run-1:abc",
           payload: { ...WORK, initiator: { kind: "routine", id: "routine_7" } },
           attempts: 1,
@@ -552,6 +574,7 @@ describe("relaying the answer home", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "relay:run-1:abc",
           payload: { ...WORK, answerIn: "thread-1" },
           attempts: 1,
@@ -616,6 +639,7 @@ describe("what a notice shows", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "run-1:notice:researcher",
           payload: { ...WORK, answerIn: "thread-1" },
           attempts: 1,
@@ -637,6 +661,7 @@ describe("what a notice shows", () => {
       claimed: [
         {
           kind: "bot.message",
+          tenantId: "user-1",
           key: "run-1:abc",
           payload: { ...WORK, fromName: "Assistant", toName: "Researcher" },
           attempts: 1,
@@ -652,5 +677,200 @@ describe("what a notice shows", () => {
     expect(shownTexts[0]).toBe(
       "Assistant asked Researcher for this on your behalf: find the outage window",
     );
+  });
+});
+
+/**
+ * G01: a hop runs as the person whose row it is.
+ *
+ * The sweep is a timer: it has no tenant of its own, and the claim asks as `platform`. The only
+ * trustworthy answer to "whose work is this" is the tenant stamped on the claimed row, so that is
+ * the frame the delivery, the trail and every follow-on hop run in. A row stamped as nobody's —
+ * `system`, `platform`, or nothing — has no person to act for, and is ended without running anybody.
+ */
+describe("whose hop it is", () => {
+  test("the delivery, the trail and the relay all run as the row's tenant", async () => {
+    const { runner: sweeper, tenants } = runner({
+      answer: "Tuesday.",
+    });
+
+    await sweeper.sweep();
+
+    expect(tenants.deliver).toEqual(["user-1"]);
+    expect(tenants.offer).toEqual(["user-1"]);
+    expect(tenants.audit.length).toBeGreaterThan(0);
+    expect(new Set(tenants.audit)).toEqual(new Set(["user-1"]));
+  });
+
+  test("a hop that failed for good tells the person from inside their own tenant", async () => {
+    const { runner: sweeper, tenants } = runner({
+      claimed: [
+        {
+          kind: "bot.message",
+          tenantId: "user-1",
+          key: "run-1:abc",
+          payload: WORK,
+          attempts: 5,
+        },
+      ] as unknown as WorkItem[],
+      deliver: async () => {
+        throw new Error("nope");
+      },
+    });
+
+    await sweeper.sweep();
+
+    expect(tenants.offer).toEqual(["user-1"]);
+    expect(new Set(tenants.audit)).toEqual(new Set(["user-1"]));
+  });
+
+  for (const stamped of ["system", "platform", "", undefined]) {
+    test(`a hop stamped ${JSON.stringify(stamped)} is ended, not delivered`, async () => {
+      const {
+        runner: sweeper,
+        calls,
+        delivered,
+        offered,
+        events,
+        tenants,
+      } = runner({
+        claimed: [
+          {
+            kind: "bot.message",
+            tenantId: stamped,
+            key: "run-1:abc",
+            payload: WORK,
+            attempts: 5,
+          },
+        ] as unknown as WorkItem[],
+        answer: "should never be relayed",
+      });
+
+      const report = await sweeper.sweep();
+
+      expect(delivered).toEqual([]);
+      expect(offered).toEqual([]);
+      // No trusted person to write the trail for, or to tell: one row, the platform's, says it
+      // was dropped, so nobody is told and the drop is still on record.
+      expect(events).toEqual(["agent.handoff_failed"]);
+      expect(tenants.audit).toEqual(["platform"]);
+      expect(calls).toEqual([
+        { verb: "finish", key: "run-1:abc", owner: "replica-a" },
+      ]);
+      expect(report).toEqual({
+        delivered: [],
+        skipped: [{ key: "run-1:abc", reason: "tenant_unresolved" }],
+      });
+    });
+  }
+
+  test("a hop whose person is not the tenant on its row is ended, not delivered", async () => {
+    const {
+      runner: sweeper,
+      delivered,
+      offered,
+      events,
+      tenants,
+    } = runner({
+      claimed: [
+        {
+          kind: "bot.message",
+          tenantId: "user-2",
+          key: "run-1:abc",
+          payload: WORK,
+          attempts: 1,
+        },
+      ] as unknown as WorkItem[],
+    });
+
+    const report = await sweeper.sweep();
+
+    expect(delivered).toEqual([]);
+    expect(offered).toEqual([]);
+    expect(events).toEqual(["agent.handoff_failed"]);
+    expect(tenants.audit).toEqual(["platform"]);
+    expect(report.skipped).toEqual([
+      { key: "run-1:abc", reason: "tenant_unresolved" },
+    ]);
+  });
+});
+
+describe("the tenant guard", () => {
+  test("asking for the tenant outside any frame is an error, not `system`", () => {
+    expect(() => requireTenant()).toThrow(TenantContextError);
+    expect(runAsTenant("user-1", () => requireTenant())).toBe("user-1");
+  });
+
+  test("work already running for one person cannot resolve into another", () => {
+    expect(() =>
+      runAsTenant("user-2", () => assertPersonTenant("user-1")),
+    ).toThrow(TenantContextError);
+    expect(runAsTenant("user-1", () => assertPersonTenant("user-1"))).toBe(
+      "user-1",
+    );
+    // A worker's own frame is nobody's, so it may hand work to whoever the row names.
+    expect(runAsTenant("platform", () => assertPersonTenant("user-1"))).toBe(
+      "user-1",
+    );
+    expect(assertPersonTenant("user-1", "user-1")).toBe("user-1");
+    expect(() => assertPersonTenant("user-1", "user-2")).toThrow(
+      TenantContextError,
+    );
+    for (const nobody of ["system", "platform", "", undefined, null, 7])
+      expect(() => assertPersonTenant(nobody)).toThrow(TenantContextError);
+  });
+
+  /*
+   * The approval.resume and person.response loops (G01-B) go through this: a row stamped A runs as
+   * A, and everything else is handed back without running.
+   */
+  test("a claimed item runs as the tenant stamped on its row, and nothing else runs", async () => {
+    const ran: Array<{ tenant: string; frame: string }> = [];
+    const work = async (tenant: string) => {
+      await Promise.resolve();
+      ran.push({ tenant, frame: currentTenant() });
+      return "done";
+    };
+    expect(
+      await runAsTenant("platform", () =>
+        runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-a", work),
+      ),
+    ).toEqual({ ran: true, value: "done" });
+    expect(ran).toEqual([{ tenant: "tenant-a", frame: "tenant-a" }]);
+
+    const refused = [
+      // The payload names somebody else: B never runs A's row, nor A B's.
+      runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-b", work),
+      runAsClaimedTenant({ tenantId: "tenant-b" }, "tenant-a", work),
+      // Rows that belong to nobody.
+      runAsClaimedTenant({ tenantId: "system" }, "tenant-a", work),
+      runAsClaimedTenant({ tenantId: "platform" }, "tenant-a", work),
+      runAsClaimedTenant({ tenantId: "" }, "tenant-a", work),
+      runAsClaimedTenant({}, "tenant-a", work),
+      // A payload with no owner names nobody to act as.
+      runAsClaimedTenant({ tenantId: "tenant-a" }, undefined, work),
+      runAsClaimedTenant({ tenantId: "tenant-a" }, 7, work),
+      // Already acting for B, A's row may not be picked up.
+      runAsTenant("tenant-b", () =>
+        runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-a", work),
+      ),
+    ];
+    for (const outcome of await Promise.all(refused))
+      expect(outcome.ran).toBe(false);
+    expect(ran).toHaveLength(1);
+  });
+
+  test("a claimed item's failure surfaces from inside its tenant", async () => {
+    let failedAs: string | undefined;
+    await expect(
+      runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-a", async () => {
+        try {
+          throw new Error("turn failed");
+        } finally {
+          failedAs = currentTenant();
+        }
+      }),
+    ).rejects.toThrow("turn failed");
+    expect(failedAs).toBe("tenant-a");
   });
 });
