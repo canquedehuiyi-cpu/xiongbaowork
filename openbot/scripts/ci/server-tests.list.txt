@@ -42,6 +42,7 @@ tests/approvals-interactive.integration.test.ts
 tests/approvals-native.test.ts
 tests/approvals-policy.integration.test.ts
 tests/approvals-policy.test.ts
+tests/approvals-question-board.test.ts
 tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-store.integration.test.ts
@@ -74,6 +75,8 @@ tests/bunfig-preload.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
 tests/channel-cursor.test.ts
+tests/channel-dispatch.integration.test.ts
+tests/channel-dispatch.test.ts
 tests/channel-events.integration.test.ts
 tests/channel-one-line.test.ts
 tests/channel-routes.test.ts
@@ -228,6 +231,7 @@ tests/picked-harness-auth.test.ts
 tests/pipeline-control.integration.test.ts
 tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
+tests/pipeline-template-edit.test.ts
 tests/pipeline-turn-channel.test.ts
 tests/plan-change-audit.integration.test.ts
 tests/plan-model.test.ts
