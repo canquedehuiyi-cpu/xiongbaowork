@@ -9,7 +9,7 @@ import {
 import { createDatabase } from "../src/db/client";
 import { agentProfiles, agents, subscriptions, users } from "../src/db/schema";
 import { createQuotaService } from "../src/quota/limits";
-import { runAsTenant } from "../src/tenant/context";
+import { isTenantFramed, runAsTenant } from "../src/tenant/context";
 import { avatarAgentId } from "../src/tenant/provisioning";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -143,7 +143,25 @@ describe("development actor persistence", () => {
       }));
     // Other suites share the actor's tenant; only what this test created is removed afterwards.
     const before = await owned();
-    await initializeDevActorUser(database, true);
+    // As src/index.ts calls it at boot: no frame around it. Under `throw` an unframed statement would
+    // reject, so this proves the upsert opens its own `platform` frame (G01-E P3).
+    const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
+    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+    try {
+      expect(isTenantFramed()).toBe(false);
+      expect(await initializeDevActorUser(database, true)).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
+      else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
+    }
+    expect(
+      await runAsTenant(DEV_ACTOR.id, () =>
+        database
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(eq(users.id, DEV_ACTOR.id)),
+      ),
+    ).toEqual([{ id: DEV_ACTOR.id, email: DEV_ACTOR.email }]);
     try {
       expect(await provisionDevActorTenant(database, true)).toBe(true);
       expect(await provisionDevActorTenant(database, true)).toBe(true);

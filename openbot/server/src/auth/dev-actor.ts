@@ -38,22 +38,27 @@ export async function initializeDevActorUser(
   if (!enabled) return false;
 
   const name = DEV_ACTOR.name ?? DEV_ACTOR.email;
-  await database
-    .insert(users)
-    .values({
-      id: DEV_ACTOR.id,
-      email: DEV_ACTOR.email,
-      name,
-      emailVerified: false,
-    })
-    .onConflictDoUpdate({
-      target: users.id,
-      set: {
+  // `users` is an identity row, not a tenant's: written at boot as `platform` (G01-E P3), never
+  // through the legacy unframed fallback. A caller already inside a transaction keeps that
+  // transaction's connection; only the frame read by the client changes.
+  await runAsTenant("platform", () =>
+    database
+      .insert(users)
+      .values({
+        id: DEV_ACTOR.id,
         email: DEV_ACTOR.email,
         name,
-        updatedAt: new Date(),
-      },
-    });
+        emailVerified: false,
+      })
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          email: DEV_ACTOR.email,
+          name,
+          updatedAt: new Date(),
+        },
+      }),
+  );
 
   return true;
 }
