@@ -1,10 +1,10 @@
 import {
-  index,
   integer,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { jsonb } from "./json";
@@ -40,11 +40,15 @@ export const subscriptions = pgTable(
     planId: text("plan_id")
       .notNull()
       .references(() => plans.id),
-    status: text("status").$type<"active" | "canceled">().notNull().default("active"),
+    status: text("status")
+      .$type<"active" | "canceled">()
+      .notNull()
+      .default("active"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [index("subscriptions_tenant_idx").on(table.tenantId)],
+  // One row per tenant (0129): provisioning inserts on conflict do nothing, a plan switch upserts.
+  (table) => [unique("subscriptions_tenant_unique").on(table.tenantId)],
 );
 
 /** One counter per tenant per billing period ("2026-10") per metric. */
@@ -57,5 +61,7 @@ export const usageCounters = pgTable(
     value: integer("value").notNull().default(0),
     updatedAt: updatedAt(),
   },
-  (table) => [primaryKey({ columns: [table.tenantId, table.period, table.metric] })],
+  (table) => [
+    primaryKey({ columns: [table.tenantId, table.period, table.metric] }),
+  ],
 );

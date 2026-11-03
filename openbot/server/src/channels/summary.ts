@@ -6,21 +6,38 @@
  *
  * Offer then claim, like `work/culler.ts`. The offer is derived from the table rather than from an
  * event, so a missed sweep costs two seconds where a missed event would cost the name entirely.
+ *
+ * WHOSE CONVERSATION THIS IS comes from the channel's own row (G01). "Which conversations have no
+ * name" is asked as the platform, which sees every tenant's; each one is then offered from its own
+ * tenant, so the queue row carries it, and named inside that tenant's frame: the read of the thread,
+ * the title written and the event announced are all that person's. A channel or a queue row stamped
+ * as nobody's (`system`, `platform`) is never named, and neither is one whose thread belongs to
+ * somebody other than the tenant it is filed under.
  */
-import { and, asc, eq, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, notExists, notInArray, sql } from "drizzle-orm";
 import { readFiring } from "../../../shared/routine-firing";
 import type { Database } from "../db/client";
+import { NOBODY_TENANTS } from "../db/schema/tenant";
 import {
   channelMemberships,
   channels,
   intelligenceChannelMappings,
   workItems,
 } from "../db/schema";
+import {
+  assertPersonTenant,
+  isPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { CHANNEL_ACTIVITY_TOPIC, type ChannelActivityEvent } from "./events";
 import { oneLine } from "./text";
 
 export const CHANNEL_SUMMARY_KIND = "channel.summary";
+
+/** The skip reason for work that names no person it could be done for. */
+export const SUMMARY_TENANT_UNRESOLVED = "no trusted tenant";
 
 /** A title long enough to truncate says no more than the preview it replaced. */
 const MAX_SUMMARY_GRAPHEMES = 60;
@@ -66,44 +83,55 @@ export type SummaryReport = {
 export async function offerChannelsAwaitingSummary(
   options: Pick<ChannelSummaryOptions, "database" | "queue" | "limit">,
 ): Promise<{ offered: string[] }> {
-  const rows = await options.database
-    .select({ id: channels.id })
-    .from(channels)
-    .where(
-      and(
-        isNull(channels.summary),
-        isNull(channels.deletedAt),
-        sql`${channels.lastMessageAt} is not null`,
-        /*
-         * Not one the queue already holds a row for, pending or settled.
-         *
-         * Offering it again changes nothing, but it takes one of the `limit` places. A conversation
-         * this cannot name keeps no summary and so never leaves the set above, and enough of them
-         * ahead of a new conversation left the new one unoffered on every pass. Once its settled row
-         * is forgotten it is offered again, as before.
-         */
-        notExists(
-          options.database
-            .select({ key: workItems.key })
-            .from(workItems)
-            .where(
-              and(
-                eq(workItems.kind, CHANNEL_SUMMARY_KIND),
-                eq(workItems.key, channels.id),
+  // A question about every tenant's conversations, so asked as the platform rather than as `system`,
+  // which would see only the platform's own and leave every person's unnamed.
+  const rows = await runAsTenant("platform", () =>
+    options.database
+      .select({ id: channels.id, tenantId: channels.tenantId })
+      .from(channels)
+      .where(
+        and(
+          isNull(channels.summary),
+          isNull(channels.deletedAt),
+          // Nobody's conversation has nobody to name it for, and must not take a place below.
+          notInArray(channels.tenantId, [...NOBODY_TENANTS]),
+          sql`${channels.lastMessageAt} is not null`,
+          /*
+           * Not one the queue already holds a row for, pending or settled.
+           *
+           * Offering it again changes nothing, but it takes one of the `limit` places. A conversation
+           * this cannot name keeps no summary and so never leaves the set above, and enough of them
+           * ahead of a new conversation left the new one unoffered on every pass. Once its settled row
+           * is forgotten it is offered again, as before.
+           */
+          notExists(
+            options.database
+              .select({ key: workItems.key })
+              .from(workItems)
+              .where(
+                and(
+                  eq(workItems.kind, CHANNEL_SUMMARY_KIND),
+                  eq(workItems.key, channels.id),
+                ),
               ),
-            ),
+          ),
         ),
-      ),
-    )
-    .limit(options.limit ?? 20);
+      )
+      .limit(options.limit ?? 20),
+  );
 
   const offered: string[] = [];
   for (const row of rows) {
-    await options.queue.offer({
-      kind: CHANNEL_SUMMARY_KIND,
-      key: row.id,
-      payload: { channelId: row.id },
-    });
+    // Filtered above already; checked again because this is the line that decides the frame.
+    if (!isPersonTenant(row.tenantId)) continue;
+    // Offered from the channel's own tenant, so the queue row is stamped as that person's work.
+    await runAsTenant(row.tenantId, () =>
+      options.queue.offer({
+        kind: CHANNEL_SUMMARY_KIND,
+        key: row.id,
+        payload: { channelId: row.id },
+      }),
+    );
     offered.push(row.id);
   }
   return { offered };
@@ -147,8 +175,24 @@ export async function summariseClaimedChannels(
       continue;
     }
 
+    /*
+     * The tenant stamped on the claimed row is whose work this is; the payload never says. A row
+     * stamped as nobody's is finished, not retried: nothing about it changes on the next pass.
+     */
+    let tenant: string;
     try {
-      const attempt = await summariseOne(options, channelId);
+      tenant = assertPersonTenant(item.tenantId);
+    } catch (error) {
+      if (!(error instanceof TenantContextError)) throw error;
+      await dropUntrusted(options, item.key, "row");
+      report.skipped.push({ channelId, reason: SUMMARY_TENANT_UNRESOLVED });
+      continue;
+    }
+
+    try {
+      const attempt = await runAsTenant(tenant, () =>
+        summariseOne(options, channelId, tenant),
+      );
       if (attempt === "not yet") {
         // Put back, not finished: Intelligence has not persisted the message yet.
         await options.queue.release({
@@ -159,6 +203,12 @@ export async function summariseClaimedChannels(
           reason: "the conversation is not readable yet",
         });
         report.skipped.push({ channelId, reason: "not readable yet" });
+        continue;
+      }
+      if (attempt === SUMMARY_TENANT_UNRESOLVED) {
+        // The row named a person, but the conversation is not theirs: dropped with the same trace.
+        await dropUntrusted(options, item.key, "channel");
+        report.skipped.push({ channelId, reason: attempt });
         continue;
       }
       await options.queue.finish({
@@ -199,24 +249,78 @@ export async function summariseClaimedChannels(
 }
 
 /**
+ * Finish work that names no person it could be done for, and leave the reason on the row.
+ *
+ * `finish` takes no reason, so the reason is written first, as the platform and only while this
+ * replica still holds the lease: a dropped row is then a fact somebody can find in the queue (until
+ * `forgetSettledSummaries` purges it) rather than a silence. Nothing is written in any person's
+ * frame, because the whole point is that this work has no trustworthy person.
+ */
+async function dropUntrusted(
+  options: ChannelSummaryOptions,
+  key: string,
+  mismatch: "row" | "channel",
+): Promise<void> {
+  await runAsTenant("platform", () =>
+    options.database
+      .update(workItems)
+      .set({ lastError: SUMMARY_TENANT_UNRESOLVED, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(workItems.kind, CHANNEL_SUMMARY_KIND),
+          eq(workItems.key, key),
+          eq(workItems.claimedBy, options.owner),
+          isNull(workItems.finishedAt),
+        ),
+      ),
+  );
+  await options.queue.finish({
+    kind: CHANNEL_SUMMARY_KIND,
+    key,
+    owner: options.owner,
+  });
+  console.warn(
+    JSON.stringify({
+      type: "channel-summary-untrusted-tenant",
+      key,
+      mismatch,
+    }),
+  );
+}
+
+/**
  * Three words, not a boolean, so `"not yet"` is told apart from the rest: a conversation offered the
  * instant somebody speaks may have no message in Intelligence yet, and finishing it never names it.
  */
-type Attempt = "written" | "not yet" | "nothing to name it with";
+type Attempt =
+  | "written"
+  | "not yet"
+  | "nothing to name it with"
+  | typeof SUMMARY_TENANT_UNRESOLVED;
 
 async function summariseOne(
   options: ChannelSummaryOptions,
   channelId: string,
+  tenant: string,
 ): Promise<Attempt> {
-  /* A queue key is not a foreign key, so work outlives its channel. Gone is final, not not-yet. */
+  /*
+   * A queue key is not a foreign key, so work outlives its channel. Gone is final, not not-yet.
+   * Read in the work's own tenant, so another person's conversation reads as gone from here.
+   */
   const [existing] = await options.database
-    .select({ deletedAt: channels.deletedAt })
+    .select({ deletedAt: channels.deletedAt, tenantId: channels.tenantId })
     .from(channels)
     .where(eq(channels.id, channelId));
   if (!existing || existing.deletedAt !== null)
     return "nothing to name it with";
+  // A `system` channel is still visible from a person's frame. It is not theirs to name.
+  if (existing.tenantId !== tenant) return SUMMARY_TENANT_UNRESOLVED;
 
-  /* Threads are per person, so the one read must be chosen: the earliest member opened it. */
+  /*
+   * Threads are per person, so the one read must be chosen: the earliest member opened it. Only the
+   * tenant's own person: a thread is private to whoever holds it, and work filed under one tenant
+   * never reads another's.
+   */
   const [owner] = await options.database
     .select({
       userId: channelMemberships.userId,
@@ -230,7 +334,12 @@ async function summariseOne(
         eq(intelligenceChannelMappings.userId, channelMemberships.userId),
       ),
     )
-    .where(eq(channelMemberships.channelId, channelId))
+    .where(
+      and(
+        eq(channelMemberships.channelId, channelId),
+        eq(channelMemberships.userId, tenant),
+      ),
+    )
     .orderBy(asc(channelMemberships.createdAt), asc(channelMemberships.userId))
     .limit(1);
 

@@ -778,6 +778,132 @@
       "when": 1793605000000,
       "tag": "0110_approval_continuation_tenant_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1793619000000,
+      "tag": "0111_credentials_tenant_scoped_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1793620000000,
+      "tag": "0112_app_role_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1793621500000,
+      "tag": "0113_tenant_skill_slugs",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1793623000000,
+      "tag": "0114_delivery_binding_owner_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1793623800000,
+      "tag": "0115_routine_memory_owner_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1793625000000,
+      "tag": "0116_task_archives",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1793625600000,
+      "tag": "0117_automation_tenant_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793628000000,
+      "tag": "0118_plugin_install_listings",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1793628600000,
+      "tag": "0120_platform_model_pool",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1793628900000,
+      "tag": "0121_source_binding_owner_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1793629200000,
+      "tag": "0122_team_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793629500000,
+      "tag": "0123_team_approval_rows",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1793629800000,
+      "tag": "0124_team_sandboxed_components",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793630100000,
+      "tag": "0125_team_bots",
+      "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1793630400000,
+      "tag": "0126_team_bot_roster_stamp",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1793630700000,
+      "tag": "0127_team_connectors",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1793631000000,
+      "tag": "0128_team_group_bots",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1793631300000,
+      "tag": "0129_subscriptions_tenant_unique",
+      "breakpoints": true
     }
   ]
 }

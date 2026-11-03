@@ -2,9 +2,16 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import {
+  assertPersonTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../tenant/context";
 import type { ResponsibilityEvent, ResponsibilityEventResult } from "./types";
 
 export type GithubResponsibilityBinding = {
+  /** The tenant the database stamped on the binding row: the only answer to whose event this is. */
+  tenantId: string;
   ownerUserId: string;
   repository: string;
   secret: string;
@@ -36,9 +43,32 @@ export function createGithubResponsibilityRoutes(options: {
     return context.json({ error: "GitHub event could not be accepted." }, 503);
   });
   routes.post("/:bindingId", async (context) => {
-    const binding = await options.bindingFor(context.req.param("bindingId"));
+    /*
+     * The binding row decides whose event this is (G01): it is looked up as `platform`, the one
+     * question asked across tenants, and the ingest runs in the tenant stamped on it, confirmed by
+     * its owner. A binding that names nobody (`system`, `platform`, empty, or another person's
+     * stamp) is answered like an unknown one.
+     */
+    const bindingId = context.req.param("bindingId");
+    const binding = await runAsTenant("platform", () =>
+      options.bindingFor(bindingId),
+    );
     if (!binding)
       return context.json({ error: "Webhook binding not found." }, 404);
+    let tenant: string;
+    try {
+      tenant = assertPersonTenant(binding.tenantId, binding.ownerUserId);
+    } catch (error) {
+      if (!(error instanceof TenantContextError)) throw error;
+      console.warn(
+        JSON.stringify({
+          type: "github-binding-untrusted-tenant",
+          bindingId,
+          reason: error.message,
+        }),
+      );
+      return context.json({ error: "Webhook binding not found." }, 404);
+    }
     if (
       !binding.secret.trim() ||
       !binding.repository.trim() ||
@@ -82,17 +112,19 @@ export function createGithubResponsibilityRoutes(options: {
         { error: "Repository is not registered for this webhook." },
         403,
       );
-    const result = await options.ingest({
-      ownerUserId: binding.ownerUserId,
-      source: "github",
-      // GitHub signs only the body; X-GitHub-Delivery is unsigned, so a captured request replayed
-      // with a fresh one would run again. A redelivery resends the same body and still dedupes.
-      externalId: `body-${createHash("sha256").update(raw).digest("hex")}`,
-      type: payload.data.action
-        ? `${eventType}.${payload.data.action}`
-        : eventType,
-      payload: payload.data,
-    });
+    const result = await runAsTenant(tenant, () =>
+      options.ingest({
+        ownerUserId: binding.ownerUserId,
+        source: "github",
+        // GitHub signs only the body; X-GitHub-Delivery is unsigned, so a captured request replayed
+        // with a fresh one would run again. A redelivery resends the same body and still dedupes.
+        externalId: `body-${createHash("sha256").update(raw).digest("hex")}`,
+        type: payload.data.action
+          ? `${eventType}.${payload.data.action}`
+          : eventType,
+        payload: payload.data,
+      }),
+    );
     return context.json(result, 202);
   });
   return routes;

@@ -289,6 +289,13 @@ fn ordinary_absolute(path: &Path) -> Result<PathBuf, Problem> {
         match component {
             std::path::Component::ParentDir => return Err(managed_error("A runtime locator contains '..'; its ownership is unclear.")),
             std::path::Component::CurDir => {},
+            // A verbatim (`\\?\`) Windows path splits only on '\\', so a spelling such as
+            // `\\?\C:\root\child/../bun` reaches us as one Normal component `child/../bun`. Refuse
+            // a '..' segment under any separator the platform accepts rather than trust that the
+            // name will never be re-parsed without its verbatim prefix. A no-op on Unix.
+            std::path::Component::Normal(name)
+                if name.to_string_lossy().split(std::path::is_separator).any(|segment| segment == "..") =>
+                return Err(managed_error("A runtime locator contains '..'; its ownership is unclear.")),
             component => normalized.push(component.as_os_str()),
         }
     }
@@ -471,6 +478,14 @@ fn classify_bun_candidate(existing: &Path, target: &Path) -> Result<Option<Exist
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound && !followed_link => return Ok(None),
                 Err(error) => return Err(managed_error(format!("Could not classify external runtime locator: {error}"))),
             };
+            // A locator that continues past a non-directory is not an absent candidate. Unix
+            // reports ENOTDIR for the next lookup, but Windows reports ERROR_PATH_NOT_FOUND, which
+            // reads as NotFound above; decide it here from what was observed instead.
+            if !reparse_or_link(&metadata) && !metadata.is_dir()
+                && components[index + 1..].iter().any(|rest| !matches!(rest, std::path::Component::CurDir))
+            {
+                return Err(managed_error(format!("Runtime locator passes through a non-directory: {}", current.display())));
+            }
             if reparse_or_link(&metadata) {
                 hops += 1;
                 if hops > 32 { return Err(managed_error("Runtime locator classification exceeds its link bound")); }
@@ -2203,7 +2218,14 @@ esac
         let mut ops = RepairFixtureOps::new(RepairFault::None);
         assert!(repair_managed_bun(&root, &download, "fixture", &mut ops).is_err());
         assert_eq!(ops.verify_calls, 0);
-        assert!(ordinary_absolute(&root.join("child/../bun")).is_err());
+        // Spell the traversal textually: `Path::join` onto a verbatim (`\\?\`) root, which is what
+        // canonicalize returns on Windows, lexically drops `child/..` before the check could see it.
+        for separator in [std::path::MAIN_SEPARATOR_STR, "/"] {
+            let mut traversal = root.clone().into_os_string();
+            traversal.push(std::path::MAIN_SEPARATOR_STR);
+            traversal.push(["child", "..", "bun"].join(separator));
+            assert!(ordinary_absolute(Path::new(&traversal)).is_err());
+        }
         std::fs::remove_dir_all(root).unwrap();
     }
 

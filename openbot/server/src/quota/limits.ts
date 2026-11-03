@@ -1,4 +1,4 @@
-import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
@@ -39,6 +39,18 @@ export type QuotaTransaction = Parameters<
 type QuotaReader = Pick<Database, "select"> | Pick<QuotaTransaction, "select">;
 
 export type Plan = { id: string; name: string; limits: PlanLimits };
+
+/**
+ * The Free tier as migration 0068 seeds it, used only when the catalogue row itself is missing.
+ *
+ * A tenant with no active subscription is held to Free (fail closed, audit #7); this constant keeps
+ * that true even on a database whose `plans` table was never seeded, so no path reads as unlimited.
+ */
+export const FREE_PLAN_FALLBACK: Plan = {
+  id: "free",
+  name: "Free",
+  limits: { wakers: 2, tasksPerMonth: 50, devices: 1, customModels: false },
+};
 
 export type QuotaUsage = {
   period: string;
@@ -97,8 +109,8 @@ const METRIC_WORDS: Record<QuotaMetric, string> = {
 };
 
 export type QuotaService = {
-  /** null means the tenant was never given a plan, which means nothing is intercepted. */
-  planFor: (tenantId: string) => Promise<Plan | null>;
+  /** Always a plan: a tenant with no active subscription is on Free, never unlimited. */
+  planFor: (tenantId: string) => Promise<Plan>;
   usageFor: (tenantId: string) => Promise<QuotaUsage>;
   /** Throws `QuotaExceeded` when the tenant is at the plan's ceiling for one metric. */
   assertCapacity: (
@@ -123,10 +135,7 @@ export type QuotaService = {
 };
 
 export function createQuotaService(database: Database): QuotaService {
-  const readPlan = (
-    executor: QuotaReader,
-    tenantId: string,
-  ): Promise<Plan | null> =>
+  const readPlan = (executor: QuotaReader, tenantId: string): Promise<Plan> =>
     runAsTenant(tenantId, async () => {
       const [row] = await executor
         .select({
@@ -142,12 +151,27 @@ export function createQuotaService(database: Database): QuotaService {
             eq(subscriptions.status, "active"),
           ),
         )
+        // One row per tenant since 0129 (`subscriptions_tenant_unique`). The order is kept so the
+        // read stays deterministic whatever the table holds, and it is the order 0129 de-duplicated
+        // by, so the row it kept is the row this read had already been answering with.
+        .orderBy(
+          desc(subscriptions.updatedAt),
+          desc(subscriptions.createdAt),
+          desc(subscriptions.id),
+        )
         .limit(1);
-      // No active subscription is not a Free tenant. Provisioning writes the row for every person who
-      // signs up, so an absent one is the deployment's own operator or a workspace older than the
-      // catalogue — and intercepting those would refuse the person who runs the server.
-      if (!row) return null;
-      return { id: row.id, name: row.name, limits: row.limits };
+      if (row) return { id: row.id, name: row.name, limits: row.limits };
+      // No active subscription fails closed to Free (audit #7). A workspace whose provisioning failed,
+      // one older than the catalogue, or one signed in by a path that does not provision, is still a
+      // tenant — and an absent row read as "no limit" would let it past every ceiling.
+      const [free] = await executor
+        .select({ id: plans.id, name: plans.name, limits: plans.limits })
+        .from(plans)
+        .where(eq(plans.id, FREE_PLAN_FALLBACK.id))
+        .limit(1);
+      return free
+        ? { id: free.id, name: free.name, limits: free.limits }
+        : FREE_PLAN_FALLBACK;
     });
 
   const readUsage = (
@@ -206,7 +230,6 @@ export function createQuotaService(database: Database): QuotaService {
     if (!Number.isSafeInteger(units) || units < 1)
       throw new TypeError("Quota units must be a positive integer");
     const plan = await readPlan(executor, tenantId);
-    if (!plan) return;
     const used = USED_BY[metric](await readUsage(executor, tenantId));
     const limit = plan.limits[metric];
     const ceiling =
