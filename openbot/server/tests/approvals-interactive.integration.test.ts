@@ -22,6 +22,7 @@ import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
+import { runAsTenant } from "../src/tenant/context";
 import { createApprovalFixtureService } from "./helpers/approval-producer-model";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -39,6 +40,8 @@ const owner = `${prefix}-owner`;
 const stranger = `${prefix}-stranger`;
 const botId = `${prefix}-bot`;
 const store = createApprovalStore(database);
+/** The owner's own rows are read and written as the owner, the way their signed-in requests are. */
+const asOwner = <T>(work: () => T) => runAsTenant(owner, work);
 const clicks: unknown[] = [];
 
 const gateway = createComputerGateway({
@@ -96,7 +99,8 @@ app.route(
   createApprovalRoutes(service, async (context, next) => {
     const id = context.req.header("x-test-user") ?? "";
     context.set("actor", { id, email: `${id}@example.test`, role: "user" });
-    await next();
+    // The real session guard runs each signed-in request as that person's tenant.
+    await runAsTenant(id, () => next());
   }),
 );
 const call = (user: string, path: string, body?: unknown, method = "POST") =>
@@ -158,33 +162,47 @@ function snapshot(
 }
 const resume = async (id: string) => {
   const continued: { content: string; error?: string }[] = [];
-  await service.resume(owner, id, {
-    validate: (action) =>
-      service.validateReentry(action, () => execute(action)),
-    execute,
-    continue: async ({ result }) => {
-      continued.push(result);
-    },
-  });
+  await asOwner(() =>
+    service.resume(owner, id, {
+      validate: (action) =>
+        service.validateReentry(action, () => execute(action)),
+      execute,
+      continue: async ({ result }) => {
+        continued.push(result);
+      },
+    }),
+  );
   return continued;
 };
 
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: stranger, email: `${stranger}@example.test` },
-  ]);
-  await store.setEnabled(owner, true);
+  // Accounts are deployment rows; the approval preference is the owner's own.
+  await runAsTenant("platform", () =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: stranger, email: `${stranger}@example.test` },
+    ]),
+  );
+  await asOwner(() => store.setEnabled(owner, true));
 });
 afterAll(async () => {
-  const ids = (await store.list(owner)).map((request) => request.id);
+  const ids = (await asOwner(() => store.list(owner))).map(
+    (request) => request.id,
+  );
   if (ids.length)
-    await database
-      .delete(workItems)
-      .where(
-        and(eq(workItems.kind, "approval.resume"), inArray(workItems.key, ids)),
-      );
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+    await asOwner(() =>
+      database
+        .delete(workItems)
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            inArray(workItems.key, ids),
+          ),
+        ),
+    );
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [owner, stranger])),
+  );
   await database.$client.close();
 });
 
@@ -278,7 +296,7 @@ test("a click whose identity is not an unanswered call in the conversation is re
 });
 
 const pendingFor = async (threadId: string) =>
-  (await store.list(owner)).filter(
+  (await asOwner(() => store.list(owner))).filter(
     (request) =>
       request.action.threadId === threadId && request.status === "pending",
   );
@@ -303,7 +321,7 @@ test("after a deny the Bot cannot try the same or an equivalent click again unti
   );
   expect(await pendingFor(threadId)).toEqual([]);
   // Switching approvals off does not turn a "no" into a yes in this conversation.
-  await service.setPreferences(owner, { enabled: false });
+  await asOwner(() => service.setPreferences(owner, { enabled: false }));
   const unasked = await call(
     owner,
     `/computer/${bot}`,
@@ -311,7 +329,7 @@ test("after a deny the Bot cannot try the same or an equivalent click again unti
   );
   expect(unasked.status).toBe(400);
   expect(clicks).toEqual([]);
-  await service.setPreferences(owner, { enabled: true });
+  await asOwner(() => service.setPreferences(owner, { enabled: true }));
   // Once the person has spoken again, the Bot may ask again.
   const asked = await call(
     owner,
@@ -346,7 +364,7 @@ test("switching approvals off withdraws what was only waiting on it, resumes the
   const threadId = `${prefix}-off-${randomUUID()}`;
   const waiting = await call(owner, `/computer/${bot}`, snapshot({ threadId }));
   const { approvalId } = (await waiting.json()) as { approvalId: string };
-  await service.setPreferences(owner, { enabled: false });
+  await asOwner(() => service.setPreferences(owner, { enabled: false }));
   try {
     expect(await pendingFor(threadId)).toEqual([]);
     const continued = await resume(approvalId);
@@ -354,18 +372,20 @@ test("switching approvals off withdraws what was only waiting on it, resumes the
       { content: WITHDRAWN_APPROVALS_OFF, error: WITHDRAWN_APPROVALS_OFF },
     ]);
     expect(clicks).toEqual([]);
-    const [row] = await database
-      .select()
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.eventType, "approval.withdrawn"),
-          eq(auditEvents.targetId, approvalId),
+    const [row] = await asOwner(() =>
+      database
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "approval.withdrawn"),
+            eq(auditEvents.targetId, approvalId),
+          ),
         ),
-      );
+    );
     expect(row?.payload).toMatchObject({ reason: WITHDRAWN_APPROVALS_OFF });
   } finally {
-    await service.setPreferences(owner, { enabled: true });
+    await asOwner(() => service.setPreferences(owner, { enabled: true }));
   }
 });
 
@@ -383,13 +403,15 @@ test("a new allow rule withdraws the requests it now covers", async () => {
     }),
   );
   const { approvalId } = (await waiting.json()) as { approvalId: string };
-  await service.createRule(owner, {
-    botId: bot,
-    toolRef: "computer_type",
-    effect: "*",
-    scope: "*",
-    behaviour: "allow",
-  });
+  await asOwner(() =>
+    service.createRule(owner, {
+      botId: bot,
+      toolRef: "computer_type",
+      effect: "*",
+      scope: "*",
+      behaviour: "allow",
+    }),
+  );
   expect(await pendingFor(threadId)).toEqual([]);
   expect(await resume(approvalId)).toEqual([
     { content: WITHDRAWN_RULE_ALLOWS, error: WITHDRAWN_RULE_ALLOWS },
@@ -398,18 +420,20 @@ test("a new allow rule withdraws the requests it now covers", async () => {
 });
 
 test("the trail tells a person's decision from the gate's own verdict", async () => {
-  const rows = await database
-    .select()
-    .from(auditEvents)
-    .where(
-      and(
-        eq(auditEvents.actorUserId, owner),
-        inArray(auditEvents.eventType, [
-          "approval.person_decided",
-          "approval.evaluated",
-        ]),
+  const rows = await asOwner(() =>
+    database
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.actorUserId, owner),
+          inArray(auditEvents.eventType, [
+            "approval.person_decided",
+            "approval.evaluated",
+          ]),
+        ),
       ),
-    );
+  );
   const person = rows.filter(
     (row) => row.eventType === "approval.person_decided",
   );

@@ -104,6 +104,8 @@ jobs:
             bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         continue-on-error: true
+        # G01-E P15: no OPENBOT_TENANT_FRAME_GUARD here. scripts/test-preload.ts defaults it to
+        # `throw`, so a database read or write with no tenant frame fails the test that made it.
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()

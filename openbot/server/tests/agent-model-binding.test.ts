@@ -20,7 +20,11 @@ import {
   createAgentModelResolver,
   languageModelFor,
 } from "../src/models/runtime-resolver";
-import { runAsTenant } from "../src/tenant/context";
+import {
+  asPlatform,
+  runAsTenant,
+  TenantContextError,
+} from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -192,12 +196,39 @@ test("a switched-off model or a withdrawn key costs the binding, not the turn", 
   await cleanup();
 });
 
-/** A read with no tenant frame sees the platform's own partition, which holds none of this. */
-test("a binding is not read outside a tenant scope", async () => {
+/**
+ * Which frames read a binding (G01-E P4, decision-tests).
+ *
+ * A read with no frame at all is a bug, not "unbound": every access needs a frame, so it rejects
+ * with `TenantContextError` instead of quietly falling back to the deployment's model. The catalogue
+ * frame `system` and a stranger's frame hold none of this; the owner's frame does; and `platform`
+ * (an admin's controls, background work) reads the owner's binding but still refuses a model row
+ * that belongs to another tenant.
+ */
+test("a binding is read only in a frame that can see it", async () => {
   const bound = await connectModel(tenantA, "openai", "gpt-6");
   const coworker = await newCoworker(tenantA, `${marker}-scope`, bound);
+  const foreign = await connectModel(tenantB, "openai", "gpt-6");
+  const thief = await newCoworker(tenantA, `${marker}-scope-thief`, foreign);
 
-  expect(await resolveModel(coworker)).toBeNull();
+  // (a) No frame: refused out loud.
+  await expect(resolveModel(coworker)).rejects.toBeInstanceOf(
+    TenantContextError,
+  );
+  // (b) The catalogue frame sees the platform's own partition, which holds none of this.
+  expect(await runAsTenant("system", () => resolveModel(coworker))).toBeNull();
+  // (c) A stranger's frame does not see tenantA's coworker.
+  expect(await runAsTenant(tenantB, () => resolveModel(coworker))).toBeNull();
+  // (d) Positive control: the owner's frame resolves the binding.
+  expect(
+    modelId(await runAsTenant(tenantA, () => resolveModel(coworker))),
+  ).toBe("gpt-6");
+  // (e) `platform` sees across tenants, so it resolves tenantA's binding, and the tenancy
+  // comparison still refuses a pointer into tenantB's library.
+  expect(modelId(await asPlatform(() => resolveModel(coworker)))).toBe(
+    "gpt-6",
+  );
+  expect(await asPlatform(() => resolveModel(thief))).toBeNull();
 
   await cleanup();
 });
