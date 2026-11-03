@@ -57,6 +57,7 @@ const group = `${suite}-group`;
 const victimGroup = `${suite}-victim-group`;
 const doomedGroup = `${suite}-doomed-group`;
 const leftGroup = `${suite}-left-group`;
+const linkGroup = `${suite}-link-group`;
 
 const rule = `${suite}-rule`;
 const settings = `${suite}-settings`;
@@ -220,8 +221,11 @@ beforeAll(async () => {
   });
   // The shared group: `creator` opens it with `member` and `owner` in it.
   await sharedGroup(group, creator, [member, owner]);
-  await inFrame(as(member), async (tx) => {
+  // The restricted Bot is linked by its owner, the one member it is visible to (0128).
+  await inFrame(as(owner), async (tx) => {
     await tx`insert into channel_agents (channel_id, agent_id, tenant_id) values (${group}, ${restrictedBot}, 'team')`;
+  });
+  await inFrame(as(member), async (tx) => {
     await tx`insert into group_messages (id, channel_id, owner_user_id, text, tenant_id) values (${`${suite}-message`}, ${group}, ${member}, 'hello', 'team')`;
     await tx`insert into group_bot_threads (owner_user_id, channel_id, agent_id, thread_id, tenant_id) values (${member}, ${group}, ${restrictedBot}, ${`${suite}-thread`}, 'team')`;
   });
@@ -915,6 +919,59 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
       (tx) =>
         tx`insert into channel_memberships (channel_id, user_id, tenant_id) values (${leftGroup}, ${creator}, 'team')`,
     );
+  });
+
+  test("(m) a member links only a Bot they could use: never somebody's private Bot or a Team Bot hidden from them (0128)", async () => {
+    const ownersPrivate = `${suite}-owners-private-bot`;
+    const membersOwn = `${suite}-members-own-bot`;
+    const catalogue = `${suite}-catalogue-bot`;
+    await privateBot(ownersPrivate, owner);
+    await privateBot(membersOwn, member);
+    await asPlatform(() =>
+      database.insert(agents).values({
+        id: catalogue,
+        tenantId: "system",
+        name: "Catalogue",
+        type: "built_in",
+        configuration: {},
+      }),
+    );
+    // `member` opens the group; `audience` is in it too, and is the restricted Bot's audience.
+    await sharedGroup(linkGroup, member, [audience]);
+    const link = (agentId: string) => (tx: TransactionSQL) =>
+      tx`insert into channel_agents (channel_id, agent_id, tenant_id) values (${linkGroup}, ${agentId}, 'team')`;
+
+    // Another person's private Bot, and a Team Bot published to an audience the member is not in.
+    await refused(as(member), link(ownersPrivate));
+    await refused(as(member), link(restrictedBot));
+    // Not by naming a Bot nobody has either.
+    await refused(as(member), link(`${suite}-no-such-bot`));
+    expect(
+      await count(as(member), "channel_agents", "channel_id", linkGroup),
+    ).toBe(0);
+
+    // Their own private Bot, a catalogue Bot, and (for the audience) the restricted Team Bot.
+    expect(await changed(as(member), link(membersOwn))).toBe(1);
+    expect(await changed(as(member), link(catalogue))).toBe(1);
+    expect(await changed(as(audience), link(restrictedBot))).toBe(1);
+    // The owner of the private Bot is no member of this group, so even they cannot add it here.
+    await refused(as(owner), link(ownersPrivate));
+
+    // An existing link cannot be turned into a link to somebody else's Bot.
+    await refused(
+      as(member),
+      (tx) =>
+        tx`update channel_agents set agent_id = ${ownersPrivate} where channel_id = ${linkGroup} and agent_id = ${membersOwn}`,
+    );
+    expect(
+      (
+        await asPlatform(() =>
+          database.execute(
+            sql`select agent_id from channel_agents where channel_id = ${linkGroup} order by agent_id`,
+          ),
+        )
+      ).map((row) => (row as { agent_id: string }).agent_id),
+    ).toEqual([catalogue, membersOwn, restrictedBot].sort());
   });
 
   test("the creator column is stamped by the database from the opening frame", async () => {
