@@ -13,6 +13,8 @@ import {
   agentProfiles,
   agents,
   modelRegistry,
+  PLATFORM_POOL_KEY_ENV,
+  platformModelPool,
   providerTemplates,
 } from "../db/schema";
 import {
@@ -21,8 +23,9 @@ import {
   type OutboundPolicy,
   OutboundRefusedError,
 } from "../net/outbound-guard";
-import type { QuotaService } from "../quota/limits";
-import { QuotaExceeded } from "../quota/limits";
+import type { Plan, QuotaService } from "../quota/limits";
+import { FREE_PLAN_FALLBACK, QuotaExceeded } from "../quota/limits";
+import type { PoolKeyEnvironment } from "./runtime-resolver";
 
 type Ctx = { Variables: AppVariables };
 
@@ -39,13 +42,20 @@ export function createModelRoutes(
   encryptionKey: string,
   /** The tenant's ceiling on models of their own, when this deployment counts one (ticket 022). */
   quota?: QuotaService,
-  /**
-   * Where a tenant's base URL may point (audit defect #6). The deployment's private-host opt-in and
-   * named hosts, so a developer's local provider still works; injectable resolver and fetch for tests.
-   */
-  outbound: OutboundPolicy = {},
+  options: {
+    /** Where a pool row's key variable is looked up for `available`; tests pass their own. */
+    environment?: PoolKeyEnvironment;
+    /**
+     * Where a tenant's base URL may point (audit defect #6). The deployment's private-host opt-in and
+     * named hosts, so a developer's local provider still works; injectable resolver and fetch for
+     * tests.
+     */
+    outbound?: OutboundPolicy;
+  } = {},
 ) {
   const routes = new Hono<Ctx>();
+  const environment = options.environment ?? process.env;
+  const outbound = options.outbound ?? {};
 
   routes.get("/", requireUser, async (context) => {
     const rows = await database
@@ -82,12 +92,71 @@ export function createModelRoutes(
       )
       .groupBy(agentProfiles.modelRef);
     const counts = new Map(bound.map((row) => [row.modelRef, row.coworkers]));
+    /*
+     * The platform's experience models this tenant's plan may bind (stories H1, K1).
+     *
+     * The plan is this tenant's own, and a workspace with no subscription is Free (audit #7) — also
+     * when this deployment counts no quota, so the shelf never offers Pro rows by omission. The pool
+     * is platform-owned with no row security (openbot_app may only SELECT it), so it is read in the
+     * member's own frame: a member request never opens `platform` (G01-E). Only the fields a
+     * screen needs leave this handler: never `api_key_env`, never a key. `available` says whether
+     * the deployment holds the key behind the row, so a screen can grey out a row that would fall
+     * back to the default model.
+     */
+    const plan: Plan = quota
+      ? await quota.planFor(context.var.actor.id)
+      : FREE_PLAN_FALLBACK;
+    const poolRows = await database
+      .select({
+        id: platformModelPool.id,
+        provider: platformModelPool.provider,
+        modelName: platformModelPool.modelName,
+        label: platformModelPool.label,
+        apiKeyEnv: platformModelPool.apiKeyEnv,
+        tiers: platformModelPool.tiers,
+      })
+      .from(platformModelPool)
+      .where(eq(platformModelPool.enabled, true))
+      .orderBy(platformModelPool.label, platformModelPool.id);
+    // Under this tenant's row-level security, like the library count above: other tenants' coworkers
+    // on the same pool row are not this tenant's business.
+    const pooled = await database
+      .select({
+        platformModelRef: agentProfiles.platformModelRef,
+        coworkers: sql<number>`count(*)::int`,
+      })
+      .from(agentProfiles)
+      .where(
+        and(
+          isNotNull(agentProfiles.platformModelRef),
+          isNull(agentProfiles.deletedAt),
+        ),
+      )
+      .groupBy(agentProfiles.platformModelRef);
+    const poolCounts = new Map(
+      pooled.map((row) => [row.platformModelRef, row.coworkers]),
+    );
+    const pool = poolRows
+      .filter((row) => (row.tiers as readonly string[]).includes(plan.id))
+      .map((row) => ({
+        id: row.id,
+        provider: row.provider,
+        modelName: row.modelName,
+        label: row.label,
+        coworkers: poolCounts.get(row.id) ?? 0,
+        available:
+          PLATFORM_POOL_KEY_ENV.test(row.apiKeyEnv) &&
+          Boolean(environment[row.apiKeyEnv]),
+      }));
     return context.json({
       models: rows.map((row) => ({
         ...row,
         coworkers: counts.get(row.id) ?? 0,
       })),
       templates,
+      pool,
+      // Whether this plan may connect models with its own key (K1); the screen gates the form on it.
+      customModels: plan.limits.customModels,
     });
   });
 

@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { meter, quotaSummaryQueryOptions } from "@/lib/quota/queries";
+import {
+  meter,
+  quotaSummaryQueryOptions,
+  TOKEN_SCOPE_CAPTION,
+  tokenReadout,
+} from "@/lib/quota/queries";
 
 /**
  * The bottom-left panel: what this workspace is on, and how close it is to the ceiling (spec K2).
@@ -51,7 +56,20 @@ export function UsagePanel() {
             {row.value.limit === null ? "不限" : row.value.limit}
           </li>
         ))}
+        {data.tokens ? (
+          <li
+            className="text-muted-foreground text-xs"
+            title={TOKEN_SCOPE_CAPTION}
+          >
+            模型 token {tokenReadout(data.tokens)}
+          </li>
+        ) : null}
       </ul>
+      {data.tokens ? (
+        <p className="text-[10px] text-muted-foreground">
+          {TOKEN_SCOPE_CAPTION}
+        </p>
+      ) : null}
     </div>
   );
 }

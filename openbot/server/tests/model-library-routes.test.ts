@@ -433,7 +433,7 @@ describe("a model endpoint inside the deployment is never sent the key", () => {
     credentialStore,
     encryptionKey,
     undefined,
-    { lookup, fetchImpl },
+    { outbound: { lookup, fetchImpl } },
   );
   const callGuarded = async <T>(
     method: string,

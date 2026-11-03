@@ -3790,7 +3790,7 @@ await startupLifecycle.run(async (startup) => {
       credentialStore,
       config.keyEncryptionKey,
       quota,
-      modelOutbound,
+      { outbound: modelOutbound },
     ),
   );
 
