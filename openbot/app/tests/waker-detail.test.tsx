@@ -313,7 +313,9 @@ test("the detail page shows duties, running tasks, skill grants and the audit tr
     "http://localhost",
   );
   expect(board.pathname).toBe("/tasks");
-  expect(board.searchParams.get("crew")).toBe(agentId);
+  // One coworker by its whole id (`executor`), never a comma-split roster (`crew`).
+  expect(board.searchParams.get("executor")).toBe(agentId);
+  expect(board.searchParams.has("crew")).toBe(false);
   expect(board.searchParams.get("status")).toBe("running");
   // The section reads running work with no time window, so the board link must not narrow to one.
   expect(board.searchParams.get("period")).toBe("all");
