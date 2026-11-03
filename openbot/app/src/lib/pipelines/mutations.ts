@@ -34,6 +34,50 @@ export function createTemplateMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/**
+ * Rewrite a saved template's name and steps (spec I1).
+ *
+ * No crew in the body: the crew a plan was written for is fixed, and the server reads it from the
+ * stored row. Runs already started keep the steps they started with, so nothing here touches a run.
+ */
+export function updateTemplateMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (input: {
+      templateId: string;
+      name: string;
+      steps: StepDraft[];
+    }) =>
+      client<string>(
+        `/api/group-pipelines/templates/${input.templateId}`,
+        "templateId",
+        {
+          method: "PUT",
+          body: { name: input.name, steps: input.steps },
+          fallback: "这条流程的修改没能保存。",
+        },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all }),
+  });
+}
+
+/** Throw a template away. Its runs stay on record, and one still going finishes from its own copy. */
+export function deleteTemplateMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (templateId: string) =>
+      client<string>(
+        `/api/group-pipelines/templates/${templateId}`,
+        "templateId",
+        {
+          method: "DELETE",
+          fallback: "这条流程没能删掉。",
+        },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all }),
+  });
+}
+
 /** One step the person may not use, as the server names it: `index` is the step's 0-based position. */
 export type RefusedStep = { index: number; stepId: string; agentId: string };
 

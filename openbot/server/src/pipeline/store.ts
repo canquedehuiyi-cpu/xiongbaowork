@@ -110,6 +110,44 @@ export class PipelineValidationError extends Error {
 }
 
 /**
+ * Another template in the same crew already has this name.
+ *
+ * Its own class because it is a 409, not a 400: the plan is fine as written, it collides with one that
+ * exists, and the person's fix is to rename one of the two. The database's unique index is what
+ * decides it, because two saves racing each other would both pass a read-then-write check.
+ */
+export class PipelineNameTakenError extends Error {
+  constructor() {
+    super("这个小组里已经有一条同名的流程了，换个名字再保存。");
+    this.name = "PipelineNameTakenError";
+  }
+}
+
+/**
+ * Turn the unique index's refusal into `PipelineNameTakenError`; anything else is rethrown as is.
+ *
+ * The state code arrives on the server's error, which drizzle wraps, and Bun reports it as `errno` —
+ * the same lookup `waker-groups/store.ts` makes for a crew's name.
+ */
+function nameTaken(error: unknown): never {
+  const violation = error as {
+    errno?: unknown;
+    code?: unknown;
+    cause?: { errno?: unknown; code?: unknown };
+  } | null;
+  const states = [
+    violation?.errno,
+    violation?.code,
+    violation?.cause?.errno,
+    violation?.cause?.code,
+  ];
+  if (states.some((state) => String(state) === "23505")) {
+    throw new PipelineNameTakenError();
+  }
+  throw error;
+}
+
+/**
  * The person who pressed run may not use one or more of the template's coworkers (spec I6).
  *
  * Thrown by `start` before anything is written: no quota is asked, no parent card opens and no run row
@@ -335,6 +373,113 @@ export function createPipelineStore(options: {
       );
   }
 
+  /**
+   * Whether a template may be saved as written, for a create and an edit alike — one set of rules,
+   * because an edit that skipped one of them would be the way around it. Answers the name to store.
+   */
+  async function validateTemplate(input: {
+    tenantId: string;
+    groupId: string;
+    name: string;
+    steps: PipelineStep[];
+  }): Promise<string> {
+    if (input.steps.length === 0) {
+      throw new PipelineValidationError("没有步骤的流水线跑不了任何东西。");
+    }
+    if (input.steps.length > MAX_STEPS) {
+      throw new PipelineValidationError(
+        `一条流水线最多 ${MAX_STEPS} 步，这条写了 ${input.steps.length} 步。`,
+      );
+    }
+    for (const step of input.steps) {
+      if (!step.id || !step.agentId || !step.instruction.trim()) {
+        throw new PipelineValidationError(
+          "每一步都要有编号、一位员工，和它要做的事。",
+        );
+      }
+    }
+    if (
+      new Set(input.steps.map((step) => step.id)).size !== input.steps.length
+    ) {
+      throw new PipelineValidationError(
+        "两个步骤用了同一个编号，跳过和恢复就分不清是哪一步了。",
+      );
+    }
+    const name = input.name.trim();
+    if (!name) {
+      throw new PipelineValidationError("给这条流程起个名字。");
+    }
+    if (!isUuid(input.groupId)) {
+      throw new PipelineValidationError(
+        "流程要写给一个小组，得先从「员工 › 小组」里挑一个。",
+      );
+    }
+    const [flowOwned] = await runAsTenant(input.tenantId, async () =>
+      database
+        .select({ id: wakerFlows.id })
+        .from(wakerFlows)
+        .where(eq(wakerFlows.groupId, input.groupId))
+        .limit(1),
+    );
+    if (flowOwned) {
+      throw new PipelineValidationError(
+        "这个小组属于 WakerFlow 内部，只能在 WakerFlow 里编辑它的流程。",
+      );
+    }
+    /*
+     * Every step goes to somebody IN this crew — the promise the pipeline screen makes in its own
+     * description, so it is checked here rather than left to the picker. Reading the roster under the
+     * caller's tenant scope means a crew that is not theirs comes back empty, which is the same answer
+     * as a crew with no members and the right one for both.
+     */
+    const roster = await runAsTenant(input.tenantId, async () =>
+      database
+        .select({ agentId: wakerGroupMembers.agentId })
+        .from(wakerGroupMembers)
+        .where(eq(wakerGroupMembers.groupId, input.groupId)),
+    );
+    if (roster.length === 0) {
+      throw new PipelineValidationError(
+        "这个小组里还没有员工。先到「员工 › 小组」把人加进去，再来排流程。",
+      );
+    }
+    if (
+      input.steps.some(
+        (step) => !roster.some((row) => row.agentId === step.agentId),
+      )
+    ) {
+      throw new PipelineValidationError(
+        "流程里有步骤交给了组外的员工。每一步的员工都得在这个小组里。",
+      );
+    }
+    return name;
+  }
+
+  /**
+   * One template of this workspace, or null — a malformed id is "not here", not a cast error. A
+   * WakerFlow's compiled template is not here either (spec D10): it is edited only through its Flow.
+   */
+  async function readTemplate(tenantId: string, templateId: string) {
+    if (!isUuid(templateId)) return null;
+    const [row] = await runAsTenant(tenantId, async () =>
+      database
+        .select({
+          id: groupTaskTemplates.id,
+          groupId: groupTaskTemplates.groupId,
+        })
+        .from(groupTaskTemplates)
+        .where(
+          and(
+            eq(groupTaskTemplates.tenantId, tenantId),
+            eq(groupTaskTemplates.id, templateId),
+            isNull(owningFlow()),
+          ),
+        )
+        .limit(1),
+    );
+    return row ?? null;
+  }
+
   /*
    * Named rather than returned inline, because `resume` has to reach the same driving loop `advance`
    * is — and a resumed crew is exactly the case where two copies of that loop would drift into running
@@ -348,78 +493,97 @@ export function createPipelineStore(options: {
       steps: PipelineStep[];
       createdBy?: string;
     }): Promise<string> {
-      if (input.steps.length === 0) {
-        throw new PipelineValidationError("没有步骤的流水线跑不了任何东西。");
-      }
-      if (input.steps.length > MAX_STEPS) {
-        throw new PipelineValidationError(
-          `一条流水线最多 ${MAX_STEPS} 步，这条写了 ${input.steps.length} 步。`,
-        );
-      }
-      for (const step of input.steps) {
-        if (!step.id || !step.agentId || !step.instruction.trim()) {
-          throw new PipelineValidationError(
-            "每一步都要有编号、一位员工，和它要做的事。",
-          );
-        }
-      }
-      if (!isUuid(input.groupId)) {
-        throw new PipelineValidationError(
-          "流程要写给一个小组，得先从「员工 › 小组」里挑一个。",
-        );
-      }
-      const [flowOwned] = await runAsTenant(input.tenantId, async () =>
-        database
-          .select({ id: wakerFlows.id })
-          .from(wakerFlows)
-          .where(eq(wakerFlows.groupId, input.groupId))
-          .limit(1),
-      );
-      if (flowOwned) {
-        throw new PipelineValidationError(
-          "这个小组属于 WakerFlow 内部，只能在 WakerFlow 里编辑它的流程。",
-        );
-      }
-      /*
-       * Every step goes to somebody IN this crew — the promise the pipeline screen makes in its own
-       * description, so it is checked here rather than left to the picker. Reading the roster under the
-       * caller's tenant scope means a crew that is not theirs comes back empty, which is the same answer
-       * as a crew with no members and the right one for both.
-       */
-      const roster = await runAsTenant(input.tenantId, async () =>
-        database
-          .select({ agentId: wakerGroupMembers.agentId })
-          .from(wakerGroupMembers)
-          .where(eq(wakerGroupMembers.groupId, input.groupId)),
-      );
-      if (roster.length === 0) {
-        throw new PipelineValidationError(
-          "这个小组里还没有员工。先到「员工 › 小组」把人加进去，再来排流程。",
-        );
-      }
-      if (
-        input.steps.some(
-          (step) => !roster.some((row) => row.agentId === step.agentId),
-        )
-      ) {
-        throw new PipelineValidationError(
-          "流程里有步骤交给了组外的员工。每一步的员工都得在这个小组里。",
-        );
-      }
+      const name = await validateTemplate(input);
       const [row] = await runAsTenant(input.tenantId, async () =>
         database
           .insert(groupTaskTemplates)
           .values({
             tenantId: input.tenantId,
             groupId: input.groupId,
-            name: input.name,
+            name,
             steps: input.steps,
             createdBy: input.createdBy ?? null,
           })
           .returning({ id: groupTaskTemplates.id }),
-      );
+      ).catch(nameTaken);
       // biome-ignore lint/style/noNonNullAssertion: an INSERT with RETURNING answers with the row it wrote
       return row!.id;
+    },
+
+    /**
+     * Rewrite a template's name and steps (spec I1: the plan is the person's to change).
+     *
+     * The crew is NOT editable: it is read from the stored row, never from the request, because a
+     * template's steps were validated against that crew's roster and moving it would be a second way to
+     * hand a step to somebody outside it. The same checks `createTemplate` makes are made here, against
+     * the same crew, so an edit cannot save a plan a create would have refused.
+     *
+     * Runs already started are untouched by design: each one snapshotted its steps when it started
+     * (`start`), so a person who reworded step 2 has changed the next press, not last hour's work. And
+     * the edit grants nothing — whoever presses run next is asked spec I6's question about every step of
+     * the edited plan at `start`, and again per step as the run reaches it.
+     */
+    async updateTemplate(input: {
+      tenantId: string;
+      templateId: string;
+      name: string;
+      steps: PipelineStep[];
+    }): Promise<void> {
+      const current = await readTemplate(input.tenantId, input.templateId);
+      if (!current) {
+        throw new PipelineNotFoundError("这个工作区里没有这条模板。");
+      }
+      const name = await validateTemplate({
+        tenantId: input.tenantId,
+        groupId: current.groupId,
+        name: input.name,
+        steps: input.steps,
+      });
+      const [row] = await runAsTenant(input.tenantId, async () =>
+        database
+          .update(groupTaskTemplates)
+          .set({ name, steps: input.steps, updatedAt: new Date() })
+          .where(
+            and(
+              eq(groupTaskTemplates.tenantId, input.tenantId),
+              eq(groupTaskTemplates.id, input.templateId),
+            ),
+          )
+          .returning({ id: groupTaskTemplates.id }),
+      ).catch(nameTaken);
+      // Deleted between the read and the write: the same answer as never having been here.
+      if (!row) throw new PipelineNotFoundError("这个工作区里没有这条模板。");
+    },
+
+    /**
+     * Throw a template away. The runs it started are kept, and one still in flight keeps going.
+     *
+     * Nothing here touches `group_task_runs`: the column is `ON DELETE SET NULL` (migration 0076), and
+     * a run never reads its template after `start` — it advances from the steps it snapshotted. So a
+     * delete in the middle of a run only forgets which recipe the run came from, which is the point of
+     * tidying a recipe away.
+     */
+    async deleteTemplate(input: {
+      tenantId: string;
+      templateId: string;
+    }): Promise<void> {
+      if (!isUuid(input.templateId)) {
+        throw new PipelineNotFoundError("这个工作区里没有这条模板。");
+      }
+      const [row] = await runAsTenant(input.tenantId, async () =>
+        database
+          .delete(groupTaskTemplates)
+          .where(
+            and(
+              eq(groupTaskTemplates.tenantId, input.tenantId),
+              eq(groupTaskTemplates.id, input.templateId),
+              // A WakerFlow's compiled template goes away with its Flow, never on its own (spec D10).
+              isNull(owningFlow()),
+            ),
+          )
+          .returning({ id: groupTaskTemplates.id }),
+      );
+      if (!row) throw new PipelineNotFoundError("这个工作区里没有这条模板。");
     },
 
     /**
@@ -479,6 +643,10 @@ export function createPipelineStore(options: {
       flowId?: string;
       runId?: string;
     }): Promise<{ runId: string; parentTaskId: string }> {
+      // A malformed id is "not here" (spec D15), the same answer edit and delete give, not a cast error.
+      if (!isUuid(input.templateId)) {
+        throw new PipelineNotFoundError("这个工作区里没有这条模板。");
+      }
       const template = await runAsTenant(input.tenantId, async () => {
         const [row] = await database
           .select({
