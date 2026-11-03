@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AuditEventInput } from "../src/audit";
 import { createStallGuard } from "../src/channels/stall-guard";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 
 /**
  * These drive real streams, because the properties that matter are properties of a stream.
@@ -116,6 +117,53 @@ describe("a Bot that stops streaming", () => {
     expect(row?.payload.run).toBe("run-9");
     expect(row?.payload.chunks).toBe(0);
     expect(Number(row?.payload.silentForMs)).toBeGreaterThanOrEqual(60);
+  });
+});
+
+/**
+ * G01: the stall is noticed by one shared sweeper timer, armed by whichever stream opened first, so
+ * the timer's own frame is somebody's. Each stream's row is recorded in the frame that opened that
+ * stream instead, and a stream opened in nobody's frame is the operator's, never `system`.
+ */
+describe("whose stall a row is", () => {
+  test("each stalled stream is recorded in the tenant that opened it", async () => {
+    const rows: { bot: unknown; tenant: string }[] = [];
+    const guard = createStallGuard({
+      stallMs: 60,
+      auditStore: {
+        insert: async (event: AuditEventInput) => {
+          rows.push({ bot: event.targetId, tenant: currentTenant() });
+        },
+      },
+    });
+    const open = (id: string) =>
+      guard.watch({ id, name: id }, async () => sse(saysNothing()))(
+        "http://bot.internal/ag-ui",
+        RUN_REQUEST,
+      );
+
+    // Alice's stream opens first, so the sweeper that notices every stall is armed in her frame.
+    const alice = await runAsTenant("alice", () => open("alice-bot"));
+    const bob = await runAsTenant("bob", () => open("bob-bot"));
+    const nobody = await runAsTenant("system", () => open("legacy-bot"));
+    const unframed = await open("unframed-bot");
+    await Promise.all(
+      [alice, bob, nobody, unframed].map((response) =>
+        new Response(response.body).text(),
+      ),
+    );
+    guard.stop();
+
+    expect(
+      rows.sort((left, right) =>
+        String(left.bot).localeCompare(String(right.bot)),
+      ),
+    ).toEqual([
+      { bot: "alice-bot", tenant: "alice" },
+      { bot: "bob-bot", tenant: "bob" },
+      { bot: "legacy-bot", tenant: "platform" },
+      { bot: "unframed-bot", tenant: "platform" },
+    ]);
   });
 });
 

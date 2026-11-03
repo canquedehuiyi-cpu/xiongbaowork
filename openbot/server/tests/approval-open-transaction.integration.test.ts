@@ -41,14 +41,15 @@ type ApprovalTransaction = Parameters<typeof openStoredApprovalInTransaction>[0]
 let initialized = false;
 
 beforeAll(async () => {
-  const [identity] = await database
+  // Which database and schema this is belongs to no tenant: asked as the platform.
+  const [identity] = await runAsTenant("platform", () => database
     .select({
       name: sql<string>`current_database()`,
       version: sql<number>`current_setting('server_version_num')::int`,
       approvals: sql<string | null>`to_regclass('public.approval_requests')::text`,
       rules: sql<string | null>`to_regclass('public.approval_rules')::text`,
     })
-    .from(sql`(select 1) as fixture_identity`);
+    .from(sql`(select 1) as fixture_identity`));
   if (
     !identity || identity.name !== databaseName ||
     identity.version < 170_000 || identity.version >= 180_000 ||

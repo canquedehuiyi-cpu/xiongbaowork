@@ -17,15 +17,20 @@ const createdChannelIds: string[] = [];
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
+  // As `platform`, so a person-stamped fixture is cleaned up too, even when its test failed.
   for (const id of createdAttachmentIds.splice(0)) {
-    await database.delete(attachments).where(eq(attachments.id, id));
+    await runAsTenant("platform", () =>
+      database.delete(attachments).where(eq(attachments.id, id)),
+    );
   }
-  for (const id of createdChannelIds.splice(0)) {
-    await database.delete(channels).where(eq(channels.id, id));
-  }
-  for (const id of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, id));
-  }
+  await runAsTenant("platform", async () => {
+    for (const id of createdChannelIds.splice(0)) {
+      await database.delete(channels).where(eq(channels.id, id));
+    }
+    for (const id of createdUserIds.splice(0)) {
+      await database.delete(users).where(eq(users.id, id));
+    }
+  });
 });
 
 afterAll(async () => {
@@ -35,19 +40,22 @@ afterAll(async () => {
 /** A user and a channel to hang an attachment off of, nothing more. */
 async function seedChannel() {
   const userId = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id: userId,
-    email: `${userId}@example.test`,
-  });
-  createdUserIds.push(userId);
-
   const channelId = `${testPrefix}-channel-${randomUUID()}`;
-  await database.insert(channels).values({
-    id: channelId,
-    name: "Attachment Sweeper Test Channel",
-    description: "Sweep target channel.",
+  // The person's own rows, seeded the way their own signed-in request would write them.
+  await runAsTenant(userId, async () => {
+    await database.insert(users).values({
+      id: userId,
+      email: `${userId}@example.test`,
+    });
+    createdUserIds.push(userId);
+
+    await database.insert(channels).values({
+      id: channelId,
+      name: "Attachment Sweeper Test Channel",
+      description: "Sweep target channel.",
+    });
+    createdChannelIds.push(channelId);
   });
-  createdChannelIds.push(channelId);
 
   return { userId, channelId };
 }
@@ -85,29 +93,32 @@ async function stagedAttachment(options: {
   attachedDaysAgo?: number;
 }) {
   const ageHours = options.hoursAgo ?? (options.daysAgo ?? 0) * 24;
-  const [inserted] = await database
-    .insert(attachments)
-    .values({
-      channelId: options.channelId,
-      uploadedBy: options.userId,
-      name: "test.bin",
-      mimeType: "application/octet-stream",
-      sizeBytes: 3,
-      bytes: Buffer.from([0x01, 0x02, 0x03]),
-      attachedAt:
-        options.attachedDaysAgo === undefined
-          ? null
-          : ago(options.attachedDaysAgo * 24),
-    })
-    .returning();
-  createdAttachmentIds.push(inserted.id);
+  // Uploaded by, and so stamped with, the person it belongs to.
+  return await runAsTenant(options.userId, async () => {
+    const [inserted] = await database
+      .insert(attachments)
+      .values({
+        channelId: options.channelId,
+        uploadedBy: options.userId,
+        name: "test.bin",
+        mimeType: "application/octet-stream",
+        sizeBytes: 3,
+        bytes: Buffer.from([0x01, 0x02, 0x03]),
+        attachedAt:
+          options.attachedDaysAgo === undefined
+            ? null
+            : ago(options.attachedDaysAgo * 24),
+      })
+      .returning();
+    createdAttachmentIds.push(inserted.id);
 
-  await database
-    .update(attachments)
-    .set({ createdAt: ago(ageHours) })
-    .where(eq(attachments.id, inserted.id));
+    await database
+      .update(attachments)
+      .set({ createdAt: ago(ageHours) })
+      .where(eq(attachments.id, inserted.id));
 
-  return inserted.id;
+    return inserted.id;
+  });
 }
 
 /** Thrown to roll a sweep back; never seen by a test. */
@@ -366,17 +377,71 @@ describe("sweeping staged attachments", () => {
             .where(eq(attachments.id, unrelated.id)),
         ),
       ).toEqual([{ id: unrelated.id }]);
+      // Read across tenants, so a row restored into any partition is counted.
       expect(
-        await database
-          .select({ id: attachments.id })
-          .from(attachments)
-          .where(inArray(attachments.id, ids)),
+        await runAsTenant("platform", () =>
+          database
+            .select({ id: attachments.id })
+            .from(attachments)
+            .where(inArray(attachments.id, ids)),
+        ),
       ).toHaveLength(3);
     } finally {
       await runAsTenant(otherTenant, () =>
         database.delete(attachments).where(eq(attachments.id, unrelated.id)),
       );
     }
+  });
+});
+
+/*
+ * G01-D: the cron script hands the culler a plain pool with no frame. The sweep is housekeeping over
+ * every tenant, so it runs as `platform`; unframed it read as the legacy `system` scope, and under
+ * row-level security a person's staged upload was never found. Driven against the pool itself here,
+ * not a transaction, because a transaction carries the frame it was opened in.
+ *
+ * The window is fifty years and the row sixty, so no other staged row in a shared database is old
+ * enough to be touched by this sweep.
+ */
+describe("the cron job's own sweep", () => {
+  test("reaches a person's staged upload with no frame of its own", async () => {
+    const { userId, channelId } = await seedChannel();
+    const tenant = `${testPrefix}-person-${randomUUID()}`;
+    const [row] = await runAsTenant(tenant, () =>
+      database
+        .insert(attachments)
+        .values({
+          tenantId: tenant,
+          channelId,
+          uploadedBy: userId,
+          name: "abandoned.bin",
+          mimeType: "application/octet-stream",
+          sizeBytes: 1,
+          bytes: Buffer.from([0x05]),
+        })
+        .returning({ id: attachments.id }),
+    );
+    createdAttachmentIds.push(row.id);
+    await runAsTenant(tenant, () =>
+      database
+        .update(attachments)
+        .set({ createdAt: ago(60 * 365 * 24) })
+        .where(eq(attachments.id, row.id)),
+    );
+
+    const deleted = await cullStagedAttachments(database, {
+      olderThanHours: 50 * 365 * 24,
+    });
+
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    expect(
+      await runAsTenant(tenant, () =>
+        database
+          .select({ id: attachments.id })
+          .from(attachments)
+          .where(eq(attachments.id, row.id)),
+      ),
+    ).toEqual([]);
   });
 });
 

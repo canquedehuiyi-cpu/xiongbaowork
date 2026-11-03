@@ -1,7 +1,7 @@
+import type { OutboundPolicy } from "../net/outbound-guard";
 import * as builtinRoutines from "./builtin-routines";
 import * as composio from "./composio";
 import * as driveRest from "./google-drive-rest";
-import type { OutboundPolicy } from "../net/outbound-guard";
 import type { ListedTool, McpCallResult } from "./mcp";
 import * as mcp from "./mcp";
 

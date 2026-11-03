@@ -4,11 +4,23 @@ import { stampSignIn } from "../src/auth";
 import { createDatabase } from "../src/db/client";
 import { revokedAccess, sessions, users } from "../src/db/schema";
 import { createPeopleStore } from "../src/people/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
-const store = createPeopleStore(database, []);
+/**
+ * The identity rows and the deny list are the deployment's, not anybody's: seeded, read and removed
+ * as `platform`, the way the identity layer (and the sign-in hook that stamps them) reaches them.
+ */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
+const people = createPeopleStore(database, []);
+const store: Pick<typeof people, "list" | "find" | "revoke" | "restore"> = {
+  list: (...args) => asPlatform(() => people.list(...args)),
+  find: (...args) => asPlatform(() => people.find(...args)),
+  revoke: (...args) => asPlatform(() => people.revoke(...args)),
+  restore: (...args) => asPlatform(() => people.restore(...args)),
+};
 const PREFIX = "last-sign-in-test-";
 const ids: string[] = [];
 
@@ -20,35 +32,39 @@ async function person(
 ): Promise<string> {
   const id = `${PREFIX}${suffix}`;
   ids.push(id);
-  await database.insert(users).values({
-    id,
-    email: `${id}@openbot.test`,
-    name: id,
-    emailVerified: true,
-    lastSignedInAt: signedInAt,
-  });
-  if (signedInAt) {
-    await database.insert(sessions).values({
-      id: `${id}-session`,
-      userId: id,
-      token: `${id}-token`,
-      expiresAt: new Date(Date.now() + 86_400_000),
-      createdAt: signedInAt,
+  await asPlatform(async () => {
+    await database.insert(users).values({
+      id,
+      email: `${id}@openbot.test`,
+      name: id,
+      emailVerified: true,
+      lastSignedInAt: signedInAt,
     });
-  }
+    if (signedInAt) {
+      await database.insert(sessions).values({
+        id: `${id}-session`,
+        userId: id,
+        token: `${id}-token`,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: signedInAt,
+      });
+    }
+  });
   return id;
 }
 
 afterEach(async () => {
   if (ids.length === 0) return;
-  await database.delete(sessions).where(inArray(sessions.userId, ids));
-  await database.delete(users).where(inArray(users.id, ids));
-  await database.delete(revokedAccess).where(
-    inArray(
-      revokedAccess.email,
-      ids.map((id) => `${id}@openbot.test`),
-    ),
-  );
+  await asPlatform(async () => {
+    await database.delete(sessions).where(inArray(sessions.userId, ids));
+    await database.delete(users).where(inArray(users.id, ids));
+    await database.delete(revokedAccess).where(
+      inArray(
+        revokedAccess.email,
+        ids.map((id) => `${id}@openbot.test`),
+      ),
+    );
+  });
   ids.length = 0;
 });
 
@@ -70,7 +86,9 @@ describe("when somebody was last here", () => {
   test("survives the session row going away, which is what signing out does", async () => {
     const dana = await person("dana", SIGNED_IN_AT);
 
-    await database.delete(sessions).where(eq(sessions.userId, dana));
+    await asPlatform(() =>
+      database.delete(sessions).where(eq(sessions.userId, dana)),
+    );
 
     expect((await store.find(dana))?.lastSignedInAt).toBe(
       SIGNED_IN_AT.toISOString(),
@@ -97,7 +115,7 @@ describe("when somebody was last here", () => {
     const dana = await person("dana", null);
     const other = await person("other", null);
 
-    await stampSignIn(database, dana, SIGNED_IN_AT);
+    await asPlatform(() => stampSignIn(database, dana, SIGNED_IN_AT));
 
     expect((await store.find(dana))?.lastSignedInAt).toBe(
       SIGNED_IN_AT.toISOString(),
@@ -109,8 +127,8 @@ describe("when somebody was last here", () => {
     const dana = await person("dana", null);
     const earlier = new Date("2026-09-01T09:00:00.000Z");
 
-    await stampSignIn(database, dana, SIGNED_IN_AT);
-    await stampSignIn(database, dana, earlier);
+    await asPlatform(() => stampSignIn(database, dana, SIGNED_IN_AT));
+    await asPlatform(() => stampSignIn(database, dana, earlier));
 
     expect((await store.find(dana))?.lastSignedInAt).toBe(
       SIGNED_IN_AT.toISOString(),

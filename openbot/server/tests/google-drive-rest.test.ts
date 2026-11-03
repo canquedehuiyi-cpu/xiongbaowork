@@ -693,8 +693,7 @@ describe("a file in a shared drive is reached like one in My Drive", () => {
  */
 describe("a redirect from Drive is not followed", () => {
   test("the request asks not to follow, the Location is never requested, and the call fails", async () => {
-    const calls: { url: string; redirect: RequestRedirect | undefined }[] =
-      [];
+    const calls: { url: string; redirect: RequestRedirect | undefined }[] = [];
     globalThis.fetch = (async (input: string | URL, options?: RequestInit) => {
       calls.push({ url: String(input), redirect: options?.redirect });
       return new Response(null, {
