@@ -58,6 +58,7 @@ import {
   type PersonQuestion,
   personQuestionSchema,
   questionConversationBot,
+  withQuestionParking,
 } from "./approvals/questions";
 import {
   ApprovalRecoveryBlockedError,
@@ -96,7 +97,10 @@ import {
   dispatchClaimedAutomations,
   offerDueAutomations,
 } from "./automations/sweep";
-import { createWakerAutomationExecutor } from "./automations/waker-executor";
+import {
+  createWakerAutomationExecutor,
+  firingOfInitiator,
+} from "./automations/waker-executor";
 import { createAuth } from "./auth";
 import {
   createDevRequireUser,
@@ -128,6 +132,10 @@ import {
   loadAttachmentForTurn,
   markAttachmentsSent,
 } from "./channels/attachments";
+import {
+  createChannelDispatch,
+  createChannelDispatchRoutes,
+} from "./channels/dispatch";
 import {
   announceTaskUpdate,
   createChannelEventHub,
@@ -219,6 +227,9 @@ import {
   HostAccessRefusedError,
 } from "./host-access/broker";
 import { hostAccessTools } from "./host-access/tools";
+import { createKnowledgeRoutes } from "./knowledge/routes";
+import { createKnowledgeStore } from "./knowledge/store";
+import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
@@ -528,12 +539,26 @@ await startupLifecycle.run(async (startup) => {
    * metered now (audit defect #11): the runtime hands the resolver the deployment model it would have
    * spoken, and the resolver wraps it with the same meter a bound model gets.
    */
+  /*
+   * Where a tenant's model base URL may point (audit defect #6): only the development private-host
+   * opt-in (refused in production by `config.ts`), so a developer's local provider still answers.
+   *
+   * Deliberately NOT `config.agentEndpointAllowedHosts`. Those are hosts an operator opened for agent
+   * endpoints; reusing them here would hand every tenant (model routes need only `requireUser`) a
+   * plain-http path to those internal services on any port, with the response read back as model
+   * output. A model allowlist, if one is ever wanted, is its own setting, empty by default.
+   */
+  const modelOutbound = {
+    // Read on its own, not through `config.computer`: a local model needs no Bot computer.
+    allowPrivateHosts: config.modelEndpointsAllowPrivateHosts,
+  };
   const tokenCallSink = databaseTokenCallSink(database);
   const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
     tokenCallSink,
+    { outbound: modelOutbound },
   );
   const resolveAgentModel = modelOf(resolveNamedAgentModel, tokenCallSink);
   const agentProfileStore = createAgentProfileStore(
@@ -719,7 +744,7 @@ await startupLifecycle.run(async (startup) => {
       throw new ApprovalRefusedError("That Bot is no longer available to you.");
   };
   // The board projector: approvals, runs and routines project into tasks.
-  const taskProjector = createTaskProjector(
+  const boardProjector = createTaskProjector(
     database,
     (tenantId) => {
       // Same announce rail the channel roster listens on, so a second server
@@ -729,6 +754,18 @@ await startupLifecycle.run(async (startup) => {
     },
     quota,
   );
+  /*
+   * Spec I3: a run that asked its person a question parks its card in 需要操作, and the answer moves it
+   * back. The questions write through the plain projector, and every card the runners finish goes through
+   * `withQuestionParking`: `ask_person` lets the turn end, so a park written while it was running would be
+   * overwritten by that close.
+   */
+  const approvalQuestions = createApprovalQuestions(
+    database,
+    authoriseQuestion,
+    boardProjector,
+  );
+  const taskProjector = withQuestionParking(boardProjector, approvalQuestions);
   const storedApprovals = createApprovalStore(database, taskProjector);
 
   /*
@@ -788,7 +825,7 @@ await startupLifecycle.run(async (startup) => {
         return request;
       },
     },
-    createApprovalQuestions(database, authoriseQuestion),
+    approvalQuestions,
     async (ownerUserId, botId, snapshot) => {
       const source = await sourceForCoordinationRun({
         actorId: ownerUserId,
@@ -1347,6 +1384,8 @@ await startupLifecycle.run(async (startup) => {
   // server-dispatched: the selected Bot and the signed-in owner are bound here, then the desktop worker
   // receives only opaque grant ids and relative paths.
   const personalMemoryStore = createMemoryStore(database);
+  // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
+  const knowledgeStore = createKnowledgeStore(database);
   const demonstrationStore = createDemonstrationStore(database);
   const demonstrationRecorder = createDemonstrationRecorder({
     store: demonstrationStore,
@@ -1418,6 +1457,11 @@ await startupLifecycle.run(async (startup) => {
         ownerUserId: actorId,
         agentId: botId,
       }),
+      ...(await knowledgeTools({
+        store: knowledgeStore,
+        ownerUserId: actorId,
+        agentId: botId,
+      })),
       ...(await grantedTools({
         store: pluginStore,
         botId,
@@ -2094,6 +2138,7 @@ await startupLifecycle.run(async (startup) => {
       database,
       encryptionKey: config.keyEncryptionKey,
       allowPlatformModel: false,
+      outbound: modelOutbound,
     }),
     generator: createFlowGenerator(),
     quota,
@@ -2464,6 +2509,8 @@ await startupLifecycle.run(async (startup) => {
     refusalMarker: REFUSAL_MARKER,
     personInitiator: PERSON_INITIATOR,
   });
+  // Declared before the approval-resume loop, which settles an automation firing an approval held.
+  const automationStore = createAutomationStore(database);
   const approvalContinuationRunner = createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
@@ -2663,6 +2710,15 @@ await startupLifecycle.run(async (startup) => {
                           sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
                         ),
                       );
+                    /*
+                     * An automation firing that stopped for this approval (D06) is settled the same
+                     * way, allowed or declined: the turn has now continued with the person's answer.
+                     * The firing is named by the snapshot's initiator, and settled in this owner's
+                     * frame, so another person's firing id matches nothing.
+                     */
+                    const waitingFiring = firingOfInitiator(snapshot.initiator);
+                    if (waitingFiring)
+                      await automationStore.settleWaitingFiring(waitingFiring);
                   },
                 };
                 abandon = (reason) =>
@@ -2956,7 +3012,6 @@ await startupLifecycle.run(async (startup) => {
    * unattended turn runner as a routine (same gates, same card, same ceiling). WakerFlow targets have
    * no executor until D10, so the store refuses them at save time.
    */
-  const automationStore = createAutomationStore(database);
   const automationQueue = createWorkQueue(database);
   const wakerAutomationExecutor = createWakerAutomationExecutor({
     store: automationStore,
@@ -3234,6 +3289,57 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
 
+  /*
+   * `@` a coworker inside a 1:1 conversation (spec B2, B3): a card on the board with the coworker named
+   * as executor, and the turn run here, on the channel's own thread, as that coworker. The same
+   * unattended runner a routine firing uses, so the pause gate, the "Use Bots" and model-allowlist
+   * refusals and the audit trail are the ones that already have suites. See channels/dispatch.ts.
+   */
+  const channelDispatch = createChannelDispatch({
+    queue: createWorkQueue(database),
+    owner: workOwner("channel-dispatch"),
+    board: taskProjector,
+    channel: (actor, channelId) => channelStore.get(actor, channelId),
+    // The same two ways a coworker can be the caller's that the memory ingestion asks, and a ban
+    // freezes this work as it freezes a routine firing (spec J5).
+    bot: async (actor, agentId) => {
+      if (await isAccessRevoked(database, actor.id)) return null;
+      const profile = await agentProfileStore.get(actor, agentId);
+      if (profile) return { id: agentId, name: profile.name };
+      return (await pluginStore.agentOwner(agentId)) === actor.id
+        ? { id: agentId, name: agentId }
+        : null;
+    },
+    actorFor,
+    runTurn: unattendedTurnRunner,
+    activity: async ({ actor, channelId, pinnedAgentId, text, sourceId }) =>
+      channelStore.recordActivity(
+        actor,
+        channelId,
+        { text, agentId: pinnedAgentId, at: new Date() },
+        { id: sourceId },
+      ),
+    busy: (threadId, busy) => channelStore.signalBusy(threadId, busy),
+    deviceIdOf: deviceIdForBot,
+  });
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          while (await channelDispatch.sweep()) {}
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "channel-dispatch-sweep-error",
+              error: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 1_000),
+    (resource) => resource.stop(),
+  );
+
   startup.acquireSync(
     () =>
       repeatAfterEach(async () => {
@@ -3290,6 +3396,22 @@ await startupLifecycle.run(async (startup) => {
                     return (turn) => run({ ...turn, tenantId });
                   },
                 });
+                /*
+                 * Spec I3: the card that asked was moved back to 进行中 when the person answered; the
+                 * turn the answer started has now replied, so the card goes on to the review lane. A
+                 * responsibility's own run closes its own card when it finishes, so it is left to do
+                 * that. The tenant is the claimed work row's, not a default.
+                 */
+                if (!outcome.responsibilityId)
+                  await taskProjector
+                    .finished({
+                      tenantId,
+                      runRef: payload.question.runId,
+                      onlyUnsettled: true,
+                    })
+                    .catch((error) =>
+                      console.error("task projection failed", error),
+                    );
                 const source = await sourceForCoordinationRun({
                   ...payload.question,
                   botId: questionConversationBot(payload.question),
@@ -3756,6 +3878,20 @@ await startupLifecycle.run(async (startup) => {
         const text = await memory.execute(args);
         return { text, isError: text.startsWith(REFUSAL_MARKER) };
       }
+      if (KNOWLEDGE_TOOL_NAMES.has(name)) {
+        // Offered only to a Waker its owner bound a notebook to; anything else is a refusal.
+        const knowledge = (
+          await knowledgeTools({
+            store: knowledgeStore,
+            ownerUserId: actorId,
+            agentId: botId,
+          })
+        ).find((candidate) => candidate.name === name);
+        const text = knowledge
+          ? await knowledge.execute(args)
+          : `${REFUSAL_MARKER} No knowledge notebook is shared with this Waker.`;
+        return { text, isError: text.startsWith(REFUSAL_MARKER) };
+      }
       if (!name.startsWith("host_")) return null;
       const tool = hostAccessTools({
         broker: hostAccessBroker,
@@ -3867,6 +4003,20 @@ await startupLifecycle.run(async (startup) => {
   );
 
   /*
+   * `POST /api/channels/:channelId/dispatch` (spec B2): mounted beside the channel routes, behind the
+   * same session guard, so the offer and the card are written in the caller's own tenant.
+   */
+  app.route(
+    "/api/channels",
+    createChannelDispatchRoutes(
+      channelDispatch,
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  /*
    * The task board (ticket 007): the projector is the only writer, these
    * routes are the read side, and both run under the caller's tenant scope.
    */
@@ -3895,6 +4045,7 @@ await startupLifecycle.run(async (startup) => {
       credentialStore,
       config.keyEncryptionKey,
       quota,
+      { outbound: modelOutbound },
     ),
   );
 
@@ -4014,6 +4165,17 @@ await startupLifecycle.run(async (startup) => {
     "/api/personas",
     createPersonaRoutes(
       createPersonaTemplateStore(database),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
+  // A person's knowledge base (D08, story RES1): notebooks, text sources and read-only Waker bindings.
+  app.route(
+    "/api/knowledge",
+    createKnowledgeRoutes(
+      knowledgeStore,
       config.singleUser
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),

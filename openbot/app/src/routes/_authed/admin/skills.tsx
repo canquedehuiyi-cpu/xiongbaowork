@@ -35,11 +35,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
+  crewMembers,
+  crewSummary,
+  grantToMembers,
+} from "@/lib/plugins/crew-grant";
+import {
   removeSkillMutationOptions,
   saveSkillMutationOptions,
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
 import { pluginsPageQueryOptions } from "@/lib/plugins/queries";
+import {
+  type WakerGroup,
+  wakerGroupsQueryOptions,
+} from "@/lib/waker-groups/queries";
 
 /**
  * The deployment's skills: named instructions a person invokes with `/` and a Bot follows.
@@ -61,10 +70,22 @@ function RouteComponent() {
   const plugins = useQuery(pluginsPageQueryOptions());
   const { data: agents } = useQuery(agentListQueryOptions());
   const nameFor = useBotNames();
+  /*
+   * The workspace's crews, as a way to say WHICH coworkers get a deployment skill (spec E2). A crew
+   * never holds the skill itself: a press writes one grant per member, as `crew-grant.ts` explains.
+   */
+  const crews = useQuery(wakerGroupsQueryOptions());
 
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  /** The last group press's sentence, on the row of the skill it was about. */
+  const [batch, setBatch] = useState<{
+    slug: string;
+    text: string;
+    failed: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const report = { onError: (thrown: Error) => setError(thrown.message) };
   const saveSkill = useMutation({
@@ -85,6 +106,32 @@ function RouteComponent() {
     name: nameFor(agent.id),
   }));
   const skills = plugins.data?.skills ?? [];
+  const known = new Set(bots.map((bot) => bot.id));
+
+  async function grantToCrew(
+    slug: string,
+    crew: WakerGroup,
+    agentIds: string[],
+  ) {
+    setBatch(null);
+    setBusy(true);
+    try {
+      const outcome = await grantToMembers({
+        queryClient,
+        kind: "skill",
+        refs: [slug],
+        agentIds,
+      });
+      setBatch({
+        slug,
+        ...crewSummary(outcome, { label: crew.name, what: `/${slug}` }),
+      });
+    } catch (thrown) {
+      setError((thrown as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <PageShell
@@ -131,7 +178,7 @@ function RouteComponent() {
                     </ItemTitle>
                     <ItemDescription>{skill.summary}</ItemDescription>
                     {/* A set, so it wraps onto its own line rather than crowding the title. */}
-                    <ItemFooter>
+                    <ItemFooter className="flex-col items-start">
                       <div className="flex flex-wrap gap-2">
                         {bots.map((bot) => {
                           const held = skill.grantedTo.includes(bot.id);
@@ -155,6 +202,49 @@ function RouteComponent() {
                           );
                         })}
                       </div>
+                      {(crews.data ?? []).length === 0 ? null : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-muted-foreground text-xs">
+                            或者交给一个小组：
+                          </span>
+                          {(crews.data ?? []).map((crew) => {
+                            /* The chip's number is the writes it will make: members not holding it yet. */
+                            const missing = crewMembers(
+                              crew,
+                              (agentId) =>
+                                known.has(agentId) &&
+                                !skill.grantedTo.includes(agentId),
+                            );
+                            return (
+                              <Button
+                                aria-label={`把 /${skill.slug} 交给${crew.name}`}
+                                disabled={busy || missing.length === 0}
+                                key={crew.id}
+                                onClick={() =>
+                                  void grantToCrew(skill.slug, crew, missing)
+                                }
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                {crew.name} · {missing.length}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {batch && batch.slug === skill.slug ? (
+                        <p
+                          className={
+                            batch.failed
+                              ? "text-destructive text-xs"
+                              : "text-muted-foreground text-xs"
+                          }
+                          role={batch.failed ? "alert" : "status"}
+                        >
+                          {batch.text}
+                        </p>
+                      ) : null}
                     </ItemFooter>
                   </ItemContent>
                   <ItemActions>

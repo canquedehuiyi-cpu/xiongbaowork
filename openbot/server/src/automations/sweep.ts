@@ -58,7 +58,11 @@ export type AutomationFiringExecutor = (
 export type AutomationSweepOptions = {
   store: Pick<
     AutomationStore,
-    "dueTriggers" | "advanceTrigger" | "beginFiring" | "finishFiring"
+    | "dueTriggers"
+    | "advanceTrigger"
+    | "beginFiring"
+    | "finishFiring"
+    | "reapAbandonedFirings"
   >;
   queue: WorkQueue;
   /** Who carries out each target kind (AUT3). A kind with nothing registered fails its firing. */
@@ -69,6 +73,13 @@ export type AutomationSweepOptions = {
   maxAttempts?: number;
   limit?: number;
   graceMs?: number;
+  /**
+   * A clock for tests. Unset in production, where phase one judges "due" and "late" on the
+   * database's clock end to end (`dueTriggers` hands its `now()` back with every row). When given,
+   * phase one uses it end to end instead — it is handed to `dueTriggers` too — so a test's stamps and
+   * its clock cannot disagree. Phase two reads it (or the process clock) for its claim-time window
+   * check, as `routines/sweep.ts` does.
+   */
   now?: () => Date;
   /**
    * Where a begun firing is carried out. Omitted, it is awaited inside this pass (the tests do this,
@@ -90,6 +101,16 @@ export type AutomationSweepReport = {
  * The minute a firing was due, rendered the same way by every replica: `2026-08-26T09:30Z`.
  * THE FORMAT IS THE IDEMPOTENCE — change it and every key already queued is orphaned.
  */
+/**
+ * How long a firing may stay `running`, untouched, before a pass declares it abandoned: twice the
+ * unattended turn timeout, the same horizon as `ABANDONED_RUN_MS` in `routines/sweep.ts`, so a
+ * slow-but-alive turn always records its own outcome first.
+ */
+export const ABANDONED_FIRING_MS = 10 * 60_000;
+
+export const ABANDONED_FIRING_ERROR =
+  "服务器没有完成这次执行，可能中途重启了；本次不会重新执行。";
+
 export function minuteKey(due: Date): string {
   return `${due.toISOString().slice(0, 16)}Z`;
 }
@@ -159,12 +180,17 @@ function eventOf(payload: Record<string, unknown>): AutomationEvent | null {
 export async function offerDueAutomations(
   options: AutomationSweepOptions,
 ): Promise<{ offered: string[] }> {
-  const now = options.now?.() ?? new Date();
+  const testClock = options.now?.();
   const graceMs = options.graceMs ?? AUTOMATION_GRACE_MS;
-  const due = await options.store.dueTriggers(options.limit ?? DEFAULT_LIMIT);
+  const due = await options.store.dueTriggers(
+    options.limit ?? DEFAULT_LIMIT,
+    testClock,
+  );
   const offered: string[] = [];
 
   for (const trigger of due) {
+    // The clock the row was judged due by: the database's, never this replica's.
+    const now = trigger.asOf;
     try {
       // The owner, as the trigger row names it. A row that names nobody is not acted on at all.
       const tenant = assertPersonTenant(trigger.tenantId);
@@ -233,6 +259,31 @@ export async function dispatchClaimedAutomations(
     fired: [],
     skipped: [],
   };
+
+  /*
+   * THE REAPER (WF-F: mark failed, never replay). The queue item is finished the moment a firing
+   * has begun, so a server that dies before the outcome is recorded leaves the firing `running` with
+   * nothing to come back for it. Age is the signal, on the database's clock; best-effort, so a
+   * reaper that cannot run never stops this pass from carrying out what it claimed.
+   */
+  try {
+    const reaped = await options.store.reapAbandonedFirings(
+      ABANDONED_FIRING_MS,
+      ABANDONED_FIRING_ERROR,
+    );
+    if (reaped > 0) {
+      console.warn(
+        JSON.stringify({ type: "automation-firings-reaped", reaped }),
+      );
+    }
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        type: "automation-firing-reap-failed",
+        reason: reasonOf(error),
+      }),
+    );
+  }
 
   const finish = async (key: string, automationId: string, reason: string) => {
     const finished = await options.queue.finish({

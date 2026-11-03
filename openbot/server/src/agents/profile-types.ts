@@ -94,4 +94,12 @@ export type CreateAgentInput = Pick<
    * server decides which parts are worth sending to a model at all.
    */
   persona?: Persona;
+  /**
+   * The seed the coworker's abstract avatar is drawn from.
+   *
+   * Absent on a create means the new id, which is what every coworker got before the seed could be
+   * chosen; absent on an update leaves the stored one where it is. Never a picture, only the string
+   * boring-avatars turns into one, so the parser keeps it to a short run of safe characters.
+   */
+  avatarSeed?: string;
 };

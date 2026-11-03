@@ -158,8 +158,9 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/audit.ts": { 'runAsTenant("platform"': 1 },
   // The signed-out automation hook's trigger lookup by id (see the header); the rest is the owner's.
   "src/automations/ingress-routes.ts": { 'runAsTenant("platform"': 1 },
-  // The scheduler's `dueTriggers`: which triggers are due across every tenant (background sweep).
-  "src/automations/store.ts": { 'runAsTenant("platform"': 1 },
+  // The scheduler's background statements across every tenant: `dueTriggers` (which triggers are
+  // due) and `reapAbandonedFirings` (firings a dead server left running are marked failed).
+  "src/automations/store.ts": { 'runAsTenant("platform"': 2 },
   "src/auth/admin-scope.ts": { "asPlatform(": 3, "withCapability(": 1 },
   "src/auth/dev-actor.ts": { 'runAsTenant("platform"': 2 },
   "src/auth/guards.ts": { 'runAsTenant("platform"': 2 },

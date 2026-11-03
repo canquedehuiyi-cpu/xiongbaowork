@@ -73,7 +73,7 @@ export type AutomationBoard = {
 export type WakerAutomationExecutorDeps = {
   store: Pick<
     AutomationStore,
-    "finishFiring" | "consecutiveFailures" | "tripBreaker"
+    "finishFiring" | "consecutiveFailures" | "tripBreaker" | "startFiring"
   >;
   channels: Pick<ChannelStore, "direct" | "recordActivity">;
   /** Who the owner is as an actor: their grants and connections resolve to them. */
@@ -116,6 +116,27 @@ export function automationInstruction(
   )}`;
 }
 
+const FIRING_INITIATOR_PREFIX = "automation-firing:";
+
+/**
+ * Who a firing's turn acts as, for the audit trail and for an approval it stops for: a `routine`
+ * initiator naming this firing. The approval snapshot keeps it, so the approval-resume path finds the
+ * one firing it settles without a column of its own.
+ */
+export function automationFiringInitiator(firingId: string): AuditInitiator {
+  return { kind: "routine", id: `${FIRING_INITIATOR_PREFIX}${firingId}` };
+}
+
+/** The firing an initiator names, or null when it is not an automation firing's. */
+export function firingOfInitiator(
+  initiator: AuditInitiator | null | undefined,
+): string | null {
+  if (initiator?.kind !== "routine") return null;
+  if (!initiator.id.startsWith(FIRING_INITIATOR_PREFIX)) return null;
+  const id = initiator.id.slice(FIRING_INITIATOR_PREFIX.length);
+  return id === "" ? null : id;
+}
+
 export function breakerMessage(name: string): string {
   return `自动任务「${name}」已连续失败 ${AUTOMATION_BREAKER_LIMIT} 次，已自动停用。请排查原因后重新启用。`;
 }
@@ -145,6 +166,11 @@ export function createWakerAutomationExecutor(
     const { automation } = firing;
     if (automation.target.kind !== "waker") {
       await store.finishFiring(firing.id, "failed", AUTOMATION_NOT_A_WAKER);
+      return;
+    }
+    // Taken up now, perhaps after waiting for its thread: one reaped meanwhile does not run at all.
+    if (!(await store.startFiring(firing.id))) {
+      log("automation-firing-gone", firing, new Error("not running any more"));
       return;
     }
     const agentId = automation.target.agentId;
@@ -201,8 +227,13 @@ export function createWakerAutomationExecutor(
       try {
         failures = await store.consecutiveFailures(automation.id);
         if (failures >= AUTOMATION_BREAKER_LIMIT) {
-          await store.tripBreaker(automation.id, firing.id);
-          tripped = true;
+          // Single winner: of failures racing past the limit, only the one that trips it goes on to
+          // close the card as the breaker and say so; the rest are ordinary failures.
+          tripped = await store.tripBreaker(
+            automation.id,
+            firing.id,
+            AUTOMATION_BREAKER_LIMIT,
+          );
         }
       } catch (error) {
         log("automation-breaker-failed", firing, error);
@@ -245,28 +276,33 @@ export function createWakerAutomationExecutor(
       return;
     }
 
-    // 2. Spec J5: a ban freezes the work.
-    if (await deps.accessRevokedOf?.(ownerUserId)) {
-      await store.finishFiring(
-        firing.id,
-        "skipped",
-        AUTOMATION_SKIPPED_ACCESS_REVOKED,
-      );
-      return;
-    }
-
-    // 3. A paused Waker's firing is skipped, so a long pause never trips the breaker.
-    if (await isBotPaused(ownerUserId, agentId)) {
-      await store.finishFiring(
-        firing.id,
-        "skipped",
-        AUTOMATION_SKIPPED_BOT_PAUSED,
-      );
-      return;
-    }
-
-    // 4. The month's ceiling, asked before the model is dialled.
+    /*
+     * 2–4. The gates. A gate that REFUSES is `skipped` and never counts; a gate that could not be
+     * asked at all (the ban list, the pause flag or the month's count unreadable) is a failure like
+     * any other, routed through `fail` so the breaker sees it rather than past it.
+     */
     try {
+      // 2. Spec J5: a ban freezes the work.
+      if (await deps.accessRevokedOf?.(ownerUserId)) {
+        await store.finishFiring(
+          firing.id,
+          "skipped",
+          AUTOMATION_SKIPPED_ACCESS_REVOKED,
+        );
+        return;
+      }
+
+      // 3. A paused Waker's firing is skipped, so a long pause never trips the breaker.
+      if (await isBotPaused(ownerUserId, agentId)) {
+        await store.finishFiring(
+          firing.id,
+          "skipped",
+          AUTOMATION_SKIPPED_BOT_PAUSED,
+        );
+        return;
+      }
+
+      // 4. The month's ceiling, asked before the model is dialled.
       await deps.quota?.assertCapacity(ownerUserId, "tasksPerMonth");
     } catch (error) {
       if (error instanceof QuotaExceeded) {
@@ -274,7 +310,8 @@ export function createWakerAutomationExecutor(
         await say(error.message);
         return;
       }
-      throw error;
+      await fail(reasonOf(error));
+      return;
     }
 
     // 5. The firing's own card (C2). Under a ceiling, a card refused is a firing refused.
@@ -302,10 +339,8 @@ export function createWakerAutomationExecutor(
         agentId,
         threadId: channel.threadId,
         instruction: automationInstruction(automation.name, event),
-        initiator: {
-          kind: "routine",
-          id: `automation:${automation.id}`,
-        } satisfies AuditInitiator,
+        // Names this firing, so the approval it may stop for can settle it (`firingOfInitiator`).
+        initiator: automationFiringInitiator(firing.id),
         // The card opened above is this firing's record; the runner files none of its own.
         cardOwnedByCaller: carded,
       }));
@@ -325,13 +360,39 @@ export function createWakerAutomationExecutor(
     await closeCard();
   }
 
+  /*
+   * ONE FIRING AT A TIME PER THREAD. Every firing for one owner and one Waker lands in the same
+   * conversation (`channels.direct`), and a turn holds that thread's lock for its whole length: two
+   * at once collide on the lock and the loser fails, which the breaker would count. So firings that
+   * share a thread queue behind each other here, in arrival order. Within this process; firings
+   * claimed by two replicas at the same moment can still meet, and the loser is then a failure.
+   */
+  const lanes = new Map<string, Promise<void>>();
+  function inLane(key: string, work: () => Promise<void>): Promise<void> {
+    const previous = lanes.get(key) ?? Promise.resolve();
+    const current = previous.then(work, work);
+    const settled = current.catch(() => undefined);
+    lanes.set(key, settled);
+    void settled.then(() => {
+      if (lanes.get(key) === settled) lanes.delete(key);
+    });
+    return current;
+  }
+
   return {
     async run(firing, event) {
       try {
         const ownerUserId = assertPersonTenant(firing.automation.tenantId);
-        await runAsTenant(ownerUserId, async () => {
-          await runAsOwner(firing, ownerUserId, event);
-        });
+        const { target } = firing.automation;
+        const lane =
+          target.kind === "waker"
+            ? JSON.stringify([ownerUserId, target.agentId])
+            : null;
+        const work = () =>
+          runAsTenant(ownerUserId, async () => {
+            await runAsOwner(firing, ownerUserId, event);
+          });
+        await (lane === null ? work() : inLane(lane, work));
       } catch (error) {
         // `run` never throws: an outcome that could not be recorded is said out loud instead.
         log("automation-run-crashed", firing, error);

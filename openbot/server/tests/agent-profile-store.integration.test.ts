@@ -695,7 +695,8 @@ describe("agent profile store integration", () => {
         // reaches here already validated by the same check that guards creation.
         endpoint: "https://moved.example.test/ag-ui",
         ownerUserId: "forged-owner",
-        avatarSeed: "forged-avatar",
+        // Editable since D07 D2 (the route has already checked it against the seed pattern).
+        avatarSeed: "chosen-avatar",
         packageId: deploymentPackage.id,
         deletedAt: new Date(),
       } as unknown as CreateAgentInput);
@@ -707,7 +708,7 @@ describe("agent profile store integration", () => {
         roleDescription: "Updated role description.",
         visibility: "public",
         ownerUserId: owner.id,
-        avatarSeed: source.avatarSeed,
+        avatarSeed: "chosen-avatar",
         systemOwned: false,
         deletedAt: null,
       });
@@ -730,7 +731,7 @@ describe("agent profile store integration", () => {
         ownerUserId: owner.id,
         title: "Updated Title",
         roleDescription: "Updated role description.",
-        avatarSeed: source.avatarSeed,
+        avatarSeed: "chosen-avatar",
         visibility: "public",
         deletedAt: null,
       });
@@ -1696,6 +1697,114 @@ describe("agent profile store integration", () => {
         configuration: { endpoint: managedAgentAgUiUrl.toString() },
         packageId: null,
       });
+    });
+  });
+});
+
+/**
+ * Story D2: the avatar seed is the person's choice, and it lands in their own workspace.
+ *
+ * Under `runAsTenant` against the real database, because `agent_profiles` is behind FORCE row-level
+ * security: the tenant stamped on the row comes from the frame, and a seed that was stored is only
+ * proven stored when it is read back through the same policy every screen reads through.
+ */
+describe("a coworker's chosen avatar seed", () => {
+  const tenantA = `${testPrefix}-seed-a`;
+  const tenantB = `${testPrefix}-seed-b`;
+  const ownerA: AgentActor = { id: tenantA, role: "user" };
+  const adminB: AgentActor = { id: tenantB, role: "admin" };
+  const createdInTenant: string[] = [];
+
+  async function tenantUser(tenant: string) {
+    await runAsTenant(tenant, () =>
+      database
+        .insert(users)
+        .values({ id: tenant, email: `${tenant}@example.test`, name: tenant })
+        .onConflictDoNothing(),
+    );
+  }
+
+  async function storedSeed(agentId: string) {
+    const [row] = await runAsTenant(tenantA, () =>
+      database
+        .select({
+          avatarSeed: agentProfiles.avatarSeed,
+          tenantId: agentProfiles.tenantId,
+        })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId)),
+    );
+    if (!row) throw new Error(`no agent_profiles row for ${agentId}`);
+    return row;
+  }
+
+  afterAll(async () => {
+    await runAsTenant(tenantA, async () => {
+      for (const agentId of createdInTenant.splice(0)) {
+        await database.delete(agents).where(eq(agents.id, agentId));
+      }
+      await database.delete(users).where(eq(users.id, tenantA));
+    });
+    await runAsTenant(tenantB, () =>
+      database.delete(users).where(eq(users.id, tenantB)),
+    );
+  });
+
+  const input: CreateAgentInput = {
+    name: "头像种子",
+    title: "测试员工",
+    roleDescription: "Checks that a picked face is kept.",
+    visibility: "private",
+  };
+
+  test("create stores the picked seed, and an edit without one leaves it alone", async () => {
+    await tenantUser(tenantA);
+    await tenantUser(tenantB);
+
+    const created = await runAsTenant(tenantA, () =>
+      store.create(ownerA, { ...input, avatarSeed: "picked-seed:01.a_b" }),
+    );
+    createdInTenant.push(created.id);
+    expect(created.avatarSeed).toBe("picked-seed:01.a_b");
+    expect(await storedSeed(created.id)).toEqual({
+      avatarSeed: "picked-seed:01.a_b",
+      tenantId: tenantA,
+    });
+
+    // An edit that never showed the avatar (no seed sent) must not redraw it.
+    const retitled = await runAsTenant(tenantA, () =>
+      store.update(ownerA, created.id, { ...input, title: "改过的头衔" }),
+    );
+    expect(retitled.title).toBe("改过的头衔");
+    expect(retitled.avatarSeed).toBe("picked-seed:01.a_b");
+
+    // An edit that sends one replaces it.
+    const rerolled = await runAsTenant(tenantA, () =>
+      store.update(ownerA, created.id, { ...input, avatarSeed: "rerolled" }),
+    );
+    expect(rerolled.avatarSeed).toBe("rerolled");
+    expect((await storedSeed(created.id)).avatarSeed).toBe("rerolled");
+    expect(
+      (await runAsTenant(tenantA, () => store.get(ownerA, created.id)))
+        ?.avatarSeed,
+    ).toBe("rerolled");
+
+    // Another workspace, even its administrator, sees no such coworker.
+    expect(
+      await runAsTenant(tenantB, () => store.get(adminB, created.id)),
+    ).toBeNull();
+  });
+
+  test("create without a seed falls back to the new id, as before the seed could be chosen", async () => {
+    await tenantUser(tenantA);
+    const created = await runAsTenant(tenantA, () =>
+      store.create(ownerA, input),
+    );
+    createdInTenant.push(created.id);
+    expect(created.avatarSeed).toBe(created.id);
+    expect(await storedSeed(created.id)).toEqual({
+      avatarSeed: created.id,
+      tenantId: tenantA,
     });
   });
 });

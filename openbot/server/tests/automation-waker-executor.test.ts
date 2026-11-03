@@ -9,9 +9,11 @@ import {
   AUTOMATION_BREAKER_LIMIT,
   AUTOMATION_SKIPPED_ACCESS_REVOKED,
   AUTOMATION_SKIPPED_BOT_PAUSED,
+  automationFiringInitiator,
   automationInstruction,
   breakerMessage,
   createWakerAutomationExecutor,
+  firingOfInitiator,
   type WakerAutomationExecutorDeps,
 } from "../src/automations/waker-executor";
 import type { AgentChannel } from "../src/channels/routes";
@@ -184,7 +186,8 @@ describe("a firing that runs (AUT3, C2)", () => {
       threadId: channel.threadId,
       routineId: `automation:${automation.id}`,
       instruction: automationInstruction(automation.name),
-      initiator: { kind: "routine", id: `automation:${automation.id}` },
+      // Names the firing, so an approval it stops for can settle it.
+      initiator: automationFiringInitiator(firing.id),
       // One firing, one card: the runner is told not to file its own.
       cardOwnedByCaller: true,
     });
@@ -218,6 +221,74 @@ describe("a firing that runs (AUT3, C2)", () => {
     expect((await firingRow(firing.id))?.status).toBe("waiting");
     expect((await cardFor(firing.id))[0]?.status).toBe("awaiting_review");
     expect(said).toEqual(["这个动作等你批准"]);
+
+    // Answered (allowed or declined), the approval-resume path settles the firing it names.
+    const named = firingOfInitiator(turns[0]?.input.initiator);
+    expect(named).toBe(firing.id);
+    expect(await as(() => store.settleWaitingFiring(named ?? ""))).toBe(true);
+    expect((await firingRow(firing.id))?.status).toBe("succeeded");
+    // Once only, and never a firing that was not waiting.
+    expect(await as(() => store.settleWaitingFiring(firing.id))).toBe(false);
+    expect(firingOfInitiator({ kind: "routine", id: "routine-1" })).toBeNull();
+    expect(firingOfInitiator({ kind: "person" })).toBeNull();
+  });
+
+  test("another person cannot settle this owner's waiting firing", async () => {
+    const { automation, trigger } = await newAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    turnOutcome = async () => {
+      throw new HeadlessToolSuspension("等你批准", { kind: "approval" });
+    };
+    await fire(firing);
+    expect(
+      await runAsTenant(`aut-exec-${suite}-stranger`, () =>
+        store.settleWaitingFiring(firing.id),
+      ),
+    ).toBe(false);
+    expect((await firingRow(firing.id))?.status).toBe("waiting");
+  });
+
+  test("a firing closed before it was taken up does not run", async () => {
+    const { automation, trigger } = await newAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    await as(() => store.finishFiring(firing.id, "failed", "reaped"));
+    await fire(firing);
+    expect(turns).toHaveLength(0);
+    expect(calls).toEqual([]);
+    expect((await firingRow(firing.id))?.error).toBe("reaped");
+  });
+
+  test("firings that share a thread run one at a time, in arrival order", async () => {
+    const { automation, trigger } = await newAutomation();
+    const first = await begin(automation.id, trigger.id);
+    const second = await begin(automation.id, trigger.id);
+    let running = 0;
+    let most = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    turnOutcome = async () => {
+      running += 1;
+      most = Math.max(most, running);
+      if (turns.length === 1) await gate;
+      running -= 1;
+      return { replyText: "好了" };
+    };
+    const shared = executor();
+    const both = Promise.all([
+      as(() => shared.run(first)),
+      as(() => shared.run(second)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The second is still waiting for the thread while the first turn is held open.
+    expect(turns).toHaveLength(1);
+    release();
+    await both;
+    expect(most).toBe(1);
+    expect(turns).toHaveLength(2);
+    expect((await firingRow(first.id))?.status).toBe("succeeded");
+    expect((await firingRow(second.id))?.status).toBe("succeeded");
   });
 });
 
@@ -285,6 +356,36 @@ describe("the gates, in the routine runner's order", () => {
     expect(row?.status).toBe("failed");
     expect(row?.error).toBe("那位 Waker 已不存在");
     expect(turns).toHaveLength(0);
+  });
+
+  test("a gate that cannot be asked is a counted failure, not an uncounted crash", async () => {
+    for (const broken of [
+      {
+        accessRevokedOf: async () => {
+          throw new Error("封禁名单暂时读不到");
+        },
+      },
+      {
+        isBotPaused: async () => {
+          throw new Error("暂停状态暂时读不到");
+        },
+      },
+      {
+        quota: {
+          assertCapacity: async () => {
+            throw new Error("本月用量暂时读不到");
+          },
+        },
+      },
+    ] satisfies Partial<WakerAutomationExecutorDeps>[]) {
+      const { automation, trigger } = await newAutomation();
+      const firing = await begin(automation.id, trigger.id);
+      await fire(firing, broken);
+      expect((await firingRow(firing.id))?.status).toBe("failed");
+      expect(turns).toHaveLength(0);
+      // Counted by the breaker, like any other failure.
+      expect(await as(() => store.consecutiveFailures(automation.id))).toBe(1);
+    }
   });
 
   test("an owner who can no longer be resolved is a counted failure, without a turn", async () => {
@@ -390,6 +491,76 @@ describe("failures and the breaker (C3)", () => {
     expect((await firingRow(again.id))?.status).toBe("failed");
     expect((await automationRow(automation.id))?.enabled).toBe(true);
     expect(await as(() => store.consecutiveFailures(automation.id))).toBe(1);
+  });
+
+  test("failures racing past the limit trip the breaker once, and it is said once", async () => {
+    const { automation, trigger } = await newAutomation();
+    turnOutcome = async () => {
+      throw new Error("Notion 授权已过期");
+    };
+    for (let index = 0; index < AUTOMATION_BREAKER_LIMIT - 1; index += 1) {
+      await fire(await begin(automation.id, trigger.id));
+    }
+    said = [];
+    const racing = [
+      await begin(automation.id, trigger.id),
+      await begin(automation.id, trigger.id),
+    ];
+    // Two executors, so nothing in this process keeps them apart: only the store's lock does.
+    await Promise.all(racing.map((firing) => fire(firing)));
+
+    const statuses = await Promise.all(
+      racing.map(async (firing) => (await firingRow(firing.id))?.status),
+    );
+    expect(
+      statuses.filter((status) => status === "circuit_breaker"),
+    ).toHaveLength(1);
+    expect(statuses.filter((status) => status === "failed")).toHaveLength(1);
+    expect(
+      said.filter((line) => line === breakerMessage(automation.name)),
+    ).toHaveLength(1);
+    expect((await automationRow(automation.id))?.enabled).toBe(false);
+  });
+
+  test("tripping the breaker is single-winner in the store itself", async () => {
+    const { automation, trigger } = await newAutomation();
+    turnOutcome = async () => {
+      throw new Error("超时");
+    };
+    const firings: AutomationFiring[] = [];
+    for (let index = 0; index < AUTOMATION_BREAKER_LIMIT; index += 1) {
+      const firing = await begin(automation.id, trigger.id);
+      firings.push(firing);
+      // Recorded as failed without the executor, so nothing has tripped yet.
+      await as(() => store.finishFiring(firing.id, "failed", "超时"));
+    }
+    const [last, previous] = [firings.at(-1), firings.at(-2)];
+    const tries = await Promise.all([
+      as(() =>
+        store.tripBreaker(
+          automation.id,
+          last?.id ?? "",
+          AUTOMATION_BREAKER_LIMIT,
+        ),
+      ),
+      as(() =>
+        store.tripBreaker(
+          automation.id,
+          previous?.id ?? "",
+          AUTOMATION_BREAKER_LIMIT,
+        ),
+      ),
+    ]);
+    expect(tries.filter(Boolean)).toHaveLength(1);
+    expect(
+      await as(() =>
+        store.tripBreaker(
+          automation.id,
+          last?.id ?? "",
+          AUTOMATION_BREAKER_LIMIT,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("a success ends the streak", async () => {
