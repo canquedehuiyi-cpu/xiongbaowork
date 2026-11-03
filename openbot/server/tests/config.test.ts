@@ -1184,16 +1184,54 @@ test("a Composio key is read when set and absent when not", () => {
  * still has to be repeated on: `cloud` runs them in the deployment's own container, `device` sends
  * them to the tenant's paired machine.
  *
- * `cloud` is the answer for anything that is not `device`, so an existing install changes nothing
- * when this variable is simply absent. The device half is what needs its own case: the shipping
- * configuration for a real tenant, not the development one.
+ * Absent, the answer depends on where the server runs (F6). A laptop and the test suite keep
+ * `cloud`, so the whole flow still runs with no runner paired. A deployed server defaults to
+ * `device`: the server-side computer is a development and demo fallback, and a production tenant's
+ * coworkers act on the tenant's own machine unless the operator says otherwise.
  */
-test("the tenant runtime defaults to the deployment's own container", () => {
-  expect(loadConfig(baseEnvironment).tenantRuntime).toBe("cloud");
+test("the tenant runtime defaults to the deployment's own container outside production", () => {
+  for (const NODE_ENV of [undefined, "development", "test"]) {
+    const config = loadConfig({ ...baseEnvironment, NODE_ENV });
+    expect(config.tenantRuntime).toBe("cloud");
+    expect(config.tenantRuntimeReason).toBe(
+      "TENANT_RUNTIME is unset outside production",
+    );
+  }
   expect(
     loadConfig({ ...baseEnvironment, TENANT_RUNTIME: "  DEVicE  " })
       .tenantRuntime,
   ).toBe("device");
+});
+
+test("production defaults the tenant runtime to the tenant's own device", () => {
+  for (const NODE_ENV of ["production", " production "]) {
+    for (const TENANT_RUNTIME of [undefined, "", "   "]) {
+      const config = loadConfig({
+        ...productionEnvironment,
+        NODE_ENV,
+        TENANT_RUNTIME,
+      });
+      expect(config.tenantRuntime).toBe("device");
+      expect(config.tenantRuntimeReason).toContain(
+        "TENANT_RUNTIME is unset and NODE_ENV=production",
+      );
+      expect(config.tenantRuntimeReason).toContain("TENANT_RUNTIME=cloud");
+    }
+  }
+});
+
+test("production still honours an explicit cloud tenant runtime", () => {
+  for (const TENANT_RUNTIME of ["cloud", " CLOUD "]) {
+    const config = loadConfig({ ...productionEnvironment, TENANT_RUNTIME });
+    expect(config.tenantRuntime).toBe("cloud");
+    expect(config.tenantRuntimeReason).toBe("TENANT_RUNTIME=cloud");
+  }
+  const device = loadConfig({
+    ...productionEnvironment,
+    TENANT_RUNTIME: "device",
+  });
+  expect(device.tenantRuntime).toBe("device");
+  expect(device.tenantRuntimeReason).toBe("TENANT_RUNTIME=device");
 });
 
 /*
@@ -1206,6 +1244,10 @@ test("refuses a tenant runtime that is neither cloud nor device", () => {
   expect(() =>
     loadConfig({ ...baseEnvironment, TENANT_RUNTIME: "devcie" }),
   ).toThrow('TENANT_RUNTIME must be "cloud" or "device". Received "devcie".');
+  // The production default does not swallow a typo either: refused, not read as unset.
+  expect(() =>
+    loadConfig({ ...productionEnvironment, TENANT_RUNTIME: "clod" }),
+  ).toThrow('TENANT_RUNTIME must be "cloud" or "device". Received "clod".');
   expect(
     loadConfig({ ...baseEnvironment, TENANT_RUNTIME: " cloud " }).tenantRuntime,
   ).toBe("cloud");
