@@ -27,8 +27,10 @@ import type { TurnRunner } from "../routines/runner";
 import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
 import { assertPersonTenant, runAsTenant } from "../tenant/context";
 import { markUntrusted } from "../untrusted-content";
+import type { WakerFlowStore } from "../wakerflows/store";
 import type { AutomationFiring, AutomationStore } from "./store";
 import type { AutomationEvent } from "./sweep";
+import { AutomationRefusedError, type AutomationTargetExecutor } from "./types";
 
 /** Consecutive failed firings after which an automation stops being fired (C3). */
 export const AUTOMATION_BREAKER_LIMIT = 10;
@@ -37,7 +39,13 @@ export const AUTOMATION_SKIPPED_ACCESS_REVOKED =
   "这个账号的访问权限已被收回，本次自动任务没有执行。";
 export const AUTOMATION_SKIPPED_BOT_PAUSED =
   "这位 Waker 已暂停，本次自动任务没有执行。";
-export const AUTOMATION_NOT_A_WAKER = "这个自动任务的执行对象不是 Waker。";
+export const AUTOMATION_FLOW_UNAVAILABLE =
+  "WakerFlow 自动执行尚未开放，本次自动任务没有执行。";
+export const AUTOMATION_FLOW_GONE =
+  "找不到这个 WakerFlow，可能已被删除，本次自动任务没有执行。";
+export const AUTOMATION_FLOW_NOT_READY =
+  "这个 WakerFlow 还没有保存成可运行的版本，请先在 WakerFlow 里保存。";
+export const AUTOMATION_FLOW_NOT_STARTED = "WakerFlow 没能启动。";
 
 const MAX_NOTIFIED_REASON = 160;
 
@@ -90,7 +98,34 @@ export type WakerAutomationExecutorDeps = {
    * minute, far inside the reaper's ten.
    */
   laneHeartbeatMs?: number;
+  /**
+   * AUT3: the WakerFlow run-start path (`wakerflows/store.ts`), for a `wakerflow` target. The firing
+   * starts one run through it exactly as the person's own 运行 button does, as the automation's
+   * owner; the run's crew, its card and its steps are the pipeline's, not this file's. Absent, a
+   * WakerFlow target is not carried out (and `wakerflowAutomationTarget` is not registered, so the
+   * store refuses one at save time).
+   */
+  wakerflows?: Pick<WakerFlowStore, "inspect" | "start">;
 };
+
+/**
+ * AUT3: the save-time half of a WakerFlow target, for the store's target registry. A flow is
+ * accepted only if it is one of the caller's own, and already saved into a runnable version: the
+ * same "ready" the WakerFlow page shows. `tenantId` is the caller's frame, never the request's.
+ */
+export function wakerflowAutomationTarget(
+  flows: Pick<WakerFlowStore, "inspect">,
+): AutomationTargetExecutor<"wakerflow"> {
+  return {
+    kind: "wakerflow",
+    async verify(target, { tenantId }) {
+      const flow = await flows.inspect(tenantId, target.flowId);
+      if (!flow) throw new AutomationRefusedError("找不到这个 WakerFlow。");
+      if (flow.status !== "ready")
+        throw new AutomationRefusedError(AUTOMATION_FLOW_NOT_READY);
+    },
+  };
+}
 
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -170,8 +205,13 @@ export function createWakerAutomationExecutor(
     event: AutomationEvent | undefined,
   ): Promise<void> {
     const { automation } = firing;
-    if (automation.target.kind !== "waker") {
-      await store.finishFiring(firing.id, "failed", AUTOMATION_NOT_A_WAKER);
+    const { target } = automation;
+    if (target.kind === "wakerflow" && !deps.wakerflows) {
+      await store.finishFiring(
+        firing.id,
+        "failed",
+        AUTOMATION_FLOW_UNAVAILABLE,
+      );
       return;
     }
     // Taken up now, perhaps after waiting for its thread: one reaped meanwhile does not run at all.
@@ -179,7 +219,8 @@ export function createWakerAutomationExecutor(
       log("automation-firing-gone", firing, new Error("not running any more"));
       return;
     }
-    const agentId = automation.target.agentId;
+    // A WakerFlow has no one Waker and no one conversation: its card names nobody, and nothing is said.
+    const agentId = target.kind === "waker" ? target.agentId : null;
     const runRef = firing.id;
     let actor: AgentActor | null = null;
     let channel: AgentChannel | null = null;
@@ -189,6 +230,7 @@ export function createWakerAutomationExecutor(
     async function say(text: string): Promise<void> {
       if (!channel || !actor) return;
       try {
+        if (!agentId) return;
         await channels.recordActivity(actor, channel.id, {
           text,
           agentId,
@@ -209,7 +251,7 @@ export function createWakerAutomationExecutor(
         triggerSource: `automation:${firing.triggerKind}`,
         ...(channel ? { channelRef: channel.id } : {}),
         runRef,
-        deviceId: (await deps.deviceIdOf?.(agentId)) ?? null,
+        deviceId: agentId ? ((await deps.deviceIdOf?.(agentId)) ?? null) : null,
       });
       carded = true;
     }
@@ -272,6 +314,69 @@ export function createWakerAutomationExecutor(
       if (failures === 1) {
         await say(`自动任务「${automation.name}」执行失败：${shorten(reason)}`);
       }
+    }
+
+    if (target.kind === "wakerflow") {
+      await runFlow(target.flowId);
+      return;
+    }
+    if (agentId === null) return;
+
+    /*
+     * AUT3: one WakerFlow run, started through the WakerFlow run-start path as the owner (this whole
+     * function runs in the owner's frame, from the claimed firing). The same ledger as a Waker
+     * firing: a ban or a full month is `skipped`; a flow that is gone, unsaved, refuses its inputs or
+     * could not be started is a failure the breaker counts; registered and driving is `succeeded`.
+     * The firing's id is the request id, so a repeat of this firing can never start a second run.
+     */
+    async function runFlow(flowId: string): Promise<void> {
+      const flows = deps.wakerflows;
+      if (!flows) return;
+      try {
+        if (await deps.accessRevokedOf?.(ownerUserId)) {
+          await store.finishFiring(
+            firing.id,
+            "skipped",
+            AUTOMATION_SKIPPED_ACCESS_REVOKED,
+          );
+          return;
+        }
+      } catch (error) {
+        await fail(reasonOf(error));
+        return;
+      }
+      let status: string;
+      let reason: string | null;
+      try {
+        const flow = await flows.inspect(ownerUserId, flowId);
+        if (!flow) {
+          await fail(AUTOMATION_FLOW_GONE);
+          return;
+        }
+        if (flow.status !== "ready") {
+          await fail(AUTOMATION_FLOW_NOT_READY);
+          return;
+        }
+        // The month's ceiling is the run-start path's own (one task per step, plus the run's card).
+        ({ status, error: reason } = await flows.start(
+          ownerUserId,
+          ownerUserId,
+          flowId,
+          { requestId: firing.id, revision: flow.revision, inputs: {} },
+        ));
+      } catch (error) {
+        if (error instanceof QuotaExceeded) {
+          await store.finishFiring(firing.id, "skipped", error.message);
+          return;
+        }
+        await fail(reasonOf(error));
+        return;
+      }
+      if (status === "completed") {
+        await store.finishFiring(firing.id, "succeeded");
+        return;
+      }
+      await fail(reason ?? AUTOMATION_FLOW_NOT_STARTED);
     }
 
     // 1. The conversation the reply lands in: the owner's own with this Waker. An owner who can no
@@ -402,40 +507,37 @@ export function createWakerAutomationExecutor(
       try {
         const ownerUserId = assertPersonTenant(firing.automation.tenantId);
         const { target } = firing.automation;
+        // A Waker's thread, or one WakerFlow: firings that would start the same thing go one at a time.
         const lane =
           target.kind === "waker"
             ? JSON.stringify([ownerUserId, target.agentId])
-            : null;
+            : JSON.stringify([ownerUserId, "wakerflow", target.flowId]);
         const work = () =>
           runAsTenant(ownerUserId, async () => {
             await runAsOwner(firing, ownerUserId, event);
           });
-        if (lane === null) {
-          await work();
-        } else {
-          /*
-           * Already counted and recorded `running` by `beginFiring`, a firing queued behind earlier
-           * turns could otherwise pass the reaper's cutoff before its turn comes and be closed as
-           * abandoned with its run already spent. While it waits, it keeps its clock fresh.
-           */
-          const heartbeat = lanes.has(lane)
-            ? setInterval(() => {
-                void runAsTenant(ownerUserId, () =>
-                  store.startFiring(firing.id),
-                ).catch((error: unknown) =>
-                  log("automation-lane-heartbeat-failed", firing, error),
-                );
-              }, laneHeartbeatMs)
-            : undefined;
-          heartbeat?.unref?.();
-          try {
-            await inLane(lane, async () => {
-              clearInterval(heartbeat);
-              await work();
-            });
-          } finally {
+        /*
+         * Already counted and recorded `running` by `beginFiring`, a firing queued behind earlier
+         * turns could otherwise pass the reaper's cutoff before its turn comes and be closed as
+         * abandoned with its run already spent. While it waits, it keeps its clock fresh.
+         */
+        const heartbeat = lanes.has(lane)
+          ? setInterval(() => {
+              void runAsTenant(ownerUserId, () =>
+                store.startFiring(firing.id),
+              ).catch((error: unknown) =>
+                log("automation-lane-heartbeat-failed", firing, error),
+              );
+            }, laneHeartbeatMs)
+          : undefined;
+        heartbeat?.unref?.();
+        try {
+          await inLane(lane, async () => {
             clearInterval(heartbeat);
-          }
+            await work();
+          });
+        } finally {
+          clearInterval(heartbeat);
         }
       } catch (error) {
         // `run` never throws: an outcome that could not be recorded is said out loud instead.

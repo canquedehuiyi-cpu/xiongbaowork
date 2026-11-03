@@ -200,7 +200,13 @@ export function wakerflowChoicesQueryOptions(enabled: boolean) {
       if (!Array.isArray(flows)) return [];
       return flows.flatMap((flow: unknown) => {
         if (!flow || typeof flow !== "object") return [];
-        const { id, name } = flow as { id?: unknown; name?: unknown };
+        const { id, name, status } = flow as {
+          id?: unknown;
+          name?: unknown;
+          status?: unknown;
+        };
+        // Only a saved Flow can run; a draft would only be refused when the automation is saved.
+        if (status !== undefined && status !== "ready") return [];
         return typeof id === "string"
           ? [{ id, name: typeof name === "string" && name ? name : id }]
           : [];

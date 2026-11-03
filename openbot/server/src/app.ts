@@ -386,6 +386,8 @@ export function createApp(
   userPreferences?: UserPreferencesStore,
   voiceSessions?: VoiceSessionServices,
   coworker?: {
+    /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
+    wakerflowAutomations?: boolean;
     demonstrations?: {
       store: DemonstrationStore;
       recorder: DemonstrationRecorder;
@@ -462,6 +464,11 @@ export function createApp(
        * both halves, so off means off.
        */
       generativeUi: config.generativeUi,
+      /*
+       * AUT3: whether an automation may target a WakerFlow. True only where the server registered
+       * the WakerFlow target, so the form never offers a target the store would refuse.
+       */
+      wakerflowAutomations: coworker?.wakerflowAutomations === true,
       // Whether to offer help self-hosting. A fork running this for its own people turns it off.
       selfHostBanner: config.selfHostBanner,
       transcription: Boolean(config.transcription),

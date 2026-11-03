@@ -6,8 +6,12 @@ import {
   createAutomationStore,
 } from "../src/automations/store";
 import { ABANDONED_FIRING_MS } from "../src/automations/sweep";
+import { createAutomationTargetRegistry } from "../src/automations/types";
 import {
   AUTOMATION_BREAKER_LIMIT,
+  AUTOMATION_FLOW_GONE,
+  AUTOMATION_FLOW_NOT_READY,
+  AUTOMATION_FLOW_UNAVAILABLE,
   AUTOMATION_SKIPPED_ACCESS_REVOKED,
   AUTOMATION_SKIPPED_BOT_PAUSED,
   automationFiringInitiator,
@@ -16,6 +20,7 @@ import {
   createWakerAutomationExecutor,
   firingOfInitiator,
   type WakerAutomationExecutorDeps,
+  wakerflowAutomationTarget,
 } from "../src/automations/waker-executor";
 import type { AgentChannel } from "../src/channels/routes";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
@@ -30,6 +35,7 @@ import { QuotaExceeded } from "../src/quota/limits";
 import type { TurnRunner } from "../src/routines/runner";
 import { createTaskProjector } from "../src/tasks/projector";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
+import type { WakerFlowStore } from "../src/wakerflows/store";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -644,5 +650,219 @@ describe("failures and the breaker (C3)", () => {
     turnOutcome = async () => ({ replyText: "好了" });
     await fire(await begin(automation.id, trigger.id));
     expect(await as(() => store.consecutiveFailures(automation.id))).toBe(0);
+  });
+});
+
+/*
+ * AUT3: a WakerFlow target. The firing starts one run through the WakerFlow run-start path (here a
+ * stand-in with the store's `inspect` and `start` shape, which records what it was asked and in
+ * which frame), under the same ledger, breaker and lane rules as a Waker firing.
+ */
+describe("a WakerFlow target (AUT3)", () => {
+  const flowId = randomUUID();
+  let flow: { status: "ready" | "draft"; revision: number } | null = null;
+  let starts: {
+    tenantId: string;
+    frame: string;
+    actor: string;
+    id: string;
+    input: unknown;
+  }[] = [];
+  let startOutcome: () => Promise<{ status: string; error: string | null }>;
+  const flows = {
+    async inspect(tenantId: string, id: string) {
+      return tenantId === tenant && id === flowId && flow
+        ? { id, name: "周报流程", ...flow }
+        : null;
+    },
+    async start(tenantId: string, actor: string, id: string, input: unknown) {
+      starts.push({ tenantId, frame: currentTenant(), actor, id, input });
+      return await startOutcome();
+    },
+  } as unknown as Pick<WakerFlowStore, "inspect" | "start">;
+  const registry = createAutomationTargetRegistry();
+  registry.register(wakerflowAutomationTarget(flows));
+  const flowStore = createAutomationStore(database, { executors: registry });
+
+  beforeEach(() => {
+    flow = { status: "ready", revision: 3 };
+    starts = [];
+    startOutcome = async () => ({ status: "completed", error: null });
+  });
+
+  async function newFlowAutomation() {
+    const automation = await as(() =>
+      flowStore.create({
+        name: `流程任务 ${randomUUID().slice(0, 4)}`,
+        target: { kind: "wakerflow", flowId },
+      }),
+    );
+    const { trigger } = await as(() =>
+      flowStore.addTrigger(automation.id, {
+        kind: "schedule",
+        cron: "0 9 * * *",
+        timezone: "Asia/Shanghai",
+      }),
+    );
+    return { automation, trigger };
+  }
+
+  const fireFlow = (
+    firing: AutomationFiring,
+    deps: Partial<WakerAutomationExecutorDeps> = {},
+  ) => fire(firing, { wakerflows: flows, ...deps });
+
+  test("only a saved WakerFlow of the owner's own can be chosen", async () => {
+    flow = { status: "draft", revision: 1 };
+    await expect(
+      as(() =>
+        flowStore.create({
+          name: "草稿流程",
+          target: { kind: "wakerflow", flowId },
+        }),
+      ),
+    ).rejects.toThrow(AUTOMATION_FLOW_NOT_READY);
+    await expect(
+      as(() =>
+        flowStore.create({
+          name: "别处流程",
+          target: { kind: "wakerflow", flowId: randomUUID() },
+        }),
+      ),
+    ).rejects.toThrow("找不到这个 WakerFlow。");
+    flow = { status: "ready", revision: 1 };
+    const { automation } = await newFlowAutomation();
+    expect(automation.target).toEqual({ kind: "wakerflow", flowId });
+  });
+
+  test("a firing starts one run as the owner, keyed by the firing, and succeeds", async () => {
+    const { automation, trigger } = await newFlowAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    await fireFlow(firing);
+
+    expect(starts).toEqual([
+      {
+        tenantId: tenant,
+        frame: tenant,
+        actor: tenant,
+        id: flowId,
+        // The firing's id is the request id: a repeat of this firing can never start a second run.
+        input: { requestId: firing.id, revision: 3, inputs: {} },
+      },
+    ]);
+    expect((await firingRow(firing.id))?.status).toBe("succeeded");
+    // No Waker turn, and no card of the executor's own: the run's card is the pipeline's.
+    expect(turns).toHaveLength(0);
+    expect(await cardFor(firing.id)).toHaveLength(0);
+  });
+
+  test("a run that could not start, or a flow that is gone, is a counted failure", async () => {
+    const { automation, trigger } = await newFlowAutomation();
+    startOutcome = async () => ({ status: "failed", error: "请填写 主题。" });
+    const refused = await begin(automation.id, trigger.id);
+    await fireFlow(refused);
+    expect(await firingRow(refused.id)).toMatchObject({
+      status: "failed",
+      error: "请填写 主题。",
+    });
+
+    flow = null;
+    const gone = await begin(automation.id, trigger.id);
+    await fireFlow(gone);
+    expect(await firingRow(gone.id)).toMatchObject({
+      status: "failed",
+      error: AUTOMATION_FLOW_GONE,
+    });
+    expect(await as(() => store.consecutiveFailures(automation.id))).toBe(2);
+  });
+
+  test("a full month and a revoked account are skipped, not counted", async () => {
+    const { automation, trigger } = await newFlowAutomation();
+    const full = new QuotaExceeded("tasksPerMonth", 50, 50, "free");
+    startOutcome = async () => {
+      throw full;
+    };
+    const capped = await begin(automation.id, trigger.id);
+    await fireFlow(capped);
+    expect(await firingRow(capped.id)).toMatchObject({
+      status: "skipped",
+      error: full.message,
+    });
+
+    const banned = await begin(automation.id, trigger.id);
+    await fireFlow(banned, { accessRevokedOf: async () => true });
+    expect(await firingRow(banned.id)).toMatchObject({
+      status: "skipped",
+      error: AUTOMATION_SKIPPED_ACCESS_REVOKED,
+    });
+    expect(starts).toHaveLength(1);
+    expect(await as(() => store.consecutiveFailures(automation.id))).toBe(0);
+  });
+
+  test("ten failures in a row trip the breaker, with a breaker card naming the automation", async () => {
+    const { automation, trigger } = await newFlowAutomation();
+    startOutcome = async () => ({ status: "failed", error: "流程启动失败" });
+    let last: AutomationFiring | undefined;
+    for (let index = 0; index < AUTOMATION_BREAKER_LIMIT; index += 1) {
+      last = await begin(automation.id, trigger.id);
+      await fireFlow(last);
+    }
+    expect((await automationRow(automation.id))?.enabled).toBe(false);
+    expect((await firingRow(last?.id ?? ""))?.status).toBe("circuit_breaker");
+    const card = (await cardFor(last?.id ?? ""))[0];
+    expect(card).toMatchObject({
+      status: "failed",
+      executorAgentId: null,
+      source: "routine",
+      triggerSource: "automation:schedule",
+    });
+    expect(card?.deliverableRef).toMatchObject({
+      kind: "circuit_breaker",
+      automationId: automation.id,
+      failures: AUTOMATION_BREAKER_LIMIT,
+    });
+  });
+
+  test("firings of one WakerFlow start one at a time", async () => {
+    const { automation, trigger } = await newFlowAutomation();
+    const first = await begin(automation.id, trigger.id);
+    const second = await begin(automation.id, trigger.id);
+    let running = 0;
+    let most = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    startOutcome = async () => {
+      running += 1;
+      most = Math.max(most, running);
+      if (starts.length === 1) await gate;
+      running -= 1;
+      return { status: "completed", error: null };
+    };
+    const shared = executor({ wakerflows: flows });
+    const both = Promise.all([
+      as(() => shared.run(first)),
+      as(() => shared.run(second)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(starts).toHaveLength(1);
+    release();
+    await both;
+    expect(most).toBe(1);
+    expect(
+      starts.map((start) => (start.input as { requestId: string }).requestId),
+    ).toEqual([first.id, second.id]);
+  });
+
+  test("a deployment without the WakerFlow path records the firing as failed and starts nothing", async () => {
+    const { automation, trigger } = await newFlowAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    await fire(firing);
+    expect(await firingRow(firing.id)).toMatchObject({
+      status: "failed",
+      error: AUTOMATION_FLOW_UNAVAILABLE,
+    });
+    expect(starts).toHaveLength(0);
   });
 });
