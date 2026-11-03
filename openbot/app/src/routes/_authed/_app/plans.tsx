@@ -19,7 +19,9 @@ import { switchPlanMutationOptions } from "@/lib/quota/mutations";
 import {
   meter,
   quotaQueryOptions,
+  TOKEN_SCOPE_CAPTION,
   tiersQueryOptions,
+  tokenReadout,
 } from "@/lib/quota/queries";
 
 export const Route = createFileRoute("/_authed/_app/plans")({
@@ -46,6 +48,7 @@ function RouteComponent() {
 
   const current = quota.data?.plan?.id;
   const usage = quota.data?.usage;
+  const tokens = quota.data?.tokens;
 
   return (
     <PageShell
@@ -90,6 +93,17 @@ function RouteComponent() {
                 </ItemContent>
               </Item>
             ))}
+            {tokens ? (
+              <Item size="sm" variant="outline">
+                <ItemContent>
+                  <ItemTitle>本月模型 token</ItemTitle>
+                  <ItemDescription>{tokenReadout(tokens)}</ItemDescription>
+                  <ItemDescription className="text-xs">
+                    {TOKEN_SCOPE_CAPTION}
+                  </ItemDescription>
+                </ItemContent>
+              </Item>
+            ) : null}
           </PageRows>
         ) : null}
       </PageSection>

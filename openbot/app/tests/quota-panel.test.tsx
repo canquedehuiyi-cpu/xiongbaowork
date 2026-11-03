@@ -13,7 +13,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UsagePanel } from "@/components/quota/usage-panel";
 import { authKeys } from "@/lib/auth/queries";
-import { quotaKeys } from "@/lib/quota/queries";
+import { quotaKeys, type TokenUsage, tokenReadout } from "@/lib/quota/queries";
 import { Route as PlansRoute } from "@/routes/_authed/_app/plans";
 
 /**
@@ -43,7 +43,26 @@ const free = {
     customModels: false,
   },
   usage: { period: "2026-10", wakers: 2, tasks: 3, devices: 1, models: 0 },
+  tokens: {
+    period: "2026-10",
+    scope: "bound-models",
+    calls: 3,
+    reportedCalls: 3,
+    partialCalls: 0,
+    unknownUsageCalls: 0,
+    unsettledCalls: 0,
+    inputTokens: 900,
+    outputTokens: 334,
+    totalTokens: 1234,
+    complete: true,
+  } satisfies TokenUsage,
 };
+
+/** A token meter for one case, everything else as `free` reported it. */
+const tokensWith = (patch: Partial<TokenUsage>): TokenUsage => ({
+  ...free.tokens,
+  ...patch,
+});
 
 const tiers = {
   plans: [
@@ -239,4 +258,106 @@ test("a member who is not an administrator is shown the tiers but no switch", as
       .some((button) => ["切换", "使用中"].includes(button.textContent ?? "")),
   ).toBeFalse();
   expect(calls.some((entry) => entry.method === "POST")).toBeFalse();
+});
+
+test("the token readout never turns an unknown sum into 0", () => {
+  // No calls at all: there is nothing to sum, and "0 tokens" would read as a measurement.
+  expect(
+    tokenReadout(
+      tokensWith({
+        calls: 0,
+        reportedCalls: 0,
+        inputTokens: null,
+        outputTokens: null,
+        totalTokens: null,
+      }),
+    ),
+  ).toBe("本月暂无计量调用");
+  // Every call came back without usage: unknown, with the count of calls behind it.
+  const unknown = tokenReadout(
+    tokensWith({
+      calls: 2,
+      reportedCalls: 0,
+      unknownUsageCalls: 2,
+      unsettledCalls: 1,
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      complete: false,
+    }),
+  );
+  expect(unknown).toBe("Token 用量未知（2 次调用未上报）");
+  expect(unknown).not.toMatch(/(^|\D)0(\D|$)/);
+  // A partial call knows one side but no total, so the total is still unknown.
+  expect(
+    tokenReadout(
+      tokensWith({
+        calls: 1,
+        reportedCalls: 0,
+        partialCalls: 1,
+        inputTokens: 40,
+        outputTokens: null,
+        totalTokens: null,
+        complete: false,
+      }),
+    ),
+  ).toBe("Token 用量未知（1 次调用未上报）");
+  // Known total plus calls whose usage is not known: both halves are said.
+  expect(
+    tokenReadout(
+      tokensWith({
+        calls: 5,
+        reportedCalls: 2,
+        partialCalls: 1,
+        unknownUsageCalls: 2,
+        unsettledCalls: 2,
+        totalTokens: 175,
+        complete: false,
+      }),
+    ),
+  ).toBe("已知 175 tokens，另有 3 次调用用量未知");
+  // A complete meter is just the number.
+  expect(tokenReadout(free.tokens)).toBe("1,234 tokens");
+  // A real zero (calls that reported zero tokens) is a measurement and is shown as one.
+  expect(
+    tokenReadout(
+      tokensWith({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+    ),
+  ).toBe("0 tokens");
+});
+
+test("the panel shows the token line and what it counts", async () => {
+  const view = drawPanel(seed());
+
+  expect(await view.findByText(/模型 token 1,234 tokens/)).toBeTruthy();
+  expect(view.getByText("仅统计绑定模型的调用")).toBeTruthy();
+});
+
+test("the panel says unknown, not 0, when no call reported usage", async () => {
+  const queryClient = seed();
+  queryClient.setQueryData(quotaKeys.usage(), {
+    ...free,
+    tokens: tokensWith({
+      calls: 4,
+      reportedCalls: 0,
+      unknownUsageCalls: 4,
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      complete: false,
+    }),
+  });
+  const view = drawPanel(queryClient);
+
+  const line = await view.findByText(/模型 token/);
+  expect(line.textContent).toBe("模型 token Token 用量未知（4 次调用未上报）");
+  expect(line.textContent).not.toContain("0 tokens");
+});
+
+test("the plans page shows the token readout with its scope", async () => {
+  const view = draw("user");
+
+  expect(await view.findByText("本月模型 token")).toBeTruthy();
+  expect(view.getByText("1,234 tokens")).toBeTruthy();
+  expect(view.getByText("仅统计绑定模型的调用")).toBeTruthy();
 });
