@@ -10,7 +10,7 @@ import {
   CustomServerRefusedError,
   createPluginStore,
 } from "../src/plugins/store";
-import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -33,13 +33,16 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
 /**
  * The administrator adding the server. The plugin routes run the store in the request's frame,
- * `runAsTenant(actor.id)`, so the row an add writes, the vault rows it is offered and every read of
- * them here are that person's rather than the unframed fallback's.
+ * `runAsTenant(actor.id)`, holding the admin capability (G01-E P10): the server and its token are
+ * `team` rows, which only an administrator with the capability writes, reads back and removes. So
+ * every step here is such a request, by a person `user_roles` names as an administrator.
  */
-const ADMIN = "curated-admin";
+const ADMIN = `curated-admin-${randomUUID().slice(0, 8)}`;
+const adminRequest = createAdminRequest(database);
 function asAdmin<T>(work: () => Promise<T>) {
-  return runAsTenant(ADMIN, work);
+  return adminRequest(ADMIN, work);
 }
+let releaseAdmin: (() => Promise<void>) | undefined;
 
 const store = createPluginStore({
   database,
@@ -84,6 +87,7 @@ let existing: { credentialId: string | null } | null = null;
 const entryRow = () => eq(mcpServers.catalogueKey, serverId);
 
 beforeAll(async () => {
+  releaseAdmin = await seedAdministrator(database, ADMIN);
   const [row] = await asAdmin(() =>
     database
       .select({ credentialId: mcpServers.credentialId })
@@ -95,8 +99,13 @@ beforeAll(async () => {
   const encrypted = await encryptSecret(`${"A".repeat(43)}=`, "not-read-here");
   await asAdmin(() =>
     database.insert(credentials).values([
+      /*
+       * The deployment token and the OAuth client are a team server's secrets, sealed to `team`
+       * (G01-E P10, Q3). The person's token is that person's, whoever's vault it sits in here.
+       */
       {
         id: deploymentCredentialId,
+        tenantId: "team",
         kind: "mcp",
         provider: serverId,
         keyId: `mcp-${serverId}-${suffix}`,
@@ -105,6 +114,7 @@ beforeAll(async () => {
       },
       {
         id: oauthClientCredentialId,
+        tenantId: "team",
         kind: "mcp_oauth_client",
         provider: serverId,
         keyId: `oauth-client-${serverId}-${suffix}`,
@@ -161,6 +171,7 @@ afterAll(async () => {
         ]),
       ),
   );
+  await releaseAdmin?.();
 });
 
 describe("a curated server may only be pointed at its own kind of credential", () => {

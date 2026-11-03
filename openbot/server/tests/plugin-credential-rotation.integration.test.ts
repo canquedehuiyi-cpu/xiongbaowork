@@ -13,6 +13,7 @@ import {
 } from "../src/db/schema";
 import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -42,13 +43,16 @@ const store = createPluginStore({
 });
 
 /**
- * The person here registers the client and connects, as an administrator of their own workspace
- * would: every route runs the store in the requester's frame, so the server row this run adds, the
- * vault rows and the connection are that person's.
+ * The person here registers the client and connects, as an administrator would: every route runs the
+ * store in the requester's frame, and the admin routes hold the admin capability (G01-E P10). The
+ * Drive server and its OAuth client are `team` rows, which only an administrator with the capability
+ * writes and reads back; the connection and its refresh token are that person's own.
  */
+const adminRequest = createAdminRequest(database);
 function asPerson<T>(work: () => Promise<T>) {
-  return runAsTenant(personId, work);
+  return adminRequest(personId, work);
 }
+let releaseAdmin: (() => Promise<void>) | undefined;
 
 /**
  * Questions about the deployment as a whole: whether a Drive row was already here (whoever holds
@@ -85,17 +89,8 @@ function live<T extends { revokedAt: Date | null }>(rows: T[]) {
 }
 
 beforeAll(async () => {
-  await asPerson(() =>
-    database
-      .insert(users)
-      .values({
-        id: personId,
-        email: `${personId}@openbot.test`,
-        name: personId,
-        emailVerified: false,
-      })
-      .onConflictDoNothing(),
-  );
+  // The person, and their administrator role (G01-E P10: the client is the team's).
+  releaseAdmin = await seedAdministrator(database, personId);
 
   const [existing] = await asPlatform(() =>
     database
@@ -111,6 +106,8 @@ beforeAll(async () => {
       .insert(mcpServers)
       .values({
         id: serverId,
+        // The deployment's server, as `addServer` writes one (G01-E P10).
+        tenantId: "team",
         title: "Google Drive",
         vendor: "Google",
         url: "https://www.googleapis.com/drive/v3",
@@ -164,6 +161,7 @@ afterAll(async () => {
     );
   }
   await asPerson(() => database.delete(users).where(eq(users.id, personId)));
+  await releaseAdmin?.();
   const restore = clientBefore;
   if (restore) {
     const [survivor] = await asPlatform(() =>
