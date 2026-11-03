@@ -90,7 +90,10 @@ import {
   dispatchClaimedAutomations,
   offerDueAutomations,
 } from "./automations/sweep";
-import { createWakerAutomationExecutor } from "./automations/waker-executor";
+import {
+  createWakerAutomationExecutor,
+  firingOfInitiator,
+} from "./automations/waker-executor";
 import { createAuth } from "./auth";
 import {
   createDevRequireUser,
@@ -2458,6 +2461,8 @@ await startupLifecycle.run(async (startup) => {
     refusalMarker: REFUSAL_MARKER,
     personInitiator: PERSON_INITIATOR,
   });
+  // Declared before the approval-resume loop, which settles an automation firing an approval held.
+  const automationStore = createAutomationStore(database);
   const approvalContinuationRunner = createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
@@ -2657,6 +2662,15 @@ await startupLifecycle.run(async (startup) => {
                           sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
                         ),
                       );
+                    /*
+                     * An automation firing that stopped for this approval (D06) is settled the same
+                     * way, allowed or declined: the turn has now continued with the person's answer.
+                     * The firing is named by the snapshot's initiator, and settled in this owner's
+                     * frame, so another person's firing id matches nothing.
+                     */
+                    const waitingFiring = firingOfInitiator(snapshot.initiator);
+                    if (waitingFiring)
+                      await automationStore.settleWaitingFiring(waitingFiring);
                   },
                 };
                 abandon = (reason) =>
@@ -2950,7 +2964,6 @@ await startupLifecycle.run(async (startup) => {
    * unattended turn runner as a routine (same gates, same card, same ceiling). WakerFlow targets have
    * no executor until D10, so the store refuses them at save time.
    */
-  const automationStore = createAutomationStore(database);
   const automationQueue = createWorkQueue(database);
   const wakerAutomationExecutor = createWakerAutomationExecutor({
     store: automationStore,
