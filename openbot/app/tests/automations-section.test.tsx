@@ -158,6 +158,19 @@ const TRIGGERS: Record<string, AutomationTrigger[]> = {
     trigger("a-running", "t-once", { kind: "once", at: later(48) }),
     trigger("a-running", "t-hook", { kind: "webhook" }),
   ],
+  // A one-off the server switched off because its moment was missed: it says why.
+  "a-paused": [
+    trigger(
+      "a-paused",
+      "t-missed",
+      { kind: "once", at: new Date(Date.now() - HOUR).toISOString() },
+      {
+        enabled: false,
+        nextRunAt: null,
+        lastError: "一次性触发错过了预定时间，没有执行。",
+      },
+    ),
+  ],
   // Still switched on with a next time on record, but its automation is off: nothing will fire.
   "a-tripped": [
     trigger("a-tripped", "t-tripped", {
@@ -275,6 +288,19 @@ test("C1/AUT4: every automation shows its state, its runs against the cap and it
   expect(
     within(await rowOf(view, "熔断任务")).getByRole("button", { name: "恢复" }),
   ).toBeTruthy();
+});
+
+test("a trigger the server switched off says why", async () => {
+  serve([paused]);
+  const { view } = draw();
+  const chips = await within(await rowOf(view, "手动暂停")).findAllByRole(
+    "listitem",
+  );
+  expect(chips.map((chip) => chip.textContent)).toEqual([
+    expect.stringMatching(
+      /^一次性 · .+ · 已停用 · 一次性触发错过了预定时间，没有执行。$/,
+    ),
+  ]);
 });
 
 test("the state rule: breaker before limits, limits before on/off", () => {

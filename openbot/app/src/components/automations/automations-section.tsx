@@ -108,6 +108,10 @@ function TriggerChip({
       {TRIGGER_KIND_LABEL[config.kind]} · {detail}
       {next}
       {trigger.enabled ? "" : " · 已停用"}
+      {/* Why the server switched it off (a missed one-off, an unreadable rule), when it says. */}
+      {trigger.lastError ? (
+        <span className="text-destructive"> · {trigger.lastError}</span>
+      ) : null}
     </li>
   );
 }
