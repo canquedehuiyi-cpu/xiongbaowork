@@ -279,12 +279,17 @@ describe("the key a customer's agent sits behind", () => {
   test("the value is encrypted at rest, not stored in the clear", async () => {
     // The store seals for the row it picks (audit #9): the fake plays the store's part and hands
     // the seal the binding a real insert would, so what it gets back is what the row would hold.
-    const binding = { id: "cred-1", tenantId: "tenant-a", kind: "agent" as const };
+    const binding = {
+      id: "cred-1",
+      tenantId: "tenant-a",
+      kind: "agent" as const,
+    };
     let written = "";
     const auth = await storeAgentAuth({
       store: {
         create: async (value) => {
-          if (!value.seal) throw new Error("expected a bound seal, not a v1 envelope");
+          if (!value.seal)
+            throw new Error("expected a bound seal, not a v1 envelope");
           written = await value.seal(binding);
           return vaultRow as never;
         },
@@ -818,5 +823,190 @@ describe("named addresses on a redirect hop", () => {
       fetchImpl: redirectingTo("http://169.254.169.254/latest/meta-data/"),
     });
     await expect(dial("https://agent.example.com/start")).rejects.toThrow();
+  });
+});
+
+/**
+ * Where a hop's NAME resolves, not only how it is spelled.
+ *
+ * The static check reads the URL. A public-looking name whose A record says `10.0.0.5` passes it, and
+ * the socket opens inside the deployment with the customer's key and the signed run attached. So
+ * every hop is resolved before it is dialled, through the same guard tenant model endpoints use, and
+ * one internal answer refuses the hop. The operator's own settings keep meaning what they mean for
+ * an agent endpoint: a host they named, or the development opt-in, admits an internal answer; nothing
+ * admits the metadata service.
+ */
+describe("where a hop's name resolves", () => {
+  /** A resolver answering from a table; a name it does not know does not resolve. */
+  function resolver(table: Record<string, string[]>) {
+    const asked: string[] = [];
+    const lookup = async (hostname: string) => {
+      asked.push(hostname);
+      const addresses = table[hostname];
+      if (!addresses) throw new Error(`ENOTFOUND ${hostname}`);
+      return addresses.map((address) => ({
+        address,
+        family: address.includes(":") ? 6 : 4,
+      }));
+    };
+    return { asked, lookup };
+  }
+
+  function recorder(answer: (url: string) => Response) {
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      calls.push({ url, init });
+      return answer(url);
+    }) as unknown as typeof fetch;
+    return { calls, impl };
+  }
+
+  const keyed = {
+    method: "POST",
+    headers: { Authorization: "Bearer customer-key" },
+    body: JSON.stringify({ threadId: "t" }),
+  };
+
+  test("a stored name that resolves inside the deployment is refused before any request", async () => {
+    for (const inside of ["10.0.0.5", "127.0.0.1", "::1"]) {
+      const refusals: Array<{ address: string; reason: string }> = [];
+      const { calls, impl } = recorder(() => new Response("ok"));
+      const { lookup } = resolver({ "agent.example.com": [inside] });
+      const dial = createAgentFetch({
+        fetchImpl: impl,
+        lookup,
+        onRefusal: (refusal) => refusals.push(refusal),
+      });
+
+      await expect(
+        dial("https://agent.example.com/ag-ui", keyed),
+      ).rejects.toBeInstanceOf(EndpointNotAllowedError);
+      expect(calls).toHaveLength(0);
+      expect(refusals).toHaveLength(1);
+      expect(refusals[0]?.reason).toMatch(/inside this deployment's network/);
+    }
+  });
+
+  test("a redirect to a name that resolves inward is refused before it is followed", async () => {
+    const { calls, impl } = recorder((url) =>
+      url.startsWith("https://agent.example.com")
+        ? new Response(null, {
+            status: 307,
+            headers: { location: "https://inward.example.net/ag-ui" },
+          })
+        : new Response("should never be reached"),
+    );
+    const { lookup } = resolver({
+      "agent.example.com": ["93.184.216.34"],
+      "inward.example.net": ["93.184.216.35", "10.1.2.3"],
+    });
+    const dial = createAgentFetch({ fetchImpl: impl, lookup });
+
+    await expect(
+      dial("https://agent.example.com/ag-ui", keyed),
+    ).rejects.toBeInstanceOf(EndpointNotAllowedError);
+    // The first hop went out; the second, and the key with it, did not.
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://agent.example.com/ag-ui",
+    ]);
+  });
+
+  test("an internal answer is admitted for a host the operator named, and only that host", async () => {
+    const { calls, impl } = recorder(() => new Response("ok"));
+    const { lookup } = resolver({
+      "agents.corp.example": ["10.0.0.42"],
+      "other.corp.example": ["10.0.0.43"],
+    });
+    const dial = createAgentFetch({
+      fetchImpl: impl,
+      lookup,
+      allowedHosts: new Set(["agents.corp.example:8443"]),
+    });
+
+    const response = await dial(
+      "https://agents.corp.example:8443/ag-ui",
+      keyed,
+    );
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+
+    await expect(
+      dial("https://other.corp.example:8443/ag-ui", keyed),
+    ).rejects.toBeInstanceOf(EndpointNotAllowedError);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("the development opt-in admits an internal answer, and never the metadata service", async () => {
+    const { calls, impl } = recorder(() => new Response("ok"));
+    const { lookup } = resolver({
+      "devbox.example.com": ["192.168.1.20"],
+      "meta.example.com": ["169.254.169.254"],
+    });
+    const dial = createAgentFetch({
+      fetchImpl: impl,
+      lookup,
+      allowPrivateHosts: true,
+    });
+
+    expect((await dial("http://devbox.example.com:4200/ag-ui")).status).toBe(
+      200,
+    );
+    await expect(
+      dial("http://meta.example.com/latest/meta-data/"),
+    ).rejects.toBeInstanceOf(EndpointNotAllowedError);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a public answer is dialled as before", async () => {
+    const { calls, impl } = recorder(() => new Response("ok"));
+    const { asked, lookup } = resolver({
+      "agent.example.com": ["93.184.216.34"],
+    });
+    const dial = createAgentFetch({ fetchImpl: impl, lookup });
+
+    expect((await dial("https://agent.example.com/ag-ui", keyed)).status).toBe(
+      200,
+    );
+    expect(asked).toEqual(["agent.example.com"]);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a resolver that never answers is bounded by the caller's signal, and nothing is dialled", async () => {
+    const { calls, impl } = recorder(() => new Response("ok"));
+    const dial = createAgentFetch({
+      fetchImpl: impl,
+      lookup: () => new Promise<never>(() => undefined),
+    });
+
+    const refusal = await dial("https://stalled.example.com/ag-ui", {
+      ...keyed,
+      signal: AbortSignal.timeout(50),
+    }).catch((error: unknown) => error);
+    expect((refusal as Error).name).toBe("TimeoutError");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a name that does not resolve is not dialled, and is not reported as a policy refusal", async () => {
+    const refusals: Array<{ address: string; reason: string }> = [];
+    const { calls, impl } = recorder(() => new Response("ok"));
+    const { lookup } = resolver({});
+    const dial = createAgentFetch({
+      fetchImpl: impl,
+      lookup,
+      viaProxy: () => false,
+      onRefusal: (refusal) => refusals.push(refusal),
+    });
+
+    await expect(dial("https://gone.example.com/ag-ui", keyed)).rejects.toThrow(
+      /could not be resolved/,
+    );
+    expect(calls).toHaveLength(0);
+    expect(refusals).toHaveLength(0);
   });
 });
