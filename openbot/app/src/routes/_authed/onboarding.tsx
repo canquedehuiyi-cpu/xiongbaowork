@@ -5,6 +5,7 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import * as React from "react";
 import useMeasure from "react-use-measure";
 import AgentOrb from "@/components/agents/orb/agent-orb";
+import { SourcesStep } from "@/components/avatar/avatar-sources";
 import { Composer } from "@/components/channels/composer";
 import { DesktopIllustration } from "@/components/computer/desktop-illustration";
 import { ComputerPlaceholder } from "@/components/computer/placeholder";
@@ -13,7 +14,10 @@ import { Button } from "@/components/ui/button";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions, needsOnboarding } from "@/lib/auth/queries";
 import { appConfig } from "@/lib/generated/application-config";
-import { completeOnboardingMutationOptions } from "@/lib/onboarding/mutations";
+import {
+  advanceOnboardingMutationOptions,
+  completeOnboardingMutationOptions,
+} from "@/lib/onboarding/mutations";
 import { queryClient } from "@/query-client";
 
 export const Route = createFileRoute("/_authed/onboarding")({
@@ -151,10 +155,27 @@ function RosterStep() {
   );
 }
 
-const STEPS: Array<() => React.ReactNode> = [
-  () => <WelcomeStep />,
-  () => <ComputerUseStep />,
-  () => <RosterStep />,
+/**
+ * The wizard, in order. A step with `ownActions` carries its own ways forward (the information-source
+ * step saves or skips, and writes the step itself), so the shared 继续 is not shown under it.
+ */
+const STEPS: Array<{
+  render: (moveTo: (step: number) => void, index: number) => React.ReactNode;
+  ownActions?: boolean;
+}> = [
+  { render: () => <WelcomeStep /> },
+  /*
+   * Story F1: right after the welcome, the 分身's information sources. Skippable (spec D3): the
+   * 分身 then stays 待配置 and is configured from its own detail page.
+   */
+  {
+    render: (moveTo, index) => (
+      <SourcesStep nextStep={index + 1} onAdvanced={() => moveTo(index + 1)} />
+    ),
+    ownActions: true,
+  },
+  { render: () => <ComputerUseStep /> },
+  { render: () => <RosterStep /> },
 ];
 
 /** A pane arrives from the side the journey is moving toward, and leaves out the other. */
@@ -167,9 +188,16 @@ const variants = {
 function RouteComponent() {
   const navigate = useNavigate();
   const complete = useMutation(completeOnboardingMutationOptions(queryClient));
+  const advance = useMutation(advanceOnboardingMutationOptions(queryClient));
+  const { data: user } = useQuery(currentUserQueryOptions());
 
-  // Browser state on purpose: the step is not persisted while the wizard is being designed.
-  const [step, setStep] = React.useState(0);
+  /*
+   * Where the person left off, as the server has it (spec D8): every move below writes the step, so a
+   * reload comes back to the same pane. Clamped, because the number outlives any one wizard's length.
+   */
+  const [step, setStep] = React.useState(() =>
+    Math.min(Math.max(user?.onboarding?.step ?? 0, 0), STEPS.length - 1),
+  );
   const [direction, setDirection] = React.useState(1);
   // The way out: set once the completion is saved, it fades the whole page and then navigates.
   const [leaving, setLeaving] = React.useState(false);
@@ -179,10 +207,17 @@ function RouteComponent() {
 
   const last = step === STEPS.length - 1;
 
-  const go = (to: number) => {
+  /** Show a step that is already saved on the server. */
+  const moveTo = (to: number) => {
     setDirection(to > step ? 1 : -1);
     setStep(to);
   };
+  /** Move and save the step, so a reload resumes here. A failed save is shown, not fatal. */
+  const go = (to: number) => {
+    moveTo(to);
+    advance.mutate(to);
+  };
+  const current = STEPS[step];
 
   return (
     // Outside `_app` on purpose: no sidebar and no chrome until onboarding is done.
@@ -221,7 +256,7 @@ function RouteComponent() {
                   key={step}
                   variants={variants}
                 >
-                  {STEPS[step]()}
+                  {current?.render(moveTo, step)}
                 </motion.div>
               </AnimatePresence>
 
@@ -240,9 +275,9 @@ function RouteComponent() {
                 }}
               />
 
-              {complete.error ? (
+              {complete.error || advance.error ? (
                 <p className="mt-4 text-destructive text-sm" role="alert">
-                  {complete.error.message}
+                  {(complete.error ?? advance.error)?.message}
                 </p>
               ) : null}
 
@@ -250,26 +285,28 @@ function RouteComponent() {
                 className="mt-20 flex flex-col items-center justify-center max-w-xs gap-4 w-full mx-auto"
                 layout
               >
-                <Button
-                  className="w-full"
-                  disabled={complete.isPending}
-                  onClick={() => {
-                    if (last) {
-                      complete.mutate(undefined, {
-                        onSuccess: () => setLeaving(true),
-                      });
-                    } else {
-                      go(step + 1);
-                    }
-                  }}
-                  size="lg"
-                >
-                  {complete.isPending
-                    ? "正在保存…"
-                    : last
-                      ? "开始使用"
-                      : "继续"}
-                </Button>
+                {current?.ownActions ? null : (
+                  <Button
+                    className="w-full"
+                    disabled={complete.isPending}
+                    onClick={() => {
+                      if (last) {
+                        complete.mutate(undefined, {
+                          onSuccess: () => setLeaving(true),
+                        });
+                      } else {
+                        go(step + 1);
+                      }
+                    }}
+                    size="lg"
+                  >
+                    {complete.isPending
+                      ? "正在保存…"
+                      : last
+                        ? "开始使用"
+                        : "继续"}
+                  </Button>
+                )}
                 {step !== 0 && (
                   <Button
                     className="w-full"
