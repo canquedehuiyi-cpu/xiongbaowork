@@ -1,18 +1,25 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
 import type { CredentialSecretReader, CredentialStore } from "../credentials";
-import { encryptSecret } from "../credentials";
+import {
+  MODEL_REGISTRY_KEY_PREFIX,
+  openCredential,
+  sealCredential,
+} from "../credentials";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
   agents,
   modelRegistry,
+  PLATFORM_POOL_KEY_ENV,
+  platformModelPool,
   providerTemplates,
 } from "../db/schema";
-import type { QuotaService } from "../quota/limits";
-import { QuotaExceeded } from "../quota/limits";
+import type { Plan, QuotaService } from "../quota/limits";
+import { FREE_PLAN_FALLBACK, QuotaExceeded } from "../quota/limits";
+import type { PoolKeyEnvironment } from "./runtime-resolver";
 
 type Ctx = { Variables: AppVariables };
 
@@ -29,8 +36,13 @@ export function createModelRoutes(
   encryptionKey: string,
   /** The tenant's ceiling on models of their own, when this deployment counts one (ticket 022). */
   quota?: QuotaService,
+  options: {
+    /** Where a pool row's key variable is looked up for `available`; tests pass their own. */
+    environment?: PoolKeyEnvironment;
+  } = {},
 ) {
   const routes = new Hono<Ctx>();
+  const environment = options.environment ?? process.env;
 
   routes.get("/", requireUser, async (context) => {
     const rows = await database
@@ -67,12 +79,71 @@ export function createModelRoutes(
       )
       .groupBy(agentProfiles.modelRef);
     const counts = new Map(bound.map((row) => [row.modelRef, row.coworkers]));
+    /*
+     * The platform's experience models this tenant's plan may bind (stories H1, K1).
+     *
+     * The plan is this tenant's own, and a workspace with no subscription is Free (audit #7) — also
+     * when this deployment counts no quota, so the shelf never offers Pro rows by omission. The pool
+     * is platform-owned with no row security (openbot_app may only SELECT it), so it is read in the
+     * member's own frame: a member request never opens `platform` (G01-E). Only the fields a
+     * screen needs leave this handler: never `api_key_env`, never a key. `available` says whether
+     * the deployment holds the key behind the row, so a screen can grey out a row that would fall
+     * back to the default model.
+     */
+    const plan: Plan = quota
+      ? await quota.planFor(context.var.actor.id)
+      : FREE_PLAN_FALLBACK;
+    const poolRows = await database
+      .select({
+        id: platformModelPool.id,
+        provider: platformModelPool.provider,
+        modelName: platformModelPool.modelName,
+        label: platformModelPool.label,
+        apiKeyEnv: platformModelPool.apiKeyEnv,
+        tiers: platformModelPool.tiers,
+      })
+      .from(platformModelPool)
+      .where(eq(platformModelPool.enabled, true))
+      .orderBy(platformModelPool.label, platformModelPool.id);
+    // Under this tenant's row-level security, like the library count above: other tenants' coworkers
+    // on the same pool row are not this tenant's business.
+    const pooled = await database
+      .select({
+        platformModelRef: agentProfiles.platformModelRef,
+        coworkers: sql<number>`count(*)::int`,
+      })
+      .from(agentProfiles)
+      .where(
+        and(
+          isNotNull(agentProfiles.platformModelRef),
+          isNull(agentProfiles.deletedAt),
+        ),
+      )
+      .groupBy(agentProfiles.platformModelRef);
+    const poolCounts = new Map(
+      pooled.map((row) => [row.platformModelRef, row.coworkers]),
+    );
+    const pool = poolRows
+      .filter((row) => (row.tiers as readonly string[]).includes(plan.id))
+      .map((row) => ({
+        id: row.id,
+        provider: row.provider,
+        modelName: row.modelName,
+        label: row.label,
+        coworkers: poolCounts.get(row.id) ?? 0,
+        available:
+          PLATFORM_POOL_KEY_ENV.test(row.apiKeyEnv) &&
+          Boolean(environment[row.apiKeyEnv]),
+      }));
     return context.json({
       models: rows.map((row) => ({
         ...row,
         coworkers: counts.get(row.id) ?? 0,
       })),
       templates,
+      pool,
+      // Whether this plan may connect models with its own key (K1); the screen gates the form on it.
+      customModels: plan.limits.customModels,
     });
   });
 
@@ -83,7 +154,7 @@ export function createModelRoutes(
     const apiKey = (body.apiKey ?? "").trim();
     if (!provider || !modelName || !apiKey) {
       return context.json(
-        { error: "provider, modelName and apiKey are all required." },
+        { error: "provider、modelName 和 apiKey 均为必填项。" },
         400,
       );
     }
@@ -93,14 +164,11 @@ export function createModelRoutes(
       .where(eq(providerTemplates.id, provider))
       .limit(1);
     if (!template[0]) {
-      return context.json({ error: "Unknown provider template." }, 400);
+      return context.json({ error: "未知的模型提供方模板。" }, 400);
     }
     const baseUrl = (body.baseUrl ?? "").trim();
     if (baseUrl && !template[0].allowsBaseUrl) {
-      return context.json(
-        { error: "This provider does not take a custom endpoint." },
-        400,
-      );
+      return context.json({ error: "该提供方不支持自定义接口地址。" }, 400);
     }
     /*
      * Before the key is stored, not after.
@@ -119,7 +187,15 @@ export function createModelRoutes(
         throw thrown;
       }
     }
-    const encrypted = await encryptSecret(encryptionKey, apiKey);
+    /*
+     * The key is named after the library row it belongs to, not after the model (audit #9).
+     *
+     * `modelName` is the tenant's own text: as a vault key it collided with every other tenant
+     * connecting the same model, and it shared a namespace with the deployment's
+     * `credentialSecretRef`, so a tenant could name a model after it. Nothing reads a library key by
+     * its name — the row's `credential_id` is the reference — so the id is the only name it needs.
+     */
+    const registryId = crypto.randomUUID();
     /*
      * ONE TRANSACTION FOR THE KEY AND THE ROW THAT POINTS AT IT.
      *
@@ -141,8 +217,8 @@ export function createModelRoutes(
           {
             kind: "model",
             provider,
-            keyId: modelName,
-            encryptedValue: encrypted,
+            keyId: `${MODEL_REGISTRY_KEY_PREFIX}${registryId}`,
+            seal: (binding) => sealCredential(encryptionKey, binding, apiKey),
             metadata: {},
           },
           transaction,
@@ -150,6 +226,7 @@ export function createModelRoutes(
         return await transaction
           .insert(modelRegistry)
           .values({
+            id: registryId,
             provider,
             baseUrl: baseUrl || null,
             credentialId: credential.id,
@@ -178,12 +255,12 @@ export function createModelRoutes(
       .where(eq(modelRegistry.id, id))
       .limit(1);
     if (!row?.credentialId) {
-      return context.json({ error: "No such model." }, 404);
+      return context.json({ error: "找不到该模型。" }, 404);
     }
     const secret = await credentials.readSecret(row.credentialId);
-    if (!secret) return context.json({ ok: false, error: "Key revoked." }, 200);
-    const { decryptSecret } = await import("../credentials");
-    const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
+    if (!secret)
+      return context.json({ ok: false, error: "密钥已被吊销。" }, 200);
+    const apiKey = await openCredential(encryptionKey, secret);
     const answer = await probe(
       row.provider,
       row.baseUrl,
@@ -195,14 +272,55 @@ export function createModelRoutes(
 
   routes.delete("/:id", requireUser, async (context) => {
     const id = context.req.param("id");
-    const [removed] = await database
-      .delete(modelRegistry)
-      .where(eq(modelRegistry.id, id))
-      .returning({
-        id: modelRegistry.id,
-        credentialId: modelRegistry.credentialId,
-      });
-    if (!removed) return context.json({ error: "No such model." }, 404);
+    /*
+     * A model a coworker still answers on is refused (audit #13), not silently unbound.
+     *
+     * `model_ref` is `on delete set null`, so without this check a delete that bypasses the screen
+     * would quietly move every bound coworker onto the deployment's model. The row is locked first
+     * (FOR UPDATE conflicts with the FK's KEY SHARE taken by a concurrent bind), so a bind either
+     * commits before the count below sees it, or waits and then fails its FK after the delete.
+     * Switching the model off (PATCH) remains the way to retire it without touching the bindings.
+     */
+    const outcome = await database.transaction(async (transaction) => {
+      const [locked] = await transaction
+        .select({ id: modelRegistry.id })
+        .from(modelRegistry)
+        .where(eq(modelRegistry.id, id))
+        .for("update");
+      if (!locked) return { kind: "missing" as const };
+      const [usage] = await transaction
+        .select({ value: count() })
+        .from(agentProfiles)
+        .where(
+          and(eq(agentProfiles.modelRef, id), isNull(agentProfiles.deletedAt)),
+        );
+      const references = Number(usage?.value ?? 0);
+      if (references > 0) return { kind: "in_use" as const, references };
+      const [row] = await transaction
+        .delete(modelRegistry)
+        .where(eq(modelRegistry.id, id))
+        .returning({
+          id: modelRegistry.id,
+          credentialId: modelRegistry.credentialId,
+        });
+      return row
+        ? { kind: "removed" as const, removed: row }
+        : { kind: "missing" as const };
+    });
+    if (outcome.kind === "missing") {
+      return context.json({ error: "找不到该模型。" }, 404);
+    }
+    if (outcome.kind === "in_use") {
+      return context.json(
+        {
+          error: `This model is still used by ${outcome.references} coworker(s); switch them to another model or turn the model off instead.`,
+          code: "model_in_use",
+          references: outcome.references,
+        },
+        409,
+      );
+    }
+    const { removed } = outcome;
     /*
      * The key goes with the model.
      *
@@ -230,7 +348,7 @@ export function createModelRoutes(
    *
    * Switching off is how a person retires a model without throwing away the coworkers bound to it:
    * the binding stays, the resolver refuses a disabled entry, and each of them answers on the
-   * deployment's own model again until it is switched back. Deleting would take the binding with it.
+   * deployment's own model again until it is switched back. Deleting is refused while any are bound.
    */
   routes.patch("/:id", requireUser, async (context) => {
     const id = context.req.param("id");
@@ -243,24 +361,23 @@ export function createModelRoutes(
     else if (typeof body.label === "string")
       patch.label = body.label.trim().slice(0, 80) || null;
     if (Object.keys(patch).length === 0) {
-      return context.json({ error: "Nothing to change." }, 400);
+      return context.json({ error: "没有需要更改的内容。" }, 400);
     }
     const [row] = await database
       .update(modelRegistry)
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(modelRegistry.id, id))
       .returning();
-    if (!row) return context.json({ error: "No such model." }, 404);
+    if (!row) return context.json({ error: "找不到该模型。" }, 404);
     return context.json({ model: row });
   });
 
   /*
    * Which coworkers answer on this one, by name.
    *
-   * Deleting a model unbinds them rather than breaking them (`model_ref` is `on delete set null`, and
-   * an unbound coworker falls back to the deployment's model), so this is not a guard but the notice
-   * that lets a person expect the change — and a bare count would be a notice that cannot be acted
-   * on, because acting on it means going to each specific coworker and rebinding it.
+   * Deleting a model that any of them still answers on is refused with 409 (`DELETE /:id`), so this
+   * is the list a person needs to act on that refusal — a bare count cannot be acted on, because
+   * acting on it means going to each specific coworker and rebinding it.
    *
    * A deleted coworker is not listed: its binding going changes nothing anybody will notice.
    */
@@ -335,7 +452,7 @@ async function probe(
           : provider === "deepseek"
             ? "https://api.deepseek.com/v1"
             : "");
-    if (!base) return { ok: false, error: "No endpoint configured." };
+    if (!base) return { ok: false, error: "尚未配置接口地址。" };
     const response = await fetch(
       `${base.replace(/\/$/, "")}/chat/completions`,
       {

@@ -18,10 +18,11 @@
  */
 import type { SCIMOptions } from "@better-auth/scim";
 import { eq } from "drizzle-orm";
-import { type AuditStore, recordAuditEvent } from "../audit";
+import { type AuditStore, recordPersonAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { revokedAccess, userRoles, users } from "../db/schema";
 import { enterpriseControls } from "../admin/controls";
+import { assertPersonTenant, runAsTenant } from "../tenant/context";
 import { roleForEmail } from "./roles";
 
 export const SCIM_REVOKED_BY_PREFIX = "scim:";
@@ -43,13 +44,13 @@ export type ScimDeps = {
   initialAdminEmails: readonly string[];
 };
 
-async function emailOf(database: Database, userId: string) {
+async function personOf(database: Database, userId: string) {
   const [row] = await database
-    .select({ email: users.email })
+    .select({ id: users.id, email: users.email })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
-  return row?.email;
+  return row;
 }
 
 /**
@@ -64,8 +65,17 @@ export async function reconcileDirectoryState(
   deps: ScimDeps,
   state: { userId: string; active: boolean },
 ): Promise<void> {
-  const email = await emailOf(deps.database, state.userId);
-  if (!email) return;
+  const person = await personOf(deps.database, state.userId);
+  if (!person) return;
+  const { email } = person;
+  /*
+   * Whose work the rest of this is (G01): the person's own tenant, which is their user row's id, read
+   * back from that row rather than taken from the directory's request. Retiring their credentials,
+   * stopping their computers and the trail rows about it all run as them. The deferred half below
+   * used to run in whatever frame the timer inherited — none at all, or the auth handler's — and
+   * filed `person.deprovisioned`, address included, where every tenant's trail could read it.
+   */
+  const tenant = assertPersonTenant(person.id);
   const normalized = email.trim().toLowerCase();
   const by = `${SCIM_REVOKED_BY_PREFIX}directory`;
 
@@ -76,10 +86,10 @@ export async function reconcileDirectoryState(
       .onConflictDoNothing()
       .returning({ email: revokedAccess.email });
     setTimeout(() => {
-      void (async () => {
-        await enterpriseControls()?.offboard(state.userId, by);
+      void runAsTenant(tenant, async () => {
+        await enterpriseControls()?.offboard(tenant, by);
         if (deps.auditStore && inserted.length > 0) {
-          await recordAuditEvent(deps.auditStore, {
+          await recordPersonAuditEvent(deps.auditStore, tenant, {
             eventType: "person.deprovisioned",
             targetType: "person",
             targetId: state.userId,
@@ -90,7 +100,7 @@ export async function reconcileDirectoryState(
             },
           });
         }
-      })().catch((error) =>
+      }).catch((error) =>
         console.error(
           JSON.stringify({
             type: "scim-offboard-failed",
@@ -113,7 +123,7 @@ export async function reconcileDirectoryState(
       .delete(revokedAccess)
       .where(eq(revokedAccess.email, normalized));
     if (deps.auditStore) {
-      await recordAuditEvent(deps.auditStore, {
+      await recordPersonAuditEvent(deps.auditStore, tenant, {
         eventType: "person.reprovisioned",
         targetType: "person",
         targetId: state.userId,
@@ -198,7 +208,8 @@ export async function recordProvisioned(
     .from(userRoles)
     .where(eq(userRoles.userId, user.id))
     .limit(1);
-  await recordAuditEvent(deps.auditStore, {
+  // Filed in the new person's own tenant, their user row's id, like the rest of their trail (G01).
+  await recordPersonAuditEvent(deps.auditStore, user.id, {
     eventType: "person.provisioned",
     targetType: "person",
     targetId: user.id,

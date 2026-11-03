@@ -66,7 +66,7 @@ export function createDeviceRoutes(
     const device = (await store.list(context.var.actor.id)).find(
       (row) => row.id === context.req.param("id"),
     );
-    if (!device) return context.json({ error: "No such device." }, 404);
+    if (!device) return context.json({ error: "找不到该设备。" }, 404);
     if (!queue) return context.json({ actions: [] });
     return context.json({
       actions: await queue.reviews({
@@ -81,9 +81,8 @@ export function createDeviceRoutes(
     const device = (await store.list(tenantId)).find(
       (row) => row.id === context.req.param("id"),
     );
-    if (!device) return context.json({ error: "No such device." }, 404);
-    if (!queue)
-      return context.json({ error: "Device receipts are unavailable." }, 409);
+    if (!device) return context.json({ error: "找不到该设备。" }, 404);
+    if (!queue) return context.json({ error: "设备操作回执暂不可用。" }, 409);
     const body = await context.req.json().catch(() => null);
     if (
       body?.confirmedChecked !== true ||
@@ -120,7 +119,7 @@ export function createDeviceRoutes(
     );
     return removed
       ? context.json({ ok: true })
-      : context.json({ error: "No such device." }, 404);
+      : context.json({ error: "找不到该设备。" }, 404);
   });
 
   return routes;
@@ -162,10 +161,7 @@ export function createRunnerRoutes(
       typeof body?.deviceId === "string" ? body.deviceId.trim() : "";
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     if (!code || !deviceId || !name) {
-      return context.json(
-        { error: "A pairing code, a device id and a name are required." },
-        400,
-      );
+      return context.json({ error: "配对码、设备 ID 和名称均为必填项。" }, 400);
     }
     /*
      * Read the ceiling before the code is spent, and say 402 rather than 403.
@@ -194,7 +190,7 @@ export function createRunnerRoutes(
       throw thrown;
     }
     if (!claimed) {
-      return context.json({ error: "That pairing code is no good." }, 403);
+      return context.json({ error: "该配对码无效或已过期。" }, 403);
     }
     // The token is returned once and never again: the store keeps only its hash.
     return context.json({ token: claimed.token, device: claimed.device }, 201);

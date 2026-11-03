@@ -4,6 +4,7 @@ import postgres from "postgres";
 import { sweepAuditTrail } from "../src/audit-retention";
 import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -24,21 +25,40 @@ const database = createDatabase(databaseUrl, TEST_POOL);
 /** The id column is a uuid, so the rows are found by their target rather than by a marker in the id. */
 const MARKER = "retention-test";
 
+/**
+ * Retention is cross-tenant housekeeping, and the sweep itself runs as `platform`. The reads that
+ * count the rows and the direct statements the trigger has to refuse run in that same scope, never in
+ * no frame at all.
+ */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
+
+/**
+ * The fixture rows are a person's trail, filed in that person's tenant as the product files them. A
+ * platform-stamped row would be reachable by a sweep whose scope only matched its own stamp, so it
+ * could not show the sweep reaching across tenants, which is the whole point of running it as
+ * `platform`.
+ */
+const person = `retention-test-${crypto.randomUUID()}`;
+
 async function event(daysAgo: number, index: number): Promise<void> {
-  await database.insert(auditEvents).values({
-    eventType: "computer.action_allowed",
-    targetType: MARKER,
-    targetId: `${MARKER}-${index}`,
-    payload: {},
-    createdAt: new Date(Date.now() - daysAgo * 86_400_000),
-  });
+  await runAsTenant(person, () =>
+    database.insert(auditEvents).values({
+      eventType: "computer.action_allowed",
+      targetType: MARKER,
+      targetId: `${MARKER}-${index}`,
+      payload: {},
+      createdAt: new Date(Date.now() - daysAgo * 86_400_000),
+    }),
+  );
 }
 
 async function remaining(): Promise<number> {
-  const rows = await database
-    .select({ id: auditEvents.id })
-    .from(auditEvents)
-    .where(eq(auditEvents.targetType, MARKER));
+  const rows = await asPlatform(() =>
+    database
+      .select({ id: auditEvents.id })
+      .from(auditEvents)
+      .where(eq(auditEvents.targetType, MARKER)),
+  );
   return rows.length;
 }
 
@@ -50,12 +70,14 @@ async function remaining(): Promise<number> {
  * to remove, and clean up by declaring that window the way the sweep does.
  */
 afterEach(async () => {
-  await database.transaction(async (tx) => {
-    await tx.execute(
-      sql`select set_config('openbot.audit_retention_days', '1', true)`,
-    );
-    await tx.delete(auditEvents).where(eq(auditEvents.targetType, MARKER));
-  });
+  await asPlatform(() =>
+    database.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('openbot.audit_retention_days', '1', true)`,
+      );
+      await tx.delete(auditEvents).where(eq(auditEvents.targetType, MARKER));
+    }),
+  );
 });
 
 /**
@@ -68,7 +90,8 @@ async function refusedAsAppendOnly(
   work: () => Promise<unknown>,
 ): Promise<boolean> {
   try {
-    await work();
+    // In the sweep's own scope, so the refusal is the trigger's and not a policy that saw no row.
+    await asPlatform(work);
     return false;
   } catch (error) {
     let current: unknown = error;
@@ -270,7 +293,7 @@ describe("keeping the audit trail to a retention policy", () => {
     work: () => Promise<unknown>,
   ): Promise<{ refused: boolean; reason: string }> {
     try {
-      await work();
+      await asPlatform(work);
       return { refused: false, reason: "the statement went through" };
     } catch (error) {
       let current: unknown = error;

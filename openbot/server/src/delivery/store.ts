@@ -12,6 +12,7 @@ import {
   pushDevices,
 } from "../db/schema/delivery";
 import { workItems } from "../db/schema/work";
+import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import {
   type BindingTransport,
   type DeliveryBinding,
@@ -128,6 +129,12 @@ export function createDeliveryStore(database: Database) {
               address: row.address,
               mentionId: row.mentionId ?? null,
               enabled: true,
+              /*
+               * Relinking restamps the row as the tenant this runs as: the owner's own frame on
+               * every link path (G01). A binding linked before the OpenTag route was framed carries
+               * `system`, which delivery now refuses; linking it again is how it recovers.
+               */
+              tenantId: sql`current_setting('app.tenant_id', true)`,
             },
             setWhere: eq(deliveryBindings.ownerUserId, input.ownerUserId),
           })
@@ -171,7 +178,7 @@ export function createDeliveryStore(database: Database) {
     async readChallenge(
       id: string,
       owner?: string,
-    ): Promise<DeliveryChallenge | null> {
+    ): Promise<(DeliveryChallenge & { tenantId: string }) | null> {
       return (
         (
           await database
@@ -207,6 +214,39 @@ export function createDeliveryStore(database: Database) {
       // A token already held by someone else moves only once its owner has signed out on that phone
       // (which disables the row). Otherwise anyone who learned a token could take over its
       // notifications, approval and sign-in links included.
+      //
+      // The holder's row is stamped with the holder's tenant, so the caller's own frame can neither
+      // see it nor take it over (the upsert below would hit row-level security). Who holds the token
+      // is therefore read in the platform frame, and only a disabled row of somebody else's is
+      // retired there; nothing about it is returned to the caller beyond the refusal it already got.
+      // The new row is then written in the caller's own frame, stamped with their tenant.
+      const [held] = await runAsTenant("platform", () =>
+        database
+          .select({
+            ownerUserId: pushDevices.ownerUserId,
+            enabled: pushDevices.enabled,
+          })
+          .from(pushDevices)
+          .where(eq(pushDevices.token, input.token))
+          .limit(1),
+      );
+      if (held && held.ownerUserId !== input.ownerUserId) {
+        if (held.enabled)
+          throw new DeliveryRefusedError(
+            "This device is already registered to another account. Sign out of OpenBot on it first.",
+          );
+        await runAsTenant("platform", () =>
+          database
+            .delete(pushDevices)
+            .where(
+              and(
+                eq(pushDevices.token, input.token),
+                eq(pushDevices.ownerUserId, held.ownerUserId),
+                eq(pushDevices.enabled, false),
+              ),
+            ),
+        );
+      }
       const [device] = await database
         .insert(pushDevices)
         .values({ ...input, enabled: true })
@@ -297,6 +337,8 @@ export function createDeliveryStore(database: Database) {
         )
         .returning({
           id: deliveryBindings.id,
+          // Whose binding it is, so each audit row is written as that person (G01).
+          tenantId: deliveryBindings.tenantId,
           ownerUserId: deliveryBindings.ownerUserId,
           channelId: deliveryBindings.channelId,
         });
@@ -423,20 +465,56 @@ export function createDeliveryStore(database: Database) {
         new Date(Date.now() + 15 * 60_000),
       );
     },
+    /**
+     * A provider's status callback for one sent SMS (G01).
+     *
+     * The callback carries no person, only Twilio's message id, so which outbox row it names is a
+     * question across tenants and is asked as `platform`. Each row is then updated in the tenant the
+     * database stamped on it, confirmed by its owner; a row that names nobody is left as it is and
+     * logged. Nothing the provider sends chooses the tenant.
+     */
     async updateSmsStatus(
       providerId: string,
       state: "delivered" | "failed" | "sent",
       error: string | null,
     ) {
-      await database
-        .update(deliveryOutbox)
-        .set({ state, error })
-        .where(
-          and(
-            eq(deliveryOutbox.transport, "sms"),
-            eq(deliveryOutbox.providerId, providerId),
-          ),
-        );
+      // The whole callback is the platform's: it hands each row to its own tenant, and the frame the
+      // caller arrived in decides nothing.
+      await runAsTenant("platform", async () => {
+        const rows = await database
+          .select({
+            id: deliveryOutbox.id,
+            tenantId: deliveryOutbox.tenantId,
+            ownerUserId: deliveryOutbox.ownerUserId,
+          })
+          .from(deliveryOutbox)
+          .where(
+            and(
+              eq(deliveryOutbox.transport, "sms"),
+              eq(deliveryOutbox.providerId, providerId),
+            ),
+          );
+        for (const row of rows) {
+          const updated = await runAsClaimedTenant(
+            row,
+            row.ownerUserId,
+            async () => {
+              await database
+                .update(deliveryOutbox)
+                .set({ state, error })
+                .where(eq(deliveryOutbox.id, row.id));
+            },
+          );
+          if (!updated.ran)
+            console.warn(
+              JSON.stringify({
+                type: "sms-status-untrusted-tenant",
+                outboxId: row.id,
+                reason: updated.reason,
+              }),
+            );
+        }
+      });
     },
     async history(owner: string) {
       return database
