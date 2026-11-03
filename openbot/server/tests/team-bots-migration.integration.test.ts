@@ -382,3 +382,92 @@ test("0126 removes every roster row not stamped team, so a squatted key is free 
     ),
   ).toEqual([]);
 });
+
+test("0126 keeps an administrator's waiting assignment as team: inert while unpublished, counted after republish", async () => {
+  /*
+   * Before P9 an assignment outlived an unpublish, waiting for the Bot to be published again. The Bot
+   * went back to private and stayed stamped with its owner, so 0125 did not move it or its
+   * assignment, which kept the stamp of the administrator who wrote it. 0126 must keep that row
+   * (stamped `team`), not delete it with the strangers' rows. A non-administrator's row of the same
+   * shape is still removed. Rolled back, like the cases above.
+   */
+  const waitingBot = `${suite}-waiting`;
+  const rollback = new Error("rollback the migration fixture");
+  type Row = Record<string, unknown>;
+  let seen:
+    | {
+        assignments: Row[];
+        profile: unknown;
+        whileUnpublished: Row;
+        afterRepublish: Row;
+      }
+    | undefined;
+  await expect(
+    db.$client.begin(async (tx) => {
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      // Published, assigned, then unpublished: private, stamped with its owner, no publication.
+      await tx`insert into agents (tenant_id, id, name, type, configuration) values (${owner}, ${waitingBot}, 'Ledger Desk', 'built_in', '{}'::jsonb)`;
+      await tx`insert into agent_profiles (tenant_id, agent_id, owner_user_id, title, role_description, avatar_seed, visibility) values (${owner}, ${waitingBot}, ${owner}, 'Finance', 'Answers ledger questions.', 'seed', 'private')`;
+      // The administrator's assignment, stamped with the administrator's frame that wrote it, and a
+      // non-administrator's row of the same shape for another group.
+      await tx`insert into team_bot_assignments (tenant_id, agent_id, group_name, assigned_by) values (${admin}, ${waitingBot}, ${assignedGroup}, ${admin}), (${stranger}, ${waitingBot}, ${strangerGroup}, ${stranger})`;
+
+      await tx`select set_config('app.tenant_id', '', true)`;
+      await tx.unsafe(rosterDataStatements());
+
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      const assignments = Array.from(
+        (await tx`select group_name, tenant_id from team_bot_assignments where agent_id = ${waitingBot} order by group_name`) as ArrayLike<Row>,
+      );
+      const [profile] =
+        await tx`select tenant_id from agent_profiles where agent_id = ${waitingBot}`;
+
+      // What a member of each group sees: the Bot, and the assignment row itself.
+      const look = async () => {
+        const out: Row = {};
+        for (const [name, person] of [
+          ["assigned", assignedMember],
+          ["forged", forgedMember],
+        ] as const) {
+          await tx`select set_config('app.tenant_id', ${person}, true)`;
+          const [row] =
+            await tx`select public.openbot_team_bot_visible(${waitingBot}) as visible, (select count(*)::int from team_bot_assignments where agent_id = ${waitingBot}) as rows`;
+          out[name] = { visible: row?.visible, rows: row?.rows };
+        }
+        return out;
+      };
+      const whileUnpublished = await look();
+
+      // The owner publishes again, from their own frame, to named people only (nobody named), so
+      // only the assignment can let a teammate in.
+      await tx`select set_config('app.tenant_id', ${owner}, true), set_config('app.team_move', ${waitingBot}, true)`;
+      await tx`update agent_profiles set tenant_id = 'team' where agent_id = ${waitingBot}`;
+      await tx`update agents set tenant_id = 'team' where id = ${waitingBot}`;
+      await tx`select set_config('app.team_move', '', true)`;
+      await tx`insert into team_bot_publications (tenant_id, agent_id, published_by, audience) values ('team', ${waitingBot}, ${owner}, 'people')`;
+      const afterRepublish = await look();
+
+      seen = {
+        assignments,
+        profile: (profile as Row).tenant_id,
+        whileUnpublished,
+        afterRepublish,
+      };
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
+
+  expect(seen?.assignments).toEqual([
+    { group_name: assignedGroup, tenant_id: "team" },
+  ]);
+  // The Bot itself did not move.
+  expect(seen?.profile).toBe(owner);
+  expect(seen?.whileUnpublished).toEqual({
+    assigned: { visible: false, rows: 0 },
+    forged: { visible: false, rows: 0 },
+  });
+  expect(seen?.afterRepublish).toEqual({
+    assigned: { visible: true, rows: 1 },
+    forged: { visible: false, rows: 0 },
+  });
+});

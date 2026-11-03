@@ -18,17 +18,34 @@
  * (rls-write-scope). An UPDATE cannot change a stamp outside `platform` (0122 row guard), so the
  * insert is the only way in.
  *
- * The rows already there that are not stamped `team` are removed. Every legitimate one was moved by
- * 0125 (a publication, audience row or assignment its rightful writer stamped, of a Bot that moved to
- * `team`). What is left is either a stranger's row, or a row of a Bot that did not move: deleted,
- * ownerless, or catalogue. Nothing reads any of these, and each one could still block a key. The
- * deletes run as `platform`, set locally like 0123 and 0125 and cleared afterwards, so they reach
- * every row whether or not the migrating role bypasses row security.
+ * First, an administrator's assignment that is still waiting is kept, stamped `team`. An assignment
+ * outlives an unpublish (it waits, inert, for the Bot to be published again), and 0125 moved only the
+ * assignments of Bots that themselves moved to `team`. So a Bot that was published, assigned, then
+ * unpublished (private again, still stamped with its owner) kept an assignment stamped with the
+ * administrator who wrote it. It gets 0125's rule without the Bot's own stamp: stamped with the
+ * person who assigned it, and that person is an administrator. Stamped `team`, it stays inert while
+ * the Bot is private and unpublished (row security and `openbot_team_bot_visible` count an assignment
+ * only through a `team` publication of a `team` Bot), and counts again once the owner republishes.
+ * An assignment stamped with anyone else, or written by someone who is not an administrator now, is
+ * not kept (the same test 0125 applied).
+ *
+ * Then every row still not stamped `team` is removed. A publication left here is a stranger's row, or
+ * one of a Bot that did not move (deleted, ownerless or catalogue): an unpublish deletes the owner's.
+ * An audience row left here is one of those, or an audience an unpublish left behind before P9 (it
+ * deleted only the publication); a later publish writes its audience afresh, so nothing it would read
+ * is lost. An assignment left here is one whose writer is not, or no longer, an administrator. Nothing
+ * reads any of these, and each one could still block a key. The re-stamp and the deletes run as
+ * `platform`, set locally like 0123 and 0125 and cleared afterwards, so they reach every row whether
+ * or not the migrating role bypasses row security.
  *
  * Numbering: the plan reserved 0126 for P10 (team connectors). P9 landed first and takes 0126; P10
  * becomes 0127 with a later `when`.
  */
 SELECT set_config('app.tenant_id', 'platform', true);
+--> statement-breakpoint
+UPDATE public.team_bot_assignments x SET tenant_id = 'team'
+ WHERE x.tenant_id <> 'team' AND x.tenant_id = x.assigned_by
+   AND EXISTS (SELECT 1 FROM public.user_roles r WHERE r.user_id = x.assigned_by AND r.role = 'admin');
 --> statement-breakpoint
 DELETE FROM public.team_bot_publications WHERE tenant_id <> 'team';
 --> statement-breakpoint
