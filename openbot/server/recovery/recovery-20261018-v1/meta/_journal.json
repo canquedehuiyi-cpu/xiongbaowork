@@ -883,6 +883,13 @@
       "when": 1793630400000,
       "tag": "0126_team_bot_roster_stamp",
       "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1793630700000,
+      "tag": "0127_team_connectors",
+      "breakpoints": true
     }
   ]
 }

@@ -262,7 +262,7 @@ test("every tenant table answers all four commands, and no writer answers the pl
   expect(reachable).toEqual([]);
 });
 
-/** The tables 0122 shares through the `team` stamp (G01-E). */
+/** The tables 0122 (and 0127, for server secrets) share through the `team` stamp (G01-E). */
 const TEAM_TABLES = [
   "agent_profiles",
   "agents",
@@ -271,6 +271,7 @@ const TEAM_TABLES = [
   "channel_agents",
   "channel_memberships",
   "channels",
+  "credentials",
   "group_bot_threads",
   "group_messages",
   "mcp_servers",
@@ -403,7 +404,7 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
     return problems;
   });
   expect(misspelled).toEqual([]);
-  // The credential kind is frozen too, although `credentials` has no team policy yet (P10).
+  // The credential kind is frozen too: `credentials` holds team server secrets since 0127 (P10).
   expect(guarded.has("credentials")).toBeTrue();
 });
 

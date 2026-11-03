@@ -8,6 +8,21 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **Before upgrading: re-enter each MCP server's token and OAuth client once after deploying.** An
+  administrator's MCP servers and their tools now belong to the whole team (migration
+  `0127_team_connectors`): every person's Bots can be granted them, and only an administrator
+  changes them. Their secrets are sealed to the team too, and a person's call reaches a server's
+  secret only for that server. Secrets stored before cannot be moved, because each one is
+  cryptographically bound to where it was stored, so a server added before this release answers
+  "needs a credential this deployment no longer holds" until an administrator stores its token again
+  on the credentials screen and re-adds the server with it, or registers its OAuth client again.
+  Model and connector keys are unchanged. Two administrators who each added the same catalogue
+  server stop the migration with the step to take: remove all but one first. For a vendor that
+  registers itself (Notion), the first connect after the upgrade has to be an administrator's; a
+  person who connects first is told so. A Bot's tool grants now always carry the Bot's own owner (or
+  the team, for a shared Bot), and grants somebody else had written onto it are removed, except an
+  administrator's, which are kept.
+
 - The platform-hosted runtime and Automatic Learning are gone from this build. Threads, memory and
   what a Bot keeps live in this deployment's own PostgreSQL, so nothing has to be provisioned before
   the stack answers: `INTELLIGENCE_API_URL`, `INTELLIGENCE_GATEWAY_WS_URL`, `INTELLIGENCE_API_KEY`
