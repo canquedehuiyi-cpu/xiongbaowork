@@ -103,6 +103,7 @@ import {
   firingOfInitiator,
 } from "./automations/waker-executor";
 import { createAuth } from "./auth";
+import { createAdminScope } from "./auth/admin-scope";
 import {
   createDevRequireUser,
   DEV_ACTOR,
@@ -4001,6 +4002,11 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser()
         : createRequireUser(auth as AuthService, roleRepository),
       signInAuditStore,
+      // Spec J5's cross-tenant reads, through the admin capability like `/api/admin/audit-events`.
+      {
+        adminScope: createAdminScope({ roleRepository }),
+        auditReader: createAuditReader(database),
+      },
     ),
   );
 
