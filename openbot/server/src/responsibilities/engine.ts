@@ -1,7 +1,11 @@
 import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
-import type { TaskProjector } from "../tasks/projector";
+import {
+  type DeliverableComponent,
+  deliverableRefOf,
+  type TaskProjector,
+} from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 import type { ResponsibilityRunContext, ResponsibilityStore } from "./types";
@@ -13,7 +17,12 @@ export type RunResponsibilityTurn = (
     /** See `TurnRunner`'s `cardOwnedByCaller` — the engine files the run's card itself. */
     cardOwnedByCaller?: boolean;
   },
-) => Promise<{ replyText: string }>;
+) => Promise<{
+  replyText: string;
+  /** What the turn drew and handed over, for the board's 查收 (spec A9). */
+  components?: DeliverableComponent[];
+  attachments?: string[];
+}>;
 export type ResponsibilityDispatchReport = {
   succeeded: string[];
   waiting: string[];
@@ -185,13 +194,14 @@ export function createResponsibilityEngine(options: {
             );
           }
         }
-        const closeCard = async (failed: boolean) => {
+        const closeCard = async (failed: boolean, deliverableRef?: unknown) => {
           if (!carded || !board) return;
           try {
             await board.finished({
               tenantId: context.ownerUserId,
               runRef: runId,
               failed,
+              deliverableRef,
             });
           } catch (error) {
             console.error(
@@ -258,7 +268,7 @@ export function createResponsibilityEngine(options: {
           });
           report.succeeded.push(runId);
           // The reply is a thing to look at, not a done deal: the review lane is where it goes.
-          await closeCard(false);
+          await closeCard(false, deliverableRefOf(result));
           if (onReply) {
             try {
               await runAsTenant(context.tenantId, () =>
