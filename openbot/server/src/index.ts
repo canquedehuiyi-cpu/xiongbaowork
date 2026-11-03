@@ -152,6 +152,7 @@ import {
 import { createRunnerTransport } from "./computer/runner-transport";
 import { createSnapshotStore } from "./computer/snapshot-store";
 import { streamPathBotId } from "./computer/stream-path";
+import { handleComputerStreamUpgrade } from "./computer/stream-upgrade";
 import { loadConfig } from "./config";
 import {
   type IdentifyActor,
@@ -3935,78 +3936,23 @@ await startupLifecycle.run(async (startup) => {
             streamBotId !== null &&
             request.headers.get("upgrade")?.toLowerCase() === "websocket"
           ) {
-            if (!config.computer) {
-              return new Response("No computer is configured.", {
-                status: 503,
-              });
-            }
-            // The session guard, applied by hand because middleware does not run on an upgrade. An
-            // unauthenticated socket here would be the whole point of the proxy defeated.
-            const actor = await resolveRequestActor(request).catch(() => null);
-            if (!actor) {
-              return new Response("Sign in first.", { status: 401 });
-            }
-            // And which Bot, which the guard above does not answer. This socket carries that Bot's screen,
-            // so signing in is not enough: without this, anybody signed in watches anybody's Bot work. And
-            // seeing a Team Bot is not enough either: its screen is its owner's signed-in browser.
-            if (
-              !(await computerAccessCheck(agentProfileStore)(
-                { id: actor.id, role: actor.role },
-                streamBotId,
-              ))
-            ) {
-              return new Response("There is no such Bot.", { status: 404 });
-            }
-            /*
-             * Through the gateway, not the provider.
-             *
-             * `gateway.locate` runs checkComputerAddress; `provider.locate` does not, and the URL built
-             * below carries COMPUTER_TOKEN in its query string. A provider that answered with a foreign
-             * host was handed the deployment's computer token, which is the case that check was written
-             * for. Every acting path already went through the gateway; this one did not.
-             */
-            let upstream: string;
-            try {
-              const streamBase = computerGateway
-                ? await computerGateway.locate(streamBotId)
-                : undefined;
-              if (!streamBase) {
-                return new Response("No computer address is configured.", {
-                  status: 503,
-                });
-              }
-              upstream = toStreamUrl(streamBase, streamBotId);
-            } catch (error) {
-              // Said out loud rather than falling back to another Bot's computer, which is the failure this
-              // whole path exists to prevent.
-              return new Response(
-                error instanceof Error
-                  ? error.message
-                  : "That Bot's computer could not be reached.",
-                { status: 502 },
-              );
-            }
-            const recording = await demonstrationStore.active(
-              actor.id,
-              streamBotId,
+            // In the signed-in person's frame: see `handleComputerStreamUpgrade` (G01-E P4).
+            const answer = await handleComputerStreamUpgrade(
+              {
+                computerConfigured: Boolean(config.computer),
+                resolveRequestActor,
+                accessCheck: computerAccessCheck(agentProfileStore),
+                locate: computerGateway
+                  ? (botId) => computerGateway.locate(botId)
+                  : undefined,
+                toStreamUrl,
+                activeRecording: (ownerUserId, botId) =>
+                  demonstrationStore.active(ownerUserId, botId),
+              },
+              request,
+              server,
             );
-            if (recording)
-              upstream += `&recording=${encodeURIComponent(recording.id)}`;
-            if (
-              server.upgrade(request, {
-                data: {
-                  upstream,
-                  ownerUserId: actor.id,
-                  botId: streamBotId,
-                  ...(recording ? { recordingId: recording.id } : {}),
-                },
-              })
-            ) {
-              return undefined as unknown as Response;
-            }
-            return new Response("Expected a WebSocket upgrade.", {
-              status: 400,
-            });
+            return answer ?? (undefined as unknown as Response);
           }
           return app.fetch(request, { server });
         },

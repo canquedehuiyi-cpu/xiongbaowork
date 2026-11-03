@@ -117,6 +117,7 @@ tests/computer-snapshot-id.test.ts
 tests/computer-snapshot-store.integration.test.ts
 tests/computer-snapshot-store.test.ts
 tests/computer-stream-path.test.ts
+tests/computer-stream-upgrade.test.ts
 tests/computer-supervisor.test.ts
 tests/computer-target.test.ts
 tests/config.test.ts

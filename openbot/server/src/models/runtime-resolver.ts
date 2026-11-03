@@ -15,7 +15,7 @@ import {
   platformModelPool,
   subscriptions,
 } from "../db/schema";
-import { runAsTenant } from "../tenant/context";
+import { runAsTenant, TenantContextError } from "../tenant/context";
 import {
   databaseTokenCallSink,
   type ModelTokenCallSink,
@@ -119,9 +119,13 @@ export function languageModelFor(
  * The binding row for one coworker, decided without touching the vault.
  *
  * `null` for a coworker with no binding, and for a binding that is disabled, missing, revoked, or
- * somebody else's. The tenancy comparison is not redundant with row-level security: a headless turn —
- * a routine at three in the morning, a hop delivery — reads as `system`, which sees every tenant's
- * rows, so a binding that reaches across that line would otherwise be honoured.
+ * somebody else's. The tenancy comparison is not redundant with row-level security: a question asked
+ * under `platform` — an admin's controls, background work that has not yet narrowed to its owner —
+ * sees every tenant's rows, and a foreign key is not stopped by row-level security, so a binding that
+ * points across that line would otherwise be honoured. Headless turns no longer read as `system`:
+ * background work runs in its row's owner frame, and a read with no frame at all is a bug that the
+ * frame guard turns into a `TenantContextError`, which the resolver below passes on rather than
+ * treating as "unbound".
  */
 async function bindingFor(
   database: Database,
@@ -305,8 +309,13 @@ export function createNamedAgentModelResolver(
   const environment = options.environment ?? process.env;
   const languageModel = options.languageModel ?? languageModelFor;
   return async (agentId) => {
+    // A binding that will not read falls back to the deployment's model, but a missing tenant frame
+    // is the caller's bug and must not pass as "unbound".
     const binding = await bindingFor(database, agentId, environment).catch(
-      () => null,
+      (error) => {
+        if (error instanceof TenantContextError) throw error;
+        return null;
+      },
     );
     if (!binding) return null;
     if (binding.kind === "pool") {
