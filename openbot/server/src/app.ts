@@ -573,10 +573,7 @@ export function createApp(
           )) ?? [])
         : [];
       if (!roles.includes("admin")) {
-        return context.json(
-          { error: "Only an administrator may change identity providers." },
-          403,
-        );
+        return context.json({ error: "只有管理员可以更改身份提供方。" }, 403);
       }
     }
 
@@ -704,7 +701,7 @@ export function createApp(
   );
   app.post("/api/me/onboarding", requireUser, async (context) => {
     if (!onboardingStore) {
-      return context.json({ error: "Onboarding is not available." }, 503);
+      return context.json({ error: "新手引导暂不可用。" }, 503);
     }
 
     const body = (await context.req.json().catch(() => undefined)) as
@@ -724,7 +721,7 @@ export function createApp(
       await onboardingStore.setStep(context.var.actor.id, body.step);
     } else {
       return context.json(
-        { error: "Send the step to move to, or completed: true." },
+        { error: "请提供要前往的步骤，或发送 completed: true。" },
         400,
       );
     }
@@ -750,10 +747,7 @@ export function createApp(
 
   app.get("/api/settings/instructions", requireUser, async (context) => {
     if (!userInstructions) {
-      return context.json(
-        { error: "Standing instructions are not available." },
-        503,
-      );
+      return context.json({ error: "常驻指令暂不可用。" }, 503);
     }
 
     return context.json({
@@ -764,10 +758,7 @@ export function createApp(
   });
   app.put("/api/settings/instructions", requireUser, async (context) => {
     if (!userInstructions) {
-      return context.json(
-        { error: "Standing instructions are not available." },
-        503,
-      );
+      return context.json({ error: "常驻指令暂不可用。" }, 503);
     }
 
     const body = (await context.req.json().catch(() => undefined)) as
@@ -775,7 +766,7 @@ export function createApp(
       | undefined;
 
     if (typeof body?.instructions !== "string") {
-      return context.json({ error: "Send the instructions to save." }, 400);
+      return context.json({ error: "请提供要保存的指令内容。" }, 400);
     }
 
     /*
@@ -835,7 +826,7 @@ export function createApp(
         return denied;
       }
       if (!auditReader) {
-        return context.json({ error: "Audit logging is not configured." }, 503);
+        return context.json({ error: "审计日志尚未配置。" }, 503);
       }
       if (!adminScope) {
         return context.json(
@@ -879,7 +870,7 @@ export function createApp(
       return denied;
     }
     if (!peopleStore) {
-      return context.json({ error: "People are not available." }, 503);
+      return context.json({ error: "成员管理暂不可用。" }, 503);
     }
 
     /*
@@ -925,22 +916,19 @@ export function createApp(
       return denied;
     }
     if (!peopleStore) {
-      return context.json({ error: "People are not available." }, 503);
+      return context.json({ error: "成员管理暂不可用。" }, 503);
     }
 
     const body = await context.req.json().catch(() => null);
     const role = (body as { role?: unknown } | null)?.role;
     if (role !== "admin" && role !== "user") {
-      return context.json(
-        { error: "A role of admin or user is required." },
-        400,
-      );
+      return context.json({ error: "角色必须是 admin 或 user。" }, 400);
     }
 
     const userId = context.req.param("userId");
     const person = await peopleStore.find(userId);
     if (!person) {
-      return context.json({ error: "That person is not here." }, 404);
+      return context.json({ error: "找不到该成员。" }, 404);
     }
 
     /*
@@ -969,10 +957,7 @@ export function createApp(
      * a slip of the finger.
      */
     if (context.var.actor.id === userId && role !== "admin") {
-      return context.json(
-        { error: "You cannot remove your own administrator role." },
-        409,
-      );
+      return context.json({ error: "不能移除你自己的管理员角色。" }, 409);
     }
 
     if (person.role !== role) {
@@ -1002,7 +987,7 @@ export function createApp(
         return denied;
       }
       if (!peopleStore) {
-        return context.json({ error: "People are not available." }, 503);
+        return context.json({ error: "成员管理暂不可用。" }, 503);
       }
       // Checked before anything is written: removing somebody without retiring what they own is the
       // half-done removal the retirement below exists to prevent.
@@ -1018,13 +1003,13 @@ export function createApp(
       const body = await context.req.json().catch(() => null);
       const revoked = (body as { revoked?: unknown } | null)?.revoked;
       if (typeof revoked !== "boolean") {
-        return context.json({ error: "revoked must be true or false." }, 400);
+        return context.json({ error: "revoked 必须是 true 或 false。" }, 400);
       }
 
       const userId = context.req.param("userId");
       const person = await peopleStore.find(userId);
       if (!person) {
-        return context.json({ error: "That person is not here." }, 404);
+        return context.json({ error: "找不到该成员。" }, 404);
       }
 
       // The same floor, for the same reason: removing somebody the configuration names would last
@@ -1042,10 +1027,7 @@ export function createApp(
       // Nobody can remove themselves. An administrator who does has locked themselves out of the
       // screen that would undo it.
       if (revoked && context.var.actor.id === userId) {
-        return context.json(
-          { error: "You cannot remove your own access." },
-          409,
-        );
+        return context.json({ error: "不能移除你自己的访问权限。" }, 409);
       }
 
       if (person.revoked !== revoked) {
@@ -1094,10 +1076,7 @@ export function createApp(
       return denied;
     }
     if (!identityProviders) {
-      return context.json(
-        { error: "Identity providers are not available." },
-        503,
-      );
+      return context.json({ error: "身份提供方暂不可用。" }, 503);
     }
 
     return context.json({ providers: await identityProviders.list() });
@@ -1119,10 +1098,7 @@ export function createApp(
         return denied;
       }
       if (!identityProviders) {
-        return context.json(
-          { error: "Identity providers are not available." },
-          503,
-        );
+        return context.json({ error: "身份提供方暂不可用。" }, 503);
       }
 
       const providerId = context.req.param("providerId");
@@ -1130,7 +1106,7 @@ export function createApp(
       if (!removed) {
         // A screen somebody left open, or two administrators removing the same one. Saying so beats
         // reporting success for something that was not there.
-        return context.json({ error: "There is no such provider." }, 404);
+        return context.json({ error: "找不到该身份提供方。" }, 404);
       }
 
       if (auditStore) {
@@ -1159,10 +1135,7 @@ export function createApp(
       return denied;
     }
     if (!credentialService) {
-      return context.json(
-        { error: "Credential storage is not configured." },
-        503,
-      );
+      return context.json({ error: "凭据存储尚未配置。" }, 503);
     }
 
     return context.json({ credentials: await credentialService.list() });
@@ -1173,16 +1146,13 @@ export function createApp(
       return denied;
     }
     if (!credentialService) {
-      return context.json(
-        { error: "Credential storage is not configured." },
-        503,
-      );
+      return context.json({ error: "凭据存储尚未配置。" }, 503);
     }
 
     const body = await context.req.json().catch(() => null);
     const input = credentialInput(body, context.var.actor.id);
     if (!input) {
-      return context.json({ error: "Credential input is invalid." }, 400);
+      return context.json({ error: "凭据输入无效。" }, 400);
     }
 
     try {
@@ -1208,16 +1178,13 @@ export function createApp(
         return denied;
       }
       if (!credentialService) {
-        return context.json(
-          { error: "Credential storage is not configured." },
-          503,
-        );
+        return context.json({ error: "凭据存储尚未配置。" }, 503);
       }
 
       const body = await context.req.json().catch(() => null);
       const input = credentialInput(body, context.var.actor.id);
       if (!input) {
-        return context.json({ error: "Credential input is invalid." }, 400);
+        return context.json({ error: "凭据输入无效。" }, 400);
       }
 
       try {
@@ -1245,10 +1212,7 @@ export function createApp(
         return denied;
       }
       if (!credentialService) {
-        return context.json(
-          { error: "Credential storage is not configured." },
-          503,
-        );
+        return context.json({ error: "凭据存储尚未配置。" }, 503);
       }
 
       try {
@@ -1271,7 +1235,7 @@ export function createApp(
     const denied = requireAdmin(context);
     if (denied) return denied;
     if (!packageStatusReader) {
-      return context.json({ error: "Tenant package is not configured." }, 503);
+      return context.json({ error: "租户配置包尚未配置。" }, 503);
     }
     return context.json({ package: await packageStatusReader.active() });
   });
