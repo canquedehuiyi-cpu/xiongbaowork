@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
@@ -17,7 +17,10 @@ import {
   wakerGroups,
 } from "../src/db/schema";
 import { createPipelineStore } from "../src/pipeline/store";
-import { createPluginStore } from "../src/plugins/store";
+import {
+  CustomServerRefusedError,
+  createPluginStore,
+} from "../src/plugins/store";
 import {
   billingPeriod,
   createQuotaService,
@@ -26,6 +29,7 @@ import {
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { provisionTenant } from "../src/tenant/provisioning";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -54,6 +58,15 @@ const toolRef = `${entryKey}/search_files`;
 
 /** Three workspaces, as one person each (D12: a personal account IS a tenant). */
 const tenants = [0, 1, 2].map((index) => `demo-${index}-${suite}`);
+/**
+ * The deployment's administrator. Since G01-E P10 a connector is the team's, opened once by an
+ * administrator holding the admin capability, and every workspace's coworkers may be granted it.
+ */
+const administrator = `demo-admin-${suite}`;
+const adminRequest = createAdminRequest(database);
+let releaseAdministrator: (() => Promise<void>) | undefined;
+/** The team's row for the entry if one was here already, so the suite removes only its own. */
+let teamRowBefore: string | null | undefined;
 
 const store = createPluginStore({
   database,
@@ -98,7 +111,8 @@ const cardsOf = (tenant: string) =>
         .orderBy(asc(tasks.createdAt)),
   );
 
-const ownRowsFor = (tenant: string) =>
+/** Every row for the entry this workspace's frame can see, whoever holds it. */
+const visibleRowsFor = (tenant: string) =>
   runAsTenant(
     tenant,
     async () =>
@@ -108,10 +122,30 @@ const ownRowsFor = (tenant: string) =>
         .where(
           and(
             eq(mcpServers.catalogueKey, entryKey),
-            eq(mcpServers.tenantId, tenant),
+            inArray(mcpServers.tenantId, [tenant, "team"]),
           ),
         ),
   );
+
+const teamRowId = async () =>
+  (
+    await runAsTenant("platform", async () =>
+      database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(
+          and(
+            eq(mcpServers.catalogueKey, entryKey),
+            eq(mcpServers.tenantId, "team"),
+          ),
+        ),
+    )
+  )[0]?.id ?? null;
+
+beforeAll(async () => {
+  releaseAdministrator = await seedAdministrator(database, administrator);
+  teamRowBefore = await teamRowId();
+});
 
 function pipelineFor() {
   return createPipelineStore({
@@ -188,6 +222,9 @@ afterAll(async () => {
       .from(mcpServers)
       .where(inArray(mcpServers.tenantId, tenants)),
   );
+  // The team's row too, but only when this suite is what opened it.
+  const opened = teamRowBefore === null ? await teamRowId() : null;
+  if (opened) rows.push({ id: opened });
   for (const tenant of tenants) {
     await runAsTenant(
       tenant,
@@ -248,33 +285,53 @@ afterAll(async () => {
   await runAsTenant("platform", () =>
     database.delete(users).where(inArray(users.id, tenants)),
   );
+  await releaseAdministrator?.();
 });
 
 /**
- * The connector, which is what ticket 028 was for.
+ * The connector, which is what ticket 028 was for, and which G01-E P10 made the team's.
  *
- * Before the split, the second of these three presses was a 500: the whole deployment could hold one
- * `google-drive` row, and the later tenants were competing for it rather than provisioning it.
+ * Before ticket 028, the second of three presses was a 500: the whole deployment could hold one
+ * `google-drive` row, and the later tenants were competing for it rather than provisioning it. Ticket
+ * 028 gave each workspace its own row. Since P10 (decision "team-tenant", Q3) the deployment's
+ * connectors are the team's: an administrator opens the entry once, into one `team` row, and no
+ * workspace writes a server row of its own at all. What each workspace still keeps to itself is its
+ * coworkers' grants and its people's own connections (the next test, and the user-oauth suites).
  */
-test("all three workspaces open the same catalogue entry", async () => {
+test("all three workspaces reach the one catalogue entry an administrator opened", async () => {
+  // A workspace that is not an administrator with the capability writes nothing, not even its own.
   for (const tenant of tenants) {
-    await runAsTenant(
-      tenant,
-      async () =>
-        await store.addServer({ key: entryKey, by: `${tenant}@example.test` }),
-    );
+    await expect(
+      runAsTenant(
+        tenant,
+        async () =>
+          await store.addServer({
+            key: entryKey,
+            by: `${tenant}@example.test`,
+          }),
+      ),
+    ).rejects.toBeInstanceOf(CustomServerRefusedError);
   }
+
+  await adminRequest(
+    administrator,
+    async () =>
+      await store.addServer({
+        key: entryKey,
+        by: `${administrator}@example.test`,
+      }),
+  );
 
   const ids = new Set<string>();
   for (const tenant of tenants) {
-    const rows = await ownRowsFor(tenant);
+    const rows = await visibleRowsFor(tenant);
+    // Exactly one row, the team's, and none of the workspace's own.
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.tenantId).toBe(tenant);
+    expect(rows[0]?.tenantId).toBe("team");
     ids.add(rows[0]?.id ?? "");
   }
-  // Three presses of one entry, three rows: a shared row would mean a shared credential and one
-  // consent history for three customers.
-  expect(ids.size).toBe(3);
+  // Three workspaces, one row: one tool list and one administrator's configuration for the team.
+  expect(ids.size).toBe(1);
 });
 
 /**

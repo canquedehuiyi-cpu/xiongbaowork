@@ -505,8 +505,10 @@ export function createHandoffDelivery(options: {
           answered = true;
           /*
            * The model the hop ran on, on the row its card reads (story H4) — the gate never saw it.
-           * Under the tenant the card was filed under, named outright: a hop is delivered from the work
-           * loop, which runs as `platform`, so the ambient tenant here is never the hop's own.
+           * Under the tenant the card was filed under, named outright. The hop runner delivers a hop
+           * inside its item's own tenant (`assertPersonTenant` on the stamp, then `runAsTenant`), so
+           * the ambient frame is the hop's today; naming it keeps the row's stamp from depending on
+           * whichever frame a later caller delivers from.
            */
           await recordHeadlessModelUsage({
             tenantId: work.actorId,

@@ -2,12 +2,13 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { eq, like } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { threadRunEvents, threadRuns, threads } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import { runAsTenant, TenantContextError } from "../src/tenant/context";
 import {
   createLocalThreadPlatform,
   createLocalThreadReader,
 } from "../src/threads/local-platform";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { expectUnframedRefused } from "./support/frame-guard";
 
 /**
  * Ticket 005 acceptance: a conversation this deployment keeps in its own PostgreSQL is scoped to the
@@ -209,11 +210,28 @@ test("one tenant's rows are invisible to the other", async () => {
   expect(seenByA.every((row) => row.tenant === tenantA)).toBeTrue();
   expect(seenByB.map((row) => row.id)).toEqual([threadB]);
 
-  // A query with no tenant context runs as `system` and sees neither: forgetting the scope loses data
-  // loudly rather than leaking it quietly, which is the deal the RLS sweep strikes.
+  /*
+   * Forgetting the scope loses data loudly rather than leaking it quietly, which is the deal the RLS
+   * sweep strikes. G01-E: a query with no tenant context is refused outright under the frame guard
+   * (it used to run as `system`); `system`, asked for explicitly, sees neither tenant's rows; `team`
+   * is a stamp and never a frame, so asking as it throws before any statement is built.
+   */
+  const ourThreads = () =>
+    database
+      .select({ id: threads.id, tenant: threads.tenantId })
+      .from(threads)
+      .where(ours);
+  await expectUnframedRefused(ourThreads);
+  expect(await runAsTenant("system", ourThreads)).toEqual([]);
+  expect(() => runAsTenant("team", ourThreads)).toThrow(TenantContextError);
+
+  // And the rows really are there, each under its own tenant: only `platform`, the frame for
+  // questions across tenants, sees all three.
+  const seenByPlatform = await runAsTenant("platform", ourThreads);
   expect(
-    await database.select({ id: threads.id }).from(threads).where(ours),
-  ).toEqual([]);
+    Object.fromEntries(seenByPlatform.map((row) => [row.id, row.tenant])),
+  ).toEqual({ [threadA]: tenantA, [toolThread]: tenantA, [threadB]: tenantB });
+  expect(seenByPlatform).toHaveLength(3);
 
   // The run and event rows travel with their thread; both are read through the same policy.
   expect(

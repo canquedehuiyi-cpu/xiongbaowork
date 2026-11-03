@@ -8,6 +8,7 @@ import { createEnterpriseGate } from "./admin/gate";
 import { createEnterpriseAdminRoutes } from "./admin/routes";
 import {
   authoriseAgentCall,
+  callbackFrameFor,
   parseAgentToolCallInput,
   type RunAssertion,
   sameToken,
@@ -126,7 +127,7 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { PackageStatusReader } from "./tenant-package";
-import { capabilityFor, isPersonTenant, runAsTenant } from "./tenant/context";
+import { capabilityFor, runAsTenant } from "./tenant/context";
 import {
   INSTRUCTIONS_LIMIT,
   InstructionsTooLongError,
@@ -1136,7 +1137,13 @@ export function createApp(
     },
   );
 
-  app.get("/api/admin/credentials", requireUser, async (context) => {
+  /*
+   * The credentials screen holds the admin capability (G01-E P10): an MCP server's own token is sealed
+   * to `team` (Q3), which only an administrator holding it may write, rotate, revoke or list. Model
+   * and connector keys stay in the administrator's own frame, as they were.
+   */
+  const CREDENTIALS = "/api/admin/credentials";
+  app.get(CREDENTIALS, requireUser, adminCapability, async (context) => {
     const denied = requireAdmin(context);
     if (denied) {
       return denied;
@@ -1150,7 +1157,7 @@ export function createApp(
 
     return context.json({ credentials: await credentialService.list() });
   });
-  app.post("/api/admin/credentials", requireUser, async (context) => {
+  app.post(CREDENTIALS, requireUser, adminCapability, async (context) => {
     const denied = requireAdmin(context);
     if (denied) {
       return denied;
@@ -1168,14 +1175,23 @@ export function createApp(
       return context.json({ error: "Credential input is invalid." }, 400);
     }
 
-    return context.json(
-      { credential: await credentialService.create(input) },
-      201,
-    );
+    try {
+      return context.json(
+        { credential: await credentialService.create(input) },
+        201,
+      );
+    } catch (error) {
+      // A team server token without the capability (a role removed since sign-in).
+      if (error instanceof CredentialRefusedError) {
+        return context.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
   });
   app.post(
     "/api/admin/credentials/:credentialId/rotate",
     requireUser,
+    adminCapability,
     async (context) => {
       const denied = requireAdmin(context);
       if (denied) {
@@ -1212,6 +1228,7 @@ export function createApp(
   app.post(
     "/api/admin/credentials/:credentialId/revoke",
     requireUser,
+    adminCapability,
     async (context) => {
       const denied = requireAdmin(context);
       if (denied) {
@@ -1707,8 +1724,12 @@ export function createApp(
           appUrl: config.appUrl,
         },
         composio,
-        // A team Bot's grants are `team`; an administrator writes them with the capability (G01-E).
-        adminScope?.adminCapability,
+        /*
+         * A team Bot's grants are `team`, and an MCP server, its tools and its secret are `team` too:
+         * an administrator writes them with the capability, and acts on somebody else's Bot in its
+         * owner's frame (G01-E P8b, P10).
+         */
+        adminScope,
       ),
     );
   }
@@ -1806,9 +1827,17 @@ export function createApp(
        * from the body, so it is the one trusted answer to "whose work is this". An assertion that
        * names nobody's tenant is refused rather than run as the platform or as `system`.
        */
-      if (!isPersonTenant(verdict.actorId))
+      /*
+       * AND IN THE BOT'S RIGHT FRAME (G01-E PCB). The token lookup above is a narrow `platform` read,
+       * so it now finds a person's private Bot and a `team` Bot; which frame the call then runs in
+       * is decided by `callbackFrameFor` from the Bot's stamp and the signed person. A private Bot
+       * runs in its owner's tenant and only for its owner; a `team` Bot (a stamp, never a frame) and
+       * a catalogue Bot run in the asking person's own frame, exactly as their in-process turn does.
+       */
+      const frame = callbackFrameFor(verdict);
+      if (frame === null)
         return context.json({ error: "Not authorised." }, 403);
-      return runAsTenant(verdict.actorId, async () => {
+      return runAsTenant(frame, async () => {
         try {
           const deploymentResult = await deploymentToolCaller?.({
             name: parsedCall.value.ref,
@@ -1827,6 +1856,39 @@ export function createApp(
             });
           }
 
+          /*
+           * AND ON THE ACCOUNT ITS IN-PROCESS TURN WOULD USE (G01-E PCB2).
+           *
+           * A Team Bot reaches its owner's connected account, and a teammate's own only with their
+           * consent: `teamBots.credentialActorFor`, the function `loadToolsForActor` hands the
+           * in-process door, asked here for the same Bot, person and tool. Without it a teammate's
+           * external-agent call went out on the teammate's own account with no consent asked. A
+           * missing consent throws the card's `PluginRefusedError`, answered below as a refusal
+           * before anything is sent, exactly as in process.
+           *
+           * Only for a Bot's own token. The deployment-wide token proves no Bot of its own, so it
+           * never borrows an owner's account. And only for a tool this Bot holds (the same grant
+           * question `callTool` asks first): the in-process door only ever offers a granted tool, so
+           * an ungranted one is still refused and recorded by `callTool`, with no one-time consent
+           * spent on a call that was never going to go out.
+           */
+          const teamBots = coworker?.teamBots;
+          const credentialActorId =
+            teamBots &&
+            verdict.botTenant !== undefined &&
+            (
+              await pluginStore.decide(
+                "mcp",
+                parsedCall.value.ref,
+                verdict.botId,
+              )
+            ).allowed
+              ? await teamBots.credentialActorFor(
+                  verdict.actorId,
+                  verdict.botId,
+                )(parsedCall.value.ref)
+              : verdict.actorId;
+
           const result = await pluginStore.callTool({
             ref: parsedCall.value.ref,
             args: parsedCall.value.args,
@@ -1834,6 +1896,9 @@ export function createApp(
             // From the assertion, never the body: this is the name the audit row will carry.
             actorId: verdict.actorId,
             ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
+            ...(credentialActorId === verdict.actorId
+              ? {}
+              : { credentialActorId }),
           });
           // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
           // error as the vendor's and not as a result. Neither Bot words it on its way through.

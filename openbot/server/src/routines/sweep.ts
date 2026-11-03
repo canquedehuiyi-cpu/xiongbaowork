@@ -97,6 +97,12 @@ export type RoutineSweepOptions = {
   limit?: number;
   /** How late a firing may be and still be offered. Default ten minutes; see the policy below. */
   graceMs?: number;
+  /**
+   * A clock for tests. Unset in production, where phase one uses the database's clock throughout.
+   * When given, phase one uses it END TO END — it is handed to `dueRoutines`, so the database's
+   * "due" comparison is made against it too — and a test's stamps and its clock cannot disagree.
+   * Phase two reads it (or the process clock) for its claim-time window check.
+   */
   now?: () => Date;
 };
 
@@ -134,20 +140,28 @@ function minuteKey(due: Date): string {
 /**
  * Phase one: due routines become idempotent work items, and `next_run_at` moves exactly once.
  *
- * WHICH CLOCK, given that everything around this names its moments in SQL. Both moments that decide
- * anything come from the database: `dueRoutines` compares `next_run_at <= now()` inside Postgres, so
- * what is due is Postgres's judgement, and the stamp this keys the offer on and hands the
- * compare-and-set is the value Postgres gave back. The one process-clock reading is `now` here, used
- * only to measure the width of the grace window below — a window minutes wide, against a stamp the
- * database chose, so sub-second skew cannot change an answer. A badly skewed node could admit or
- * suppress a firing near the boundary; it cannot double-fire one, because the key and the CAS are
- * both the database's. That is the difference between this and a lease, which is why a lease is
- * never computed here. The option exists so tests can put a stamp anywhere they like.
+ * WHICH CLOCK: THE DATABASE'S, FOR EVERY MOMENT. `dueRoutines` compares `next_run_at <= now()`
+ * inside Postgres and hands that same `now()` back with each row (`asOf`). How late a firing is,
+ * where a stale clock lands and where an offered one moves to are all measured on it, and the stamp
+ * this keys the offer on and hands the compare-and-set is the value Postgres gave back. Nothing here
+ * reads the process clock.
+ *
+ * It used to: lateness was measured on `Date.now()` against a stamp Postgres had judged due. A node
+ * whose clock ran behind the database's caught a stale routine up to ITS now — a moment the database
+ * still called due — and on the next pass measured that row's lateness as negative, called it fresh
+ * and offered it: a backlog replayed one occurrence at a time. A node running ahead dropped firings
+ * the database had only just let through. One clock makes both impossible, and a row the clock says
+ * is not yet due (only a store that disagrees with itself can hand one over) is reported as skew
+ * rather than taken as fresh.
+ *
+ * The `now` option is for tests, and when given it replaces the database's clock end to end — the
+ * `dueRoutines` comparison included — so a test can put a stamp anywhere without two clocks.
  */
 export async function offerDueRoutines(
   options: RoutineSweepOptions,
 ): Promise<{ offered: string[] }> {
-  const now = options.now?.() ?? new Date();
+  // Only a test's clock; production leaves this unset and every moment below is the database's.
+  const testClock = options.now?.();
   const graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
 
   try {
@@ -163,10 +177,33 @@ export async function offerDueRoutines(
 
   const due = await options.routineStore.dueRoutines(
     options.limit ?? DEFAULT_LIMIT,
+    testClock,
   );
 
   const offered: string[] = [];
   for (const routine of due) {
+    // The clock that judged this row due. Every moment measured for it below is on this clock.
+    const now = routine.asOf;
+    const lateBy = now.getTime() - routine.nextRunAt.getTime();
+    /*
+     * A ROW THAT IS NOT DUE BY THE CLOCK THAT SAID IT WAS. `dueRoutines` admits a row only when its
+     * stamp is at or before the `asOf` it returns, so this is a store disagreeing with itself — a
+     * clock from somewhere else. Measured as "fresh", the old shape, it would be offered under a key
+     * for a moment that has not happened, and its clock moved past an occurrence nobody has had. It
+     * is left exactly as it is for a pass whose clock agrees, and said out loud.
+     */
+    if (lateBy < 0) {
+      console.warn(
+        JSON.stringify({
+          type: "routine-sweep-clock-skew",
+          routineId: routine.id,
+          scheduledFor: routine.nextRunAt.toISOString(),
+          asOf: now.toISOString(),
+          aheadByMs: -lateBy,
+        }),
+      );
+      continue;
+    }
     /*
      * ONE ROUTINE'S FAILURE IS ONE ROUTINE'S FAILURE. A cron the parser cannot read — a row written
      * before a validation existed, a hand-edited value — makes `advanceNextRun` throw, and an
@@ -230,7 +267,6 @@ export async function offerDueRoutines(
        * one per five-minute sweep is itself two weeks. The store deliberately does not decide this:
        * which stamps are worth firing, and where a stale clock should land, are this file's policy.
        */
-      const lateBy = now.getTime() - routine.nextRunAt.getTime();
       if (lateBy <= graceMs) {
         /*
          * OFFERED BEFORE THE CLOCK MOVES. A crash between the two leaves the stamp where it was, so
@@ -249,11 +285,20 @@ export async function offerDueRoutines(
           }),
         );
         offered.push(routine.id);
-        // False means another sweep advanced it first, which is fine either way: the firing was
-        // offered under the same key by both, so it still happens once.
+        /*
+         * False means another sweep advanced it first, which is fine either way: the firing was
+         * offered under the same key by both, so it still happens once.
+         *
+         * Measured from the later of the stamp and now, so the row lands strictly after now and is
+         * never due again the moment it moves. With the default window the two agree — the next
+         * occurrence after a stamp is at least the schedule floor away, and the window is under it
+         * — but a caller's wider `graceMs` would otherwise land the clock on an occurrence already
+         * past, and the next pass would offer that as well.
+         */
         await options.routineStore.advanceNextRun(
           routine.id,
           routine.nextRunAt,
+          new Date(Math.max(routine.nextRunAt.getTime(), now.getTime())),
         );
       } else {
         // The CAS still compares against the stale stamp it read — only the landing point moves.

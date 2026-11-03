@@ -11,6 +11,7 @@ import {
   TenantContextError,
   tenantFrameGuard,
 } from "../src/tenant/context";
+import { expectUnframedRefused, UNFRAMED_REFUSAL } from "./support/frame-guard";
 
 /*
  * G01-D, step one: `OPENBOT_TENANT_FRAME_GUARD` decides what an unframed read of the tenant does,
@@ -150,5 +151,61 @@ describe("team is nobody", () => {
       }),
     ).toBe("platform");
     expect(() => currentTenant()).toThrow(TenantContextError);
+  });
+});
+
+/*
+ * The probe the decision tests ask with (`tests/support/frame-guard.ts`). It has to answer one
+ * question — "was this refused FOR HAVING NO FRAME?" — so it is asked here about work that is
+ * unframed, work that was framed after all, and work refused by a different `TenantContextError`.
+ */
+describe("the unframed-refusal probe", () => {
+  test("pins the refusal currentTenant() makes outside every frame, word for word", () => {
+    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
+    expect(() => currentTenant()).toThrow(
+      new TenantContextError(UNFRAMED_REFUSAL),
+    );
+  });
+
+  test("passes for unframed work, synchronous or not", async () => {
+    await expectUnframedRefused(() => currentTenant());
+    await expectUnframedRefused(async () => {
+      await Promise.resolve();
+      return currentTenant();
+    });
+  });
+
+  test("fails for work that runs framed", async () => {
+    let probe: unknown;
+    try {
+      await expectUnframedRefused(() => runAsTenant("person-a", currentTenant));
+    } catch (error) {
+      probe = error;
+    }
+    expect(probe).toBeInstanceOf(Error);
+  });
+
+  test("fails for work refused by a TenantContextError that is not the missing frame", async () => {
+    for (const work of [
+      () => runAsTenant(TEAM_TENANT, currentTenant),
+      () => assertPersonTenant("person-a", "person-b"),
+      () => runAsTenant("person-a", () => assertPersonTenant("person-b")),
+    ]) {
+      let probe: unknown;
+      try {
+        await expectUnframedRefused(work);
+      } catch (error) {
+        probe = error;
+      }
+      expect(probe).toBeInstanceOf(Error);
+      // The probe's own failure, not the refusal it was handed passed through as a pass.
+      expect(probe).not.toBeInstanceOf(TenantContextError);
+    }
+  });
+
+  test("puts the guard back as it found it", async () => {
+    process.env.OPENBOT_TENANT_FRAME_GUARD = "report";
+    await expectUnframedRefused(() => currentTenant());
+    expect(process.env.OPENBOT_TENANT_FRAME_GUARD).toBe("report");
   });
 });

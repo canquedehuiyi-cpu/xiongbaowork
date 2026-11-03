@@ -214,6 +214,39 @@ export function createDeliveryStore(database: Database) {
       // A token already held by someone else moves only once its owner has signed out on that phone
       // (which disables the row). Otherwise anyone who learned a token could take over its
       // notifications, approval and sign-in links included.
+      //
+      // The holder's row is stamped with the holder's tenant, so the caller's own frame can neither
+      // see it nor take it over (the upsert below would hit row-level security). Who holds the token
+      // is therefore read in the platform frame, and only a disabled row of somebody else's is
+      // retired there; nothing about it is returned to the caller beyond the refusal it already got.
+      // The new row is then written in the caller's own frame, stamped with their tenant.
+      const [held] = await runAsTenant("platform", () =>
+        database
+          .select({
+            ownerUserId: pushDevices.ownerUserId,
+            enabled: pushDevices.enabled,
+          })
+          .from(pushDevices)
+          .where(eq(pushDevices.token, input.token))
+          .limit(1),
+      );
+      if (held && held.ownerUserId !== input.ownerUserId) {
+        if (held.enabled)
+          throw new DeliveryRefusedError(
+            "This device is already registered to another account. Sign out of OpenBot on it first.",
+          );
+        await runAsTenant("platform", () =>
+          database
+            .delete(pushDevices)
+            .where(
+              and(
+                eq(pushDevices.token, input.token),
+                eq(pushDevices.ownerUserId, held.ownerUserId),
+                eq(pushDevices.enabled, false),
+              ),
+            ),
+        );
+      }
       const [device] = await database
         .insert(pushDevices)
         .values({ ...input, enabled: true })

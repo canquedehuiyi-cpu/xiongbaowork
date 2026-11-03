@@ -40,8 +40,10 @@ import { createTeamBotRoutes } from "../src/team-bots/routes";
 import {
   createTeamBots,
   TEAM_BOT_CONSENT_MARKER,
+  TeamBotForbiddenError,
   TeamBotNotFoundError,
   TeamBotRefusedError,
+  type TeamBots,
 } from "../src/team-bots/team-bots";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -98,6 +100,7 @@ function teamBotRequest(
   method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
+  store: TeamBots = teamBots,
 ) {
   const signedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
     context,
@@ -107,7 +110,7 @@ function teamBotRequest(
     await runAsTenant(actor.id, () => next());
   };
   const app = new Hono<{ Variables: AppVariables }>();
-  app.route("/", createTeamBotRoutes(teamBots, signedIn, adminScope));
+  app.route("/", createTeamBotRoutes(store, signedIn, adminScope));
   return app.request(`http://test${path}`, {
     method,
     ...(body === undefined
@@ -445,17 +448,19 @@ describe("Team Bots in PostgreSQL", () => {
     await expect(
       as(admin, () => teamBots.assign(admin, bot, "support")),
     ).rejects.toThrow(TeamBotRefusedError);
-    // ...and a raw assignment from it is refused without the capability.
-    await expect(
-      as(admin, async () => {
-        await database.insert(teamBotAssignments).values({
-          agentId: bot,
-          groupName: "support",
-          assignedBy: admin.id,
-          tenantId: TEAM_TENANT,
-        });
-      }),
-    ).rejects.toThrow();
+    // ...and a raw assignment from it is refused without the capability, whatever its stamp: an
+    // own-tenant row would hold the (Bot, group) key and make the real assignment do nothing (0126).
+    for (const tenantId of [TEAM_TENANT, admin.id])
+      await expect(
+        as(admin, async () => {
+          await database.insert(teamBotAssignments).values({
+            agentId: bot,
+            groupName: "support",
+            assignedBy: admin.id,
+            tenantId,
+          });
+        }),
+      ).rejects.toThrow();
     // The admin page assigns, holding the capability.
     expect(
       (
@@ -498,6 +503,91 @@ describe("Team Bots in PostgreSQL", () => {
       false,
     );
     expect(await as(member, () => profiles.get(member, bot))).toBeNull();
+  });
+
+  test("a stranger cannot squat an unpublished Bot's publication, audience or assignment key", async () => {
+    /*
+     * The roster tables are keyed by agent id. A row a stranger stamped with their own tenant used to
+     * be accepted, grant nothing, and still hold the key: the owner's publish then failed on a row
+     * the owner can neither see nor delete, and an administrator's assignment of the same group did
+     * nothing at all (ON CONFLICT DO NOTHING). Since 0126 the stranger's rows are refused, so the
+     * owner's publish and the administrator's assignment go through.
+     */
+    const owner = await person();
+    const stranger = await person();
+    const admin = await person("admin");
+    const member = await person("user", ["support"]);
+    const bot = await privateBot(owner);
+    const squats = [
+      () =>
+        database.insert(teamBotPublications).values({
+          agentId: bot,
+          publishedBy: stranger.id,
+          audience: "team",
+          tenantId: stranger.id,
+        }),
+      () =>
+        database.insert(teamBotAudience).values({
+          agentId: bot,
+          kind: "user",
+          value: member.id,
+          tenantId: stranger.id,
+        }),
+      () =>
+        database.insert(teamBotAssignments).values({
+          agentId: bot,
+          groupName: "support",
+          assignedBy: stranger.id,
+          tenantId: stranger.id,
+        }),
+    ];
+    for (const squat of squats) {
+      await expect(
+        as(stranger, async () => {
+          await squat();
+        }),
+      ).rejects.toThrow();
+    }
+    expect(await stampsOf(bot)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+      publications: [],
+      audience: [],
+      assignments: [],
+    });
+
+    await publish(owner, bot, {
+      audience: "people",
+      emails: [member.email],
+      groups: [],
+    });
+    expect(
+      (
+        await teamBotRequest(admin, "POST", `/${bot}/assignments`, {
+          group: "support",
+        })
+      ).status,
+    ).toBe(204);
+    expect(await stampsOf(bot)).toEqual({
+      agent: TEAM_TENANT,
+      profile: TEAM_TENANT,
+      publications: [TEAM_TENANT],
+      audience: [TEAM_TENANT],
+      assignments: [TEAM_TENANT],
+    });
+    expect(await as(member, () => profiles.get(member, bot))).not.toBeNull();
+    expect(await as(member, () => teamBots.isAssignedTo(member.id, bot))).toBe(
+      true,
+    );
+    // Once it is `team`, the stranger still writes nothing next to it.
+    for (const squat of squats) {
+      await expect(
+        as(stranger, async () => {
+          await squat();
+        }),
+      ).rejects.toThrow();
+    }
+    expect(await as(stranger, () => profiles.get(stranger, bot))).toBeNull();
   });
 
   test("an administrator unpublishes another person's Bot in the owner's frame, and the owner keeps it", async () => {
@@ -647,5 +737,210 @@ describe("Team Bots in PostgreSQL", () => {
         groups: [],
       }),
     ).rejects.toThrow(TeamBotRefusedError);
+  });
+
+  test("an administrator whose role was taken away cannot assign or unassign, and is told so", async () => {
+    /*
+     * The session still says admin; `user_roles` no longer does, so the route's admin door
+     * (`adminCapability`, which re-reads the role from the table) grants nothing and the call runs in
+     * their own frame without the capability. Before, the assignment failed on row security with a
+     * 500 that echoed the SQL, and the unassignment matched nothing and answered 204 (I9).
+     */
+    const owner = await person();
+    const admin = await person("admin");
+    const demoted = { ...(await person("user")), role: "admin" as const };
+    const member = await person("user", ["support"]);
+    const bot = await privateBot(owner);
+    await publish(owner, bot, { audience: "team", emails: [], groups: [] });
+
+    const refusedAssign = await teamBotRequest(
+      demoted,
+      "POST",
+      `/${bot}/assignments`,
+      { group: "support" },
+    );
+    expect(refusedAssign.status).toBe(403);
+    const assignBody = await refusedAssign.text();
+    expect(assignBody).toContain("could not be confirmed");
+    expect(assignBody).not.toContain("team_bot_assignments");
+    expect((await stampsOf(bot)).assignments).toEqual([]);
+    await expect(
+      as(demoted, () => teamBots.assign(demoted, bot, "support")),
+    ).rejects.toThrow(TeamBotForbiddenError);
+    expect((await stampsOf(bot)).assignments).toEqual([]);
+
+    // The administrator who holds the role assigns; the demoted one cannot take it back.
+    expect(
+      (
+        await teamBotRequest(admin, "POST", `/${bot}/assignments`, {
+          group: "support",
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (await teamBotRequest(demoted, "DELETE", `/${bot}/assignments/support`))
+        .status,
+    ).toBe(403);
+    await expect(
+      as(demoted, () => teamBots.unassign(demoted, bot, "support")),
+    ).rejects.toThrow(TeamBotForbiddenError);
+    expect((await stampsOf(bot)).assignments).toEqual([TEAM_TENANT]);
+    expect(await as(member, () => teamBots.isAssignedTo(member.id, bot))).toBe(
+      true,
+    );
+
+    // An unassignment that removes nothing says so, even for the administrator with the role.
+    expect(
+      (await teamBotRequest(admin, "DELETE", `/${bot}/assignments/nobody`))
+        .status,
+    ).toBe(404);
+    expect((await stampsOf(bot)).assignments).toEqual([TEAM_TENANT]);
+    expect(
+      (await teamBotRequest(admin, "DELETE", `/${bot}/assignments/support`))
+        .status,
+    ).toBe(204);
+    expect((await stampsOf(bot)).assignments).toEqual([]);
+    expect(
+      (await teamBotRequest(admin, "DELETE", `/${bot}/assignments/support`))
+        .status,
+    ).toBe(404);
+  });
+
+  test("a failure that is not the Team Bots' own answer is logged, not sent to the browser", async () => {
+    const someone = await person();
+    const failing: TeamBots = {
+      ...teamBots,
+      list: async () => {
+        throw new Error(
+          'Failed query: select * from "team_bot_publications" params: secret-param',
+        );
+      },
+    };
+    const logged: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      const response = await teamBotRequest(
+        someone,
+        "GET",
+        "/",
+        undefined,
+        failing,
+      );
+      expect(response.status).toBe(500);
+      const body = await response.text();
+      expect(body).not.toContain("Failed query");
+      expect(body).not.toContain("secret-param");
+      expect(JSON.parse(body)).toEqual({
+        error: "Team Bots are unavailable right now. Try again.",
+      });
+    } finally {
+      console.error = original;
+    }
+    expect(JSON.stringify(logged)).toContain("secret-param");
+  });
+
+  test("unpublishing a Bot that is not published answers not found, for its owner and the admin page", async () => {
+    const owner = await person();
+    const admin = await person("admin");
+    const bot = await privateBot(owner);
+    expect(
+      (await teamBotRequest(owner, "DELETE", `/${bot}/publication`)).status,
+    ).toBe(404);
+    await expect(
+      as(owner, () => teamBots.unpublish(owner, bot)),
+    ).rejects.toThrow(TeamBotNotFoundError);
+    expect(
+      (await teamBotRequest(admin, "DELETE", `/${bot}/publication`)).status,
+    ).toBe(404);
+    expect(await stampsOf(bot)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+      publications: [],
+      audience: [],
+      assignments: [],
+    });
+    // Published and unpublished once, a second unpublish finds nothing either.
+    await publish(owner, bot, { audience: "team", emails: [], groups: [] });
+    expect(
+      (await teamBotRequest(owner, "DELETE", `/${bot}/publication`)).status,
+    ).toBe(204);
+    expect(
+      (await teamBotRequest(owner, "DELETE", `/${bot}/publication`)).status,
+    ).toBe(404);
+    expect((await stampsOf(bot)).profile).toBe(owner.id);
+  });
+
+  test("a Bot still stamped system is not offered for publishing, and publishing it is refused", async () => {
+    /*
+     * A Bot written before G01-E by code with no frame carries the `system` stamp though a person
+     * owns it. The owner's frame reads it (a `system` catalogue row) but cannot move it to `team`,
+     * so publishing used to fail inside the move with a 500. It is left off the publish list, and
+     * publishing it says why and what to do.
+     */
+    const owner = await person();
+    const legacy = `${prefix}-legacy-${randomUUID()}`;
+    await asPlatform(async () => {
+      await database.insert(agents).values({
+        id: legacy,
+        name: "Legacy Helper",
+        type: "built_in",
+        configuration: {},
+        tenantId: "system",
+      });
+      await database.insert(agentProfiles).values({
+        agentId: legacy,
+        ownerUserId: owner.id,
+        title: "Legacy",
+        roleDescription: "Answers legacy questions.",
+        avatarSeed: "legacy",
+        visibility: "private",
+        tenantId: "system",
+      });
+    });
+    createdAgents.push(legacy);
+    const ordinary = await privateBot(owner);
+
+    const listed = (await as(owner, () => teamBots.publishable(owner))).map(
+      (row) => row.id,
+    );
+    expect(listed).toContain(ordinary);
+    expect(listed).not.toContain(legacy);
+
+    const refused = await teamBotRequest(
+      owner,
+      "PUT",
+      `/${legacy}/publication`,
+      { audience: "team" },
+    );
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toBe(
+      "This Bot is stored with the deployment's own Bots, not under your account, so it cannot be published. Duplicate it and publish the copy.",
+    );
+    await expect(
+      publish(owner, legacy, { audience: "team", emails: [], groups: [] }),
+    ).rejects.toThrow(TeamBotRefusedError);
+    expect(await stampsOf(legacy)).toEqual({
+      agent: "system",
+      profile: "system",
+      publications: [],
+      audience: [],
+      assignments: [],
+    });
+
+    // What the sentence says works: the copy is the owner's, offered, and publishes.
+    const copy = await as(owner, () => profiles.duplicate(owner, legacy));
+    createdAgents.push(copy.id);
+    expect(
+      (await as(owner, () => teamBots.publishable(owner))).map((row) => row.id),
+    ).toContain(copy.id);
+    await publish(owner, copy.id, {
+      audience: "team",
+      emails: [],
+      groups: [],
+    });
+    expect((await stampsOf(copy.id)).publications).toEqual([TEAM_TENANT]);
   });
 });

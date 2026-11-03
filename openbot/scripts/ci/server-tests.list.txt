@@ -2,6 +2,7 @@ tests/admin-capability.test.ts
 tests/admin-controls-shutdown.test.ts
 tests/admin-people-credentials-validation.test.ts
 tests/agent-auth-header.test.ts
+tests/agent-callback-frame.integration.test.ts
 tests/agent-callback-token.test.ts
 tests/agent-connection-live.test.ts
 tests/agent-endpoint.test.ts
@@ -244,6 +245,7 @@ tests/plugin-share-target.test.ts
 tests/plugin-store.integration.test.ts
 tests/plugin-tenant-catalogue-row.test.ts
 tests/plugin-user-credential.integration.test.ts
+tests/plugins-mcp-admin.integration.test.ts
 tests/policy-dry-run.test.ts
 tests/policy-durability.integration.test.ts
 tests/policy-fanout.integration.test.ts
@@ -354,6 +356,7 @@ tests/team-bot-owner.integration.test.ts
 tests/team-bot-visibility-parity.integration.test.ts
 tests/team-bots-migration.integration.test.ts
 tests/team-bots.integration.test.ts
+tests/team-group-bots-migration.integration.test.ts
 tests/team-tenant-rls.integration.test.ts
 tests/tenant-cross-tenant-404.test.ts
 tests/tenant-cross-tenant-agents.test.ts

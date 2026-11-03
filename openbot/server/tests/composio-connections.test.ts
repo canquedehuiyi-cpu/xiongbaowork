@@ -978,6 +978,8 @@ async function addProbedApp(options: { withProbe?: boolean } = {}) {
   });
   if (options.withProbe === false) return;
   await database.insert(mcpTools).values({
+    // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+    tenantId: "team",
     serverId: probedId,
     name: probeAction,
     description: "Says who the key belongs to.",
@@ -1004,6 +1006,8 @@ async function addCheckableApp(slug: string): Promise<void> {
     connection: { kind: "fields", authScheme: "API_KEY" },
   });
   await database.insert(mcpTools).values({
+    // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+    tenantId: "team",
     serverId: `composio-${slug}`,
     name: probeAction,
     description: "Says who the key belongs to.",
@@ -2282,6 +2286,8 @@ test("an app whose only safe read has no recorded version has no probe", () =>
     useAnsweringClient();
     await addProbedApp({ withProbe: false });
     await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
       serverId: probedId,
       name: probeAction,
       description:
@@ -2596,6 +2602,8 @@ test("an action listed after the fact does not rewrite what a key was checked wi
     // chooser will take. Inserted directly for {@link addProbedApp}'s reason — nothing here is about
     // how a listing turns Composio's tags into an effect.
     await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
       serverId: probedId,
       name: probeAction,
       description: "Says who the key belongs to.",
@@ -2658,6 +2666,8 @@ test("a key nothing was spent on becomes checkable when the app publishes someth
     // THE REFRESH. An administrator's press re-lists the app's actions and one of them is a safe
     // versioned read — the very press the transport tells an operator to make when an action appears.
     await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
       serverId: probedId,
       name: probeAction,
       description: "Says who the key belongs to.",
@@ -2805,6 +2815,8 @@ test("a consent connection records no action, because none was spent", () =>
     // The action a derived field would have named, so the null below is this path's doing and not the
     // app having nothing to offer.
     await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
       serverId: probedId,
       name: probeAction,
       description: "Says who the account belongs to.",
@@ -4660,6 +4672,8 @@ test("a re-check against a consent connection refuses rather than spending its d
       connection: { kind: "consent" },
     });
     await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
       serverId: probedId,
       name: probeAction,
       description: "Says who the account belongs to.",

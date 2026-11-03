@@ -10,6 +10,7 @@ import {
   deliveryChallenges,
   deliveryInbox,
   deliveryOutbox,
+  pushDevices,
 } from "../src/db/schema/delivery";
 import { workItems } from "../src/db/schema/work";
 import { createDeliveryStore } from "../src/delivery/store";
@@ -349,48 +350,105 @@ test("a push token registered by one person cannot be moved to another person's 
   const token = `ExponentPushToken[${prefix.replace(/[^A-Za-z0-9]/g, "")}]`;
   const projectId = randomUUID();
   const ownersDevice = randomUUID();
-  await store.registerDevice({
-    id: ownersDevice,
-    ownerUserId: owner,
-    token,
-    projectId,
-    platform: "ios",
-  });
-  await expect(
+  await asOwner(() =>
     store.registerDevice({
-      id: randomUUID(),
+      id: ownersDevice,
+      ownerUserId: owner,
+      token,
+      projectId,
+      platform: "ios",
+    }),
+  );
+  await expect(
+    asStranger(() =>
+      store.registerDevice({
+        id: randomUUID(),
+        ownerUserId: stranger,
+        token,
+        projectId,
+        platform: "ios",
+      }),
+    ),
+  ).rejects.toThrow("already registered to another account");
+  expect(await asOwner(() => store.devices(owner))).toEqual([
+    expect.objectContaining({ id: ownersDevice, token }),
+  ]);
+  expect(await asStranger(() => store.devices(stranger))).toEqual([]);
+  // The same person registering the same phone again keeps it.
+  await asOwner(() =>
+    store.registerDevice({
+      id: ownersDevice,
+      ownerUserId: owner,
+      token,
+      projectId,
+      platform: "ios",
+    }),
+  );
+  expect(await asOwner(() => store.devices(owner))).toEqual([
+    expect.objectContaining({ id: ownersDevice, token }),
+  ]);
+  // Signing out on the phone takes the device off the owner's list.
+  await asOwner(() => store.removeDevice(owner, ownersDevice));
+  expect(await asOwner(() => store.devices(owner))).toEqual([]);
+});
+
+/*
+ * After the owner signs out on the phone, the next person to sign in there takes its push token.
+ * Both people act in their own frames, as production does: the previous owner's row is stamped with
+ * their tenant, so registerDevice retires that disabled row in the platform frame and writes the new
+ * person's row in their own frame, stamped with their tenant.
+ */
+test("after the owner signs out on a phone, the next person to sign in there takes its push token", async () => {
+  const token = `ExponentPushToken[${prefix.replace(/[^A-Za-z0-9]/g, "")}handover]`;
+  const projectId = randomUUID();
+  const ownersDevice = randomUUID();
+  await asOwner(() =>
+    store.registerDevice({
+      id: ownersDevice,
+      ownerUserId: owner,
+      token,
+      projectId,
+      platform: "ios",
+    }),
+  );
+  await asOwner(() => store.removeDevice(owner, ownersDevice));
+  const next = randomUUID();
+  await asStranger(() =>
+    store.registerDevice({
+      id: next,
       ownerUserId: stranger,
       token,
       projectId,
       platform: "ios",
     }),
-  ).rejects.toThrow("already registered to another account");
-  expect(await store.devices(owner)).toEqual([
-    expect.objectContaining({ id: ownersDevice, token }),
-  ]);
-  expect(await store.devices(stranger)).toEqual([]);
-  // The same person registering the same phone again keeps it.
-  await store.registerDevice({
-    id: ownersDevice,
-    ownerUserId: owner,
-    token,
-    projectId,
-    platform: "ios",
-  });
-  // After the owner signs out on the phone, the next person to sign in there takes the token.
-  await store.removeDevice(owner, ownersDevice);
-  const next = randomUUID();
-  await store.registerDevice({
-    id: next,
-    ownerUserId: stranger,
-    token,
-    projectId,
-    platform: "ios",
-  });
-  expect(await store.devices(stranger)).toEqual([
+  );
+  expect(await asStranger(() => store.devices(stranger))).toEqual([
     expect.objectContaining({ id: next, token }),
   ]);
-  expect(await store.devices(owner)).toEqual([]);
+  expect(await asOwner(() => store.devices(owner))).toEqual([]);
+  // The moved row is the new person's in the database too, not a row of the old tenant's.
+  const rows = await asPlatform(() =>
+    db
+      .select({
+        tenantId: pushDevices.tenantId,
+        ownerUserId: pushDevices.ownerUserId,
+      })
+      .from(pushDevices)
+      .where(eq(pushDevices.token, token)),
+  );
+  expect(rows).toEqual([{ tenantId: stranger, ownerUserId: stranger }]);
+  // And while the new person is signed in, the previous owner cannot take it back.
+  await expect(
+    asOwner(() =>
+      store.registerDevice({
+        id: randomUUID(),
+        ownerUserId: owner,
+        token,
+        projectId,
+        platform: "ios",
+      }),
+    ),
+  ).rejects.toThrow("already registered to another account");
 });
 
 /*

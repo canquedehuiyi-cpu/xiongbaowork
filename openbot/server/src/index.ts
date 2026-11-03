@@ -3075,8 +3075,9 @@ await startupLifecycle.run(async (startup) => {
         turn.channelId,
         busy,
       ),
-    createChannel: async (ownerUserId, agentIds) =>
-      channelStore.create(await actorFor(ownerUserId), agentIds),
+    // A group is shared (`team`), so the people later added to it read it in their own frames.
+    createChannel: async (ownerUserId, agentIds, options) =>
+      channelStore.create(await actorFor(ownerUserId), agentIds, options),
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.

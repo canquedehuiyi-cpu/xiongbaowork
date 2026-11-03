@@ -11,6 +11,7 @@ import {
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { workItems } from "../src/db/schema/work";
 import { createMemoryIngestion } from "../src/memory/ingestion";
 import { createMemoryStore } from "../src/memory/store";
@@ -53,10 +54,11 @@ const memory = createMemoryStore(database);
 const ingestion = createMemoryIngestion({ store: memory, plugins });
 
 /*
- * Settings, suggestions, memories, the Bots and the connector they read are the owner's, so each
- * case runs inside the owner's tenant, as the owner's own requests and their runs do (G01). Where a
- * case asks as `other`, it still asks from inside the owner's tenant, so what refuses `other` is the
- * store's own owner check, not the row policy. People and teardown are the deployment's: `platform`.
+ * Settings, suggestions, memories and the Bots are the owner's, so each case runs inside the owner's
+ * tenant, as the owner's own requests and their runs do (G01). Where a case asks as `other`, it still
+ * asks from inside the owner's tenant, so what refuses `other` is the store's own owner check, not
+ * the row policy. People, the connector the Bots read (the team's, as an administrator's add writes
+ * it, G01-E P10) and teardown are the deployment's: `platform`.
  */
 function asOwner<T>(work: () => T): T {
   return runAsTenant(owner, work);
@@ -72,6 +74,25 @@ beforeAll(async () => {
       { id: other, email: `${other}@example.test` },
     ]),
   );
+  // The connector as an administrator's add leaves it: the team's server and tool (G01-E P10; a
+  // person's frame can no longer write either, 0127).
+  await asDeployment(async () => {
+    await database.insert(mcpServers).values({
+      tenantId: "team",
+      id: server,
+      title: "Issue tracker",
+      vendor: "Fixture",
+      url: "https://issues.example.test/mcp",
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values({
+      tenantId: "team",
+      serverId: server,
+      name: "list_issues",
+      effect: "read",
+      inputSchema: {},
+    });
+  });
   await asOwner(async () => {
     await database.insert(agents).values([
       { id: bot, name: "Research Bot", type: "built_in", configuration: {} },
@@ -92,19 +113,6 @@ beforeAll(async () => {
         visibility: "private" as const,
       })),
     );
-    await database.insert(mcpServers).values({
-      id: server,
-      title: "Issue tracker",
-      vendor: "Fixture",
-      url: "https://issues.example.test/mcp",
-      provenance: "custom",
-    });
-    await database.insert(mcpTools).values({
-      serverId: server,
-      name: "list_issues",
-      effect: "read",
-      inputSchema: {},
-    });
     await plugins.grant("mcp", ref, bot, owner);
   });
 });
@@ -427,6 +435,7 @@ describe("G01: whose research the sweep is doing", () => {
   const bob = `${prefix}-tenant-bob`;
   const aliceBot = `${prefix}-alice-bot`;
   const systemBot = `${prefix}-system-bot`;
+  const teamBot = `${prefix}-team-bot`;
   const foreignBot = `${prefix}-foreign-bot`;
   const settingIds: string[] = [];
 
@@ -443,12 +452,12 @@ describe("G01: whose research the sweep is doing", () => {
       type: "built_in" as const,
       configuration: {},
     });
-    // Alice's Bot is hers. The two that must never run are the deployment's: neither is anybody's to run.
+    // Alice's Bot is hers. The three that must never run are the deployment's: none is anybody's to run.
     await runAsTenant(alice, () =>
       database.insert(agents).values(bot(aliceBot)),
     );
     await runAsTenant("platform", () =>
-      database.insert(agents).values([systemBot, foreignBot].map(bot)),
+      database.insert(agents).values([systemBot, teamBot, foreignBot].map(bot)),
     );
   });
   afterAll(async () => {
@@ -466,7 +475,7 @@ describe("G01: whose research the sweep is doing", () => {
       await database.delete(users).where(inArray(users.id, [alice, bob]));
       await database
         .delete(agents)
-        .where(inArray(agents.id, [aliceBot, systemBot, foreignBot]));
+        .where(inArray(agents.id, [aliceBot, systemBot, teamBot, foreignBot]));
     });
   });
 
@@ -483,16 +492,32 @@ describe("G01: whose research the sweep is doing", () => {
         `${prefix}-alice-thread`,
       ),
     );
-    // Stamped as nobody's: written from no frame.
+    // Stamped as nobody's: written as `system`, the stamp a write from no frame used to get (G01-E:
+    // an unframed write is now an error, so the frame is named).
     const nobodys = randomUUID();
-    await database.insert(proactiveSettings).values({
-      id: nobodys,
-      ownerUserId: alice,
-      agentId: systemBot,
-      channelId: `${prefix}-system-channel`,
-      threadId: `${prefix}-system-thread`,
-      intervalMinutes: 60,
-    });
+    await runAsTenant("system", () =>
+      database.insert(proactiveSettings).values({
+        id: nobodys,
+        ownerUserId: alice,
+        agentId: systemBot,
+        channelId: `${prefix}-system-channel`,
+        threadId: `${prefix}-system-thread`,
+        intervalMinutes: 60,
+      }),
+    );
+    // Stamped `team`, which names nobody either: no frame writes it, so `platform` does.
+    const teams = randomUUID();
+    await runAsTenant("platform", () =>
+      database.insert(proactiveSettings).values({
+        id: teams,
+        tenantId: TEAM_TENANT,
+        ownerUserId: alice,
+        agentId: teamBot,
+        channelId: `${prefix}-team-channel`,
+        threadId: `${prefix}-team-thread`,
+        intervalMinutes: 60,
+      }),
+    );
     // Filed under Alice but naming Bob.
     const foreign = randomUUID();
     await runAsTenant(alice, () =>
@@ -505,7 +530,7 @@ describe("G01: whose research the sweep is doing", () => {
         intervalMinutes: 60,
       }),
     );
-    settingIds.push(mine.id, nobodys, foreign);
+    settingIds.push(mine.id, nobodys, teams, foreign);
 
     const claimedAs: string[] = [];
     const turns: { agentId: string; as: string }[] = [];
@@ -563,14 +588,15 @@ describe("G01: whose research the sweep is doing", () => {
     for (let pass = 0; pass < 10; pass += 1) {
       await engine.sweep();
       const states = await Promise.all(
-        [mine.id, nobodys, foreign].map(
+        [mine.id, nobodys, teams, foreign].map(
           async (id) => (await statusOf(id))?.status,
         ),
       );
       if (
         states[0] === "succeeded" &&
         states[1] === "error" &&
-        states[2] === "error"
+        states[2] === "error" &&
+        states[3] === "error"
       )
         break;
     }
@@ -581,14 +607,24 @@ describe("G01: whose research the sweep is doing", () => {
     ]);
     expect(
       turns.some(
-        (turn) => turn.agentId === systemBot || turn.agentId === foreignBot,
+        (turn) =>
+          turn.agentId === systemBot ||
+          turn.agentId === teamBot ||
+          turn.agentId === foreignBot,
       ),
     ).toBe(false);
     expect(await statusOf(mine.id)).toEqual({
       status: "succeeded",
       tenantId: alice,
     });
-    expect((await statusOf(nobodys))?.status).toBe("error");
+    expect(await statusOf(nobodys)).toEqual({
+      status: "error",
+      tenantId: "system",
+    });
+    expect(await statusOf(teams)).toEqual({
+      status: "error",
+      tenantId: TEAM_TENANT,
+    });
     expect((await statusOf(foreign))?.status).toBe("error");
 
     const everywhere = await runAsTenant("platform", async () => ({
@@ -603,11 +639,12 @@ describe("G01: whose research the sweep is doing", () => {
           or(
             like(workItems.key, `${mine.id}:%`),
             like(workItems.key, `${nobodys}:%`),
+            like(workItems.key, `${teams}:%`),
             like(workItems.key, `${foreign}:%`),
           ),
         ),
     }));
-    // The suggestion and the queued run are Alice's; nothing was queued for the other two.
+    // The suggestion and the queued run are Alice's; nothing was queued for the other three.
     expect(everywhere.suggestions).toEqual([{ tenantId: alice }]);
     expect(everywhere.work.map((row) => row.tenantId)).toEqual([alice]);
     expect(everywhere.work[0]?.key.startsWith(`${mine.id}:`)).toBe(true);
@@ -629,33 +666,53 @@ describe("G01: whose research the sweep is doing", () => {
     }));
     expect(asBob).toEqual({ settings: [], suggestions: [], work: [] });
 
-    // A run of Alice's setting queued from no frame is stamped as nobody's, and is ended unrun.
+    /*
+     * A run of Alice's setting queued as nobody's is ended unrun: one offered as `system` (the stamp
+     * an offer from no frame used to get; G01-E names the frame), and one stamped `team`, which no
+     * frame offers as, so `platform` writes it.
+     */
     const forged = `${mine.id}:forged`;
-    await createWorkQueue(database).offer({
-      kind: PROACTIVE_RUN_KIND,
-      key: forged,
-      payload: { settingId: mine.id, runId: randomUUID() },
-    });
-    const forgedRow = () =>
+    const forgedTeam = `${mine.id}:forged-team`;
+    await runAsTenant("system", () =>
+      createWorkQueue(database).offer({
+        kind: PROACTIVE_RUN_KIND,
+        key: forged,
+        payload: { settingId: mine.id, runId: randomUUID() },
+      }),
+    );
+    await runAsTenant("platform", () =>
+      database.insert(workItems).values({
+        kind: PROACTIVE_RUN_KIND,
+        key: forgedTeam,
+        payload: { settingId: mine.id, runId: randomUUID() },
+        tenantId: TEAM_TENANT,
+      }),
+    );
+    const forgedRow = (key: string) =>
       runAsTenant("platform", async () => {
         const [row] = await database
           .select({ error: workItems.lastError, tenantId: workItems.tenantId })
           .from(workItems)
           .where(
-            and(
-              eq(workItems.kind, PROACTIVE_RUN_KIND),
-              eq(workItems.key, forged),
-            ),
+            and(eq(workItems.kind, PROACTIVE_RUN_KIND), eq(workItems.key, key)),
           );
         return row;
       });
     for (let pass = 0; pass < 10; pass += 1) {
       await engine.sweep();
-      if ((await forgedRow())?.error) break;
+      if (
+        (await forgedRow(forged))?.error &&
+        (await forgedRow(forgedTeam))?.error
+      )
+        break;
     }
-    expect(await forgedRow()).toEqual({
+    expect(await forgedRow(forged)).toEqual({
       error: PROACTIVE_TENANT_UNRESOLVED,
       tenantId: "system",
+    });
+    expect(await forgedRow(forgedTeam)).toEqual({
+      error: PROACTIVE_TENANT_UNRESOLVED,
+      tenantId: TEAM_TENANT,
     });
     expect(turns.filter((turn) => turn.agentId === aliceBot)).toHaveLength(1);
   });

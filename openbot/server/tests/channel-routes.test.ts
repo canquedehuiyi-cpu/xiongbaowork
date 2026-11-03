@@ -41,6 +41,7 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
@@ -839,6 +840,34 @@ async function createPersistentAgent(options: {
   return agentId;
 }
 
+/**
+ * A shared group (`team`, G01-E P11) `creator` starts with one of their own Bots, with `other` added
+ * the way `addMember` adds a person: a `team` membership written in the creator's frame. Call it in
+ * the creator's frame. The other member's mapping is not written here: the store writes it in their
+ * own frame the first time they read the group.
+ */
+async function sharedGroupOf(
+  creator: AgentActor,
+  other: AgentActor,
+  agentName: string,
+) {
+  const agentId = await createPersistentAgent({
+    name: agentName,
+    owner: creator,
+    visibility: "public",
+  });
+  const created = await persistentStore.create(creator, [agentId], {
+    shared: true,
+  });
+  createdChannelIds.push(created.id);
+  await database.insert(channelMemberships).values({
+    channelId: created.id,
+    userId: other.id,
+    tenantId: TEAM_TENANT,
+  });
+  return created.id;
+}
+
 async function persistedChannel(channelId: string) {
   const [channelRow] = await database
     .select()
@@ -1252,33 +1281,22 @@ describe("channel pinning", () => {
   test("one member's pin is invisible to another member", async () => {
     const pinner = await createPersistentUser();
     const other = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Shared pinnable agent",
-      owner: pinner,
-      visibility: "public",
-    });
-    const created = await persistentStore.create(pinner, [agentId]);
-    createdChannelIds.push(created.id);
-    // The store only creates the creator's membership; give the other user one directly,
-    // plus the thread mapping the list join requires.
-    await database.insert(channelMemberships).values({
-      channelId: created.id,
-      userId: other.id,
-    });
-    await database.insert(intelligenceChannelMappings).values({
-      userId: other.id,
-      channelId: created.id,
-      // thread_id is globally unique; the pinner's own mapping row already claimed
-      // created.threadId, so the other member's row needs one of its own.
-      threadId: randomUUID(),
-    });
+    const created = await as(pinner, () =>
+      sharedGroupOf(pinner, other, "Shared pinnable agent"),
+    );
 
-    await persistentStore.setPinned(pinner, created.id, true);
+    await as(pinner, () => persistentStore.setPinned(pinner, created, true));
 
-    const otherPage = await persistentStore.list(other);
+    const otherPage = await as(other, () => persistentStore.list(other));
     expect(
-      otherPage.channels.find((channel) => channel.id === created.id)?.pinned,
+      otherPage.channels.find((channel) => channel.id === created)?.pinned,
     ).toBe(false);
+    // And it is the pinner's: their own roster shows it pinned.
+    expect(
+      (await as(pinner, () => persistentStore.list(pinner))).channels.find(
+        (channel) => channel.id === created,
+      )?.pinned,
+    ).toBe(true);
   });
 
   test("reports pinned false for a channel nobody pinned", async () => {
@@ -1310,7 +1328,7 @@ describe("channel read markers", () => {
 
   /**
    * The same channel with every row written in the reader's request, as `addMember` writes the second
-   * member's rows in the inviter's: all of it lands in the reader's tenant.
+   * member's rows in the inviter's: a shared group, so all of it lands in `team` (G01-E P11).
    */
   async function framedSharedChannel() {
     const reader = await createPersistentUser();
@@ -1323,27 +1341,9 @@ describe("channel read markers", () => {
   }
 
   async function seedSharedChannel(reader: AgentActor, other: AgentActor) {
-    const agentId = await createPersistentAgent({
-      name: "Shared readable agent",
-      owner: reader,
-      visibility: "public",
-    });
-    const created = await persistentStore.create(reader, [agentId]);
-    createdChannelIds.push(created.id);
-    // The store only creates the creator's membership; give the other user one directly,
-    // plus the thread mapping the list join requires.
-    await database.insert(channelMemberships).values({
-      channelId: created.id,
-      userId: other.id,
-    });
-    await database.insert(intelligenceChannelMappings).values({
-      userId: other.id,
-      channelId: created.id,
-      // thread_id is globally unique; the reader's own mapping row already claimed
-      // created.threadId, so the other member's row needs one of its own.
-      threadId: randomUUID(),
-    });
-    return created.id;
+    return as(reader, () =>
+      sharedGroupOf(reader, other, "Shared readable agent"),
+    );
   }
 
   test("stamps last_read_at on the caller's own membership only", async () => {
@@ -1370,10 +1370,10 @@ describe("channel read markers", () => {
   test("the list carries the caller's lastReadAt and nobody else's", async () => {
     const { reader, other, channelId } = await sharedChannel();
 
-    await persistentStore.markRead(reader, channelId);
+    await as(reader, () => persistentStore.markRead(reader, channelId));
 
-    const forReader = await persistentStore.list(reader);
-    const forOther = await persistentStore.list(other);
+    const forReader = await as(reader, () => persistentStore.list(reader));
+    const forOther = await as(other, () => persistentStore.list(other));
     expect(
       forReader.channels.find((channel) => channel.id === channelId)
         ?.lastReadAt,
@@ -1449,40 +1449,54 @@ describe("channel soft delete", () => {
   test("hides a deleted channel from list and get", async () => {
     const actor = await createPersistentUser();
     const other = await createPersistentUser();
-    const agentId = await createPersistentAgent({
-      name: "Deletable agent",
-      owner: actor,
-      visibility: "public",
-    });
-    const created = await persistentStore.create(actor, [agentId]);
-    createdChannelIds.push(created.id);
-    // The store only creates the creator's membership; give the other user one directly,
-    // plus the thread mapping the list join requires.
-    await database.insert(channelMemberships).values({
-      channelId: created.id,
-      userId: other.id,
-    });
-    await database.insert(intelligenceChannelMappings).values({
-      userId: other.id,
-      channelId: created.id,
-      // thread_id is globally unique; the actor's own mapping row already claimed
-      // created.threadId, so the other member's row needs one of its own.
-      threadId: randomUUID(),
-    });
+    const createdId = await as(actor, () =>
+      sharedGroupOf(actor, other, "Deletable agent"),
+    );
+    const created = { id: createdId };
+    // Both members see it before the delete, each in their own frame.
+    expect(
+      await as(other, () => persistentStore.get(other, created.id)),
+    ).not.toBeNull();
 
-    await persistentStore.softDelete(actor, created.id);
+    // The person who started it deletes it, for everybody.
+    await as(actor, () => persistentStore.softDelete(actor, created.id));
 
-    expect(await persistentStore.get(actor, created.id)).toBeNull();
-    const page = await persistentStore.list(actor);
+    expect(
+      await as(actor, () => persistentStore.get(actor, created.id)),
+    ).toBeNull();
+    const page = await as(actor, () => persistentStore.list(actor));
     expect(
       page.channels.find((channel) => channel.id === created.id),
     ).toBeUndefined();
 
-    expect(await persistentStore.get(other, created.id)).toBeNull();
-    const otherPage = await persistentStore.list(other);
+    expect(
+      await as(other, () => persistentStore.get(other, created.id)),
+    ).toBeNull();
+    const otherPage = await as(other, () => persistentStore.list(other));
     expect(
       otherPage.channels.find((channel) => channel.id === created.id),
     ).toBeUndefined();
+  });
+
+  test("in a shared group only the person who started it deletes it", async () => {
+    const creator = await createPersistentUser();
+    const member = await createPersistentUser();
+    const groupId = await as(creator, () =>
+      sharedGroupOf(creator, member, "Group agent"),
+    );
+    // Another member gets the same not-found answer as a stranger, and nothing is stamped.
+    await expect(
+      as(member, () => persistentStore.softDelete(member, groupId)),
+    ).rejects.toBeInstanceOf(ChannelNotFoundError);
+    expect(
+      await as(member, () => persistentStore.get(member, groupId)),
+    ).not.toBeNull();
+    expect(
+      await as(creator, () => persistentStore.softDelete(creator, groupId)),
+    ).toBe(true);
+    expect(
+      await as(member, () => persistentStore.get(member, groupId)),
+    ).toBeNull();
   });
 
   test("stamps deleted_at on the channel", async () => {

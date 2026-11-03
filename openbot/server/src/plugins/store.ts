@@ -18,7 +18,6 @@ import {
   type CredentialSecretReader,
   type CredentialStore,
   CredentialUnusableError,
-  decryptCredentialForUse,
   openCredential,
   sealCredential,
 } from "../credentials";
@@ -49,7 +48,12 @@ import {
 } from "../db/schema/plugin-install-listings";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import { currentTenant, isPersonTenant, runAsTenant } from "../tenant/context";
+import {
+  capabilityFor,
+  currentTenant,
+  isPersonTenant,
+  runAsTenant,
+} from "../tenant/context";
 import {
   accessFor,
   type ServerAccess,
@@ -637,10 +641,20 @@ function storableSchema(
  * FIRST OCCURRENCE WINS, and the order is the vendor's own. Anything else needs a rule for which
  * of two identical names is the real one, and there is no such rule.
  */
-function storableTools(serverId: string, listed: ListedTool[]) {
+function storableTools(
+  serverId: string,
+  listed: ListedTool[],
+  /**
+   * The server row's stamp, which its tools carry (G01-E P10: migration 0127 refuses a tool stamped
+   * other than its server, so a `team` server's tools are `team` and a catalogue server's `system`).
+   */
+  serverTenant?: string,
+) {
+  const stamp = serverTenant ? { tenantId: serverTenant } : {};
   const byName = new Map<
     string,
     {
+      tenantId?: string;
       serverId: string;
       name: string;
       description: string;
@@ -655,6 +669,7 @@ function storableTools(serverId: string, listed: ListedTool[]) {
     const name = tool.name.replaceAll(NUL, "");
     if (byName.has(name)) continue;
     byName.set(name, {
+      ...stamp,
       serverId,
       name,
       /*
@@ -1218,27 +1233,42 @@ export function atServerAddress(address: string) {
 export const serverKeyOfToolRow = sql<string>`coalesce(${mcpServers.catalogueKey}, ${mcpServers.id})`;
 
 /**
- * The row identity a catalogue entry takes on for whoever is opening it.
+ * The row identity a catalogue entry takes on when an administrator opens it.
  *
  * Derived rather than minted, because the write has to be an upsert: a random id would make every press
  * of "add" a new row, and one connection would arrive with two tool lists, two grant sets and two
- * consent histories. The tenant prefix is what makes it one row per tenant per entry, which is the
- * constraint `UNIQUE (tenant_id, catalogue_key)` states and spec J4 asks for.
+ * consent histories. Since G01-E P10 the deployment's servers are `team` rows, one per entry, which is
+ * the constraint `UNIQUE (tenant_id, catalogue_key)` states; the prefix says whose row it is. A row
+ * written before keeps the id it was given (its administrator's tenant), because tool rows, grants and
+ * people's connections point at it.
  */
 function catalogueRowId(key: string) {
-  return `${currentTenant()}:${key}`;
+  return `${TEAM_TENANT}:${key}`;
 }
 
 /**
- * Which of the rows a key names is "the caller's": their own before the platform's shared one.
+ * Which of the rows a key names is "the caller's": the team's, then the frame's own, then the rest.
  *
- * Not a preference about tidiness. The SELECT policy admits `system` rows to every workspace, so a
- * tenant's `google-drive` and the deployment's own carry the same key, and taking whichever came first
- * would hand a tenant somebody else's credential, tool list and grants while asking for their own.
+ * Not a preference about tidiness. The SELECT policy admits `system` rows to every workspace, so the
+ * team's `google-drive` and the deployment's own catalogue row carry the same key, and taking
+ * whichever came first would hand a person somebody else's credential, tool list and grants. The
+ * team's row is the one an administrator configured for everybody (G01-E P10); a row stamped with the
+ * frame itself (one written before the team tenant existed) comes after it, and `system` last.
  */
 function ownRowFirst() {
-  return sql`(${mcpServers.tenantId} = ${currentTenant()})::int desc`;
+  return sql`case when ${mcpServers.tenantId} = ${TEAM_TENANT} then 0 when ${mcpServers.tenantId} = ${currentTenant()} then 1 else 2 end`;
 }
+
+/**
+ * The refusal for a server write from a frame that may not write the deployment's servers.
+ *
+ * A server, its tools and its secret are `team` rows (G01-E P10), which row security lets only an
+ * administrator holding the capability write; `platform` (an operator path, the deployment's own
+ * background work) may too. Asked before anything is written, so nothing is half done: an OAuth
+ * client registered at the vendor and then refused by the vault would be a client nobody holds.
+ */
+const SERVER_WRITE_REFUSAL =
+  "Changing this deployment's apps takes an administrator, from the administrator's own screens.";
 
 /**
  * The tenants a skill slug can name for the caller: their own, then the platform's (audit #9).
@@ -1482,21 +1512,138 @@ export function createPluginStore(options: PluginStoreOptions) {
    * this one did not even need the rewording.
    */
   async function secretFor(
-    credentialId: string,
+    server: { tenantId: string; credentialId: string },
     onRevoked: string,
   ): Promise<string> {
     try {
-      return await decryptCredentialForUse(
-        encryptionKey,
-        credentials,
-        credentialId,
-      );
+      return await serverCredentialById(server);
     } catch (error) {
       if (error instanceof CredentialUnusableError) {
         throw new PluginRefusedError(onRevoked, null);
       }
       throw error;
     }
+  }
+
+  /**
+   * A server's own secret read by id, where the broker is not the door (`platform`, or a server that
+   * is not `team`): only a server secret's kind (`mcp`, `mcp_oauth_client`) carrying the server's own
+   * stamp, so a `team` server's secret is a `team` row (G01-E P10). Without this a pointer re-aimed at
+   * any row the frame can read (somebody's `mcp_user_token` under `platform`, a person's own model key
+   * from a catalogue server) was decrypted and sent as the server's token. Anything else is
+   * {@link CredentialUnusableError}, the same as a row that is gone: there is nothing here to spend.
+   */
+  async function serverCredentialById(server: {
+    tenantId: string;
+    credentialId: string;
+  }): Promise<string> {
+    const stored = await credentials.readSecret(server.credentialId);
+    if (!stored) throw new CredentialUnusableError("Credential was not found");
+    if (stored.revokedAt) {
+      throw new CredentialUnusableError("Credential is revoked");
+    }
+    if (
+      (stored.kind !== "mcp" && stored.kind !== "mcp_oauth_client") ||
+      stored.tenantId !== server.tenantId
+    ) {
+      throw new CredentialUnusableError(
+        "Credential is not this server's own secret",
+      );
+    }
+    return openCredential(encryptionKey, stored);
+  }
+
+  /**
+   * Whether this frame may write the deployment's servers, their tools and their secrets: an
+   * administrator holding the capability, or `platform`. See {@link SERVER_WRITE_REFUSAL}.
+   */
+  function writesTeamServers(): boolean {
+    const frame = currentTenant();
+    return frame === "platform" || capabilityFor(frame) === "admin";
+  }
+
+  function requireServerWriter(): void {
+    if (!writesTeamServers()) {
+      throw new CustomServerRefusedError(SERVER_WRITE_REFUSAL);
+    }
+  }
+
+  /**
+   * Whether a team server's secret is read here through the broker rather than by id (G01-E P10, I8).
+   *
+   * A team server's token and OAuth client are sealed to `team`, and no person's frame may SELECT a
+   * `team` credential (an administrator holding the capability may, to rotate it, but reads it the same
+   * way here). So in a person's frame the secret comes from `openbot_team_server_secret(server_id)`:
+   * the one credential that named team server points at, and nothing else. `platform` reads every row
+   * and keeps the vault reader; so does any server that is not `team` (the `system` catalogue).
+   */
+  function throughBroker(server: { tenantId: string }): boolean {
+    return server.tenantId === TEAM_TENANT && isPersonTenant(currentTenant());
+  }
+
+  /** What the broker hands back: the row a v2 envelope is bound to, and when it was stored. */
+  type BrokeredSecret = {
+    encryptedValue: string;
+    revokedAt: Date | null;
+    id: string;
+    tenantId: string;
+    kind: CredentialBinding["kind"];
+    storedAt: Date | null;
+  };
+
+  const asDate = (value: unknown): Date | null =>
+    value === null || value === undefined ? null : new Date(value as string);
+
+  /** The secret a team server points at, read through the broker, on the caller's executor. */
+  async function brokeredSecret(
+    executor: Pick<Database, "execute"> | Pick<Transaction, "execute">,
+    serverId: string,
+  ): Promise<BrokeredSecret | null> {
+    const rows = Array.from(
+      (await executor.execute(
+        sql`select id, encrypted_value, revoked_at, tenant_id, kind, created_at from public.openbot_team_server_secret(${serverId})`,
+      )) as unknown as ArrayLike<{
+        id: string;
+        encrypted_value: string;
+        revoked_at: unknown;
+        tenant_id: string;
+        kind: BrokeredSecret["kind"];
+        created_at: unknown;
+      }>,
+    );
+    const [row] = rows;
+    if (!row) return null;
+    return {
+      id: row.id,
+      encryptedValue: row.encrypted_value,
+      revokedAt: asDate(row.revoked_at),
+      tenantId: row.tenant_id,
+      kind: row.kind,
+      storedAt: asDate(row.created_at),
+    };
+  }
+
+  /**
+   * A server's own secret (its token, or the deployment's OAuth client for it), decrypted for one call.
+   *
+   * {@link secretFor} by id, except for a team server in a person's frame, which goes through
+   * {@link brokeredSecret}: the credential the server points at NOW, refused in `onRevoked`'s words
+   * when there is none or it is revoked, exactly as the vault reader's answer would have been. Also
+   * says when the secret was stored, where the broker said (the vault reader does not).
+   */
+  async function serverSecretFor(
+    server: { id: string; tenantId: string; credentialId: string },
+    onRevoked: string,
+  ): Promise<{ secret: string; storedAt?: Date | null }> {
+    if (!throughBroker(server)) {
+      return { secret: await secretFor(server, onRevoked) };
+    }
+    const held = await brokeredSecret(database, server.id);
+    if (!held || held.revokedAt) throw new PluginRefusedError(onRevoked, null);
+    return {
+      secret: await openCredential(encryptionKey, held),
+      storedAt: held.storedAt,
+    };
   }
 
   /**
@@ -1535,6 +1682,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       id: string;
       title: string;
       credentialId: string | null;
+      /** `team` for a server an administrator added: its secret is then read through the broker. */
+      tenantId: string;
       /*
        * NO `authScheme` HERE, DELIBERATELY. The scheme that decides whether a brokered call needs a
        * connection row is the APP'S, read through `brokeredAppScheme` below — and this row's own
@@ -1685,10 +1834,16 @@ export function createPluginStore(options: PluginStoreOptions) {
 
     if (access.credential !== "person-oauth") {
       const token = row.credentialId
-        ? await secretFor(
-            row.credentialId,
-            `${row.id} needs a credential this deployment no longer holds. An administrator has to add it again.`,
-          )
+        ? (
+            await serverSecretFor(
+              {
+                id: row.id,
+                tenantId: row.tenantId,
+                credentialId: row.credentialId,
+              },
+              `${row.id} needs a credential this deployment no longer holds. An administrator has to add it again.`,
+            )
+          ).secret
         : undefined;
       return { token };
     }
@@ -1817,6 +1972,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       const [server] = await database
         .select({
           credentialId: mcpServers.credentialId,
+          tenantId: mcpServers.tenantId,
           registeredAt: credentialRows.createdAt,
         })
         .from(mcpServers)
@@ -1832,8 +1988,20 @@ export function createPluginStore(options: PluginStoreOptions) {
       /*
        * Decrypted outside the guard below, so that `secretFor`'s own refusal for a revoked or
        * missing row is not caught here and relabelled. Only the parse is guarded.
+       *
+       * A team server's client comes through the broker in a person's frame (G01-E P10), and with it
+       * when it was stored: the join above reads the vault row under the caller's row security, which
+       * shows a person no `team` credential, so it answers null there.
        */
-      const decrypted = await secretFor(server.credentialId, unusableClient);
+      const { secret: decrypted, storedAt } = await serverSecretFor(
+        {
+          id: row.id,
+          tenantId: server.tenantId,
+          credentialId: server.credentialId,
+        },
+        unusableClient,
+      );
+      const registeredAt = storedAt ?? server.registeredAt;
       let parsed: unknown;
       try {
         parsed = JSON.parse(decrypted);
@@ -1871,7 +2039,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (!isUsableClient(parsed)) {
         throw new PluginRefusedError(unusableClient, null);
       }
-      return { client: parsed, registeredAt: server.registeredAt };
+      return { client: parsed, registeredAt };
     }
 
     /*
@@ -2078,6 +2246,15 @@ export function createPluginStore(options: PluginStoreOptions) {
       throw error;
     }
 
+    /*
+     * Only where the replacement can be stored (G01-E P10). The client is the deployment's, sealed to
+     * `team` beside its `team` server, and only an administrator holding the capability (or
+     * `platform`) writes there. A member's call that meets an evicted client is refused with the
+     * vendor's own answer, as when there is nowhere to register again; registering a client nobody
+     * could then store would leave one at the vendor that this deployment does not hold.
+     */
+    if (!writesTeamServers()) throw error;
+
     const fresh = await registerClient({ registrationUrl, redirectUri });
     // The vendor would not have us either. The first refusal is the one worth reporting: it says
     // what actually stopped the call, where this one says what stopped the recovery.
@@ -2280,24 +2457,31 @@ export function createPluginStore(options: PluginStoreOptions) {
     serverId: string,
   ): Promise<OAuthClient | null> {
     const [server] = await transaction
-      .select({ credentialId: mcpServers.credentialId })
+      .select({
+        id: mcpServers.id,
+        tenantId: mcpServers.tenantId,
+        credentialId: mcpServers.credentialId,
+      })
       .from(mcpServers)
       .where(atServerAddress(serverId))
       .orderBy(ownRowFirst())
       .limit(1);
     if (!server?.credentialId) return null;
 
-    const [held] = await transaction
-      .select({
-        encryptedValue: credentialRows.encryptedValue,
-        revokedAt: credentialRows.revokedAt,
-        id: credentialRows.id,
-        tenantId: credentialRows.tenantId,
-        kind: credentialRows.kind,
-      })
-      .from(credentialRows)
-      .where(eq(credentialRows.id, server.credentialId))
-      .limit(1);
+    // A team server's client, in a person's frame, through the broker (G01-E P10).
+    const [held] = throughBroker(server)
+      ? [await brokeredSecret(transaction, server.id)]
+      : await transaction
+          .select({
+            encryptedValue: credentialRows.encryptedValue,
+            revokedAt: credentialRows.revokedAt,
+            id: credentialRows.id,
+            tenantId: credentialRows.tenantId,
+            kind: credentialRows.kind,
+          })
+          .from(credentialRows)
+          .where(eq(credentialRows.id, server.credentialId))
+          .limit(1);
     if (!held || held.revokedAt) return null;
 
     try {
@@ -2328,7 +2512,37 @@ export function createPluginStore(options: PluginStoreOptions) {
     input: { serverId: string; client: OAuthClient },
     transaction: Transaction,
   ): Promise<{ replaced: boolean }> {
-    const key = oauthClientKey(input.serverId);
+    /*
+     * The server row first, for its stamp: a `team` server's client is sealed to `team` beside it
+     * (G01-E P10), where a member reaches it through the broker and only an administrator holding
+     * the capability, or `platform`, may write it. The vault refuses that target to anybody else.
+     */
+    const [target] = await transaction
+      .select({ id: mcpServers.id, tenantId: mcpServers.tenantId })
+      .from(mcpServers)
+      .where(atServerAddress(input.serverId))
+      .orderBy(ownRowFirst())
+      .limit(1);
+    if (!target) {
+      throw new CatalogueEntryUnknownError(input.serverId);
+    }
+    /*
+     * Only the team's row or the frame's own: a client sealed beside any other row (the catalogue's,
+     * read through `system`, or somebody's under `platform`) would carry a stamp that row's readers do
+     * not, so no read could ever return it. Refused before anything is stored.
+     */
+    if (
+      target.tenantId !== TEAM_TENANT &&
+      target.tenantId !== currentTenant()
+    ) {
+      throw new CustomServerRefusedError(
+        `${input.serverId} is not a server this deployment's OAuth client can be stored for here.`,
+      );
+    }
+    const shared: { target?: typeof TEAM_TENANT } =
+      target.tenantId === TEAM_TENANT ? { target: TEAM_TENANT } : {};
+
+    const key = { ...oauthClientKey(input.serverId), ...shared };
     const value = {
       ...key,
       metadata: { server: input.serverId, clientId: input.client.clientId },
@@ -2354,24 +2568,26 @@ export function createPluginStore(options: PluginStoreOptions) {
      *
      * Resolved rather than matched with an OR, because an UPDATE cannot order-and-limit: the same
      * preference the read applies (this workspace's row before the platform's shared one) has to be the
-     * one this write uses, or the client is stored on one row and read from another. When the row the
-     * caller may only read is not one they may write, this raises on the row-level security check
-     * instead of quietly touching zero rows, which is the loud answer an operator can act on.
+     * one this write uses, or the client is stored on one row and read from another. The row was
+     * resolved at the top, by the same rule. When the row the caller may only read is not one they may
+     * write, row security filters it out of the UPDATE, which touches zero rows without raising: so
+     * the count is checked below, which is the loud answer an operator can act on.
      */
-    const [target] = await transaction
-      .select({ id: mcpServers.id })
-      .from(mcpServers)
-      .where(atServerAddress(input.serverId))
-      .orderBy(ownRowFirst())
-      .limit(1);
-    if (!target) {
-      throw new CatalogueEntryUnknownError(input.serverId);
-    }
-
-    await transaction
+    const pointed = await transaction
       .update(mcpServers)
       .set({ credentialId: stored.id, updatedAt: new Date() })
-      .where(eq(mcpServers.id, target.id));
+      .where(eq(mcpServers.id, target.id))
+      .returning({ id: mcpServers.id });
+    /*
+     * An UPDATE that row security filters touches nothing and says nothing (I9): a client stored with
+     * no row pointing at it is the "there is none" the paragraph above describes. Thrown inside the
+     * caller's transaction, so the client just stored goes with it.
+     */
+    if (pointed.length === 0) {
+      throw new PluginInvariantError(
+        `${input.serverId}: the OAuth client was stored but the server row could not be pointed at it, so nothing was kept.`,
+      );
+    }
 
     return { replaced: live !== null };
   }
@@ -2425,6 +2641,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     client: OAuthClient;
     by: string;
   }): Promise<void> {
+    requireServerWriter();
     const { entry } = await requireServer(input.serverId);
     if (entry?.auth.kind !== "user-oauth") {
       throw new CustomServerRefusedError(
@@ -2455,7 +2672,11 @@ export function createPluginStore(options: PluginStoreOptions) {
     serverId: string,
   ): Promise<OAuthClient | null> {
     const [row] = await database
-      .select({ credentialId: mcpServers.credentialId })
+      .select({
+        id: mcpServers.id,
+        tenantId: mcpServers.tenantId,
+        credentialId: mcpServers.credentialId,
+      })
       .from(mcpServers)
       .where(atServerAddress(serverId))
       .orderBy(ownRowFirst())
@@ -2463,12 +2684,20 @@ export function createPluginStore(options: PluginStoreOptions) {
     if (!row?.credentialId) return null;
 
     try {
+      // A team server's client, in a person's frame, through the broker (G01-E P10).
+      const brokered = throughBroker(row)
+        ? await brokeredSecret(database, row.id)
+        : undefined;
+      if (brokered !== undefined && (!brokered || brokered.revokedAt)) {
+        return null;
+      }
       const parsed: unknown = JSON.parse(
-        await decryptCredentialForUse(
-          encryptionKey,
-          credentials,
-          row.credentialId,
-        ),
+        brokered
+          ? await openCredential(encryptionKey, brokered)
+          : await serverCredentialById({
+              tenantId: row.tenantId,
+              credentialId: row.credentialId,
+            }),
       );
       // A client that parsed and is not one is as unusable as the revoked or missing row the catch
       // below answers for, and is the same none to every caller — see {@link isUsableClient}.
@@ -2537,6 +2766,13 @@ export function createPluginStore(options: PluginStoreOptions) {
             and(
               eq(credentialRows.id, credentialId),
               isNull(credentialRows.revokedAt),
+              /*
+               * Sealed to `team`, where the team server it is attached to can hand it to a member
+               * through the broker (G01-E P10). A token sealed to the administrator's own tenant
+               * (one stored before P10) would be a server that answers nobody but its administrator;
+               * it is refused here, in the same words, and stored again from the credentials screen.
+               */
+              eq(credentialRows.tenantId, TEAM_TENANT),
             ),
           )
       : [];
@@ -2749,6 +2985,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       credentialId?: string;
       by: string;
     }): Promise<ServerRecord> {
+      requireServerWriter();
       const resolved = resolveServerUrl(input.key, input.instanceHost);
       if (!resolved) throw new CatalogueEntryUnknownError(input.key);
 
@@ -2787,7 +3024,10 @@ export function createPluginStore(options: PluginStoreOptions) {
        * carry the name.
        */
       /*
-       * Read by the key, but ONLY among this workspace's own rows.
+       * Read by the key, but ONLY among the team's rows and this frame's own (G01-E P10: the
+       * deployment's servers are `team`, one per entry, and the team's row is preferred; a row this
+       * frame stamped with itself before the team tenant existed keeps its identity and is updated in
+       * place, and is checked for being brokered all the same).
        *
        * The order is deliberately different from {@link requireServer}'s. A read may legitimately land
        * on a row the platform stamped, because the SELECT policy admits those to everybody and that is
@@ -2808,13 +3048,14 @@ export function createPluginStore(options: PluginStoreOptions) {
         .from(mcpServers)
         .where(
           and(
-            eq(mcpServers.tenantId, currentTenant()),
+            inArray(mcpServers.tenantId, [TEAM_TENANT, currentTenant()]),
             or(
               eq(mcpServers.id, resolved.entry.key),
               eq(mcpServers.catalogueKey, resolved.entry.key),
             ),
           ),
         )
+        .orderBy(ownRowFirst())
         .limit(1);
       // A row that is already here keeps its identity, however it was named when it arrived: the
       // pre-split ones are called exactly what this function used to write, and rewriting an id would
@@ -2826,6 +3067,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         .insert(mcpServers)
         .values({
           id: rowId,
+          // The team's: every person's Bots may be granted it, and only an administrator changes it.
+          tenantId: TEAM_TENANT,
           title: resolved.entry.title,
           vendor: resolved.entry.vendor,
           url: resolved.url,
@@ -2921,6 +3164,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       credentialId?: string;
       by: string;
     }): Promise<ServerRecord> {
+      requireServerWriter();
       const refusal = customUrlRefusal(input.url);
       if (refusal) throw new CustomServerRefusedError(refusal);
 
@@ -3070,6 +3314,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         .insert(mcpServers)
         .values({
           id: input.id,
+          // The team's, like a catalogue server (G01-E P10).
+          tenantId: TEAM_TENANT,
           title: input.title,
           vendor: new URL(input.url).hostname,
           url: input.url,
@@ -3190,6 +3436,9 @@ export function createPluginStore(options: PluginStoreOptions) {
       // Before anything at all. A deployment with no key has no catalogue for this app to have been
       // chosen from, so there is nothing here to half-do and nothing to say but the setting.
       if (!broker) throw new BrokerUnconfiguredError();
+      // Before the broker is asked for anything: a config made at Composio for a row this frame
+      // could not then write would be one nothing here names (G01-E P10).
+      requireServerWriter();
 
       const url = `composio://${input.slug}`;
       if (toolkitOf(url) !== input.slug) {
@@ -3256,6 +3505,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         .insert(mcpServers)
         .values({
           id: `composio-${input.slug}`,
+          // The team's, like every server (G01-E P10).
+          tenantId: TEAM_TENANT,
           title: input.title,
           logo: input.logo ?? null,
           // The broker, whoever publishes the app behind it. `vendor` is what the first-party rule
@@ -3536,6 +3787,7 @@ export function createPluginStore(options: PluginStoreOptions) {
      * delete-then-revoke leaves live secrets no server references and no operation can reach.
      */
     async removeServer(serverId: string, by: string): Promise<void> {
+      requireServerWriter();
       const [existing] = await database
         .select({
           id: mcpServers.id,
@@ -3582,7 +3834,10 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const [live] = existing?.credentialId
         ? await database
-            .select({ id: credentialRows.id })
+            .select({
+              id: credentialRows.id,
+              tenantId: credentialRows.tenantId,
+            })
             .from(credentialRows)
             .where(
               and(
@@ -3593,7 +3848,12 @@ export function createPluginStore(options: PluginStoreOptions) {
         : [];
 
       if (live) {
-        await credentials.revoke(live.id);
+        // A team server's own secret is retired as one (G01-E P10): the vault checks the capability.
+        await credentials.revoke(
+          live.id,
+          undefined,
+          live.tenantId === TEAM_TENANT ? TEAM_TENANT : undefined,
+        );
         await recordAuditEvent(auditStore, {
           eventType: "credential.revoked",
           targetType: "credential",
@@ -3845,6 +4105,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       serverId: string,
       actorId = "",
     ): Promise<{ tools: number }> {
+      // It rewrites the server's tool rows and its status columns: an administrator's (G01-E P10).
+      requireServerWriter();
       const { row, entry, access } = await requireServer(serverId);
 
       /*
@@ -4115,7 +4377,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       let storable: ReturnType<typeof storableTools>;
       try {
-        storable = storableTools(rowId, listed);
+        storable = storableTools(rowId, listed, row.tenantId);
       } catch (error) {
         const reason =
           error instanceof Error ? withoutStatement(error) : String(error);
@@ -4600,6 +4862,31 @@ export function createPluginStore(options: PluginStoreOptions) {
         .orderBy(ownRowFirst())
         .limit(1);
       return row !== undefined;
+    },
+
+    /**
+     * The person whose frame an administrator's grant on this Bot runs in (G01-E P10, I6), or null.
+     *
+     * A private Bot's own stamp, or a team Bot's owner. Null for a catalogue Bot, an ownerless team
+     * Bot, or none at all: there is no owner to act as, and the administrator acts in their own frame.
+     * Asked by the grant routes under `asAdminPlatform`, because the Bot is usually not one the
+     * administrator's own frame can see; only the answer leaves that frame.
+     */
+    async botOwnerTenant(agentId: string): Promise<string | null> {
+      const [row] = await database
+        .select({
+          tenantId: agents.tenantId,
+          ownerUserId: agentProfiles.ownerUserId,
+        })
+        .from(agents)
+        .leftJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+        .where(eq(agents.id, agentId))
+        .limit(1);
+      if (!row) return null;
+      if (isPersonTenant(row.tenantId)) return row.tenantId;
+      if (row.tenantId === TEAM_TENANT && isPersonTenant(row.ownerUserId))
+        return row.ownerUserId;
+      return null;
     },
 
     async agentOwner(agentId: string): Promise<string | null | undefined> {
@@ -5233,6 +5520,18 @@ export function createPluginStore(options: PluginStoreOptions) {
         !options.redirectUri
       ) {
         return null;
+      }
+      /*
+       * Only where the client can be stored (G01-E P10): it is the deployment's, sealed to `team`
+       * beside its `team` server, which an administrator holding the capability (or `platform`)
+       * writes. Refused before the vendor is asked, so no client is registered there that this
+       * deployment would not hold. A member's first connect waits for an administrator's.
+       */
+      if (!writesTeamServers()) {
+        throw new PluginRefusedError(
+          `${entry.title} has no OAuth client for this deployment yet. An administrator has to connect it once first, and this deployment registers itself with ${entry.title} then.`,
+          null,
+        );
       }
       // Held before the lock, because narrowing does not survive into the closure below.
       const { registrationUrl } = entry.auth;

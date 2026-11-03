@@ -40,8 +40,9 @@ const toolName = "search_notes";
 const ref = `${serverId}/${toolName}`;
 
 /**
- * The administrator's own tenant, which holds both Bots, the server and the grant. Every call a Bot
- * makes here is one made for that person, so it runs in their frame; the sweep after crosses tenants.
+ * The administrator's own tenant, which holds both Bots and the grant; the server is the team's, as
+ * an administrator's add writes it (G01-E P10). Every call a Bot makes here is one made for that
+ * person, so it runs in their frame; the server's fixture and the sweep after cross tenants.
  */
 const admin = `user_tools_admin_${suite}`;
 const asAdmin = <T>(fn: () => Promise<T>) => runAsTenant(admin, fn);
@@ -87,29 +88,35 @@ beforeAll(() =>
     });
     const url = await mock.start();
 
-    await database
-      .insert(mcpServers)
-      .values({
-        id: serverId,
-        title: "Notes",
-        vendor: "notes",
-        url,
-        provenance: "custom",
-      })
-      .onConflictDoNothing();
-    await database
-      .insert(mcpTools)
-      .values({
-        serverId,
-        name: toolName,
-        description: "Search the notes.",
-        inputSchema: {
-          type: "object",
-          properties: { query: { type: "string" } },
-          required: ["query"],
-        },
-      })
-      .onConflictDoNothing();
+    // The server as an administrator's add leaves it: the team's, with its tool (G01-E P10; a
+    // person's frame can no longer write either, 0127).
+    await runAsTenant("platform", async () => {
+      await database
+        .insert(mcpServers)
+        .values({
+          tenantId: "team",
+          id: serverId,
+          title: "Notes",
+          vendor: "notes",
+          url,
+          provenance: "custom",
+        })
+        .onConflictDoNothing();
+      await database
+        .insert(mcpTools)
+        .values({
+          tenantId: "team",
+          serverId,
+          name: toolName,
+          description: "Search the notes.",
+          inputSchema: {
+            type: "object",
+            properties: { query: { type: "string" } },
+            required: ["query"],
+          },
+        })
+        .onConflictDoNothing();
+    });
   }),
 );
 

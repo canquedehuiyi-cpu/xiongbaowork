@@ -183,7 +183,10 @@ async function offer(channelId: string) {
       .from(channels)
       .where(eq(channels.id, channelId)),
   );
-  await runAsTenant(row?.tenantId ?? "system", () =>
+  // A conversation this file made always exists; offering one that does not would otherwise fall
+  // back to the unframed `system` partition, which P16 removes.
+  if (!row) throw new Error(`offer: no conversation ${channelId}`);
+  await runAsTenant(row.tenantId, () =>
     queue.offer({ kind: CHANNEL_SUMMARY_KIND, key: channelId }),
   );
 }
@@ -531,11 +534,18 @@ describe("naming a claimed conversation", () => {
     for (let index = 0; index < 40; index += 1) {
       const member = await createUser();
       crowd.push(member.id);
-      // Admitted by the owner, as `addMember` does in the owner's request: the owner's tenant.
-      await runAsTenant(owner.id, () =>
+      // Members of the owner's own channel, stamped with the owner. Seeded by the platform: no
+      // person frame may write a row stamped with one person that names another (0128, G01-E P11
+      // review), and `addMember` now adds people only to a shared `team` group. The rows, and the
+      // member list the payload carries, are what they were.
+      await runAsTenant("platform", () =>
         database
           .insert(channelMemberships)
-          .values({ channelId: channel.id, userId: member.id }),
+          .values({
+            channelId: channel.id,
+            userId: member.id,
+            tenantId: owner.id,
+          }),
       );
     }
 
@@ -799,14 +809,20 @@ describe("G01: whose conversation the loop is naming", () => {
         .delete(intelligenceChannelMappings)
         .where(eq(intelligenceChannelMappings.channelId, borrowed.id)),
     );
-    await runAsTenant(alice.id, async () => {
+    /*
+     * Rows stamped with Alice that name Bob. Alice's own frame can no longer write them (0128 refuses
+     * a row stamped with one person that names another, and deletes the old ones), so the platform
+     * seeds them, standing for a row that got there anyway: the loop must still refuse to name it.
+     */
+    await runAsTenant("platform", async () => {
       await database
         .insert(channelMemberships)
-        .values({ channelId: borrowed.id, userId: bob.id });
+        .values({ channelId: borrowed.id, userId: bob.id, tenantId: alice.id });
       await database.insert(intelligenceChannelMappings).values({
         userId: bob.id,
         channelId: borrowed.id,
         threadId: `${borrowed.id}-bob-thread`,
+        tenantId: alice.id,
       });
     });
     await offer(borrowed.id);

@@ -3708,8 +3708,13 @@ describe("a custom server may only be pointed at its own kind of credential", ()
         "not-read-here",
       );
       await database.insert(credentialRows).values([
+        /*
+         * A server's own token is sealed to `team`, beside the `team` server it is attached to
+         * (G01-E P10), which is how the credentials screen stores one now.
+         */
         {
           id: deploymentCredentialId,
+          tenantId: "team",
           kind: "mcp",
           provider: customServerId,
           keyId: customServerId,
@@ -3718,6 +3723,7 @@ describe("a custom server may only be pointed at its own kind of credential", ()
         },
         {
           id: upsertCredentialId,
+          tenantId: "team",
           kind: "mcp",
           provider: `${customServerId}-upsert`,
           keyId: `${customServerId}-upsert`,

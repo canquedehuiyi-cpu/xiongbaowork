@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
@@ -8,6 +8,7 @@ import type { ComposioBroker } from "../src/plugins/broker";
 import { useComposioClient } from "../src/plugins/composio";
 import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -25,10 +26,18 @@ const botId = `agent_grant_removal_${suite}`;
 
 /**
  * The administrator's own tenant. Adding, granting and removing an app is a request they make, so it
- * runs in their frame as the route would run it; the sweep after the file crosses every tenant.
+ * runs in their frame as the route would run it, holding the admin capability: the app is a `team`
+ * row (G01-E P10), which only an administrator with the capability writes. The sweep after the file
+ * crosses every tenant.
  */
 const admin = `user_grant_removal_admin_${suite}`;
-const asAdmin = <T>(fn: () => Promise<T>) => runAsTenant(admin, fn);
+const adminRequest = createAdminRequest(database);
+const asAdmin = <T>(fn: () => Promise<T>) => adminRequest(admin, fn);
+let releaseAdmin: (() => Promise<void>) | undefined;
+
+beforeAll(async () => {
+  releaseAdmin = await seedAdministrator(database, admin);
+});
 
 const broker: ComposioBroker = {
   listApps: async () => [],
@@ -104,6 +113,7 @@ afterAll(async () => {
       .where(inArray(mcpServers.id, [serverId, keptServerId]));
     await database.delete(agents).where(eq(agents.id, botId));
   });
+  await releaseAdmin?.();
 });
 
 test("removing an app takes its grants with it, and adding it back grants nothing", () =>

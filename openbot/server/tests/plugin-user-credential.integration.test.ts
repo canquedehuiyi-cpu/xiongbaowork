@@ -6,6 +6,7 @@ import type { ActionPolicy } from "../src/computer/policy";
 import { encryptSecret } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
+  agentProfiles,
   agents,
   credentials,
   mcpServers,
@@ -16,6 +17,7 @@ import {
 } from "../src/db/schema";
 import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -38,6 +40,8 @@ const suite = randomUUID().slice(0, 8);
 const botId = `agent_oauth_bot_${suite}`;
 const askerId = `user_oauth_asker_${suite}`;
 const otherId = `user_oauth_other_${suite}`;
+/** The administrator who added the server and registered its OAuth client (G01-E P10). */
+const adminId = `user_oauth_admin_${suite}`;
 const serverId = "google-drive";
 const toolName = "search_files";
 const ref = `${serverId}/${toolName}`;
@@ -93,14 +97,17 @@ let toolWasAlreadyAdvertised = false;
 const credentialIds: string[] = [];
 
 /*
- * TWO FRAMES, by whose row it is (G01).
+ * THREE FRAMES, by whose row it is (G01, G01-E P10).
  *
  * A person's own rows — their user row, the refresh token they granted and the connection pointing
- * at it — are written and read back in that person's frame. The deployment's rows — the Drive server,
- * its tool, its OAuth client, the Bot and its grant — and every question asked across both people
- * (the calls, the retirements, the cleanup) run as `platform`, which reads every tenant's rows the way
- * the unframed `system` frame read this suite's rows when all of them were `system`. Which person's
- * grant a call spends is still decided by `actorId` alone, which is what these tests are about.
+ * at it — are written and read back in that person's frame. The deployment's server rows — the Drive
+ * server, its tool and its OAuth client — are the team's, stamped `team`, and written by an
+ * administrator holding the admin capability, as the admin routes write them. The Bot is a public
+ * team Bot, so each person's frame may run it and see its grant. Calls run in the asker's own frame,
+ * as a person's chat turn runs them; the same calls are also asked as `platform` (background work),
+ * which reads every tenant's rows. The cross-person questions (the retirements, the cleanup) run as
+ * `platform`. Which person's grant a call spends is still decided by `actorId` alone, and a person's
+ * frame can spend nobody's but their own: that is what these tests are about.
  */
 function asPerson<T>(userId: string, work: () => Promise<T>) {
   return runAsTenant(userId, work);
@@ -108,6 +115,11 @@ function asPerson<T>(userId: string, work: () => Promise<T>) {
 function asPlatform<T>(work: () => Promise<T>) {
   return runAsTenant("platform", work);
 }
+const adminRequest = createAdminRequest(database);
+function asAdmin<T>(work: () => Promise<T>) {
+  return adminRequest(adminId, work);
+}
+let releaseAdmin: (() => Promise<void>) | undefined;
 
 const store = createPluginStore({
   database,
@@ -118,6 +130,10 @@ const store = createPluginStore({
         .select({
           encryptedValue: credentials.encryptedValue,
           revokedAt: credentials.revokedAt,
+          // What the vault's own reader reports, which the store checks a server's secret against.
+          id: credentials.id,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
         })
         .from(credentials)
         .where(eq(credentials.id, id));
@@ -187,9 +203,10 @@ async function retireLive(
   keyId: string,
 ) {
   const revokedAt = new Date();
-  // A person's token is theirs; the OAuth client is the deployment's.
-  const retireFrame = kind === "mcp_user_token" ? keyId : "platform";
-  await runAsTenant(retireFrame, () =>
+  // A person's token is theirs; the OAuth client is the team's, retired by an administrator.
+  const retire =
+    kind === "mcp_user_token" ? asPerson.bind(null, keyId) : asAdmin;
+  await retire(() =>
     database
       .update(credentials)
       .set({ revokedAt, updatedAt: revokedAt })
@@ -211,10 +228,12 @@ async function registerClient() {
     ENCRYPTION_KEY,
     JSON.stringify(CLIENT),
   );
-  const [credential] = await asPlatform(() =>
+  // Sealed to `team`, beside its `team` server, by an administrator (G01-E P10, Q3).
+  const [credential] = await asAdmin(() =>
     database
       .insert(credentials)
       .values({
+        tenantId: "team",
         kind: "mcp_oauth_client",
         provider: serverId,
         keyId: "oauth-client",
@@ -225,7 +244,7 @@ async function registerClient() {
   );
   if (!credential) throw new Error("client was not stored");
   credentialIds.push(credential.id);
-  await asPlatform(() =>
+  await asAdmin(() =>
     database
       .update(mcpServers)
       .set({ credentialId: credential.id })
@@ -270,18 +289,7 @@ async function connect(userId: string, refreshToken: string) {
 }
 
 beforeAll(async () => {
-  await asPlatform(() =>
-    database
-      .insert(agents)
-      .values({
-        id: botId,
-        name: botId,
-        type: "remote_ag_ui",
-        configuration: {},
-      })
-      .onConflictDoNothing(),
-  );
-
+  releaseAdmin = await seedAdministrator(database, adminId);
   for (const [id, email] of [
     [askerId, `${askerId}@openbot.test`],
     [otherId, `${otherId}@openbot.test`],
@@ -293,6 +301,35 @@ beforeAll(async () => {
         .onConflictDoNothing(),
     );
   }
+
+  /*
+   * A public team Bot (G01-E P8b), owned by the other person: the asker runs it as a teammate, and
+   * both people's frames see it and its grant. Written as `platform`, as a fixture across people.
+   */
+  await asPlatform(async () => {
+    await database
+      .insert(agents)
+      .values({
+        id: botId,
+        tenantId: "team",
+        name: "Drive Desk",
+        type: "remote_ag_ui",
+        configuration: {},
+      })
+      .onConflictDoNothing();
+    await database
+      .insert(agentProfiles)
+      .values({
+        agentId: botId,
+        tenantId: "team",
+        ownerUserId: otherId,
+        title: "Research",
+        roleDescription: "Finds documents.",
+        avatarSeed: "seed",
+        visibility: "public",
+      })
+      .onConflictDoNothing();
+  });
 
   const [existing] = await asPlatform(() =>
     database
@@ -315,12 +352,13 @@ beforeAll(async () => {
   clientBefore = existing?.credentialId ?? null;
 
   // Written directly, so the test needs no vendor to be reachable. What is under test is which
-  // credential gets chosen, not the listing.
-  await asPlatform(() =>
+  // credential gets chosen, not the listing. The team's rows, by an administrator (G01-E P10).
+  await asAdmin(() =>
     database
       .insert(mcpServers)
       .values({
         id: serverId,
+        tenantId: "team",
         title: "Google Drive",
         vendor: "Google",
         url: "https://www.googleapis.com/drive/v3",
@@ -328,18 +366,24 @@ beforeAll(async () => {
       })
       .onConflictDoNothing(),
   );
-  await asPlatform(() =>
+  await asAdmin(() =>
     database
       .insert(mcpTools)
-      .values({ serverId, name: toolName, description: "Search files." })
+      .values({
+        serverId,
+        tenantId: "team",
+        name: toolName,
+        description: "Search files.",
+      })
       .onConflictDoNothing(),
   );
 
-  // The Bot holds the tool throughout. Everything here is about the person, not the grant.
-  await asPlatform(() =>
+  // The Bot holds the tool throughout, a team Bot's grant stamped `team` by an administrator.
+  // Everything here is about the person, not the grant.
+  await asAdmin(() =>
     database
       .insert(pluginGrants)
-      .values({ kind: "mcp", ref, agentId: botId })
+      .values({ kind: "mcp", ref, agentId: botId, tenantId: "team" })
       .onConflictDoNothing(),
   );
 });
@@ -425,6 +469,7 @@ afterAll(async () => {
   await asPerson(otherId, () =>
     database.delete(users).where(eq(users.id, otherId)),
   );
+  await releaseAdmin?.();
 });
 
 describe("a person who has not connected", () => {
@@ -583,6 +628,66 @@ describe("a person who has connected", () => {
         store.callTool({ ref, args: {}, botId, actorId: askerId }),
       ),
     ).rejects.toThrow(PluginRefusedError);
+    expect(decrypted).toEqual([]);
+  });
+});
+
+/*
+ * The same selection asked from the asker's OWN frame, which is how a person's chat turn calls a tool
+ * (G01-E P10). The team's OAuth client is sealed to `team` and no person's frame may read it by id:
+ * it reaches the call through the `openbot_team_server_secret` broker. A person's frame reads only
+ * that person's own connection, so it can never spend anybody else's grant, whoever it names.
+ */
+describe("in the asker's own frame", () => {
+  test("each person goes out with their own token and nobody else's", async () => {
+    const clientId = await registerClient();
+    await connect(askerId, askerRefreshToken);
+    await connect(otherId, otherRefreshToken);
+    decrypted.length = 0;
+    exchanged.length = 0;
+
+    await asPerson(askerId, () =>
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    );
+    expect(exchanged).toEqual([askerRefreshToken]);
+    expect(decrypted).toEqual([accessTokenFrom(askerRefreshToken)]);
+
+    decrypted.length = 0;
+    exchanged.length = 0;
+    await asPerson(otherId, () =>
+      store.callTool({ ref, args: {}, botId, actorId: otherId }),
+    );
+    expect(exchanged).toEqual([otherRefreshToken]);
+    expect(decrypted).toEqual([accessTokenFrom(otherRefreshToken)]);
+
+    // The client came through the broker: neither frame can read it by id.
+    for (const person of [askerId, otherId]) {
+      expect(
+        await asPerson(person, () =>
+          database
+            .select({ id: credentials.id })
+            .from(credentials)
+            .where(eq(credentials.id, clientId)),
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  test("naming another person spends nothing of theirs", async () => {
+    await registerClient();
+    await connect(askerId, askerRefreshToken);
+    await connect(otherId, otherRefreshToken);
+    decrypted.length = 0;
+    exchanged.length = 0;
+
+    // The asker's frame, claiming to act for the other person: their connection is not this frame's
+    // to read, so the call is refused as one nobody connected, before any token is exchanged.
+    await expect(
+      asPerson(askerId, () =>
+        store.callTool({ ref, args: {}, botId, actorId: otherId }),
+      ),
+    ).rejects.toThrow(PluginRefusedError);
+    expect(exchanged).toEqual([]);
     expect(decrypted).toEqual([]);
   });
 });

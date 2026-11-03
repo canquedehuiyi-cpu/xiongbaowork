@@ -59,9 +59,13 @@ afterAll(async () => {
   await unreachableDatabase.$client.close();
 });
 
+/*
+ * The stub of the real guard: the rest of the request runs inside a tenant frame, which is the
+ * signed-in person's own unless a test names another. Only the staged-draft test names one; see it.
+ */
 function actorMiddleware(
   actorId: string,
-  framing: Framing = "framed",
+  frameTenant: string = actorId,
 ): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {
     context.set("actor", {
@@ -69,36 +73,44 @@ function actorMiddleware(
       email: `${actorId}@example.test`,
       role: "user",
     });
-    // As the real guard does: the rest of the request runs inside the signed-in person's tenant.
-    await framedAs(framing, actorId, () => next());
+    await runAsTenant(frameTenant, () => next());
   };
 }
 
-/*
- * "framed" is how production runs: every person in their own tenant. "unframed" is the pre-G01
- * shape, where every row sat in the shared `system` partition. It is kept ONLY for the one test
- * whose assertion depends on that shared partition (a colleague in another tenant can never see
- * the member's channel, so "can once it is sent" cannot hold per person). That test is listed for
- * a human decision and is kept exactly as it ran before this batch rather than rewritten or left
- * red; the unframed accesses it makes are still reported under OPENBOT_TENANT_FRAME_GUARD=report.
+/**
+ * A colleague's membership of the member's own channel, stamped with the member: the single-tenant
+ * shape these cases were written for, where the colleague's calls run in the member's frame.
+ *
+ * Seeded by the platform because no person frame may write it any more: since 0128 (G01-E P11 review)
+ * a row stamped with one person must name that person, so nobody can occupy somebody else's key in
+ * a channel. Other people share a conversation only as a `team` group. The rows are the same as
+ * before, so what each case asserts about attachments is unchanged.
  */
-type Framing = "framed" | "unframed";
-function framedAs<T>(framing: Framing, tenant: string, work: () => T): T {
-  return framing === "framed" ? runAsTenant(tenant, work) : work();
+async function colleagueInMembersChannel(
+  db: typeof database,
+  channelId: string,
+  colleagueId: string,
+  memberId: string,
+) {
+  await runAsTenant("platform", () =>
+    db
+      .insert(channelMemberships)
+      .values({ channelId, userId: colleagueId, tenantId: memberId }),
+  );
 }
 
 /** A member of a channel, a stranger to it, and an app that uploads as the member. */
-async function harness(framing: Framing = "framed") {
+async function harness() {
   const memberId = `${testPrefix}-member-${randomUUID()}`;
   const strangerId = `${testPrefix}-stranger-${randomUUID()}`;
   // Each person's own row in their own tenant; the channel, its membership and its thread are the
   // member's, written the way the member's own request would write them.
-  await framedAs(framing, memberId, () =>
+  await runAsTenant(memberId, () =>
     database
       .insert(users)
       .values({ id: memberId, email: `${memberId}@example.test` }),
   );
-  await framedAs(framing, strangerId, () =>
+  await runAsTenant(strangerId, () =>
     database
       .insert(users)
       .values({ id: strangerId, email: `${strangerId}@example.test` }),
@@ -106,7 +118,7 @@ async function harness(framing: Framing = "framed") {
   createdUserIds.push(memberId, strangerId);
 
   const channelId = `${testPrefix}-channel-${randomUUID()}`;
-  await framedAs(framing, memberId, () =>
+  await runAsTenant(memberId, () =>
     database.insert(channels).values({
       id: channelId,
       name: "Attachment Route Test Channel",
@@ -115,7 +127,7 @@ async function harness(framing: Framing = "framed") {
   );
   createdChannelIds.push(channelId);
 
-  await framedAs(framing, memberId, () =>
+  await runAsTenant(memberId, () =>
     database.insert(channelMemberships).values({ channelId, userId: memberId }),
   );
 
@@ -131,14 +143,14 @@ async function harness(framing: Framing = "framed") {
    * not for a channel. Tests would then agree with each other and with nothing that ships.
    */
   const threadId = `${testPrefix}-thread-${randomUUID()}`;
-  await framedAs(framing, memberId, () =>
+  await runAsTenant(memberId, () =>
     database
       .insert(intelligenceChannelMappings)
       .values({ channelId, userId: memberId, threadId }),
   );
 
-  const member = actorMiddleware(memberId, framing);
-  const stranger = actorMiddleware(strangerId, framing);
+  const member = actorMiddleware(memberId);
+  const stranger = actorMiddleware(strangerId);
 
   const app = new Hono<{ Variables: AppVariables }>();
   app.route("/", createChannelAttachmentRoutes(database, member));
@@ -1587,38 +1599,47 @@ describe("GET /:id", () => {
    * everybody everything.
    */
   test("a member cannot fetch a colleague's staged draft, and can once it is sent", async () => {
-    const {
-      database: db,
-      channelId,
-      memberId,
-      threadId,
-    } = await harness("unframed");
+    const { database: db, channelId, memberId, threadId } = await harness();
+    /*
+     * "Can once it is sent" needs the colleague to see the member's channel at all, and a channel is
+     * one person's rows until shared group conversations land in `team`. So every row here, and the
+     * colleague's requests, sit in the member's (the channel's) tenant: the 404 and the 200 below are
+     * then the route's own staged-versus-sent rule, with row security letting both through.
+     */
     const colleagueId = `${testPrefix}-colleague-${randomUUID()}`;
-    await db
-      .insert(users)
-      .values({ id: colleagueId, email: `${colleagueId}@example.test` });
-    createdUserIds.push(colleagueId);
-    await db
-      .insert(channelMemberships)
-      .values({ channelId, userId: colleagueId });
-    const id = await uploadText(db, {
-      channelId,
-      uploadedBy: memberId,
-      name: "draft.txt",
-      text: "not sent yet",
-    });
-    const colleague = attachmentApp(
-      db,
-      actorMiddleware(colleagueId, "unframed"),
+    await runAsTenant(colleagueId, () =>
+      db
+        .insert(users)
+        .values({ id: colleagueId, email: `${colleagueId}@example.test` }),
     );
+    createdUserIds.push(colleagueId);
+    // The colleague's membership is stamped with the member, as before, but written by the platform:
+    // since 0128 (G01-E P11) a person-stamped row must name that same person, so no person's frame
+    // may write it.
+    await runAsTenant("platform", () =>
+      db
+        .insert(channelMemberships)
+        .values({ channelId, userId: colleagueId, tenantId: memberId }),
+    );
+    const id = await runAsTenant(memberId, async () => {
+      return uploadText(db, {
+        channelId,
+        uploadedBy: memberId,
+        name: "draft.txt",
+        text: "not sent yet",
+      });
+    });
+    const colleague = attachmentApp(db, actorMiddleware(colleagueId, memberId));
 
     expect((await colleague.request(`http://test/${id}`)).status).toBe(404);
 
     // The uploader is not shut out of their own composer's preview by this.
-    const uploader = attachmentApp(db, actorMiddleware(memberId, "unframed"));
+    const uploader = attachmentApp(db, actorMiddleware(memberId));
     expect((await uploader.request(`http://test/${id}`)).status).toBe(200);
 
-    await markAttachmentsSent(db, { actorId: memberId, threadId }, [id]);
+    await runAsTenant(memberId, () =>
+      markAttachmentsSent(db, { actorId: memberId, threadId }, [id]),
+    );
 
     expect((await colleague.request(`http://test/${id}`)).status).toBe(200);
   });
@@ -1639,9 +1660,7 @@ describe("GET /:id", () => {
           .values({ id: colleagueId, email: `${colleagueId}@example.test` }),
       );
       createdUserIds.push(colleagueId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+      await colleagueInMembersChannel(db, channelId, colleagueId, memberId);
       const id = await uploadText(db, {
         channelId,
         uploadedBy: memberId,
@@ -2107,9 +2126,7 @@ describe("GET /:id", () => {
           .values({ id: colleagueId, email: `${colleagueId}@example.test` }),
       );
       createdUserIds.push(colleagueId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+      await colleagueInMembersChannel(db, channelId, colleagueId, memberId);
 
       const sent = await uploadText(db, {
         channelId,
@@ -2478,9 +2495,7 @@ describe("DELETE /:id", () => {
         }),
       );
       createdUserIds.push(otherMemberId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: otherMemberId });
+      await colleagueInMembersChannel(db, channelId, otherMemberId, memberId);
       const otherMember = actorMiddleware(otherMemberId);
 
       const id = await uploadText(db, {
@@ -3102,9 +3117,7 @@ describe("loadAttachmentForTurn", () => {
         }),
       );
       createdUserIds.push(otherMemberId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: otherMemberId });
+      await colleagueInMembersChannel(db, channelId, otherMemberId, memberId);
 
       const id = await uploadText(db, {
         channelId,
@@ -3623,9 +3636,7 @@ describe("markAttachmentsSent", () => {
         }),
       );
       createdUserIds.push(colleagueId);
-      await db
-        .insert(channelMemberships)
-        .values({ channelId, userId: colleagueId });
+      await colleagueInMembersChannel(db, channelId, colleagueId, memberId);
 
       const theirs = await uploadText(db, {
         channelId,

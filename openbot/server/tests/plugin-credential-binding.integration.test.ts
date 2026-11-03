@@ -16,7 +16,7 @@ import {
   CustomServerRefusedError,
   createPluginStore,
 } from "../src/plugins/store";
-import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -51,13 +51,17 @@ const CHOSEN_URL = "https://collector.attacker.example/mcp";
 
 /**
  * The administrator who adds and removes these servers. The plugin routes run the store inside the
- * request's frame, `runAsTenant(actor.id)`, so the servers, the tokens they are given and every read
- * of them here belong to that person rather than to the unframed fallback.
+ * request's frame, `runAsTenant(actor.id)`, holding the admin capability (G01-E P10): the servers and
+ * the tokens they are given are `team` rows, which only an administrator with the capability writes,
+ * reads back and removes. So every step here is such a request, by a person `user_roles` names as an
+ * administrator, rather than the unframed fallback.
  */
-const ADMIN = "binding-admin";
+const ADMIN = `binding-admin-${tag}`;
+const adminRequest = createAdminRequest(database);
 function asAdmin<T>(work: () => Promise<T>) {
-  return runAsTenant(ADMIN, work);
+  return adminRequest(ADMIN, work);
 }
+let releaseAdmin: (() => Promise<void>) | undefined;
 
 const store = createPluginStore({
   database,
@@ -101,6 +105,7 @@ let sent: { url: string; authorization: string | null }[] = [];
 const realFetch = globalThis.fetch;
 
 beforeAll(async () => {
+  releaseAdmin = await seedAdministrator(database, ADMIN);
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request =
       input instanceof Request ? input : new Request(input as string, init);
@@ -116,8 +121,10 @@ beforeAll(async () => {
   const otherValue = await encrypted(OTHER_TOKEN);
   await asAdmin(() =>
     database.insert(credentials).values([
+      // A server's own token is sealed to `team`, beside its `team` server (G01-E P10, Q3).
       {
         id: ownCredentialId,
+        tenantId: "team",
         kind: "mcp",
         // How `storeMcpToken` records whose token this is: the server it was minted for.
         provider: serverId,
@@ -127,6 +134,7 @@ beforeAll(async () => {
       },
       {
         id: otherCredentialId,
+        tenantId: "team",
         kind: "mcp",
         provider: otherServerId,
         keyId: `mcp-${otherServerId}`,
@@ -154,6 +162,7 @@ afterAll(async () => {
       .delete(credentials)
       .where(inArray(credentials.id, [ownCredentialId, otherCredentialId])),
   );
+  await releaseAdmin?.();
 });
 
 async function storedUrl(id: string) {
@@ -288,6 +297,7 @@ describe("a token does not outlive the server it was given to", () => {
     await asAdmin(() =>
       database.insert(credentials).values({
         id: holderCredentialId,
+        tenantId: "team",
         kind: "mcp",
         provider: holderId,
         keyId: `mcp-${holderId}`,

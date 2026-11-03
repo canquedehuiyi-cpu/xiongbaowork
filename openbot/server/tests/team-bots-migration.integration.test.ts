@@ -71,6 +71,27 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const rosterMigration = readFileSync(
+  join(
+    import.meta.dir,
+    "..",
+    "recovery",
+    "recovery-20261018-v1",
+    "sql",
+    "0126_team_bot_roster_stamp.sql",
+  ),
+  "utf8",
+);
+/** 0126 minus its policy block, which belongs to the migrator and is already in place here. */
+function rosterDataStatements() {
+  const statements = rosterMigration.split("--> statement-breakpoint");
+  const kept = statements.filter(
+    (statement) => !/CREATE POLICY/i.test(statement),
+  );
+  expect(statements.length - kept.length).toBe(1);
+  return kept.join("\n");
+}
+
 /** The file's statements minus the migrator's function replacement (see the note above). */
 function dataStatements() {
   const statements = migration.split("--> statement-breakpoint");
@@ -273,4 +294,180 @@ test("0125 moves only rows their legitimate writer stamped; a stranger's rows st
       db.select({ id: agents.id }).from(agents).where(inArray(agents.id, bots)),
     ),
   ).toEqual([]);
+});
+
+test("0126 removes every roster row not stamped team, so a squatted key is free for the owner", async () => {
+  /*
+   * A stranger's own-tenant rows written before 0126 (a "publication" of the owner's private Bot, an
+   * audience row, a '*' assignment) grant nothing but hold the key. 0126 deletes every roster row
+   * not stamped `team`, and keeps the `team` ones. Run, like the 0125 case above, as the application
+   * role from the empty frame a migrator arrives with, and rolled back.
+   */
+  const squattedBot = `${suite}-squatted`;
+  const sharedBot = `${suite}-shared`;
+  const rollback = new Error("rollback the migration fixture");
+  type Row = Record<string, unknown>;
+  let seen:
+    | {
+        frame: unknown;
+        publications: Row[];
+        audience: Row[];
+        assignments: Row[];
+        published: unknown;
+      }
+    | undefined;
+  await expect(
+    db.$client.begin(async (tx) => {
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      // The owner's private Bot, unpublished, and their shared Bot, published to the team.
+      await tx`insert into agents (tenant_id, id, name, type, configuration) values (${owner}, ${squattedBot}, 'Ledger Desk', 'built_in', '{}'::jsonb), ('team', ${sharedBot}, 'Ledger Desk', 'built_in', '{}'::jsonb)`;
+      await tx`insert into agent_profiles (tenant_id, agent_id, owner_user_id, title, role_description, avatar_seed, visibility) values (${owner}, ${squattedBot}, ${owner}, 'Finance', 'Answers ledger questions.', 'seed', 'private'), ('team', ${sharedBot}, ${owner}, 'Finance', 'Answers ledger questions.', 'seed', 'private')`;
+      await tx`insert into team_bot_publications (tenant_id, agent_id, published_by, audience) values (${stranger}, ${squattedBot}, ${stranger}, 'team'), ('team', ${sharedBot}, ${owner}, 'people')`;
+      await tx`insert into team_bot_audience (tenant_id, agent_id, kind, value) values (${stranger}, ${squattedBot}, 'user', ${strangersPick}), ('team', ${sharedBot}, 'user', ${invited}), (${stranger}, ${sharedBot}, 'user', ${stranger})`;
+      await tx`insert into team_bot_assignments (tenant_id, agent_id, group_name, assigned_by) values (${stranger}, ${squattedBot}, '*', ${stranger}), ('team', ${sharedBot}, ${assignedGroup}, ${admin}), (${stranger}, ${sharedBot}, '*', ${stranger})`;
+
+      await tx`select set_config('app.tenant_id', '', true)`;
+      await tx.unsafe(rosterDataStatements());
+      const [frame] =
+        await tx`select current_setting('app.tenant_id', true) as tenant`;
+
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      const read = async (query: Promise<unknown>) =>
+        Array.from((await query) as ArrayLike<Row>);
+      const publications = await read(
+        tx`select agent_id, tenant_id from team_bot_publications where agent_id in ${tx([squattedBot, sharedBot])} order by agent_id`,
+      );
+      const audience = await read(
+        tx`select agent_id, value, tenant_id from team_bot_audience where agent_id in ${tx([squattedBot, sharedBot])} order by agent_id, value`,
+      );
+      const assignments = await read(
+        tx`select agent_id, group_name, tenant_id from team_bot_assignments where agent_id in ${tx([squattedBot, sharedBot])} order by agent_id, group_name`,
+      );
+
+      // The key is free: the owner moves their Bot and publishes it, from their own frame.
+      await tx`select set_config('app.tenant_id', ${owner}, true), set_config('app.team_move', ${squattedBot}, true)`;
+      await tx`update agent_profiles set tenant_id = 'team' where agent_id = ${squattedBot}`;
+      await tx`update agents set tenant_id = 'team' where id = ${squattedBot}`;
+      await tx`select set_config('app.team_move', '', true)`;
+      const published =
+        await tx`insert into team_bot_publications (tenant_id, agent_id, published_by, audience) values ('team', ${squattedBot}, ${owner}, 'team')`;
+      seen = {
+        frame: (frame as Row).tenant,
+        publications,
+        audience,
+        assignments,
+        published: (published as unknown as { count: number }).count,
+      };
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
+
+  expect(seen?.frame).toBe("");
+  expect(seen?.publications).toEqual([
+    { agent_id: sharedBot, tenant_id: "team" },
+  ]);
+  expect(seen?.audience).toEqual([
+    { agent_id: sharedBot, value: invited, tenant_id: "team" },
+  ]);
+  expect(seen?.assignments).toEqual([
+    { agent_id: sharedBot, group_name: assignedGroup, tenant_id: "team" },
+  ]);
+  expect(seen?.published).toBe(1);
+  expect(
+    await runAsTenant("platform", () =>
+      db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(inArray(agents.id, [squattedBot, sharedBot])),
+    ),
+  ).toEqual([]);
+});
+
+test("0126 keeps an administrator's waiting assignment as team: inert while unpublished, counted after republish", async () => {
+  /*
+   * Before P9 an assignment outlived an unpublish, waiting for the Bot to be published again. The Bot
+   * went back to private and stayed stamped with its owner, so 0125 did not move it or its
+   * assignment, which kept the stamp of the administrator who wrote it. 0126 must keep that row
+   * (stamped `team`), not delete it with the strangers' rows. A non-administrator's row of the same
+   * shape is still removed. Rolled back, like the cases above.
+   */
+  const waitingBot = `${suite}-waiting`;
+  const rollback = new Error("rollback the migration fixture");
+  type Row = Record<string, unknown>;
+  let seen:
+    | {
+        assignments: Row[];
+        profile: unknown;
+        whileUnpublished: Row;
+        afterRepublish: Row;
+      }
+    | undefined;
+  await expect(
+    db.$client.begin(async (tx) => {
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      // Published, assigned, then unpublished: private, stamped with its owner, no publication.
+      await tx`insert into agents (tenant_id, id, name, type, configuration) values (${owner}, ${waitingBot}, 'Ledger Desk', 'built_in', '{}'::jsonb)`;
+      await tx`insert into agent_profiles (tenant_id, agent_id, owner_user_id, title, role_description, avatar_seed, visibility) values (${owner}, ${waitingBot}, ${owner}, 'Finance', 'Answers ledger questions.', 'seed', 'private')`;
+      // The administrator's assignment, stamped with the administrator's frame that wrote it, and a
+      // non-administrator's row of the same shape for another group.
+      await tx`insert into team_bot_assignments (tenant_id, agent_id, group_name, assigned_by) values (${admin}, ${waitingBot}, ${assignedGroup}, ${admin}), (${stranger}, ${waitingBot}, ${strangerGroup}, ${stranger})`;
+
+      await tx`select set_config('app.tenant_id', '', true)`;
+      await tx.unsafe(rosterDataStatements());
+
+      await tx`select set_config('app.tenant_id', 'platform', true)`;
+      const assignments = Array.from(
+        (await tx`select group_name, tenant_id from team_bot_assignments where agent_id = ${waitingBot} order by group_name`) as ArrayLike<Row>,
+      );
+      const [profile] =
+        await tx`select tenant_id from agent_profiles where agent_id = ${waitingBot}`;
+
+      // What a member of each group sees: the Bot, and the assignment row itself.
+      const look = async () => {
+        const out: Row = {};
+        for (const [name, person] of [
+          ["assigned", assignedMember],
+          ["forged", forgedMember],
+        ] as const) {
+          await tx`select set_config('app.tenant_id', ${person}, true)`;
+          const [row] =
+            await tx`select public.openbot_team_bot_visible(${waitingBot}) as visible, (select count(*)::int from team_bot_assignments where agent_id = ${waitingBot}) as rows`;
+          out[name] = { visible: row?.visible, rows: row?.rows };
+        }
+        return out;
+      };
+      const whileUnpublished = await look();
+
+      // The owner publishes again, from their own frame, to named people only (nobody named), so
+      // only the assignment can let a teammate in.
+      await tx`select set_config('app.tenant_id', ${owner}, true), set_config('app.team_move', ${waitingBot}, true)`;
+      await tx`update agent_profiles set tenant_id = 'team' where agent_id = ${waitingBot}`;
+      await tx`update agents set tenant_id = 'team' where id = ${waitingBot}`;
+      await tx`select set_config('app.team_move', '', true)`;
+      await tx`insert into team_bot_publications (tenant_id, agent_id, published_by, audience) values ('team', ${waitingBot}, ${owner}, 'people')`;
+      const afterRepublish = await look();
+
+      seen = {
+        assignments,
+        profile: (profile as Row).tenant_id,
+        whileUnpublished,
+        afterRepublish,
+      };
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
+
+  expect(seen?.assignments).toEqual([
+    { group_name: assignedGroup, tenant_id: "team" },
+  ]);
+  // The Bot itself did not move.
+  expect(seen?.profile).toBe(owner);
+  expect(seen?.whileUnpublished).toEqual({
+    assigned: { visible: false, rows: 0 },
+    forged: { visible: false, rows: 0 },
+  });
+  expect(seen?.afterRepublish).toEqual({
+    assigned: { visible: true, rows: 1 },
+    forged: { visible: false, rows: 0 },
+  });
 });

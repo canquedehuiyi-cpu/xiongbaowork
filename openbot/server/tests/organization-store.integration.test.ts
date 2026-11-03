@@ -196,8 +196,11 @@ test("verified employee keeps the same-email local account and history identity 
       materializeUser: organizationUserStore(database),
     });
     expect(
-      (await restarted.api.getSession({ headers: new Headers({ cookie }) }))
-        ?.user.id,
+      (
+        await asPlatform(() =>
+          restarted.api.getSession({ headers: new Headers({ cookie }) }),
+        )
+      )?.user.id,
     ).toBe(localId);
     expect((await owned()).subscriptions).toHaveLength(1);
   } finally {

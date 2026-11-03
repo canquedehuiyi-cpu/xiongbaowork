@@ -262,7 +262,7 @@ test("every tenant table answers all four commands, and no writer answers the pl
   expect(reachable).toEqual([]);
 });
 
-/** The tables 0122 shares through the `team` stamp (G01-E). */
+/** The tables 0122 (and 0127, for server secrets) share through the `team` stamp (G01-E). */
 const TEAM_TABLES = [
   "agent_profiles",
   "agents",
@@ -271,6 +271,7 @@ const TEAM_TABLES = [
   "channel_agents",
   "channel_memberships",
   "channels",
+  "credentials",
   "group_bot_threads",
   "group_messages",
   "mcp_servers",
@@ -355,7 +356,11 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
         .map((row) => row.table),
     ),
   ].sort();
-  expect(shared).toEqual(TEAM_TABLES);
+  /*
+   * `group_message_private` (0128) shares nothing, so it has no `team_read`; it holds the private
+   * part of shared group rows, and refuses a `team` frame and freezes its stamp like them.
+   */
+  expect(shared).toEqual([...TEAM_TABLES, "group_message_private"].sort());
   const unguarded = shared.flatMap((table) => {
     const problems: string[] = [];
     for (const command of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
@@ -403,7 +408,7 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
     return problems;
   });
   expect(misspelled).toEqual([]);
-  // The credential kind is frozen too, although `credentials` has no team policy yet (P10).
+  // The credential kind is frozen too: `credentials` holds team server secrets since 0127 (P10).
   expect(guarded.has("credentials")).toBeTrue();
 });
 
