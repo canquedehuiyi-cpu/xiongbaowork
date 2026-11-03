@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   type AuditStore,
   recordPersonAuditEvent,
@@ -18,15 +18,11 @@ import {
 } from "../src/tenant/context";
 
 /*
- * G01-D: work that has no person behind it says whose it is at the call site. These run under
- * `OPENBOT_TENANT_FRAME_GUARD=throw`, so an unframed read of the tenant fails the test instead of
- * quietly answering the legacy `system`.
+ * G01-D: work that has no person behind it says whose it is at the call site. An unframed read of
+ * the tenant is a `TenantContextError` — the suite's default since G01-E P15, and the only behaviour
+ * once P16 removes the `system` fallback — so a call site that forgot its frame fails the test that
+ * reaches it instead of quietly answering `system`. Nothing here switches a guard.
  */
-const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
-afterEach(() => {
-  if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-  else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
-});
 
 /** An audit store that remembers which tenant each row would have been stamped with. */
 function recordingStore() {
@@ -41,7 +37,6 @@ function recordingStore() {
 
 describe("boot readiness", () => {
   test("reads the role facts as platform, so a boot with no frame is not refused", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     const seen: string[] = [];
     const reports: string[] = [];
     await checkServerReadiness({
@@ -59,7 +54,6 @@ describe("boot readiness", () => {
 
 describe("audit rows that say whose they are", () => {
   test("a deployment row is platform's even when written with no frame", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     const { store, rows } = recordingStore();
     await recordPlatformAuditEvent(store, {
       eventType: "computer.policy_loaded",
@@ -84,7 +78,6 @@ describe("audit rows that say whose they are", () => {
   });
 
   test("a person's row is filed in their tenant, from a platform frame or none", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     const { store, rows } = recordingStore();
     await recordPersonAuditEvent(store, "person-a", {
       eventType: "session.signed_in",
@@ -127,7 +120,6 @@ describe("audit rows that say whose they are", () => {
 
 describe("the request guard", () => {
   test("asks who is calling as platform, then runs the request as that person", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "throw";
     const seen: Record<string, string> = {};
     const auth = {
       api: {
