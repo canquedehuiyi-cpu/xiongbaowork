@@ -11,6 +11,22 @@ import { runAsTenant } from "../tenant/context";
 import { staleUnattendedCards } from "./reclaim";
 
 /**
+ * What fired an unattended card, finer than its `source` lane (story C2), as the board's 自主工作
+ * sub-label reads it: `routine` a routine firing (例行), `responsibility` a duty (职责), `proactive` a
+ * Bot's background research (巡检), `wake_up` a follow-up a Bot scheduled for itself, and
+ * `automation:<id>` an automation's own run. The board keys its sub-labels by exact value, so
+ * `wake_up` (and `automation:<id>`, until the board matches the `automation:` prefix) falls back to
+ * the lane's own sub-label, 例行 for the `routine` lane. Free text in the column, so a new trigger
+ * needs no migration -- only a member here. A person's own turn stores none.
+ */
+export type TriggerSource =
+  | "proactive"
+  | "routine"
+  | "responsibility"
+  | "wake_up"
+  | `automation:${string}`;
+
+/**
  * The board's projector: every fact the run machinery already emits gets one
  * narrow function here that turns it into task state. Nothing else writes
  * `tasks`, so the board can be rebuilt from scratch by replaying these calls,
@@ -27,6 +43,11 @@ export type TaskProjector = {
     /** See `tasks.executor_agent_id`: omit it when the card is a whole group's ask. */
     executorAgentId?: string | null;
     source: "chat" | "routine" | "responsibility" | "handoff" | "group_run";
+    /**
+     * Which autonomous trigger set the card in motion, finer than `source` (story C2). See
+     * {@link TriggerSource}. Omitted, the column stays null, which is what a person's own turn stores.
+     */
+    triggerSource?: TriggerSource | null;
     channelRef?: string;
     runRef?: string;
     parentTaskId?: string;
@@ -345,6 +366,7 @@ export function createTaskProjector(
               title: input.title.slice(0, 200),
               executorAgentId: input.executorAgentId ?? null,
               source: input.source,
+              triggerSource: input.triggerSource ?? null,
               channelRef: input.channelRef,
               deviceId: input.deviceId ?? null,
               runRef: input.runRef,

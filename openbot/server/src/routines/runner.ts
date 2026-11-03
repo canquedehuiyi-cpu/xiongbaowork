@@ -326,6 +326,7 @@ export function createRoutineRunner(options: {
           title: instruction,
           executorAgentId: agentId,
           source: "routine",
+          triggerSource: "routine",
           channelRef: channelId,
           runRef: routineRunId,
           deviceId: (await deviceIdOf?.(agentId, routineRunId)) ?? null,

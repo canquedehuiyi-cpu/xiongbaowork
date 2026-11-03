@@ -16,6 +16,7 @@ import {
   subscriptions,
 } from "../db/schema";
 import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
 import {
   currentTenant,
   isPersonTenant,
@@ -113,6 +114,12 @@ export type LanguageModelFactory = (
 export type AgentModelResolverOptions = {
   environment?: PoolKeyEnvironment;
   languageModel?: LanguageModelFactory;
+  /**
+   * Where a TENANT's library base URL may point (audit defect #6), passed to {@link languageModelFor}
+   * for library bindings only. A platform pool row's base URL is the operator's (rows are written by
+   * the operator, never by a tenant route), so it is not held to the tenant policy.
+   */
+  outbound?: OutboundPolicy;
 };
 
 const OPENAI_COMPATIBLE_DEFAULTS: Record<string, string> = {
@@ -127,6 +134,12 @@ export function languageModelFor(
   baseUrl: string | null,
   modelName: string,
   apiKey: string,
+  /**
+   * Where a tenant's base URL may point (audit defect #6). Applied to every request the SDK makes to
+   * a tenant-chosen endpoint: checked, resolved, never redirected. No deadline here — a streamed
+   * answer is legitimately long, and the run's own abort signal still applies.
+   */
+  outbound: OutboundPolicy = {},
 ): LanguageModel {
   if (provider === "anthropic") {
     return createAnthropic({ apiKey })(modelName);
@@ -147,6 +160,7 @@ export function languageModelFor(
     baseURL,
     apiKey,
     includeUsage: true,
+    ...(baseUrl ? { fetch: createGuardedFetch(outbound) } : {}),
   }).chatModel(modelName);
 }
 
@@ -358,7 +372,13 @@ export function createNamedAgentModelResolver(
   options: AgentModelResolverOptions = {},
 ): (agentId: string) => Promise<ResolvedAgentModel | null> {
   const environment = options.environment ?? process.env;
-  const languageModel = options.languageModel ?? languageModelFor;
+  const outbound = options.outbound ?? {};
+  // A library binding's base URL is the tenant's, so the default factory holds it to the guard.
+  const libraryModel: LanguageModelFactory =
+    options.languageModel ??
+    ((provider, baseUrl, modelName, apiKey) =>
+      languageModelFor(provider, baseUrl, modelName, apiKey, outbound));
+  const poolLanguageModel = options.languageModel ?? languageModelFor;
   return async (agentId) => {
     // A binding that will not read falls back to the deployment's model, but a missing tenant frame
     // is the caller's bug and must not pass as "unbound".
@@ -370,7 +390,7 @@ export function createNamedAgentModelResolver(
     );
     if (!binding) return null;
     if (binding.kind === "pool") {
-      return poolModel(binding, agentId, languageModel, sink);
+      return poolModel(binding, agentId, poolLanguageModel, sink);
     }
     const secret = await credentials
       .readSecret(binding.credentialId)
@@ -380,7 +400,7 @@ export function createNamedAgentModelResolver(
       const apiKey = await openCredential(encryptionKey, secret);
       const originalText = `${binding.provider}/${binding.modelName}`;
       const model = meteredLanguageModel(
-        languageModel(
+        libraryModel(
           binding.provider,
           binding.baseUrl,
           binding.modelName,

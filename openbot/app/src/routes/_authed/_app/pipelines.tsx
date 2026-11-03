@@ -26,12 +26,17 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   abortRunMutationOptions,
   createTemplateMutationOptions,
+  deleteTemplateMutationOptions,
+  PipelineDispatchRefused,
+  type RefusedStep,
   resumeRunMutationOptions,
   skipStepMutationOptions,
   startRunMutationOptions,
+  updateTemplateMutationOptions,
 } from "@/lib/pipelines/mutations";
 import {
   type PipelineRunStep,
+  type PipelineTemplate,
   pipelineRunQueryOptions,
   pipelineTemplatesQueryOptions,
   type StepDraft,
@@ -81,6 +86,12 @@ function RouteComponent() {
   const crews = useQuery(wakerGroupsQueryOptions());
   const coworkers = useQuery(agentListQueryOptions());
   const [crewId, setCrewId] = useState<string | null>(null);
+  /*
+   * The saved template the editor is rewriting, or null for "new". Held here rather than in the editor
+   * because the row's 编辑 is what opens it, and switching crew has to close it: a plan is edited only
+   * inside the crew it was written for.
+   */
+  const [editing, setEditing] = useState<PipelineTemplate | null>(null);
   const { run: runId } = Route.useSearch();
   const navigate = useNavigate();
   const setRunId = (id: string | null) =>
@@ -93,6 +104,7 @@ function RouteComponent() {
   const names = new Map(
     (coworkers.data ?? []).map((agent) => [agent.id, agent.name]),
   );
+  const editingHere = editing && editing.groupId === selected ? editing : null;
 
   return (
     <PageShell
@@ -140,6 +152,7 @@ function RouteComponent() {
                     variant={crew.id === selected ? "default" : "outline"}
                     onClick={() => {
                       setCrewId(crew.id);
+                      setEditing(null);
                       setRunId(null);
                     }}
                   >
@@ -152,6 +165,13 @@ function RouteComponent() {
 
           {selected ? (
             <TemplateEditor
+              /*
+               * Keyed by what it is editing, so opening another template (or going back to "new") starts
+               * the rows from that template rather than from whatever was typed before.
+               */
+              key={editingHere?.id ?? "new"}
+              editing={editingHere}
+              onDone={() => setEditing(null)}
               crewId={selected}
               /*
                * The crew's own roster, in the order the person put it, not the whole workspace. The step
@@ -191,6 +211,10 @@ function RouteComponent() {
                     key={template.id}
                     template={template}
                     names={names}
+                    onEdit={() => setEditing(template)}
+                    onDeleted={() => {
+                      if (editing?.id === template.id) setEditing(null);
+                    }}
                     onStarted={setRunId}
                     queryClient={queryClient}
                   />
@@ -223,16 +247,36 @@ function TemplateEditor(props: {
   crewId: string;
   coworkers: { id: string; name: string }[];
   problem: string | null;
+  /** The saved template being rewritten, or null when the editor writes a new one. */
+  editing: PipelineTemplate | null;
+  onDone: () => void;
 }) {
   const queryClient = useQueryClient();
   const create = useMutation(createTemplateMutationOptions(queryClient));
-  const [name, setName] = useState("");
-  const [steps, setSteps] = useState<StepDraft[]>([]);
+  const update = useMutation(updateTemplateMutationOptions(queryClient));
+  const [name, setName] = useState(props.editing?.name ?? "");
+  const [steps, setSteps] = useState<StepDraft[]>(
+    (props.editing?.steps ?? []).map((step) => ({
+      id: step.id,
+      agentId: step.agentId,
+      instruction: step.instruction,
+    })),
+  );
   const [problem, setProblem] = useState<string | null>(props.problem);
 
   if (props.problem && !problem) setProblem(props.problem);
 
   const first = props.coworkers[0]?.id;
+  const saving = create.isPending || update.isPending;
+  const settled = {
+    onError: (thrown: Error) => setProblem(thrown.message),
+    onSuccess: () => {
+      setName("");
+      setSteps([]);
+      setProblem(null);
+      props.onDone();
+    },
+  };
 
   function move(index: number, by: -1 | 1) {
     const target = index + by;
@@ -247,8 +291,15 @@ function TemplateEditor(props: {
   }
 
   return (
-    <PageSection title="新建一条流程">
+    <PageSection
+      title={props.editing ? `编辑流程：${props.editing.name}` : "新建一条流程"}
+    >
       <div className="flex flex-col gap-3">
+        {props.editing ? (
+          <p className="text-muted-foreground text-sm">
+            改动只影响之后的运行；已经开跑的会按开跑时的步骤跑完。
+          </p>
+        ) : null}
         <Input
           aria-label="流程名称"
           placeholder="例如：编程任务"
@@ -285,6 +336,16 @@ function TemplateEditor(props: {
                   )
                 }
               >
+                {props.coworkers.some(
+                  (agent) => agent.id === step.agentId,
+                ) ? null : (
+                  /*
+                   * A saved step whose coworker has since left the crew. Shown as itself rather than
+                   * silently re-pointed at the first member: saving it is refused by the server, and the
+                   * person should see why and pick somebody.
+                   */
+                  <option value={step.agentId}>已不在组里的员工</option>
+                )}
                 {props.coworkers.map((agent) => (
                   <option key={agent.id} value={agent.id}>
                     {agent.name}
@@ -349,24 +410,31 @@ function TemplateEditor(props: {
               !name.trim() ||
               steps.length === 0 ||
               steps.some((step) => !step.instruction.trim()) ||
-              create.isPending
+              saving
             }
             onClick={() =>
-              create.mutate(
-                { groupId: props.crewId, name: name.trim(), steps },
-                {
-                  onError: (thrown: Error) => setProblem(thrown.message),
-                  onSuccess: () => {
-                    setName("");
-                    setSteps([]);
-                    setProblem(null);
-                  },
-                },
-              )
+              props.editing
+                ? update.mutate(
+                    {
+                      templateId: props.editing.id,
+                      name: name.trim(),
+                      steps,
+                    },
+                    settled,
+                  )
+                : create.mutate(
+                    { groupId: props.crewId, name: name.trim(), steps },
+                    settled,
+                  )
             }
           >
-            保存流程
+            {props.editing ? "保存修改" : "保存流程"}
           </Button>
+          {props.editing ? (
+            <Button variant="outline" disabled={saving} onClick={props.onDone}>
+              取消编辑
+            </Button>
+          ) : null}
         </div>
         {problem ? (
           <p className="text-destructive text-sm" role="alert">
@@ -385,18 +453,28 @@ function TemplateEditor(props: {
  * press is for is different every time.
  */
 function TemplateRow(props: {
-  template: {
-    id: string;
-    name: string;
-    steps: { agentId: string; instruction: string }[];
-  };
+  template: PipelineTemplate;
   names: Map<string, string>;
   onStarted: (runId: string) => void;
+  onEdit: () => void;
+  onDeleted: () => void;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
   const start = useMutation(startRunMutationOptions(props.queryClient));
+  const remove = useMutation(deleteTemplateMutationOptions(props.queryClient));
+  /*
+   * Delete asks once more before it goes: the plan is gone for good, and the row says what is NOT lost
+   * (runs already started finish from their own copy), which is the question a person hesitates on.
+   */
+  const [confirming, setConfirming] = useState(false);
   const [task, setTask] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  /*
+   * The steps the server refused to dispatch because their coworkers are not this person's to use
+   * (spec I6). Listed by step number and name rather than left in a sentence, because the next move is
+   * per step: grant that coworker, or give the step to somebody else.
+   */
+  const [refused, setRefused] = useState<RefusedStep[] | null>(null);
 
   return (
     <Item>
@@ -410,13 +488,72 @@ function TemplateRow(props: {
             )
             .join(" → ")}
         </ItemDescription>
-        {problem ? (
+        {refused ? (
+          <div className="text-destructive text-sm" role="alert">
+            <p>
+              这次没有派出去：下面这些步骤的员工你还没有使用权。先给他们开通使用权，或把这几步换成你能用的员工，再运行。
+            </p>
+            <ul aria-label="没有派出去的步骤" className="list-disc pl-5">
+              {refused.map((step) => (
+                <li key={`${step.index}-${step.stepId}`}>
+                  {`第 ${step.index + 1} 步：${props.names.get(step.agentId) ?? step.agentId}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : problem ? (
           <p className="text-destructive text-sm" role="alert">
             {problem}
           </p>
         ) : null}
+        {confirming ? (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span>
+              {`确定删除「${props.template.name}」？已经开跑的运行会照常跑完，记录也会留着。`}
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={remove.isPending}
+              onClick={() =>
+                remove.mutate(props.template.id, {
+                  onError: (thrown: Error) => {
+                    setConfirming(false);
+                    setRefused(null);
+                    setProblem(thrown.message);
+                  },
+                  onSuccess: () => {
+                    setConfirming(false);
+                    props.onDeleted();
+                  },
+                })
+              }
+            >
+              确定删除
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={remove.isPending}
+              onClick={() => setConfirming(false)}
+            >
+              取消
+            </Button>
+          </div>
+        ) : null}
       </ItemContent>
       <ItemActions className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onEdit}>
+          编辑
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={confirming}
+          onClick={() => setConfirming(true)}
+        >
+          删除
+        </Button>
         <Input
           aria-label={`交给${props.template.name}的任务`}
           className="w-48"
@@ -430,10 +567,18 @@ function TemplateRow(props: {
             start.mutate(
               { templateId: props.template.id, task: task.trim() },
               {
-                onError: (thrown: Error) => setProblem(thrown.message),
+                onError: (thrown: Error) => {
+                  setProblem(thrown.message);
+                  setRefused(
+                    thrown instanceof PipelineDispatchRefused
+                      ? thrown.refused
+                      : null,
+                  );
+                },
                 onSuccess: (run) => {
                   setTask("");
                   setProblem(null);
+                  setRefused(null);
                   props.onStarted(run.runId);
                 },
               },

@@ -3,7 +3,10 @@ import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
 import { QuotaExceeded } from "../quota/limits";
 import {
+  PipelineNameTakenError,
   PipelineNotFoundError,
+  type PipelineStep,
+  PipelineStepForbiddenError,
   type PipelineStore,
   PipelineValidationError,
 } from "./store";
@@ -48,18 +51,48 @@ export function createPipelineRoutes(
         groupId: String(body.groupId ?? ""),
         name: String(body.name ?? ""),
         createdBy: context.var.actor.id,
-        steps: Array.isArray(body.steps)
-          ? body.steps.map((step) => {
-              const row = (step ?? {}) as Record<string, unknown>;
-              return {
-                id: String(row.id ?? ""),
-                agentId: String(row.agentId ?? ""),
-                instruction: String(row.instruction ?? ""),
-              };
-            })
-          : [],
+        steps: stepsOf(body),
       });
       return context.json({ templateId }, 201);
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  /*
+   * Edit a template's name and steps (spec I1). A `groupId` in the body is ignored rather than obeyed:
+   * the crew a plan was written for is fixed, and the store reads it from the stored row. Runs already
+   * started keep the steps they started with.
+   */
+  routes.put("/templates/:templateId", requireUser, async (context) => {
+    const body = await context.req
+      .json<Record<string, unknown>>()
+      .catch((): Record<string, unknown> => ({}));
+    const templateId = context.req.param("templateId");
+    try {
+      await store.updateTemplate({
+        tenantId: context.var.actor.id,
+        templateId,
+        name: String(body.name ?? ""),
+        steps: stepsOf(body),
+      });
+      return context.json({ templateId });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  /*
+   * Throw a template away. Its runs stay on record, and one in flight finishes from its own snapshot.
+   */
+  routes.delete("/templates/:templateId", requireUser, async (context) => {
+    const templateId = context.req.param("templateId");
+    try {
+      await store.deleteTemplate({
+        tenantId: context.var.actor.id,
+        templateId,
+      });
+      return context.json({ templateId });
     } catch (error) {
       return refuse(context, error);
     }
@@ -201,6 +234,20 @@ export function createPipelineRoutes(
   return routes;
 }
 
+/** The steps of a template as the editor sent them, each field coerced to the shape the store checks. */
+function stepsOf(body: Record<string, unknown>): PipelineStep[] {
+  return Array.isArray(body.steps)
+    ? body.steps.map((step) => {
+        const row = (step ?? {}) as Record<string, unknown>;
+        return {
+          id: String(row.id ?? ""),
+          agentId: String(row.agentId ?? ""),
+          instruction: String(row.instruction ?? ""),
+        };
+      })
+    : [];
+}
+
 /**
  * Run the crew without keeping the person's request open.
  *
@@ -227,9 +274,15 @@ function drive(store: PipelineStore, runId: string, tenantId: string) {
  * A not-found is the answer to a run or template that is not this workspace's, and 404 is both the true
  * statement and D15's rule that another tenant's ids are not confirmed to it. A quota refusal keeps the
  * ceiling's own body and status, because the person's next move is the plans page rather than a retry.
+ * A step the person may not use is a 403 that names every refused step (spec I6), so the screen can say
+ * which ones to fix instead of a bare "no". A template name already used in the crew is a 409: the plan
+ * is valid, it collides with one that exists.
  */
 function refuse(context: Context<Ctx>, error: unknown) {
   if (error instanceof QuotaExceeded) return context.json(error.body, 402);
+  if (error instanceof PipelineStepForbiddenError) {
+    return context.json({ error: error.message, refused: error.refused }, 403);
+  }
   const message =
     error instanceof Error ? error.message : "流水线没有按预期执行。";
   if (error instanceof PipelineNotFoundError) {
@@ -237,6 +290,9 @@ function refuse(context: Context<Ctx>, error: unknown) {
   }
   if (error instanceof PipelineValidationError) {
     return context.json({ error: message }, 400);
+  }
+  if (error instanceof PipelineNameTakenError) {
+    return context.json({ error: message }, 409);
   }
   throw error;
 }

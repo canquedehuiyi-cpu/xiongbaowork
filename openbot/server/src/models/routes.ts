@@ -17,6 +17,12 @@ import {
   platformModelPool,
   providerTemplates,
 } from "../db/schema";
+import {
+  checkOutboundUrl,
+  guardedFetch,
+  type OutboundPolicy,
+  OutboundRefusedError,
+} from "../net/outbound-guard";
 import type { Plan, QuotaService } from "../quota/limits";
 import { FREE_PLAN_FALLBACK, QuotaExceeded } from "../quota/limits";
 import type { PoolKeyEnvironment } from "./runtime-resolver";
@@ -39,10 +45,17 @@ export function createModelRoutes(
   options: {
     /** Where a pool row's key variable is looked up for `available`; tests pass their own. */
     environment?: PoolKeyEnvironment;
+    /**
+     * Where a tenant's base URL may point (audit defect #6). The deployment's private-host opt-in and
+     * named hosts, so a developer's local provider still works; injectable resolver and fetch for
+     * tests.
+     */
+    outbound?: OutboundPolicy;
   } = {},
 ) {
   const routes = new Hono<Ctx>();
   const environment = options.environment ?? process.env;
+  const outbound = options.outbound ?? {};
 
   routes.get("/", requireUser, async (context) => {
     const rows = await database
@@ -171,6 +184,17 @@ export function createModelRoutes(
       return context.json({ error: "该提供方不支持自定义接口地址。" }, 400);
     }
     /*
+     * Refused before it is stored. This server will POST the tenant's key to this address, so an
+     * address inside the deployment (or the metadata service, or plain http) never reaches the
+     * database; the probe and every run check it again, with DNS, before sending anything.
+     */
+    if (baseUrl) {
+      const verdict = checkOutboundUrl(baseUrl, outbound);
+      if (!verdict.allowed) {
+        return context.json({ error: verdict.reason }, 400);
+      }
+    }
+    /*
      * Before the key is stored, not after.
      *
      * A refused connection that had already written a credential would leave an encrypted key in the
@@ -266,8 +290,12 @@ export function createModelRoutes(
       row.baseUrl,
       row.modelName,
       apiKey,
+      outbound,
     );
-    return context.json(answer, 200);
+    // Refused before sending: the stored endpoint is not one this server will dial. A 4xx, so a
+    // screen does not read it as the provider's own answer.
+    const { refused, ...result } = answer;
+    return context.json(result, refused ? 400 : 200);
   });
 
   routes.delete("/:id", requireUser, async (context) => {
@@ -401,47 +429,82 @@ function mask(key: string): string {
   return key.length <= 4 ? "****" : `****${key.slice(-4)}`;
 }
 
-/** One-token ping against whichever shape the template speaks. */
-async function probe(
+/** How long a probe waits for a provider before calling it unreachable. */
+const PROBE_TIMEOUT_MS = 15_000;
+
+/**
+ * One-token ping against whichever shape the template speaks.
+ *
+ * Exported for tests. Every request is `redirect: "manual"` with a deadline, and a redirect is an
+ * answer rather than a hop, so the key never travels further than the host it was sent to. The
+ * tenant-chosen base URL goes through {@link guardedFetch} (scheme, DNS, internal ranges); the two
+ * fixed provider hosts are ours and are not resolved, but are not followed anywhere either.
+ * `refused` means nothing was sent, and the route answers it with a 400.
+ */
+export async function probe(
   provider: string,
   baseUrl: string | null,
   modelName: string,
   apiKey: string,
-): Promise<{ ok: boolean; error?: string }> {
-  try {
-    if (provider === "anthropic") {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: modelName,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "ping" }],
-        }),
-      });
-      return response.ok || response.status === 400
+  outbound: OutboundPolicy & { timeoutMs?: number } = {},
+): Promise<{ ok: boolean; error?: string; refused?: true }> {
+  const timeoutMs = outbound.timeoutMs ?? PROBE_TIMEOUT_MS;
+  const send = outbound.fetchImpl ?? fetch;
+  const toFixedHost = async (url: string, init: RequestInit) => {
+    const response = await send(url, {
+      ...init,
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    await response.body?.cancel().catch(() => undefined);
+    return response;
+  };
+  const verdict = (response: Response, acceptBadRequest: boolean) =>
+    response.status >= 300 && response.status < 400
+      ? {
+          ok: false,
+          error: `HTTP ${response.status} (redirects are not followed)`,
+        }
+      : response.ok || (acceptBadRequest && response.status === 400)
         ? { ok: true }
         : { ok: false, error: `HTTP ${response.status}` };
-    }
-    if (provider === "google") {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+  try {
+    if (provider === "anthropic") {
+      const response = await toFixedHost(
+        "https://api.anthropic.com/v1/messages",
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelName,
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ping" }],
+          }),
+        },
+      );
+      return verdict(response, true);
+    }
+    if (provider === "google") {
+      // The key in a header, never in the query string, where proxies and access logs keep it.
+      const response = await toFixedHost(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": apiKey,
+            "content-type": "application/json",
+          },
           body: JSON.stringify({
             contents: [{ parts: [{ text: "ping" }] }],
             generationConfig: { maxOutputTokens: 1 },
           }),
         },
       );
-      return response.ok
-        ? { ok: true }
-        : { ok: false, error: `HTTP ${response.status}` };
+      return verdict(response, false);
     }
     const base =
       baseUrl ||
@@ -453,25 +516,46 @@ async function probe(
             ? "https://api.deepseek.com/v1"
             : "");
     if (!base) return { ok: false, error: "尚未配置接口地址。" };
-    const response = await fetch(
-      `${base.replace(/\/$/, "")}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          "content-type": "application/json",
+    let response: Response;
+    try {
+      response = await guardedFetch(
+        `${base.replace(/\/$/, "")}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelName,
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ping" }],
+          }),
         },
-        body: JSON.stringify({
-          model: modelName,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "ping" }],
-        }),
-      },
-    );
-    return response.ok || response.status === 400
-      ? { ok: true }
-      : { ok: false, error: `HTTP ${response.status}` };
+        { ...outbound, timeoutMs },
+      );
+    } catch (error) {
+      if (error instanceof OutboundRefusedError) {
+        // A redirect was answered and refused, not sent onward: the provider's answer, not ours.
+        // A name that did not resolve is unreachable, not forbidden: a 200 with ok:false, so a
+        // transient resolver error does not read as a policy refusal.
+        return error.kind === "destination"
+          ? { ok: false, error: error.message, refused: true }
+          : { ok: false, error: error.message };
+      }
+      throw error;
+    }
+    await response.body?.cancel().catch(() => undefined);
+    return verdict(response, true);
   } catch (error) {
-    return { ok: false, error: String(error).slice(0, 200) };
+    // Never the thrown value's text verbatim beyond its kind: a fetch error can repeat the URL.
+    const name = error instanceof Error ? error.name : "Error";
+    return {
+      ok: false,
+      error:
+        name === "TimeoutError" || name === "AbortError"
+          ? "The provider did not answer in time."
+          : `${name}: the provider could not be reached.`,
+    };
   }
 }
