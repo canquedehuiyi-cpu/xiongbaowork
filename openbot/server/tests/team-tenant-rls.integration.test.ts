@@ -836,14 +836,12 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
       (tx) =>
         tx`update group_bot_threads set owner_user_id = ${owner} where channel_id = ${group}`,
     );
-    // A member may rename the group: the guard freezes links, not content.
-    expect(
-      await changed(
-        as(member),
-        (tx) =>
-          tx`update channels set name = 'Renamed by a member' where id = ${group}`,
-      ),
-    ).toBe(1);
+    // Nor rename the group for everybody: its content is the creator's (0128, P11 review; see (p)).
+    await refused(
+      as(member),
+      (tx) =>
+        tx`update channels set name = 'Renamed by a member' where id = ${group}`,
+    );
   });
 
   test("(f) a member cannot make themselves the creator", async () => {
@@ -972,6 +970,209 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
         )
       ).map((row) => (row as { agent_id: string }).agent_id),
     ).toEqual([catalogue, membersOwn, restrictedBot].sort());
+  });
+
+  test("(n) nobody writes a row that names somebody else, so an invitee is never locked out (0128, P11 review)", async () => {
+    const squatGroup = `${suite}-squat-group`;
+    await sharedGroup(squatGroup, creator, [member]);
+    // `member` knows the group id and expects `stranger` to be invited next. Each key below is
+    // global, so a row stamped with `member` holding it would block the real one for good.
+    await refused(
+      as(member),
+      (tx) =>
+        tx`insert into intelligence_channel_mappings (user_id, channel_id, thread_id) values (${stranger}, ${squatGroup}, ${`${suite}-squat-thread`})`,
+    );
+    await refused(
+      as(member),
+      (tx) =>
+        tx`insert into channel_memberships (channel_id, user_id) values (${squatGroup}, ${stranger})`,
+    );
+    await refused(
+      as(member),
+      (tx) =>
+        tx`insert into group_bot_threads (owner_user_id, channel_id, agent_id, thread_id) values (${creator}, ${squatGroup}, ${restrictedBot}, ${`${suite}-squat-bot-thread`})`,
+    );
+    await refused(
+      as(member),
+      (tx) =>
+        tx`insert into group_messages (id, channel_id, owner_user_id, text) values (${`${suite}-squat-message`}, ${squatGroup}, ${creator}, 'as the creator')`,
+    );
+    // Their own rows are still theirs to write, and cannot be turned into somebody else's.
+    expect(
+      await changed(
+        as(member),
+        (tx) =>
+          tx`insert into intelligence_channel_mappings (user_id, channel_id, thread_id) values (${member}, ${squatGroup}, ${`${suite}-member-thread`})`,
+      ),
+    ).toBe(1);
+    await refused(
+      as(member),
+      (tx) =>
+        tx`update intelligence_channel_mappings set user_id = ${stranger} where channel_id = ${squatGroup} and user_id = ${member}`,
+    );
+    expect(
+      await asPlatform(() =>
+        database.execute(
+          sql`select user_id, tenant_id from intelligence_channel_mappings where channel_id = ${squatGroup}`,
+        ),
+      ),
+    ).toEqual([{ user_id: member, tenant_id: member }]);
+    // So the invitation writes the invitee's membership, and the invitee their own mapping.
+    expect(
+      await changed(
+        as(member),
+        (tx) =>
+          tx`insert into channel_memberships (channel_id, user_id, tenant_id) values (${squatGroup}, ${stranger}, 'team') on conflict do nothing`,
+      ),
+    ).toBe(1);
+    expect(
+      await changed(
+        as(stranger),
+        (tx) =>
+          tx`insert into intelligence_channel_mappings (user_id, channel_id, thread_id) values (${stranger}, ${squatGroup}, ${`${suite}-invitee-thread`}) on conflict do nothing`,
+      ),
+    ).toBe(1);
+    expect(await count(as(stranger), "channels", "id", squatGroup)).toBe(1);
+  });
+
+  test("(o) only the creator takes a Bot out of a shared group (0128, P11 review)", async () => {
+    const unlinkGroup = `${suite}-unlink-group`;
+    const catalogue = `${suite}-unlink-catalogue-bot`;
+    await asPlatform(() =>
+      database.insert(agents).values({
+        id: catalogue,
+        tenantId: "system",
+        name: "Catalogue",
+        type: "built_in",
+        configuration: {},
+      }),
+    );
+    await sharedGroup(unlinkGroup, creator, [member]);
+    await inFrame(
+      as(creator),
+      (tx) =>
+        tx`insert into channel_agents (channel_id, agent_id, tenant_id) values (${unlinkGroup}, ${catalogue}, 'team')`,
+    );
+    expect(
+      await changed(
+        as(member),
+        (tx) =>
+          tx`delete from channel_agents where channel_id = ${unlinkGroup}`,
+      ),
+    ).toBe(0);
+    expect(
+      await count(as(member), "channel_agents", "channel_id", unlinkGroup),
+    ).toBe(1);
+    expect(
+      await changed(
+        as(creator),
+        (tx) =>
+          tx`delete from channel_agents where channel_id = ${unlinkGroup}`,
+      ),
+    ).toBe(1);
+  });
+
+  test("(p) a member moves only a shared group's activity columns; its content is the creator's (0128, P11 review)", async () => {
+    const memberWrites = [
+      `name = 'Renamed by a member'`,
+      `description = 'Forged'`,
+      `summary = 'Forged summary', summary_at = now()`,
+      `suggested_prompts = array['forged']`,
+      // A package pointer would make the creator's delete refuse the group as package-owned.
+      `package_id = gen_random_uuid()`,
+      `override = '{}'::jsonb`,
+      `allowed_groups = array['everyone']`,
+      `created_at = now() - interval '1 day'`,
+    ];
+    for (const set of memberWrites)
+      await refused(as(member), (tx) =>
+        tx.unsafe(`update channels set ${set} where id = $1`, [group]),
+      );
+    // What recordActivity writes, any member writes.
+    expect(
+      await changed(
+        as(member),
+        (tx) =>
+          tx`update channels set last_message = 'hi', last_message_at = now(), last_message_agent_id = null, last_message_source_id = 'm', updated_at = now() where id = ${group}`,
+      ),
+    ).toBe(1);
+    // The creator renames and describes it, and still cannot point it at a package.
+    expect(
+      await changed(
+        as(creator),
+        (tx) =>
+          tx`update channels set name = 'Renamed by its creator', summary = 'Ours' where id = ${group}`,
+      ),
+    ).toBe(1);
+    for (const set of [
+      `package_id = gen_random_uuid()`,
+      `allowed_groups = array['everyone']`,
+    ])
+      await refused(as(creator), (tx) =>
+        tx.unsafe(`update channels set ${set} where id = $1`, [group]),
+      );
+    const [row] = await asPlatform(() =>
+      database.execute(
+        sql`select name, summary, package_id, allowed_groups, last_message from channels where id = ${group}`,
+      ),
+    );
+    expect(row).toEqual({
+      name: "Renamed by its creator",
+      summary: "Ours",
+      package_id: null,
+      allowed_groups: [],
+      last_message: "hi",
+    });
+  });
+
+  test("(q) a held or running reply's private part is read by its sender alone (0128, P11 review)", async () => {
+    const heldId = `${suite}-held-message`;
+    await inFrame(as(member), async (tx) => {
+      await tx`insert into group_messages (id, channel_id, owner_user_id, agent_id, text, status, details, tenant_id)
+               values (${heldId}, ${group}, ${member}, ${restrictedBot}, '', 'waiting', '{"message":"Waiting for permission."}'::jsonb, 'team')`;
+      await tx`insert into group_message_private (message_id, owner_user_id, text, details)
+               values (${heldId}, ${member}, 'From my notes: the launch slipped', '{"privateShare":{"text":"From my notes: the launch slipped"}}'::jsonb)`;
+    });
+    expect(
+      await count(as(member), "group_message_private", "message_id", heldId),
+    ).toBe(1);
+    for (const reader of [creator, owner, stranger])
+      expect(
+        `${reader}:${await count(as(reader), "group_message_private", "message_id", heldId)}`,
+      ).toBe(`${reader}:0`);
+    // The group reads the shared row, which holds nothing of the reply.
+    const [shared] = await inFrame(
+      as(owner),
+      (tx) =>
+        tx`select text, details from group_messages where id = ${heldId}`,
+    );
+    expect(JSON.stringify(shared)).not.toContain("launch slipped");
+    // Nobody else writes the private row of somebody's message: not under the sender's name ...
+    await refused(
+      as(owner),
+      (tx) =>
+        tx`insert into group_message_private (message_id, owner_user_id, text) values (${`${suite}-message`}, ${member}, 'forged')`,
+    );
+    // ... and not under their own, since it must belong to the message's sender.
+    let caught: unknown;
+    try {
+      await inFrame(
+        as(owner),
+        (tx) =>
+          tx`insert into group_message_private (message_id, owner_user_id, text) values (${`${suite}-message`}, ${owner}, 'mine now')`,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as { errno?: string } | undefined)?.errno).toBe("23503");
+    // Nor rewrite the sender's (it is invisible to them, so nothing changes).
+    expect(
+      await changed(
+        as(owner),
+        (tx) =>
+          tx`update group_message_private set text = 'edited' where message_id = ${heldId}`,
+      ),
+    ).toBe(0);
   });
 
   test("the creator column is stamped by the database from the opening frame", async () => {
