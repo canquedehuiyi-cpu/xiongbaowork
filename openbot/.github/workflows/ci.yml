@@ -208,6 +208,14 @@ jobs:
           # secret is this chart's or a store's, because the key list is readable either way.
           refuses "a managed agent URL with no token" \
             --set-string config.managedAgent.url=http://agent.default:8000/ag-ui
+          # The bundled superuser with nobody having said RLS may go unenforced. Only armed where the
+          # target runs the bundled database.
+          if grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/openbot/ci/${{ matrix.target }}-values.yaml); then
+            refuses "the bundled superuser with OPENBOT_RLS_ENFORCE unsaid" \
+              --set config.extraEnv=null
+          else
+            echo "skipped: the bundled-superuser refusal is only armed with postgresql.enabled"
+          fi
           # A browser inside every replica of a replicated API.
           refuses "an embedded browser across several replicas" \
             --set server.embeddedComputer=true --set server.replicaCount=2

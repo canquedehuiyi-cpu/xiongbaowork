@@ -28,6 +28,8 @@ import {
   ROUTINE_FIRE_KIND,
 } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
+import { runAsTenant } from "../src/tenant/context";
+import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWorkQueue } from "../src/work/queue";
 
 const config = loadConfig(process.env);
@@ -101,6 +103,17 @@ async function dispatch(routineRunId: string): Promise<void> {
   }
 }
 
+/*
+ * THE SWEEP RUNS AS THE PLATFORM, explicitly (G01). It belongs to no person: what is due, what is
+ * claimable, what is stranded and what is stale are every tenant's rows, asked by nobody. Each
+ * routine is offered in its owner's frame and each claimed firing opens its run in the claimed item's
+ * tenant — `routines/sweep.ts` takes both from the row it read, never from this frame — and the
+ * reapers close each row as its own tenant. Unframed, anything a phase forgot to frame would fall
+ * through to the legacy `system` default, which files rows where every tenant can read them.
+ */
+const asPlatform = <T>(phase: () => Promise<T>) =>
+  runAsTenant("platform", phase);
+
 try {
   const options = { routineStore, queue, dispatch, owner };
   /*
@@ -108,8 +121,8 @@ try {
    * the consume below, so a routine due right now fires in this sweep rather than in the next one.
    * Neither half needs the other to have run — another replica's offer is claimed here just the same.
    */
-  const { offered } = await offerDueRoutines(options);
-  const report = await dispatchClaimedRoutines(options);
+  const { offered } = await asPlatform(() => offerDueRoutines(options));
+  const report = await asPlatform(() => dispatchClaimedRoutines(options));
   /*
    * Restart recovery: crew runs and unattended cards a dead server left at `running` (ticket 021,
    * audit defect #10). The same sweep, lease and phases the API server runs on its own timer
@@ -119,16 +132,20 @@ try {
    */
   try {
     const board = createTaskProjector(database);
-    const recovered = await sweepAbandonedWork({
+    const recovered = await asPlatform(() =>
+      sweepAbandonedWork({
       queue,
       owner,
       phases: abandonedWorkPhases({
         routineStore,
         reapPipelineRuns: (input) =>
           reapAbandonedPipelineRuns(database, board, input),
+        recoverFlowRuns: (input) =>
+          recoverInterruptedFlowRuns(database, board, input),
         board,
       }),
-    });
+      }),
+    );
     if (
       recovered.won &&
       (recovered.routineRuns ||
@@ -158,10 +175,12 @@ try {
    * be offered for that minute again. `server/src/work/queue.ts:262-274` documents that bug at
    * length; the culler pays the same rent at `cull-idle-computers.ts:71-74`.
    */
-  const purged = await queue.purge({
-    kind: ROUTINE_FIRE_KIND,
-    olderThanMs: 24 * 60 * 60 * 1000,
-  });
+  const purged = await asPlatform(() =>
+    queue.purge({
+      kind: ROUTINE_FIRE_KIND,
+      olderThanMs: 24 * 60 * 60 * 1000,
+    }),
+  );
   console.info(
     JSON.stringify({
       type: "routine-sweep",

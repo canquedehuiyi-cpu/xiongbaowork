@@ -250,6 +250,12 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   value: production
 - name: EMBEDDED_POSTGRES
   value: "off"
+{{- /*
+  No OPENBOT_RLS_ENFORCE here, on purpose: unset under NODE_ENV=production, the server refuses to
+  start when DATABASE_URL names a superuser or a BYPASSRLS role (audit defect #8). An operator who
+  accepts that writes it in `config.extraEnv`, which renders after this block and so wins; the
+  bundled `postgres` superuser is refused at install in validation.yaml until somebody does.
+*/}}
 {{- /* The switch that makes a replica a replica: no browser in an API pod. */}}
 - name: EMBEDDED_COMPUTER
   value: {{ ternary "on" "off" .Values.server.embeddedComputer | quote }}
