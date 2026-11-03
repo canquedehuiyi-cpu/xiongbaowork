@@ -44,7 +44,8 @@ import {
  * KNOWN LIMIT — EGRESS PROXY. A locked-down deployment may have no external DNS inside the pod and
  * send all egress through HTTP(S)_PROXY. There the local lookup fails for every public provider, so
  * refusing on that failure would break every legitimate custom endpoint. When a proxy is configured
- * and the local lookup FAILS, step 2 is skipped and the proxy resolves the name; the deny-list then
+ * and the local lookup FAILS, step 2 is skipped and the proxy resolves the name — unless NO_PROXY
+ * names the host, in which case fetch dials it directly and the name is refused; the deny-list then
  * has to be enforced at the proxy, which is the deployment's responsibility. When the local lookup
  * SUCCEEDS, its answers are still checked, proxy or not. Literal addresses, `localhost`, metadata
  * names and the scheme are checked in step 1 whatever the proxy says.
@@ -69,7 +70,8 @@ export type OutboundPolicy = {
   fetchImpl?: typeof fetch;
   /**
    * Whether `fetch` will send this URL through an egress proxy. Injected by tests; defaults to
-   * reading HTTPS_PROXY / HTTP_PROXY (either case) from the environment.
+   * reading HTTPS_PROXY / HTTP_PROXY and NO_PROXY (either case) from the environment
+   * ({@link proxiedByEnvironment}).
    */
   viaProxy?: (url: URL) => boolean;
 };
@@ -97,12 +99,56 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const systemLookup: OutboundLookup = (hostname) =>
   dnsLookup(hostname, { all: true, verbatim: true });
 
-/** Whether Bun's `fetch` would send this URL through a proxy, by the environment it reads. */
-function environmentProxy(url: URL): boolean {
-  const env = process.env;
+/**
+ * Whether Bun's `fetch` would send this URL through a proxy, by the environment it reads.
+ *
+ * NO_PROXY FIRST. A host that matches NO_PROXY (or `no_proxy`) is dialled DIRECTLY even with a proxy
+ * configured, and then resolved by this pod. Treating it as proxied let a tenant name such a host,
+ * have the guard's own lookup fail, skip the address check on the strength of a proxy that would
+ * never see the request, and reach an internal address with the credential attached. So a NO_PROXY
+ * match is "not proxied", and an unresolved name is refused.
+ *
+ * Matched GENEROUSLY, because a false match only refuses a name this pod cannot resolve, while a
+ * missed match is the hole. Bun, as driven: comma-separated, trimmed, case-insensitive; `*` matches
+ * everything; `host` and `.host` both match `host`; `host:port` only on that port. Here, besides,
+ * every entry also matches its subdomains, `*.host` is read as `.host`, and a port on an entry is
+ * ignored.
+ */
+export function proxiedByEnvironment(
+  url: URL,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
   const https = env.HTTPS_PROXY ?? env.https_proxy;
   const http = env.HTTP_PROXY ?? env.http_proxy;
-  return Boolean(url.protocol === "https:" ? https || http : http);
+  const proxy = url.protocol === "https:" ? https || http : http;
+  if (!proxy) return false;
+  return !bypassesProxy(url.hostname, [env.NO_PROXY, env.no_proxy]);
+}
+
+function bypassesProxy(
+  rawHost: string,
+  lists: readonly (string | undefined)[],
+): boolean {
+  const host = rawHost
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "")
+    .toLowerCase();
+  for (const list of lists) {
+    for (const raw of (list ?? "").split(",")) {
+      let entry = raw.trim().toLowerCase();
+      if (!entry) continue;
+      if (entry === "*") return true;
+      // `[::1]:8080` and `host:443`: the address part only; the port is ignored (see above).
+      const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(entry);
+      if (bracketed) entry = bracketed[1] ?? "";
+      else if (/^[^:]+:\d+$/.test(entry))
+        entry = entry.slice(0, entry.lastIndexOf(":"));
+      entry = entry.replace(/^\*?\./, "").replace(/\.$/, "");
+      if (!entry) continue;
+      if (host === entry || host.endsWith(`.${entry}`)) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -311,7 +357,7 @@ export async function assertResolvesPublic(
   if (answers.length === 0) {
     // No local answer. Behind an egress proxy the proxy resolves it (KNOWN LIMIT — EGRESS PROXY);
     // otherwise the request could not go anywhere anyway: unreachable, not forbidden.
-    if ((policy.viaProxy ?? environmentProxy)(url)) return;
+    if ((policy.viaProxy ?? proxiedByEnvironment)(url)) return;
     throw new OutboundRefusedError(`无法解析 ${hostname}。`, "unresolved");
   }
   for (const { address } of answers) {

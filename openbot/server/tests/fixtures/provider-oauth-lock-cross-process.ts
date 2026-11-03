@@ -20,12 +20,33 @@ function holder(command: string[]) {
     stderr: "pipe",
   });
   let acquired = false;
+  // Both owners say `waiting` right before their attempt and `locked` once they hold the lock.
+  // `waiting` has its own, longer bound: a cold start is not a held lock.
+  let markWaiting: () => void = () => {};
+  const waiting = new Promise<void>((resolve) => {
+    markWaiting = resolve;
+  });
   const ready = (async () => {
     const reader = child.stdout.getReader();
-    const timeout = setTimeout(() => child.kill(), 15000);
+    let timeout = setTimeout(() => child.kill(), 60000);
+    let sawWaiting = false;
     try {
       let output = "";
-      while (!output.includes("\n")) {
+      for (;;) {
+        const lines = output.split("\n").slice(0, -1).map((line) => line.trim());
+        if (lines[0] !== undefined && lines[0] !== "waiting")
+          throw new Error(`Unexpected readiness: ${output}`);
+        if (lines.length >= 1 && !sawWaiting) {
+          sawWaiting = true;
+          markWaiting();
+          clearTimeout(timeout);
+          timeout = setTimeout(() => child.kill(), 15000);
+        }
+        if (lines.length >= 2) {
+          if (lines[1] !== "locked" || lines.length > 2)
+            throw new Error(`Unexpected readiness: ${output}`);
+          break;
+        }
         const { done, value } = await reader.read();
         if (done)
           throw new Error(
@@ -33,15 +54,19 @@ function holder(command: string[]) {
           );
         output += new TextDecoder().decode(value);
       }
-      if (output.trim() !== "locked")
-        throw new Error(`Unexpected readiness: ${output}`);
       acquired = true;
     } finally {
       reader.releaseLock();
       clearTimeout(timeout);
     }
   })();
-  return { child, ready, acquired: () => acquired };
+  // An owner that fails before `waiting` rejects this too, rather than leaving it pending.
+  return {
+    child,
+    ready,
+    waiting: Promise.race([waiting, ready]),
+    acquired: () => acquired,
+  };
 }
 try {
   const nativeFirst = holder([native, file]);
@@ -81,6 +106,7 @@ try {
   await bunFirst.ready;
   const pendingNative = holder([native, file]);
   children.push(pendingNative);
+  await pendingNative.waiting;
   await Bun.sleep(200);
   if (pendingNative.acquired())
     throw new Error("Native entered a live Bun lock.");
