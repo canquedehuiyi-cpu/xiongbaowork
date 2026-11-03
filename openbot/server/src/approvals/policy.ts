@@ -1,12 +1,15 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
-import type {
-  ApprovalCandidate,
-  ApprovalPolicyOutcome,
-  ApprovalRule,
-  ApprovalTeamRule,
-  HostCommandPolicy,
-  RuleBehaviour,
+import {
+  type ApprovalCandidate,
+  type ApprovalPolicyOutcome,
+  type ApprovalRule,
+  type ApprovalTeamRule,
+  DEFAULT_EMPLOYEE_SECURITY,
+  type EmployeeSecuritySettings,
+  type HostCommandPolicy,
+  type RuleBehaviour,
+  TIGHTENING_BEHAVIOURS,
 } from "./types";
 
 /**
@@ -26,7 +29,18 @@ const RANK: Record<RuleBehaviour, number> = {
   pre_approved: 1,
   ask: 2,
   hand_off: 3,
+  deny: 4,
 };
+/**
+ * A behaviour's strictness. One this code does not know (a row written by newer code, or by hand)
+ * ranks as `deny`, the strictest: an unreadable rule never lets an action through (SEC1 §4.1).
+ */
+const rankOf = (behaviour: string): number =>
+  Object.hasOwn(RANK, behaviour) ? RANK[behaviour as RuleBehaviour] : RANK.deny;
+/** Whether a behaviour only ever makes the gate stricter. An unknown one counts as stricter. */
+export const tightens = (behaviour: string): boolean =>
+  (TIGHTENING_BEHAVIOURS as readonly string[]).includes(behaviour) ||
+  !Object.hasOwn(RANK, behaviour);
 
 /** `*` matches any run of characters; everything else is literal and the whole value must match. */
 export function globMatches(pattern: string, value: string): boolean {
@@ -52,24 +66,80 @@ export function ruleMatches(rule: AnyRule, candidate: ApprovalCandidate) {
   );
 }
 
-/** The strictest matching rule across both layers. A tie goes to the team's locked row. */
+export type RuleLayer = "team_rule" | "owner_rule" | "personal_rule";
+
+/**
+ * The strictest matching rule across the layers: the team's, the Bot owner's (SEC1 D9), and the
+ * acting person's own. A tie goes to the earlier layer, so the team's locked row wins it, then the
+ * owner's.
+ */
 export function strictestRule(
   candidate: ApprovalCandidate,
   team: readonly ApprovalTeamRule[],
   personal: readonly ApprovalRule[],
-): { rule: AnyRule; layer: "team_rule" | "personal_rule" } | undefined {
-  let best: { rule: AnyRule; layer: "team_rule" | "personal_rule" } | undefined;
+  owner: readonly ApprovalRule[] = [],
+): { rule: AnyRule; layer: RuleLayer } | undefined {
+  let best: { rule: AnyRule; layer: RuleLayer } | undefined;
   for (const [layer, rules] of [
     ["team_rule", team],
+    ["owner_rule", owner],
     ["personal_rule", personal],
   ] as const) {
     for (const rule of rules) {
       if (!ruleMatches(rule, candidate)) continue;
-      if (!best || RANK[rule.behaviour] > RANK[best.rule.behaviour])
+      if (!best || rankOf(rule.behaviour) > rankOf(best.rule.behaviour))
         best = { rule, layer };
     }
   }
   return best;
+}
+
+/**
+ * Whether a tool is disabled outright for this Bot and person: a `deny` rule (or one this code
+ * cannot read) in any layer that names the tool for every effect and every target. Such a tool is
+ * hidden from the model (SEC1 D4); a `deny` narrowed to one target only refuses at the gate.
+ *
+ * The layers arrive already filtered the way the gate filters them, so a tool hidden here is one the
+ * gate would refuse on every call.
+ */
+export function toolDisabled(
+  input: { botId: string; toolRef: string },
+  layers: readonly (readonly AnyRule[])[],
+): boolean {
+  return layers.some((rules) =>
+    rules.some(
+      (rule) =>
+        rankOf(rule.behaviour) >= RANK.deny &&
+        rule.effect === "*" &&
+        rule.scope === "*" &&
+        globMatches(rule.botId, input.botId) &&
+        globMatches(rule.toolRef, input.toolRef),
+    ),
+  );
+}
+
+/**
+ * The rules of the person acting and of the Bot's owner that the gate weighs.
+ *
+ * The acting person's own rules all apply, unless the workspace switched custom rules off: then only
+ * the ones that tighten (ask, hand off, disable) do, because a rule that can only stop an action
+ * never widens what a workspace allowed (D6).
+ *
+ * The owner's rules apply to somebody else using their Bot only where they tighten. "Disable this
+ * tool on my Bot" binds everybody who uses it (D9); "run this directly" is the owner's choice for
+ * their own runs and does not switch off another person's own "ask me before changes".
+ */
+export function applicableRules(input: {
+  personal: readonly ApprovalRule[];
+  owner?: readonly ApprovalRule[];
+  customRulesEnabled: boolean;
+}): { personal: ApprovalRule[]; owner: ApprovalRule[] } {
+  return {
+    personal: input.personal.filter(
+      (rule) => input.customRulesEnabled || tightens(rule.behaviour),
+    ),
+    owner: (input.owner ?? []).filter((rule) => tightens(rule.behaviour)),
+  };
 }
 
 /**
@@ -142,6 +212,292 @@ export function safetyRequirement(
   ].join(" ");
   const hit = SAFETY_REQUIREMENTS.find((entry) => entry.pattern.test(words));
   return hit ? { id: hit.id, reason: hit.reason } : undefined;
+}
+
+/**
+ * SEC1 §4.3: commands that are hard or impossible to undo, or that hand the machine to someone else.
+ *
+ * Deterministic and model-free: this is a floor, not a reviewer. Each entry is a regular expression
+ * over the whole command text, case-insensitive, matched anywhere, so a dangerous step chained after
+ * a harmless one (`cd x && rm -rf .`) is caught. Deliberately broad: a false positive costs the
+ * person one click, a miss costs them their files. Not configurable by a workspace in v1.0 (D7).
+ *
+ * "Within one step" below is `[^;&|\n]*`: the flag has to belong to the same simple command as the
+ * program, so `rm a; ls -R` is not a recursive delete, while `rm -f -r x` is.
+ */
+const STEP = String.raw`[^;&|\n]*`;
+const DANGEROUS_COMMANDS: readonly { id: string; pattern: RegExp }[] = [
+  // rm with -r / -R / -rf / -fr / --recursive, or --no-preserve-root, anywhere in its own step.
+  {
+    id: "recursive_delete",
+    pattern: new RegExp(
+      String.raw`\brm\b${STEP}(\s-[a-z]*r[a-z]*\b|\s--recursive\b|--no-preserve-root)`,
+      "i",
+    ),
+  },
+  { id: "find_delete", pattern: new RegExp(String.raw`\bfind\b${STEP}\s-delete\b`, "i") },
+  { id: "make_filesystem", pattern: /\bmkfs(\.[a-z0-9]+)?\b|\bwipefs\b|\bformat-volume\b/i },
+  { id: "disk_write", pattern: new RegExp(String.raw`\bdd\b${STEP}\bof=`, "i") },
+  { id: "shred", pattern: /\bshred\b/i },
+  { id: "raw_device_write", pattern: />\s*\/dev\/(sd|hd|nvme|disk|mmcblk|xvd)/i },
+  {
+    id: "world_writable",
+    pattern: new RegExp(
+      String.raw`\bchmod\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)${STEP}\b(0?777|a\+rwx|o\+w)\b|\bchmod\b${STEP}\b(0?777|a\+rwx)\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)`,
+    ),
+  },
+  {
+    id: "recursive_chown",
+    pattern: new RegExp(String.raw`\bchown\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)`),
+  },
+  // Anything piped into a shell, and a shell fed a download: `curl … | sh`, `bash <(curl …)`.
+  {
+    id: "pipe_to_shell",
+    pattern:
+      /\|\s*(sudo\s+|env\s+)?(ba|z|k|da|fi|c|tc)?sh\b|\|\s*(sudo\s+)?(python[0-9.]*|perl|ruby|node)\s*(-\s*)?($|[;&|])|<\(\s*(curl|wget)\b|\b(ba|z)?sh\s+-c\s+["']?\$\(\s*(curl|wget)\b/i,
+  },
+  { id: "eval", pattern: /(^|[\s;&|(`])eval\s/i },
+  { id: "privilege", pattern: /(^|[\s;&|(`])(sudo|doas|pkexec)\b|(^|[\s;&|(`])su(\s+-\s*|\s+root\b|\s*$)/i },
+  {
+    id: "power",
+    pattern: /\b(shutdown|reboot|poweroff|halt)\b|(^|[\s;&|])init\s+[06]\b|\bstop-computer\b|\brestart-computer\b/i,
+  },
+  {
+    id: "force_push",
+    pattern: new RegExp(
+      String.raw`\bgit\b${STEP}\bpush\b${STEP}(\s--force(-with-lease)?\b|\s-[a-z]*f[a-z]*\b|\s\+[^\s]+)`,
+      "i",
+    ),
+  },
+  { id: "hard_reset", pattern: new RegExp(String.raw`\bgit\b${STEP}\breset\b${STEP}--hard\b`, "i") },
+  { id: "git_clean", pattern: new RegExp(String.raw`\bgit\b${STEP}\bclean\b${STEP}\s-[a-z]*f`, "i") },
+  // Windows: recursive deletes in cmd and PowerShell, formatting a drive, deleting registry keys.
+  {
+    id: "windows_recursive_delete",
+    pattern: new RegExp(
+      String.raw`\b(del|erase|rd|rmdir)\b${STEP}\s\/s\b|\b(remove-item|ri|rm|del|erase|rd|rmdir)\b${STEP}\s-recurse\b`,
+      "i",
+    ),
+  },
+  // `format C:`, never a bare `format`: `git log --format=%h` and `npm run format` are not this.
+  { id: "format_drive", pattern: /(^|[\s;&|(])format(\.com)?\s+["']?[a-z]:/i },
+  { id: "registry_delete", pattern: /\breg(\.exe)?\s+delete\b|\bremove-itemproperty\b/i },
+  // Writing into the system's own configuration: `> /etc/…`, `tee /etc/…`, `> C:\Windows\…`.
+  {
+    id: "system_config_write",
+    pattern:
+      /(>{1,2}|\btee\b(\s+-[a-z]+)*)\s*["']?(\/etc\/|\/boot\/|\/usr\/(s?bin|lib)\/|[a-z]:[\\/]+windows\b)/i,
+  },
+  { id: "fork_bomb", pattern: /:\s*\(\s*\)\s*\{[^}]*:\s*\|\s*:/ },
+];
+/** Longer than this is not classified, it is asked about: too long to show, too long to trust. */
+const MAX_CLASSIFIED_COMMAND = 20_000;
+
+/**
+ * Whether a command is dangerous (SEC1 §4.3). Fails closed: a command that is not a string, or is
+ * too long to classify, counts as dangerous, and so does any error while classifying it.
+ */
+export function dangerousCommand(command: unknown): { id: string } | undefined {
+  try {
+    if (typeof command !== "string") return { id: "unreadable" };
+    if (command.length > MAX_CLASSIFIED_COMMAND) return { id: "too_long" };
+    const hit = DANGEROUS_COMMANDS.find((entry) => entry.pattern.test(command));
+    return hit ? { id: hit.id } : undefined;
+  } catch {
+    return { id: "unclassifiable" };
+  }
+}
+
+/**
+ * SEC1 §4.4: files that hold secrets, matched inside the Bot's workspace (the workspace boundary
+ * itself is the runner's and the computer's job). Can be switched off one by one, never removed (D8).
+ */
+export const DEFAULT_SENSITIVE_PATHS = [
+  ".env*",
+  "*.pem",
+  "*.key",
+  "id_rsa*",
+  ".ssh/**",
+  ".aws/**",
+  ".git/config",
+  "*credentials*",
+  "*.kdbx",
+] as const;
+
+/** A sensitive-path pattern a person may add: segments of letters, digits and `._-*`, joined by `/`. */
+export const SENSITIVE_PATH_PATTERN =
+  /^(?!\/)(\*\*|[A-Za-z0-9._*-]{1,120})(\/(\*\*|[A-Za-z0-9._*-]{1,120})){0,15}$/;
+
+function segmentMatches(pattern: string, segment: string): boolean {
+  const source = pattern
+    .split("*")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[^/]*");
+  return new RegExp(`^${source}$`, "i").test(segment);
+}
+
+/** Whether `pattern` matches `path` from `from` onward, with `**` standing for any number of segments. */
+function segmentsMatch(
+  pattern: readonly string[],
+  path: readonly string[],
+  p = 0,
+  from = 0,
+): boolean {
+  if (p === pattern.length) return from === path.length;
+  if (pattern[p] === "**")
+    return (
+      segmentsMatch(pattern, path, p + 1, from) ||
+      (from < path.length && segmentsMatch(pattern, path, p, from + 1))
+    );
+  return (
+    from < path.length &&
+    segmentMatches(pattern[p] as string, path[from] as string) &&
+    segmentsMatch(pattern, path, p + 1, from + 1)
+  );
+}
+
+const segmentsOf = (path: string) =>
+  path
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((segment) => segment !== "" && segment !== ".");
+
+/**
+ * The sensitive pattern `path` falls under, if any (SEC1 §4.4). A pattern matches the END of the
+ * path, starting at any folder: `.git/config` matches `repo/.git/config`, `*.pem` matches a file of
+ * that name in any folder, and `.ssh/**` matches the folder itself and everything in it. Case does
+ * not matter, and `\` separates as `/` does. Fails closed: a path that is not a string, or a match
+ * that throws, counts as sensitive.
+ */
+export function sensitivePath(
+  path: unknown,
+  patterns: readonly string[] = DEFAULT_SENSITIVE_PATHS,
+): { pattern: string } | undefined {
+  try {
+    if (typeof path !== "string") return { pattern: "(unreadable)" };
+    if (path.length > 4096) return { pattern: "(too long)" };
+    const segments = segmentsOf(path);
+    for (const pattern of patterns) {
+      const wanted = segmentsOf(pattern);
+      if (wanted.length === 0) continue;
+      for (let start = 0; start < segments.length; start += 1)
+        if (segmentsMatch(wanted, segments, 0, start)) return { pattern };
+    }
+    return undefined;
+  } catch {
+    return { pattern: "(unclassifiable)" };
+  }
+}
+
+/** The patterns in force for a Bot: the defaults it has not switched off, then the ones it added. */
+export function sensitivePathsInForce(
+  settings: Pick<EmployeeSecuritySettings, "extraSensitivePaths" | "disabledDefaultPaths">,
+): string[] {
+  return [
+    ...DEFAULT_SENSITIVE_PATHS.filter(
+      (pattern) => !settings.disabledDefaultPaths.includes(pattern),
+    ),
+    ...settings.extraSensitivePaths,
+  ];
+}
+
+/** The tools whose subject is a command, and the ones whose subject is a file path. */
+const COMMAND_TOOLS = /^(computer_run_command|host\/run_command)$/;
+const PATH_TOOLS =
+  /^(computer_(read_file|write_file|list_files|download_file)|host\/(read_file|write_file|list_files))$/;
+
+function field(value: unknown, key: string): unknown {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** The command a call runs: the call site's own value when it gave one, otherwise the arguments'. */
+function commandOf(candidate: ApprovalCandidate): unknown {
+  return candidate.subject?.command !== undefined
+    ? candidate.subject.command
+    : field(candidate.args, "command");
+}
+
+/** The path a file call names, or `undefined` when it names none this code can find. */
+function pathOf(candidate: ApprovalCandidate): unknown {
+  if (candidate.subject?.path !== undefined) return candidate.subject.path;
+  for (const source of [candidate.target, candidate.args])
+    for (const key of ["filePath", "relativePath", "path"]) {
+      const value = field(source, key);
+      if (value !== undefined) return value;
+    }
+  return undefined;
+}
+
+/** The words of a command that could name a file, for the sensitive-path floor. */
+const commandWords = (command: string) =>
+  command
+    .split(/[\s"'`=<>|;&()]+/)
+    .filter((word) => word !== "")
+    .slice(0, 2000);
+
+export type SecurityFloor = {
+  source: "dangerous_command" | "sensitive_path";
+  reason: string;
+};
+
+/**
+ * The two deterministic floors for one action (SEC1 §4.2 step 4): a dangerous command, or a
+ * sensitive path (named by a file call, or appearing as a word of a command). Either one means the
+ * action asks at least. `enforceDangerousCommands` is the team's switch (D10), which a Bot's own
+ * switch cannot turn off.
+ */
+export function securityFloor(
+  candidate: ApprovalCandidate,
+  security: EmployeeSecuritySettings,
+  enforceDangerousCommands = false,
+): SecurityFloor | undefined {
+  const commandTool = COMMAND_TOOLS.test(candidate.toolRef);
+  const command = commandTool ? commandOf(candidate) : undefined;
+  if (
+    commandTool &&
+    (security.dangerousCommands !== "off" || enforceDangerousCommands)
+  ) {
+    const hit = dangerousCommand(command);
+    if (hit)
+      return {
+        source: "dangerous_command",
+        reason:
+          hit.id === "unreadable" || hit.id === "too_long" || hit.id === "unclassifiable"
+            ? "This command could not be checked for dangerous operations, so it needs approval before it runs."
+            : "This command can delete data, change the system or hand the computer to someone else, so it needs approval before it runs.",
+      };
+  }
+  if (security.sensitivePaths === "off") return undefined;
+  const patterns = sensitivePathsInForce(security);
+  if (PATH_TOOLS.test(candidate.toolRef)) {
+    const path = pathOf(candidate);
+    // A file call that names no path this code can read is asked about, not waved through.
+    const hit = sensitivePath(path === undefined ? null : path, patterns);
+    if (hit)
+      return {
+        source: "sensitive_path",
+        reason: `This touches a file that may hold secrets (${hit.pattern}), so it needs approval first.`,
+      };
+  }
+  if (commandTool) {
+    if (typeof command !== "string")
+      return {
+        source: "sensitive_path",
+        reason:
+          "This command could not be checked for files that hold secrets, so it needs approval before it runs.",
+      };
+    for (const word of commandWords(command)) {
+      const hit = sensitivePath(word, patterns);
+      if (hit)
+        return {
+          source: "sensitive_path",
+          reason: `This command names a file that may hold secrets (${hit.pattern}), so it needs approval before it runs.`,
+        };
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -272,21 +628,71 @@ export async function reviewAction(input: {
   }
 }
 
+/** What a refused action tells the Bot: final, and not something to work around. */
+export const TOOL_DISABLED =
+  "This tool is disabled for this Bot, so the action was not done and cannot be approved. Do not try it, or anything equivalent, another way; tell the person it is disabled.";
+export const HOST_COMMANDS_NEVER =
+  "Commands on paired computers are set to never run by your team, so this command was not run. Do not try it another way; tell the person.";
+
 /**
- * The whole decision, layer by layer. Safety first and unconditionally; then the strictest rule;
- * then the reviewer where it applies; then the person's own "ask before making changes" default.
+ * The whole decision, layer by layer (SEC1 §4.2). The first layer that settles the action decides,
+ * and every later one can only make it stricter:
+ *
+ *  1. The deployment's boundary and the enterprise controls, before the gate (computer/gateway.ts).
+ *  2. A disabled tool: a `deny` in any layer refuses the action outright, with no request to approve.
+ *     So does the team's host-command cap of `never` for a command on a paired computer (D5).
+ *  3. The built-in safety requirements: always handed to the person. "Run directly" cannot skip them.
+ *  4. The deterministic floors: a dangerous command or a sensitive path asks at least (§4.3, §4.4),
+ *     and so does the team cap of `ask` for a command on a paired computer.
+ *  5. The strictest rule across the team's, the owner's and the person's own; then the reviewer
+ *     where it applies; then the person's own "ask before making changes" default.
  */
 export async function decideAction(input: {
   candidate: ApprovalCandidate;
   messages?: readonly Message[];
   team: readonly ApprovalTeamRule[];
   personal: readonly ApprovalRule[];
+  /** The Bot owner's rules, when somebody other than the owner is acting (D9). */
+  owner?: readonly ApprovalRule[];
   customRulesEnabled: boolean;
   autoReview: boolean;
   askBeforeChanges: boolean;
   model?: ReviewModel;
+  /** The Bot's security floors. Absent means the defaults: both floors ask. */
+  security?: EmployeeSecuritySettings;
+  /** The team's "every Bot asks before a dangerous command" switch (D10). */
+  enforceDangerousCommands?: boolean;
+  /** The team's host-command cap, applied here to commands on a paired computer (D5). */
+  hostCommandsCap?: HostCommandPolicy;
 }): Promise<ApprovalPolicyOutcome> {
   const { candidate } = input;
+  const layers = applicableRules({
+    personal: input.personal,
+    ...(input.owner ? { owner: input.owner } : {}),
+    customRulesEnabled: input.customRulesEnabled,
+  });
+  const matched = strictestRule(
+    candidate,
+    input.team,
+    layers.personal,
+    layers.owner,
+  );
+  if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
+    return {
+      behaviour: "deny",
+      source: matched.layer,
+      ruleId: matched.rule.id,
+      reason: TOOL_DISABLED,
+    };
+  const runnerCommand =
+    candidate.subject?.runner === true &&
+    candidate.toolRef === "computer_run_command";
+  if (runnerCommand && input.hostCommandsCap === "never")
+    return {
+      behaviour: "deny",
+      source: "host_command_cap",
+      reason: HOST_COMMANDS_NEVER,
+    };
   const safety = safetyRequirement(candidate);
   if (safety)
     return {
@@ -294,11 +700,39 @@ export async function decideAction(input: {
       source: "safety",
       reason: safety.reason,
     };
-  const matched = strictestRule(
-    candidate,
-    input.team,
-    input.customRulesEnabled ? input.personal : [],
-  );
+  const floor: SecurityFloor | { source: "host_command_cap"; reason: string } | undefined =
+    securityFloor(
+      candidate,
+      input.security ?? DEFAULT_EMPLOYEE_SECURITY,
+      input.enforceDangerousCommands === true,
+    ) ??
+    (runnerCommand && input.hostCommandsCap === "ask"
+      ? {
+          source: "host_command_cap",
+          reason:
+            "Your team asks before any command runs on a paired computer, so this needs approval.",
+        }
+      : undefined);
+  const decided = await decideByRules(input, matched);
+  // A floor only raises: an action the rules let through still asks; one already asked about or
+  // handed off keeps the stricter answer it had.
+  if (floor && decided.behaviour === "allow")
+    return {
+      behaviour: "ask",
+      source: floor.source,
+      reason: floor.reason,
+      ...(decided.ruleId ? { ruleId: decided.ruleId } : {}),
+      ...(decided.review ? { review: decided.review } : {}),
+    };
+  return decided;
+}
+
+/** Step 5 of {@link decideAction}: the strictest rule, the reviewer, and the person's default. */
+async function decideByRules(
+  input: Parameters<typeof decideAction>[0],
+  matched: ReturnType<typeof strictestRule>,
+): Promise<ApprovalPolicyOutcome> {
+  const { candidate } = input;
   const rule = matched
     ? {
         ruleId: matched.rule.id,

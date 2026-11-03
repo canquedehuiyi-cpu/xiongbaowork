@@ -242,22 +242,35 @@ export function createApprovalService(
   ): Promise<ApprovalPolicyOutcome | undefined> {
     const policy = store.policy;
     if (!policy) return undefined;
-    const [preferences, team, teamRules, personal] = await Promise.all([
-      policy.preferences(candidate.actorId),
-      policy.teamSettings(),
-      policy.teamRules(),
-      store.rules(candidate.actorId),
-    ]);
+    /*
+     * The Bot owner's side is read in the owner's frame whoever acts (SEC1 D9). A failure to read it
+     * is not "no owner rules": it throws, and the action is not carried out (fail closed).
+     */
+    const [preferences, team, teamRules, personal, employee] =
+      await Promise.all([
+        policy.preferences(candidate.actorId),
+        policy.teamSettings(),
+        policy.teamRules(),
+        store.rules(candidate.actorId),
+        policy.employee?.(candidate.botId),
+      ]);
     const continuation = candidate.continuation ?? currentApprovalContext();
     const outcome = await decideAction({
       candidate,
       messages: continuation?.messages,
       team: teamRules,
       personal,
+      // The owner's own rules are already their personal rules when the owner is the one acting.
+      ...(employee?.ownerUserId && employee.ownerUserId !== candidate.actorId
+        ? { owner: employee.rules }
+        : {}),
       customRulesEnabled: team.customRulesEnabled,
       autoReview: preferences.autoReview || team.enforceAutoReview,
       askBeforeChanges: preferences.enabled,
       ...(options.review ? { model: options.review } : {}),
+      ...(employee ? { security: employee.security } : {}),
+      enforceDangerousCommands: team.enforceDangerousCommands,
+      hostCommandsCap: team.hostCommandsCap,
     });
     // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.
     if (
@@ -398,6 +411,9 @@ export function createApprovalService(
       const outcome = await evaluate(candidate);
       if (outcome) {
         if (outcome.behaviour === "allow") return;
+        // Disabled: refused here, after its audit row, with nothing opened and nothing to approve.
+        if (outcome.behaviour === "deny")
+          throw new ApprovalRefusedError(outcome.reason);
       } else if (
         candidate.effect === "read" ||
         !(await store.enabled(candidate.actorId))

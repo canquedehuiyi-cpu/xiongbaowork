@@ -38,6 +38,7 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
   customRulesEnabled: true,
   hostCommandsCap: "allow",
+  enforceDangerousCommands: false,
 };
 
 /** The real transaction callback type supplied by the tenant-bound DB client. */
@@ -370,6 +371,8 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           enforceAutoReview: row.enforceAutoReview,
           customRulesEnabled: row.customRulesEnabled,
           hostCommandsCap: row.hostCommandsCap,
+          // The column arrives with migration 0130; until then nobody can have switched it on.
+          enforceDangerousCommands: false,
         }
       : { ...DEFAULT_TEAM };
   };
