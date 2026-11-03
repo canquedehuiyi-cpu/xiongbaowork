@@ -86,6 +86,22 @@ export class ThreadUnavailableError extends Error {
 }
 
 /**
+ * A trusted continuation's run header whose terminal is not written yet (G01-E P20).
+ *
+ * The local continuation reserves its `thread_runs` row (`ap-local-…`, no events) before it enters
+ * the runtime, and its events and count land together with its terminal. Until then the header is a
+ * continuation still running — one running in this process enters the store itself, live, as it
+ * finishes, so loading the empty header too would show it twice — or one whose outcome was never
+ * recorded, which has nothing to replay. Ordinary runs cannot carry that prefix (`run` refuses it).
+ */
+function continuationInFlight(run: {
+  id: string;
+  eventCount: number;
+}): boolean {
+  return run.id.startsWith("ap-local-") && run.eventCount === 0;
+}
+
+/**
  * Whether the turn failed, as the stream itself said it did.
  *
  * `RUN_ERROR` is written by a run that could not carry on — the stall watchdog, an unreachable
@@ -152,6 +168,16 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         throw new Error("local_target_agent_input_mismatch");
     };
     verifyAgentInput();
+    /*
+     * The tenant's stored threads go into the store before this run is appended after them (G01-E
+     * P20), as `run` does. The load is once per tenant and never appends to a thread already holding
+     * runs, so a continuation that reached a cold thread first would be all that thread ever showed.
+     * It yields, so it is here, ahead of admission and of the await-free window below, and the
+     * trusted signal is checked again after it. A failed load is logged and retried on the next
+     * access, exactly as for `run`; it does not refuse the continuation.
+     */
+    await this.hydrate();
+    checkCancellation();
     // Capacity may yield; recheck the trusted signal before the admission CAS.
     if (this.quota) await this.quota.assertCapacity(tenant, "tasksPerMonth");
     checkCancellation();
@@ -559,11 +585,11 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
    *
    * Nothing calls this at boot: there is no frame at boot, and no single tenant whose threads they
    * are. It is awaited wherever a tenant first reaches a thread — every signed-in runtime request
-   * (`mountCopilotRuntime`), a run, and the local platform's history read — in that tenant's frame,
-   * and the reads below are re-entered in that frame explicitly. Row-level security decides what
-   * loads, and the query asks for the caller's own stamp and `system`'s besides, so even a frame that
-   * reads across tenants (`platform`) could not load somebody else's here; a frame that is not a
-   * person's loads nothing at all.
+   * (`mountCopilotRuntime`), a run, a trusted local continuation (`runContinuation`) and the local
+   * platform's history read — in that tenant's frame, and the reads below are re-entered in that
+   * frame explicitly. Row-level security decides what loads, and the query asks for the caller's own
+   * stamp and `system`'s besides, so even a frame that reads across tenants (`platform`) could not
+   * load somebody else's here; a frame that is not a person's loads nothing at all.
    *
    * Idempotent per tenant and safe under concurrent first requests: the promise is shared, so a
    * tenant's rows are read once. A load that fails is forgotten, so the next access tries again, and
@@ -614,6 +640,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           id: threadRuns.id,
           threadId: threadRuns.threadId,
           agentId: threadRuns.agentId,
+          eventCount: threadRuns.eventCount,
           createdAt: threadRuns.createdAt,
         })
         .from(threadRuns)
@@ -635,6 +662,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       }
       const runsOf = new Map<string, typeof runs>();
       for (const run of runs) {
+        if (continuationInFlight(run)) continue;
         const list = runsOf.get(run.threadId) ?? [];
         list.push(run);
         runsOf.set(run.threadId, list);
