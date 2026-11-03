@@ -529,7 +529,7 @@ describe("role writer startup frame (G01-E P3)", () => {
     expect(events).toContain("bound");
   });
 
-  test("the real writer binds under guard throw with no frame around start(), as src/index.ts calls it", async () => {
+  test("the real writer binds with no frame around start() and no unframed fallback, as src/index.ts calls it", async () => {
     const writerUrl = process.env.TEST_ROLE_WRITER_DATABASE_URL?.trim();
     if (!writerUrl)
       throw new Error(

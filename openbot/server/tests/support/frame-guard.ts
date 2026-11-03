@@ -2,21 +2,6 @@ import { expect } from "bun:test";
 import { TenantContextError } from "../../src/tenant/context";
 
 /**
- * Run `work` as an isolation probe for "no frame at all".
- *
- * G01-E: a statement issued outside every tenant frame no longer means "as `system`"; it is a
- * `TenantContextError`, always. This used to switch `OPENBOT_TENANT_FRAME_GUARD` to `throw` around
- * `work`, while that guard decided what an unframed read did. P16 removed the guard with the
- * fallback, so there is nothing left to switch and this only runs `work`. It is kept so a test that
- * uses the unframed statement as a probe still says which question it is asking.
- */
-export async function underThrowGuard<T>(
-  work: () => Promise<T> | T,
-): Promise<T> {
-  return await work();
-}
-
-/**
  * The refusal `currentTenant()` makes outside every frame, word for word.
  *
  * Pinned literally, because "some `TenantContextError`" is not the question. The same class is
@@ -39,14 +24,12 @@ export const UNFRAMED_REFUSAL = "no tenant frame";
 export async function expectUnframedRefused(
   work: () => unknown,
 ): Promise<void> {
-  const outcome = await underThrowGuard(() =>
-    Promise.resolve()
-      .then(async () => await work())
-      .then(
-        (value) => ({ refused: false as const, value }),
-        (error: unknown) => ({ refused: true as const, error }),
-      ),
-  );
+  const outcome = await Promise.resolve()
+    .then(async () => await work())
+    .then(
+      (value) => ({ refused: false as const, value }),
+      (error: unknown) => ({ refused: true as const, error }),
+    );
   if (!outcome.refused)
     throw new Error(
       `expected the unframed work to be refused with "${UNFRAMED_REFUSAL}", but it resolved`,

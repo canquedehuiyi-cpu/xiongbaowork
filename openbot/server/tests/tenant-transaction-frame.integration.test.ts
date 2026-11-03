@@ -91,7 +91,7 @@ test("a transaction's callback runs in the frame that opened it, on a fresh conn
   expect(again).toBe(alice);
 });
 
-test("markAttachmentsSent records a send under the throwing guard", async () => {
+test("markAttachmentsSent records a send in the caller's frame, with no unframed fallback", async () => {
   const database = freshDatabase();
   const channelId = `${suite}-channel-${randomUUID()}`;
   const threadId = `${suite}-thread-${randomUUID()}`;
@@ -143,7 +143,7 @@ test("markAttachmentsSent records a send under the throwing guard", async () => 
   expect(row?.attachedAt).toBeInstanceOf(Date);
 });
 
-test("credentials.rotate seals the new row to the caller's tenant under the throwing guard", async () => {
+test("credentials.rotate seals the new row to the caller's tenant, with no unframed fallback", async () => {
   const database = freshDatabase();
   const store = createCredentialStore(database);
   const previousId = randomUUID();

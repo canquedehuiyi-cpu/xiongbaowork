@@ -29,7 +29,6 @@ import {
 import { asPlatform, currentTenant, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
-import { underThrowGuard } from "./support/frame-guard";
 
 /**
  * THE CALLBACK ROUTE FINDS ITS BOT UNDER ROW SECURITY, AND RUNS THE CALL IN THE RIGHT FRAME (G01-E PCB).
@@ -340,15 +339,15 @@ describe("a callback with a Bot's own token", () => {
     expect(await callRows(botId)).toEqual([]);
   });
 
-  test("runs with no unframed fallback: OPENBOT_TENANT_FRAME_GUARD=throw", async () => {
+  test("with no unframed fallback, a private and a team Bot's calls each succeed in their caller's frame", async () => {
     const privateBot = await createBot("private");
     const teamBot = await createBot("public");
     vendorFrames.length = 0;
 
-    const answers = await underThrowGuard(async () => [
+    const answers = [
       await callBack(privateBot.token, privateBot.botId, owner.id),
       await callBack(teamBot.token, teamBot.botId, teammate.id),
-    ]);
+    ];
 
     expect(answers.map((answer) => answer.status)).toEqual([200, 200]);
     expect(answers.map((answer) => answer.body.isError)).toEqual([
@@ -371,10 +370,10 @@ describe("a callback whose token proves no Bot", () => {
     await as(owner, () => profiles.revokeCallbackToken(owner, botId));
     vendorFrames.length = 0;
 
-    const answers = await underThrowGuard(async () => [
+    const answers = [
       await callBack(mintCallbackToken(), botId, owner.id),
       await callBack(token, botId, owner.id),
-    ]);
+    ];
 
     expect(answers).toEqual([
       { status: 401, body: { error: "Not authorised." } },
@@ -401,9 +400,7 @@ describe("a `team` Bot's callback reaches the account its in-process turn would 
     vendorFrames.length = 0;
     vendorAccounts.length = 0;
 
-    const { status, body } = await underThrowGuard(() =>
-      callBack(token, botId, teammate.id),
-    );
+    const { status, body } = await callBack(token, botId, teammate.id);
 
     expect(status).toBe(200);
     expect(body.isError).toBe(false);
@@ -520,11 +517,11 @@ describe("a `team` Bot's callback reaches the account its in-process turn would 
     connected.set(teammate.id, new Set([server]));
     vendorAccounts.length = 0;
 
-    const answers = await underThrowGuard(async () => [
+    const answers = [
       await callBack(privateBot.token, privateBot.botId, owner.id),
       // The deployment-wide token proves no Bot of its own, so it never borrows an owner's account.
       await callBack(LEGACY_TOKEN, teamBot.botId, teammate.id, legacyApp),
-    ]);
+    ];
 
     expect(answers.map((answer) => answer.body.isError)).toEqual([
       false,
