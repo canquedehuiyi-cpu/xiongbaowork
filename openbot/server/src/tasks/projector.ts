@@ -1,4 +1,8 @@
+import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, count, eq, lt, sql } from "drizzle-orm";
+import { NOT_SHOWN } from "../../../shared/component-markers";
+import { attachmentIdsIn } from "../channels/attachment-parts";
+import { HEADLESS_COMPONENTS } from "../components/headless";
 import type { Database } from "../db/client";
 import { groupTaskRuns, tasks } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
@@ -89,6 +93,152 @@ export type TaskProjector = {
    */
   reclaimAbandoned(input: { olderThanMs: number }): Promise<number>;
 };
+
+/** A display component a run drew, with the props it drew it with. */
+export type DeliverableComponent = {
+  name: string;
+  args: Record<string, unknown>;
+};
+
+/**
+ * What a finished run left for a person to look at (spec A9, design note D6): the display components
+ * it drew and the attachments it produced. Stored on `tasks.deliverable_ref`.
+ *
+ * `kind` is what the board keys on. Other writers may put other shapes in the same column, and the
+ * board's chip is drawn only for this one, so a record that is not an output is never shown as one.
+ */
+export type DeliverableRef = {
+  kind: "deliverable";
+  components: DeliverableComponent[];
+  /** Attachment ids, as `/api/attachments/<id>` serves them. */
+  attachments: string[];
+};
+
+/**
+ * The ref for what a run produced, or undefined when it produced nothing to look at.
+ *
+ * Undefined rather than an empty record, so a turn that only answered in words stores null exactly as
+ * it did before. What lane such a card belongs in is a separate product decision, and the status rule
+ * in `finished` does not read this value.
+ */
+export function deliverableRefOf(input: {
+  components?: readonly DeliverableComponent[];
+  attachments?: readonly string[];
+}): DeliverableRef | undefined {
+  const components = [...(input.components ?? [])];
+  const attachments = [...new Set(input.attachments ?? [])];
+  if (components.length === 0 && attachments.length === 0) return undefined;
+  return { kind: "deliverable", components, attachments };
+}
+
+/** Whether a stored `deliverable_ref` is a run's output rather than some other record. */
+export function isDeliverableRef(value: unknown): value is DeliverableRef {
+  if (!value || typeof value !== "object") return false;
+  const ref = value as Partial<DeliverableRef>;
+  return (
+    ref.kind === "deliverable" &&
+    Array.isArray(ref.components) &&
+    Array.isArray(ref.attachments)
+  );
+}
+
+const DISPLAY_COMPONENTS = new Set(HEADLESS_COMPONENTS.map(({ name }) => name));
+
+function parsedArgs(raw: string): Record<string, unknown> | null {
+  try {
+    const args = JSON.parse(raw || "{}");
+    return args && typeof args === "object" && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : null;
+  } catch {
+    // Arguments that are not JSON were refused by the schema check, so nothing was drawn.
+    return null;
+  }
+}
+
+/**
+ * The attachments a run's own assistant messages carry. A person's attachments are input, not
+ * output, so user messages are never read here.
+ */
+export function producedAttachments(messages: readonly Message[]): string[] {
+  const ids: string[] = [];
+  for (const message of messages)
+    if (message.role === "assistant")
+      ids.push(...attachmentIdsIn(message.content));
+  return [...new Set(ids)];
+}
+
+/**
+ * What one streamed run produced, read from the events it emitted.
+ *
+ * A component counts when its call named a display component and carried JSON arguments, and no
+ * result in the same stream refused it. A browser answers its own component calls after the stream
+ * ends, so a result is only seen here for a call the server answered itself.
+ *
+ * `earlier` names the messages the run was handed: a snapshot repeats the whole thread, and an
+ * attachment an earlier turn produced is not this run's output.
+ */
+export function deliverableFromEvents(
+  events: readonly BaseEvent[],
+  earlier: ReadonlySet<string> = new Set(),
+): DeliverableRef | undefined {
+  const calls = new Map<string, { name: string; args: string }>();
+  const refused = new Set<string>();
+  const attachments: string[] = [];
+  for (const event of events) {
+    const value = event as BaseEvent & {
+      toolCallId?: string;
+      toolCallName?: string;
+      delta?: string;
+      content?: unknown;
+      messages?: Message[];
+    };
+    switch (event.type) {
+      case EventType.TOOL_CALL_START:
+      case EventType.TOOL_CALL_CHUNK: {
+        if (!value.toolCallId) break;
+        const call = calls.get(value.toolCallId) ?? {
+          name: value.toolCallName ?? "",
+          args: "",
+        };
+        if (value.toolCallName) call.name = value.toolCallName;
+        if (event.type === EventType.TOOL_CALL_CHUNK && value.delta)
+          call.args += value.delta;
+        calls.set(value.toolCallId, call);
+        break;
+      }
+      case EventType.TOOL_CALL_ARGS: {
+        const call = value.toolCallId ? calls.get(value.toolCallId) : undefined;
+        if (call && value.delta) call.args += value.delta;
+        break;
+      }
+      case EventType.TOOL_CALL_RESULT:
+        if (
+          value.toolCallId &&
+          typeof value.content === "string" &&
+          value.content.startsWith(NOT_SHOWN)
+        )
+          refused.add(value.toolCallId);
+        break;
+      case EventType.MESSAGES_SNAPSHOT:
+        attachments.push(
+          ...producedAttachments(
+            (value.messages ?? []).filter(
+              (message) => !earlier.has(message.id),
+            ),
+          ),
+        );
+        break;
+    }
+  }
+  const components: DeliverableComponent[] = [];
+  for (const [id, call] of calls) {
+    if (!DISPLAY_COMPONENTS.has(call.name) || refused.has(id)) continue;
+    const args = parsedArgs(call.args);
+    if (args) components.push({ name: call.name, args });
+  }
+  return deliverableRefOf({ components, attachments });
+}
 
 export function createTaskProjector(
   database: Database,

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenBot",
+  "productName": "XiongBao",
   "version": "../../package.json",
-  "identifier": "ai.copilotkit.openbot.desktop",
+  "identifier": "com.xiongbao.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3020",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "OpenBot",
+        "title": "熊宝",
         "width": 900,
         "height": 640,
         "minWidth": 720,
@@ -48,7 +48,7 @@
     ],
     "copyright": "CopilotKit",
     "category": "DeveloperTool",
-    "shortDescription": "Run OpenBot on your own machine",
-    "longDescription": "OpenBot Desktop installs the container engine, raises the stack, and keeps it running."
+    "shortDescription": "在你自己的电脑上运行熊宝",
+    "longDescription": "熊宝桌面版会安装容器引擎、启动服务栈并保持其持续运行。"
   }
 }
