@@ -202,6 +202,7 @@ tests/mobile-links.test.ts
 tests/model-e2e-reconcile.test.ts
 tests/model-e2e-workflow.test.ts
 tests/model-library-routes.test.ts
+tests/model-probe.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
 tests/model-token-metering.test.ts
@@ -213,6 +214,7 @@ tests/organization-store.integration.test.ts
 tests/otel-export-scrubbing.test.ts
 tests/otel-exporter-compat.test.ts
 tests/otel-sdk-lifecycle.test.ts
+tests/outbound-guard.test.ts
 tests/owner-assembly-audit.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
@@ -353,6 +355,8 @@ tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
 tests/stall-guard.test.ts
+tests/subscriptions-unique-migration.integration.test.ts
+tests/subscriptions-unique.integration.test.ts
 tests/support/database.test.ts
 tests/support/load-order.test.ts
 tests/task-card-reclaim.test.ts
