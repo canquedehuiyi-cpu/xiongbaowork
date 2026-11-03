@@ -7,7 +7,7 @@ import { createApprovalStore } from "../src/approvals/store";
 import { createApprovalService } from "../src/approvals/service";
 import { approvalAction } from "../src/approvals/types";
 import { runAsTenant } from "../src/tenant/context";
-import { createDisposableTestDatabase } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 // Explicit opt-in disposable PG only. Never import this file in CPU runs.
 const disposable = await createDisposableTestDatabase();
 const raw = disposable.url;
@@ -74,7 +74,7 @@ afterAll(async () => {
   await a.$client.close();
   await b.$client.close();
   await disposable.drop();
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 test("PG owned recovery DTO uses actual parent columns on independent connections", async () => {
   const first = await scope(() =>
     createApprovalStore(a).getRecoveryContext?.(owner, id),

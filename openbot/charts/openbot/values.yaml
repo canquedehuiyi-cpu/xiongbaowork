@@ -151,7 +151,7 @@ config:
     okta:
       clientId: ""
       issuer: ""
-  tenantPackageDir: /app/examples/fintech
+  tenantPackageDir: /app/examples/qoderwake
 
   # How far one Bot may hand work to another.
   #
@@ -439,6 +439,13 @@ database:
   #   postgres://user:password@host:5432/openbot?sslmode=require
   #
   # Keep it in a Secret rather than here: `url` is readable by anybody who can read the release.
+  #
+  # NOT A SUPERUSER, AND NOT `BYPASSRLS`. The migrations Job and the API both use this URL, and the
+  # API refuses to start on a role row-level security does not bind (OPENBOT_RLS_ENFORCE, unset,
+  # means refuse in production; it used to mean warn). A managed database's administrative role is
+  # neither, so RDS, Cloud SQL and Azure are unaffected. A self-hosted server's superuser is: give
+  # the URL a non-superuser owner, or set `config.extraEnv: [{name: OPENBOT_RLS_ENFORCE, value:
+  # warn}]` and accept that isolation rests on the application. See README, Upgrades.
   url: ""
   existingSecret: ""
   existingSecretKey: "database-url"
@@ -465,6 +472,9 @@ postgresql:
     # This is the shape `docker-compose.yml` already ships, where the app user is the cluster
     # superuser, and it is safe for the same reason: this database exists for this release alone and
     # nothing else can reach it.
+    #
+    # IT IS ALSO A ROLE ROW-LEVEL SECURITY DOES NOT BIND, and the API refuses it in production, so
+    # the chart refuses to render until `config.extraEnv` names OPENBOT_RLS_ENFORCE. See README.
     #
     # A MANAGED DATABASE IS NOT THIS. On RDS, Cloud SQL or Azure there is no superuser to hand out,
     # so create the extension once as the administrative role and grant the migrating role ownership

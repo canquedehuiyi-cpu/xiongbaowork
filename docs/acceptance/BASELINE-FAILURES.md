@@ -44,3 +44,17 @@
 另外：基线 2aacf0f 早于迁移修复，它的日志永远无法解析，导致报告整体判为"未验证"。改为只由 head 决定门禁，基线解析不了时只省略对比部分。见 PR #2 中的 `scripts/ci/test-report.mjs`。
 
 以上失败簇都在 PR #2 继续修复，修完后在此补上提交号和运行号。
+
+## 运行 3–6：逐个根因修复（PR #2）
+
+| 运行 | head | 结果 | 本轮修复 |
+| --- | --- | --- | --- |
+| 41436886165 | bbd3848 | static、app、server 1/3/4/6 绿；server 2（8）、server 5（2）、image 红 | role writer 开通（0109、镜像、CI、测试助手）、flow_source 显式拒绝（0108）、D06 一次性库、otel/postgres mock 泄漏、审批恢复 |
+| 41438689485 | 49ce9ab | server 5 转绿；server 2（8）、image 红 | `roles.ts` 的 MAINTAIN 权限按 PG 版本分支（镜像是 PG16）；冻结文件改用已批准的 lint inverse；rls-write-scope 不再把排除式 `NOT IN ('system',…)` 和 EXISTS 子查询误判为可写平台行 |
+| 41439837095 | 0b6ff84 | server 2 由 8 个失败降到 1 个；image 红 | 迁移 0110：continuation 账本按租户可读、可锁，app 角色不能改账本；就绪门先于 role writer 启动，owner URL 以 `rls-not-enforced` 被拒 |
+| 41440346726 | dd13a9f | server 2 剩 4 个 | 测试中模拟租约过期改走 fixture 角色 |
+| 41440923225 | a3a64b5 | **9/9 全绿**（static、app-test、server-test 1–6、image） | 0110 允许本租户推进自己的 step（reserved → running → terminal） |
+
+PR #10（= a3a64b5 + 缺陷 #8）的 run 41441075576 同样 9/9 全绿。
+
+这是交付 CI 第一次在完整组合下全绿：PG17、非超级用户且无 BYPASSRLS 的 `openbot_app`、独立的 role writer、6 个 server 分片零失败、镜像启动并通过 smoke 断言。仍保留的 `continue-on-error` 只用于基线对比步骤；门禁步骤只看 head 的零失败。

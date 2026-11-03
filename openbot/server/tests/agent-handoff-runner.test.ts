@@ -11,6 +11,7 @@ import {
   assertPersonTenant,
   currentTenant,
   requireTenant,
+  runAsClaimedTenant,
   runAsTenant,
   TenantContextError,
 } from "../src/tenant/context";
@@ -817,5 +818,59 @@ describe("the tenant guard", () => {
     );
     for (const nobody of ["system", "platform", "", undefined, null, 7])
       expect(() => assertPersonTenant(nobody)).toThrow(TenantContextError);
+  });
+
+  /*
+   * The approval.resume and person.response loops (G01-B) go through this: a row stamped A runs as
+   * A, and everything else is handed back without running.
+   */
+  test("a claimed item runs as the tenant stamped on its row, and nothing else runs", async () => {
+    const ran: Array<{ tenant: string; frame: string }> = [];
+    const work = async (tenant: string) => {
+      await Promise.resolve();
+      ran.push({ tenant, frame: currentTenant() });
+      return "done";
+    };
+    expect(
+      await runAsTenant("platform", () =>
+        runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-a", work),
+      ),
+    ).toEqual({ ran: true, value: "done" });
+    expect(ran).toEqual([{ tenant: "tenant-a", frame: "tenant-a" }]);
+
+    const refused = [
+      // The payload names somebody else: B never runs A's row, nor A B's.
+      runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-b", work),
+      runAsClaimedTenant({ tenantId: "tenant-b" }, "tenant-a", work),
+      // Rows that belong to nobody.
+      runAsClaimedTenant({ tenantId: "system" }, "tenant-a", work),
+      runAsClaimedTenant({ tenantId: "platform" }, "tenant-a", work),
+      runAsClaimedTenant({ tenantId: "" }, "tenant-a", work),
+      runAsClaimedTenant({}, "tenant-a", work),
+      // A payload with no owner names nobody to act as.
+      runAsClaimedTenant({ tenantId: "tenant-a" }, undefined, work),
+      runAsClaimedTenant({ tenantId: "tenant-a" }, 7, work),
+      // Already acting for B, A's row may not be picked up.
+      runAsTenant("tenant-b", () =>
+        runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-a", work),
+      ),
+    ];
+    for (const outcome of await Promise.all(refused))
+      expect(outcome.ran).toBe(false);
+    expect(ran).toHaveLength(1);
+  });
+
+  test("a claimed item's failure surfaces from inside its tenant", async () => {
+    let failedAs: string | undefined;
+    await expect(
+      runAsClaimedTenant({ tenantId: "tenant-a" }, "tenant-a", async () => {
+        try {
+          throw new Error("turn failed");
+        } finally {
+          failedAs = currentTenant();
+        }
+      }),
+    ).rejects.toThrow("turn failed");
+    expect(failedAs).toBe("tenant-a");
   });
 });

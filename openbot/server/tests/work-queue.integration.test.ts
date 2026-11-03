@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { workItems } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -17,25 +18,38 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const queue = createWorkQueue(database);
 const kind = `test.${randomUUID().slice(0, 8)}`;
+/**
+ * The queue's own mechanics belong to no person: these items carry nobody's work, so they are
+ * offered, claimed and read as the deployment (`platform`), the frame a sweep claims in.
+ */
+const asPlatform = <T>(fn: () => T) => runAsTenant("platform", fn);
 
 afterAll(async () => {
-  await database.delete(workItems).where(eq(workItems.kind, kind));
+  await asPlatform(() =>
+    database.delete(workItems).where(eq(workItems.kind, kind)),
+  );
   await database.$client.end({ timeout: 5 });
 });
 
 beforeEach(async () => {
-  await database.delete(workItems).where(eq(workItems.kind, kind));
+  await asPlatform(() =>
+    database.delete(workItems).where(eq(workItems.kind, kind)),
+  );
 });
 
 describe("claiming durable work", () => {
   test("one replica takes a due item, and it comes back with what it is about", async () => {
-    await queue.offer({ kind, key: "bot-a", payload: { botId: "bot-a" } });
+    await asPlatform(() =>
+      queue.offer({ kind, key: "bot-a", payload: { botId: "bot-a" } }),
+    );
 
-    const claimed = await queue.claim({
-      kind,
-      owner: "replica-1",
-      leaseMs: 30_000,
-    });
+    const claimed = await asPlatform(() =>
+      queue.claim({
+        kind,
+        owner: "replica-1",
+        leaseMs: 30_000,
+      }),
+    );
 
     expect(claimed).toHaveLength(1);
     expect(claimed[0]?.key).toBe("bot-a");
@@ -45,18 +59,22 @@ describe("claiming durable work", () => {
   });
 
   test("a second replica does not get an item the first is holding", async () => {
-    await queue.offer({ kind, key: "bot-a" });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
 
-    const first = await queue.claim({
-      kind,
-      owner: "replica-1",
-      leaseMs: 30_000,
-    });
-    const second = await queue.claim({
-      kind,
-      owner: "replica-2",
-      leaseMs: 30_000,
-    });
+    const first = await asPlatform(() =>
+      queue.claim({
+        kind,
+        owner: "replica-1",
+        leaseMs: 30_000,
+      }),
+    );
+    const second = await asPlatform(() =>
+      queue.claim({
+        kind,
+        owner: "replica-2",
+        leaseMs: 30_000,
+      }),
+    );
 
     expect(first).toHaveLength(1);
     expect(second).toHaveLength(0);
@@ -72,16 +90,18 @@ describe("claiming durable work", () => {
    */
   test("ten replicas racing for ten items take each of them exactly once", async () => {
     const keys = Array.from({ length: 10 }, (_, index) => `bot-${index}`);
-    for (const key of keys) await queue.offer({ kind, key });
+    for (const key of keys) await asPlatform(() => queue.offer({ kind, key }));
 
     const results = await Promise.all(
       Array.from({ length: 10 }, (_, index) =>
-        queue.claim({
-          kind,
-          owner: `replica-${index}`,
-          leaseMs: 30_000,
-          limit: 3,
-        }),
+        asPlatform(() =>
+          queue.claim({
+            kind,
+            owner: `replica-${index}`,
+            leaseMs: 30_000,
+            limit: 3,
+          }),
+        ),
       ),
     );
 
@@ -91,15 +111,19 @@ describe("claiming durable work", () => {
   });
 
   test("a lease that stopped being renewed comes back to whoever asks next", async () => {
-    await queue.offer({ kind, key: "bot-a" });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
     // Claimed by a replica that then dies: nothing renews, and the lease is already in the past.
-    await queue.claim({ kind, owner: "replica-1", leaseMs: -1 });
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: -1 }),
+    );
 
-    const recovered = await queue.claim({
-      kind,
-      owner: "replica-2",
-      leaseMs: 30_000,
-    });
+    const recovered = await asPlatform(() =>
+      queue.claim({
+        kind,
+        owner: "replica-2",
+        leaseMs: 30_000,
+      }),
+    );
 
     expect(recovered).toHaveLength(1);
     /*
@@ -111,23 +135,31 @@ describe("claiming durable work", () => {
   });
 
   test("renewing keeps a claim, and cannot steal one back after it was lost", async () => {
-    await queue.offer({ kind, key: "bot-a" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: -1 });
-    await queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: -1 }),
+    );
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+    );
 
     // Replica 1 wakes up and tries to keep a claim that is no longer its own.
-    const stale = await queue.renew({
-      kind,
-      key: "bot-a",
-      owner: "replica-1",
-      leaseMs: 30_000,
-    });
-    const current = await queue.renew({
-      kind,
-      key: "bot-a",
-      owner: "replica-2",
-      leaseMs: 30_000,
-    });
+    const stale = await asPlatform(() =>
+      queue.renew({
+        kind,
+        key: "bot-a",
+        owner: "replica-1",
+        leaseMs: 30_000,
+      }),
+    );
+    const current = await asPlatform(() =>
+      queue.renew({
+        kind,
+        key: "bot-a",
+        owner: "replica-2",
+        leaseMs: 30_000,
+      }),
+    );
 
     expect(stale).toBe(false);
     expect(current).toBe(true);
@@ -139,26 +171,38 @@ describe("claiming durable work", () => {
      * due at 07:00 is offered by every replica that wakes; the key carries the minute, so they are
      * all offering the same thing.
      */
-    await queue.offer({ kind, key: "routine:daily:2026-08-24T07:00" });
-    await queue.offer({ kind, key: "routine:daily:2026-08-24T07:00" });
-    await queue.offer({ kind, key: "routine:daily:2026-08-24T07:00" });
+    await asPlatform(() =>
+      queue.offer({ kind, key: "routine:daily:2026-08-24T07:00" }),
+    );
+    await asPlatform(() =>
+      queue.offer({ kind, key: "routine:daily:2026-08-24T07:00" }),
+    );
+    await asPlatform(() =>
+      queue.offer({ kind, key: "routine:daily:2026-08-24T07:00" }),
+    );
 
-    const rows = await database
-      .select({ key: workItems.key })
-      .from(workItems)
-      .where(eq(workItems.kind, kind));
+    const rows = await asPlatform(() =>
+      database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(eq(workItems.kind, kind)),
+    );
     expect(rows).toHaveLength(1);
   });
 
   test("an item that is not due yet is not claimed", async () => {
-    await queue.offer({
-      kind,
-      key: "later",
-      runAt: new Date(Date.now() + 60_000),
-    });
+    await asPlatform(() =>
+      queue.offer({
+        kind,
+        key: "later",
+        runAt: new Date(Date.now() + 60_000),
+      }),
+    );
 
     expect(
-      await queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
+      await asPlatform(() =>
+        queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
+      ),
     ).toHaveLength(0);
   });
 
@@ -171,41 +215,61 @@ describe("claiming durable work", () => {
    * path.
    */
   test("a finished item stays, so re-offering the same key runs nothing", async () => {
-    await queue.offer({ kind, key: "bot-a" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 });
-    expect(await queue.finish({ kind, key: "bot-a", owner: "replica-1" })).toBe(
-      true,
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
     );
+    expect(
+      await asPlatform(() =>
+        queue.finish({ kind, key: "bot-a", owner: "replica-1" }),
+      ),
+    ).toBe(true);
 
-    await queue.offer({ kind, key: "bot-a" });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
 
     expect(
-      await queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+      await asPlatform(() =>
+        queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+      ),
     ).toHaveLength(0);
   });
 
   test("finished rows are swept once they are past their retention", async () => {
-    await queue.offer({ kind, key: "bot-a" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 });
-    await queue.finish({ kind, key: "bot-a", owner: "replica-1" });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
+    );
+    await asPlatform(() =>
+      queue.finish({ kind, key: "bot-a", owner: "replica-1" }),
+    );
 
-    expect(await queue.purge({ kind, olderThanMs: 60_000 })).toBe(0);
-    expect(await queue.purge({ kind, olderThanMs: 0 })).toBe(1);
+    expect(
+      await asPlatform(() => queue.purge({ kind, olderThanMs: 60_000 })),
+    ).toBe(0);
+    expect(await asPlatform(() => queue.purge({ kind, olderThanMs: 0 }))).toBe(
+      1,
+    );
   });
 
   test("releasing frees the item and holds it back for a while", async () => {
-    await queue.offer({ kind, key: "bot-a" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 });
-    await queue.release({
-      kind,
-      key: "bot-a",
-      owner: "replica-1",
-      delayMs: 60_000,
-    });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
+    );
+    await asPlatform(() =>
+      queue.release({
+        kind,
+        key: "bot-a",
+        owner: "replica-1",
+        delayMs: 60_000,
+      }),
+    );
 
     // Free, but not yet due, so nobody picks it straight back up and spins on it.
     expect(
-      await queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+      await asPlatform(() =>
+        queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+      ),
     ).toHaveLength(0);
   });
 
@@ -215,42 +279,58 @@ describe("claiming durable work", () => {
    * another replica was in the middle of doing.
    */
   test("a replica that lost its lease cannot finish somebody else's work", async () => {
-    await queue.offer({ kind, key: "bot-a" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: 1 });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 1 }),
+    );
     await Bun.sleep(30);
-    await queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 });
-
-    expect(await queue.finish({ kind, key: "bot-a", owner: "replica-1" })).toBe(
-      false,
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
     );
 
-    const [row] = await database
-      .select({ by: workItems.claimedBy, done: workItems.finishedAt })
-      .from(workItems)
-      .where(and(eq(workItems.kind, kind), eq(workItems.key, "bot-a")));
+    expect(
+      await asPlatform(() =>
+        queue.finish({ kind, key: "bot-a", owner: "replica-1" }),
+      ),
+    ).toBe(false);
+
+    const [row] = await asPlatform(() =>
+      database
+        .select({ by: workItems.claimedBy, done: workItems.finishedAt })
+        .from(workItems)
+        .where(and(eq(workItems.kind, kind), eq(workItems.key, "bot-a"))),
+    );
     expect(row?.by).toBe("replica-2");
     expect(row?.done).toBeNull();
   });
 
   test("a replica that lost its lease cannot reschedule somebody else's work", async () => {
-    await queue.offer({ kind, key: "bot-a" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: 1 });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 1 }),
+    );
     await Bun.sleep(30);
-    await queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 });
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+    );
 
     expect(
-      await queue.release({
-        kind,
-        key: "bot-a",
-        owner: "replica-1",
-        delayMs: 60_000,
-      }),
+      await asPlatform(() =>
+        queue.release({
+          kind,
+          key: "bot-a",
+          owner: "replica-1",
+          delayMs: 60_000,
+        }),
+      ),
     ).toBe(false);
 
-    const [row] = await database
-      .select({ by: workItems.claimedBy })
-      .from(workItems)
-      .where(and(eq(workItems.kind, kind), eq(workItems.key, "bot-a")));
+    const [row] = await asPlatform(() =>
+      database
+        .select({ by: workItems.claimedBy })
+        .from(workItems)
+        .where(and(eq(workItems.kind, kind), eq(workItems.key, "bot-a"))),
+    );
     expect(row?.by).toBe("replica-2");
   });
 
@@ -263,18 +343,22 @@ describe("claiming durable work", () => {
    * now, so a wrong local clock cannot produce one.
    */
   test("a replica whose clock is behind still holds a real lease", async () => {
-    await queue.offer({ kind, key: "bot-a" });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
 
     const realNow = Date.now;
     Date.now = () => realNow() - 90_000;
     try {
-      await queue.claim({ kind, owner: "replica-1", leaseMs: 60_000 });
+      await asPlatform(() =>
+        queue.claim({ kind, owner: "replica-1", leaseMs: 60_000 }),
+      );
     } finally {
       Date.now = realNow;
     }
 
     expect(
-      await queue.claim({ kind, owner: "replica-2", leaseMs: 60_000 }),
+      await asPlatform(() =>
+        queue.claim({ kind, owner: "replica-2", leaseMs: 60_000 }),
+      ),
     ).toHaveLength(0);
   });
 
@@ -283,39 +367,47 @@ describe("claiming durable work", () => {
    * somebody notices, which on a queue with no dashboard is never.
    */
   test("an item stops being offered once it runs out of attempts", async () => {
-    await queue.offer({ kind, key: "bot-a" });
+    await asPlatform(() => queue.offer({ kind, key: "bot-a" }));
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const [item] = await queue.claim({
-        kind,
-        owner: "replica-1",
-        leaseMs: 30_000,
-        maxAttempts: 3,
-      });
+      const [item] = await asPlatform(() =>
+        queue.claim({
+          kind,
+          owner: "replica-1",
+          leaseMs: 30_000,
+          maxAttempts: 3,
+        }),
+      );
       expect(item?.attempts).toBe(attempt + 1);
-      await queue.release({
-        kind,
-        key: "bot-a",
-        owner: "replica-1",
-        delayMs: 0,
-        reason: "the cluster said no",
-      });
+      await asPlatform(() =>
+        queue.release({
+          kind,
+          key: "bot-a",
+          owner: "replica-1",
+          delayMs: 0,
+          reason: "the cluster said no",
+        }),
+      );
     }
 
     expect(
-      await queue.claim({
-        kind,
-        owner: "replica-1",
-        leaseMs: 30_000,
-        maxAttempts: 3,
-      }),
+      await asPlatform(() =>
+        queue.claim({
+          kind,
+          owner: "replica-1",
+          leaseMs: 30_000,
+          maxAttempts: 3,
+        }),
+      ),
     ).toHaveLength(0);
 
     // Still here, with its count and its reason, which is the terminal state rather than a silence.
-    const [row] = await database
-      .select({ attempts: workItems.attempts, why: workItems.lastError })
-      .from(workItems)
-      .where(and(eq(workItems.kind, kind), eq(workItems.key, "bot-a")));
+    const [row] = await asPlatform(() =>
+      database
+        .select({ attempts: workItems.attempts, why: workItems.lastError })
+        .from(workItems)
+        .where(and(eq(workItems.kind, kind), eq(workItems.key, "bot-a"))),
+    );
     expect(row?.attempts).toBe(3);
     expect(row?.why).toBe("the cluster said no");
   });
@@ -329,44 +421,60 @@ describe("claiming durable work", () => {
    * or retried a broken suspension every few minutes.
    */
   test("a finished row and one that gave up are swept on separate windows", async () => {
-    await queue.offer({ kind, key: "done" });
-    await queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 });
-    await queue.finish({ kind, key: "done", owner: "replica-1" });
+    await asPlatform(() => queue.offer({ kind, key: "done" }));
+    await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
+    );
+    await asPlatform(() =>
+      queue.finish({ kind, key: "done", owner: "replica-1" }),
+    );
 
-    await queue.offer({ kind, key: "gave-up" });
+    await asPlatform(() => queue.offer({ kind, key: "gave-up" }));
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      await queue.claim({
-        kind,
-        owner: "replica-1",
-        leaseMs: 30_000,
-        maxAttempts: 3,
-      });
-      await queue.release({
-        kind,
-        key: "gave-up",
-        owner: "replica-1",
-        delayMs: 0,
-        reason: "the cluster said no",
-      });
+      await asPlatform(() =>
+        queue.claim({
+          kind,
+          owner: "replica-1",
+          leaseMs: 30_000,
+          maxAttempts: 3,
+        }),
+      );
+      await asPlatform(() =>
+        queue.release({
+          kind,
+          key: "gave-up",
+          owner: "replica-1",
+          delayMs: 0,
+          reason: "the cluster said no",
+        }),
+      );
     }
 
     // The finished one goes on its own short window; the one that gave up keeps its long one.
     expect(
-      await queue.purge({
-        kind,
-        olderThanMs: 60_000,
-        finishedOlderThanMs: 0,
-        maxAttempts: 3,
-      }),
+      await asPlatform(() =>
+        queue.purge({
+          kind,
+          olderThanMs: 60_000,
+          finishedOlderThanMs: 0,
+          maxAttempts: 3,
+        }),
+      ),
     ).toBe(1);
-    const [left] = await database
-      .select({ key: workItems.key })
-      .from(workItems)
-      .where(eq(workItems.kind, kind));
+    const [left] = await asPlatform(() =>
+      database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(eq(workItems.kind, kind)),
+    );
     expect(left?.key).toBe("gave-up");
 
     // And omitting it leaves both halves on the one window, which is what every other caller does.
-    expect(await queue.purge({ kind, olderThanMs: 0, maxAttempts: 3 })).toBe(1);
+    expect(
+      await asPlatform(() =>
+        queue.purge({ kind, olderThanMs: 0, maxAttempts: 3 }),
+      ),
+    ).toBe(1);
   });
 });
 
@@ -385,20 +493,24 @@ describe("offering at most so many under one prefix", () => {
 
     const results = await Promise.all(
       ["one", "two", "three", "four", "five"].map((word) =>
-        queue.offer({
-          kind,
-          key: `${run}${word}`,
-          atMost: { keyPrefix: run, max: 3 },
-        }),
+        asPlatform(() =>
+          queue.offer({
+            kind,
+            key: `${run}${word}`,
+            atMost: { keyPrefix: run, max: 3 },
+          }),
+        ),
       ),
     );
 
     expect(results.filter((result) => result === "queued")).toHaveLength(3);
     expect(results.filter((result) => result === "refused")).toHaveLength(2);
-    const written = await database
-      .select({ key: workItems.key })
-      .from(workItems)
-      .where(eq(workItems.kind, kind));
+    const written = await asPlatform(() =>
+      database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(eq(workItems.kind, kind)),
+    );
     expect(written).toHaveLength(3);
   });
 
@@ -410,23 +522,31 @@ describe("offering at most so many under one prefix", () => {
     const run = `${randomUUID()}:`;
     const cap = { keyPrefix: run, max: 1 };
 
-    expect(await queue.offer({ kind, key: `${run}a`, atMost: cap })).toBe(
-      "queued",
-    );
+    expect(
+      await asPlatform(() =>
+        queue.offer({ kind, key: `${run}a`, atMost: cap }),
+      ),
+    ).toBe("queued");
     // The same key again is work already queued, not a second piece of work — and not something the
     // cap should refuse either. A caller that reports it as new promises an answer nobody will give.
-    expect(await queue.offer({ kind, key: `${run}a`, atMost: cap })).toBe(
-      "already",
-    );
-    expect(await queue.offer({ kind, key: `${run}b`, atMost: cap })).toBe(
-      "refused",
-    );
+    expect(
+      await asPlatform(() =>
+        queue.offer({ kind, key: `${run}a`, atMost: cap }),
+      ),
+    ).toBe("already");
+    expect(
+      await asPlatform(() =>
+        queue.offer({ kind, key: `${run}b`, atMost: cap }),
+      ),
+    ).toBe("refused");
   });
 
   test("without a cap nothing is refused", async () => {
     const run = `${randomUUID()}:`;
     const results = await Promise.all(
-      [1, 2, 3, 4, 5].map((n) => queue.offer({ kind, key: `${run}${n}` })),
+      [1, 2, 3, 4, 5].map((n) =>
+        asPlatform(() => queue.offer({ kind, key: `${run}${n}` })),
+      ),
     );
     expect(results.every((result) => result === "queued")).toBe(true);
   });

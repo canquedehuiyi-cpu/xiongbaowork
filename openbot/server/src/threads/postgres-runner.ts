@@ -2,13 +2,23 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { BaseEvent, Message } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
 import {
+  type AgentRunnerConnectRequest,
+  type AgentRunnerIsRunningRequest,
   type AgentRunnerRunRequest,
+  type AgentRunnerStopRequest,
   InMemoryAgentRunner,
   type InMemoryThread,
   ɵGLOBAL_STORE,
 } from "@copilotkit/runtime/v2";
-import { asc, eq } from "drizzle-orm";
-import { from, Observable, type Subscription, switchMap, tap } from "rxjs";
+import { asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import {
+  EMPTY,
+  from,
+  Observable,
+  type Subscription,
+  switchMap,
+  tap,
+} from "rxjs";
 import type { Database } from "../db/client";
 import {
   takeLocalRunTicket,
@@ -20,8 +30,13 @@ import {
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
-import type { TaskProjector } from "../tasks/projector";
-import { currentTenant, runAsTenant } from "../tenant/context";
+import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
+import {
+  currentTenant,
+  isPersonTenant,
+  isTenantFramed,
+  runAsTenant,
+} from "../tenant/context";
 import { runnerCardSuppressed } from "./unattended-card";
 
 /**
@@ -38,9 +53,53 @@ import { runnerCardSuppressed } from "./unattended-card";
  */
 const threadOwners = new Map<string, string>();
 
+/**
+ * Per tenant, the one load of that tenant's stored threads into the store (G01-E P18).
+ *
+ * After a restart the store and the index above are empty while the rows are not, so every thread
+ * read would answer as if the person had never talked to anybody. Each tenant's rows are loaded the
+ * first time that tenant reaches a thread, in that tenant's own frame, and once: every later access
+ * (and every concurrent first one) awaits the same promise. Module-level for the reason the index is.
+ */
+const tenantLoads = new Map<string, Promise<void>>();
+
+/** How many of one tenant's threads a load brings back: the newest, its own ahead of `system`'s. */
+const LOAD_LIMIT = 500;
+/** Threads read per round trip while loading, so one tenant's history is never one huge result. */
+const LOAD_CHUNK = 50;
+
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
   return owner === tenant || owner === SYSTEM_TENANT;
+}
+
+/**
+ * Why a run on somebody else's thread id did not happen.
+ *
+ * The same words whether the id is another tenant's or `system`'s, and no owner named: the refusal
+ * says this caller may not continue that id, never whose it is.
+ */
+export class ThreadUnavailableError extends Error {
+  override readonly name = "ThreadUnavailableError";
+  constructor() {
+    super("This conversation is not available.");
+  }
+}
+
+/**
+ * A trusted continuation's run header whose terminal is not written yet (G01-E P20).
+ *
+ * The local continuation reserves its `thread_runs` row (`ap-local-…`, no events) before it enters
+ * the runtime, and its events and count land together with its terminal. Until then the header is a
+ * continuation still running — one running in this process enters the store itself, live, as it
+ * finishes, so loading the empty header too would show it twice — or one whose outcome was never
+ * recorded, which has nothing to replay. Ordinary runs cannot carry that prefix (`run` refuses it).
+ */
+function continuationInFlight(run: {
+  id: string;
+  eventCount: number;
+}): boolean {
+  return run.id.startsWith("ap-local-") && run.eventCount === 0;
 }
 
 /**
@@ -84,13 +143,12 @@ export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
  *
  * The in-memory runner keeps live run semantics (SSE mode, local thread
  * endpoints); this subclass writes every finalized run through to PostgreSQL
- * and replays stored threads back into the shared store at boot, so a restart
- * loses nothing. `ɵGLOBAL_STORE` is the same bounded store the parent commits
- * finalized runs to, and `appendRun` is how a finished run enters it.
+ * and replays a tenant's stored threads back into the shared store the first
+ * time that tenant reaches one (see {@link PostgresAgentRunner.hydrate}), so a
+ * restart loses nothing. `ɵGLOBAL_STORE` is the same bounded store the parent
+ * commits finalized runs to, and `appendRun` is how a finished run enters it.
  */
 export class PostgresAgentRunner extends InMemoryAgentRunner {
-  private hydration: Promise<void> | null = null;
-
   constructor(
     private readonly database: Database,
     private readonly board?: TaskProjector,
@@ -102,7 +160,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * Asked, never insisted on: a turn that cannot name a machine still runs — in cloud mode there is
      * none — so the answer here is a label for the card rather than a gate. The gate is the dispatch.
      */
-    private readonly deviceOf?: (agentId: string) => Promise<string | null>,
+    private readonly deviceOf?: (
+      agentId: string,
+      taskRef?: string,
+    ) => Promise<string | null>,
   ) {
     super({ onConcurrentRun: "supersede" });
   }
@@ -136,6 +197,16 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         throw new Error("local_target_agent_input_mismatch");
     };
     verifyAgentInput();
+    /*
+     * The tenant's stored threads go into the store before this run is appended after them (G01-E
+     * P20), as `run` does. The load is once per tenant and never appends to a thread already holding
+     * runs, so a continuation that reached a cold thread first would be all that thread ever showed.
+     * It yields, so it is here, ahead of admission and of the await-free window below, and the
+     * trusted signal is checked again after it. A failed load is logged and retried on the next
+     * access, exactly as for `run`; it does not refuse the continuation.
+     */
+    await this.hydrate();
+    checkCancellation();
     // Capacity may yield; recheck the trusted signal before the admission CAS.
     if (this.quota) await this.quota.assertCapacity(tenant, "tasksPerMonth");
     checkCancellation();
@@ -297,29 +368,93 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const cardIsTaken = runnerCardSuppressed();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
-    if (!quota || cardIsTaken)
-      return this.stream(request, tenant, cardIsTaken, lane);
     /*
-     * The month is asked about before the model is called, not after.
+     * A thread id another tenant holds here is refused before anything else is asked: the parent's
+     * `run` would supersede that tenant's live turn, append this run to their history, and the
+     * write-through would then index the thread as this caller's.
+     */
+    const owner = threadOwners.get(request.threadId);
+    if (owner !== undefined && owner !== tenant)
+      return new Observable((subscriber) =>
+        subscriber.error(new ThreadUnavailableError()),
+      );
+    const ceiling = cardIsTaken ? undefined : quota;
+    /*
+     * Two questions before the model is called, each deferred rather than awaited because a runner
+     * answers with a stream, and a refusal has to arrive as that stream failing — which is how the
+     * browser already shows a run that could not start.
      *
-     * A turn that runs and is then refused leaves a person charged for work they got and a task card
-     * that never appeared; the ceiling on tasks per month only means something if the fifty-first
-     * conversation does not happen at all. Deferred rather than awaited because a runner answers with
-     * a stream, and the refusal has to arrive as that stream failing — which is how the browser
-     * already shows a run that could not start.
+     * The month comes first. A turn that runs and is then refused leaves a person charged for work
+     * they got and a task card that never appeared; the ceiling on tasks per month only means
+     * something if the fifty-first conversation does not happen at all. Then the thread: see `claim`.
      */
     return new Observable<BaseEvent>((subscriber) => {
       let inner: Subscription | undefined;
-      void quota.assertCapacity(tenant, "tasksPerMonth").then(
+      let closed = false;
+      void (async () => {
+        if (ceiling) await ceiling.assertCapacity(tenant, "tasksPerMonth");
+        // The thread's stored history goes into the store before this run is appended after it.
+        await this.hydrate();
+        await this.claim(request, tenant);
+      })().then(
         () => {
-          inner = this.stream(request, tenant, false, lane).subscribe(
+          if (closed) return;
+          inner = this.stream(request, tenant, cardIsTaken, lane).subscribe(
             subscriber,
           );
         },
         (thrown: unknown) => subscriber.error(thrown),
       );
-      return () => inner?.unsubscribe();
+      return () => {
+        closed = true;
+        inner?.unsubscribe();
+      };
     });
+  }
+
+  /**
+   * Make the thread this tenant's before a turn runs on it, or refuse the turn.
+   *
+   * The row is the record (`threads.tenant_id`, under row-level security), and the ownership index
+   * is this process's mirror of it. A thread id the index already gives this tenant needs no read. One
+   * it knows nothing about is claimed by writing the header row in the caller's own frame: a new id
+   * becomes theirs there and then, and an id that already has a row is theirs only if the row reads
+   * back with their stamp. Another tenant's row is invisible to this frame, and `system`'s is visible
+   * but outside the write scope (0072), so both read as not-the-caller's and the run is refused.
+   *
+   * Indexed before the parent's `run` starts rather than when the write-through lands, so the
+   * owner's own reconnect during a first turn finds the thread, and nobody else's run can take the
+   * id in between.
+   */
+  private async claim(
+    request: AgentRunnerRunRequest,
+    tenant: string,
+  ): Promise<void> {
+    const { threadId } = request;
+    const known = threadOwners.get(threadId);
+    if (known === tenant) return;
+    if (known !== undefined) throw new ThreadUnavailableError();
+    const created = await this.database
+      .insert(threads)
+      .values({
+        id: threadId,
+        tenantId: tenant,
+        agentId: request.agent.agentId ?? "unknown",
+      })
+      .onConflictDoNothing()
+      .returning({ id: threads.id });
+    if (created.length === 0) {
+      const [row] = await this.database
+        .select({ tenantId: threads.tenantId })
+        .from(threads)
+        .where(eq(threads.id, threadId))
+        .limit(1);
+      if (row?.tenantId !== tenant) throw new ThreadUnavailableError();
+    }
+    // Asked again: another of this tenant's requests, or another tenant's, may have landed first.
+    const now = threadOwners.get(threadId);
+    if (now !== undefined && now !== tenant) throw new ThreadUnavailableError();
+    threadOwners.set(threadId, tenant);
   }
 
   /** The turn itself, once the plan has admitted it. */
@@ -358,7 +493,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      */
     const card =
       this.board && !cardIsTaken
-        ? Promise.resolve(this.deviceOf?.(agentId))
+        ? Promise.resolve(this.deviceOf?.(agentId, runId))
             .catch(() => null)
             .then((deviceId) =>
               // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
@@ -381,10 +516,32 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         : undefined;
     const finish = (failed: boolean) => {
       if (!card) return;
+      /*
+       * What the turn produced rides on the card (spec A9), read from the stream before it is handed
+       * on. A failed turn's half-drawn output is not something to review, so it carries none.
+       */
+      const produced = () => {
+        // Read inside the stream's `complete`: a throw here would skip the transcript's write below.
+        try {
+          return deliverableFromEvents(
+            events,
+            new Set(request.input.messages.map((message) => message.id)),
+          );
+        } catch (error) {
+          console.error("task deliverable unreadable", error);
+          return undefined;
+        }
+      };
+      const deliverableRef = failed ? undefined : produced();
       void card
         .then(() =>
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
-          this.board!.finished({ tenantId: tenant, runRef: runId, failed }),
+          this.board!.finished({
+            tenantId: tenant,
+            runRef: runId,
+            failed,
+            deliverableRef,
+          }),
         )
         .catch((error) => console.error("task projection failed", error));
     };
@@ -480,86 +637,140 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   }
 
   /**
-   * Load stored threads back into the live store. Lazy and idempotent: the
-   * wiring calls it once before the first request is served.
+   * Load the calling tenant's stored threads back into the live store, once per tenant per process.
    *
-   * Scoped to the caller's tenant — the same `threads` read every other query takes, so row-level
-   * security decides what is replayed and a hydration run as the wrong tenant loads nothing.
+   * Nothing calls this at boot: there is no frame at boot, and no single tenant whose threads they
+   * are. It is awaited wherever a tenant first reaches a thread — every signed-in runtime request
+   * (`mountCopilotRuntime`), a run, a trusted local continuation (`runContinuation`) and the local
+   * platform's history read — in that tenant's frame, and the reads below are re-entered in that
+   * frame explicitly. Row-level security decides what loads, and the query asks for the caller's own
+   * stamp and `system`'s besides, so even a frame that reads across tenants (`platform`) could not
+   * load somebody else's here; a frame that is not a person's loads nothing at all.
+   *
+   * Idempotent per tenant and safe under concurrent first requests: the promise is shared, so a
+   * tenant's rows are read once. A load that fails is forgotten, so the next access tries again, and
+   * a thread already holding runs in the store is never appended to a second time.
    */
   hydrate(): Promise<void> {
-    this.hydration ??= this.loadStored();
-    return this.hydration;
+    const tenant = currentTenant();
+    if (!isPersonTenant(tenant)) return Promise.resolve();
+    const pending = tenantLoads.get(tenant);
+    if (pending) return pending;
+    const load: Promise<void> = runAsTenant(tenant, () =>
+      this.loadStored(tenant),
+    ).catch((error: unknown) => {
+      if (tenantLoads.get(tenant) === load) tenantLoads.delete(tenant);
+      console.error("thread hydration failed", error);
+    });
+    tenantLoads.set(tenant, load);
+    return load;
   }
 
-  private async loadStored(): Promise<void> {
-    try {
-      const stored = await this.database
+  private async loadStored(tenant: string): Promise<void> {
+    const stored = await this.database
+      .select({
+        id: threads.id,
+        tenantId: threads.tenantId,
+        messages: threads.messagesSnapshot,
+      })
+      .from(threads)
+      .where(
+        or(eq(threads.tenantId, tenant), eq(threads.tenantId, SYSTEM_TENANT)),
+      )
+      .orderBy(
+        desc(sql`${threads.tenantId} = ${tenant}`),
+        desc(threads.updatedAt),
+      )
+      .limit(LOAD_LIMIT);
+    // Oldest first into the store, so its LRU order ends with the conversations used last.
+    const loadable = stored
+      .filter(
+        (row) => row.tenantId === tenant || row.tenantId === SYSTEM_TENANT,
+      )
+      .reverse();
+    for (let at = 0; at < loadable.length; at += LOAD_CHUNK) {
+      const chunk = loadable.slice(at, at + LOAD_CHUNK);
+      const ids = chunk.map((row) => row.id);
+      const runs = await this.database
         .select({
-          id: threads.id,
-          tenantId: threads.tenantId,
-          agentId: threads.agentId,
-          name: threads.name,
-          createdAt: threads.createdAt,
+          id: threadRuns.id,
+          threadId: threadRuns.threadId,
+          agentId: threadRuns.agentId,
+          eventCount: threadRuns.eventCount,
+          createdAt: threadRuns.createdAt,
         })
-        .from(threads)
-        .orderBy(asc(threads.createdAt))
-        .limit(500);
-      for (const thread of stored) {
-        threadOwners.set(thread.id, thread.tenantId);
-        const runs = await this.database
-          .select({
-            id: threadRuns.id,
-            agentId: threadRuns.agentId,
-            createdAt: threadRuns.createdAt,
-          })
-          .from(threadRuns)
-          .where(eq(threadRuns.threadId, thread.id))
-          .orderBy(asc(threadRuns.createdAt));
-        const eventRows = await this.database
-          .select({
-            runId: threadRunEvents.runId,
-            event: threadRunEvents.event,
-          })
-          .from(threadRunEvents)
-          .where(eq(threadRunEvents.threadId, thread.id))
-          .orderBy(asc(threadRunEvents.runId), asc(threadRunEvents.seq));
-        const byRun = new Map<string, BaseEvent[]>();
-        for (const row of eventRows) {
-          const list = byRun.get(row.runId) ?? [];
-          list.push(row.event as BaseEvent);
-          byRun.set(row.runId, list);
-        }
-        const [meta] = await this.database
-          .select({ messages: threads.messagesSnapshot })
-          .from(threads)
-          .where(eq(threads.id, thread.id))
-          .limit(1);
-        const snapshot = (meta?.messages as Message[] | undefined) ?? [];
-        runs.forEach((run, index) => {
-          ɵGLOBAL_STORE.appendRun(thread.id, {
-            threadId: thread.id,
-            runId: run.id,
-            agentId: run.agentId,
-            parentRunId: null,
-            events: byRun.get(run.id) ?? [],
-            // appendRun hoists the LAST run's messages to the thread level;
-            // earlier runs carry none, matching how a live run commits.
-            messages: index === runs.length - 1 ? snapshot : [],
-            createdAt: run.createdAt.getTime(),
-          });
-        });
+        .from(threadRuns)
+        .where(inArray(threadRuns.threadId, ids))
+        .orderBy(asc(threadRuns.createdAt), asc(threadRuns.id));
+      const eventRows = await this.database
+        .select({
+          runId: threadRunEvents.runId,
+          event: threadRunEvents.event,
+        })
+        .from(threadRunEvents)
+        .where(inArray(threadRunEvents.threadId, ids))
+        .orderBy(asc(threadRunEvents.runId), asc(threadRunEvents.seq));
+      const eventsOf = new Map<string, BaseEvent[]>();
+      for (const row of eventRows) {
+        const list = eventsOf.get(row.runId) ?? [];
+        list.push(row.event as BaseEvent);
+        eventsOf.set(row.runId, list);
       }
-    } catch (error) {
-      console.error("thread hydration failed", error);
+      const runsOf = new Map<string, typeof runs>();
+      for (const run of runs) {
+        if (continuationInFlight(run)) continue;
+        const list = runsOf.get(run.threadId) ?? [];
+        list.push(run);
+        runsOf.set(run.threadId, list);
+      }
+      // No await from here to the end of the chunk: each thread is checked and filled in one go.
+      for (const thread of chunk)
+        this.replay(thread, runsOf.get(thread.id) ?? [], eventsOf);
     }
+  }
+
+  /**
+   * One stored thread into the store and the index, unless this process already holds it.
+   *
+   * The entry is created before the runs are appended: the store's `appendRun` drops a run for a
+   * thread it holds no entry for. A thread already holding runs (another tenant's load brought a
+   * `system` thread in, or a turn landed first) is left as it is, so nothing is ever appended twice;
+   * and one the index gives somebody else is not touched.
+   */
+  private replay(
+    thread: { id: string; tenantId: string; messages: unknown[] },
+    runs: readonly { id: string; agentId: string; createdAt: Date }[],
+    eventsOf: ReadonlyMap<string, BaseEvent[]>,
+  ): void {
+    const owner = threadOwners.get(thread.id);
+    if (owner !== undefined && owner !== thread.tenantId) return;
+    threadOwners.set(thread.id, thread.tenantId);
+    if (runs.length === 0) return;
+    if ((ɵGLOBAL_STORE.peek(thread.id)?.historicRuns.length ?? 0) > 0) return;
+    ɵGLOBAL_STORE.getOrCreate(thread.id);
+    const snapshot = thread.messages as Message[];
+    runs.forEach((run, index) => {
+      ɵGLOBAL_STORE.appendRun(thread.id, {
+        threadId: thread.id,
+        runId: run.id,
+        agentId: run.agentId,
+        parentRunId: runs[index - 1]?.id ?? null,
+        events: eventsOf.get(run.id) ?? [],
+        // appendRun hoists the LAST run's messages to the thread level;
+        // earlier runs carry none, matching how a live run commits.
+        messages: index === runs.length - 1 ? snapshot : [],
+        createdAt: run.createdAt.getTime(),
+      });
+    });
   }
 
   /**
    * The thread's stored header, or null when this tenant holds no such thread.
    *
    * A database read rather than the in-memory store, because "does this conversation exist" is
-   * asked across a restart: the store is cold until a run or a hydration puts the thread in it, while
-   * the row is the record. Row-level security is the scope, so another tenant's thread answers null.
+   * asked across a restart: the store is cold until a run or the tenant's first access (`hydrate`)
+   * puts the thread in it, while the row is the record. Row-level security is the scope, so another
+   * tenant's thread answers null.
    */
   async storedThread(
     threadId: string,
@@ -590,5 +801,60 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   override getThreadEvents(threadId: string): BaseEvent[] {
     if (!ownedBy(threadId, currentTenant())) return [];
     return super.getThreadEvents(threadId);
+  }
+
+  /**
+   * `/agent/:id/connect` replays a thread straight out of the shared store, by thread id alone — the
+   * Bot in the path is not the thread's. Guarded the way the three reads above are: a thread this
+   * tenant does not hold answers what an id nobody ever ran answers, a stream that completes empty.
+   */
+  override connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
+    if (!ownedBy(request.threadId, currentTenant())) return EMPTY;
+    return super.connect(request);
+  }
+
+  /** Whether somebody else's thread is mid-turn is not this caller's to learn. */
+  override isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
+    if (!ownedBy(request.threadId, currentTenant()))
+      return Promise.resolve(false);
+    return super.isRunning(request);
+  }
+
+  /**
+   * Stopping a turn is a write on the thread, so it takes the write scope: a thread the index gives
+   * another tenant (`system` included), or asked outside any frame, answers "no active run", as an
+   * unknown one does. A thread the index does not know yet is left to the parent, which is what a
+   * local continuation's own cancellation stops before its write-through lands.
+   */
+  override stop(request: AgentRunnerStopRequest): Promise<boolean | undefined> {
+    const owner = threadOwners.get(request.threadId);
+    if (owner !== undefined && (!isTenantFramed() || owner !== currentTenant()))
+      return Promise.resolve(false);
+    return super.stop(request);
+  }
+  /**
+   * `/threads/clear`: the caller's own conversations out of the in-memory store, and nobody else's.
+   *
+   * The inherited method empties the whole process-wide store — every tenant's live history and
+   * connect replay, for whoever pressed Clear. Like it, this touches memory only (the stored rows
+   * are the record and stay), and takes the write scope: a thread the index gives exactly this
+   * tenant, not `system`'s. The ownership entries stay, so a cleared id is still this tenant's and
+   * nobody else can take it. Outside a frame nothing is cleared.
+   */
+  override clearThreads(): void {
+    if (!isTenantFramed()) return;
+    const tenant = currentTenant();
+    // The store's own removal, so its byte accounting stays right. Private in its typings; a
+    // runtime without it clears nothing rather than everything.
+    const store = ɵGLOBAL_STORE as unknown as {
+      peek(threadId: string): object | undefined;
+      removeThread?: (threadId: string, entry: object) => void;
+    };
+    if (typeof store.removeThread !== "function") return;
+    for (const [threadId, owner] of threadOwners) {
+      if (owner !== tenant) continue;
+      const entry = store.peek(threadId);
+      if (entry) store.removeThread(threadId, entry);
+    }
   }
 }

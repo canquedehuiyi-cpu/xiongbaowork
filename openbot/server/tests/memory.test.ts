@@ -1,8 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { z } from "zod";
 import type { AuthenticatedActor } from "../src/auth/guards";
 import type { MemoryIngestion } from "../src/memory/ingestion";
 import {
+  createMemoryIngestion,
   normalizeConnectorRecords,
   quoteMemoryContext,
 } from "../src/memory/ingestion";
@@ -14,7 +15,9 @@ import {
   parseMemoryPatch,
   parseMemorySourceInput,
 } from "../src/memory/types";
+import type { PluginStore } from "../src/plugins/store";
 import { PluginRefusedError } from "../src/plugins/store";
+import { currentTenant } from "../src/tenant/context";
 
 test("memory validates explicit facts and bounded source opt-in", () => {
   expect(
@@ -161,4 +164,58 @@ test("a source sync a connector's policy refuses answers 400 with the reason, no
   });
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "Tool refused by policy." });
+});
+
+/**
+ * G01: the background sync is nobody's until it has read whose source it is. What is due is asked
+ * as `platform`; each source is then synced as the tenant stamped on its own row, never as the
+ * platform and never as the source before it; a source stamped as nobody's is not synced at all.
+ */
+test("the due-source sweep syncs each source in its own tenant and refuses unowned stamps", async () => {
+  const frames: [string, string][] = [];
+  const sources = [
+    { id: "alice-source", ownerUserId: "alice", tenantId: "alice" },
+    { id: "system-source", ownerUserId: "bob", tenantId: "system" },
+    { id: "platform-source", ownerUserId: "bob", tenantId: "platform" },
+    { id: "blank-source", ownerUserId: "bob", tenantId: "" },
+    { id: "carol-source", ownerUserId: "carol", tenantId: "dave" },
+    { id: "erin-source", ownerUserId: "erin", tenantId: "erin" },
+  ];
+  const store = {
+    dueSources: async () => {
+      frames.push(["dueSources", currentTenant()]);
+      return sources;
+    },
+    getSource: async (_owner: string, id: string) => {
+      frames.push([`sync:${id}`, currentTenant()]);
+      return sources.find((source) => source.id === id);
+    },
+    // Already claimed elsewhere: the sync stops here, which is all this test needs of it.
+    claimSync: async () => null,
+    failSync: async (_owner: string, id: string) => {
+      frames.push([`fail:${id}`, currentTenant()]);
+    },
+  } as unknown as MemoryStore;
+  const ingestion = createMemoryIngestion({
+    store,
+    plugins: {} as PluginStore,
+  });
+
+  const errors = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    // Started the way the timer starts it: from no frame at all.
+    await ingestion.syncDue();
+  } finally {
+    errors.mockRestore();
+  }
+
+  expect(frames).toEqual([
+    ["dueSources", "platform"],
+    ["sync:alice-source", "alice"],
+    ["fail:system-source", "platform"],
+    ["fail:platform-source", "platform"],
+    ["fail:blank-source", "platform"],
+    ["fail:carol-source", "platform"],
+    ["sync:erin-source", "erin"],
+  ]);
 });

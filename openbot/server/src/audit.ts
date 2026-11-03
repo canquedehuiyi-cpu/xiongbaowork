@@ -13,6 +13,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import type { Database } from "./db/client";
 import { auditEvents } from "./db/schema";
 import { parsePageLimit } from "./paging";
+import { assertPersonTenant, runAsTenant } from "./tenant/context";
 
 const sensitiveKeys = new Set([
   "access_token",
@@ -362,6 +363,11 @@ export const auditEventTypes = [
   "platform.tenant_suspended",
   "platform.tenant_restored",
   /*
+   * A workspace moved between tiers by hand. No payment stands behind the switch, so this row is the
+   * only record of who granted a tier and from what; written in the same transaction as the move.
+   */
+  "plan.changed",
+  /*
    * Getting in, and being turned away.
    *
    * The trail had nothing about sign-in at all, which left two questions unanswerable. Anybody who
@@ -653,6 +659,38 @@ export async function recordAuditEvent(
   });
 }
 
+/**
+ * A row that belongs to nobody: the deployment's own (a boot note, a refusal of a caller who proved
+ * no person). Written as `platform` (G01), never left to the caller's frame.
+ *
+ * Unframed, the legacy fallback filed these as `system`, and a `system` row is one every tenant's
+ * trail shows: a refused sign-in, with the address it was refused for, in everybody's audit list.
+ */
+export function recordPlatformAuditEvent(
+  store: AuditStore,
+  event: AuditEventInput,
+): Promise<void> {
+  return runAsTenant("platform", () => recordAuditEvent(store, event));
+}
+
+/**
+ * A row about one person, filed in that person's tenant (G01).
+ *
+ * `tenant` must come from a row the caller read or was handed by the identity layer (a session's
+ * user id, a user row's id), never from a request payload. Somebody who is nobody (`system`,
+ * `platform`, empty) is refused with a `TenantContextError` rather than filed where everybody sees it,
+ * and so is a person other than the one whose frame this already runs in.
+ */
+export async function recordPersonAuditEvent(
+  store: AuditStore,
+  tenant: unknown,
+  event: AuditEventInput,
+): Promise<void> {
+  // Async so a refusal is a rejection, which every caller's `.catch` already handles.
+  const owner = assertPersonTenant(tenant);
+  await runAsTenant(owner, () => recordAuditEvent(store, event));
+}
+
 function initiatorColumns(initiator: AuditInitiator | undefined) {
   if (!initiator)
     return { initiatorKind: "person" as const, initiatorId: null };
@@ -733,6 +771,58 @@ export async function commitOwnerAssembly<T>(
     }
   }
   return result.value;
+}
+
+/**
+ * A change and the rows that record it, committed together.
+ *
+ * `work` gets an `AuditStore` bound to the transaction, so `recordAuditEvent(audit, ...)` inside it
+ * writes on the same connection as the change: a trail row that cannot be written rolls the change
+ * back with it, and a change that fails leaves no row claiming it happened. Taps hear the rows only
+ * after COMMIT returns, for the same reason `commitOwnerAssembly` waits — nothing is streamed that
+ * the trail does not hold.
+ *
+ * The tenant is the caller's frame when this is called (`runAsTenant(t, () => commitWithAudit(...))`),
+ * which is the frame both the change and the row are written in.
+ */
+export async function commitWithAudit<T>(
+  database: Database,
+  work: (
+    audit: AuditStore,
+    transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
+  ) => Promise<T>,
+): Promise<T> {
+  const written: AuditTapEvent[] = [];
+  const value = await database.transaction(async (transaction) => {
+    const audit: AuditStore = {
+      insert: async ({ initiator, ...event }) => {
+        const row = {
+          ...event,
+          ...initiatorColumns(initiator),
+          payload: redactAuditPayload(event.payload) as Record<string, unknown>,
+        };
+        await transaction.insert(auditEvents).values(row);
+        written.push(row);
+      },
+    };
+    return await work(audit, transaction);
+  });
+  for (const row of written) {
+    for (const tap of auditTaps) {
+      try {
+        tap(row);
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "audit-tap-failed",
+            eventType: row.eventType,
+            error: String(error),
+          }),
+        );
+      }
+    }
+  }
+  return value;
 }
 
 export function createAuditStore(database: Database): AuditStore {
