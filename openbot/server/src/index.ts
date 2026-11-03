@@ -512,12 +512,26 @@ await startupLifecycle.run(async (startup) => {
    * metered now (audit defect #11): the runtime hands the resolver the deployment model it would have
    * spoken, and the resolver wraps it with the same meter a bound model gets.
    */
+  /*
+   * Where a tenant's model base URL may point (audit defect #6): only the development private-host
+   * opt-in (refused in production by `config.ts`), so a developer's local provider still answers.
+   *
+   * Deliberately NOT `config.agentEndpointAllowedHosts`. Those are hosts an operator opened for agent
+   * endpoints; reusing them here would hand every tenant (model routes need only `requireUser`) a
+   * plain-http path to those internal services on any port, with the response read back as model
+   * output. A model allowlist, if one is ever wanted, is its own setting, empty by default.
+   */
+  const modelOutbound = {
+    // Read on its own, not through `config.computer`: a local model needs no Bot computer.
+    allowPrivateHosts: config.modelEndpointsAllowPrivateHosts,
+  };
   const tokenCallSink = databaseTokenCallSink(database);
   const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,
     credentialStore,
     config.keyEncryptionKey,
     tokenCallSink,
+    { outbound: modelOutbound },
   );
   const resolveAgentModel = modelOf(resolveNamedAgentModel, tokenCallSink);
   const agentProfileStore = createAgentProfileStore(
@@ -2078,6 +2092,7 @@ await startupLifecycle.run(async (startup) => {
       database,
       encryptionKey: config.keyEncryptionKey,
       allowPlatformModel: false,
+      outbound: modelOutbound,
     }),
     generator: createFlowGenerator(),
     quota,
@@ -3774,6 +3789,7 @@ await startupLifecycle.run(async (startup) => {
       credentialStore,
       config.keyEncryptionKey,
       quota,
+      { outbound: modelOutbound },
     ),
   );
 
