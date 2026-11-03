@@ -1,0 +1,70 @@
+# Story G6 / audit defect #11: one minimal REAL bound-model call, reconciled against the
+# model_token_calls row it wrote. Spends a real key, so it runs only by hand, only from main, and
+# only inside the GitHub Environment `model-e2e` (whose protection rules gate the secret).
+# ci.yml never runs this; there is deliberately no pull_request or push trigger here.
+#
+# The key is the DeepSeek key stored ONLY as the `model-e2e` Environment's secret
+# DEEPSEEK_API_KEY: an Environment secret reaches only a job that names that Environment.
+# The model and endpoint are variables (MODEL_E2E_MODEL, MODEL_E2E_BASE_URL) with DeepSeek's
+# own defaults when unset.
+name: 模型 E2E 计量对账
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-e2e
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: openbot
+
+jobs:
+  model-e2e:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: model-e2e
+    timeout-minutes: 10
+    services:
+      # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: e2e-owner
+          POSTGRES_DB: openbot_model_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_model_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NODE_ENV: test
+      PGPASSWORD: e2e-owner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      # This job holds a real key: no dependency lifecycle script runs in it.
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Migrate the job's own database (ci.yml recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_model_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+      - name: One bound-model call, reconciled against model_token_calls
+        env:
+          MODEL_E2E: "1"
+          DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_model_e2e
+          MODEL_E2E_PROVIDER: deepseek
+          MODEL_E2E_MODEL: ${{ vars.MODEL_E2E_MODEL || 'deepseek-chat' }}
+          MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
+          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: bun run --cwd server scripts/model-e2e.ts
