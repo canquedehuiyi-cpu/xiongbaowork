@@ -159,7 +159,7 @@ test("only the tenant's own calls in the period count, and partial rows add only
 
   expect(await tokenUsageFor(database, tenantA, period)).toEqual({
     period,
-    scope: "bound-models",
+    scope: "coworker-calls",
     calls: 5,
     reportedCalls: 2,
     partialCalls: 1,
@@ -180,7 +180,7 @@ test("only the tenant's own calls in the period count, and partial rows add only
   // B's meter counts only B, and B's frame cannot read a single row of A's.
   expect(await tokenUsageFor(database, tenantB, period)).toEqual({
     period,
-    scope: "bound-models",
+    scope: "coworker-calls",
     calls: 1,
     reportedCalls: 1,
     partialCalls: 0,
@@ -238,7 +238,7 @@ test("a tenant with no calls has no sums at all and nothing outstanding", async 
   const usage = await tokenUsageFor(database, tenantFor("empty"), period);
   expect(usage).toEqual({
     period,
-    scope: "bound-models",
+    scope: "coworker-calls",
     calls: 0,
     reportedCalls: 0,
     partialCalls: 0,
@@ -299,7 +299,7 @@ test("GET /api/quota carries this period's tokens beside the existing fields", a
   expect(body.usage.period).toBe(billingPeriod());
   expect(body.tokens).toEqual({
     period: billingPeriod(),
-    scope: "bound-models",
+    scope: "coworker-calls",
     calls: 2,
     reportedCalls: 1,
     partialCalls: 0,

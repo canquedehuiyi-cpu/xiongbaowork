@@ -15,6 +15,53 @@ fn temp_roots_with_the_same_label_do_not_collide() {
     assert_ne!(temp_root("same-label"), temp_root("same-label"));
 }
 
+/// The digest every fixture image is pinned to: the full 64 hex digits a release publishes.
+pub(crate) fn fixture_digest() -> String {
+    format!("sha256:{}", "a".repeat(64))
+}
+
+pub(crate) fn fixture_reference(image: &str) -> String {
+    format!("ghcr.io/copilotkit/openbot-{image}@{}", fixture_digest())
+}
+
+/// Lay down what a finished fetch leaves: a manifest naming the stack's required images plus
+/// `extra`, and the success stamp for the same version.
+///
+/// Resolution reads through the deployment's runtime boundary, which refuses a manifest without
+/// a matching stamp, one that omits a required stack image, or one whose references are not
+/// digest-pinned. A manifest alone is what an interrupted fetch leaves, not a release.
+///
+/// Shared by the library and the desktop binary: each names the deployment module `crate::deployment`.
+pub(crate) fn installed_release<'a>(
+    root: &std::path::Path,
+    version: &str,
+    extra: impl IntoIterator<Item = &'a str>,
+) {
+    let mut images = std::collections::BTreeMap::new();
+    for name in crate::deployment::IMAGE_VARIABLES
+        .iter()
+        .map(|(published, _)| *published)
+        .chain(extra)
+    {
+        images.insert(
+            name.to_string(),
+            crate::deployment::Image {
+                reference: fixture_reference(name),
+            },
+        );
+    }
+    let manifest = crate::deployment::Images {
+        version: version.to_string(),
+        images,
+    };
+    std::fs::write(
+        crate::deployment::images_path(root),
+        serde_json::to_string(&manifest).unwrap(),
+    )
+    .expect("manifest is written");
+    crate::deployment::record(root, version).expect("stamp is written");
+}
+
 /// Runtime PATH belongs to the scenario under test; the compiler and linker tools belong to
 /// Cargo's build environment. Neither an inherited runtime RUSTC nor another test can replace it.
 pub(crate) fn compile_fixture(source: &std::path::Path, binary: &std::path::Path) {

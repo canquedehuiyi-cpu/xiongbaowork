@@ -117,7 +117,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `PORT`               | `3001`                             | API server port. `SERVER_PORT` names the same port; set either, or both to the same value, or the server refuses to start. |
 | `VAULT_REQUIRE_AAD`  | unset (off)                        | `1` or `true` refuses stored credentials that are not bound to their row. Set it only after `scripts/reseal-credentials.ts` exits `0`; see [above](#binding-stored-credentials-to-their-row-vault_require_aad). |
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
-| `TENANT_PACKAGE_DIR` | `../examples/fintech`              | Tenant package directory, resolved from `server/`.                  |
+| `TENANT_PACKAGE_DIR` | `../examples/qoderwake`            | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database.                      |
 | `OPENAI_API_KEY`     | unset                              | Default model key for built-in agents and both shipped Bots.        |
 | `OPENAI_BASE_URL`    | unset                              | OpenAI-compatible endpoint that key is spent against. See below.    |
