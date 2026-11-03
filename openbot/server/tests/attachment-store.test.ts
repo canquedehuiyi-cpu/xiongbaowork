@@ -18,6 +18,7 @@ import {
   channels,
   users,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -30,15 +31,18 @@ const createdChannelIds: string[] = [];
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
-  for (const id of createdAttachmentIds.splice(0)) {
-    await database.delete(attachments).where(eq(attachments.id, id));
-  }
-  for (const id of createdChannelIds.splice(0)) {
-    await database.delete(channels).where(eq(channels.id, id));
-  }
-  for (const id of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, id));
-  }
+  // Cleanup spans every person this file seeded, which only the platform reaches.
+  await runAsTenant("platform", async () => {
+    for (const id of createdAttachmentIds.splice(0)) {
+      await database.delete(attachments).where(eq(attachments.id, id));
+    }
+    for (const id of createdChannelIds.splice(0)) {
+      await database.delete(channels).where(eq(channels.id, id));
+    }
+    for (const id of createdUserIds.splice(0)) {
+      await database.delete(users).where(eq(users.id, id));
+    }
+  });
 });
 
 afterAll(async () => {
@@ -48,19 +52,22 @@ afterAll(async () => {
 /** A user and a channel to hang an attachment off of, nothing more. */
 async function seedChannel(db: typeof database) {
   const userId = `${testPrefix}-user-${randomUUID()}`;
-  await db.insert(users).values({
-    id: userId,
-    email: `${userId}@example.test`,
-  });
-  createdUserIds.push(userId);
-
   const channelId = `${testPrefix}-channel-${randomUUID()}`;
-  await db.insert(channels).values({
-    id: channelId,
-    name: "Attachment Store Test Channel",
-    description: "Round-trip test channel.",
+  // The person's own rows, seeded the way their own signed-in request would write them.
+  await runAsTenant(userId, async () => {
+    await db.insert(users).values({
+      id: userId,
+      email: `${userId}@example.test`,
+    });
+    createdUserIds.push(userId);
+
+    await db.insert(channels).values({
+      id: channelId,
+      name: "Attachment Store Test Channel",
+      description: "Round-trip test channel.",
+    });
+    createdChannelIds.push(channelId);
   });
-  createdChannelIds.push(channelId);
 
   return { userId, channelId };
 }
@@ -68,30 +75,32 @@ async function seedChannel(db: typeof database) {
 describe("an attachment's bytes through the bytea column", () => {
   test("survive the round trip unchanged, byte for byte", async () => {
     const { userId, channelId } = await seedChannel(database);
-    // Deliberately includes both a null byte and 0xff: a driver that
-    // treats bytea as text would mangle one of these on the way through.
-    const payload = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0x00, 0xff]);
+    await runAsTenant(userId, async () => {
+      // Deliberately includes both a null byte and 0xff: a driver that
+      // treats bytea as text would mangle one of these on the way through.
+      const payload = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0x00, 0xff]);
 
-    const [inserted] = await database
-      .insert(attachments)
-      .values({
-        channelId,
-        uploadedBy: userId,
-        name: "test.bin",
-        mimeType: "application/octet-stream",
-        sizeBytes: payload.byteLength,
-        bytes: payload,
-      })
-      .returning();
-    createdAttachmentIds.push(inserted.id);
+      const [inserted] = await database
+        .insert(attachments)
+        .values({
+          channelId,
+          uploadedBy: userId,
+          name: "test.bin",
+          mimeType: "application/octet-stream",
+          sizeBytes: payload.byteLength,
+          bytes: payload,
+        })
+        .returning();
+      createdAttachmentIds.push(inserted.id);
 
-    const [read] = await database
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, inserted.id));
+      const [read] = await database
+        .select()
+        .from(attachments)
+        .where(eq(attachments.id, inserted.id));
 
-    expect(Buffer.compare(read.bytes, payload)).toBe(0);
-    expect(read.attachedAt).toBeNull();
+      expect(Buffer.compare(read.bytes, payload)).toBe(0);
+      expect(read.attachedAt).toBeNull();
+    });
   });
 });
 
@@ -128,70 +137,72 @@ describe("a file uploaded through the route and fetched back", () => {
 
   test("comes back byte for byte, under the headers it was stored with", async () => {
     const { userId, channelId } = await seedChannel(database);
-    await database.insert(channelMemberships).values({ channelId, userId });
+    await runAsTenant(userId, async () => {
+      await database.insert(channelMemberships).values({ channelId, userId });
 
-    /*
-     * A real PNG signature so the route's sniffer names it `image/png` on the bytes rather than on
-     * the claim, then a body chosen to break anything that treats these bytes as text: a NUL, a
-     * 0xff, a lone 0x0d and the 0x0d 0x0a pair a transport that thinks it is handling lines would
-     * rewrite.
-     */
-    const payload = Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0xfe, 0x0d,
-      0x0d, 0x0a, 0x7f, 0x80, 0x00, 0x01,
-    ]);
+      /*
+       * A real PNG signature so the route's sniffer names it `image/png` on the bytes rather than on
+       * the claim, then a body chosen to break anything that treats these bytes as text: a NUL, a
+       * 0xff, a lone 0x0d and the 0x0d 0x0a pair a transport that thinks it is handling lines would
+       * rewrite.
+       */
+      const payload = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0xfe, 0x0d,
+        0x0d, 0x0a, 0x7f, 0x80, 0x00, 0x01,
+      ]);
 
-    const actor = actorMiddleware(userId);
-    const uploads = new Hono<{ Variables: AppVariables }>();
-    uploads.route("/", createChannelAttachmentRoutes(database, actor));
+      const actor = actorMiddleware(userId);
+      const uploads = new Hono<{ Variables: AppVariables }>();
+      uploads.route("/", createChannelAttachmentRoutes(database, actor));
 
-    const body = new FormData();
-    body.set(
-      "file",
-      new File([payload], "round-trip.png", { type: "image/png" }),
-    );
-    body.set("uploadGroup", randomUUID());
-    const uploaded = await uploads.request(
-      `http://test/${channelId}/attachments`,
-      { method: "POST", body },
-    );
+      const body = new FormData();
+      body.set(
+        "file",
+        new File([payload], "round-trip.png", { type: "image/png" }),
+      );
+      body.set("uploadGroup", randomUUID());
+      const uploaded = await uploads.request(
+        `http://test/${channelId}/attachments`,
+        { method: "POST", body },
+      );
 
-    expect(uploaded.status).toBe(201);
-    const created = (await uploaded.json()) as {
-      id: string;
-      name: string;
-      mimeType: string;
-      sizeBytes: number;
-    };
-    createdAttachmentIds.push(created.id);
-    expect(created.name).toBe("round-trip.png");
-    expect(created.mimeType).toBe("image/png");
-    // The length the route recorded, which is the field a truncating upload would have to lie
-    // about to keep the round trip below looking consistent.
-    expect(created.sizeBytes).toBe(payload.byteLength);
+      expect(uploaded.status).toBe(201);
+      const created = (await uploaded.json()) as {
+        id: string;
+        name: string;
+        mimeType: string;
+        sizeBytes: number;
+      };
+      createdAttachmentIds.push(created.id);
+      expect(created.name).toBe("round-trip.png");
+      expect(created.mimeType).toBe("image/png");
+      // The length the route recorded, which is the field a truncating upload would have to lie
+      // about to keep the round trip below looking consistent.
+      expect(created.sizeBytes).toBe(payload.byteLength);
 
-    const fetches = new Hono<{ Variables: AppVariables }>();
-    fetches.route("/", createAttachmentRoutes(database, actor));
-    const served = await fetches.request(`http://test/${created.id}`);
+      const fetches = new Hono<{ Variables: AppVariables }>();
+      fetches.route("/", createAttachmentRoutes(database, actor));
+      const served = await fetches.request(`http://test/${created.id}`);
 
-    expect(served.status).toBe(200);
-    const servedBytes = Buffer.from(await served.arrayBuffer());
-    // Against the buffer the request was built from. Comparing lengths first only so a failure says
-    // "truncated" rather than printing two buffers.
-    expect(servedBytes.byteLength).toBe(payload.byteLength);
-    expect(Buffer.compare(servedBytes, payload)).toBe(0);
+      expect(served.status).toBe(200);
+      const servedBytes = Buffer.from(await served.arrayBuffer());
+      // Against the buffer the request was built from. Comparing lengths first only so a failure says
+      // "truncated" rather than printing two buffers.
+      expect(servedBytes.byteLength).toBe(payload.byteLength);
+      expect(Buffer.compare(servedBytes, payload)).toBe(0);
 
-    // The type the server sniffed, never the claim, and the two headers that keep a served
-    // attachment from being run as a page on this app's origin.
-    expect(served.headers.get("content-type")).toBe("image/png");
-    expect(served.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(served.headers.get("content-disposition")).toBe("inline");
-    // `no-cache` rather than a max-age, and the ETag beside it, are what let a DELETED attachment
-    // stop being served: the browser must revalidate every time, and the revalidation is answered
-    // behind the same channel-and-membership join a 200 is. A max-age here would put the
-    // "unavailable" path out of reach for the length of the window.
-    expect(served.headers.get("cache-control")).toBe("private, no-cache");
-    expect(served.headers.get("etag")).toBe(`"${created.id}"`);
+      // The type the server sniffed, never the claim, and the two headers that keep a served
+      // attachment from being run as a page on this app's origin.
+      expect(served.headers.get("content-type")).toBe("image/png");
+      expect(served.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(served.headers.get("content-disposition")).toBe("inline");
+      // `no-cache` rather than a max-age, and the ETag beside it, are what let a DELETED attachment
+      // stop being served: the browser must revalidate every time, and the revalidation is answered
+      // behind the same channel-and-membership join a 200 is. A max-age here would put the
+      // "unavailable" path out of reach for the length of the window.
+      expect(served.headers.get("cache-control")).toBe("private, no-cache");
+      expect(served.headers.get("etag")).toBe(`"${created.id}"`);
+    });
   });
 });
 
@@ -201,7 +212,9 @@ describe("a file uploaded through the route and fetched back", () => {
  */
 async function seedMemberChannel() {
   const { userId, channelId } = await seedChannel(database);
-  await database.insert(channelMemberships).values({ channelId, userId });
+  await runAsTenant(userId, () =>
+    database.insert(channelMemberships).values({ channelId, userId }),
+  );
   return { userId, channelId };
 }
 
@@ -283,10 +296,13 @@ function uploadRequest(
 
 /** The rows this channel holds, so a refusal can be checked against its own channel and no other. */
 async function rowsIn(channelId: string) {
-  return await database
-    .select({ id: attachments.id })
-    .from(attachments)
-    .where(eq(attachments.channelId, channelId));
+  // Across every tenant, so a row stamped as anybody's would still be seen.
+  return await runAsTenant("platform", () =>
+    database
+      .select({ id: attachments.id })
+      .from(attachments)
+      .where(eq(attachments.channelId, channelId)),
+  );
 }
 
 describe("the body limit in front of the upload route", () => {
@@ -365,11 +381,14 @@ describe("the body limit in front of the upload route", () => {
 
 describe("the attachments table's cascading foreign keys", () => {
   test("index uploaded_by, so removing a person is not a sequential scan of the blob table", async () => {
-    const indexes = (await database.execute(sql`
-      select indexname, indexdef
-      from pg_indexes
-      where schemaname = current_schema() and tablename = 'attachments'
-    `)) as unknown as { indexname: string; indexdef: string }[];
+    // The system catalogue, which belongs to no person.
+    const indexes = (await runAsTenant("system", () =>
+      database.execute(sql`
+        select indexname, indexdef
+        from pg_indexes
+        where schemaname = current_schema() and tablename = 'attachments'
+      `),
+    )) as unknown as { indexname: string; indexdef: string }[];
 
     /*
      * The LEADING column, not merely a column that appears somewhere. `attachments_upload_group_idx`
@@ -405,24 +424,26 @@ describe("the attachments table's cascading foreign keys", () => {
 
   test("actually cascade a removed person's attachments away", async () => {
     const { userId, channelId } = await seedChannel(database);
-    const [inserted] = await database
-      .insert(attachments)
-      .values({
-        channelId,
-        uploadedBy: userId,
-        name: "theirs.txt",
-        mimeType: "text/plain",
-        sizeBytes: 5,
-        bytes: Buffer.from("hello"),
-      })
-      .returning();
+    await runAsTenant(userId, async () => {
+      const [inserted] = await database
+        .insert(attachments)
+        .values({
+          channelId,
+          uploadedBy: userId,
+          name: "theirs.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+          bytes: Buffer.from("hello"),
+        })
+        .returning();
 
-    await database.delete(users).where(eq(users.id, userId));
+      await database.delete(users).where(eq(users.id, userId));
 
-    const survivors = await database
-      .select({ id: attachments.id })
-      .from(attachments)
-      .where(eq(attachments.id, inserted.id));
-    expect(survivors).toEqual([]);
+      const survivors = await database
+        .select({ id: attachments.id })
+        .from(attachments)
+        .where(eq(attachments.id, inserted.id));
+      expect(survivors).toEqual([]);
+    });
   });
 });

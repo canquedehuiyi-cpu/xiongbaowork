@@ -18,12 +18,56 @@ export type QuotaUsage = {
   models: number;
 };
 
+/**
+ * Model tokens this billing period, counted from the calls made through bound models (spec K2).
+ *
+ * A sum is null when no call reported a number for it: unknown, which is not the same as zero, and
+ * nothing on screen may turn one into the other. `complete` is false while any call is unreported,
+ * only partly reported, or still unsettled.
+ */
+export type TokenUsage = {
+  period: string;
+  scope: "bound-models";
+  calls: number;
+  reportedCalls: number;
+  partialCalls: number;
+  unknownUsageCalls: number;
+  unsettledCalls: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  complete: boolean;
+};
+
 export type Quota = {
   /** null means this workspace has no subscription, which means no ceiling is applied to it. */
   plan: { id: string; name: string } | null;
   limits: PlanLimits | null;
   usage: QuotaUsage;
+  tokens: TokenUsage;
 };
+
+/** What the token meter can see, said wherever its number is shown. */
+export const TOKEN_SCOPE_CAPTION = "仅统计绑定模型的调用";
+
+/**
+ * The token line as text.
+ *
+ * Four answers, and none of them is a 0 the meter did not read: no calls at all; calls but no total
+ * from any of them; a known total plus calls whose usage is not (yet) known; and a complete total.
+ */
+export function tokenReadout(tokens: TokenUsage): string {
+  if (tokens.calls === 0) return "本月暂无计量调用";
+  if (tokens.totalTokens === null) {
+    return `Token 用量未知（${tokens.calls} 次调用未上报）`;
+  }
+  const known = `${tokens.totalTokens.toLocaleString("zh-CN")} tokens`;
+  if (tokens.complete) return known;
+  // A call still running may already have reported, so it is only counted when nothing else is.
+  const missing =
+    tokens.unknownUsageCalls + tokens.partialCalls || tokens.unsettledCalls;
+  return `已知 ${known}，另有 ${missing} 次调用用量未知`;
+}
 
 export type Tier = {
   id: string;

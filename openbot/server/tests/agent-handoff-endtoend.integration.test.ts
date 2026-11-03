@@ -26,10 +26,17 @@ import {
   pluginGrants,
   workItems,
 } from "../src/db/schema";
-import { currentTenant, runAsTenant } from "../src/tenant/context";
+import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
+import {
+  asPlatform,
+  currentTenant,
+  runAsTenant,
+  TenantContextError,
+} from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { expectUnframedRefused } from "./support/frame-guard";
 
 /**
  * A hop from end to end: a Bot calls the tool, and another replica delivers it.
@@ -110,30 +117,36 @@ async function clean() {
 
 beforeEach(async () => {
   await clean();
-  for (const [id, name] of [
-    [ASKER, "Asker"],
-    [TARGET, "Target"],
-  ]) {
+  // Built-in Bots are the deployment's catalogue (`system`), which every person's run must read.
+  await runAsTenant("system", async () => {
+    for (const [id, name] of [
+      [ASKER, "Asker"],
+      [TARGET, "Target"],
+    ]) {
+      await database
+        .insert(agents)
+        .values({ id, name, type: "built_in", configuration: {} })
+        .onConflictDoNothing();
+      await database
+        .insert(agentProfiles)
+        .values({
+          agentId: id,
+          name,
+          title: "",
+          roleDescription: "",
+          avatarSeed: id,
+          visibility: "public",
+        })
+        .onConflictDoNothing();
+    }
+  });
+  // The grant is configuration made in the person's own tenant, where every hop here is asked.
+  await runAsTenant(ACTOR, async () => {
     await database
-      .insert(agents)
-      .values({ id, name, type: "built_in", configuration: {} })
+      .insert(pluginGrants)
+      .values({ kind: "bot", ref: TARGET, agentId: ASKER, grantedBy: "test" })
       .onConflictDoNothing();
-    await database
-      .insert(agentProfiles)
-      .values({
-        agentId: id,
-        name,
-        title: "",
-        roleDescription: "",
-        avatarSeed: id,
-        visibility: "public",
-      })
-      .onConflictDoNothing();
-  }
-  await database
-    .insert(pluginGrants)
-    .values({ kind: "bot", ref: TARGET, agentId: ASKER, grantedBy: "test" })
-    .onConflictDoNothing();
+  });
 });
 
 afterAll(async () => {
@@ -384,75 +397,114 @@ describe("G01: whose work a sweep is doing", () => {
     expect(strangerSees).toEqual({ work: [], trail: [] });
   });
 
-  test("a hop stamped as nobody's is ended without running anybody", async () => {
-    const run = `${RUN}-unframed`;
-    const key = `${run}:${TARGET}`;
-    // Offered from no frame, which is what stamped every background row `system` before.
-    await createWorkQueue(database).offer({
-      kind: "bot.message",
-      key,
-      payload: {
+  /*
+   * Two stamps that name nobody. `system` is what an offer from no frame used to get by default, so
+   * it is offered here from an explicit `system` frame; `team` is a stamp no frame can write, so that
+   * row is put on the queue the only way one can be, by `platform`. Neither has a person to act as.
+   *
+   * THE THIRD CASE IS THE ONE THAT ASKS `isPersonTenant` ABOUT `team`. A `team` stamp on a hop for
+   * a real person is refused by the owner/stamp comparison as well, so it would still be refused if
+   * `team` were ever taken for a person. A hop whose payload names `team` as its person agrees with
+   * its own stamp: the only thing left to refuse it is that `team` is nobody.
+   */
+  test.each([
+    [SYSTEM_TENANT, ACTOR],
+    [TEAM_TENANT, ACTOR],
+    [TEAM_TENANT, TEAM_TENANT],
+  ])(
+    "a hop stamped as nobody's (`%s`, for `%s`) is ended without running anybody",
+    async (stamp, actorId) => {
+      const run = `${RUN}-nobody-${stamp}-for-${actorId}`;
+      const key = `${run}:${TARGET}`;
+      const payload = {
         fromBotId: ASKER,
         toBotId: TARGET,
-        actorId: ACTOR,
+        actorId,
         threadId: `thread-${suite}`,
         runId: run,
         depth: 1,
         task: "nobody's question",
-      },
-    });
+      };
+      if (stamp === SYSTEM_TENANT)
+        expect(
+          await runAsTenant(SYSTEM_TENANT, () =>
+            createWorkQueue(database).offer({
+              kind: "bot.message",
+              key,
+              payload,
+            }),
+          ),
+        ).toBe("queued");
+      else
+        await asPlatform(() =>
+          database
+            .insert(workItems)
+            .values({ kind: "bot.message", key, payload, tenantId: stamp }),
+        );
+      const [stamped] = await asPlatform(() =>
+        database
+          .select({ tenantId: workItems.tenantId })
+          .from(workItems)
+          .where(
+            and(eq(workItems.kind, "bot.message"), eq(workItems.key, key)),
+          ),
+      );
+      expect(stamped?.tenantId).toBe(stamp);
 
-    const ran: string[] = [];
-    const runner = createHandoffRunner({
-      queue: createWorkQueue(database),
-      owner: `replica-${suite}`,
-      sign: () => "signed",
-      auditStore,
-      delivery: {
-        deliver: async ({ work }) => {
-          ran.push(work.runId);
-          return { answer: "should never be relayed" };
+      const ran: string[] = [];
+      const runner = createHandoffRunner({
+        queue: createWorkQueue(database),
+        owner: `replica-${suite}`,
+        sign: () => "signed",
+        auditStore,
+        delivery: {
+          deliver: async ({ work }) => {
+            ran.push(work.runId);
+            return { answer: "should never be relayed" };
+          },
         },
-      },
-    });
-    const report = await runAsTenant("platform", () => runner.sweep());
+      });
+      const report = await runAsTenant("platform", () => runner.sweep());
 
-    expect(ran).not.toContain(run);
-    expect(report.skipped).toContainEqual({
-      key,
-      reason: "tenant_unresolved",
-    });
-    const after = await runAsTenant("platform", async () => ({
-      row: await database
-        .select({ finishedAt: workItems.finishedAt })
-        .from(workItems)
-        .where(and(eq(workItems.kind, "bot.message"), eq(workItems.key, key))),
-      trail: await database
-        .select({
-          eventType: auditEvents.eventType,
-          tenantId: auditEvents.tenantId,
-          actorUserId: auditEvents.actorUserId,
-        })
-        .from(auditEvents)
-        .where(sql`${auditEvents.payload}->>'run' = ${run}`),
-      relays: await database
-        .select({ key: workItems.key })
-        .from(workItems)
-        .where(
-          sql`${workItems.key} like ${`%${key}`} and ${workItems.key} <> ${key}`,
-        ),
-    }));
-    expect(after.row[0]?.finishedAt).not.toBeNull();
-    // One row says it was dropped: the platform's, naming nobody, so no tenant can read it.
-    expect(after.trail).toEqual([
-      {
-        eventType: "agent.handoff_failed",
-        tenantId: "platform",
-        actorUserId: null,
-      },
-    ]);
-    expect(after.relays).toEqual([]);
-  });
+      expect(ran).not.toContain(run);
+      expect(report.skipped).toContainEqual({
+        key,
+        reason: "tenant_unresolved",
+      });
+      const after = await runAsTenant("platform", async () => ({
+        row: await database
+          .select({ finishedAt: workItems.finishedAt })
+          .from(workItems)
+          .where(
+            and(eq(workItems.kind, "bot.message"), eq(workItems.key, key)),
+          ),
+        trail: await database
+          .select({
+            eventType: auditEvents.eventType,
+            tenantId: auditEvents.tenantId,
+            actorUserId: auditEvents.actorUserId,
+          })
+          .from(auditEvents)
+          .where(sql`${auditEvents.payload}->>'run' = ${run}`),
+        relays: await database
+          .select({ key: workItems.key })
+          .from(workItems)
+          .where(
+            sql`${workItems.key} like ${`%${key}`} and ${workItems.key} <> ${key}`,
+          ),
+      }));
+      expect(after.row[0]?.finishedAt).not.toBeNull();
+      // One row says it was dropped: the platform's, naming nobody, so no tenant can read it.
+      expect(after.trail).toEqual([
+        {
+          eventType: "agent.handoff_failed",
+          tenantId: "platform",
+          actorUserId: null,
+        },
+      ]);
+      expect(after.relays).toEqual([]);
+    },
+  );
 
   /** A follow-up runner over the real queue and store, with only the turn and the channel faked. */
   function wakeUps() {
@@ -497,8 +549,11 @@ describe("G01: whose work a sweep is doing", () => {
     return { store, turns, sweepUntil };
   }
 
-  /** A follow-up row written straight to the queue, stamped by whichever frame writes it. */
-  async function dueFollowUp(ownerUserId: string) {
+  /**
+   * A follow-up row written straight to the queue, stamped by whichever frame writes it, or with
+   * `stamp` when one is named: a stamp no frame writes by default, so the caller is `platform`.
+   */
+  async function dueFollowUp(ownerUserId: string, stamp?: string) {
     const key = `wake:${suite}:${randomUUID()}`;
     wakeUpKeys.push(key);
     await database.insert(workItems).values({
@@ -512,6 +567,7 @@ describe("G01: whose work a sweep is doing", () => {
         dueAt: new Date(Date.now() - 60_000).toISOString(),
         scheduledAt: new Date(Date.now() - 120_000).toISOString(),
       },
+      ...(stamp === undefined ? {} : { tenantId: stamp }),
     });
     return key;
   }
@@ -563,20 +619,38 @@ describe("G01: whose work a sweep is doing", () => {
     );
   });
 
-  test("a follow-up stamped `system` is failed and its turn never runs", async () => {
-    const { turns, sweepUntil } = wakeUps();
-    // From no frame: the stamp a background row used to get by default.
-    const key = await dueFollowUp(ACTOR);
+  /*
+   * `system` is the stamp a background row used to get by default from no frame, so it is written
+   * here from an explicit `system` frame. `team` is a stamp no frame can write, so that row is
+   * written by `platform`. Both name nobody, so neither has a person whose turn could run.
+   *
+   * As with the hop above, the last case is the one that reaches `isPersonTenant("team")`: a payload
+   * that names `team` as its owner agrees with its `team` stamp, so the owner/stamp comparison has
+   * nothing to refuse and only "`team` is nobody" stands between it and a turn.
+   */
+  test.each([
+    [SYSTEM_TENANT, ACTOR],
+    [TEAM_TENANT, ACTOR],
+    [TEAM_TENANT, TEAM_TENANT],
+  ])(
+    "a follow-up stamped `%s` (for `%s`) is failed and its turn never runs",
+    async (stamp, ownerUserId) => {
+      const { turns, sweepUntil } = wakeUps();
+      const key =
+        stamp === SYSTEM_TENANT
+          ? await runAsTenant(SYSTEM_TENANT, () => dueFollowUp(ownerUserId))
+          : await asPlatform(() => dueFollowUp(ownerUserId, stamp));
 
-    expect(await sweepUntil(key)).toBe("skipped");
-    expect(turns.filter((turn) => turn.owner === ACTOR)).toEqual([]);
-    const [row] = await runAsTenant("platform", () => outcomeOf(key));
-    expect(row?.tenantId).toBe("system");
-    expect(
-      (row?.payload as { outcome?: { status: string } } | undefined)?.outcome
-        ?.status,
-    ).toBe("failed");
-  });
+      expect(await sweepUntil(key)).toBe("skipped");
+      expect(turns.filter((turn) => turn.owner === ownerUserId)).toEqual([]);
+      const [row] = await runAsTenant("platform", () => outcomeOf(key));
+      expect(row?.tenantId).toBe(stamp);
+      expect(
+        (row?.payload as { outcome?: { status: string } } | undefined)?.outcome
+          ?.status,
+      ).toBe("failed");
+    },
+  );
 
   test("a follow-up whose owner is not the tenant on its row is refused", async () => {
     const { turns, sweepUntil } = wakeUps();
@@ -722,9 +796,18 @@ describe("G01: whose work a sweep is doing", () => {
         database.select({ key: workItems.key }).from(workItems).where(mine),
       ),
     ).toEqual([]);
-    expect(
-      await database.select({ key: workItems.key }).from(workItems).where(mine),
-    ).toEqual([]);
+    /*
+     * Nor can anybody who is not a person. A read from no frame is refused outright (G01-E; it used
+     * to run as `system`), `system` asked for explicitly sees neither row, and `team` is a stamp that
+     * cannot be opened as a frame at all.
+     */
+    const queuedKeys = () =>
+      database.select({ key: workItems.key }).from(workItems).where(mine);
+    await expectUnframedRefused(queuedKeys);
+    expect(await runAsTenant(SYSTEM_TENANT, queuedKeys)).toEqual([]);
+    expect(() => runAsTenant(TEAM_TENANT, queuedKeys)).toThrow(
+      TenantContextError,
+    );
 
     // And the sweeps run them, as that person.
     const deliveredAs: string[] = [];

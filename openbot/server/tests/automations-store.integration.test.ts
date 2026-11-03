@@ -18,7 +18,7 @@ import {
   automations,
   automationTriggers,
 } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import { runAsTenant, TenantContextError } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -230,12 +230,24 @@ describe("whose automation it is (tenant from the caller frame)", () => {
 
   test("no 'system' rows: an unscoped connection reads none and writes none", async () => {
     const created = await createFor(tenantA, wakerA);
-    // No frame at all runs as 'system'.
-    const unscoped = await database
-      .select({ id: automations.id })
-      .from(automations)
-      .where(eq(automations.id, created.id));
+    // The `system` frame (what no frame at all used to fall back to) reads none of a person's rows.
+    const unscoped = await as("system", () =>
+      database
+        .select({ id: automations.id })
+        .from(automations)
+        .where(eq(automations.id, created.id)),
+    );
     expect(unscoped).toEqual([]);
+    // And no frame at all reads nothing: every access needs a frame, so it is refused outright.
+    // (The client refuses while the statement is built, so the async wrapper turns that into a
+    // rejection.)
+    await expect(
+      (async () =>
+        database
+          .select({ id: automations.id })
+          .from(automations)
+          .where(eq(automations.id, created.id)))(),
+    ).rejects.toBeInstanceOf(TenantContextError);
     await expect(
       as("system", async () => {
         await database.insert(automations).values({
@@ -261,7 +273,12 @@ describe("whose automation it is (tenant from the caller frame)", () => {
   });
 
   test("the store refuses to act outside a person's frame", async () => {
-    await expect(store.list()).rejects.toThrow(/tenant's frame/);
+    // `system` is the frame no frame at all used to fall back to; it is nobody's, so it is refused.
+    await expect(as("system", () => store.list())).rejects.toThrow(
+      /tenant's frame/,
+    );
+    // Every access needs a frame, so no frame at all is refused before the store is reached.
+    await expect(store.list()).rejects.toBeInstanceOf(TenantContextError);
     await expect(as("platform", () => store.list())).rejects.toThrow(
       /tenant's frame/,
     );

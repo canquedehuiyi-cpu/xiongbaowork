@@ -10,6 +10,7 @@ import { loadConfig } from "../src/config";
 import { buildAgents } from "../src/copilot";
 import { encryptSecret } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
+import { runAsTenant } from "../src/tenant/context";
 import { loadTenantPackage } from "../src/tenant-package";
 import { testEnvironment } from "./support/environment";
 
@@ -239,11 +240,14 @@ async function runPicked(options: {
           },
         }
       : undefined;
-    const loaded = await createRuntimeAgentLoader(
-      database,
-      vault,
-      config.managedAgent,
-    )({ id: "fixture-actor", role: "admin" });
+    // The roster is read for one person, so it is read in their frame, as the request would be.
+    const loaded = await runAsTenant("fixture-actor", () =>
+      createRuntimeAgentLoader(
+        database,
+        vault,
+        config.managedAgent,
+      )({ id: "fixture-actor", role: "admin" }),
+    );
     expect(loaded).toHaveLength(1);
     const agents = await buildAgents(
       loaded,
