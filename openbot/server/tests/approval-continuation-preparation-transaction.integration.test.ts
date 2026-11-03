@@ -11,7 +11,7 @@ import { createDatabase, type Database } from "../src/db/client";
 import { approvalContinuations as ledger, approvalRequests } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
 import { runAsTenant } from "../src/tenant/context";
-import { createDisposableTestDatabase } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 
 // SOURCE_ONLY: real PG17 definitions, zero executions. Import opens the existing
 // DB module; this file is never a CPU-only import or an authorization artifact.
@@ -70,7 +70,7 @@ afterAll(async () => {
     await database.$client.close();
     await disposable.drop();
   }
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 
 async function fixture(origin: ContinuationProvision["origin"] = "current") {
   const id = randomUUID();
