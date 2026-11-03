@@ -14,23 +14,19 @@ import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
  * `assertPersonTenant` has refused a row that names nobody. Questions that genuinely belong to no
  * tenant — what is due, what is unheld — say so with an explicit `runAsTenant("platform")`.
  *
- * The `system` answer below for a query with no context is LEGACY. It reads only platform rows, but
- * it also WRITES them, and a `system` row is one every tenant can read, so background work that
- * forgot its frame filed a person's results where everybody could see them. It goes away in
- * follow-up G01-D, when `currentTenant()` throws outside a frame the way `requireTenant()` does now.
+ * THERE IS NO ANSWER OUTSIDE A FRAME (G01-E). `currentTenant()` outside every `runAsTenant` throws
+ * a `TenantContextError`, and so does every statement the database client builds there, because the
+ * client asks it first. It used to answer `system`. That read only platform rows, but it also WROTE
+ * them, and a `system` row is one every tenant can read, so background work that forgot its frame
+ * filed a person's results where everybody could see them. The `OPENBOT_TENANT_FRAME_GUARD` switch
+ * that found the remaining offenders (`report`, then `throw` as the suite's default) is gone with
+ * the fallback, and there is no escape hatch: a path that reaches the database without a frame is a
+ * bug, fixed by giving it the right frame.
  *
- * THE ROAD THERE (G01-D, step one). `OPENBOT_TENANT_FRAME_GUARD` decides what an unframed read of
- * the tenant does, so offenders can be found before the fallback is removed:
- *   - unset / `off`: the legacy `system` answer, silently. Production today.
- *   - `report`: still `system`, but each distinct call site is written once to stderr as a
- *     `tenant-unframed-access` line with the stack that reached it. CI's server shards run this
- *     way, so the logs list every remaining offender without failing anything.
- *   - `throw`: a `TenantContextError`, exactly what G01-D makes the only behaviour. Run a test file
- *     with it to prove that file is clean.
- * The escape for work that genuinely belongs to nobody is NOT the fallback: it is an explicit
- * `runAsTenant("platform", ...)` (a question across tenants, or a deployment row) or, for the
- * catalogue rows every tenant must read, `runAsTenant("system", ...)`, at the call site.
- * `asPlatform(work)` is the short spelling of the first.
+ * The frame for work that genuinely belongs to nobody is named at the call site: an explicit
+ * `runAsTenant("platform", ...)` (a question across tenants, or a deployment row), or, for the
+ * catalogue rows every tenant must read, `runAsTenant("system", ...)`. `asPlatform(work)` is the
+ * short spelling of the first. `tests/tenant-invariants.test.ts` counts every such door in `src`.
  *
  * `team` IS A STAMP, NEVER A FRAME (G01-E). Rows shared by the whole team are stamped `team`, and
  * who may touch one is decided by that row's ownership predicate in the frame of the person asking.
@@ -41,13 +37,12 @@ import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 const store = new AsyncLocalStorage<string>();
 
 /**
- * The tenant frame exactly as it stands: `undefined` outside any `runAsTenant`, unlike
- * `currentTenant`, which answers that with `system`.
+ * The tenant frame exactly as it stands: `undefined` outside any `runAsTenant`, where `currentTenant`
+ * throws.
  *
- * The database client needs the difference. A statement built inside a frame is pinned to that frame
- * for good, because the frame can be gone by the time it executes; one built outside every frame keeps
- * the old behaviour of running as whichever frame awaits it. An explicit `runAsTenant("system", ...)`
- * is a frame like any other and pins to `system`.
+ * The database client pins a statement built inside a frame to that frame for good, because the frame
+ * can be gone by the time it executes. An explicit `runAsTenant("system", ...)` is a frame like any
+ * other and pins to `system`.
  */
 export function tenantFrame(): string | undefined {
   return store.getStore();
@@ -58,77 +53,28 @@ export class TenantContextError extends Error {
   override name = "TenantContextError";
 }
 
-export type TenantFrameGuard = "off" | "report" | "throw";
+const UNFRAMED = "no tenant frame";
 
-/** Read at call time, so a test can switch it for one case and restore it. */
-export function tenantFrameGuard(
-  env: Record<string, string | undefined> = process.env,
-): TenantFrameGuard {
-  const value = env.OPENBOT_TENANT_FRAME_GUARD?.trim().toLowerCase();
-  return value === "report" || value === "throw" ? value : "off";
+/** The tenant of the frame this runs in. Outside every frame it is an error, never `system`. */
+export function currentTenant(): string {
+  const tenant = store.getStore();
+  // An empty frame names nobody, the same as none: it was refused by `requireTenant` before G01-E.
+  if (tenant === undefined || tenant === "")
+    throw new TenantContextError(UNFRAMED);
+  return tenant;
 }
 
-const reportedSites = new Set<string>();
-const REPORTED_SITES_LIMIT = 1000;
-
-/** The first stack frame outside this module and the database client: who forgot the frame. */
-function unframedCallSite(stack: string | undefined): string {
-  const frames = (stack ?? "").split("\n").slice(1);
-  const caller = frames.find(
-    (line) =>
-      !/tenant[\\/]context\.ts|db[\\/]client\.ts|node_modules|node:/.test(line),
-  );
-  return (caller ?? frames[0] ?? "unknown").trim();
+/** Whether `currentTenant()` would answer here rather than throw. */
+export function isTenantFramed(): boolean {
+  const tenant = store.getStore();
+  return tenant !== undefined && tenant !== "";
 }
 
 /**
- * Forget which call sites were reported. For the guard's own test: a CI shard runs every file in one
- * process under `report`, so by the time that test runs the cap may already be spent by others.
+ * The same as `currentTenant`, which throws outside a frame too since G01-E. Kept for the call sites
+ * that said "a frame is required here" before that was true everywhere.
  */
-export function forgetReportedUnframedSites() {
-  reportedSites.clear();
-}
-
-function reportUnframed(error: Error) {
-  const site = unframedCallSite(error.stack);
-  if (reportedSites.has(site) || reportedSites.size >= REPORTED_SITES_LIMIT)
-    return;
-  reportedSites.add(site);
-  // stderr rather than console.warn: a test that spies on the console must not see the guard.
-  process.stderr.write(
-    `${JSON.stringify({
-      type: "tenant-unframed-access",
-      site,
-      stack: (error.stack ?? "")
-        .split("\n")
-        .slice(1, 9)
-        .map((line) => line.trim()),
-    })}\n`,
-  );
-}
-
-export function currentTenant(): string {
-  const tenant = store.getStore();
-  if (tenant !== undefined) return tenant;
-  const guard = tenantFrameGuard();
-  if (guard === "throw")
-    throw new TenantContextError(
-      "no tenant frame (OPENBOT_TENANT_FRAME_GUARD=throw): run this inside runAsTenant",
-    );
-  if (guard === "report") reportUnframed(new Error("unframed tenant read"));
-  return "system";
-}
-
-export function isTenantFramed(): boolean {
-  return store.getStore() !== undefined;
-}
-
-/** The tenant of the frame this runs in. Outside a frame it is an error, never `system`. */
-export function requireTenant(): string {
-  const tenant = store.getStore();
-  if (!tenant) throw new TenantContextError("no tenant frame");
-  return tenant;
-}
+export const requireTenant = currentTenant;
 
 /** A tenant that is a person's own: not empty, and not one of the three that belong to nobody. */
 export function isPersonTenant(tenant: unknown): tenant is string {

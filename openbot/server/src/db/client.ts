@@ -282,13 +282,14 @@ export function createDatabase(
    * 1.3.14 calls it OUTSIDE the caller's AsyncLocalStorage frame when an async function has already
    * awaited something and then returns the builder unawaited
    * (`runAsTenant(t, async () => { await x; return db.select().from(t) })`), so a client that read
-   * the frame at that moment ran the statement as `system`: row-level security answered with
-   * nothing, and a write leaning on the `tenant_id` default would have landed in the partition every
-   * tenant reads. Every builder, prepared statement, relational query and transaction drizzle makes
-   * reaches the database through the session of the instance it was made on, so pinning the
-   * instance's client to the tenant it was made for carries that tenant into execution with nothing
-   * wrapped -- no builder, table or SQL chunk changes identity, and `instanceof`, `.as()`, subquery
-   * embedding, `.toSQL()` and `.prepare()` behave exactly as drizzle wrote them.
+   * the frame at that moment ran the statement as `system` (the old answer outside a frame; since
+   * G01-E it throws instead): row-level security answered with nothing, and a write leaning on the
+   * `tenant_id` default would have landed in the partition every tenant reads. Every builder,
+   * prepared statement, relational query and transaction drizzle makes reaches the database through
+   * the session of the instance it was made on, so pinning the instance's client to the tenant it
+   * was made for carries that tenant into execution with nothing wrapped -- no builder, table or SQL
+   * chunk changes identity, and `instanceof`, `.as()`, subquery embedding, `.toSQL()` and
+   * `.prepare()` behave exactly as drizzle wrote them.
    *
    * The admin capability is pinned alongside the tenant (G01-E), for the same reason: it lives in
    * AsyncLocalStorage too, so read at execution time it was gone exactly when the tenant would have
@@ -338,7 +339,8 @@ export function createDatabase(
              * The callback itself runs inside `runAsTenant(tenant)` (G01-E). Bun calls it from its own
              * connection machinery, outside the caller's frame, so without this a `currentTenant()`
              * read anywhere inside the transaction — a store stamping a row, `sealedRow` binding an
-             * envelope — fell back to `system` while the session's `app.tenant_id` said otherwise.
+             * envelope — fell back to `system` while the session's `app.tenant_id` said otherwise
+             * (and since G01-E would throw, there being no answer outside a frame).
              * The capability is re-entered with it, from the same capture that wrote
              * `app.capability`, so `capabilityFor(currentTenant())` inside the callback (a credential
              * sealed to `team`, say) answers what the session says rather than `''`.
@@ -365,9 +367,11 @@ export function createDatabase(
    * caches apart while the connection pool stays common.
    *
    * Each instance's client is pinned to its tenant (see `clientFor`). The one instance made outside
-   * every frame is not pinned and runs as whichever frame executes its statements, which is what a
-   * statement built at module scope or before a frame was entered has always done -- `system` when
-   * no frame executes it either.
+   * every frame is not pinned: its client asks `currentTenant()` when a statement executes, so it runs
+   * as whichever frame executes it, and throws when none does (G01-E: there is no `system` answer
+   * outside a frame any more). It is the proxy's target and stays the unpinned fallback of
+   * `instanceFor`, but the getter below never reaches it: `currentTenant()` there throws before any
+   * instance is chosen, so not even a builder made at module scope can be made outside a frame.
    */
   const unframed = drizzle({ client: clientFor(undefined), schema });
   /*
@@ -401,8 +405,12 @@ export function createDatabase(
        * not in the object, so handing it out opens no door that `unsafe` did not already.
        */
       if (property === "$client") return raw;
-      const frame = tenantFrame();
+      /*
+       * Asked first, so ANY use of the client outside every frame — building a statement, opening a
+       * transaction, reading `query` — is a `TenantContextError` here, before drizzle sees it.
+       */
       const tenant = currentTenant();
+      const frame = tenantFrame();
       const instance = instanceFor(frame) as unknown as Record<
         string | symbol,
         unknown

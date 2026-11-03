@@ -25,10 +25,11 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  *    "you may not touch that"; it answers "there is no such row here", so a tenant's UPDATE or DELETE
  *    of a platform row succeeds having changed nothing. INSERT is the exception — WITH CHECK is asked
  *    of the row being written whether or not it was ever visible — and that one keeps its `rejects`.
- *  - The legitimate `system` writer is expected to keep working. `tenant/context.ts` resolves an absent
- *    scope to `system` and the client stamps that onto the session, so `tenant_id = current_setting(…)`
- *    still holds for boot-time and unscoped seeding, and the cross-tenant writers that name
- *    `platform` still reach everything.
+ *  - The legitimate `system` writer is expected to keep working. It writes in an explicit
+ *    `runAsTenant("system", …)` frame, which the client stamps onto the session, so
+ *    `tenant_id = current_setting(…)` holds for the catalogue's own seeding, and the cross-tenant
+ *    writers that name `platform` still reach everything. There is no unscoped writer: since G01-E a
+ *    statement outside every frame is refused before it is sent, rather than resolved to `system`.
  */
 /**
  * What the catalog says each tenant table answers, command by command.
