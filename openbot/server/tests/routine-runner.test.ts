@@ -64,8 +64,20 @@ type Recorded = {
   board: { opened: Record<string, unknown>[]; finished: string[] };
 };
 
+/**
+ * Every `finished` call in full, and how many switch-offs had happened when it was made (spec C3).
+ *
+ * Kept beside `Recorded` rather than inside it, so the assertions that compare `recorded` whole keep
+ * meaning exactly what they meant before the breaker reached the card.
+ */
+type Close = {
+  input: Parameters<TaskProjector["finished"]>[0];
+  switchedOffBefore: number;
+};
+
 function recordingBoard(
   recorded: Recorded,
+  closes: Close[] = [],
 ): Pick<TaskProjector, "opened" | "finished"> {
   return {
     async opened(input) {
@@ -74,6 +86,7 @@ function recordingBoard(
     },
     async finished(input) {
       recorded.board.finished.push(input.failed ? "failed" : "review");
+      closes.push({ input, switchedOffBefore: recorded.enabled.length });
     },
   };
 }
@@ -90,7 +103,12 @@ function harness(options: {
   recordActivity?: () => Promise<void>;
   /** The month's ceiling already spent (ticket 022): the firing must not dial the model at all. */
   overQuota?: boolean;
+  /** The fatigue count cannot be read (spec C3: the card must still close). */
+  failuresError?: Error;
+  /** The switch-off cannot be written (spec C3: the card must not claim it happened). */
+  setEnabledError?: Error;
 }) {
+  const closes: Close[] = [];
   const recorded: Recorded = {
     finished: [],
     activity: [],
@@ -124,9 +142,11 @@ function harness(options: {
         runId: RUN_ID,
         status: "failed",
       });
+      if (options.failuresError) throw options.failuresError;
       return options.failures ?? 0;
     },
     async setEnabled(ownerUserId, id, enabled) {
+      if (options.setEnabledError) throw options.setEnabledError;
       recorded.enabled.push({ ownerUserId, id, enabled });
     },
   };
@@ -157,11 +177,12 @@ function harness(options: {
 
   return {
     recorded,
+    closes,
     runner: createRoutineRunner({
       routineStore,
       channelStore,
       runTurn,
-      board: recordingBoard(recorded),
+      board: recordingBoard(recorded, closes),
       quota: {
         async assertCapacity() {
           if (options.overQuota) {
@@ -397,7 +418,7 @@ describe("the board a headless firing leaves", () => {
 
     expect(recorded.board.opened).toEqual([
       {
-        tenantId: "user_owner",
+        tenantId: CONTEXT.tenantId,
         title: "Post the standup summary.",
         executorAgentId: "bot_helper",
         source: "routine",
@@ -461,5 +482,152 @@ describe("the board a headless firing leaves", () => {
     expect(recorded.finished).toEqual([
       { runId: RUN_ID, status: "waiting", error: "A tool is waiting for you." },
     ]);
+  });
+});
+
+/**
+ * Spec C3: the circuit breaker is visible on the card, not only in the channel.
+ *
+ * The tenth consecutive failure switches the routine off (threshold, switch-off and message are the
+ * fatigue rule's, unchanged), and the card that firing opened closes `failed` exactly once, carrying a
+ * `circuit_breaker` reference the board draws as 已熔断·已自动停用. Any other failure closes as a plain
+ * failure, and a switch-off that did not happen is never drawn as one.
+ */
+describe("the circuit breaker on the card", () => {
+  test("the tenth failure closes its card failed once, carrying the breaker, after the switch-off", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 10,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+      deliverableRef: {
+        kind: "circuit_breaker",
+        failures: 10,
+        routineId: CONTEXT.routineId,
+      },
+    });
+    // The badge says 已自动停用, so the routine is off before the card says so.
+    expect(closes[0]?.switchedOffBefore).toBe(1);
+    expect(recorded.board.finished).toEqual(["failed"]);
+    expect(recorded.enabled).toEqual([
+      {
+        ownerUserId: CONTEXT.ownerUserId,
+        id: CONTEXT.routineId,
+        enabled: false,
+      },
+    ]);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "the model refused" },
+    ]);
+    expect(recorded.activity.map((entry) => entry.activity.text)).toEqual([
+      "This routine has failed ten times in a row, so I have switched it off. Ask me to turn it back on when whatever it needs is working.",
+    ]);
+  });
+
+  test("a failure count past the limit still carries the count it was read at", async () => {
+    const { runner, closes } = harness({ runTurn: throwingTurn, failures: 12 });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input.deliverableRef).toEqual({
+      kind: "circuit_breaker",
+      failures: 12,
+      routineId: CONTEXT.routineId,
+    });
+  });
+
+  test("the ninth failure closes as a plain failure, with no breaker and no switch-off", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 9,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+    });
+    expect(closes[0]?.input.deliverableRef).toBeUndefined();
+    expect(recorded.enabled).toEqual([]);
+    expect(recorded.activity).toEqual([]);
+  });
+
+  test("the first failure says so in the channel and carries no breaker", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 1,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes.map((close) => close.input.deliverableRef)).toEqual([
+      undefined,
+    ]);
+    expect(recorded.activity.map((entry) => entry.activity.text)).toEqual([
+      "This routine failed: the model refused",
+    ]);
+  });
+
+  test("a switch-off that could not be written is not drawn as one, and the card still closes failed", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 10,
+      setEnabledError: new Error("routines table unavailable"),
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+    });
+    // Nor is the switch-off announced: the routine is still on.
+    expect(recorded.activity).toEqual([]);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "the model refused" },
+    ]);
+  });
+
+  test("an unreadable fatigue count still closes the card failed, once", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failuresError: new Error("routine_runs unavailable"),
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+    });
+    expect(recorded.enabled).toEqual([]);
+    expect(recorded.activity).toEqual([]);
+  });
+
+  test("a succeeded firing never carries a breaker", async () => {
+    const { runner, closes } = harness({});
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+    });
   });
 });
