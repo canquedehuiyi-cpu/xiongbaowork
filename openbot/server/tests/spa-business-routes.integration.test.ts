@@ -107,11 +107,14 @@ app.route(
   createPersonaRoutes(createPersonaTemplateStore(database), guard),
 );
 
-await database
-  .insert(users)
-  .values(
-    [tenantA, tenantB].map((id) => ({ id, email: `${id}@example.test` })),
-  );
+// The identity rows are the identity layer's, written as `platform` the way sign-up writes them.
+await runAsTenant("platform", () =>
+  database
+    .insert(users)
+    .values(
+      [tenantA, tenantB].map((id) => ({ id, email: `${id}@example.test` })),
+    ),
+);
 const [card] = await runAsTenant(tenantA, async () => {
   await database.insert(agents).values({
     id: agentId,

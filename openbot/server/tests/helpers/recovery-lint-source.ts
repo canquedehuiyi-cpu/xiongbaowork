@@ -14,10 +14,11 @@ type ApprovedLintTestInverse = Readonly<{
 }>;
 const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
   // D06 suite moved onto the shared disposable-database helper (load-order rule); same guards.
+  // G01-E P14: the fixture-identity probe runs as `platform`, so it needs no unframed fallback.
   {
     "path": "tests/approval-continuation-preparation-transaction.integration.test.ts",
-    "currentBytes": 21393,
-    "currentSha256": "dba5050f96c073a277b65c7a50ac481a9cde66bbe30bb7f33fb2651a642c4f2f",
+    "currentBytes": 21424,
+    "currentSha256": "ee813a24ca72260ac5e08c580b006caf790057f5d28430eecb62309ad9bd255f",
     "beforeBytes": 21306,
     "beforeSha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
     "edits": [
@@ -39,6 +40,16 @@ const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
       {
         "after": "    await database.$client.close();\n    await disposable.drop();\n",
         "before": "    await database.$client.close();\n",
+        "count": 1
+      },
+      {
+        "after": "  const [identity] = await runAsTenant(\"platform\", () => database.select({\n",
+        "before": "  const [identity] = await database.select({\n",
+        "count": 1
+      },
+      {
+        "after": "  }).from(sql`(select 1) as fixture_identity`));\n",
+        "before": "  }).from(sql`(select 1) as fixture_identity`);\n",
         "count": 1
       }
     ]

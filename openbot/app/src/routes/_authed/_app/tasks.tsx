@@ -69,7 +69,10 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
  * raw ref sent every chat card to "Could not load this channel." (audit N1), so the server now says
  * which screen holds the work and this file only draws it.
  */
-export type OpenTarget = { kind: "channel" | "group" | "pipeline"; id: string };
+export type OpenTarget = {
+  kind: "channel" | "group" | "pipeline" | "wakerflow";
+  id: string;
+};
 
 type Task = {
   id: string;
@@ -88,6 +91,11 @@ type Task = {
   model: string | null;
   /** Which of the tenant's machines the work happened on, in device mode. */
   device: string | null;
+  /**
+   * When a person filed this card away (spec A5/A7), or null. Only a failure carries one: it keeps
+   * reading `failed`, and this is what moves it from 需要关注 to 已结束. Absent from an older server.
+   */
+  archivedAt?: string | null;
   updatedAt: string;
 };
 
@@ -148,6 +156,34 @@ export const laneOf = (status: string): string[] =>
   );
 
 /**
+ * The lane a CARD lives in, which is its status's lane except for one case: a failure somebody has
+ * archived. It still reads 已结束-失败 — the server never turns it into `done` — but it has been seen
+ * and put away, so it leaves 需要关注 for 已结束 instead of asking for attention forever.
+ */
+export const laneOfTask = (task: {
+  status: string;
+  archivedAt?: string | null;
+}): string[] =>
+  task.status === "failed" && task.archivedAt
+    ? ["finished"]
+    : laneOf(task.status);
+
+/** Whether this card is a failure a person has already archived. */
+const isArchivedFailure = (task: {
+  status: string;
+  archivedAt?: string | null;
+}): boolean => task.status === "failed" && Boolean(task.archivedAt);
+
+/** The badge's words: an archived failure says it is over, and that it failed. */
+export const statusLabelOf = (task: {
+  status: string;
+  archivedAt?: string | null;
+}): string =>
+  isArchivedFailure(task)
+    ? "已结束-失败"
+    : (STATUS_LABEL[task.status] ?? task.status);
+
+/**
  * Spec A5 / decision D7: dragging is an archive gesture, one way only -- into 已结束, and only from a
  * state the archive accepts (`awaiting_review`, `failed`; the server's `archived` says the same).
  *
@@ -155,9 +191,14 @@ export const laneOf = (status: string): string[] =>
  * whether the card's status belonged to the target lane, and 已结束 holds only `done`, so no
  * archivable card ever passed and the drag did nothing at all.
  */
-export const archivesOnDrop = (laneKey: string, status: string): boolean =>
+export const archivesOnDrop = (
+  laneKey: string,
+  status: string,
+  /** A failure that is already archived has nothing left to archive; the server would answer 409. */
+  archivedAt?: string | null,
+): boolean =>
   laneKey === "finished" &&
-  (status === "awaiting_review" || status === "failed");
+  (status === "awaiting_review" || (status === "failed" && !archivedAt));
 
 const FILTERS = [
   { key: "", label: "全部" },
@@ -236,8 +277,21 @@ export const boardEmptySentence = (filters: {
   crew: string;
   status: string;
   q: string;
+  /**
+   * Whether `machineId` names one of this person's registered devices: `false` only once the device
+   * list has answered and the id is not on it. While that list is loading or has failed the answer
+   * is unknown (`undefined`), and an unknown answer must not be spoken as "nobody is here".
+   */
+  machineRegistered?: boolean;
 }): string => {
   const narrowed = Boolean(filters.status || filters.q || filters.crew);
+  /*
+   * Spec F5: an address naming a machine this person does not have is not an idle machine -- there
+   * is no machine. No filter can bring work back from it, so this answer comes before the others.
+   */
+  if (filters.machineId && filters.machineRegistered === false) {
+    return "Waker 们正在休息——这台设备不在你的设备列表里，到 /tasks 看全部设备。";
+  }
   /*
    * Which scopes are in play decides which sentence is true. A device and a filter together are not
    * the same question as either one alone: idle in this window is a different claim from hidden by
@@ -263,7 +317,6 @@ export const boardEmptySentence = (filters: {
  */
 export const lanesUnmappable = (tasks: { status: string }[]): boolean =>
   tasks.length > 0 && tasks.every((task) => laneOf(task.status).length === 0);
-
 
 /**
  * Spec A1/A2: the window's totals, each one a filter. Pressing a number shows those tasks; pressing
@@ -328,18 +381,19 @@ function modelLabel(model: string): string {
   return model.startsWith("remote:") ? "外部托管模型" : model;
 }
 
-/** What a card's 打开 does: one of three screens, a sentence saying the place is gone, or nothing. */
+/** What a card's 查看详情 does: one of four screens, a sentence saying the place is gone, or nothing. */
 export type CardLink =
   | { to: "/channel/$channelId"; params: { channelId: string } }
   | { to: "/group/$channelId"; params: { channelId: string } }
   | { to: "/pipelines"; search: { run: string } }
+  | { to: "/wakerflows/$flowId"; params: { flowId: string } }
   | "gone"
   | null;
 
 /**
  * Spec A6 ("查看详情 enters the run's own conversation"), decided from the server's `open` field.
  *
- * A server without the field gets the old link back rather than none: hiding every 打开 the moment
+ * A server without the field gets the old link back rather than none: hiding every 查看详情 the moment
  * the screen ships ahead of its server would trade a link that sometimes lands for one that never
  * appears. An unknown kind draws nothing — the enum is server-owned, and a guessed route is the dead
  * link this exists to stop drawing.
@@ -358,6 +412,9 @@ export function cardLinkOf(task: Pick<Task, "open" | "channelRef">): CardLink {
       return { to: "/group/$channelId", params: { channelId: task.open.id } };
     case "pipeline":
       return { to: "/pipelines", search: { run: task.open.id } };
+    // A WakerFlow's run (parent or step card) is reviewed on the Flow, where its runs are listed.
+    case "wakerflow":
+      return { to: "/wakerflows/$flowId", params: { flowId: task.open.id } };
     default:
       return null;
   }
@@ -374,7 +431,18 @@ function CardOpenLink({ task }: { task: Task }) {
         search={link.search}
         className="underline opacity-80"
       >
-        打开
+        查看详情
+      </Link>
+    );
+  }
+  if (link.to === "/wakerflows/$flowId") {
+    return (
+      <Link
+        to="/wakerflows/$flowId"
+        params={link.params}
+        className="underline opacity-80"
+      >
+        查看详情
       </Link>
     );
   }
@@ -385,7 +453,7 @@ function CardOpenLink({ task }: { task: Task }) {
         params={link.params}
         className="underline opacity-80"
       >
-        打开
+        查看详情
       </Link>
     );
   }
@@ -395,7 +463,7 @@ function CardOpenLink({ task }: { task: Task }) {
       params={link.params}
       className="underline opacity-80"
     >
-      打开
+      查看详情
     </Link>
   );
 }
@@ -455,7 +523,7 @@ function TaskCard({
           }`}
           data-status={task.status}
         >
-          {STATUS_LABEL[task.status] ?? task.status}
+          {statusLabelOf(task)}
         </span>
       </div>
       {/*
@@ -516,7 +584,7 @@ function TaskCard({
           >
             {busy ? "查收中…" : "查收"}
           </button>
-        ) : task.status === "failed" ? (
+        ) : task.status === "failed" && !task.archivedAt ? (
           <button
             className="rounded bg-foreground/10 px-2 py-0.5"
             type="button"
@@ -547,7 +615,10 @@ export const attentionGroups = (
   tasks: Task[],
 ): Record<"needsYou" | "review", Task[]> => ({
   needsYou: tasks.filter(
-    (task) => task.status === "needs_action" || task.status === "failed",
+    (task) =>
+      task.status === "needs_action" ||
+      // An archived failure has been seen and put away: it is in 已结束, not asking any more.
+      (task.status === "failed" && !isArchivedFailure(task)),
   ),
   review: tasks.filter((task) => task.status === "awaiting_review"),
 });
@@ -641,6 +712,15 @@ function TasksPage() {
   } = boardSearch(Route.useSearch());
   const navigate = useNavigate();
   const machines = useQuery(devicesQueryOptions());
+  /*
+   * F5: whether the address's machine is one of this person's own. Asked only of a list that has
+   * answered -- loading or failed leaves it unknown, so the board never says the Wakers are resting
+   * on the strength of a read that has not come back.
+   */
+  const machineRegistered =
+    machineId && machines.isSuccess
+      ? machines.data.some((machine) => machine.deviceId === machineId)
+      : undefined;
   /*
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
@@ -754,7 +834,7 @@ function TasksPage() {
   };
   const dropLane = (laneKey: string, taskId: string) => {
     const task = list.find((entry) => entry.id === taskId);
-    if (task && archivesOnDrop(laneKey, task.status)) {
+    if (task && archivesOnDrop(laneKey, task.status, task.archivedAt)) {
       runAction(taskId, "archive");
     }
   };
@@ -764,11 +844,26 @@ function TasksPage() {
    * denial we are allowed to assert: the write may have landed. So the screen says 未确认 and offers
    * a read, never a second write.
    */
-  const actionFailure = (): { label: string; note: string; detail: string | null } => {
+  const actionFailure = (): {
+    label: string;
+    note: string;
+    detail: string | null;
+  } => {
     const status = act.error instanceof RequestError ? act.error.status : 0;
-    const message = act.error instanceof Error ? act.error.message : "请稍后再试。";
-    if (status === 404) return { label: "这个任务已经不在那里了", note: "服务端拒绝（404）", detail: message };
-    if (status === 409) return { label: "这个任务当前状态不接受这个操作", note: "服务端拒绝（409）", detail: message };
+    const message =
+      act.error instanceof Error ? act.error.message : "请稍后再试。";
+    if (status === 404)
+      return {
+        label: "这个任务已经不在那里了",
+        note: "服务端拒绝（404）",
+        detail: message,
+      };
+    if (status === 409)
+      return {
+        label: "这个任务当前状态不接受这个操作",
+        note: "服务端拒绝（409）",
+        detail: message,
+      };
     return {
       label: "结果未确认，请刷新任务后核对",
       note: status ? `服务端返回 ${status}` : "请求没有收到回应",
@@ -810,8 +905,7 @@ function TasksPage() {
         <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
           <p className="text-destructive">
             {failure.label}
-            {failure.detail ? `：${failure.detail}` : ""}
-            （{failure.note}）
+            {failure.detail ? `：${failure.detail}` : ""}（{failure.note}）
           </p>
           <Button onClick={refreshReadsOnly} size="sm" variant="outline">
             刷新任务
@@ -978,53 +1072,65 @@ function TasksPage() {
            */}
           {list.length === 0 && !readFailed ? (
             <li className="py-10 text-center text-sm opacity-50">
-              {boardEmptySentence({ machineId, crew, status, q: search })}
+              {boardEmptySentence({
+                machineId,
+                crew,
+                status,
+                q: search,
+                machineRegistered,
+              })}
             </li>
           ) : null}
         </ul>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {LANES.map((lane) => (
-            // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-            <div
-              aria-label={`${lane.label}泳道`}
-              key={lane.key}
-              role="group"
-              onDragOver={(event) => {
-                if (lane.key === "finished") event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                dropLane(lane.key, event.dataTransfer.getData("text/plain"));
-              }}
-              className="bg-foreground/[0.02] rounded-xl p-2"
-            >
-              <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                {lane.label}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {LANES.map((lane) => (
+              // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+              <div
+                aria-label={`${lane.label}泳道`}
+                key={lane.key}
+                role="group"
+                onDragOver={(event) => {
+                  if (lane.key === "finished") event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  dropLane(lane.key, event.dataTransfer.getData("text/plain"));
+                }}
+                className="bg-foreground/[0.02] rounded-xl p-2"
+              >
+                <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
+                  {lane.label}
+                </div>
+                <ul className="list-none space-y-1.5">
+                  {list
+                    .filter((task) => laneOfTask(task).includes(lane.key))
+                    .map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        machine={machineLabel(task.device)}
+                        onReview={(id) => runAction(id, "review")}
+                        onArchive={(id) => runAction(id, "archive")}
+                        pendingIds={pendingIds}
+                      />
+                    ))}
+                </ul>
               </div>
-              <ul className="list-none space-y-1.5">
-                {list
-                  .filter((task) => lane.statuses.includes(task.status))
-                  .map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      machine={machineLabel(task.device)}
-                      onReview={(id) => runAction(id, "review")}
-                      onArchive={(id) => runAction(id, "archive")}
-                      pendingIds={pendingIds}
-                    />
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
           {!readFailed && (list.length === 0 || lanesUnmappable(list)) ? (
             <p className="text-muted-foreground py-10 text-center text-sm opacity-50">
               {lanesUnmappable(list)
                 ? "当前任务暂无可归入泳道的状态，可切换列表查看。"
-                : boardEmptySentence({ machineId, crew, status, q: search })}
+                : boardEmptySentence({
+                    machineId,
+                    crew,
+                    status,
+                    q: search,
+                    machineRegistered,
+                  })}
             </p>
           ) : null}
         </>

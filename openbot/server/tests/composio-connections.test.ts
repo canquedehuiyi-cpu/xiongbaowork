@@ -25,6 +25,7 @@ import {
   CustomServerRefusedError,
   createPluginStore,
 } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -60,6 +61,16 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  */
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+
+/*
+ * The frame every hook and test below runs in. The servers, tools, Bots, grants and trail rows these
+ * fixtures write are the deployment's own configuration rather than any one person's, and the
+ * questions asked of them (an administrator's grant, a removal, a read of the whole trail) cross
+ * tenants, so they are asked in the platform frame rather than in the legacy unframed `system` one.
+ */
+function asPlatform<T>(work: () => Promise<T>): Promise<T> {
+  return runAsTenant("platform", work);
+}
 
 const suite = randomUUID().slice(0, 8);
 /** The app: its `mcp_servers.id`, and the slug in its url, which is what a connection is keyed on. */
@@ -939,9 +950,9 @@ async function seedApp(options: { connect?: boolean } = {}) {
   });
   await addApp();
   if (options.connect !== false) {
-    await database
-      .insert(composioConnections)
-      .values({ toolkit, userId: askerId });
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({ toolkit, userId: askerId }),
+    );
   }
 }
 
@@ -967,6 +978,8 @@ async function addProbedApp(options: { withProbe?: boolean } = {}) {
   });
   if (options.withProbe === false) return;
   await database.insert(mcpTools).values({
+    // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+    tenantId: "team",
     serverId: probedId,
     name: probeAction,
     description: "Says who the key belongs to.",
@@ -993,6 +1006,8 @@ async function addCheckableApp(slug: string): Promise<void> {
     connection: { kind: "fields", authScheme: "API_KEY" },
   });
   await database.insert(mcpTools).values({
+    // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+    tenantId: "team",
     serverId: `composio-${slug}`,
     name: probeAction,
     description: "Says who the key belongs to.",
@@ -1067,34 +1082,38 @@ function recordedOfType(eventType: string) {
 
 // Cleaning BEFORE each test as well as after the run, so a run that dies halfway leaves the next
 // one nothing to trip over.
-beforeEach(async () => {
-  await clean();
-  await cleanForeign();
-  events.length = 0;
-  reached.length = 0;
-  asks.length = 0;
-  valuesSent.length = 0;
-  schemesSent.length = 0;
-  // The vendor finding an account is the ordinary case — somebody connected, so there is a grant to
-  // withdraw. The one test about the answer itself says otherwise for itself.
-  vendorFinds = () => true;
-  // And answering at all is the ordinary case too. A vendor that will not answer is the subject of
-  // its own two tests and of nothing else.
-  vendorRefuses = () => false;
-  // The vendor holding nothing is where every test starts, so an account in the list below is one
-  // the test under way either made or seeded on purpose.
-  vendorHolds = [];
-  // And a config is created rather than found, which is the ordinary enable: the reuse is the
-  // subject of exactly one test.
-  configWasStanding = false;
-});
+beforeEach(() =>
+  asPlatform(async () => {
+    await clean();
+    await cleanForeign();
+    events.length = 0;
+    reached.length = 0;
+    asks.length = 0;
+    valuesSent.length = 0;
+    schemesSent.length = 0;
+    // The vendor finding an account is the ordinary case — somebody connected, so there is a grant to
+    // withdraw. The one test about the answer itself says otherwise for itself.
+    vendorFinds = () => true;
+    // And answering at all is the ordinary case too. A vendor that will not answer is the subject of
+    // its own two tests and of nothing else.
+    vendorRefuses = () => false;
+    // The vendor holding nothing is where every test starts, so an account in the list below is one
+    // the test under way either made or seeded on purpose.
+    vendorHolds = [];
+    // And a config is created rather than found, which is the ordinary enable: the reuse is the
+    // subject of exactly one test.
+    configWasStanding = false;
+  }),
+);
 
 afterEach(() => useComposioClient(null));
 
-afterAll(async () => {
-  await clean();
-  await cleanForeign();
-});
+afterAll(() =>
+  asPlatform(async () => {
+    await clean();
+    await cleanForeign();
+  }),
+);
 
 /**
  * OFFBOARDING. The act an administrator is told removes somebody's access.
@@ -1103,49 +1122,50 @@ afterAll(async () => {
  * fixture. Reaching the vendor a second time would be the person's mailbox being opened after they
  * were removed.
  */
-test("offboarding somebody retires the app they connected, and the next call is refused", async () => {
-  await seedApp();
-  useAnsweringClient();
+test("offboarding somebody retires the app they connected, and the next call is refused", () =>
+  asPlatform(async () => {
+    await seedApp();
+    useAnsweringClient();
 
-  await store.callTool({ ref, args: {}, botId, actorId: askerId });
-  expect(reached).toEqual([actionName]);
+    await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    expect(reached).toEqual([actionName]);
 
-  const { retired } = await store.retireConnectionsFor(askerId, admin);
+    const { retired } = await store.retireConnectionsFor(askerId, admin);
 
-  // Counted, because the number is what "we removed their access" claims. Reporting the vault's
-  // tally alone would say nothing was retired for somebody whose only connector was brokered.
-  expect(retired).toBe(1);
-  expect(await connectedToolkitsFor(askerId)).toEqual([]);
+    // Counted, because the number is what "we removed their access" claims. Reporting the vault's
+    // tally alone would say nothing was retired for somebody whose only connector was brokered.
+    expect(retired).toBe(1);
+    expect(await connectedToolkitsFor(askerId)).toEqual([]);
 
-  /*
-   * THE ACCOUNT ENDED AT THE VENDOR, not merely forgotten here, which is the half an administrator
-   * was actually promised. Deleting the row shuts the gate this deployment owns and does nothing to
-   * the grant: the person's mailbox stays attached at Composio and the offboarding was a lie about
-   * the only thing that matters. So the ask is asserted, and asserted WHILE THE ROW STILL STOOD —
-   * the row is the only thing naming which app to revoke, so the other order leaves a failed revoke
-   * with nothing to revoke under.
-   */
-  expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
-  expect(asks[0].held).toEqual([`${toolkit}/${askerId}`]);
+    /*
+     * THE ACCOUNT ENDED AT THE VENDOR, not merely forgotten here, which is the half an administrator
+     * was actually promised. Deleting the row shuts the gate this deployment owns and does nothing to
+     * the grant: the person's mailbox stays attached at Composio and the offboarding was a lie about
+     * the only thing that matters. So the ask is asserted, and asserted WHILE THE ROW STILL STOOD —
+     * the row is the only thing naming which app to revoke, so the other order leaves a failed revoke
+     * with nothing to revoke under.
+     */
+    expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
+    expect(asks[0].held).toEqual([`${toolkit}/${askerId}`]);
 
-  await expect(
-    store.callTool({ ref, args: {}, botId, actorId: askerId }),
-  ).rejects.toThrow(/have not connected/i);
-  expect(reached).toEqual([actionName]);
+    await expect(
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    ).rejects.toThrow(/have not connected/i);
+    expect(reached).toEqual([actionName]);
 
-  const disconnected = recordedOfType("mcp.account_disconnected");
-  expect(disconnected).toHaveLength(1);
-  expect(disconnected[0].payload).toMatchObject({
-    actor: admin,
-    server: toolkit,
-    owner: askerId,
-    // An administrator removing somebody, never somebody changing their own mind. And true because
-    // the broker answered that it had found this person's account and asked for its withdrawal:
-    // the field is the vendor's own answer passed through, not that a call was made.
-    reason: "person_removed",
-    vendorRevocationRequested: true,
-  });
-});
+    const disconnected = recordedOfType("mcp.account_disconnected");
+    expect(disconnected).toHaveLength(1);
+    expect(disconnected[0].payload).toMatchObject({
+      actor: admin,
+      server: toolkit,
+      owner: askerId,
+      // An administrator removing somebody, never somebody changing their own mind. And true because
+      // the broker answered that it had found this person's account and asked for its withdrawal:
+      // the field is the vendor's own answer passed through, not that a call was made.
+      reason: "person_removed",
+      vendorRevocationRequested: true,
+    });
+  }));
 
 /**
  * THE GATE, AFTER THE PERSON IS GONE.
@@ -1156,49 +1176,55 @@ test("offboarding somebody retires the app they connected, and the next call is 
  * it is the one the vault-based retirement cannot reach: there is no secret here to scan for,
  * because Composio holds the account.
  */
-test("a connection whose person is already deleted is retired, and stops passing the gate", async () => {
-  await seedApp({ connect: false });
-  useAnsweringClient();
+test("a connection whose person is already deleted is retired, and stops passing the gate", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    useAnsweringClient();
 
-  await database
-    .insert(users)
-    .values({ id: leaverId, email: `${leaverId}@example.com`, name: "Leaver" });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit, userId: leaverId });
-  await database.delete(users).where(eq(users.id, leaverId));
+    await database.insert(users).values({
+      id: leaverId,
+      email: `${leaverId}@example.com`,
+      name: "Leaver",
+    });
+    await runAsTenant(leaverId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit, userId: leaverId }),
+    );
+    await database.delete(users).where(eq(users.id, leaverId));
 
-  // The design fact this rests on: the row outlives the person, which is what leaves anything to
-  // find. Asserted rather than assumed, because the retirement below is pointless without it.
-  expect(await connectedToolkitsFor(leaverId)).toEqual([toolkit]);
+    // The design fact this rests on: the row outlives the person, which is what leaves anything to
+    // find. Asserted rather than assumed, because the retirement below is pointless without it.
+    expect(await connectedToolkitsFor(leaverId)).toEqual([toolkit]);
 
-  const { retired } = await store.retireConnectionsFor(leaverId, admin);
-  expect(retired).toBe(1);
-  expect(await connectedToolkitsFor(leaverId)).toEqual([]);
-  // The grant is withdrawn for somebody who no longer exists here, which is the point of the row
-  // outliving the person: nothing else in this deployment still names the app they connected.
-  expect(asksMade()).toEqual([`revoke:${toolkit}/${leaverId}`]);
-  expect(asks[0].held).toEqual([`${toolkit}/${leaverId}`]);
+    const { retired } = await store.retireConnectionsFor(leaverId, admin);
+    expect(retired).toBe(1);
+    expect(await connectedToolkitsFor(leaverId)).toEqual([]);
+    // The grant is withdrawn for somebody who no longer exists here, which is the point of the row
+    // outliving the person: nothing else in this deployment still names the app they connected.
+    expect(asksMade()).toEqual([`revoke:${toolkit}/${leaverId}`]);
+    expect(asks[0].held).toEqual([`${toolkit}/${leaverId}`]);
 
-  await expect(
-    store.callTool({ ref, args: {}, botId, actorId: leaverId }),
-  ).rejects.toThrow(/have not connected/i);
-  expect(reached).toEqual([]);
-});
+    await expect(
+      store.callTool({ ref, args: {}, botId, actorId: leaverId }),
+    ).rejects.toThrow(/have not connected/i);
+    expect(reached).toEqual([]);
+  }));
 
 /** Retiring twice is something an administrator may legitimately do, and the second time is quiet. */
-test("retiring the same person twice retires nothing the second time", async () => {
-  await seedApp();
-  useAnsweringClient();
+test("retiring the same person twice retires nothing the second time", () =>
+  asPlatform(async () => {
+    await seedApp();
+    useAnsweringClient();
 
-  expect((await store.retireConnectionsFor(askerId, admin)).retired).toBe(1);
-  expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
+    expect((await store.retireConnectionsFor(askerId, admin)).retired).toBe(1);
+    expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
 
-  expect((await store.retireConnectionsFor(askerId, admin)).retired).toBe(0);
-  // Quiet at the vendor too, and not only in the count. The rows are gone, so there is no app left
-  // to name — a second pass that asked Composio again would be this deployment guessing.
-  expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
-});
+    expect((await store.retireConnectionsFor(askerId, admin)).retired).toBe(0);
+    // Quiet at the vendor too, and not only in the count. The rows are gone, so there is no app left
+    // to name — a second pass that asked Composio again would be this deployment guessing.
+    expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
+  }));
 
 /**
  * A REFUSAL AT THE VENDOR MUST NOT BECOME A RETIREMENT HERE.
@@ -1217,24 +1243,25 @@ test("retiring the same person twice retires nothing the second time", async () 
  * come apart if a retirement ever clears part of the state before failing, and it is the second
  * that describes the person's access.
  */
-test("an offboarding the vendor refuses leaves the connection standing", async () => {
-  await seedApp();
-  vendorRefuses = () => true;
+test("an offboarding the vendor refuses leaves the connection standing", () =>
+  asPlatform(async () => {
+    await seedApp();
+    vendorRefuses = () => true;
 
-  await expect(store.retireConnectionsFor(askerId, admin)).rejects.toThrow(
-    /would not withdraw/i,
-  );
+    await expect(store.retireConnectionsFor(askerId, admin)).rejects.toThrow(
+      /would not withdraw/i,
+    );
 
-  // The ask was made and the answer never came, which is the state the row has to survive.
-  expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
-  expect(await connectedToolkitsFor(askerId)).toEqual([toolkit]);
-  // No trail row either: `mcp.account_disconnected` says an account ended, and none did.
-  expect(recordedOfType("mcp.account_disconnected")).toHaveLength(0);
+    // The ask was made and the answer never came, which is the state the row has to survive.
+    expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
+    expect(await connectedToolkitsFor(askerId)).toEqual([toolkit]);
+    // No trail row either: `mcp.account_disconnected` says an account ended, and none did.
+    expect(recordedOfType("mcp.account_disconnected")).toHaveLength(0);
 
-  useAnsweringClient();
-  await store.callTool({ ref, args: {}, botId, actorId: askerId });
-  expect(reached).toEqual([actionName]);
-});
+    useAnsweringClient();
+    await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    expect(reached).toEqual([actionName]);
+  }));
 
 /**
  * THE OFFBOARDING TRAIL CARRIES THE VENDOR'S ANSWER PER APP, AND IN A FIXED ORDER.
@@ -1258,51 +1285,54 @@ test("an offboarding the vendor refuses leaves the connection standing", async (
  * with an unordered read by accident and the ordering assertion proves nothing. Inserting the later
  * name first is what makes the sort the only thing that could have produced the expected answer.
  */
-test("an offboarding carries the vendor's answer per app, in a fixed order", async () => {
-  await seedApp({ connect: false });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: secondToolkit, userId: askerId });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit, userId: askerId });
-  vendorFinds = ({ toolkit: asked }) => asked === toolkit;
+test("an offboarding carries the vendor's answer per app, in a fixed order", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: secondToolkit, userId: askerId }),
+    );
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({ toolkit, userId: askerId }),
+    );
+    vendorFinds = ({ toolkit: asked }) => asked === toolkit;
 
-  expect((await store.retireConnectionsFor(askerId, admin)).retired).toBe(2);
+    expect((await store.retireConnectionsFor(askerId, admin)).retired).toBe(2);
 
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${askerId}`,
-    `revoke:${secondToolkit}/${askerId}`,
-  ]);
-  // Both asks made while both rows still stood: the apps are read off the rows, so a delete between
-  // the two would leave the second revoke with nothing to name.
-  const bothHeld = [`${toolkit}/${askerId}`, `${secondToolkit}/${askerId}`];
-  expect(asks[0].held).toEqual(bothHeld);
-  expect(asks[1].held).toEqual(bothHeld);
-  expect(await connectedToolkitsFor(askerId)).toEqual([]);
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${askerId}`,
+      `revoke:${secondToolkit}/${askerId}`,
+    ]);
+    // Both asks made while both rows still stood: the apps are read off the rows, so a delete between
+    // the two would leave the second revoke with nothing to name.
+    const bothHeld = [`${toolkit}/${askerId}`, `${secondToolkit}/${askerId}`];
+    expect(asks[0].held).toEqual(bothHeld);
+    expect(asks[1].held).toEqual(bothHeld);
+    expect(await connectedToolkitsFor(askerId)).toEqual([]);
 
-  const disconnected = recordedOfType("mcp.account_disconnected");
-  expect(disconnected).toHaveLength(2);
-  // Compared in order rather than as a set, because the order is half the criterion. Not sorted
-  // here either: sorting the answer before comparing it is how an ordering assertion stops being one.
-  expect(
-    disconnected
-      .map(
-        (event) =>
-          event.payload as {
-            server: string;
-            vendorRevocationRequested: boolean;
-          },
-      )
-      .map(({ server, vendorRevocationRequested }) => ({
-        server,
-        vendorRevocationRequested,
-      })),
-  ).toEqual([
-    { server: toolkit, vendorRevocationRequested: true },
-    { server: secondToolkit, vendorRevocationRequested: false },
-  ]);
-});
+    const disconnected = recordedOfType("mcp.account_disconnected");
+    expect(disconnected).toHaveLength(2);
+    // Compared in order rather than as a set, because the order is half the criterion. Not sorted
+    // here either: sorting the answer before comparing it is how an ordering assertion stops being one.
+    expect(
+      disconnected
+        .map(
+          (event) =>
+            event.payload as {
+              server: string;
+              vendorRevocationRequested: boolean;
+            },
+        )
+        .map(({ server, vendorRevocationRequested }) => ({
+          server,
+          vendorRevocationRequested,
+        })),
+    ).toEqual([
+      { server: toolkit, vendorRevocationRequested: true },
+      { server: secondToolkit, vendorRevocationRequested: false },
+    ]);
+  }));
 
 /**
  * ONE APP'S REFUSAL IS ONE APP'S REFUSAL, AND THE APPS THAT ANSWERED ARE RECORDED.
@@ -1325,40 +1355,43 @@ test("an offboarding carries the vendor's answer per app, in a fixed order", asy
  * possible while it is there. What is new is that the rule now applies to the app it is about
  * rather than to every app in the same act.
  */
-test("an offboarding one app refuses still records the app that answered", async () => {
-  await seedApp({ connect: false });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit, userId: askerId });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: secondToolkit, userId: askerId });
-  vendorRefuses = ({ toolkit: asked }) => asked === secondToolkit;
+test("an offboarding one app refuses still records the app that answered", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({ toolkit, userId: askerId }),
+    );
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: secondToolkit, userId: askerId }),
+    );
+    vendorRefuses = ({ toolkit: asked }) => asked === secondToolkit;
 
-  await expect(store.retireConnectionsFor(askerId, admin)).rejects.toThrow(
-    /would not withdraw/i,
-  );
+    await expect(store.retireConnectionsFor(askerId, admin)).rejects.toThrow(
+      /would not withdraw/i,
+    );
 
-  // Both were asked. A later app is not punished for an earlier one, and on the previous shape the
-  // throw left the loop, so an app after the refused one was never reached at all.
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${askerId}`,
-    `revoke:${secondToolkit}/${askerId}`,
-  ]);
+    // Both were asked. A later app is not punished for an earlier one, and on the previous shape the
+    // throw left the loop, so an app after the refused one was never reached at all.
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${askerId}`,
+      `revoke:${secondToolkit}/${askerId}`,
+    ]);
 
-  // The withdrawn app's row is gone; the refused app's stands, so the recovery still has it.
-  expect(await connectedToolkitsFor(askerId)).toEqual([secondToolkit]);
+    // The withdrawn app's row is gone; the refused app's stands, so the recovery still has it.
+    expect(await connectedToolkitsFor(askerId)).toEqual([secondToolkit]);
 
-  const disconnected = recordedOfType("mcp.account_disconnected");
-  expect(disconnected).toHaveLength(1);
-  expect(disconnected[0]?.payload).toMatchObject({
-    server: toolkit,
-    owner: askerId,
-    reason: "person_removed",
-    // The answer this app actually got, written while it was still known.
-    vendorRevocationRequested: true,
-  });
-});
+    const disconnected = recordedOfType("mcp.account_disconnected");
+    expect(disconnected).toHaveLength(1);
+    expect(disconnected[0]?.payload).toMatchObject({
+      server: toolkit,
+      owner: askerId,
+      reason: "person_removed",
+      // The answer this app actually got, written while it was still known.
+      vendorRevocationRequested: true,
+    });
+  }));
 
 /**
  * AND THE REFUSAL IS STILL THROWN, WHATEVER ORDER IT CAME IN.
@@ -1371,27 +1404,30 @@ test("an offboarding one app refuses still records the app that answered", async
  * into a reported one, which is the state `an offboarding the vendor refuses leaves the connection
  * standing` exists to forbid.
  */
-test("a refusal on the first app still fails the act and still asks the second", async () => {
-  await seedApp({ connect: false });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit, userId: askerId });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: secondToolkit, userId: askerId });
-  vendorRefuses = ({ toolkit: asked }) => asked === toolkit;
+test("a refusal on the first app still fails the act and still asks the second", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({ toolkit, userId: askerId }),
+    );
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: secondToolkit, userId: askerId }),
+    );
+    vendorRefuses = ({ toolkit: asked }) => asked === toolkit;
 
-  await expect(store.retireConnectionsFor(askerId, admin)).rejects.toThrow(
-    /would not withdraw/i,
-  );
+    await expect(store.retireConnectionsFor(askerId, admin)).rejects.toThrow(
+      /would not withdraw/i,
+    );
 
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${askerId}`,
-    `revoke:${secondToolkit}/${askerId}`,
-  ]);
-  expect(await connectedToolkitsFor(askerId)).toEqual([toolkit]);
-  expect(recordedOfType("mcp.account_disconnected")).toHaveLength(1);
-});
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${askerId}`,
+      `revoke:${secondToolkit}/${askerId}`,
+    ]);
+    expect(await connectedToolkitsFor(askerId)).toEqual([toolkit]);
+    expect(recordedOfType("mcp.account_disconnected")).toHaveLength(1);
+  }));
 
 /**
  * THE ANONYMOUS ACTOR OWNS NOTHING, and `notNull` does not exclude the empty string, so a row at
@@ -1405,16 +1441,17 @@ test("a refusal on the first app still fails the act and still asks the second",
  * once, which is how this fixture came to be removed mid-run by another file, and how a run of
  * this file that died before its cleanup came to refuse every test in that one.
  */
-test("retiring nobody retires nothing and leaves the anonymous row alone", async () => {
-  await seedApp({ connect: false });
-  await database.insert(composioConnections).values({ toolkit, userId: "" });
+test("retiring nobody retires nothing and leaves the anonymous row alone", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    await database.insert(composioConnections).values({ toolkit, userId: "" });
 
-  expect((await store.retireConnectionsFor("", admin)).retired).toBe(0);
-  expect(await connectedToolkitsFor("")).toEqual([toolkit]);
-  // And nothing reached Composio either. An unattributed offboarding has no account to name, so a
-  // revoke sent under an empty user id would be this deployment asking the vendor about nobody.
-  expect(asksMade()).toEqual([]);
-});
+    expect((await store.retireConnectionsFor("", admin)).retired).toBe(0);
+    expect(await connectedToolkitsFor("")).toEqual([toolkit]);
+    // And nothing reached Composio either. An unattributed offboarding has no account to name, so a
+    // revoke sent under an empty user id would be this deployment asking the vendor about nobody.
+    expect(asksMade()).toEqual([]);
+  }));
 
 /**
  * The fixture above is taken back by the same sweep every other row here is, and by nothing wider.
@@ -1437,24 +1474,25 @@ test("retiring nobody retires nothing and leaves the anonymous row alone", async
  * pair another run legitimately holds. It is cleaned up by {@link cleanForeign} rather than by the
  * sweep under test, for the reason given there.
  */
-test("the sweep takes this run's anonymous row without reaching by actor", async () => {
-  await seedApp({ connect: false });
-  await database.insert(composioConnections).values({ toolkit, userId: "" });
-  // Somebody else's anonymous row, at an app this file's sweep does not name.
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: foreignToolkit, userId: "" });
-  expect(await connectedToolkitsFor("")).toEqual([toolkit]);
+test("the sweep takes this run's anonymous row without reaching by actor", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    await database.insert(composioConnections).values({ toolkit, userId: "" });
+    // Somebody else's anonymous row, at an app this file's sweep does not name.
+    await database
+      .insert(composioConnections)
+      .values({ toolkit: foreignToolkit, userId: "" });
+    expect(await connectedToolkitsFor("")).toEqual([toolkit]);
 
-  await clean();
+    await clean();
 
-  expect(await connectionsHeld()).toEqual([]);
-  // And the row that was never this sweep's to take is exactly where it was. This is the assertion
-  // a delete keyed on `user_id = ''` fails, and the only one here that it fails.
-  expect(await connectedToolkitsFor("", [foreignToolkit])).toEqual([
-    foreignToolkit,
-  ]);
-});
+    expect(await connectionsHeld()).toEqual([]);
+    // And the row that was never this sweep's to take is exactly where it was. This is the assertion
+    // a delete keyed on `user_id = ''` fails, and the only one here that it fails.
+    expect(await connectedToolkitsFor("", [foreignToolkit])).toEqual([
+      foreignToolkit,
+    ]);
+  }));
 
 /**
  * REMOVING THE APP. The second act that has to end a brokered connection.
@@ -1462,45 +1500,46 @@ test("the sweep takes this run's anonymous row without reaching by actor", async
  * Nothing else can: the table references `mcp_servers` no more than it references `users`, so the
  * rows simply stand there once the app's row is gone.
  */
-test("removing the app takes every brokered connection to it", async () => {
-  await seedApp();
-  useAnsweringClient();
+test("removing the app takes every brokered connection to it", () =>
+  asPlatform(async () => {
+    await seedApp();
+    useAnsweringClient();
 
-  await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    await store.callTool({ ref, args: {}, botId, actorId: askerId });
 
-  await store.removeServer(toolkit, admin);
+    await store.removeServer(toolkit, admin);
 
-  expect(await connectedToolkitsFor(askerId)).toEqual([]);
+    expect(await connectedToolkitsFor(askerId)).toEqual([]);
 
-  /*
-   * THE THREE ASKS THIS ACT OWES THE VENDOR, IN THIS ORDER.
-   *
-   * Every connected person revoked first, while the rows naming the app still stand, for the reason
-   * offboarding revokes first. Then the auth config, LAST OF ALL: an orphaned config grants nobody
-   * anything, while a live account whose config has already been deleted is access nothing left
-   * here can end. And the config is dropped for the APP, which the `deleteAuthConfig:` half of the
-   * entry carries.
-   */
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${askerId}`,
-    `deleteAuthConfig:${toolkit}`,
-  ]);
-  expect(asks[0].held).toEqual([`${toolkit}/${askerId}`]);
-  expect(asks[1].held).toEqual([]);
+    /*
+     * THE THREE ASKS THIS ACT OWES THE VENDOR, IN THIS ORDER.
+     *
+     * Every connected person revoked first, while the rows naming the app still stand, for the reason
+     * offboarding revokes first. Then the auth config, LAST OF ALL: an orphaned config grants nobody
+     * anything, while a live account whose config has already been deleted is access nothing left
+     * here can end. And the config is dropped for the APP, which the `deleteAuthConfig:` half of the
+     * entry carries.
+     */
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${askerId}`,
+      `deleteAuthConfig:${toolkit}`,
+    ]);
+    expect(asks[0].held).toEqual([`${toolkit}/${askerId}`]);
+    expect(asks[1].held).toEqual([]);
 
-  const disconnected = recordedOfType("mcp.account_disconnected");
-  expect(disconnected).toHaveLength(1);
-  expect(disconnected[0].payload).toMatchObject({
-    actor: admin,
-    server: toolkit,
-    owner: askerId,
-    // An administrator took the whole app away and the person did nothing. Distinct from both
-    // "they disconnected" and "they were removed", which is what an auditor is trying to tell apart.
-    reason: "mcp_server_removed",
-    // And the vendor's own answer about this person's account, passed through.
-    vendorRevocationRequested: true,
-  });
-});
+    const disconnected = recordedOfType("mcp.account_disconnected");
+    expect(disconnected).toHaveLength(1);
+    expect(disconnected[0].payload).toMatchObject({
+      actor: admin,
+      server: toolkit,
+      owner: askerId,
+      // An administrator took the whole app away and the person did nothing. Distinct from both
+      // "they disconnected" and "they were removed", which is what an auditor is trying to tell apart.
+      reason: "mcp_server_removed",
+      // And the vendor's own answer about this person's account, passed through.
+      vendorRevocationRequested: true,
+    });
+  }));
 
 /**
  * THE SAME REFUSAL, ON THE OTHER ACT, WHERE MORE IS AT STAKE.
@@ -1518,21 +1557,22 @@ test("removing the app takes every brokered connection to it", async () => {
  * dropped last because a live account whose config has already been deleted is access nothing left
  * here can end; a refusal partway through must not reach that step either.
  */
-test("an app removal the vendor refuses leaves the app and its connections standing", async () => {
-  await seedApp();
-  vendorRefuses = () => true;
+test("an app removal the vendor refuses leaves the app and its connections standing", () =>
+  asPlatform(async () => {
+    await seedApp();
+    vendorRefuses = () => true;
 
-  await expect(store.removeServer(toolkit, admin)).rejects.toThrow(
-    /would not withdraw/i,
-  );
+    await expect(store.removeServer(toolkit, admin)).rejects.toThrow(
+      /would not withdraw/i,
+    );
 
-  // The revoke was attempted; nothing after it ran. Asserted as the whole list, because what makes
-  // this pass is as much the `deleteAuthConfig:` that is absent as the `revoke:` that is present.
-  expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
-  expect(await connectedToolkitsFor(askerId)).toEqual([toolkit]);
-  expect(recordedOfType("mcp.account_disconnected")).toHaveLength(0);
-  expect(await appsHeld()).toEqual([toolkit]);
-});
+    // The revoke was attempted; nothing after it ran. Asserted as the whole list, because what makes
+    // this pass is as much the `deleteAuthConfig:` that is absent as the `revoke:` that is present.
+    expect(asksMade()).toEqual([`revoke:${toolkit}/${askerId}`]);
+    expect(await connectedToolkitsFor(askerId)).toEqual([toolkit]);
+    expect(recordedOfType("mcp.account_disconnected")).toHaveLength(0);
+    expect(await appsHeld()).toEqual([toolkit]);
+  }));
 
 /**
  * REMOVING AN APP NOBODY EVER CONNECTED.
@@ -1548,16 +1588,17 @@ test("an app removal the vendor refuses leaves the app and its connections stand
  * removed without a single person connecting is an ordinary sequence — a trial, a mistake, a
  * rename — so the config it leaves behind is the ordinary case and not the rare one.
  */
-test("removing an app nobody connected asks about nobody and still drops the config", async () => {
-  await seedApp({ connect: false });
+test("removing an app nobody connected asks about nobody and still drops the config", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
 
-  await store.removeServer(toolkit, admin);
+    await store.removeServer(toolkit, admin);
 
-  expect(asksMade()).toEqual([`deleteAuthConfig:${toolkit}`]);
-  // Nobody's account ended, so nothing claims one did.
-  expect(recordedOfType("mcp.account_disconnected")).toHaveLength(0);
-  expect(await appsHeld()).toEqual([]);
-});
+    expect(asksMade()).toEqual([`deleteAuthConfig:${toolkit}`]);
+    // Nobody's account ended, so nothing claims one did.
+    expect(recordedOfType("mcp.account_disconnected")).toHaveLength(0);
+    expect(await appsHeld()).toEqual([]);
+  }));
 
 /**
  * WHAT WAS ASKED OF THE VENDOR, NOT THAT A CALL WAS MADE.
@@ -1576,42 +1617,45 @@ test("removing an app nobody connected asks about nobody and still drops the con
  * alone is satisfied by a hardcoded `true` just as the brokerless store satisfied a hardcoded
  * `false`.
  */
-test("the trail carries the vendor's answer per person, not one answer for the act", async () => {
-  await seedApp();
-  await database
-    .insert(composioConnections)
-    .values({ toolkit, userId: leaverId });
-  vendorFinds = ({ userId }) => userId === askerId;
+test("the trail carries the vendor's answer per person, not one answer for the act", () =>
+  asPlatform(async () => {
+    await seedApp();
+    await runAsTenant(leaverId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit, userId: leaverId }),
+    );
+    vendorFinds = ({ userId }) => userId === askerId;
 
-  await store.removeServer(toolkit, admin);
+    await store.removeServer(toolkit, admin);
 
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${askerId}`,
-    `revoke:${toolkit}/${leaverId}`,
-    `deleteAuthConfig:${toolkit}`,
-  ]);
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${askerId}`,
+      `revoke:${toolkit}/${leaverId}`,
+      `deleteAuthConfig:${toolkit}`,
+    ]);
 
-  const disconnected = recordedOfType("mcp.account_disconnected");
-  expect(disconnected).toHaveLength(2);
-  expect(
-    disconnected
-      .map(
-        (event) =>
-          event.payload as {
-            owner: string;
-            vendorRevocationRequested: boolean;
-          },
-      )
-      .map(({ owner, vendorRevocationRequested }) => ({
-        owner,
-        vendorRevocationRequested,
-      }))
-      .sort((left, right) => left.owner.localeCompare(right.owner)),
-  ).toEqual([
-    { owner: askerId, vendorRevocationRequested: true },
-    { owner: leaverId, vendorRevocationRequested: false },
-  ]);
-});
+    const disconnected = recordedOfType("mcp.account_disconnected");
+    expect(disconnected).toHaveLength(2);
+    expect(
+      disconnected
+        .map(
+          (event) =>
+            event.payload as {
+              owner: string;
+              vendorRevocationRequested: boolean;
+            },
+        )
+        .map(({ owner, vendorRevocationRequested }) => ({
+          owner,
+          vendorRevocationRequested,
+        }))
+        .sort((left, right) => left.owner.localeCompare(right.owner)),
+    ).toEqual([
+      { owner: askerId, vendorRevocationRequested: true },
+      { owner: leaverId, vendorRevocationRequested: false },
+    ]);
+  }));
 
 /**
  * ONE KEY FOR "WHAT HAPPENED TO THIS PERSON'S ACCESS", across both acts that can end it.
@@ -1633,65 +1677,73 @@ test("the trail carries the vendor's answer per person, not one answer for the a
  * to. Which server row was removed is not lost either: the `configuration.changed` row written in
  * the same call names it.
  */
-test("both acts that end a brokered connection file it under the app", async () => {
-  await database.insert(agents).values({
-    id: botId,
-    name: "Helper",
-    type: "built_in",
-    configuration: {},
-  });
-  // The row id and the app slug deliberately different, which is the only shape that can tell the
-  // two keys apart.
-  await database.insert(mcpServers).values({
-    id: renamedId,
-    title: "Revocable App",
-    vendor: "Composio",
-    url: `composio://${toolkit}`,
-    provenance: "composio",
-  });
-  await database.insert(composioConnections).values([
-    { toolkit, userId: askerId },
-    { toolkit, userId: leaverId },
-  ]);
+test("both acts that end a brokered connection file it under the app", () =>
+  asPlatform(async () => {
+    await database.insert(agents).values({
+      id: botId,
+      name: "Helper",
+      type: "built_in",
+      configuration: {},
+    });
+    // The row id and the app slug deliberately different, which is the only shape that can tell the
+    // two keys apart.
+    await database.insert(mcpServers).values({
+      id: renamedId,
+      title: "Revocable App",
+      vendor: "Composio",
+      url: `composio://${toolkit}`,
+      provenance: "composio",
+    });
+    // Each person's connection is written in that person's own frame, as their connect would be.
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({ toolkit, userId: askerId }),
+    );
+    await runAsTenant(leaverId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit, userId: leaverId }),
+    );
 
-  // Offboarding one person, then removing the app out from under the other.
-  expect((await store.retireConnectionsFor(leaverId, admin)).retired).toBe(1);
-  await store.removeServer(renamedId, admin);
+    // Offboarding one person, then removing the app out from under the other.
+    expect((await store.retireConnectionsFor(leaverId, admin)).retired).toBe(1);
+    await store.removeServer(renamedId, admin);
 
-  // The broker is asked about the APP in both acts, and the auth config dropped for the app too —
-  // never for the row id, which is a display key the vendor has never heard of. This is the one
-  // fixture where the two spellings differ, so it is the only one that can tell them apart.
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${leaverId}`,
-    `revoke:${toolkit}/${askerId}`,
-    `deleteAuthConfig:${toolkit}`,
-  ]);
+    // The broker is asked about the APP in both acts, and the auth config dropped for the app too —
+    // never for the row id, which is a display key the vendor has never heard of. This is the one
+    // fixture where the two spellings differ, so it is the only one that can tell them apart.
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${leaverId}`,
+      `revoke:${toolkit}/${askerId}`,
+      `deleteAuthConfig:${toolkit}`,
+    ]);
 
-  const disconnected = recordedOfType("mcp.account_disconnected");
-  expect(disconnected).toHaveLength(2);
-  // Both rows, under one key. Asked as the set of keys rather than row by row, because what the
-  // criterion is about is a query finding all of them at once.
-  expect(new Set(disconnected.map((event) => event.targetId))).toEqual(
-    new Set([toolkit]),
-  );
-  expect(
-    new Set(
-      disconnected.map((event) => (event.payload as { server: string }).server),
-    ),
-  ).toEqual(new Set([toolkit]));
+    const disconnected = recordedOfType("mcp.account_disconnected");
+    expect(disconnected).toHaveLength(2);
+    // Both rows, under one key. Asked as the set of keys rather than row by row, because what the
+    // criterion is about is a query finding all of them at once.
+    expect(new Set(disconnected.map((event) => event.targetId))).toEqual(
+      new Set([toolkit]),
+    );
+    expect(
+      new Set(
+        disconnected.map(
+          (event) => (event.payload as { server: string }).server,
+        ),
+      ),
+    ).toEqual(new Set([toolkit]));
 
-  // And each still says which person and which of the three things happened to them, which is the
-  // other half of the question and was never the part that was wrong.
-  expect(
-    disconnected
-      .map((event) => event.payload as { owner: string; reason: string })
-      .map(({ owner, reason }) => ({ owner, reason }))
-      .sort((left, right) => left.owner.localeCompare(right.owner)),
-  ).toEqual([
-    { owner: askerId, reason: "mcp_server_removed" },
-    { owner: leaverId, reason: "person_removed" },
-  ]);
-});
+    // And each still says which person and which of the three things happened to them, which is the
+    // other half of the question and was never the part that was wrong.
+    expect(
+      disconnected
+        .map((event) => event.payload as { owner: string; reason: string })
+        .map(({ owner, reason }) => ({ owner, reason }))
+        .sort((left, right) => left.owner.localeCompare(right.owner)),
+    ).toEqual([
+      { owner: askerId, reason: "mcp_server_removed" },
+      { owner: leaverId, reason: "person_removed" },
+    ]);
+  }));
 
 /**
  * CONSENT MUST NOT REATTACH.
@@ -1701,29 +1753,30 @@ test("both acts that end a brokered connection file it under the app", async () 
  * asked again — and the only visible difference between an app nobody has connected and an app
  * everybody is still connected to is whether a call goes out.
  */
-test("adding the app back does not restore a connection nobody re-granted", async () => {
-  await seedApp();
-  useAnsweringClient();
+test("adding the app back does not restore a connection nobody re-granted", () =>
+  asPlatform(async () => {
+    await seedApp();
+    useAnsweringClient();
 
-  await store.callTool({ ref, args: {}, botId, actorId: askerId });
-  expect(reached).toEqual([actionName]);
+    await store.callTool({ ref, args: {}, botId, actorId: askerId });
+    expect(reached).toEqual([actionName]);
 
-  await store.removeServer(toolkit, admin);
-  expect(asksMade()).toEqual([
-    `revoke:${toolkit}/${askerId}`,
-    `deleteAuthConfig:${toolkit}`,
-  ]);
-  // The same app at the same id, added again. Only the server and its action: the Bot's grant
-  // survived the removal on its own, which is a separate defect about `plugin_grants` and not this
-  // one. Added by insert rather than through `addBrokeredApp`, so nothing asks the broker again —
-  // the refusal below is the consent being gone and not an auth config that was never remade.
-  await addApp();
+    await store.removeServer(toolkit, admin);
+    expect(asksMade()).toEqual([
+      `revoke:${toolkit}/${askerId}`,
+      `deleteAuthConfig:${toolkit}`,
+    ]);
+    // The same app at the same id, added again. Only the server and its action: the Bot's grant
+    // survived the removal on its own, which is a separate defect about `plugin_grants` and not this
+    // one. Added by insert rather than through `addBrokeredApp`, so nothing asks the broker again —
+    // the refusal below is the consent being gone and not an auth config that was never remade.
+    await addApp();
 
-  await expect(
-    store.callTool({ ref, args: {}, botId, actorId: askerId }),
-  ).rejects.toThrow(/have not connected/i);
-  expect(reached).toEqual([actionName]);
-});
+    await expect(
+      store.callTool({ ref, args: {}, botId, actorId: askerId }),
+    ).rejects.toThrow(/have not connected/i);
+    expect(reached).toEqual([actionName]);
+  }));
 
 /**
  * THE TRAIL, WHERE NOBODY WAS ASKING.
@@ -1735,27 +1788,28 @@ test("adding the app back does not restore a connection nobody re-granted", asyn
  * app is reached AS THE PERSON, so a run nobody could be attributed to has no name to put in either
  * — and the refusal is recorded, which is exactly when the trail matters.
  */
-test("an unattributed run is recorded as unattributed rather than as a blank", async () => {
-  await seedApp();
-  useAnsweringClient();
+test("an unattributed run is recorded as unattributed rather than as a blank", () =>
+  asPlatform(async () => {
+    await seedApp();
+    useAnsweringClient();
 
-  await expect(
-    store.callTool({ ref, args: {}, botId, actorId: "" }),
-  ).rejects.toThrow(/not attributed to anybody/i);
-  expect(reached).toEqual([]);
+    await expect(
+      store.callTool({ ref, args: {}, botId, actorId: "" }),
+    ).rejects.toThrow(/not attributed to anybody/i);
+    expect(reached).toEqual([]);
 
-  const failed = recordedOfType("mcp.call_failed");
-  expect(failed).toHaveLength(1);
-  // Both fields, exactly. `reachedAs` is "unattributed" and so by that very assertion is not
-  // "deployment": this call did not go out on a shared credential, it did not go out at all, and
-  // saying the deployment reached the app would assert an attribution that never happened. A
-  // separate `not.toBe("deployment")` below this would be that same claim restated more weakly,
-  // green for every wrong value but one.
-  expect(failed[0].payload).toMatchObject({
-    actor: "unattributed",
-    reachedAs: "unattributed",
-  });
-});
+    const failed = recordedOfType("mcp.call_failed");
+    expect(failed).toHaveLength(1);
+    // Both fields, exactly. `reachedAs` is "unattributed" and so by that very assertion is not
+    // "deployment": this call did not go out on a shared credential, it did not go out at all, and
+    // saying the deployment reached the app would assert an attribution that never happened. A
+    // separate `not.toBe("deployment")` below this would be that same claim restated more weakly,
+    // green for every wrong value but one.
+    expect(failed[0].payload).toMatchObject({
+      actor: "unattributed",
+      reachedAs: "unattributed",
+    });
+  }));
 
 /**
  * WHAT CONTENT INSPECTION JUDGES IS WHAT THE CALL WOULD SEND.
@@ -1780,36 +1834,37 @@ test("an unattributed run is recorded as unattributed rather than as a blank", a
  * removed by loosening the inspector would satisfy the first half alone. What must be true is that
  * the call went out carrying exactly what was inspected.
  */
-test("a call is judged on the arguments it would send, not on the ones it was handed", async () => {
-  await seedApp();
-  const sent: { version: string; args: Record<string, unknown> }[] = [];
-  useAnsweringClient({
-    execute: async ({ slug, version }, args) => {
-      reached.push(slug);
-      sent.push({ version, args });
-      return answered;
-    },
-  });
+test("a call is judged on the arguments it would send, not on the ones it was handed", () =>
+  asPlatform(async () => {
+    await seedApp();
+    const sent: { version: string; args: Record<string, unknown> }[] = [];
+    useAnsweringClient({
+      execute: async ({ slug, version }, args) => {
+        reached.push(slug);
+        sent.push({ version, args });
+        return answered;
+      },
+    });
 
-  const result = await store.callTool({
-    ref,
-    // A model filling in the reserved key itself, with a value the inspector reads as a provider
-    // token. Stripped unconditionally before the recorded version is merged, so it reaches nothing.
-    args: { [VERSION_ARG]: "sk-modelsuppliedvalue0123456789" },
-    botId,
-    actorId: askerId,
-  });
+    const result = await store.callTool({
+      ref,
+      // A model filling in the reserved key itself, with a value the inspector reads as a provider
+      // token. Stripped unconditionally before the recorded version is merged, so it reaches nothing.
+      args: { [VERSION_ARG]: "sk-modelsuppliedvalue0123456789" },
+      botId,
+      actorId: askerId,
+    });
 
-  expect(result.isError).toBe(false);
-  // The listed revision, and no arguments at all: what the model wrote under the reserved key
-  // reached nothing, which is why refusing the call over it was a refusal nobody earned. The
-  // transport lifts the reserved key off the arguments and sends it as the version, so `args` here
-  // is what is left of what the inspection ran over.
-  expect(sent).toEqual([{ version: "20260903_00", args: {} }]);
-  expect(reached).toEqual([actionName]);
-  // And nothing was filed as refused, which is the half a person would have met on the screen.
-  expect(recordedOfType("mcp.call_rejected")).toEqual([]);
-});
+    expect(result.isError).toBe(false);
+    // The listed revision, and no arguments at all: what the model wrote under the reserved key
+    // reached nothing, which is why refusing the call over it was a refusal nobody earned. The
+    // transport lifts the reserved key off the arguments and sends it as the version, so `args` here
+    // is what is left of what the inspection ran over.
+    expect(sent).toEqual([{ version: "20260903_00", args: {} }]);
+    expect(reached).toEqual([actionName]);
+    // And nothing was filed as refused, which is the half a person would have met on the screen.
+    expect(recordedOfType("mcp.call_rejected")).toEqual([]);
+  }));
 
 /**
  * THE TRAIL, WHERE THE DEPLOYMENT WAS THE ONE ACTING.
@@ -1820,33 +1875,35 @@ test("a call is judged on the arguments it would send, not on the ones it was ha
  * and what the trail owes a reader is the distinction: not a person, and not nobody either, but the
  * deployment refreshing on its own behalf. `reachedAs` already spells that "deployment".
  */
-test("the refresh that follows an add is attributed to the deployment", async () => {
-  await seedApp();
-  // A different action, so the granted one is left held and not advertised — which is the audit row
-  // under test.
-  useAnsweringClient({
-    listActions: async () => [
-      {
-        slug: "APP_SOMETHING_ELSE",
-        description: "Not the one anybody holds.",
-        version: "20260903_00",
-      },
-    ],
-  });
+test("the refresh that follows an add is attributed to the deployment", () =>
+  asPlatform(async () => {
+    await seedApp();
+    // A different action, so the granted one is left held and not advertised — which is the audit row
+    // under test.
+    useAnsweringClient({
+      listActions: async () => [
+        {
+          slug: "APP_SOMETHING_ELSE",
+          description: "Not the one anybody holds.",
+          version: "20260903_00",
+        },
+      ],
+    });
 
-  // No actor, which is exactly what the add path passes.
-  await store.refreshTools(toolkit);
+    // No actor, which is exactly what the add path passes.
+    await store.refreshTools(toolkit);
 
-  const stranded = events.filter(
-    (event) =>
-      (event.payload as { change?: string }).change === "grants_not_advertised",
-  );
-  expect(stranded).toHaveLength(1);
-  expect(stranded[0].payload).toMatchObject({
-    actor: "deployment",
-    refs: [ref],
-  });
-});
+    const stranded = events.filter(
+      (event) =>
+        (event.payload as { change?: string }).change ===
+        "grants_not_advertised",
+    );
+    expect(stranded).toHaveLength(1);
+    expect(stranded[0].payload).toMatchObject({
+      actor: "deployment",
+      refs: [ref],
+    });
+  }));
 
 /**
  * ENABLING AN APP THAT IS ALREADY HERE, which is what pressing Add a second time is.
@@ -1860,31 +1917,34 @@ test("the refresh that follows an add is attributed to the deployment", async ()
  * would otherwise, one press of Add later, have this deployment minting consent links against a
  * config full of keys.
  */
-test("re-enabling never moves a connected app onto a different flow", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: enabledToolkit, userId: askerId });
+test("re-enabling never moves a connected app onto a different flow", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: enabledToolkit, userId: askerId }),
+    );
 
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
 
-  const [row] = await database
-    .select({ authScheme: mcpServers.authScheme })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, enabledId));
-  expect(row.authScheme).toBe("API_KEY");
-});
+    const [row] = await database
+      .select({ authScheme: mcpServers.authScheme })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, enabledId));
+    expect(row.authScheme).toBe("API_KEY");
+  }));
 
 /**
  * AND THE ONE CASE WHERE THE REWRITE IS BOTH SAFE AND THE POINT.
@@ -1895,28 +1955,29 @@ test("re-enabling never moves a connected app onto a different flow", async () =
  * it. So the column is write-once EXCEPT here, and this test is the half of that sentence the test
  * above cannot state.
  */
-test("re-enabling an app nobody has connected picks up the vendor's change", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
+test("re-enabling an app nobody has connected picks up the vendor's change", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
 
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
 
-  const [row] = await database
-    .select({ authScheme: mcpServers.authScheme })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, enabledId));
-  expect(row.authScheme).toBe("OAUTH2");
-});
+    const [row] = await database
+      .select({ authScheme: mcpServers.authScheme })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, enabledId));
+    expect(row.authScheme).toBe("OAUTH2");
+  }));
 
 /**
  * AND IT PICKS IT UP ONLY WHERE A CONFIG WAS ACTUALLY MADE AS THE NEW SCHEME.
@@ -1937,31 +1998,32 @@ test("re-enabling an app nobody has connected picks up the vendor's change", asy
  * THE APP HERE HAS NO CONNECTIONS AT ALL, which is what makes this test about the second clause and
  * not about the first: under the old guard this is exactly the case that rewrote.
  */
-test("re-enabling writes no scheme where the standing config was left alone", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
+test("re-enabling writes no scheme where the standing config was left alone", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
 
-  // The vendor's answer changes and Composio's config does not, which is the whole scenario: the
-  // catalogue now resolves consent, and `ensureAuthConfig` finds the key config and returns.
-  configWasStanding = true;
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
+    // The vendor's answer changes and Composio's config does not, which is the whole scenario: the
+    // catalogue now resolves consent, and `ensureAuthConfig` finds the key config and returns.
+    configWasStanding = true;
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
 
-  const [row] = await database
-    .select({ authScheme: mcpServers.authScheme })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, enabledId));
-  expect(row.authScheme).toBe("API_KEY");
-});
+    const [row] = await database
+      .select({ authScheme: mcpServers.authScheme })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, enabledId));
+    expect(row.authScheme).toBe("API_KEY");
+  }));
 
 /**
  * CONFIRMING A CONNECTION RECORDS IT VERIFIED, BECAUSE A CONSENT SCREEN IS A VERIFICATION.
@@ -1983,35 +2045,36 @@ test("re-enabling writes no scheme where the standing config was left alone", as
  * is a claim with no date on it, and the page has nothing to print; the two are written together by
  * one writer or the row is a shape no reader here has reasoned about.
  */
-test("a confirmed connection is recorded verified, at the moment it was earned", async () => {
-  await seedApp({ connect: false });
-  // Taken before the call, so the comparison below is against a moment that cannot postdate the
-  // write. Both this and the column are written in this process, so no clock but one is involved.
-  const before = new Date();
+test("a confirmed connection is recorded verified, at the moment it was earned", () =>
+  asPlatform(async () => {
+    await seedApp({ connect: false });
+    // Taken before the call, so the comparison below is against a moment that cannot postdate the
+    // write. Both this and the column are written in this process, so no clock but one is involved.
+    const before = new Date();
 
-  expect(
-    await store.confirmBrokeredConnection({ toolkit, userId: askerId }),
-  ).toEqual({ connected: true });
-  // And the vendor was asked, which is what makes the row a record of Composio's answer rather than
-  // of a browser arriving back on a page.
-  expect(asksMade()).toEqual([`isConnected:${toolkit}/${askerId}`]);
+    expect(
+      await store.confirmBrokeredConnection({ toolkit, userId: askerId }),
+    ).toEqual({ connected: true });
+    // And the vendor was asked, which is what makes the row a record of Composio's answer rather than
+    // of a browser arriving back on a page.
+    expect(asksMade()).toEqual([`isConnected:${toolkit}/${askerId}`]);
 
-  const [row] = await database
-    .select({
-      verified: composioConnections.verified,
-      verifiedAt: composioConnections.verifiedAt,
-    })
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, toolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row.verified).toBe(true);
-  expect(row.verifiedAt).not.toBeNull();
-  expect(row.verifiedAt?.getTime()).toBeGreaterThanOrEqual(before.getTime());
-});
+    const [row] = await database
+      .select({
+        verified: composioConnections.verified,
+        verifiedAt: composioConnections.verifiedAt,
+      })
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, toolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(true);
+    expect(row.verifiedAt).not.toBeNull();
+    expect(row.verifiedAt?.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  }));
 
 /**
  * CHOOSING THE PROBE: READ EFFECT AND ZERO REQUIRED INPUTS, AND NEITHER ALONE WILL DO.
@@ -2030,38 +2093,39 @@ test("a confirmed connection is recorded verified, at the moment it was earned",
  * `read` only where Composio sent `readOnlyHint`, so everything unlabelled is already recorded here
  * as a write.
  */
-test("the probe skips an argument-less write for the read that sorts after it", async () => {
-  await database.insert(mcpServers).values({
-    id: probeAppId,
-    title: "Stripe",
-    vendor: "Composio",
-    url: `composio://${probeAppId}`,
-    provenance: "composio",
-  });
-  await database.insert(mcpTools).values([
-    {
-      serverId: probeAppId,
-      // Sorts first, asks for nothing, and charges somebody money. The whole test.
-      name: "STRIPE_CREATE_BILLING_METER_EVENT_SESSION",
-      description: "Creates a billing meter event session.",
-      effect: "write",
-      version: "20260903_00",
-    },
-    {
-      serverId: probeAppId,
-      name: "STRIPE_RETRIEVE_BALANCE",
-      description: "Retrieves the balance.",
-      effect: "read",
-      version: "20260903_00",
-    },
-  ]);
+test("the probe skips an argument-less write for the read that sorts after it", () =>
+  asPlatform(async () => {
+    await database.insert(mcpServers).values({
+      id: probeAppId,
+      title: "Stripe",
+      vendor: "Composio",
+      url: `composio://${probeAppId}`,
+      provenance: "composio",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: probeAppId,
+        // Sorts first, asks for nothing, and charges somebody money. The whole test.
+        name: "STRIPE_CREATE_BILLING_METER_EVENT_SESSION",
+        description: "Creates a billing meter event session.",
+        effect: "write",
+        version: "20260903_00",
+      },
+      {
+        serverId: probeAppId,
+        name: "STRIPE_RETRIEVE_BALANCE",
+        description: "Retrieves the balance.",
+        effect: "read",
+        version: "20260903_00",
+      },
+    ]);
 
-  // The name, which is what this test is about; the version beside it is asserted by the test below
-  // that is about the version.
-  expect((await store.probeActionFor(probeAppId))?.name).toBe(
-    "STRIPE_RETRIEVE_BALANCE",
-  );
-});
+    // The name, which is what this test is about; the version beside it is asserted by the test below
+    // that is about the version.
+    expect((await store.probeActionFor(probeAppId))?.name).toBe(
+      "STRIPE_RETRIEVE_BALANCE",
+    );
+  }));
 
 /**
  * AND AN APP WHOSE ONLY SAFE ACTION WANTS AN ARGUMENT HAS NO PROBE AT ALL.
@@ -2077,29 +2141,30 @@ test("the probe skips an argument-less write for the read that sorts after it", 
  * publish some argument-less read and PostHog publishes none, so every caller of this has to have
  * an answer for an app that cannot be probed.
  */
-test("an app whose only read takes an argument has no probe", async () => {
-  await database.insert(mcpServers).values({
-    id: probeAppId,
-    title: "Needs An Argument",
-    vendor: "Composio",
-    url: `composio://${probeAppId}`,
-    provenance: "composio",
-  });
-  await database.insert(mcpTools).values({
-    serverId: probeAppId,
-    name: "APP_GET_PROJECT",
-    description: "Reads one project, by id.",
-    effect: "read",
-    inputSchema: {
-      type: "object",
-      properties: { project_id: { type: "string" } },
-      required: ["project_id"],
-    },
-    version: "20260903_00",
-  });
+test("an app whose only read takes an argument has no probe", () =>
+  asPlatform(async () => {
+    await database.insert(mcpServers).values({
+      id: probeAppId,
+      title: "Needs An Argument",
+      vendor: "Composio",
+      url: `composio://${probeAppId}`,
+      provenance: "composio",
+    });
+    await database.insert(mcpTools).values({
+      serverId: probeAppId,
+      name: "APP_GET_PROJECT",
+      description: "Reads one project, by id.",
+      effect: "read",
+      inputSchema: {
+        type: "object",
+        properties: { project_id: { type: "string" } },
+        required: ["project_id"],
+      },
+      version: "20260903_00",
+    });
 
-  expect(await store.probeActionFor(probeAppId)).toBeNull();
-});
+    expect(await store.probeActionFor(probeAppId)).toBeNull();
+  }));
 
 /**
  * AND IT ASKS THE WHOLE SCHEMA, NOT ITS TOP-LEVEL `required`.
@@ -2138,25 +2203,26 @@ test.each([
   ["a $ref", { $ref: "#/$defs/ProjectQuery" }],
 ])(
   "an action whose required arguments are published under %s is no probe candidate",
-  async (_name, inputSchema) => {
-    await database.insert(mcpServers).values({
-      id: probeAppId,
-      title: "Composes Its Schema",
-      vendor: "Composio",
-      url: `composio://${probeAppId}`,
-      provenance: "composio",
-    });
-    await database.insert(mcpTools).values({
-      serverId: probeAppId,
-      name: "APP_GET_PROJECT",
-      description: "Reads one project.",
-      effect: "read",
-      inputSchema,
-      version: "20260903_00",
-    });
+  (_name, inputSchema) =>
+    asPlatform(async () => {
+      await database.insert(mcpServers).values({
+        id: probeAppId,
+        title: "Composes Its Schema",
+        vendor: "Composio",
+        url: `composio://${probeAppId}`,
+        provenance: "composio",
+      });
+      await database.insert(mcpTools).values({
+        serverId: probeAppId,
+        name: "APP_GET_PROJECT",
+        description: "Reads one project.",
+        effect: "read",
+        inputSchema,
+        version: "20260903_00",
+      });
 
-    expect(await store.probeActionFor(probeAppId)).toBeNull();
-  },
+      expect(await store.probeActionFor(probeAppId)).toBeNull();
+    }),
 );
 
 /**
@@ -2167,32 +2233,33 @@ test.each([
  * the shape a toolkit writes when it factors a base object out, and refusing it would leave most of
  * the catalogue with no probe and no Re-check button over a constraint that does not exist.
  */
-test("an action whose composed schema requires nothing is still a probe candidate", async () => {
-  await database.insert(mcpServers).values({
-    id: probeAppId,
-    title: "Composes And Asks Nothing",
-    vendor: "Composio",
-    url: `composio://${probeAppId}`,
-    provenance: "composio",
-  });
-  await database.insert(mcpTools).values({
-    serverId: probeAppId,
-    name: "APP_GET_ME",
-    description: "Reads the current account.",
-    effect: "read",
-    inputSchema: {
-      type: "object",
-      allOf: [{ properties: { verbose: { type: "boolean" } } }],
-      required: [],
-    },
-    version: "20260903_00",
-  });
+test("an action whose composed schema requires nothing is still a probe candidate", () =>
+  asPlatform(async () => {
+    await database.insert(mcpServers).values({
+      id: probeAppId,
+      title: "Composes And Asks Nothing",
+      vendor: "Composio",
+      url: `composio://${probeAppId}`,
+      provenance: "composio",
+    });
+    await database.insert(mcpTools).values({
+      serverId: probeAppId,
+      name: "APP_GET_ME",
+      description: "Reads the current account.",
+      effect: "read",
+      inputSchema: {
+        type: "object",
+        allOf: [{ properties: { verbose: { type: "boolean" } } }],
+        required: [],
+      },
+      version: "20260903_00",
+    });
 
-  expect(await store.probeActionFor(probeAppId)).toEqual({
-    name: "APP_GET_ME",
-    version: "20260903_00",
-  });
-});
+    expect(await store.probeActionFor(probeAppId)).toEqual({
+      name: "APP_GET_ME",
+      version: "20260903_00",
+    });
+  }));
 
 /**
  * AND AN ACTION WITH NO RECORDED VERSION IS NOT A CANDIDATE, ON THE READ AS WELL AS ON THE PROBE.
@@ -2214,30 +2281,36 @@ test("an action whose composed schema requires nothing is still a probe candidat
  * BOTH HALVES IN ONE TEST, because the point is that they AGREE. Asserting either alone would leave
  * the pair free to come apart again in the direction that was wrong the first time.
  */
-test("an app whose only safe read has no recorded version has no probe", async () => {
-  useAnsweringClient();
-  await addProbedApp({ withProbe: false });
-  await database.insert(mcpTools).values({
-    serverId: probedId,
-    name: probeAction,
-    description: "Says who the key belongs to, at no version anybody recorded.",
-    effect: "read",
-    version: null,
-  });
+test("an app whose only safe read has no recorded version has no probe", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp({ withProbe: false });
+    await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
+      serverId: probedId,
+      name: probeAction,
+      description:
+        "Says who the key belongs to, at no version anybody recorded.",
+      effect: "read",
+      version: null,
+    });
 
-  expect(await store.probeActionFor(probedId)).toBeNull();
+    expect(await store.probeActionFor(probedId)).toBeNull();
 
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: probedToolkit, userId: askerId, verified: false });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: probedToolkit, userId: askerId, verified: false }),
+    );
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.serverId).toBe(probedId);
-  expect(listed[0]?.probe).toBeNull();
-  // And nothing was spent learning it: both answers come out of recorded metadata.
-  expect(reached).toEqual([]);
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.serverId).toBe(probedId);
+    expect(listed[0]?.probe).toBeNull();
+    // And nothing was spent learning it: both answers come out of recorded metadata.
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * AND A VERSIONLESS ACTION IS PASSED OVER RATHER THAN ENDING THE SEARCH.
@@ -2253,37 +2326,38 @@ test("an app whose only safe read has no recorded version has no probe", async (
  * another read this deployment could have called. Passing over it is strictly better: an app that
  * can be checked gets checked, and the null answer is kept for an app that really has nothing.
  */
-test("the chooser passes over a versionless read for the one it could call", async () => {
-  await database.insert(mcpServers).values({
-    id: probeAppId,
-    title: "Thin Listing",
-    vendor: "Composio",
-    url: `composio://${probeAppId}`,
-    provenance: "composio",
-  });
-  await database.insert(mcpTools).values([
-    {
-      serverId: probeAppId,
-      // Sorts first, is the preferred shape, and carries nothing to call it at.
-      name: "THIN_GET_ME",
-      description: "Says who the key belongs to.",
-      effect: "read",
-      version: null,
-    },
-    {
-      serverId: probeAppId,
-      name: "THIN_LIST_PROJECTS",
-      description: "Lists the projects.",
-      effect: "read",
-      version: "20260903_00",
-    },
-  ]);
+test("the chooser passes over a versionless read for the one it could call", () =>
+  asPlatform(async () => {
+    await database.insert(mcpServers).values({
+      id: probeAppId,
+      title: "Thin Listing",
+      vendor: "Composio",
+      url: `composio://${probeAppId}`,
+      provenance: "composio",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: probeAppId,
+        // Sorts first, is the preferred shape, and carries nothing to call it at.
+        name: "THIN_GET_ME",
+        description: "Says who the key belongs to.",
+        effect: "read",
+        version: null,
+      },
+      {
+        serverId: probeAppId,
+        name: "THIN_LIST_PROJECTS",
+        description: "Lists the projects.",
+        effect: "read",
+        version: "20260903_00",
+      },
+    ]);
 
-  expect(await store.probeActionFor(probeAppId)).toEqual({
-    name: "THIN_LIST_PROJECTS",
-    version: "20260903_00",
-  });
-});
+    expect(await store.probeActionFor(probeAppId)).toEqual({
+      name: "THIN_LIST_PROJECTS",
+      version: "20260903_00",
+    });
+  }));
 
 /**
  * AND A ROW THAT SAYS READ AND ALSO SAYS DESTRUCTIVE IS NOT A READ THIS DEPLOYMENT WILL SPEND.
@@ -2306,52 +2380,53 @@ test("the chooser passes over a versionless read for the one it could call", asy
  * safe alternative proves the destructive row is PASSED OVER rather than merely not-first; an app
  * with none proves it is not fallen back to when the search finds nothing else.
  */
-test("the probe skips a read the vendor also calls destructive", async () => {
-  await database.insert(mcpServers).values({
-    id: probeAppId,
-    title: "Two Reads",
-    vendor: "Composio",
-    url: `composio://${probeAppId}`,
-    provenance: "composio",
-  });
-  await database.insert(mcpTools).values([
-    {
-      serverId: probeAppId,
-      // Sorts first, asks for nothing, and Composio itself says calling it destroys something.
-      name: "APP_ARCHIVE_EVERYTHING",
-      description: "Archives the lot.",
-      effect: "read",
-      destructive: true,
-      version: "20260903_00",
-    },
-    {
-      serverId: probeAppId,
+test("the probe skips a read the vendor also calls destructive", () =>
+  asPlatform(async () => {
+    await database.insert(mcpServers).values({
+      id: probeAppId,
+      title: "Two Reads",
+      vendor: "Composio",
+      url: `composio://${probeAppId}`,
+      provenance: "composio",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: probeAppId,
+        // Sorts first, asks for nothing, and Composio itself says calling it destroys something.
+        name: "APP_ARCHIVE_EVERYTHING",
+        description: "Archives the lot.",
+        effect: "read",
+        destructive: true,
+        version: "20260903_00",
+      },
+      {
+        serverId: probeAppId,
+        name: "APP_LIST_PROJECTS",
+        description: "Lists the projects.",
+        effect: "read",
+        destructive: false,
+        version: "20260903_00",
+      },
+    ]);
+
+    expect(await store.probeActionFor(probeAppId)).toEqual({
       name: "APP_LIST_PROJECTS",
-      description: "Lists the projects.",
-      effect: "read",
-      destructive: false,
       version: "20260903_00",
-    },
-  ]);
+    });
 
-  expect(await store.probeActionFor(probeAppId)).toEqual({
-    name: "APP_LIST_PROJECTS",
-    version: "20260903_00",
-  });
+    // And with the safe alternative gone there is nothing to fall back to: the destructive row is not
+    // a candidate, rather than a last resort.
+    await database
+      .delete(mcpTools)
+      .where(
+        and(
+          eq(mcpTools.serverId, probeAppId),
+          eq(mcpTools.name, "APP_LIST_PROJECTS"),
+        ),
+      );
 
-  // And with the safe alternative gone there is nothing to fall back to: the destructive row is not
-  // a candidate, rather than a last resort.
-  await database
-    .delete(mcpTools)
-    .where(
-      and(
-        eq(mcpTools.serverId, probeAppId),
-        eq(mcpTools.name, "APP_LIST_PROJECTS"),
-      ),
-    );
-
-  expect(await store.probeActionFor(probeAppId)).toBeNull();
-});
+    expect(await store.probeActionFor(probeAppId)).toBeNull();
+  }));
 
 /**
  * AND WHERE SEVERAL READS SURVIVE, THE ONE THAT ASKS WHO THE KEY BELONGS TO IS PREFERRED.
@@ -2372,38 +2447,39 @@ test("the probe skips a read the vendor also calls destructive", async () => {
  * `ZOO_ALL_ANIMALS`, so the expected answer is the one the fallback would not have produced — a
  * fixture where the identity read also happened to sort first would pass with the preference gone.
  */
-test("the probe prefers the identity read over the read that sorts first", async () => {
-  await database.insert(mcpServers).values({
-    id: probeAppId,
-    title: "Two Safe Reads",
-    vendor: "Composio",
-    url: `composio://${probeAppId}`,
-    provenance: "composio",
-  });
-  await database.insert(mcpTools).values([
-    {
-      serverId: probeAppId,
-      // Sorts first and is perfectly safe, which is what makes it the wrong answer rather than an
-      // unsafe one: this is a test about which of two good candidates is chosen.
-      name: "ZOO_ALL_ANIMALS",
-      description: "Lists the animals.",
-      effect: "read",
-      version: "20260903_00",
-    },
-    {
-      serverId: probeAppId,
-      name: "ZOO_GET_ME",
-      description: "Says who the key belongs to.",
-      effect: "read",
-      version: "20260903_00",
-    },
-  ]);
+test("the probe prefers the identity read over the read that sorts first", () =>
+  asPlatform(async () => {
+    await database.insert(mcpServers).values({
+      id: probeAppId,
+      title: "Two Safe Reads",
+      vendor: "Composio",
+      url: `composio://${probeAppId}`,
+      provenance: "composio",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: probeAppId,
+        // Sorts first and is perfectly safe, which is what makes it the wrong answer rather than an
+        // unsafe one: this is a test about which of two good candidates is chosen.
+        name: "ZOO_ALL_ANIMALS",
+        description: "Lists the animals.",
+        effect: "read",
+        version: "20260903_00",
+      },
+      {
+        serverId: probeAppId,
+        name: "ZOO_GET_ME",
+        description: "Says who the key belongs to.",
+        effect: "read",
+        version: "20260903_00",
+      },
+    ]);
 
-  expect(await store.probeActionFor(probeAppId)).toEqual({
-    name: "ZOO_GET_ME",
-    version: "20260903_00",
-  });
-});
+    expect(await store.probeActionFor(probeAppId)).toEqual({
+      name: "ZOO_GET_ME",
+      version: "20260903_00",
+    });
+  }));
 
 /**
  * AND THE LISTING CARRIES THE ACTION THE CHECK ACTUALLY SPENT, WHICH IS WHAT SURVIVES A RELOAD.
@@ -2428,30 +2504,33 @@ test("the probe prefers the identity read over the read that sorts first", async
  * Composio publishes what it publishes — and the connection still reports what was tried on it,
  * because that is what happened and no later listing can unhappen it.
  */
-test("a listed brokered connection names the action it was checked with", async () => {
-  useAnsweringClient();
-  // The app WITHOUT the action, so the only place the name below can come from is the row.
-  await addProbedApp({ withProbe: false });
-  await database.insert(composioConnections).values({
-    toolkit: probedToolkit,
-    userId: askerId,
-    verified: false,
-    probeAction: probeAction,
-  });
+test("a listed brokered connection names the action it was checked with", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // The app WITHOUT the action, so the only place the name below can come from is the row.
+    await addProbedApp({ withProbe: false });
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: probedToolkit,
+        userId: askerId,
+        verified: false,
+        probeAction: probeAction,
+      }),
+    );
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.serverId).toBe(probedId);
-  expect(listed[0]?.verified).toBe(false);
-  // The name, and not merely "something": it is the name that separates a key the vendor refused
-  // from a connection nothing was ever tried on.
-  expect(listed[0]?.probe).toBe(probeAction);
-  // And the chooser has nothing to offer, which is what makes the line above about the record.
-  expect(await store.probeActionFor(probedId)).toBeNull();
-  // Nothing was spent finding any of that out: both answers are read out of this deployment's own
-  // tables.
-  expect(reached).toEqual([]);
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.serverId).toBe(probedId);
+    expect(listed[0]?.verified).toBe(false);
+    // The name, and not merely "something": it is the name that separates a key the vendor refused
+    // from a connection nothing was ever tried on.
+    expect(listed[0]?.probe).toBe(probeAction);
+    // And the chooser has nothing to offer, which is what makes the line above about the record.
+    expect(await store.probeActionFor(probedId)).toBeNull();
+    // Nothing was spent finding any of that out: both answers are read out of this deployment's own
+    // tables.
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * AND A CONNECTION NOTHING WAS EVER SPENT ON IS LISTED AS EXACTLY THAT.
@@ -2466,18 +2545,21 @@ test("a listed brokered connection names the action it was checked with", async 
  * that apart from a refused key, which is the distinction the whole field exists for — and it would
  * draw the accusation written for a bad key over somebody whose key was never tried.
  */
-test("a listed brokered connection nothing was spent on says there is no probe", async () => {
-  useAnsweringClient();
-  await addProbedApp({ withProbe: false });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: probedToolkit, userId: askerId, verified: false });
+test("a listed brokered connection nothing was spent on says there is no probe", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp({ withProbe: false });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: probedToolkit, userId: askerId, verified: false }),
+    );
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.serverId).toBe(probedId);
-  expect(listed[0]?.probe).toBeNull();
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.serverId).toBe(probedId);
+    expect(listed[0]?.probe).toBeNull();
+  }));
 
 /**
  * AND AN APP THAT LATER STARTS PUBLISHING ONE DOES NOT ACCUSE A KEY NOBODY EVER TRIED.
@@ -2503,41 +2585,44 @@ test("a listed brokered connection nothing was spent on says there is no probe",
  * of it. The chooser is asked in the same breath below, so this is a test about the record rather
  * than a test about an app that still has nothing to publish.
  */
-test("an action listed after the fact does not rewrite what a key was checked with", async () => {
-  useAnsweringClient();
-  await addProbedApp({ withProbe: false });
+test("an action listed after the fact does not rewrite what a key was checked with", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp({ withProbe: false });
 
-  expect(
-    await store.connectBrokeredWithFields({
-      toolkit: probedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).toEqual({ connected: true, verified: false, probe: null });
+    expect(
+      await store.connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).toEqual({ connected: true, verified: false, probe: null });
 
-  // THE REFRESH, as its only lasting effect: the app's actions re-listed, now carrying a read the
-  // chooser will take. Inserted directly for {@link addProbedApp}'s reason — nothing here is about
-  // how a listing turns Composio's tags into an effect.
-  await database.insert(mcpTools).values({
-    serverId: probedId,
-    name: probeAction,
-    description: "Says who the key belongs to.",
-    effect: "read",
-    version: probeVersion,
-  });
+    // THE REFRESH, as its only lasting effect: the app's actions re-listed, now carrying a read the
+    // chooser will take. Inserted directly for {@link addProbedApp}'s reason — nothing here is about
+    // how a listing turns Composio's tags into an effect.
+    await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
+      serverId: probedId,
+      name: probeAction,
+      description: "Says who the key belongs to.",
+      effect: "read",
+      version: probeVersion,
+    });
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.serverId).toBe(probedId);
-  expect(listed[0]?.verified).toBe(false);
-  // Still null, because still nothing was ever spent on this key.
-  expect(listed[0]?.probe).toBeNull();
-  // While the chooser now names one, which is the whole of what changed and the reason the two
-  // answers have to come from two different questions.
-  expect((await store.probeActionFor(probedId))?.name).toBe(probeAction);
-  // And no call was made to find any of that out.
-  expect(reached).toEqual([]);
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.serverId).toBe(probedId);
+    expect(listed[0]?.verified).toBe(false);
+    // Still null, because still nothing was ever spent on this key.
+    expect(listed[0]?.probe).toBeNull();
+    // While the chooser now names one, which is the whole of what changed and the reason the two
+    // answers have to come from two different questions.
+    expect((await store.probeActionFor(probedId))?.name).toBe(probeAction);
+    // And no call was made to find any of that out.
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * AND WHETHER THERE IS ANYTHING TO CHECK TODAY IS ANSWERED BESIDE IT, NEVER OUT OF IT.
@@ -2561,41 +2646,46 @@ test("an action listed after the fact does not rewrite what a key was checked wi
  * {@link createPluginStore.probeActionFor} about the app. The pair below is what a single field can
  * never be: the check spent nothing AND there is something to spend now.
  */
-test("a key nothing was spent on becomes checkable when the app publishes something", async () => {
-  useAnsweringClient();
-  await addProbedApp({ withProbe: false });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: probedToolkit, userId: askerId, verified: false });
+test("a key nothing was spent on becomes checkable when the app publishes something", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp({ withProbe: false });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: probedToolkit, userId: askerId, verified: false }),
+    );
 
-  const before = await store.brokeredConnectionsFor(askerId);
-  expect(before).toHaveLength(1);
-  // Nothing was tried, and there is nothing to try: the two agree here, which is why one field
-  // could ever pass for both.
-  expect(before[0]?.probe).toBeNull();
-  expect(before[0]?.checkable).toBe(false);
+    const before = await store.brokeredConnectionsFor(askerId);
+    expect(before).toHaveLength(1);
+    // Nothing was tried, and there is nothing to try: the two agree here, which is why one field
+    // could ever pass for both.
+    expect(before[0]?.probe).toBeNull();
+    expect(before[0]?.checkable).toBe(false);
 
-  // THE REFRESH. An administrator's press re-lists the app's actions and one of them is a safe
-  // versioned read — the very press the transport tells an operator to make when an action appears.
-  await database.insert(mcpTools).values({
-    serverId: probedId,
-    name: probeAction,
-    description: "Says who the key belongs to.",
-    effect: "read",
-    version: probeVersion,
-  });
+    // THE REFRESH. An administrator's press re-lists the app's actions and one of them is a safe
+    // versioned read — the very press the transport tells an operator to make when an action appears.
+    await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
+      serverId: probedId,
+      name: probeAction,
+      description: "Says who the key belongs to.",
+      effect: "read",
+      version: probeVersion,
+    });
 
-  const after = await store.brokeredConnectionsFor(askerId);
-  expect(after).toHaveLength(1);
-  // The record does not move, because nothing happened to the key: this is the guard on the fix
-  // that stands above, and a listing that let the catalogue write here would re-open it.
-  expect(after[0]?.probe).toBeNull();
-  expect(after[0]?.verified).toBe(false);
-  // And the present-tense answer does move, which is what puts the button back within reach.
-  expect(after[0]?.checkable).toBe(true);
-  // Both answers are read out of this deployment's own tables.
-  expect(reached).toEqual([]);
-});
+    const after = await store.brokeredConnectionsFor(askerId);
+    expect(after).toHaveLength(1);
+    // The record does not move, because nothing happened to the key: this is the guard on the fix
+    // that stands above, and a listing that let the catalogue write here would re-open it.
+    expect(after[0]?.probe).toBeNull();
+    expect(after[0]?.verified).toBe(false);
+    // And the present-tense answer does move, which is what puts the button back within reach.
+    expect(after[0]?.checkable).toBe(true);
+    // Both answers are read out of this deployment's own tables.
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * AND THE PROBE FINDS THE APP THE SAME WAY THE LISTING DOES, OR THE PAIR IS BACK WHERE IT STARTED.
@@ -2619,34 +2709,37 @@ test("a key nothing was spent on becomes checkable when the app publishes someth
  * about. Nothing holds the two equal — which is why every other brokered lookup in the store, the
  * connect, this re-check's own scheme gate and the disconnect alike, is keyed on the url.
  */
-test("a re-check of an app whose row id is not its slug spends the key it was offered for", async () => {
-  useAnsweringClient();
-  await addRenamedApp();
-  await database.insert(composioConnections).values({
-    toolkit: renamedProbedToolkit,
-    userId: askerId,
-    verified: false,
-  });
+test("a re-check of an app whose row id is not its slug spends the key it was offered for", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addRenamedApp();
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: renamedProbedToolkit,
+        userId: askerId,
+        verified: false,
+      }),
+    );
 
-  // THE BUTTON IS OFFERED, which is the listing's half of the pair and the half that was right.
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.serverId).toBe(renamedProbedId);
-  expect(listed[0]?.probe).toBeNull();
-  expect(listed[0]?.checkable).toBe(true);
+    // THE BUTTON IS OFFERED, which is the listing's half of the pair and the half that was right.
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.serverId).toBe(renamedProbedId);
+    expect(listed[0]?.probe).toBeNull();
+    expect(listed[0]?.checkable).toBe(true);
 
-  // AND THE PRESS SPENDS IT. `probe: null` here is the deadlock itself: a button offered over an
-  // app the check cannot find, on every page load, for good.
-  const answer = await store.recheckBrokeredConnection({
-    toolkit: renamedProbedToolkit,
-    userId: askerId,
-  });
-  expect(answer.probe).toBe(renamedProbeAction);
-  expect(answer.verified).toBe(true);
-  expect(answer.verifiedAt).not.toBeNull();
-  // And the call really went out, against the action the app's own row publishes.
-  expect(reached).toEqual([renamedProbeAction]);
-});
+    // AND THE PRESS SPENDS IT. `probe: null` here is the deadlock itself: a button offered over an
+    // app the check cannot find, on every page load, for good.
+    const answer = await store.recheckBrokeredConnection({
+      toolkit: renamedProbedToolkit,
+      userId: askerId,
+    });
+    expect(answer.probe).toBe(renamedProbeAction);
+    expect(answer.verified).toBe(true);
+    expect(answer.verifiedAt).not.toBeNull();
+    // And the call really went out, against the action the app's own row publishes.
+    expect(reached).toEqual([renamedProbeAction]);
+  }));
 
 /**
  * AND IT NEVER SPENDS A KEY ON WHATEVER ROW A COMPOSED ID HAPPENS TO HIT.
@@ -2664,35 +2757,36 @@ test("a re-check of an app whose row id is not its slug spends the key it was of
  * no-arguments conditions still hold of the action picked — they are the chooser's, and the chooser
  * was asked about the wrong app.
  */
-test("a probe never spends a key on the action of a row the composed id would hit", async () => {
-  useAnsweringClient();
-  await addRenamedApp();
-  // The decoy: an app of its own, whose only crime is being called what the first app's id would
-  // have been composed as.
-  await database.insert(mcpServers).values({
-    id: decoyId,
-    title: "Decoy App",
-    vendor: "Composio",
-    url: `composio://${decoyToolkit}`,
-    provenance: "composio",
-    authScheme: "API_KEY",
-  });
-  await database.insert(mcpTools).values({
-    serverId: decoyId,
-    name: decoyAction,
-    description: "Reads something belonging to another app entirely.",
-    effect: "read",
-    version: probeVersion,
-  });
+test("a probe never spends a key on the action of a row the composed id would hit", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addRenamedApp();
+    // The decoy: an app of its own, whose only crime is being called what the first app's id would
+    // have been composed as.
+    await database.insert(mcpServers).values({
+      id: decoyId,
+      title: "Decoy App",
+      vendor: "Composio",
+      url: `composio://${decoyToolkit}`,
+      provenance: "composio",
+      authScheme: "API_KEY",
+    });
+    await database.insert(mcpTools).values({
+      serverId: decoyId,
+      name: decoyAction,
+      description: "Reads something belonging to another app entirely.",
+      effect: "read",
+      version: probeVersion,
+    });
 
-  expect(
-    await store.probeBrokeredConnection({
-      toolkit: renamedProbedToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({ outcome: "answered", probe: renamedProbeAction });
-  expect(reached).toEqual([renamedProbeAction]);
-});
+    expect(
+      await store.probeBrokeredConnection({
+        toolkit: renamedProbedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ outcome: "answered", probe: renamedProbeAction });
+    expect(reached).toEqual([renamedProbeAction]);
+  }));
 
 /**
  * A CONSENT CONNECTION RECORDS NO ACTION, BECAUSE NONE WAS SPENT.
@@ -2709,48 +2803,51 @@ test("a probe never spends a key on the action of a row the composed id would hi
  * and the rows whose date is the moment of consent read exactly like the rows that had answered a
  * call.
  */
-test("a consent connection records no action, because none was spent", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: probedToolkit,
-    title: "Probed App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
-  // The action a derived field would have named, so the null below is this path's doing and not the
-  // app having nothing to offer.
-  await database.insert(mcpTools).values({
-    serverId: probedId,
-    name: probeAction,
-    description: "Says who the account belongs to.",
-    effect: "read",
-    version: probeVersion,
-  });
+test("a consent connection records no action, because none was spent", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: probedToolkit,
+      title: "Probed App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
+    // The action a derived field would have named, so the null below is this path's doing and not the
+    // app having nothing to offer.
+    await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
+      serverId: probedId,
+      name: probeAction,
+      description: "Says who the account belongs to.",
+      effect: "read",
+      version: probeVersion,
+    });
 
-  expect(
-    await store.confirmBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({ connected: true });
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ connected: true });
 
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row.verified).toBe(true);
-  expect(row.probeAction).toBeNull();
-  // Nothing was called to earn that flag, which is the fact the null records.
-  expect(reached).toEqual([]);
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(true);
+    expect(row.probeAction).toBeNull();
+    // Nothing was called to earn that flag, which is the fact the null records.
+    expect(reached).toEqual([]);
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed[0]?.probe).toBeNull();
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed[0]?.probe).toBeNull();
+  }));
 
 /**
  * A CONFIRM DOES NOT ERASE WHAT A CHECK SPENT ON A KEY CONNECTION.
@@ -2782,83 +2879,84 @@ test("a consent connection records no action, because none was spent", async () 
  * vendor answering NO still deletes the row, here as everywhere. What this asserts is only that a
  * YES writes no verdict it did not earn.
  */
-test("a confirm does not erase what a check spent on a key connection", async () => {
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      reached.push(slug);
-      return {
-        data: {},
-        error: "rate limit exceeded, retry in 60s",
-        successful: false,
-      };
-    },
-  });
-  await addProbedApp();
+test("a confirm does not erase what a check spent on a key connection", () =>
+  asPlatform(async () => {
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        reached.push(slug);
+        return {
+          data: {},
+          error: "rate limit exceeded, retry in 60s",
+          successful: false,
+        };
+      },
+    });
+    await addProbedApp();
 
-  await expect(
-    store.connectBrokeredWithFields({
-      toolkit: probedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).rejects.toThrow(/did not come back clean/);
+    await expect(
+      store.connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).rejects.toThrow(/did not come back clean/);
 
-  // THE STATE BEFORE THE PAGE LOAD, asserted in full rather than assumed from the throw: a named
-  // probe, no flag, no date.
-  const [before] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(before.probeAction).toBe(probeAction);
-  expect(before.verified).toBe(false);
-  expect(before.verifiedAt).toBeNull();
+    // THE STATE BEFORE THE PAGE LOAD, asserted in full rather than assumed from the throw: a named
+    // probe, no flag, no date.
+    const [before] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(before.probeAction).toBe(probeAction);
+    expect(before.verified).toBe(false);
+    expect(before.verifiedAt).toBeNull();
 
-  // THE PAGE LOAD. Nothing a person did — an effect on mount, on whichever of the two screens draws
-  // this row, as many times as they open it.
-  expect(
-    await store.confirmBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({ connected: true });
+    // THE PAGE LOAD. Nothing a person did — an effect on mount, on whichever of the two screens draws
+    // this row, as many times as they open it.
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ connected: true });
 
-  const [after] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  // The record of the check survives the mount, whole: the action it spent, the verdict it reached,
-  // and the absence of a date for a claim nobody is making.
-  expect(after.probeAction).toBe(probeAction);
-  expect(after.verified).toBe(false);
-  expect(after.verifiedAt).toBeNull();
+    const [after] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    // The record of the check survives the mount, whole: the action it spent, the verdict it reached,
+    // and the absence of a date for a claim nobody is making.
+    expect(after.probeAction).toBe(probeAction);
+    expect(after.verified).toBe(false);
+    expect(after.verifiedAt).toBeNull();
 
-  // And the settings page goes on drawing the sentence that state is for, which is the sentence the
-  // person has to act on: the key was checked and refused, and the account still stands.
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.probe).toBe(probeAction);
-  expect(listed[0]?.verified).toBe(false);
-  expect(listed[0]?.verifiedAt).toBeNull();
+    // And the settings page goes on drawing the sentence that state is for, which is the sentence the
+    // person has to act on: the key was checked and refused, and the account still stands.
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.probe).toBe(probeAction);
+    expect(listed[0]?.verified).toBe(false);
+    expect(listed[0]?.verifiedAt).toBeNull();
 
-  // The confirm asked the vendor and spent nothing on the person's account: the only action ever
-  // called here is the probe the connect made, before the confirm ran at all.
-  expect(reached).toEqual([probeAction]);
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${probedToolkit}/fields`,
-    `connectWithFields:${probedToolkit}/${askerId}`,
-    `isConnected:${probedToolkit}/${askerId}`,
-  ]);
-});
+    // The confirm asked the vendor and spent nothing on the person's account: the only action ever
+    // called here is the probe the connect made, before the confirm ran at all.
+    expect(reached).toEqual([probeAction]);
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${probedToolkit}/fields`,
+      `connectWithFields:${probedToolkit}/${askerId}`,
+      `isConnected:${probedToolkit}/${askerId}`,
+    ]);
+  }));
 
 /**
  * AND IT DOES NOT REDATE A KEY THE LAST CHECK PASSED, EITHER.
@@ -2885,92 +2983,95 @@ test("a confirm does not erase what a check spent on a key connection", async ()
  * inside. So the rule is one rule for both kinds now — a verdict already recorded is left alone —
  * and what still differs between them is which act may write it in the first place.
  */
-test("a confirm does not redate a key the last check verified", async () => {
-  useAnsweringClient();
-  await addProbedApp();
-  await store.connectBrokeredWithFields({
-    toolkit: probedToolkit,
-    userId: askerId,
-    values: { generic_api_key: typedKey },
-  });
-
-  const [checked] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(checked.verified).toBe(true);
-  expect(checked.probeAction).toBe(probeAction);
-  const earned = checked.verifiedAt;
-  expect(earned).not.toBeNull();
-
-  expect(
-    await store.confirmBrokeredConnection({
+test("a confirm does not redate a key the last check verified", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp();
+    await store.connectBrokeredWithFields({
       toolkit: probedToolkit,
       userId: askerId,
-    }),
-  ).toEqual({ connected: true });
+      values: { generic_api_key: typedKey },
+    });
 
-  const [after] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
+    const [checked] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(checked.verified).toBe(true);
+    expect(checked.probeAction).toBe(probeAction);
+    const earned = checked.verifiedAt;
+    expect(earned).not.toBeNull();
+
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ connected: true });
+
+    const [after] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    // The moment the probe earned, unmoved: the date on the row is the date of a check, and a page
+    // load is not one.
+    expect(after.verifiedAt?.toISOString()).toBe(earned?.toISOString());
+    expect(after.probeAction).toBe(probeAction);
+    expect(after.verified).toBe(true);
+
+    // THE OTHER KIND, against the same stub and the same act. A consent connection's evidence IS the
+    // vendor's yes — but it is the yes somebody gave at the vendor's screen on the day they gave it,
+    // and this row already carries it. So the confirm writes nothing: the date stands, and so does
+    // the null that says nothing of the app's was ever called against it.
+    const consentSeeded = new Date("2026-08-30T09:00:00.000Z");
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: enabledToolkit,
+        userId: askerId,
+        verified: true,
+        verifiedAt: consentSeeded,
+      }),
     );
-  // The moment the probe earned, unmoved: the date on the row is the date of a check, and a page
-  // load is not one.
-  expect(after.verifiedAt?.toISOString()).toBe(earned?.toISOString());
-  expect(after.probeAction).toBe(probeAction);
-  expect(after.verified).toBe(true);
 
-  // THE OTHER KIND, against the same stub and the same act. A consent connection's evidence IS the
-  // vendor's yes — but it is the yes somebody gave at the vendor's screen on the day they gave it,
-  // and this row already carries it. So the confirm writes nothing: the date stands, and so does
-  // the null that says nothing of the app's was ever called against it.
-  const consentSeeded = new Date("2026-08-30T09:00:00.000Z");
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
-  await database.insert(composioConnections).values({
-    toolkit: enabledToolkit,
-    userId: askerId,
-    verified: true,
-    verifiedAt: consentSeeded,
-  });
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: enabledToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ connected: true });
 
-  expect(
-    await store.confirmBrokeredConnection({
-      toolkit: enabledToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({ connected: true });
+    const [consent] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, enabledToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(consent.verified).toBe(true);
+    expect(consent.probeAction).toBeNull();
+    expect(consent.verifiedAt?.toISOString()).toBe(consentSeeded.toISOString());
 
-  const [consent] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, enabledToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(consent.verified).toBe(true);
-  expect(consent.probeAction).toBeNull();
-  expect(consent.verifiedAt?.toISOString()).toBe(consentSeeded.toISOString());
-
-  // One probe, spent by the connect, and nothing since.
-  expect(reached).toEqual([probeAction]);
-});
+    // One probe, spent by the connect, and nothing since.
+    expect(reached).toEqual([probeAction]);
+  }));
 
 /**
  * ONE CONNECTION IS ONE LISTED ROW, EVEN WHERE TWO SERVER ROWS NAME THE APP.
@@ -2993,19 +3094,20 @@ test("a confirm does not redate a key the last check verified", async () => {
  * is that rule, and the fixtures here are named and ordered to tell it from an accident — see
  * {@link twinId}.
  */
-test("a connection is listed once where two server rows name its app", async () => {
-  await seedApp();
-  await database.insert(mcpServers).values({
-    id: twinId,
-    title: "Revocable App, added a second time",
-    vendor: "Composio",
-    url: `composio://${toolkit}`,
-    provenance: "composio",
-  });
+test("a connection is listed once where two server rows name its app", () =>
+  asPlatform(async () => {
+    await seedApp();
+    await database.insert(mcpServers).values({
+      id: twinId,
+      title: "Revocable App, added a second time",
+      vendor: "Composio",
+      url: `composio://${toolkit}`,
+      provenance: "composio",
+    });
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed.map((row) => row.serverId)).toEqual([twinId]);
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed.map((row) => row.serverId)).toEqual([twinId]);
+  }));
 
 /**
  * AND THE SAME ROW ANSWERS WHAT THE APP IS CONNECTED WITH.
@@ -3029,29 +3131,30 @@ test("a connection is listed once where two server rows name its app", async () 
  * `checkable`/`probe` deadlock, reached through a duplicate row instead of a composed id. So
  * `probe` naming the action is what says the scheme and the action came off ONE row.
  */
-test("a re-check reads the app's scheme off the same row the listing names it by", async () => {
-  useAnsweringClient();
-  // Before the app's own row, and named to sort after it. See {@link schemeTwinId}: the pre-fix
-  // reading is the row physically first, and the rule's is the row that sorts first.
-  await database.insert(mcpServers).values({
-    id: schemeTwinId,
-    title: "Probed App, as it was recorded before",
-    vendor: "Composio",
-    url: `composio://${probedToolkit}`,
-    provenance: "composio",
-    authScheme: "OAUTH2",
-  });
-  await addProbedApp();
-  await holdProbedApp();
+test("a re-check reads the app's scheme off the same row the listing names it by", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // Before the app's own row, and named to sort after it. See {@link schemeTwinId}: the pre-fix
+    // reading is the row physically first, and the rule's is the row that sorts first.
+    await database.insert(mcpServers).values({
+      id: schemeTwinId,
+      title: "Probed App, as it was recorded before",
+      vendor: "Composio",
+      url: `composio://${probedToolkit}`,
+      provenance: "composio",
+      authScheme: "OAUTH2",
+    });
+    await addProbedApp();
+    await holdProbedApp();
 
-  const answer = await store.recheckBrokeredConnection({
-    toolkit: probedToolkit,
-    userId: askerId,
-  });
+    const answer = await store.recheckBrokeredConnection({
+      toolkit: probedToolkit,
+      userId: askerId,
+    });
 
-  expect(answer.verified).toBe(true);
-  expect(answer.probe).toBe(probeAction);
-});
+    expect(answer.verified).toBe(true);
+    expect(answer.probe).toBe(probeAction);
+  }));
 
 /**
  * AND SO DOES THE CONFIRM, WHERE THE SCHEME DECIDES WHETHER IT MAY WRITE AT ALL.
@@ -3069,43 +3172,44 @@ test("a re-check reads the app's scheme off the same row the listing names it by
  * rather than the flag because both readings leave the row saying `verified: true` — the damage here
  * is quiet, and only `verified_at` records it.
  */
-test("a confirm reads the app's scheme off the same row the listing names it by", async () => {
-  useAnsweringClient();
-  // The same pair, ordered the same way. See {@link schemeTwinId}.
-  await database.insert(mcpServers).values({
-    id: schemeTwinId,
-    title: "Probed App, as it was recorded before",
-    vendor: "Composio",
-    url: `composio://${probedToolkit}`,
-    provenance: "composio",
-    authScheme: "OAUTH2",
-  });
-  await addProbedApp();
-  const checked = new Date("2026-08-30T09:00:00.000Z");
-  await holdProbedApp(checked);
+test("a confirm reads the app's scheme off the same row the listing names it by", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // The same pair, ordered the same way. See {@link schemeTwinId}.
+    await database.insert(mcpServers).values({
+      id: schemeTwinId,
+      title: "Probed App, as it was recorded before",
+      vendor: "Composio",
+      url: `composio://${probedToolkit}`,
+      provenance: "composio",
+      authScheme: "OAUTH2",
+    });
+    await addProbedApp();
+    const checked = new Date("2026-08-30T09:00:00.000Z");
+    await holdProbedApp(checked);
 
-  expect(
-    await store.confirmBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({ connected: true });
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ connected: true });
 
-  const [after] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(after.verified).toBe(true);
-  expect(after.verifiedAt?.toISOString()).toBe(checked.toISOString());
-  // And nothing of the app's was called to arrive at that: a confirm asks the vendor, it does not
-  // spend the key.
-  expect(reached).toEqual([]);
-});
+    const [after] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(after.verified).toBe(true);
+    expect(after.verifiedAt?.toISOString()).toBe(checked.toISOString());
+    // And nothing of the app's was called to arrive at that: a confirm asks the vendor, it does not
+    // spend the key.
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * AND SO DOES THE CONNECT, WHICH IS THE THIRD OF THE THREE READS AND THE ONE THAT SPENDS A SECRET.
@@ -3126,30 +3230,31 @@ test("a confirm reads the app's scheme off the same row the listing names it by"
  * answer says the gate admitted this app; {@link schemesSent} says which row the word came off, and
  * it is the only assertion in this file that can tell one from the other.
  */
-test("a connect reads the app's scheme off the same row the listing names it by", async () => {
-  useAnsweringClient();
-  // The same pair as the two tests above, ordered the same way. See {@link schemeTwinId}.
-  await database.insert(mcpServers).values({
-    id: schemeTwinId,
-    title: "Probed App, as it was recorded before",
-    vendor: "Composio",
-    url: `composio://${probedToolkit}`,
-    provenance: "composio",
-    authScheme: "OAUTH2",
-  });
-  await addProbedApp();
+test("a connect reads the app's scheme off the same row the listing names it by", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // The same pair as the two tests above, ordered the same way. See {@link schemeTwinId}.
+    await database.insert(mcpServers).values({
+      id: schemeTwinId,
+      title: "Probed App, as it was recorded before",
+      vendor: "Composio",
+      url: `composio://${probedToolkit}`,
+      provenance: "composio",
+      authScheme: "OAUTH2",
+    });
+    await addProbedApp();
 
-  expect(
-    await store.connectBrokeredWithFields({
-      toolkit: probedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).toEqual({ connected: true, verified: true, probe: probeAction });
+    expect(
+      await store.connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).toEqual({ connected: true, verified: true, probe: probeAction });
 
-  expect(valuesSent).toEqual([{ generic_api_key: typedKey }]);
-  expect(schemesSent).toEqual(["API_KEY"]);
-});
+    expect(valuesSent).toEqual([{ generic_api_key: typedKey }]);
+    expect(schemesSent).toEqual(["API_KEY"]);
+  }));
 
 /**
  * TYPING A KEY AT AN APP NOBODY TYPES A KEY AT, WHICH IS THE GATE ON WHAT REACHES THE VENDOR.
@@ -3165,37 +3270,38 @@ test("a connect reads the app's scheme off the same row the listing names it by"
  * vendor's silence beside it: a guard that raised the right sentence AFTER handing the values over
  * would satisfy the first half and have already leaked the secret.
  */
-test("a key typed at a consent app is refused before the vendor is handed anything", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: consentToolkit,
-    title: "Consented App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
+test("a key typed at a consent app is refused before the vendor is handed anything", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: consentToolkit,
+      title: "Consented App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
 
-  await expect(
-    store.connectBrokeredWithFields({
-      toolkit: consentToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-    // The app by name, and the one act that is open to somebody standing in front of this: the
-    // Plugins page, where it is connected the way it asks for.
-  ).rejects.toThrow(
-    new RegExp(
-      `${consentToolkit} is not an app this deployment connects with values somebody types`,
-    ),
-  );
+    await expect(
+      store.connectBrokeredWithFields({
+        toolkit: consentToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+      // The app by name, and the one act that is open to somebody standing in front of this: the
+      // Plugins page, where it is connected the way it asks for.
+    ).rejects.toThrow(
+      new RegExp(
+        `${consentToolkit} is not an app this deployment connects with values somebody types`,
+      ),
+    );
 
-  // NOTHING WAS SENT, which is the half the sentence cannot say. The enable above is the only ask
-  // this test makes, and the values never left.
-  expect(asksMade()).toEqual([`ensureAuthConfig:${consentToolkit}/consent`]);
-  expect(valuesSent).toEqual([]);
-  expect(schemesSent).toEqual([]);
-  // And no row was written, so nothing on any screen claims this person has an account here.
-  expect(await connectedToolkitsFor(askerId)).toEqual([]);
-});
+    // NOTHING WAS SENT, which is the half the sentence cannot say. The enable above is the only ask
+    // this test makes, and the values never left.
+    expect(asksMade()).toEqual([`ensureAuthConfig:${consentToolkit}/consent`]);
+    expect(valuesSent).toEqual([]);
+    expect(schemesSent).toEqual([]);
+    // And no row was written, so nothing on any screen claims this person has an account here.
+    expect(await connectedToolkitsFor(askerId)).toEqual([]);
+  }));
 
 /**
  * AND THE ROW THE LISTING NAMES IS THE ONE THE DATABASE ORDERS FIRST, NOT THE ONE THIS LANGUAGE DOES.
@@ -3224,79 +3330,82 @@ test("a key typed at a consent app is refused before the vendor is handed anythi
  * LEAST ONE pair separates them, and the answer is then asserted for both: the property under test
  * is the same one either way round, and nothing about it depends on which collation is running.
  */
-test("a connection is listed under the row the database orders first", async () => {
-  for (const fixture of ORDERING_FIXTURES) {
-    // Inserted in the order that puts JavaScript's answer physically first as well, so neither the
-    // scan order nor the language's order is the one the assertion expects.
-    await database.insert(mcpServers).values([
-      {
-        id: fixture.unitFirst,
-        title: `Ordered App at ${fixture.toolkit}, as one row spells it`,
-        vendor: "Composio",
-        url: `composio://${fixture.toolkit}`,
-        provenance: "composio",
-      },
-      {
-        id: fixture.other,
-        title: `Ordered App at ${fixture.toolkit}, as the other spells it`,
-        vendor: "Composio",
-        url: `composio://${fixture.toolkit}`,
-        provenance: "composio",
-      },
-    ]);
-    await database
-      .insert(composioConnections)
-      .values({ toolkit: fixture.toolkit, userId: askerId });
-  }
+test("a connection is listed under the row the database orders first", () =>
+  asPlatform(async () => {
+    for (const fixture of ORDERING_FIXTURES) {
+      // Inserted in the order that puts JavaScript's answer physically first as well, so neither the
+      // scan order nor the language's order is the one the assertion expects.
+      await database.insert(mcpServers).values([
+        {
+          id: fixture.unitFirst,
+          title: `Ordered App at ${fixture.toolkit}, as one row spells it`,
+          vendor: "Composio",
+          url: `composio://${fixture.toolkit}`,
+          provenance: "composio",
+        },
+        {
+          id: fixture.other,
+          title: `Ordered App at ${fixture.toolkit}, as the other spells it`,
+          vendor: "Composio",
+          url: `composio://${fixture.toolkit}`,
+          provenance: "composio",
+        },
+      ]);
+      await runAsTenant(askerId, () =>
+        database
+          .insert(composioConnections)
+          .values({ toolkit: fixture.toolkit, userId: askerId }),
+      );
+    }
 
-  // THE DATABASE'S OWN ANSWER FOR EACH URL, asked the way `brokeredAppRow` asks it. Read rather than
-  // written down, so these expectations are the rule under the collation actually running and not a
-  // guess about one.
-  const answering: string[] = [];
-  // And the pairs the two rules really disagree about. `sort` with no comparator is the JavaScript
-  // ordering the listing used to apply, so a fixture whose SQL answer is not that one is a fixture
-  // that can tell the two rules apart.
-  const separating: string[] = [];
-  for (const fixture of ORDERING_FIXTURES) {
-    const [row] = await database
-      .select({ id: mcpServers.id })
-      .from(mcpServers)
-      .where(eq(mcpServers.url, `composio://${fixture.toolkit}`))
-      .orderBy(asc(mcpServers.id))
-      .limit(1);
-    if (!row) throw new Error(`no row answers for ${fixture.toolkit}`);
-    answering.push(row.id);
-    if (row.id !== fixture.unitFirst) separating.push(fixture.toolkit);
-  }
+    // THE DATABASE'S OWN ANSWER FOR EACH URL, asked the way `brokeredAppRow` asks it. Read rather than
+    // written down, so these expectations are the rule under the collation actually running and not a
+    // guess about one.
+    const answering: string[] = [];
+    // And the pairs the two rules really disagree about. `sort` with no comparator is the JavaScript
+    // ordering the listing used to apply, so a fixture whose SQL answer is not that one is a fixture
+    // that can tell the two rules apart.
+    const separating: string[] = [];
+    for (const fixture of ORDERING_FIXTURES) {
+      const [row] = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.url, `composio://${fixture.toolkit}`))
+        .orderBy(asc(mcpServers.id))
+        .limit(1);
+      if (!row) throw new Error(`no row answers for ${fixture.toolkit}`);
+      answering.push(row.id);
+      if (row.id !== fixture.unitFirst) separating.push(fixture.toolkit);
+    }
 
-  /*
-   * THE TEETH, AND A REFUSAL RATHER THAN A QUIET PASS. If this database orders every pair exactly as
-   * JavaScript does then nothing here can tell the two rules apart any more: the assertion below
-   * would hold for a listing that picked its row in SQL and for one that picked it in JavaScript,
-   * and would have passed before the fix as well as after it.
-   *
-   * THE REPAIR IS A THIRD PAIR THIS COLLATION SEPARATES, NOT A SHORTER TEST — which is why the
-   * collation is named here rather than left to be guessed at from a failing expectation.
-   */
-  if (separating.length === 0) {
-    const [running] = await database.execute<{ collation: string }>(
-      sql`select datcollate as collation from pg_database where datname = current_database()`,
-    );
-    throw new Error(
-      `This database (collation ${running?.collation ?? "unknown"}) orders every fixture pair the ` +
-        "way JavaScript's `<` does, so none of them can say whether the listing resolved its row " +
-        "in SQL or in JavaScript, and the assertion below has nothing left to prove. Add a pair " +
-        "this collation orders differently to ORDERING_FIXTURES. Do not delete this guard: the " +
-        "defect it protects — a page drawing an app under one server id while every read behind " +
-        "its buttons is about another — is invisible to a fixture the two rules agree about.",
-    );
-  }
+    /*
+     * THE TEETH, AND A REFUSAL RATHER THAN A QUIET PASS. If this database orders every pair exactly as
+     * JavaScript does then nothing here can tell the two rules apart any more: the assertion below
+     * would hold for a listing that picked its row in SQL and for one that picked it in JavaScript,
+     * and would have passed before the fix as well as after it.
+     *
+     * THE REPAIR IS A THIRD PAIR THIS COLLATION SEPARATES, NOT A SHORTER TEST — which is why the
+     * collation is named here rather than left to be guessed at from a failing expectation.
+     */
+    if (separating.length === 0) {
+      const [running] = await database.execute<{ collation: string }>(
+        sql`select datcollate as collation from pg_database where datname = current_database()`,
+      );
+      throw new Error(
+        `This database (collation ${running?.collation ?? "unknown"}) orders every fixture pair the ` +
+          "way JavaScript's `<` does, so none of them can say whether the listing resolved its row " +
+          "in SQL or in JavaScript, and the assertion below has nothing left to prove. Add a pair " +
+          "this collation orders differently to ORDERING_FIXTURES. Do not delete this guard: the " +
+          "defect it protects — a page drawing an app under one server id while every read behind " +
+          "its buttons is about another — is invisible to a fixture the two rules agree about.",
+      );
+    }
 
-  const listed = await store.brokeredConnectionsFor(askerId);
-  // In the order the listing puts its own rows in, which is a plain string comparison over the ids
-  // it ends up naming — so the expectation is the database's answers, sorted the same way.
-  expect(listed.map((row) => row.serverId)).toEqual([...answering].sort());
-});
+    const listed = await store.brokeredConnectionsFor(askerId);
+    // In the order the listing puts its own rows in, which is a plain string comparison over the ids
+    // it ends up naming — so the expectation is the database's answers, sorted the same way.
+    expect(listed.map((row) => row.serverId)).toEqual([...answering].sort());
+  }));
 
 /**
  * ENABLING AN APP RECORDS ITS SCHEME ON THE ROW THAT ANSWERS FOR THE APP.
@@ -3318,49 +3427,52 @@ test("a connection is listed under the row the database orders first", async () 
  * write that landed on the right row by coincidence of ordering, and what this is about is the two
  * agreeing.
  */
-test("enabling an app records its scheme where the readers read it", async () => {
-  useAnsweringClient();
-  // The row that already answers for the app: at its url, sorting before the `composio-` id Add is
-  // about to mint, and recorded as the consent app this deployment used to create for everything.
-  await database.insert(mcpServers).values({
-    id: answeringTwinId,
-    title: "Answering App, as it was recorded before",
-    vendor: "Composio",
-    url: `composio://${answeringToolkit}`,
-    provenance: "composio",
-    authScheme: "OAUTH2",
-  });
+test("enabling an app records its scheme where the readers read it", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // The row that already answers for the app: at its url, sorting before the `composio-` id Add is
+    // about to mint, and recorded as the consent app this deployment used to create for everything.
+    await database.insert(mcpServers).values({
+      id: answeringTwinId,
+      title: "Answering App, as it was recorded before",
+      vendor: "Composio",
+      url: `composio://${answeringToolkit}`,
+      provenance: "composio",
+      authScheme: "OAUTH2",
+    });
 
-  await store.addBrokeredApp({
-    slug: answeringToolkit,
-    title: "Answering App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
+    await store.addBrokeredApp({
+      slug: answeringToolkit,
+      title: "Answering App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
 
-  const [answering] = await database
-    .select({ authScheme: mcpServers.authScheme })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, answeringTwinId));
-  expect(answering.authScheme).toBe("API_KEY");
+    const [answering] = await database
+      .select({ authScheme: mcpServers.authScheme })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, answeringTwinId));
+    expect(answering.authScheme).toBe("API_KEY");
 
-  // AND THE READER AGREES, which is the whole point of the column landing there. A person holding a
-  // key for this app may re-check it; the pre-fix reading refuses that press in a sentence about a
-  // sign-in screen nobody used.
-  await database.insert(composioConnections).values({
-    toolkit: answeringToolkit,
-    userId: askerId,
-    verified: false,
-  });
-  const answer = await store.recheckBrokeredConnection({
-    toolkit: answeringToolkit,
-    userId: askerId,
-  });
-  // Null because the app publishes nothing safe to spend a key on, which is the honest answer and
-  // not a refusal: what is being asserted is that the press was admitted at all.
-  expect(answer.probe).toBeNull();
-  expect(answer.verified).toBe(false);
-});
+    // AND THE READER AGREES, which is the whole point of the column landing there. A person holding a
+    // key for this app may re-check it; the pre-fix reading refuses that press in a sentence about a
+    // sign-in screen nobody used.
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: answeringToolkit,
+        userId: askerId,
+        verified: false,
+      }),
+    );
+    const answer = await store.recheckBrokeredConnection({
+      toolkit: answeringToolkit,
+      userId: askerId,
+    });
+    // Null because the app publishes nothing safe to spend a key on, which is the honest answer and
+    // not a refusal: what is being asserted is that the press was admitted at all.
+    expect(answer.probe).toBeNull();
+    expect(answer.verified).toBe(false);
+  }));
 
 /**
  * ENABLING AN APP LISTS ITS ACTIONS ONTO THE ROW THAT ANSWERS FOR THE APP.
@@ -3383,60 +3495,66 @@ test("enabling an app records its scheme where the readers read it", async () =>
  * probe fixture here, because the refresh IS what is under test: an action inserted by hand would
  * be written at whichever id this file chose and would say nothing about where the enable put it.
  */
-test("enabling an app lists its actions where the readers look for them", async () => {
-  useAnsweringClient({
-    listActions: async () => [
-      {
-        slug: refreshedAction,
-        description: "Says who the key belongs to.",
-        // The one label that can produce a read effect, which is the first of the probe chooser's
-        // two conditions; the empty schema is the second.
-        tags: ["readOnlyHint"],
-        inputParameters: {},
-        version: probeVersion,
-      },
-    ],
-  });
-  // The row that already answers for the app: at its url, and sorting before the `composio-` id Add
-  // is about to compose.
-  await database.insert(mcpServers).values({
-    id: refreshedTwinId,
-    title: "Refreshed App, as it was recorded before",
-    vendor: "Composio",
-    url: `composio://${refreshedToolkit}`,
-    provenance: "composio",
-    authScheme: "API_KEY",
-  });
+test("enabling an app lists its actions where the readers look for them", () =>
+  asPlatform(async () => {
+    useAnsweringClient({
+      listActions: async () => [
+        {
+          slug: refreshedAction,
+          description: "Says who the key belongs to.",
+          // The one label that can produce a read effect, which is the first of the probe chooser's
+          // two conditions; the empty schema is the second.
+          tags: ["readOnlyHint"],
+          inputParameters: {},
+          version: probeVersion,
+        },
+      ],
+    });
+    // The row that already answers for the app: at its url, and sorting before the `composio-` id Add
+    // is about to compose.
+    await database.insert(mcpServers).values({
+      id: refreshedTwinId,
+      title: "Refreshed App, as it was recorded before",
+      vendor: "Composio",
+      url: `composio://${refreshedToolkit}`,
+      provenance: "composio",
+      authScheme: "API_KEY",
+    });
 
-  const added = await store.addBrokeredApp({
-    slug: refreshedToolkit,
-    title: "Refreshed App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
+    const added = await store.addBrokeredApp({
+      slug: refreshedToolkit,
+      title: "Refreshed App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
 
-  // THE CHOOSER, asked the way every brokered caller asks it: about the row the app resolves to.
-  expect(await store.probeActionFor(refreshedTwinId)).toEqual({
-    name: refreshedAction,
-    version: probeVersion,
-  });
-  // And what the enable hands its caller back is that row, carrying those actions, rather than a
-  // second row named after a convention nothing holds the app to.
-  expect(added.id).toBe(refreshedTwinId);
-  expect(added.tools.map((tool) => tool.name)).toEqual([refreshedAction]);
+    // THE CHOOSER, asked the way every brokered caller asks it: about the row the app resolves to.
+    expect(await store.probeActionFor(refreshedTwinId)).toEqual({
+      name: refreshedAction,
+      version: probeVersion,
+    });
+    // And what the enable hands its caller back is that row, carrying those actions, rather than a
+    // second row named after a convention nothing holds the app to.
+    expect(added.id).toBe(refreshedTwinId);
+    expect(added.tools.map((tool) => tool.name)).toEqual([refreshedAction]);
 
-  // AND THE READER AGREES, which is the whole point of the actions landing there: `checkable` is
-  // what the browser draws the Re-check button off, and it is computed off the resolved row.
-  await database.insert(composioConnections).values({
-    toolkit: refreshedToolkit,
-    userId: askerId,
-    verified: false,
-  });
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(
-    listed.map((row) => ({ serverId: row.serverId, checkable: row.checkable })),
-  ).toEqual([{ serverId: refreshedTwinId, checkable: true }]);
-});
+    // AND THE READER AGREES, which is the whole point of the actions landing there: `checkable` is
+    // what the browser draws the Re-check button off, and it is computed off the resolved row.
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: refreshedToolkit,
+        userId: askerId,
+        verified: false,
+      }),
+    );
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(
+      listed.map((row) => ({
+        serverId: row.serverId,
+        checkable: row.checkable,
+      })),
+    ).toEqual([{ serverId: refreshedTwinId, checkable: true }]);
+  }));
 
 /**
  * A CONFIRM WRITES NO VERDICT FOR AN APP WHOSE SCHEME IT CANNOT READ.
@@ -3465,74 +3583,77 @@ test("enabling an app lists its actions where the readers look for them", async 
  * at all would be the other way to pass the first half, and it would take away the row a brokered
  * call is permitted by and Disconnect works off.
  */
-test("a confirm writes no verdict for an app whose scheme it cannot read", async () => {
-  useAnsweringClient();
-  // A brokered row with nothing in its scheme column, which is what this deployment reads rather
-  // than what it writes. See {@link unschemedToolkit}.
-  await database.insert(mcpServers).values({
-    id: unschemedId,
-    title: "Unschemed App",
-    vendor: "Composio",
-    url: `composio://${unschemedToolkit}`,
-    provenance: "composio",
-  });
-  // The worst of the four states, and the one a mount-time write destroys most expensively: a
-  // named probe beside `verified: false` is "it ran, the vendor refused the key, and the account is
-  // still standing".
-  await database.insert(composioConnections).values({
-    toolkit: unschemedToolkit,
-    userId: askerId,
-    verified: false,
-    probeAction: unschemedProbeAction,
-  });
-
-  // THE PAGE LOAD. Nothing a person did.
-  expect(
-    await store.confirmBrokeredConnection({
-      toolkit: unschemedToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({ connected: true });
-
-  const [after] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, unschemedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
+test("a confirm writes no verdict for an app whose scheme it cannot read", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // A brokered row with nothing in its scheme column, which is what this deployment reads rather
+    // than what it writes. See {@link unschemedToolkit}.
+    await database.insert(mcpServers).values({
+      id: unschemedId,
+      title: "Unschemed App",
+      vendor: "Composio",
+      url: `composio://${unschemedToolkit}`,
+      provenance: "composio",
+    });
+    // The worst of the four states, and the one a mount-time write destroys most expensively: a
+    // named probe beside `verified: false` is "it ran, the vendor refused the key, and the account is
+    // still standing".
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: unschemedToolkit,
+        userId: askerId,
+        verified: false,
+        probeAction: unschemedProbeAction,
+      }),
     );
-  expect(after.probeAction).toBe(unschemedProbeAction);
-  expect(after.verified).toBe(false);
-  expect(after.verifiedAt).toBeNull();
 
-  // AND THE GATE IS STILL WRITTEN FOR SOMEBODY WHO HAS NO ROW. The vendor holds their account, so
-  // there has to be a row here — `composio_connections` is the whole of the permission for a
-  // brokered call — and it says what is true of it: nothing was checked.
-  expect(
-    await store.confirmBrokeredConnection({
-      toolkit: unschemedToolkit,
-      userId: leaverId,
-    }),
-  ).toEqual({ connected: true });
+    // THE PAGE LOAD. Nothing a person did.
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: unschemedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({ connected: true });
 
-  const [made] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, unschemedToolkit),
-        eq(composioConnections.userId, leaverId),
-      ),
-    );
-  expect(made.verified).toBe(false);
-  expect(made.verifiedAt).toBeNull();
-  expect(made.probeAction).toBeNull();
+    const [after] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, unschemedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(after.probeAction).toBe(unschemedProbeAction);
+    expect(after.verified).toBe(false);
+    expect(after.verifiedAt).toBeNull();
 
-  // Neither confirm spent anything of the app's: a confirm asks the vendor and makes no call.
-  expect(reached).toEqual([]);
-});
+    // AND THE GATE IS STILL WRITTEN FOR SOMEBODY WHO HAS NO ROW. The vendor holds their account, so
+    // there has to be a row here — `composio_connections` is the whole of the permission for a
+    // brokered call — and it says what is true of it: nothing was checked.
+    expect(
+      await store.confirmBrokeredConnection({
+        toolkit: unschemedToolkit,
+        userId: leaverId,
+      }),
+    ).toEqual({ connected: true });
+
+    const [made] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, unschemedToolkit),
+          eq(composioConnections.userId, leaverId),
+        ),
+      );
+    expect(made.verified).toBe(false);
+    expect(made.verifiedAt).toBeNull();
+    expect(made.probeAction).toBeNull();
+
+    // Neither confirm spent anything of the app's: a confirm asks the vendor and makes no call.
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * AND EVERY SURFACE THAT SAYS HOW AN APP CONNECTS SAYS THE SAME THING ABOUT IT.
@@ -3551,40 +3672,43 @@ test("a confirm writes no verdict for an app whose scheme it cannot read", async
  * — over an app they were asked exactly that way. The id and the title stay the row's own; how the
  * APP connects has one answer.
  */
-test("how an app connects is answered the same way for either of its rows", async () => {
-  // The row that answers: at the app's url, sorting first, recorded as a key app.
-  await database.insert(mcpServers).values({
-    id: answeringTwinId,
-    title: "Answering App",
-    vendor: "Composio",
-    url: `composio://${answeringToolkit}`,
-    provenance: "composio",
-    authScheme: "API_KEY",
-  });
-  // And the row an enable minted later, under the scheme this deployment used to create for
-  // everything. It is the row a page is opened on, and it is not the row that answers.
-  await database.insert(mcpServers).values({
-    id: answeringId,
-    title: "Answering App",
-    vendor: "Composio",
-    url: `composio://${answeringToolkit}`,
-    provenance: "composio",
-    authScheme: "OAUTH2",
-  });
+test("how an app connects is answered the same way for either of its rows", () =>
+  asPlatform(async () => {
+    // The row that answers: at the app's url, sorting first, recorded as a key app.
+    await database.insert(mcpServers).values({
+      id: answeringTwinId,
+      title: "Answering App",
+      vendor: "Composio",
+      url: `composio://${answeringToolkit}`,
+      provenance: "composio",
+      authScheme: "API_KEY",
+    });
+    // And the row an enable minted later, under the scheme this deployment used to create for
+    // everything. It is the row a page is opened on, and it is not the row that answers.
+    await database.insert(mcpServers).values({
+      id: answeringId,
+      title: "Answering App",
+      vendor: "Composio",
+      url: `composio://${answeringToolkit}`,
+      provenance: "composio",
+      authScheme: "OAUTH2",
+    });
 
-  expect((await store.serverAddress(answeringId))?.authScheme).toBe("API_KEY");
-  expect((await store.serverAddress(answeringTwinId))?.authScheme).toBe(
-    "API_KEY",
-  );
+    expect((await store.serverAddress(answeringId))?.authScheme).toBe(
+      "API_KEY",
+    );
+    expect((await store.serverAddress(answeringTwinId))?.authScheme).toBe(
+      "API_KEY",
+    );
 
-  const listed = await store.listServers();
-  expect(listed.find((server) => server.id === answeringId)?.authScheme).toBe(
-    "API_KEY",
-  );
-  expect(
-    listed.find((server) => server.id === answeringTwinId)?.authScheme,
-  ).toBe("API_KEY");
-});
+    const listed = await store.listServers();
+    expect(listed.find((server) => server.id === answeringId)?.authScheme).toBe(
+      "API_KEY",
+    );
+    expect(
+      listed.find((server) => server.id === answeringTwinId)?.authScheme,
+    ).toBe("API_KEY");
+  }));
 
 /**
  * AND WHETHER A CALL NEEDS A CONNECTION AT ALL IS THE APP'S QUESTION, NOT THE DIALLED ROW'S.
@@ -3603,41 +3727,42 @@ test("how an app connects is answered the same way for either of its rows", asyn
  * NOTHING REACHED THE VENDOR IS HALF THE CRITERION. The refusal is only worth having if it happens
  * before the call, which is where this gate sits and why it is not left to Composio to notice.
  */
-test("a duplicate row recording no-auth does not take the gate off an app", async () => {
-  // The app as Add leaves it — consent, and nobody connected — plus the Bot that holds its action.
-  await seedApp({ connect: false });
-  useAnsweringClient();
+test("a duplicate row recording no-auth does not take the gate off an app", () =>
+  asPlatform(async () => {
+    // The app as Add leaves it — consent, and nobody connected — plus the Bot that holds its action.
+    await seedApp({ connect: false });
+    useAnsweringClient();
 
-  // The other row at the same url, recorded as needing no account at all, with an action of its own
-  // for a Bot to be granted. Named to sort after the app's own row, so the row that answers is not
-  // this one.
-  await database.insert(mcpServers).values({
-    id: noAuthTwinId,
-    title: "Revocable App, as another row records it",
-    vendor: "Composio",
-    url: `composio://${toolkit}`,
-    provenance: "composio",
-    authScheme: "NO_AUTH",
-  });
-  await database.insert(mcpTools).values({
-    serverId: noAuthTwinId,
-    name: actionName,
-    description: "Fetch some items.",
-    effect: "read",
-    version: "20260903_00",
-  });
-  await store.grant("mcp", `${noAuthTwinId}/${actionName}`, botId, admin);
+    // The other row at the same url, recorded as needing no account at all, with an action of its own
+    // for a Bot to be granted. Named to sort after the app's own row, so the row that answers is not
+    // this one.
+    await database.insert(mcpServers).values({
+      id: noAuthTwinId,
+      title: "Revocable App, as another row records it",
+      vendor: "Composio",
+      url: `composio://${toolkit}`,
+      provenance: "composio",
+      authScheme: "NO_AUTH",
+    });
+    await database.insert(mcpTools).values({
+      serverId: noAuthTwinId,
+      name: actionName,
+      description: "Fetch some items.",
+      effect: "read",
+      version: "20260903_00",
+    });
+    await store.grant("mcp", `${noAuthTwinId}/${actionName}`, botId, admin);
 
-  await expect(
-    store.callTool({
-      ref: `${noAuthTwinId}/${actionName}`,
-      args: {},
-      botId,
-      actorId: askerId,
-    }),
-  ).rejects.toThrow(/have not connected/i);
-  expect(reached).toEqual([]);
-});
+    await expect(
+      store.callTool({
+        ref: `${noAuthTwinId}/${actionName}`,
+        args: {},
+        botId,
+        actorId: askerId,
+      }),
+    ).rejects.toThrow(/have not connected/i);
+    expect(reached).toEqual([]);
+  }));
 
 /**
  * CONNECTING WITH A KEY SOMEBODY TYPED: THE VALUES REACH COMPOSIO AND NOTHING ELSE.
@@ -3671,82 +3796,83 @@ test("a duplicate row recording no-auth does not take the gate off an app", asyn
  * same `false` beside a NAMED probe would mean the opposite thing about the key, which is why the
  * two travel together; see {@link connectBrokeredWithFields} and the test at the foot of this file.
  */
-test("the values reach Composio and nothing else", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: enabledToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
+test("the values reach Composio and nothing else", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: enabledToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
 
-  expect(
-    await store.connectBrokeredWithFields({
+    expect(
+      await store.connectBrokeredWithFields({
+        toolkit: enabledToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).toEqual({ connected: true, verified: false, probe: null });
+
+    // The vendor was asked, and asked with what the person typed. Without this the absences below
+    // would be satisfied by a method that connected nobody.
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${enabledToolkit}/fields`,
+      `connectWithFields:${enabledToolkit}/${askerId}`,
+    ]);
+    expect(valuesSent).toEqual([{ generic_api_key: typedKey }]);
+    // And told what it was being handed, which decides what Composio does with it. See
+    // {@link schemesSent}: this is the scheme `addBrokeredApp` recorded on the app's row above.
+    expect(schemesSent).toEqual(["API_KEY"]);
+
+    /*
+     * THE TRAIL, READ OUT OF THE TABLE RATHER THAN OFF THE RECORDING STORE. The rows are what a
+     * reader of the trail will actually see — after the redactor, after the insert — and this file's
+     * `auditStore` keeps a copy of the input beside it, not instead of it. Narrowed to this app
+     * because `audit_events` is append-only: no cleanup here can reach it, so the other tests in this
+     * run have already written `mcp.account_connected` rows under {@link toolkit}.
+     *
+     * AND THE ONE IS AN ASSERTION RATHER THAN AN ACCIDENT OF ORDER, which it has to be said out loud
+     * to stay: `enabledToolkit` is connected for real by THIS TEST AND NO OTHER in the file, so the
+     * count is this test's own act and nobody else's. Any test that needs a second real connect takes
+     * a slug of its own — {@link rekeyedToolkit} and {@link reschemedToolkit} both exist for this and
+     * nothing else. Sharing one here does not redden anything on the spot; it makes this number the
+     * runner's answer rather than the implementation's, and it reads as passing until somebody moves
+     * a test.
+     */
+    const trail = await database
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.account_connected"),
+          eq(auditEvents.targetId, enabledToolkit),
+        ),
+      );
+    expect(trail).toHaveLength(1);
+    expect(trail[0].payload).toMatchObject({
+      actor: askerId,
+      server: enabledToolkit,
+      reconnected: false,
+      // The names, sorted, because a reader needs to know what the app asked this person for — and
+      // that is the whole of what a credential may contribute to a record like this one.
+      fields: ["generic_api_key"],
+    });
+    expect(JSON.stringify(trail)).not.toContain(typedKey);
+
+    const rows = await database
+      .select()
+      .from(composioConnections)
+      .where(inArray(composioConnections.toolkit, ownedToolkits));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
       toolkit: enabledToolkit,
       userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).toEqual({ connected: true, verified: false, probe: null });
-
-  // The vendor was asked, and asked with what the person typed. Without this the absences below
-  // would be satisfied by a method that connected nobody.
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${enabledToolkit}/fields`,
-    `connectWithFields:${enabledToolkit}/${askerId}`,
-  ]);
-  expect(valuesSent).toEqual([{ generic_api_key: typedKey }]);
-  // And told what it was being handed, which decides what Composio does with it. See
-  // {@link schemesSent}: this is the scheme `addBrokeredApp` recorded on the app's row above.
-  expect(schemesSent).toEqual(["API_KEY"]);
-
-  /*
-   * THE TRAIL, READ OUT OF THE TABLE RATHER THAN OFF THE RECORDING STORE. The rows are what a
-   * reader of the trail will actually see — after the redactor, after the insert — and this file's
-   * `auditStore` keeps a copy of the input beside it, not instead of it. Narrowed to this app
-   * because `audit_events` is append-only: no cleanup here can reach it, so the other tests in this
-   * run have already written `mcp.account_connected` rows under {@link toolkit}.
-   *
-   * AND THE ONE IS AN ASSERTION RATHER THAN AN ACCIDENT OF ORDER, which it has to be said out loud
-   * to stay: `enabledToolkit` is connected for real by THIS TEST AND NO OTHER in the file, so the
-   * count is this test's own act and nobody else's. Any test that needs a second real connect takes
-   * a slug of its own — {@link rekeyedToolkit} and {@link reschemedToolkit} both exist for this and
-   * nothing else. Sharing one here does not redden anything on the spot; it makes this number the
-   * runner's answer rather than the implementation's, and it reads as passing until somebody moves
-   * a test.
-   */
-  const trail = await database
-    .select()
-    .from(auditEvents)
-    .where(
-      and(
-        eq(auditEvents.eventType, "mcp.account_connected"),
-        eq(auditEvents.targetId, enabledToolkit),
-      ),
-    );
-  expect(trail).toHaveLength(1);
-  expect(trail[0].payload).toMatchObject({
-    actor: askerId,
-    server: enabledToolkit,
-    reconnected: false,
-    // The names, sorted, because a reader needs to know what the app asked this person for — and
-    // that is the whole of what a credential may contribute to a record like this one.
-    fields: ["generic_api_key"],
-  });
-  expect(JSON.stringify(trail)).not.toContain(typedKey);
-
-  const rows = await database
-    .select()
-    .from(composioConnections)
-    .where(inArray(composioConnections.toolkit, ownedToolkits));
-  expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({
-    toolkit: enabledToolkit,
-    userId: askerId,
-    verified: false,
-  });
-  expect(rows[0].verifiedAt).toBeNull();
-  expect(JSON.stringify(rows)).not.toContain(typedKey);
-});
+      verified: false,
+    });
+    expect(rows[0].verifiedAt).toBeNull();
+    expect(JSON.stringify(rows)).not.toContain(typedKey);
+  }));
 
 /**
  * CONNECTING A SECOND TIME: THE TRAIL SAYS A GRANT WAS REPLACED.
@@ -3767,49 +3893,50 @@ test("the values reach Composio and nothing else", async () => {
  * that is honest only because of a check somewhere else is one refactor away from filing a false
  * record. What is asserted here is that the store looks.
  */
-test("a second key for the same app is recorded as a reconnection", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: rekeyedToolkit,
-    title: "Rekeyable App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
+test("a second key for the same app is recorded as a reconnection", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: rekeyedToolkit,
+      title: "Rekeyable App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
 
-  await store.connectBrokeredWithFields({
-    toolkit: rekeyedToolkit,
-    userId: askerId,
-    values: { generic_api_key: typedKey },
-  });
-  await store.connectBrokeredWithFields({
-    toolkit: rekeyedToolkit,
-    userId: askerId,
-    values: { generic_api_key: rotatedKey },
-  });
+    await store.connectBrokeredWithFields({
+      toolkit: rekeyedToolkit,
+      userId: askerId,
+      values: { generic_api_key: typedKey },
+    });
+    await store.connectBrokeredWithFields({
+      toolkit: rekeyedToolkit,
+      userId: askerId,
+      values: { generic_api_key: rotatedKey },
+    });
 
-  // Both keys reached the vendor, in order. Without this the trail assertion below would be
-  // satisfied by a second call that refused before it connected anybody.
-  expect(valuesSent).toEqual([
-    { generic_api_key: typedKey },
-    { generic_api_key: rotatedKey },
-  ]);
+    // Both keys reached the vendor, in order. Without this the trail assertion below would be
+    // satisfied by a second call that refused before it connected anybody.
+    expect(valuesSent).toEqual([
+      { generic_api_key: typedKey },
+      { generic_api_key: rotatedKey },
+    ]);
 
-  // ONE ROW FOR TWO CONNECTS, which is the whole of why the flag cannot be inferred later: the
-  // upsert left nothing behind saying there had been two.
-  expect(await connectedToolkitsFor(askerId)).toEqual([rekeyedToolkit]);
+    // ONE ROW FOR TWO CONNECTS, which is the whole of why the flag cannot be inferred later: the
+    // upsert left nothing behind saying there had been two.
+    expect(await connectedToolkitsFor(askerId)).toEqual([rekeyedToolkit]);
 
-  // Read in the order the acts happened, which the recorder keeps and `created_at` does not
-  // promise to: two inserts a millisecond apart are two rows an ordered read may return either way
-  // round, and the whole assertion is about which of them said what.
-  const connected = recordedOfType("mcp.account_connected").filter(
-    (event) => event.targetId === rekeyedToolkit,
-  );
-  expect(
-    connected.map(
-      (event) => (event.payload as { reconnected: boolean }).reconnected,
-    ),
-  ).toEqual([false, true]);
-});
+    // Read in the order the acts happened, which the recorder keeps and `created_at` does not
+    // promise to: two inserts a millisecond apart are two rows an ordered read may return either way
+    // round, and the whole assertion is about which of them said what.
+    const connected = recordedOfType("mcp.account_connected").filter(
+      (event) => event.targetId === rekeyedToolkit,
+    );
+    expect(
+      connected.map(
+        (event) => (event.payload as { reconnected: boolean }).reconnected,
+      ),
+    ).toEqual([false, true]);
+  }));
 
 /**
  * A CHECK THAT DOES NOT COME BACK CLEAN LEAVES THE ACCOUNT STANDING, RECORDED UNCHECKED.
@@ -3835,109 +3962,110 @@ test("a second key for the same app is recorded as a reconnection", async () => 
  * is also what a method that refused before it dialled would leave, so without it this test would
  * pass against a deployment that never spent the key at all.
  */
-test("a check that does not come back clean leaves the account standing, recorded unchecked", async () => {
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      reached.push(slug);
-      // The vendor reporting a failure in a 200, which is the only shape this decision is made from.
-      return {
-        data: {},
-        error: "rate limit exceeded, retry in 60s",
-        successful: false,
-      };
-    },
-  });
-  await addProbedApp();
+test("a check that does not come back clean leaves the account standing, recorded unchecked", () =>
+  asPlatform(async () => {
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        reached.push(slug);
+        // The vendor reporting a failure in a 200, which is the only shape this decision is made from.
+        return {
+          data: {},
+          error: "rate limit exceeded, retry in 60s",
+          successful: false,
+        };
+      },
+    });
+    await addProbedApp();
 
-  const raised = await store
-    .connectBrokeredWithFields({
+    const raised = await store
+      .connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      })
+      .then(() => null)
+      .catch((error: unknown) => (error as Error).message);
+
+    // The app's own sentence reaches the person.
+    expect(raised).toMatch(/rate limit exceeded/);
+    // And no verdict about what they typed, which is the whole of the correction.
+    expect(raised).not.toMatch(/did not work|not valid|wrong/i);
+
+    // The key was spent on the action the chooser picked, and on nothing else.
+    expect(reached).toEqual([probeAction]);
+    // The account the check created is still the vendor's to see...
+    expect(vendorHolds).toEqual([madeAccountId]);
+    // ...because nothing asked for it back. A `revokeAccount` here is the destruction this test is
+    // about, and its absence from the list is the assertion.
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${probedToolkit}/fields`,
+      `connectWithFields:${probedToolkit}/${askerId}`,
+    ]);
+
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row).toMatchObject({
       toolkit: probedToolkit,
       userId: askerId,
-      values: { generic_api_key: typedKey },
-    })
-    .then(() => null)
-    .catch((error: unknown) => (error as Error).message);
+      verified: false,
+    });
+    // No date on a claim nobody made, which is the pair `recordBrokeredConnection` writes together.
+    expect(row.verifiedAt).toBeNull();
 
-  // The app's own sentence reaches the person.
-  expect(raised).toMatch(/rate limit exceeded/);
-  // And no verdict about what they typed, which is the whole of the correction.
-  expect(raised).not.toMatch(/did not work|not valid|wrong/i);
+    // AND THE TRAIL CARRIES THE STATE, not just the person who happened to be at the screen. What
+    // outlives the one sentence one person read is an unverified row and a live account at the
+    // vendor, and an operator reading the trail later is exactly who needs to find both.
+    const checked = recordedOfType("mcp.connection_verified");
+    expect(checked).toHaveLength(1);
+    expect(checked[0].payload).toMatchObject({
+      actor: askerId,
+      // The action that was TRIED, which is the whole of what separates this row from the unchecked
+      // one: both say `verified: false`, and only the name says a check was spent at all.
+      action: probeAction,
+      verified: false,
+    });
+    /*
+     * AND THE CONNECT IS ON THE TRAIL TOO, WHICH IS THE ROW THIS PATH USED TO LOSE.
+     *
+     * CRITERION. A `complained` check files `mcp.account_connected` for the account it left standing,
+     * under the same id as everything else about this person's access to this app, and says it was a
+     * first connection rather than a replacement.
+     *
+     * REASON. Every way out of the branch above is a throw, and this row was written below it — so a
+     * rate limit or one refused scope left a live account at Composio, a `composio_connections` row
+     * and an `mcp.connection_verified` row saying the check did not come back clean, with nothing
+     * anywhere saying the account had ever been connected. The `mcp.account_disconnected` row filed
+     * when this person later presses Disconnect then had no counterpart to pair against, and the
+     * pairing is the whole of what the trail is asked for.
+     *
+     * ASSERTED AS A PAIR UNDER ONE ID rather than as a row that exists, because the defect this
+     * closes is a HALF of the story being present: a check that happened is already recorded above,
+     * and what was missing is the connect beside it.
+     */
+    const connected = recordedOfType("mcp.account_connected");
+    expect(connected).toHaveLength(1);
+    expect(connected[0].targetId).toBe(probedToolkit);
+    expect(connected[0].payload).toMatchObject({
+      actor: askerId,
+      server: probedToolkit,
+      scope: "",
+      reconnected: false,
+      // The names of what was filled in, never the values — the promise this path keeps on the
+      // failing outcome exactly as on the working one.
+      fields: ["generic_api_key"],
+    });
+    expect(JSON.stringify(connected)).not.toContain(typedKey);
 
-  // The key was spent on the action the chooser picked, and on nothing else.
-  expect(reached).toEqual([probeAction]);
-  // The account the check created is still the vendor's to see...
-  expect(vendorHolds).toEqual([madeAccountId]);
-  // ...because nothing asked for it back. A `revokeAccount` here is the destruction this test is
-  // about, and its absence from the list is the assertion.
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${probedToolkit}/fields`,
-    `connectWithFields:${probedToolkit}/${askerId}`,
-  ]);
-
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row).toMatchObject({
-    toolkit: probedToolkit,
-    userId: askerId,
-    verified: false,
-  });
-  // No date on a claim nobody made, which is the pair `recordBrokeredConnection` writes together.
-  expect(row.verifiedAt).toBeNull();
-
-  // AND THE TRAIL CARRIES THE STATE, not just the person who happened to be at the screen. What
-  // outlives the one sentence one person read is an unverified row and a live account at the
-  // vendor, and an operator reading the trail later is exactly who needs to find both.
-  const checked = recordedOfType("mcp.connection_verified");
-  expect(checked).toHaveLength(1);
-  expect(checked[0].payload).toMatchObject({
-    actor: askerId,
-    // The action that was TRIED, which is the whole of what separates this row from the unchecked
-    // one: both say `verified: false`, and only the name says a check was spent at all.
-    action: probeAction,
-    verified: false,
-  });
-  /*
-   * AND THE CONNECT IS ON THE TRAIL TOO, WHICH IS THE ROW THIS PATH USED TO LOSE.
-   *
-   * CRITERION. A `complained` check files `mcp.account_connected` for the account it left standing,
-   * under the same id as everything else about this person's access to this app, and says it was a
-   * first connection rather than a replacement.
-   *
-   * REASON. Every way out of the branch above is a throw, and this row was written below it — so a
-   * rate limit or one refused scope left a live account at Composio, a `composio_connections` row
-   * and an `mcp.connection_verified` row saying the check did not come back clean, with nothing
-   * anywhere saying the account had ever been connected. The `mcp.account_disconnected` row filed
-   * when this person later presses Disconnect then had no counterpart to pair against, and the
-   * pairing is the whole of what the trail is asked for.
-   *
-   * ASSERTED AS A PAIR UNDER ONE ID rather than as a row that exists, because the defect this
-   * closes is a HALF of the story being present: a check that happened is already recorded above,
-   * and what was missing is the connect beside it.
-   */
-  const connected = recordedOfType("mcp.account_connected");
-  expect(connected).toHaveLength(1);
-  expect(connected[0].targetId).toBe(probedToolkit);
-  expect(connected[0].payload).toMatchObject({
-    actor: askerId,
-    server: probedToolkit,
-    scope: "",
-    reconnected: false,
-    // The names of what was filled in, never the values — the promise this path keeps on the
-    // failing outcome exactly as on the working one.
-    fields: ["generic_api_key"],
-  });
-  expect(JSON.stringify(connected)).not.toContain(typedKey);
-
-  // And the key is in none of it, on the path that fails as much as on the one that works.
-  expect(JSON.stringify(checked)).not.toContain(typedKey);
-});
+    // And the key is in none of it, on the path that fails as much as on the one that works.
+    expect(JSON.stringify(checked)).not.toContain(typedKey);
+  }));
 
 /**
  * A FAILED CHECK TAKES DOWN NOTHING AT ALL, ITS OWN ACCOUNT INCLUDED.
@@ -3954,40 +4082,41 @@ test("a check that does not come back clean leaves the account standing, recorde
  * above for why. What this holds is that BOTH accounts survive, which is the one assertion that
  * fails if either destruction comes back.
  */
-test("a failed check takes down nothing at all, its own account included", async () => {
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      reached.push(slug);
-      return {
-        data: {},
-        error: "rate limit exceeded, retry in 60s",
-        successful: false,
-      };
-    },
-  });
-  await addProbedApp();
-  // Seeded before the connect, so it is an account that predates this act rather than one of its
-  // making — which is the whole of what a sweep cannot tell apart.
-  vendorHolds.push(strandedAccountId);
+test("a failed check takes down nothing at all, its own account included", () =>
+  asPlatform(async () => {
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        reached.push(slug);
+        return {
+          data: {},
+          error: "rate limit exceeded, retry in 60s",
+          successful: false,
+        };
+      },
+    });
+    await addProbedApp();
+    // Seeded before the connect, so it is an account that predates this act rather than one of its
+    // making — which is the whole of what a sweep cannot tell apart.
+    vendorHolds.push(strandedAccountId);
 
-  await expect(
-    store.connectBrokeredWithFields({
-      toolkit: probedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).rejects.toThrow();
+    await expect(
+      store.connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).rejects.toThrow();
 
-  // Both accounts survived: the stranded one, and the one this connect made.
-  expect(vendorHolds.slice().sort()).toEqual(
-    [strandedAccountId, madeAccountId].sort(),
-  );
-  // And neither withdrawal was asked for, which is the other half of the same statement.
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${probedToolkit}/fields`,
-    `connectWithFields:${probedToolkit}/${askerId}`,
-  ]);
-});
+    // Both accounts survived: the stranded one, and the one this connect made.
+    expect(vendorHolds.slice().sort()).toEqual(
+      [strandedAccountId, madeAccountId].sort(),
+    );
+    // And neither withdrawal was asked for, which is the other half of the same statement.
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${probedToolkit}/fields`,
+      `connectWithFields:${probedToolkit}/${askerId}`,
+    ]);
+  }));
 
 /**
  * AN APP WITH NO PROBE CONNECTS UNVERIFIED RATHER THAN NOT AT ALL.
@@ -4005,48 +4134,49 @@ test("a failed check takes down nothing at all, its own account included", async
  * would tell one of those two people the opposite of what happened. The audit row carries the same
  * distinction under `action`.
  */
-test("an app with no probe connects unverified rather than not at all", async () => {
-  useAnsweringClient();
-  await addProbedApp({ withProbe: false });
+test("an app with no probe connects unverified rather than not at all", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp({ withProbe: false });
 
-  expect(
-    await store.connectBrokeredWithFields({
-      toolkit: probedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).toEqual({ connected: true, verified: false, probe: null });
+    expect(
+      await store.connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).toEqual({ connected: true, verified: false, probe: null });
 
-  // Nothing was called, which is what "nothing to try" means at the vendor.
-  expect(reached).toEqual([]);
-  // And nothing was taken back either: there was no failure to undo.
-  expect(vendorHolds).toEqual([madeAccountId]);
+    // Nothing was called, which is what "nothing to try" means at the vendor.
+    expect(reached).toEqual([]);
+    // And nothing was taken back either: there was no failure to undo.
+    expect(vendorHolds).toEqual([madeAccountId]);
 
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row.verified).toBe(false);
-  expect(row.verifiedAt).toBeNull();
-  // Null in the column too, and it is the row's own sentence rather than the listing's: NOTHING WAS
-  // SPENT on this key. What the app publishes today, or comes to publish tomorrow, cannot move it.
-  expect(row.probeAction).toBeNull();
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(false);
+    expect(row.verifiedAt).toBeNull();
+    // Null in the column too, and it is the row's own sentence rather than the listing's: NOTHING WAS
+    // SPENT on this key. What the app publishes today, or comes to publish tomorrow, cannot move it.
+    expect(row.probeAction).toBeNull();
 
-  const checked = recordedOfType("mcp.connection_verified");
-  expect(checked).toHaveLength(1);
-  expect(checked[0].payload).toMatchObject({
-    actor: askerId,
-    // Null rather than a name, for the same reason the response field is: the trail must be able to
-    // say that no action ran, which "verified: false" alone cannot.
-    action: null,
-    verified: false,
-  });
-});
+    const checked = recordedOfType("mcp.connection_verified");
+    expect(checked).toHaveLength(1);
+    expect(checked[0].payload).toMatchObject({
+      actor: askerId,
+      // Null rather than a name, for the same reason the response field is: the trail must be able to
+      // say that no action ran, which "verified: false" alone cannot.
+      action: null,
+      verified: false,
+    });
+  }));
 
 /**
  * A KEY THAT WORKS IS RECORDED VERIFIED, WITH THE ACTION IT WAS CHECKED WITH.
@@ -4068,103 +4198,104 @@ test("an app with no probe connects unverified rather than not at all", async ()
  * travels under the transport's reserved key and is stripped before anything reaches Composio, so
  * what the vendor is handed is an action chosen from recorded metadata and nothing else.
  */
-test("a key that works is recorded verified, with the action it was checked with", async () => {
-  const sent: {
-    slug: string;
-    userId: string;
-    version: string;
-    args: unknown;
-  }[] = [];
-  useAnsweringClient({
-    execute: async (call, args) => {
-      reached.push(call.slug);
-      sent.push({
-        slug: call.slug,
-        userId: call.userId,
-        version: call.version,
-        args,
-      });
-      return answered;
-    },
-  });
-  await addProbedApp();
-  // Taken before the call, so the comparison below is against a moment that cannot postdate the
-  // write. Both this and the column are written in this process, so no clock but one is involved.
-  const before = new Date();
+test("a key that works is recorded verified, with the action it was checked with", () =>
+  asPlatform(async () => {
+    const sent: {
+      slug: string;
+      userId: string;
+      version: string;
+      args: unknown;
+    }[] = [];
+    useAnsweringClient({
+      execute: async (call, args) => {
+        reached.push(call.slug);
+        sent.push({
+          slug: call.slug,
+          userId: call.userId,
+          version: call.version,
+          args,
+        });
+        return answered;
+      },
+    });
+    await addProbedApp();
+    // Taken before the call, so the comparison below is against a moment that cannot postdate the
+    // write. Both this and the column are written in this process, so no clock but one is involved.
+    const before = new Date();
 
-  expect(
-    await store.connectBrokeredWithFields({
-      toolkit: probedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).toEqual({ connected: true, verified: true, probe: probeAction });
+    expect(
+      await store.connectBrokeredWithFields({
+        toolkit: probedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).toEqual({ connected: true, verified: true, probe: probeAction });
 
-  expect(sent).toEqual([
-    {
-      slug: probeAction,
-      // The person's own account, which is the only account a probe could be a check on.
-      userId: askerId,
-      version: probeVersion,
-      args: {},
-    },
-  ]);
-  // The account stands, because there was nothing to undo.
-  expect(vendorHolds).toEqual([madeAccountId]);
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${probedToolkit}/fields`,
-    `connectWithFields:${probedToolkit}/${askerId}`,
-  ]);
+    expect(sent).toEqual([
+      {
+        slug: probeAction,
+        // The person's own account, which is the only account a probe could be a check on.
+        userId: askerId,
+        version: probeVersion,
+        args: {},
+      },
+    ]);
+    // The account stands, because there was nothing to undo.
+    expect(vendorHolds).toEqual([madeAccountId]);
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${probedToolkit}/fields`,
+      `connectWithFields:${probedToolkit}/${askerId}`,
+    ]);
 
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(true);
+    expect(row.verifiedAt).not.toBeNull();
+    expect(row.verifiedAt?.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    // AND THE ROW RECORDS WHICH ACTION EARNED THE FLAG, which is the half `verified` cannot hold.
+    // The listing reads this column rather than asking today's metadata what it WOULD spend, so what
+    // a page says about this connection stays what happened to it.
+    expect(row.probeAction).toBe(probeAction);
+
+    const checked = recordedOfType("mcp.connection_verified");
+    expect(checked).toHaveLength(1);
+    expect(checked[0].payload).toMatchObject({
+      actor: askerId,
+      action: probeAction,
+      verified: true,
+    });
+    // The row names the person and no Bot, which is what `mcp.connection_verified` documents: nothing
+    // ran on a Bot's behalf here, and borrowing one to make the row look uniform would be a lie.
+    expect(JSON.stringify(checked[0].payload)).not.toContain(botId);
+    /*
+     * BOTH ROWS THIS METHOD WRITES COME BACK UNDER ONE ID, which is the question anybody asks this
+     * trail: what happened to this person's access to this app. The two used to be filed under
+     * different keys — the connection under the app slug, the verification under the server row id —
+     * so a reader got half the story depending on which one they asked with, and neither half said
+     * it was a half. {@link probedId} is named first because it is the id that was used and the one
+     * a regression puts back; the set is asked after it, because the criterion is a single query
+     * finding all of these rows and that is true of no other id either.
+     */
+    const forApp = events.filter(
+      (event) =>
+        event.eventType === "mcp.connection_verified" ||
+        event.eventType === "mcp.account_connected",
     );
-  expect(row.verified).toBe(true);
-  expect(row.verifiedAt).not.toBeNull();
-  expect(row.verifiedAt?.getTime()).toBeGreaterThanOrEqual(before.getTime());
-  // AND THE ROW RECORDS WHICH ACTION EARNED THE FLAG, which is the half `verified` cannot hold.
-  // The listing reads this column rather than asking today's metadata what it WOULD spend, so what
-  // a page says about this connection stays what happened to it.
-  expect(row.probeAction).toBe(probeAction);
-
-  const checked = recordedOfType("mcp.connection_verified");
-  expect(checked).toHaveLength(1);
-  expect(checked[0].payload).toMatchObject({
-    actor: askerId,
-    action: probeAction,
-    verified: true,
-  });
-  // The row names the person and no Bot, which is what `mcp.connection_verified` documents: nothing
-  // ran on a Bot's behalf here, and borrowing one to make the row look uniform would be a lie.
-  expect(JSON.stringify(checked[0].payload)).not.toContain(botId);
-  /*
-   * BOTH ROWS THIS METHOD WRITES COME BACK UNDER ONE ID, which is the question anybody asks this
-   * trail: what happened to this person's access to this app. The two used to be filed under
-   * different keys — the connection under the app slug, the verification under the server row id —
-   * so a reader got half the story depending on which one they asked with, and neither half said
-   * it was a half. {@link probedId} is named first because it is the id that was used and the one
-   * a regression puts back; the set is asked after it, because the criterion is a single query
-   * finding all of these rows and that is true of no other id either.
-   */
-  const forApp = events.filter(
-    (event) =>
-      event.eventType === "mcp.connection_verified" ||
-      event.eventType === "mcp.account_connected",
-  );
-  expect(forApp).toHaveLength(2);
-  expect(forApp.map((event) => event.targetId)).not.toContain(probedId);
-  expect(new Set(forApp.map((event) => event.targetId))).toEqual(
-    new Set([probedToolkit]),
-  );
-  // And the key itself is in none of it, the promise every write on this path keeps.
-  expect(JSON.stringify(checked)).not.toContain(typedKey);
-});
+    expect(forApp).toHaveLength(2);
+    expect(forApp.map((event) => event.targetId)).not.toContain(probedId);
+    expect(new Set(forApp.map((event) => event.targetId))).toEqual(
+      new Set([probedToolkit]),
+    );
+    // And the key itself is in none of it, the promise every write on this path keeps.
+    expect(JSON.stringify(checked)).not.toContain(typedKey);
+  }));
 
 /**
  * The account a re-check runs against, which is one that ALREADY EXISTS.
@@ -4179,12 +4310,14 @@ test("a key that works is recorded verified, with the action it was checked with
  * an assertion about a value rather than about whether a column is null.
  */
 async function holdProbedApp(verifiedAt: Date | null = null) {
-  await database.insert(composioConnections).values({
-    toolkit: probedToolkit,
-    userId: askerId,
-    verified: verifiedAt !== null,
-    verifiedAt,
-  });
+  await runAsTenant(askerId, () =>
+    database.insert(composioConnections).values({
+      toolkit: probedToolkit,
+      userId: askerId,
+      verified: verifiedAt !== null,
+      verifiedAt,
+    }),
+  );
   // The vendor's side of that row: an account it is holding before this run's act, which is what
   // makes "nothing was withdrawn" an assertion about what Composio still has afterwards.
   vendorHolds.push(madeAccountId);
@@ -4207,80 +4340,81 @@ async function holdProbedApp(verifiedAt: Date | null = null) {
  * call is spent against the VENDOR'S rate limit on the person's own account, so verifying on every
  * render would burn somebody's quota at Linear to redraw one word on a settings page.
  */
-test("a re-check that answers records the connection verified, with the action it was checked with", async () => {
-  const sent: {
-    slug: string;
-    userId: string;
-    version: string;
-    args: unknown;
-  }[] = [];
-  useAnsweringClient({
-    execute: async (call, args) => {
-      reached.push(call.slug);
-      sent.push({
-        slug: call.slug,
-        userId: call.userId,
-        version: call.version,
-        args,
-      });
-      return answered;
-    },
-  });
-  await addProbedApp();
-  await holdProbedApp();
-  // Taken before the call, so the comparison below is against a moment that cannot postdate the
-  // write. Both this and the column are written in this process, so no clock but one is involved.
-  const before = new Date();
+test("a re-check that answers records the connection verified, with the action it was checked with", () =>
+  asPlatform(async () => {
+    const sent: {
+      slug: string;
+      userId: string;
+      version: string;
+      args: unknown;
+    }[] = [];
+    useAnsweringClient({
+      execute: async (call, args) => {
+        reached.push(call.slug);
+        sent.push({
+          slug: call.slug,
+          userId: call.userId,
+          version: call.version,
+          args,
+        });
+        return answered;
+      },
+    });
+    await addProbedApp();
+    await holdProbedApp();
+    // Taken before the call, so the comparison below is against a moment that cannot postdate the
+    // write. Both this and the column are written in this process, so no clock but one is involved.
+    const before = new Date();
 
-  const answer = await store.recheckBrokeredConnection({
-    toolkit: probedToolkit,
-    userId: askerId,
-  });
+    const answer = await store.recheckBrokeredConnection({
+      toolkit: probedToolkit,
+      userId: askerId,
+    });
 
-  expect(answer.verified).toBe(true);
-  expect(answer.probe).toBe(probeAction);
-  expect(new Date(answer.verifiedAt ?? "").getTime()).toBeGreaterThanOrEqual(
-    before.getTime(),
-  );
-
-  // The same call the connect path makes, in the same shape: the person's own account, the version
-  // the listing recorded, and no arguments at all.
-  expect(sent).toEqual([
-    { slug: probeAction, userId: askerId, version: probeVersion, args: {} },
-  ]);
-
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
+    expect(answer.verified).toBe(true);
+    expect(answer.probe).toBe(probeAction);
+    expect(new Date(answer.verifiedAt ?? "").getTime()).toBeGreaterThanOrEqual(
+      before.getTime(),
     );
-  expect(row.verified).toBe(true);
-  expect(row.verifiedAt?.toISOString()).toBe(answer.verifiedAt);
-  // And the action this press spent, written down beside the flag it earned. A re-check is the
-  // second of the two writers that can put a name here, and a row must not be able to tell which of
-  // them wrote it apart from by its date.
-  expect(row.probeAction).toBe(probeAction);
 
-  // NOTHING WAS CONNECTED AND NOTHING WAS WITHDRAWN. The only ask in this run is the one the app's
-  // own enablement made; a re-check that reached `connectWithFields` would be making a second
-  // account for somebody who has one, and one that reached either revoke would be ending the
-  // account it was asked to check.
-  expect(asksMade()).toEqual([`ensureAuthConfig:${probedToolkit}/fields`]);
-  expect(vendorHolds).toEqual([madeAccountId]);
+    // The same call the connect path makes, in the same shape: the person's own account, the version
+    // the listing recorded, and no arguments at all.
+    expect(sent).toEqual([
+      { slug: probeAction, userId: askerId, version: probeVersion, args: {} },
+    ]);
 
-  const checked = recordedOfType("mcp.connection_verified");
-  expect(checked).toHaveLength(1);
-  expect(checked[0].targetId).toBe(probedToolkit);
-  expect(checked[0].payload).toMatchObject({
-    actor: askerId,
-    action: probeAction,
-    verified: true,
-  });
-});
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(true);
+    expect(row.verifiedAt?.toISOString()).toBe(answer.verifiedAt);
+    // And the action this press spent, written down beside the flag it earned. A re-check is the
+    // second of the two writers that can put a name here, and a row must not be able to tell which of
+    // them wrote it apart from by its date.
+    expect(row.probeAction).toBe(probeAction);
+
+    // NOTHING WAS CONNECTED AND NOTHING WAS WITHDRAWN. The only ask in this run is the one the app's
+    // own enablement made; a re-check that reached `connectWithFields` would be making a second
+    // account for somebody who has one, and one that reached either revoke would be ending the
+    // account it was asked to check.
+    expect(asksMade()).toEqual([`ensureAuthConfig:${probedToolkit}/fields`]);
+    expect(vendorHolds).toEqual([madeAccountId]);
+
+    const checked = recordedOfType("mcp.connection_verified");
+    expect(checked).toHaveLength(1);
+    expect(checked[0].targetId).toBe(probedToolkit);
+    expect(checked[0].payload).toMatchObject({
+      actor: askerId,
+      action: probeAction,
+      verified: true,
+    });
+  }));
 
 /**
  * A DISCONNECT THAT LANDS WHILE THE CHECK IS RUNNING IS NOT UNDONE BY THE CHECK'S OWN WRITE.
@@ -4302,51 +4436,52 @@ test("a re-check that answers records the connection verified, with the action i
  * THE DELETE IS DONE FROM INSIDE THE VENDOR CALL, which is what makes this a test of the window
  * rather than of a sequence. The probe is in flight at the moment the row goes.
  */
-test("a re-check writes nothing when the connection was disconnected while it ran", async () => {
-  await addProbedApp();
-  await holdProbedApp(new Date());
+test("a re-check writes nothing when the connection was disconnected while it ran", () =>
+  asPlatform(async () => {
+    await addProbedApp();
+    await holdProbedApp(new Date());
 
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      reached.push(slug);
-      // The other tab, landing inside the window between this method's read and its write.
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        reached.push(slug);
+        // The other tab, landing inside the window between this method's read and its write.
+        await database
+          .delete(composioConnections)
+          .where(
+            and(
+              eq(composioConnections.toolkit, probedToolkit),
+              eq(composioConnections.userId, askerId),
+            ),
+          );
+        return answered;
+      },
+    });
+
+    await expect(
+      store.recheckBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).rejects.toThrow(/disconnected while this check was still running/);
+
+    // NOTHING WAS PUT BACK. This is the assertion: an upsert here leaves a row, and a row is the
+    // permission every later brokered call for this person is decided on.
+    expect(
       await database
-        .delete(composioConnections)
+        .select()
+        .from(composioConnections)
         .where(
           and(
             eq(composioConnections.toolkit, probedToolkit),
             eq(composioConnections.userId, askerId),
           ),
-        );
-      return answered;
-    },
-  });
-
-  await expect(
-    store.recheckBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).rejects.toThrow(/disconnected while this check was still running/);
-
-  // NOTHING WAS PUT BACK. This is the assertion: an upsert here leaves a row, and a row is the
-  // permission every later brokered call for this person is decided on.
-  expect(
-    await database
-      .select()
-      .from(composioConnections)
-      .where(
-        and(
-          eq(composioConnections.toolkit, probedToolkit),
-          eq(composioConnections.userId, askerId),
         ),
-      ),
-  ).toEqual([]);
+    ).toEqual([]);
 
-  // And nothing on the trail claims a connection was verified: the thing it would be a verdict
-  // about is gone.
-  expect(recordedOfType("mcp.connection_verified")).toEqual([]);
-});
+    // And nothing on the trail claims a connection was verified: the thing it would be a verdict
+    // about is gone.
+    expect(recordedOfType("mcp.connection_verified")).toEqual([]);
+  }));
 
 /**
  * A PROBE THAT RAN AND FAILED IS A FAILURE, AND NOT AN ANSWER SAYING "NOT VERIFIED".
@@ -4368,58 +4503,59 @@ test("a re-check writes nothing when the connection was disconnected while it ra
  * anything; their key is wrong, and taking their account away to tell them so would destroy the
  * thing they are trying to repair.
  */
-test("a re-check whose probe fails raises rather than answering unverified", async () => {
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      reached.push(slug);
-      // The vendor reporting a failure in a 200, which is how Composio says a credential is wrong.
-      return {
-        data: {},
-        error: "Invalid API key provided.",
-        successful: false,
-      };
-    },
-  });
-  await addProbedApp();
-  await holdProbedApp();
+test("a re-check whose probe fails raises rather than answering unverified", () =>
+  asPlatform(async () => {
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        reached.push(slug);
+        // The vendor reporting a failure in a 200, which is how Composio says a credential is wrong.
+        return {
+          data: {},
+          error: "Invalid API key provided.",
+          successful: false,
+        };
+      },
+    });
+    await addProbedApp();
+    await holdProbedApp();
 
-  await expect(
-    store.recheckBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).rejects.toThrow(/Invalid API key provided\./);
+    await expect(
+      store.recheckBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).rejects.toThrow(/Invalid API key provided\./);
 
-  // The key was spent on the action the chooser picked, and on nothing else.
-  expect(reached).toEqual([probeAction]);
-  // The account is still the vendor's to see, and nothing here asked it to be otherwise.
-  expect(vendorHolds).toEqual([madeAccountId]);
-  expect(asksMade()).toEqual([`ensureAuthConfig:${probedToolkit}/fields`]);
+    // The key was spent on the action the chooser picked, and on nothing else.
+    expect(reached).toEqual([probeAction]);
+    // The account is still the vendor's to see, and nothing here asked it to be otherwise.
+    expect(vendorHolds).toEqual([madeAccountId]);
+    expect(asksMade()).toEqual([`ensureAuthConfig:${probedToolkit}/fields`]);
 
-  // The row SURVIVES the failure — it is their key that is wrong, not their account — and it stops
-  // claiming a verification, with no date left standing on a claim nobody is making.
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row).toMatchObject({ toolkit: probedToolkit, verified: false });
-  expect(row.verifiedAt).toBeNull();
+    // The row SURVIVES the failure — it is their key that is wrong, not their account — and it stops
+    // claiming a verification, with no date left standing on a claim nobody is making.
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row).toMatchObject({ toolkit: probedToolkit, verified: false });
+    expect(row.verifiedAt).toBeNull();
 
-  // AND THE TRAIL SAYS WHICH ACTION WAS TRIED, which is what separates this row from an app that
-  // had nothing to try: both say `verified: false`, and only the name says the vendor was asked.
-  const checked = recordedOfType("mcp.connection_verified");
-  expect(checked).toHaveLength(1);
-  expect(checked[0].payload).toMatchObject({
-    actor: askerId,
-    action: probeAction,
-    verified: false,
-  });
-});
+    // AND THE TRAIL SAYS WHICH ACTION WAS TRIED, which is what separates this row from an app that
+    // had nothing to try: both say `verified: false`, and only the name says the vendor was asked.
+    const checked = recordedOfType("mcp.connection_verified");
+    expect(checked).toHaveLength(1);
+    expect(checked[0].payload).toMatchObject({
+      actor: askerId,
+      action: probeAction,
+      verified: false,
+    });
+  }));
 
 /**
  * AN APP WITH NOTHING TO PROBE COMES BACK SAYING SO, AND THE ROW IS LEFT EXACTLY AS IT WAS.
@@ -4438,43 +4574,44 @@ test("a re-check whose probe fails raises rather than answering unverified", asy
  * the person their working connection is now unchecked. A check that could try nothing has learned
  * nothing, and the honest write is no write at all.
  */
-test("an app with nothing to probe leaves the verification exactly as it was", async () => {
-  useAnsweringClient();
-  await addProbedApp({ withProbe: false });
-  // Verified a fortnight ago, at a consent screen or by a probe this app has since stopped
-  // publishing. Either way it is a fact, and this press must not be what takes it off the row.
-  const earned = new Date("2026-08-30T09:00:00.000Z");
-  await holdProbedApp(earned);
+test("an app with nothing to probe leaves the verification exactly as it was", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp({ withProbe: false });
+    // Verified a fortnight ago, at a consent screen or by a probe this app has since stopped
+    // publishing. Either way it is a fact, and this press must not be what takes it off the row.
+    const earned = new Date("2026-08-30T09:00:00.000Z");
+    await holdProbedApp(earned);
 
-  expect(
-    await store.recheckBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).toEqual({
-    verified: true,
-    verifiedAt: earned.toISOString(),
-    probe: null,
-  });
+    expect(
+      await store.recheckBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).toEqual({
+      verified: true,
+      verifiedAt: earned.toISOString(),
+      probe: null,
+    });
 
-  // Nothing was called, which is what "nothing to try" means at the vendor.
-  expect(reached).toEqual([]);
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row.verified).toBe(true);
-  expect(row.verifiedAt?.toISOString()).toBe(earned.toISOString());
-  // And nothing is on the trail: `mcp.connection_verified` records an account exercised with a real
-  // call, and no call was made. A row filed for a press that changed nothing would make the one
-  // event that means "a key was tried" also mean "somebody looked at a page".
-  expect(recordedOfType("mcp.connection_verified")).toEqual([]);
-});
+    // Nothing was called, which is what "nothing to try" means at the vendor.
+    expect(reached).toEqual([]);
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(true);
+    expect(row.verifiedAt?.toISOString()).toBe(earned.toISOString());
+    // And nothing is on the trail: `mcp.connection_verified` records an account exercised with a real
+    // call, and no call was made. A row filed for a press that changed nothing would make the one
+    // event that means "a key was tried" also mean "somebody looked at a page".
+    expect(recordedOfType("mcp.connection_verified")).toEqual([]);
+  }));
 
 /**
  * A RE-CHECK WITH NO CONNECTION TO CHECK REFUSES, AND MAKES NEITHER A ROW NOR A CALL.
@@ -4489,21 +4626,22 @@ test("an app with nothing to probe leaves the verification exactly as it was", a
  * back as "no connected account found": a sentence about this deployment's own state, shown to
  * somebody as though their key had been rejected.
  */
-test("a re-check with no connection refuses rather than making one", async () => {
-  useAnsweringClient();
-  await addProbedApp();
+test("a re-check with no connection refuses rather than making one", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await addProbedApp();
 
-  await expect(
-    store.recheckBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).rejects.toThrow();
+    await expect(
+      store.recheckBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).rejects.toThrow();
 
-  expect(await connectedToolkitsFor(askerId)).toEqual([]);
-  expect(reached).toEqual([]);
-  expect(recordedOfType("mcp.connection_verified")).toEqual([]);
-});
+    expect(await connectedToolkitsFor(askerId)).toEqual([]);
+    expect(reached).toEqual([]);
+    expect(recordedOfType("mcp.connection_verified")).toEqual([]);
+  }));
 
 /**
  * AND A RE-CHECK AGAINST A CONSENT CONNECTION IS REFUSED IN THE STORE, NOT MERELY IN THE BROWSER.
@@ -4521,49 +4659,52 @@ test("a re-check with no connection refuses rather than making one", async () =>
  * was ever checked. {@link connectBrokeredWithFields} sets the precedent it is read off — the scheme
  * on the app's row decides, in the store, rather than the caller being trusted to have looked.
  */
-test("a re-check against a consent connection refuses rather than spending its date", async () => {
-  useAnsweringClient();
-  // Added on the consent flow, and then given an action a probe could otherwise have used: without
-  // that action this test would pass on the nothing-to-probe branch and assert nothing about the
-  // scheme.
-  await store.addBrokeredApp({
-    slug: probedToolkit,
-    title: "Probed App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
-  await database.insert(mcpTools).values({
-    serverId: probedId,
-    name: probeAction,
-    description: "Says who the account belongs to.",
-    effect: "read",
-    version: probeVersion,
-  });
-  // The date the consent screen earned, which is the thing this refusal protects.
-  const earned = new Date("2026-08-30T09:00:00.000Z");
-  await holdProbedApp(earned);
+test("a re-check against a consent connection refuses rather than spending its date", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    // Added on the consent flow, and then given an action a probe could otherwise have used: without
+    // that action this test would pass on the nothing-to-probe branch and assert nothing about the
+    // scheme.
+    await store.addBrokeredApp({
+      slug: probedToolkit,
+      title: "Probed App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
+    await database.insert(mcpTools).values({
+      // The row `addBrokeredApp` wrote is the team's, and a tool carries its server's stamp (0127).
+      tenantId: "team",
+      serverId: probedId,
+      name: probeAction,
+      description: "Says who the account belongs to.",
+      effect: "read",
+      version: probeVersion,
+    });
+    // The date the consent screen earned, which is the thing this refusal protects.
+    const earned = new Date("2026-08-30T09:00:00.000Z");
+    await holdProbedApp(earned);
 
-  await expect(
-    store.recheckBrokeredConnection({
-      toolkit: probedToolkit,
-      userId: askerId,
-    }),
-  ).rejects.toThrow();
+    await expect(
+      store.recheckBrokeredConnection({
+        toolkit: probedToolkit,
+        userId: askerId,
+      }),
+    ).rejects.toThrow();
 
-  expect(reached).toEqual([]);
-  expect(recordedOfType("mcp.connection_verified")).toEqual([]);
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, probedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row.verified).toBe(true);
-  expect(row.verifiedAt?.toISOString()).toBe(earned.toISOString());
-});
+    expect(reached).toEqual([]);
+    expect(recordedOfType("mcp.connection_verified")).toEqual([]);
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, probedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(true);
+    expect(row.verifiedAt?.toISOString()).toBe(earned.toISOString());
+  }));
 
 /**
  * DISCONNECTING A KEY CLAIMS NO REVOCATION, BECAUSE A KEY HAS NO GRANT BEHIND IT TO WITHDRAW.
@@ -4590,75 +4731,78 @@ test("a re-check against a consent connection refuses rather than spending its d
  * onto the other flow with nobody connected, so the ONLY thing that differs between the two acts is
  * the scheme recorded on the row.
  */
-test("disconnecting a key claims no revocation", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: reschemedToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "fields", authScheme: "API_KEY" },
-  });
-  await store.connectBrokeredWithFields({
-    toolkit: reschemedToolkit,
-    userId: askerId,
-    values: { generic_api_key: typedKey },
-  });
-
-  expect(
-    await store.disconnectBrokered({
+test("disconnecting a key claims no revocation", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: reschemedToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "fields", authScheme: "API_KEY" },
+    });
+    await store.connectBrokeredWithFields({
       toolkit: reschemedToolkit,
       userId: askerId,
-      by: askerId,
-      reason: "self",
-    }),
-  ).toEqual({ vendorRevocationRequested: false });
+      values: { generic_api_key: typedKey },
+    });
 
-  /*
-   * AND THE ACCOUNT DID END AT COMPOSIO, which is the half of the sentence the false must not be
-   * allowed to swallow. The broker was asked, it answered that it found an account — {@link
-   * vendorFinds} is true for everybody here — and it is holding nothing afterwards. Without these
-   * the assertion above would be satisfied just as well by a disconnect that skipped the revoke
-   * and left somebody's key attached at the vendor with no row here pointing at it.
-   */
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${reschemedToolkit}/fields`,
-    `connectWithFields:${reschemedToolkit}/${askerId}`,
-    `revoke:${reschemedToolkit}/${askerId}`,
-  ]);
-  expect(vendorHolds).toEqual([]);
-  expect(await connectedToolkitsFor(askerId)).toEqual([]);
+    expect(
+      await store.disconnectBrokered({
+        toolkit: reschemedToolkit,
+        userId: askerId,
+        by: askerId,
+        reason: "self",
+      }),
+    ).toEqual({ vendorRevocationRequested: false });
 
-  // THE SAME APP AND THE SAME ACT, with the scheme moved underneath it. Re-enabling may rewrite the
-  // column because the disconnect above left nobody connected to be stranded by it.
-  await store.addBrokeredApp({
-    slug: reschemedToolkit,
-    title: "Enablable App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: reschemedToolkit, userId: askerId });
+    /*
+     * AND THE ACCOUNT DID END AT COMPOSIO, which is the half of the sentence the false must not be
+     * allowed to swallow. The broker was asked, it answered that it found an account — {@link
+     * vendorFinds} is true for everybody here — and it is holding nothing afterwards. Without these
+     * the assertion above would be satisfied just as well by a disconnect that skipped the revoke
+     * and left somebody's key attached at the vendor with no row here pointing at it.
+     */
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${reschemedToolkit}/fields`,
+      `connectWithFields:${reschemedToolkit}/${askerId}`,
+      `revoke:${reschemedToolkit}/${askerId}`,
+    ]);
+    expect(vendorHolds).toEqual([]);
+    expect(await connectedToolkitsFor(askerId)).toEqual([]);
 
-  expect(
-    await store.disconnectBrokered({
-      toolkit: reschemedToolkit,
-      userId: askerId,
-      by: askerId,
-      reason: "self",
-    }),
-  ).toEqual({ vendorRevocationRequested: true });
+    // THE SAME APP AND THE SAME ACT, with the scheme moved underneath it. Re-enabling may rewrite the
+    // column because the disconnect above left nobody connected to be stranded by it.
+    await store.addBrokeredApp({
+      slug: reschemedToolkit,
+      title: "Enablable App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: reschemedToolkit, userId: askerId }),
+    );
 
-  // Read in the order the two acts happened, which is what makes the pair an assertion about the
-  // scheme rather than two separate assertions about a boolean.
-  expect(
-    recordedOfType("mcp.account_disconnected").map(
-      (event) =>
-        (event.payload as { vendorRevocationRequested: boolean })
-          .vendorRevocationRequested,
-    ),
-  ).toEqual([false, true]);
-});
+    expect(
+      await store.disconnectBrokered({
+        toolkit: reschemedToolkit,
+        userId: askerId,
+        by: askerId,
+        reason: "self",
+      }),
+    ).toEqual({ vendorRevocationRequested: true });
+
+    // Read in the order the two acts happened, which is what makes the pair an assertion about the
+    // scheme rather than two separate assertions about a boolean.
+    expect(
+      recordedOfType("mcp.account_disconnected").map(
+        (event) =>
+          (event.payload as { vendorRevocationRequested: boolean })
+            .vendorRevocationRequested,
+      ),
+    ).toEqual([false, true]);
+  }));
 
 /**
  * THE TWO ADD PATHS WRITING ONE ROW, which is the only way a row can stop saying what it is.
@@ -4695,65 +4839,68 @@ test("disconnecting a key claims no revocation", async () => {
  * now refuses outright — see the test below. That refusal is the forward half; this is the half
  * that has to hold for a row already in a deployment's database when the refusal arrives.
  */
-test("enabling an app over a row somebody typed leaves a row that says it is brokered", async () => {
-  useAnsweringClient();
-  await database.insert(mcpServers).values({
-    id: collidedId,
-    title: "Typed By Hand",
-    vendor: "collector.attacker.example",
-    url: "https://collector.attacker.example/mcp",
-    provenance: "custom",
-  });
+test("enabling an app over a row somebody typed leaves a row that says it is brokered", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await database.insert(mcpServers).values({
+      id: collidedId,
+      title: "Typed By Hand",
+      vendor: "collector.attacker.example",
+      url: "https://collector.attacker.example/mcp",
+      provenance: "custom",
+    });
 
-  await store.addBrokeredApp({
-    slug: collidedToolkit,
-    title: "Collided App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
+    await store.addBrokeredApp({
+      slug: collidedToolkit,
+      title: "Collided App",
+      by: admin,
+      connection: { kind: "consent" },
+    });
 
-  const [row] = await database
-    .select({
-      url: mcpServers.url,
-      provenance: mcpServers.provenance,
-      vendor: mcpServers.vendor,
-    })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, collidedId));
-  expect(row).toEqual({
-    url: `composio://${collidedToolkit}`,
-    provenance: "composio",
-    // The broker, because that is who this deployment is now talking to for this row, and the
-    // column is what the first-party rule is checked against.
-    vendor: "Composio",
-  });
+    const [row] = await database
+      .select({
+        url: mcpServers.url,
+        provenance: mcpServers.provenance,
+        vendor: mcpServers.vendor,
+      })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, collidedId));
+    expect(row).toEqual({
+      url: `composio://${collidedToolkit}`,
+      provenance: "composio",
+      // The broker, because that is who this deployment is now talking to for this row, and the
+      // column is what the first-party rule is checked against.
+      vendor: "Composio",
+    });
 
-  // Asked through the same function every gate asks, rather than by comparing the columns again:
-  // what the row must be is not "these two strings" but the answer those two strings produce.
-  expect(accessFor(row, null)).toMatchObject({
-    credential: "brokered",
-    toolkit: collidedToolkit,
-  });
+    // Asked through the same function every gate asks, rather than by comparing the columns again:
+    // what the row must be is not "these two strings" but the answer those two strings produce.
+    expect(accessFor(row, null)).toMatchObject({
+      credential: "brokered",
+      toolkit: collidedToolkit,
+    });
 
-  /*
-   * AND THE CONSEQUENCE, which is the whole reason the column matters. Somebody connects, an
-   * administrator removes the app, and the account ends at Composio. On the row the upsert used to
-   * leave, `removeServer` read no app off `accessFor` at all: it deleted the row, asked the vendor
-   * nothing, and left the mailbox attached with nothing here left naming it.
-   */
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: collidedToolkit, userId: askerId });
+    /*
+     * AND THE CONSEQUENCE, which is the whole reason the column matters. Somebody connects, an
+     * administrator removes the app, and the account ends at Composio. On the row the upsert used to
+     * leave, `removeServer` read no app off `accessFor` at all: it deleted the row, asked the vendor
+     * nothing, and left the mailbox attached with nothing here left naming it.
+     */
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: collidedToolkit, userId: askerId }),
+    );
 
-  await store.removeServer(collidedId, admin);
+    await store.removeServer(collidedId, admin);
 
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${collidedToolkit}/consent`,
-    `revoke:${collidedToolkit}/${askerId}`,
-    `deleteAuthConfig:${collidedToolkit}`,
-  ]);
-  expect(await connectionsHeld()).toEqual([]);
-});
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${collidedToolkit}/consent`,
+      `revoke:${collidedToolkit}/${askerId}`,
+      `deleteAuthConfig:${collidedToolkit}`,
+    ]);
+    expect(await connectionsHeld()).toEqual([]);
+  }));
 
 /**
  * ADDING A SERVER BY URL OVER A BROKERED ROW, which is refused rather than repaired.
@@ -4775,46 +4922,49 @@ test("enabling an app over a row somebody typed leaves a row that says it is bro
  * So the add is refused, and the honest act is left to the administrator: remove the app, which
  * ends every account at Composio on the way out, and then add the endpoint at that name.
  */
-test("a server added by URL may not take a brokered row, and its accounts stay revocable", async () => {
-  useAnsweringClient();
-  await store.addBrokeredApp({
-    slug: collidedToolkit,
-    title: "Collided App",
-    by: admin,
-    connection: { kind: "consent" },
-  });
-  await database
-    .insert(composioConnections)
-    .values({ toolkit: collidedToolkit, userId: askerId });
-
-  await expect(
-    store.addCustomServer({
-      id: collidedId,
-      title: "Collector",
-      url: "https://collector.attacker.example/mcp",
+test("a server added by URL may not take a brokered row, and its accounts stay revocable", () =>
+  asPlatform(async () => {
+    useAnsweringClient();
+    await store.addBrokeredApp({
+      slug: collidedToolkit,
+      title: "Collided App",
       by: admin,
-    }),
-  ).rejects.toThrow(CustomServerRefusedError);
+      connection: { kind: "consent" },
+    });
+    await runAsTenant(askerId, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: collidedToolkit, userId: askerId }),
+    );
 
-  const [row] = await database
-    .select({ url: mcpServers.url, provenance: mcpServers.provenance })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, collidedId));
-  expect(row).toEqual({
-    url: `composio://${collidedToolkit}`,
-    provenance: "composio",
-  });
+    await expect(
+      store.addCustomServer({
+        id: collidedId,
+        title: "Collector",
+        url: "https://collector.attacker.example/mcp",
+        by: admin,
+      }),
+    ).rejects.toThrow(CustomServerRefusedError);
 
-  // The property the refusal exists for: the app is still an app, so taking it away still ends the
-  // account at the vendor rather than merely forgetting it here.
-  await store.removeServer(collidedId, admin);
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${collidedToolkit}/consent`,
-    `revoke:${collidedToolkit}/${askerId}`,
-    `deleteAuthConfig:${collidedToolkit}`,
-  ]);
-  expect(await connectionsHeld()).toEqual([]);
-});
+    const [row] = await database
+      .select({ url: mcpServers.url, provenance: mcpServers.provenance })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, collidedId));
+    expect(row).toEqual({
+      url: `composio://${collidedToolkit}`,
+      provenance: "composio",
+    });
+
+    // The property the refusal exists for: the app is still an app, so taking it away still ends the
+    // account at the vendor rather than merely forgetting it here.
+    await store.removeServer(collidedId, admin);
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${collidedToolkit}/consent`,
+      `revoke:${collidedToolkit}/${askerId}`,
+      `deleteAuthConfig:${collidedToolkit}`,
+    ]);
+    expect(await connectionsHeld()).toEqual([]);
+  }));
 
 /**
  * AND THE NAMESPACE ITSELF, reserved before there is any row to collide with.
@@ -4830,23 +4980,24 @@ test("a server added by URL may not take a brokered row, and its accounts stay r
  * every tool name and is what a grant and a policy rule are written against, so a row that shadows
  * another path's namespace inherits rules that were written about something else.
  */
-test("a server added by URL may not take the namespace brokered rows are minted in", async () => {
-  await expect(
-    store.addCustomServer({
-      id: collidedId,
-      title: "Collector",
-      url: "https://collector.attacker.example/mcp",
-      by: admin,
-    }),
-  ).rejects.toThrow(CustomServerRefusedError);
+test("a server added by URL may not take the namespace brokered rows are minted in", () =>
+  asPlatform(async () => {
+    await expect(
+      store.addCustomServer({
+        id: collidedId,
+        title: "Collector",
+        url: "https://collector.attacker.example/mcp",
+        by: admin,
+      }),
+    ).rejects.toThrow(CustomServerRefusedError);
 
-  expect(
-    await database
-      .select({ id: mcpServers.id })
-      .from(mcpServers)
-      .where(eq(mcpServers.id, collidedId)),
-  ).toEqual([]);
-});
+    expect(
+      await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, collidedId)),
+    ).toEqual([]);
+  }));
 
 /**
  * A VENDOR THAT COULD NOT BE REACHED IS NOT A VENDOR THAT REFUSED THE KEY.
@@ -4876,78 +5027,79 @@ test("a server added by URL may not take the namespace brokered rows are minted 
  * publishes a read, so the settings page offers Re-check: the person whose key was never checked
  * because Composio was down can have it checked as soon as Composio is up.
  */
-test("a connect whose check could not reach the vendor keeps the account and accuses no key", async () => {
-  await addCheckableApp(outageToolkit);
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      // Recorded before it throws, so "the call was attempted" is an assertion below rather than an
-      // assumption: what is under test is how the answer is READ, not whether one was asked for.
-      reached.push(slug);
-      throw new Error("Composio could not be reached: connect ETIMEDOUT");
-    },
-  });
+test("a connect whose check could not reach the vendor keeps the account and accuses no key", () =>
+  asPlatform(async () => {
+    await addCheckableApp(outageToolkit);
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        // Recorded before it throws, so "the call was attempted" is an assertion below rather than an
+        // assumption: what is under test is how the answer is READ, not whether one was asked for.
+        reached.push(slug);
+        throw new Error("Composio could not be reached: connect ETIMEDOUT");
+      },
+    });
 
-  // ANSWERED RATHER THAN REFUSED, and answered with the unchecked state: the key was taken, and
-  // nothing here knows anything about it.
-  expect(
-    await store.connectBrokeredWithFields({
-      toolkit: outageToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).toEqual({ connected: true, verified: false, probe: null });
+    // ANSWERED RATHER THAN REFUSED, and answered with the unchecked state: the key was taken, and
+    // nothing here knows anything about it.
+    expect(
+      await store.connectBrokeredWithFields({
+        toolkit: outageToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).toEqual({ connected: true, verified: false, probe: null });
 
-  // The call really went out, and the account it was spent for is still there.
-  expect(reached).toEqual([probeAction]);
-  expect(vendorHolds).toEqual([madeAccountId]);
-  // No undo was even attempted, which is the half a person cannot get back.
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${outageToolkit}/fields`,
-    `connectWithFields:${outageToolkit}/${askerId}`,
-  ]);
+    // The call really went out, and the account it was spent for is still there.
+    expect(reached).toEqual([probeAction]);
+    expect(vendorHolds).toEqual([madeAccountId]);
+    // No undo was even attempted, which is the half a person cannot get back.
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${outageToolkit}/fields`,
+      `connectWithFields:${outageToolkit}/${askerId}`,
+    ]);
 
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, outageToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
-    );
-  expect(row.verified).toBe(false);
-  expect(row.verifiedAt).toBeNull();
-  // THE WHOLE OF THE FIX, in one field: null, and never the name of an action nothing can show ran.
-  expect(row.probeAction).toBeNull();
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, outageToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row.verified).toBe(false);
+    expect(row.verifiedAt).toBeNull();
+    // THE WHOLE OF THE FIX, in one field: null, and never the name of an action nothing can show ran.
+    expect(row.probeAction).toBeNull();
 
-  // Which is the sentence the settings page draws, beside the button that can still settle it.
-  const listed = await store.brokeredConnectionsFor(askerId);
-  expect(listed).toHaveLength(1);
-  expect(listed[0]?.serverId).toBe(outageId);
-  expect(listed[0]?.probe).toBeNull();
-  expect(listed[0]?.verified).toBe(false);
-  expect(listed[0]?.checkable).toBe(true);
+    // Which is the sentence the settings page draws, beside the button that can still settle it.
+    const listed = await store.brokeredConnectionsFor(askerId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.serverId).toBe(outageId);
+    expect(listed[0]?.probe).toBeNull();
+    expect(listed[0]?.verified).toBe(false);
+    expect(listed[0]?.checkable).toBe(true);
 
-  // AND THE TRAIL SAYS WHICH OF THE TWO NULLS THIS IS, which the row itself cannot: an app that
-  // publishes nothing to try and a check that could not be made read the same on the row, and only
-  // here is the second one named.
-  const trail = await database
-    .select()
-    .from(auditEvents)
-    .where(
-      and(
-        eq(auditEvents.eventType, "mcp.connection_verified"),
-        eq(auditEvents.targetId, outageToolkit),
-      ),
-    );
-  expect(trail).toHaveLength(1);
-  expect(trail[0].payload).toMatchObject({
-    actor: askerId,
-    action: null,
-    verified: false,
-    unreachable: expect.stringContaining("connect ETIMEDOUT"),
-  });
-});
+    // AND THE TRAIL SAYS WHICH OF THE TWO NULLS THIS IS, which the row itself cannot: an app that
+    // publishes nothing to try and a check that could not be made read the same on the row, and only
+    // here is the second one named.
+    const trail = await database
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "mcp.connection_verified"),
+          eq(auditEvents.targetId, outageToolkit),
+        ),
+      );
+    expect(trail).toHaveLength(1);
+    expect(trail[0].payload).toMatchObject({
+      actor: askerId,
+      action: null,
+      verified: false,
+      unreachable: expect.stringContaining("connect ETIMEDOUT"),
+    });
+  }));
 
 /**
  * AND A RE-CHECK THAT COULD NOT REACH THE VENDOR LEAVES THE RECORD OF THE LAST ONE STANDING.
@@ -4970,60 +5122,63 @@ test("a connect whose check could not reach the vendor keeps the account and acc
  * The refusal is what the person gets, and it says the check did not happen rather than that their
  * key is bad.
  */
-test("a re-check that could not reach the vendor leaves the last check's record whole", async () => {
-  await addCheckableApp(recheckedToolkit);
-  // The state a real call left days ago: verified, dated, and naming what it spent.
-  const checkedAt = new Date("2026-08-01T09:00:00.000Z");
-  await database.insert(composioConnections).values({
-    toolkit: recheckedToolkit,
-    userId: askerId,
-    verified: true,
-    verifiedAt: checkedAt,
-    probeAction: probeAction,
-  });
-  useAnsweringClient({
-    execute: async ({ slug }) => {
-      reached.push(slug);
-      throw new Error("Composio could not be reached: connect ETIMEDOUT");
-    },
-  });
-
-  await expect(
-    store.recheckBrokeredConnection({
-      toolkit: recheckedToolkit,
-      userId: askerId,
-    }),
-  ).rejects.toThrow(/connect ETIMEDOUT/);
-
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, recheckedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
+test("a re-check that could not reach the vendor leaves the last check's record whole", () =>
+  asPlatform(async () => {
+    await addCheckableApp(recheckedToolkit);
+    // The state a real call left days ago: verified, dated, and naming what it spent.
+    const checkedAt = new Date("2026-08-01T09:00:00.000Z");
+    await runAsTenant(askerId, () =>
+      database.insert(composioConnections).values({
+        toolkit: recheckedToolkit,
+        userId: askerId,
+        verified: true,
+        verifiedAt: checkedAt,
+        probeAction: probeAction,
+      }),
     );
-  // Whole: the verdict, the day it was reached, and the action that reached it.
-  expect(row.verified).toBe(true);
-  expect(row.verifiedAt?.toISOString()).toBe(checkedAt.toISOString());
-  expect(row.probeAction).toBe(probeAction);
+    useAnsweringClient({
+      execute: async ({ slug }) => {
+        reached.push(slug);
+        throw new Error("Composio could not be reached: connect ETIMEDOUT");
+      },
+    });
 
-  // The call was attempted and no verdict came back, so the one event that means "a key was tried"
-  // is not filed for it.
-  expect(reached).toEqual([probeAction]);
-  expect(
-    await database
+    await expect(
+      store.recheckBrokeredConnection({
+        toolkit: recheckedToolkit,
+        userId: askerId,
+      }),
+    ).rejects.toThrow(/connect ETIMEDOUT/);
+
+    const [row] = await database
       .select()
-      .from(auditEvents)
+      .from(composioConnections)
       .where(
         and(
-          eq(auditEvents.eventType, "mcp.connection_verified"),
-          eq(auditEvents.targetId, recheckedToolkit),
+          eq(composioConnections.toolkit, recheckedToolkit),
+          eq(composioConnections.userId, askerId),
         ),
-      ),
-  ).toEqual([]);
-});
+      );
+    // Whole: the verdict, the day it was reached, and the action that reached it.
+    expect(row.verified).toBe(true);
+    expect(row.verifiedAt?.toISOString()).toBe(checkedAt.toISOString());
+    expect(row.probeAction).toBe(probeAction);
+
+    // The call was attempted and no verdict came back, so the one event that means "a key was tried"
+    // is not filed for it.
+    expect(reached).toEqual([probeAction]);
+    expect(
+      await database
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.eventType, "mcp.connection_verified"),
+            eq(auditEvents.targetId, recheckedToolkit),
+          ),
+        ),
+    ).toEqual([]);
+  }));
 
 /**
  * THE CHECK IS SPENT ON THE ACCOUNT THE CONNECT JUST MADE, AND NEVER ON WHICHEVER ONE ANSWERS.
@@ -5045,55 +5200,56 @@ test("a re-check that could not reach the vendor leaves the last check's record 
  * account destroyed, because some other account of theirs was broken — and that deletion is gone;
  * the pinning is still what keeps the verdict about the right account.
  */
-test("a connect spends its check on the account it just made", async () => {
-  await addCheckableApp(pinnedToolkit);
-  // The account the person already held, which is the one that would answer if nothing named the
-  // new one: it works, and the key just typed does not.
-  vendorHolds.push(otherAccountId);
-  useAnsweringClient({
-    execute: async (call) => {
-      reached.push(call.slug);
-      return call.connectedAccountId === madeAccountId
-        ? {
-            data: {},
-            error: "rate limit exceeded, retry in 60s",
-            successful: false,
-          }
-        : // The other account, answering for a key it does not hold.
-          { data: {}, error: null, successful: true };
-    },
-  });
+test("a connect spends its check on the account it just made", () =>
+  asPlatform(async () => {
+    await addCheckableApp(pinnedToolkit);
+    // The account the person already held, which is the one that would answer if nothing named the
+    // new one: it works, and the key just typed does not.
+    vendorHolds.push(otherAccountId);
+    useAnsweringClient({
+      execute: async (call) => {
+        reached.push(call.slug);
+        return call.connectedAccountId === madeAccountId
+          ? {
+              data: {},
+              error: "rate limit exceeded, retry in 60s",
+              successful: false,
+            }
+          : // The other account, answering for a key it does not hold.
+            { data: {}, error: null, successful: true };
+      },
+    });
 
-  await expect(
-    store.connectBrokeredWithFields({
-      toolkit: pinnedToolkit,
-      userId: askerId,
-      values: { generic_api_key: typedKey },
-    }),
-  ).rejects.toThrow(/rate limit exceeded/);
+    await expect(
+      store.connectBrokeredWithFields({
+        toolkit: pinnedToolkit,
+        userId: askerId,
+        values: { generic_api_key: typedKey },
+      }),
+    ).rejects.toThrow(/rate limit exceeded/);
 
-  // Both accounts stand — the person's older one was never a target, and the new one is no longer
-  // destroyed over a failure that says nothing about the key it holds.
-  expect(vendorHolds.slice().sort()).toEqual(
-    [otherAccountId, madeAccountId].sort(),
-  );
-  expect(asksMade()).toEqual([
-    `ensureAuthConfig:${pinnedToolkit}/fields`,
-    `connectWithFields:${pinnedToolkit}/${askerId}`,
-  ]);
-  // AND THE ROW RECORDS THE FAILED CHECK RATHER THAN A VERDICT IT DID NOT EARN. The older account
-  // answered `successful: true`; had the probe gone unpinned, this row would say verified.
-  const [row] = await database
-    .select()
-    .from(composioConnections)
-    .where(
-      and(
-        eq(composioConnections.toolkit, pinnedToolkit),
-        eq(composioConnections.userId, askerId),
-      ),
+    // Both accounts stand — the person's older one was never a target, and the new one is no longer
+    // destroyed over a failure that says nothing about the key it holds.
+    expect(vendorHolds.slice().sort()).toEqual(
+      [otherAccountId, madeAccountId].sort(),
     );
-  expect(row).toMatchObject({ verified: false, probeAction: probeAction });
-});
+    expect(asksMade()).toEqual([
+      `ensureAuthConfig:${pinnedToolkit}/fields`,
+      `connectWithFields:${pinnedToolkit}/${askerId}`,
+    ]);
+    // AND THE ROW RECORDS THE FAILED CHECK RATHER THAN A VERDICT IT DID NOT EARN. The older account
+    // answered `successful: true`; had the probe gone unpinned, this row would say verified.
+    const [row] = await database
+      .select()
+      .from(composioConnections)
+      .where(
+        and(
+          eq(composioConnections.toolkit, pinnedToolkit),
+          eq(composioConnections.userId, askerId),
+        ),
+      );
+    expect(row).toMatchObject({ verified: false, probeAction: probeAction });
+  }));
 
 /*
  * THE UNDO-REFUSED CASE USED TO BE TESTED HERE AND HAS NO SUBJECT LEFT.
