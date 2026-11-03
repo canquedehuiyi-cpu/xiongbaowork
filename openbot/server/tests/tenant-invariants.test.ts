@@ -175,7 +175,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/platform/store.ts": { 'runAsTenant("platform"': 3 },
   "src/plugins/logos.ts": { 'runAsTenant("platform"': 2 },
   "src/plugins/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 1 },
-  "src/plugins/store.ts": { 'runAsTenant("platform"': 2 },
+  // Install listings (admin-only), and `removeServer`'s reach over every person's rows tied to one
+  // team server (their tokens, brokered connections and grants for it), after `requireServerWriter`
+  // has checked the admin capability (P21).
+  "src/plugins/store.ts": { 'runAsTenant("platform"': 3 },
   "src/proactive/engine.ts": { 'runAsTenant("platform"': 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
   "src/recovery/abandoned-work.ts": { 'runAsTenant("platform"': 1 },

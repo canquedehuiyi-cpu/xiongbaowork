@@ -190,6 +190,7 @@ tests/mcp-grant-removal.integration.test.ts
 tests/mcp-listing.test.ts
 tests/mcp-protocol.test.ts
 tests/mcp-result.test.ts
+tests/mcp-server-removal-every-person.integration.test.ts
 tests/memory-runtime.test.ts
 tests/memory-store.integration.test.ts
 tests/memory.test.ts
