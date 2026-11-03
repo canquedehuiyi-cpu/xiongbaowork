@@ -117,12 +117,14 @@ test("a hop that answered is one card, under the turn that asked", async () => {
     runRef: WORK.runId,
   });
 
-  await harness(FINISHED).deliver({
-    work: WORK,
-    message: "worker was asked to find the outage window",
-    shown: "Ask worker: find the outage window",
-    assertion: "signed",
-  });
+  await runAsTenant(person, () =>
+    harness(FINISHED).deliver({
+      work: WORK,
+      message: "worker was asked to find the outage window",
+      shown: "Ask worker: find the outage window",
+      assertion: "signed",
+    }),
+  );
 
   const [card] = await childCard();
   expect(card?.source).toBe("handoff");
@@ -151,18 +153,20 @@ test("a hop whose run errored closes as failed rather than stranded", async () =
 
   const work: HandoffWork = { ...WORK, runId: `${WORK.runId}-err` };
   await expect(
-    harness(
-      [
-        { type: "RUN_ERROR", message: "endpoint refused" },
-      ] as unknown as BaseEvent[],
-      true,
-      `${hopRunId}-err`,
-    ).deliver({
-      work,
-      message: "worker was asked and could not answer",
-      shown: "Ask worker",
-      assertion: "signed",
-    }),
+    runAsTenant(person, () =>
+      harness(
+        [
+          { type: "RUN_ERROR", message: "endpoint refused" },
+        ] as unknown as BaseEvent[],
+        true,
+        `${hopRunId}-err`,
+      ).deliver({
+        work,
+        message: "worker was asked and could not answer",
+        shown: "Ask worker",
+        assertion: "signed",
+      }),
+    ),
   ).rejects.toBeDefined();
 
   const [card] = await runAsTenant(person, async () =>
@@ -185,28 +189,29 @@ test("a hop whose run errored closes as failed rather than stranded", async () =
 test("a hop that never got the conversation opens no card at all", async () => {
   const otherRun = `${hopRunId}-busy`;
   await expect(
-    createHandoffDelivery({
-      board,
-      agentFor: async () => stubAgent(),
-      history: async () => [],
-      newRunId: () => otherRun,
-      mintThreadId: () => `scratch-${suite}`,
-      lock: {
-        acquire: async () => null,
-        renew: async () => {},
-        release: async () => {},
-      },
-      runner: {
-        run: () =>
-          new Observable<BaseEvent>((subscriber) => subscriber.complete()),
-      },
-    })
-      .deliver({
+    runAsTenant(person, () =>
+      createHandoffDelivery({
+        board,
+        agentFor: async () => stubAgent(),
+        history: async () => [],
+        newRunId: () => otherRun,
+        mintThreadId: () => `scratch-${suite}`,
+        lock: {
+          acquire: async () => null,
+          renew: async () => {},
+          release: async () => {},
+        },
+        runner: {
+          run: () =>
+            new Observable<BaseEvent>((subscriber) => subscriber.complete()),
+        },
+      }).deliver({
         work: { ...WORK, runId: `${WORK.runId}-busy` },
         message: "worker was asked while the thread was busy",
         shown: "Ask worker",
         assertion: "signed",
-      })
+      }),
+    )
       .catch(() => undefined)
       .then(
         async () =>
@@ -233,12 +238,14 @@ test("the board reads the chain oldest first, so a parent is filed before its ch
     runRef: `${WORK.runId}-order`,
   });
 
-  await harness(FINISHED, true, `${hopRunId}-order`).deliver({
-    work: { ...WORK, runId: `${WORK.runId}-order` },
-    message: "worker was asked",
-    shown: "Ask worker",
-    assertion: "signed",
-  });
+  await runAsTenant(person, () =>
+    harness(FINISHED, true, `${hopRunId}-order`).deliver({
+      work: { ...WORK, runId: `${WORK.runId}-order` },
+      message: "worker was asked",
+      shown: "Ask worker",
+      assertion: "signed",
+    }),
+  );
 
   const rows = await runAsTenant(person, async () =>
     database

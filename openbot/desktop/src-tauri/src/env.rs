@@ -194,14 +194,28 @@ fn bind_loopbacks(port: u16) -> std::io::Result<Vec<std::net::TcpListener>> {
     let mut held = vec![ipv4];
     match std::net::TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, port)) {
         Ok(ipv6) => held.push(ipv6),
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
-            ) => {}
+        Err(error) if ipv6_loopback_unavailable(&error) => {}
         Err(error) => return Err(error),
     }
     Ok(held)
+}
+
+/// Whether an IPv6 loopback bind failed because this host has no IPv6 at all,
+/// rather than because the port is taken. A kernel with IPv6 disabled reports
+/// EAFNOSUPPORT (WSAEAFNOSUPPORT on Windows), which std leaves uncategorized.
+/// An occupied port (`AddrInUse`) is never treated as IPv6 being unavailable.
+pub(crate) fn ipv6_loopback_unavailable(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    const EAFNOSUPPORT: Option<i32> = Some(libc::EAFNOSUPPORT);
+    #[cfg(windows)]
+    const EAFNOSUPPORT: Option<i32> = Some(10047); // WSAEAFNOSUPPORT
+    #[cfg(not(any(unix, windows)))]
+    const EAFNOSUPPORT: Option<i32> = None;
+
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
+    ) || (EAFNOSUPPORT.is_some() && error.raw_os_error() == EAFNOSUPPORT)
 }
 
 #[cfg(test)]
@@ -209,6 +223,35 @@ mod port_tests {
     use super::*;
     use std::collections::HashSet;
     use std::net::{TcpListener, TcpStream};
+
+    #[test]
+    fn ipv6_unavailable_covers_missing_address_family_but_not_occupied_ports() {
+        use std::io::{Error, ErrorKind};
+        #[cfg(unix)]
+        let eafnosupport = libc::EAFNOSUPPORT;
+        #[cfg(windows)]
+        let eafnosupport = 10047;
+        #[cfg(any(unix, windows))]
+        assert!(ipv6_loopback_unavailable(&Error::from_raw_os_error(
+            eafnosupport
+        )));
+        assert!(ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::AddrNotAvailable
+        )));
+        assert!(ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::Unsupported
+        )));
+        assert!(!ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::AddrInUse
+        )));
+        #[cfg(unix)]
+        assert!(!ipv6_loopback_unavailable(&Error::from_raw_os_error(
+            libc::EADDRINUSE
+        )));
+        assert!(!ipv6_loopback_unavailable(&Error::from(
+            ErrorKind::PermissionDenied
+        )));
+    }
 
     #[test]
     fn occupied_ports_are_replaced_with_distinct_bindable_loopback_ports() {
@@ -577,6 +620,13 @@ pub fn compose(
             ports.postgres
         ),
     );
+    // The URL above is the compose owner, a superuser, which row-level security does not bind.
+    // The server refuses that by default (audit defect #8), so this install says, in its own file,
+    // that it runs it anyway: one machine, one person, a database published on loopback only. The
+    // server still prints `rls-not-enforced` on every boot. Written every time, like
+    // `DATABASE_URL`, because the two belong together; moving the server to `openbot_app` is the
+    // fix that would let this go, and it also moves the worker, which shares this file.
+    env.insert("OPENBOT_RLS_ENFORCE".into(), "warn".into());
     // Every address the app is actually reachable at, because it is reachable at more than one.
     //
     // The app's dev server binds `[::1]` and not `127.0.0.1`, so a browser sent to one of those
@@ -1515,6 +1565,24 @@ HTTPS_PROXY=http://proxy:8080
         assert_eq!(
             env.get("OPENBOT_SINGLE_USER").map(String::as_str),
             Some("true")
+        );
+    }
+
+    #[test]
+    fn the_owner_database_url_says_rls_is_not_enforced_or_the_server_refuses_to_start() {
+        let env = compose(
+            &intelligence(),
+            &Model::default(),
+            &engine_status(None),
+            &Ports::default(),
+            &pinned(),
+            None,
+            &BTreeMap::new(),
+        );
+        assert!(env["DATABASE_URL"].starts_with("postgres://openbot:"));
+        assert_eq!(
+            env.get("OPENBOT_RLS_ENFORCE").map(String::as_str),
+            Some("warn")
         );
     }
 
