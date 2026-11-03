@@ -392,6 +392,28 @@ test("connectors count employees across tools and say whether you connected a pe
   expect(row("GitHub").queryByText("未连接")).toBeNull();
 });
 
+test("a team-scoped curated connector is still asked about the person's own account", async () => {
+  // As G01-E stores it: the row is `team:linear`, its tools' refs name the catalogue key `linear`.
+  const teamLinear = server("team:linear", "Linear", [
+    { name: "issues", grantedTo: [] },
+  ]);
+  teamLinear.tools = teamLinear.tools.map((tool) => ({
+    ...tool,
+    ref: `linear/${tool.name}`,
+  }));
+  const saved = { ...responses };
+  responses["/api/plugins"] = () => ({ ...page, servers: [teamLinear] });
+  try {
+    const { view } = draw();
+    const connectors = await zone(view, "连接器");
+    // Per-person (`user-oauth` under `linear`), not "没有凭据" for want of a deployment key.
+    await connectors.findByText("未连接");
+    expect(connectors.queryByText("没有凭据")).toBeNull();
+  } finally {
+    Object.assign(responses, saved);
+  }
+});
+
 test("knowledge bases, with how many employees each is authorised to, sit above the memory sources", async () => {
   const { view } = draw();
   const knowledge = await zone(view, "知识来源");

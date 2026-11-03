@@ -60,6 +60,7 @@ import {
   poolChoiceName,
 } from "@/lib/models/queries";
 import {
+  appKeyOf,
   connectionsQueryOptions,
   installListingsQueryOptions,
   listedRefs,
@@ -634,8 +635,10 @@ function SkillGroup({
  */
 function connectsPerPerson(server: PluginServer, page: PluginsPage): boolean {
   if (server.provenance === "composio") return server.authScheme !== "NO_AUTH";
+  // The catalogue key, not the row id: a curated connector is the team's row `team:<key>`.
+  const key = appKeyOf(server);
   return page.catalogue.some(
-    (entry) => entry.key === server.id && entry.auth === "user-oauth",
+    (entry) => entry.key === key && entry.auth === "user-oauth",
   );
 }
 
