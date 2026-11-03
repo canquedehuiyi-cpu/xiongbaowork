@@ -52,6 +52,18 @@ This template renders nothing.
 {{- fail "An external database needs two URLs. database.url is the API's (openbot_app); also set database.roleWriterUrl to openbot_role_writer's (migration 0109), with its own password, or database.roleWriterExistingSecret to a Secret holding it. The API refuses to start without ROLE_WRITER_DATABASE_URL. Prefer database.existingSecret with both keys (database-url, role-writer-database-url): a URL in values is readable by anybody who can read the release." }}
 {{- end }}
 
+{{- /*
+  An external database given by URL, with nothing for the migrations Job to migrate as.
+
+  `database.url` is the API's role (openbot_app), which cannot migrate: the grants and roles the
+  migrations make are the owner's. With `database.existingSecret` the owner's URL is read from the
+  Secret's `database.migrationExistingSecretKey`, which a render cannot see, so that path is not
+  refused here (the Job says so in its log instead).
+*/}}
+{{- if and (not .Values.postgresql.enabled) .Values.database.url (not .Values.database.existingSecret) (not (.Values.database).migrationUrl) }}
+{{- fail "An external database needs the owner's URL for migrations. database.url is the API's (openbot_app), which cannot migrate; set database.migrationUrl to the database owner's URL, or use database.existingSecret with a migration-database-url key." }}
+{{- end }}
+
 {{- if and .Values.postgresql.enabled (or .Values.database.url .Values.database.existingSecret) }}
 {{- fail "Two databases. postgresql.enabled is true and database.url is also set, so it is not clear which one is meant. Pick one." }}
 {{- end }}

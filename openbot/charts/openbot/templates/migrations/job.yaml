@@ -80,6 +80,15 @@ spec:
             - /bin/sh
             - -ec
             - |
+              {{- if not .Values.postgresql.enabled }}
+              # The owner migrates (0054's grants and 0109's roles are the owner's to make); the API's
+              # own role cannot. See database.migrationUrl in values.yaml.
+              if [ -n "${MIGRATION_DATABASE_URL:-}" ]; then
+                export DATABASE_URL="$MIGRATION_DATABASE_URL"
+              elif [ -n "${MIGRATION_URL_EXPECTED:-}" ]; then
+                echo "migrate: no ${MIGRATION_URL_EXPECTED} key in the database Secret, so migrating with database-url as before. Add the owner's URL under that key: the API's role cannot run migrations." >&2
+              fi
+              {{- end }}
               # Bounded, so a database that is never coming back fails the install rather than
               # holding it open until somebody notices. `pg_isready` reads the same DATABASE_URL the
               # migration is about to use, so this cannot wait on the wrong server.
@@ -91,9 +100,22 @@ spec:
                 fi
                 sleep 2
               done
-              exec /usr/local/bin/bun scripts/migrate.ts
+              /usr/local/bin/bun scripts/migrate.ts
+              {{- if .Values.postgresql.enabled }}
+              # The role writer's password, as the embedded image's migrate.sh sets it: after the
+              # migrations that create the role, as the owner. Alphanumeric by construction; checked
+              # anyway before it goes into a SQL literal.
+              case "$ROLE_WRITER_PASSWORD" in ''|*[!A-Za-z0-9]*) echo "migrate: invalid role writer password" >&2; exit 1 ;; esac
+              printf "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "$ROLE_WRITER_PASSWORD" |
+                psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q >/dev/null
+              echo "migrate: openbot_role_writer password installed"
+              {{- end }}
           env:
-{{ include "openbot.databaseUrlEnv" . | indent 12 }}
+{{ include "openbot.migrationDatabaseUrlEnv" . | indent 12 }}
+            {{- if and (not .Values.postgresql.enabled) (not (.Values.database).migrationUrl) .Values.database.existingSecret }}
+            - name: MIGRATION_URL_EXPECTED
+              value: {{ (.Values.database).migrationExistingSecretKey | default "migration-database-url" | quote }}
+            {{- end }}
             - name: EMBEDDED_POSTGRES
               value: "off"
             - name: EMBEDDED_COMPUTER

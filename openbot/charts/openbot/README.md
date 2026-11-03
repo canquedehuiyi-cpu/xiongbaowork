@@ -31,24 +31,29 @@ single most common reason a first install comes up with a pod stuck `Pending` an
 why.
 
 **A database, and the Secret that names it**, unless you are using the bundled one. The chart reads
-two URLs out of a Secret you make; it never writes your database credentials into a values file.
-Two roles, each with its own password: the API's `openbot_app`, and `openbot_role_writer`
-(migration 0109), the only login allowed to write identity roles. The API refuses to start without
-the second (`ROLE_WRITER_DATABASE_URL is required`). Set both roles' passwords after the first
-migration; the ones the migration creates them with are public.
+three URLs out of a Secret you make; it never writes your database credentials into a values file.
+The migrations Job connects as the database **owner**; the API as `openbot_app`, which cannot
+migrate; and the API also as `openbot_role_writer` (migration 0109), the only login allowed to write
+identity roles. The API refuses to start without the last (`ROLE_WRITER_DATABASE_URL is required`).
+After the first migration, give `openbot_app` and `openbot_role_writer` their own passwords as the
+owner (`ALTER ROLE ... PASSWORD`); the ones the migrations leave are public or absent.
 
 ```sh
 kubectl create namespace openbot
 kubectl -n openbot create secret generic openbot-database \
+  --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/openbot?sslmode=require' \
   --from-literal=database-url='postgresql://openbot_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
   --from-literal=role-writer-database-url='postgresql://openbot_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
 ```
 
-Then `--set database.existingSecret=openbot-database`. The keys must be `database-url` and
-`role-writer-database-url`, or name different ones with `database.existingSecretKey` and
+Then `--set database.existingSecret=openbot-database`. The keys must be `migration-database-url`,
+`database-url` and `role-writer-database-url`, or name different ones with
+`database.migrationExistingSecretKey`, `database.existingSecretKey` and
 `database.roleWriterExistingSecretKey` (or a separate Secret with `database.roleWriterExistingSecret`).
-With `database.url` instead of a Secret, `database.roleWriterUrl` is required too, and the install
-is refused without it. See
+A Secret without `migration-database-url` still upgrades: the Job logs that it is migrating with
+`database-url` as it used to, which only works if that URL is the owner's. With `database.url`
+instead of a Secret, `database.migrationUrl` and `database.roleWriterUrl` are required too, and the
+install is refused without them. See
 [Your own database](#your-own-database-which-is-what-a-real-deployment-uses) for `sslmode` and the
 `vector` extension, both of which a managed database will otherwise fail on in a way that names the
 wrong problem.
@@ -156,6 +161,13 @@ helm upgrade --install openbot charts/openbot \
   --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)"
 ```
 
+The bundled database needs no role-writer setup: the chart keeps a random password for
+`openbot_role_writer` in its own `<release>-openbot-database-roles` Secret (read back on upgrade, so
+it stays the same), the migrations Job sets it on the role as the owner after migrating, and the API
+gets `ROLE_WRITER_DATABASE_URL` with it. A tool that renders without a cluster (`helm template`, some
+GitOps setups) cannot read it back and makes a new one each render; the Job sets each new one, so the
+API still connects, but the role's password changes on every sync.
+
 The two `extraEnv` lines are the bundled database's price: it connects the API as the superuser
 `postgres`, which row-level security does not bind, and the server refuses that in production unless
 told otherwise. The chart refuses to render without them rather than leave the API crash-looping. See
@@ -184,7 +196,7 @@ and asking for it with more than one replica is refused at install time.
 
 ```sh
 --set postgresql.enabled=false \
---set database.existingSecret=openbot-database   # keys: database-url, role-writer-database-url
+--set database.existingSecret=openbot-database   # keys: migration-database-url, database-url, role-writer-database-url
 ```
 
 `postgresql.enabled` is **off by default and not production-grade**. A database on a pod goes away
@@ -311,7 +323,8 @@ nobody could sign in or nobody would be an administrator; an identity provider i
 public LoadBalancer; `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; there is no
 `secrets.computerToken`; `computers.mode` is `external` with no `computers.url`, or `sandbox` on a
 cluster with no Sandbox CRD; both an Ingress and an HTTPRoute are enabled; both `externalSecrets` and
-an existing Secret are named; a Bot endpoint is named with no token to call it with; a browser is
+an existing Secret are named; an external `database.url` is given without `database.roleWriterUrl` or
+without `database.migrationUrl`; a Bot endpoint is named with no token to call it with; a browser is
 asked for inside more than one API replica; `networkPolicy.enabled` is set with an external database
 and no `networkPolicy.extraEgress`, or with `computers.mode: sandbox` and no
 `networkPolicy.kubernetesApiCidr`; a computer proxy is named that the network policy blocks; or
