@@ -204,6 +204,51 @@ describe("an agent's audit trail", () => {
     ]);
   });
 
+  test("a colleague's rows are filed in their own tenant: the owner's frame never reads them, an administrator's platform read does", async () => {
+    // G01-E: a row is filed in the frame of the person who caused it, so what a colleague did to a
+    // shared Bot lives in the colleague's tenant, not the owner's.
+    const agentId = `agent-trail-${crypto.randomUUID()}`;
+    const ownerTenant = `tenant-trail-owner-${crypto.randomUUID()}`;
+    const colleagueTenant = `tenant-trail-colleague-${crypto.randomUUID()}`;
+    const [ownerUpdate] = await insertTrail(ownerTenant, agentId, [
+      { eventType: "bot.updated", actorUserId: OWNER },
+    ]);
+    const [colleagueDuplicate, colleaguePause] = await insertTrail(
+      colleagueTenant,
+      agentId,
+      [
+        { eventType: "bot.duplicated", actorUserId: COLLEAGUE },
+        { eventType: "bot.paused", actorUserId: COLLEAGUE },
+      ],
+    );
+
+    const owner = await walk(
+      ownerTenant,
+      { agentId, viewerUserId: OWNER, seesEveryone: true },
+      50,
+    );
+    expect(owner).toEqual([ownerUpdate?.id]);
+
+    const colleague = await walk(
+      colleagueTenant,
+      { agentId, viewerUserId: COLLEAGUE, seesEveryone: false },
+      50,
+    );
+    expect(colleague).toEqual([colleagueDuplicate?.id, colleaguePause?.id]);
+
+    // The administrator's door (`asAdminPlatform` in agents/lifecycle-routes.ts) reads as
+    // `platform`: every tenant's rows for this agent, still without anyone else's own lifecycle.
+    const admin = await walk(
+      "platform",
+      { agentId, viewerUserId: "trail-admin", seesEveryone: true },
+      50,
+    );
+    expect(new Set(admin)).toEqual(
+      new Set([ownerUpdate?.id, colleagueDuplicate?.id]),
+    );
+    expect(admin).not.toContain(colleaguePause?.id);
+  });
+
   test("another tenant's trail for the same agent id is invisible", async () => {
     const { agentId } = await fixture();
     const elsewhere = `tenant-trail-${crypto.randomUUID()}`;

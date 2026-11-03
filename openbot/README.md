@@ -216,7 +216,7 @@ A host on its own covers any port on that host; a host with a port pins that por
 
 The list covers agent endpoints only. Browsing is unaffected, the addresses holding a deployment's own cloud credentials are refused whatever is listed, and listing an address permits registering an agent there rather than granting that agent anything.
 
-Tenant package agents are declared in the package's own `agents.yaml`, in the directory `TENANT_PACKAGE_DIR` names (`examples/fintech` by default), or each in a file of its own under that package's `agents/` directory, as either:
+Tenant package agents are declared in the package's own `agents.yaml`, in the directory `TENANT_PACKAGE_DIR` names (`examples/qoderwake` by default), or each in a file of its own under that package's `agents/` directory, as either:
 
 - `built-in`, with a system prompt; or
 - `remote-ag-ui`, with an endpoint.
@@ -252,7 +252,7 @@ Settings worth knowing:
 | `AGENT_COMPUTER_POLICY`              | JSON action policy. Malformed JSON stops server startup.                  |
 | `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` | Lets a Bot reach this machine's own services. Local only, and refused under `NODE_ENV=production`. |
 | `AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated. A host, optionally with a port. |
-| `TENANT_PACKAGE_DIR`                 | Directory containing tenant YAML. Defaults to `../examples/fintech`.      |
+| `TENANT_PACKAGE_DIR`                 | Directory containing tenant YAML. Defaults to `../examples/qoderwake`.    |
 | `DEPLOYMENT_ID`                      | Names the deployment that minted a thread, when several share one PostgreSQL. |
 | `OPENBOT_SELF_HOST_BANNER`           | Set `false` to hide the bar offering CopilotKit's help self-hosting OpenBot. |
 
@@ -322,7 +322,10 @@ provider's discovery document listed in `TRUSTED_ORIGINS`, not only the issuer.
 - `INITIAL_ADMIN_EMAILS` is required, because it is what grants the first administrator. After that
   `/admin/people` can promote others, but an address named here stays an administrator and cannot be
   demoted or removed from that screen. It is re-read on every sign-in, so editing it takes effect
-  the next time that person signs in.
+  the next time that person signs in. Only a verified address is promoted (an identity provider's,
+  or one arriving through a registered SSO connection); an account that signed up with a password is
+  never promoted by this list, because nobody verified who registered it. On a password-only
+  deployment, sign up first and then run `bun scripts/grant-admin.ts <email>` in the server.
 - `MICROSOFT_OAUTH_TENANT_ID` defaults to `common`, which admits personal Microsoft accounts as well
   as work ones. On a multi-tenant app registration Entra may send no `email` claim at all, so
   OpenBot falls back to `upn` and then `preferred_username`. If none of the three arrives the

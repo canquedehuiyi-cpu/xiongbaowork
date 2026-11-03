@@ -21,8 +21,12 @@ if (existsSync(marker))
   throw new Error("Use a fresh disposable workspace for each run.");
 writeFileSync(marker, "Windows runner acceptance\n", { flag: "wx" });
 const execute = createRunnerExecutor(root);
-const assert = (ok: unknown, label: string) => {
-  if (!ok) throw new Error(label);
+const assert = (ok: unknown, label: string, seen?: unknown) => {
+  // Say what came back, so a red probe names its cause instead of only its check.
+  if (!ok)
+    throw new Error(
+      seen === undefined ? label : `${label}: ${JSON.stringify(seen)}`,
+    );
   console.log(JSON.stringify({ check: label, passed: true }));
 };
 const successfulOutput = (outcome: ActionOutcome): Record<string, unknown> => {
@@ -40,6 +44,7 @@ assert(
   String(successfulOutput(result).stdout).includes("runner-marker") &&
     successfulOutput(result).exitCode === 0,
   "native command produces the marker",
+  result,
 );
 const unicode = await execute({
   action: "exec",
@@ -48,6 +53,7 @@ const unicode = await execute({
 assert(
   String(successfulOutput(unicode).stdout).includes("熊宝员工"),
   "Unicode output is preserved",
+  unicode,
 );
 const code = await execute({ action: "exec", payload: { command: "exit 7" } });
 assert(successfulOutput(code).exitCode === 7, "nonzero exit code is preserved");
@@ -103,6 +109,11 @@ await unavailable.run({ command: "echo no-shell" }).then(
 );
 const nodePath = process.argv[3] ?? "node.exe";
 const psQuote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
+// How long the tree may take to start: a fresh PowerShell, then node, then node's child. A cold
+// PowerShell start alone has taken 11-12 s on windows-latest (see the Unicode and secrets checks of
+// a green run), so the old fixed 8 s wait failed a healthy runner. Each command's own timeout is
+// longer than any start seen, and the wait below ends early if the command settles first.
+const startMs = 20000;
 for (const mode of ["abort", "timeout", "protocol"]) {
   const parentFile = join(root, mode + "-parent.mjs");
   const childFile = join(root, mode + "-child.mjs");
@@ -130,7 +141,7 @@ for (const mode of ["abort", "timeout", "protocol"]) {
             id: mode,
             key: mode,
             action: "exec",
-            payload: { command, timeoutMs: 20000 },
+            payload: { command, timeoutMs: startMs * 2 },
           },
           (frame) => {
             frameResult = frame;
@@ -138,16 +149,36 @@ for (const mode of ["abort", "timeout", "protocol"]) {
         )
       : secretShell.run({
           command,
-          timeoutMs: mode === "timeout" ? 2000 : 20000,
+          // The timeout case must not fire before the tree it is meant to kill has started.
+          timeoutMs: mode === "timeout" ? startMs : startMs * 2,
           signal: controller.signal,
         });
-  const deadline = Date.now() + 8000;
-  while (!existsSync(pidFile) && Date.now() < deadline) await Bun.sleep(25);
-  assert(existsSync(pidFile), mode + ": real child tree started");
+  // A command that ends before writing its pid file will never write it: stop waiting and say
+  // what it returned, instead of waiting out the deadline and naming only the check.
+  let settled: { value: unknown } | undefined;
+  const watched = running.then(
+    (value) => {
+      settled = { value };
+      return value;
+    },
+    (error: unknown) => {
+      settled = { value: String(error) };
+      throw error;
+    },
+  );
+  const begun = Date.now();
+  while (!existsSync(pidFile) && !settled && Date.now() - begun < startMs * 2)
+    await Bun.sleep(25);
+  assert(
+    existsSync(pidFile),
+    mode + ": real child tree started",
+    settled ?? { waitedMs: Date.now() - begun },
+  );
+  console.log(JSON.stringify({ mode, treeStartedMs: Date.now() - begun }));
   if (mode === "abort") controller.abort();
   if (mode === "protocol")
     await dispatch("local/device", { type: "cancel", key: mode }, () => {});
-  const outcome = await running;
+  const outcome = await watched;
   if (mode === "timeout")
     assert((outcome as ShellResult).timedOut === true, "timeout is reported");
   if (mode === "abort")

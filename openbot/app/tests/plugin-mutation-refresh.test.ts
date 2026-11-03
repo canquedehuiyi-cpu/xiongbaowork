@@ -21,6 +21,7 @@ import {
   registerOAuthClientMutationOptions,
   removePluginServerMutationOptions,
   removeSkillMutationOptions,
+  replaceServerTokenMutationOptions,
   saveSkillMutationOptions,
   setListingMutationOptions,
   setPluginGrantMutationOptions,
@@ -235,6 +236,15 @@ const REFUSALS: {
     message: "That server could not be removed.",
     factory: removePluginServerMutationOptions,
     variables: "linear",
+  },
+  {
+    // Stored and pointed at in one transaction, then refreshed: a 409 is a token that is in place.
+    name: "replacing a server's token",
+    route: "POST /api/plugins/servers/:id/token",
+    status: 409,
+    message: "That server's tools could not be recorded.",
+    factory: replaceServerTokenMutationOptions,
+    variables: { serverId: "linear", token: "fixture-token" },
   },
   {
     name: "saving a skill",
@@ -504,6 +514,12 @@ const ENCODED_REQUESTS: {
     url: `/api/plugins/servers/${ENCODED_ID}`,
     build: removePluginServerMutationOptions,
     variables: HOSTILE_ID,
+  },
+  {
+    name: "replacing a server's token",
+    url: `/api/plugins/servers/${ENCODED_ID}/token`,
+    build: replaceServerTokenMutationOptions,
+    variables: { serverId: HOSTILE_ID, token: "fixture-token" },
   },
   {
     name: "registering an OAuth client",

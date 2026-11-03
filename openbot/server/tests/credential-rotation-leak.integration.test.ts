@@ -10,6 +10,7 @@ import {
 import { createDatabase } from "../src/db/client";
 import { auditEvents, credentials } from "../src/db/schema";
 import { deploymentFaultSentence } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -51,30 +52,45 @@ const NUL = String.fromCharCode(0);
 
 const created: string[] = [];
 
+/**
+ * The administrator the rotations name. The model screen reaches the vault inside the request's frame,
+ * `runAsTenant(actor.id)`, so the keys, the refusals filed about them and the cleanup all happen in
+ * that person's tenant here too.
+ */
+const ADMIN = "admin";
+function asAdmin<T>(work: () => Promise<T>) {
+  return runAsTenant(ADMIN, work);
+}
+
 async function liveCredential(keyId: string, secret: string) {
-  const credential = await store.create({
-    kind: "model",
-    provider: "openai",
-    keyId,
-    metadata: {},
-    encryptedValue: await encryptSecret(ENCRYPTION_KEY, secret),
-  });
+  const encryptedValue = await encryptSecret(ENCRYPTION_KEY, secret);
+  const credential = await asAdmin(() =>
+    store.create({
+      kind: "model",
+      provider: "openai",
+      keyId,
+      metadata: {},
+      encryptedValue,
+    }),
+  );
   created.push(credential.id);
   return credential;
 }
 
 async function refusalReason(targetId: string) {
-  const [event] = await database
-    .select({ payload: auditEvents.payload })
-    .from(auditEvents)
-    .where(
-      and(
-        eq(auditEvents.eventType, "credential.rotation_refused"),
-        eq(auditEvents.targetId, targetId),
-      ),
-    )
-    .orderBy(desc(auditEvents.createdAt))
-    .limit(1);
+  const [event] = await asAdmin(() =>
+    database
+      .select({ payload: auditEvents.payload })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.eventType, "credential.rotation_refused"),
+          eq(auditEvents.targetId, targetId),
+        ),
+      )
+      .orderBy(desc(auditEvents.createdAt))
+      .limit(1),
+  );
 
   return (event?.payload as { reason?: string } | undefined)?.reason;
 }
@@ -82,7 +98,9 @@ async function refusalReason(targetId: string) {
 afterAll(async () => {
   // Only the rows this file inserted, named by id. The trail itself is append-only and stays.
   for (const id of created.splice(0)) {
-    await database.delete(credentials).where(eq(credentials.id, id));
+    await asAdmin(() =>
+      database.delete(credentials).where(eq(credentials.id, id)),
+    );
   }
 });
 
@@ -92,16 +110,18 @@ describe("a rotation the database refuses", () => {
     const previous = await liveCredential(keyId, "old-openai-secret");
 
     await expect(
-      rotateCredential(service, {
-        previousCredentialId: previous.id,
-        kind: "model",
-        provider: "openai",
-        keyId,
-        // Refused by `jsonb`, so the insert fails with the envelope already bound to it.
-        metadata: { note: NUL },
-        plaintext: "new-openai-secret",
-        actorUserId: "admin",
-      }),
+      asAdmin(() =>
+        rotateCredential(service, {
+          previousCredentialId: previous.id,
+          kind: "model",
+          provider: "openai",
+          keyId,
+          // Refused by `jsonb`, so the insert fails with the envelope already bound to it.
+          metadata: { note: NUL },
+          plaintext: "new-openai-secret",
+          actorUserId: ADMIN,
+        }),
+      ),
     ).rejects.toThrow();
 
     const reason = await refusalReason(previous.id);
@@ -122,18 +142,20 @@ describe("a rotation the database refuses", () => {
     // of what the row has to say, and scrubbing it would trade a leak for a trail nobody can read.
     const keyId = `rotation-refused-${randomUUID()}`;
     const previous = await liveCredential(keyId, "old-openai-secret");
-    await store.revoke(previous.id);
+    await asAdmin(() => store.revoke(previous.id));
 
     await expect(
-      rotateCredential(service, {
-        previousCredentialId: previous.id,
-        kind: "model",
-        provider: "openai",
-        keyId,
-        metadata: {},
-        plaintext: "new-openai-secret",
-        actorUserId: "admin",
-      }),
+      asAdmin(() =>
+        rotateCredential(service, {
+          previousCredentialId: previous.id,
+          kind: "model",
+          provider: "openai",
+          keyId,
+          metadata: {},
+          plaintext: "new-openai-secret",
+          actorUserId: ADMIN,
+        }),
+      ),
     ).rejects.toThrow("Previous credential is already revoked");
 
     expect(await refusalReason(previous.id)).toBe(
@@ -144,7 +166,7 @@ describe("a rotation the database refuses", () => {
   test("keeps a unique violation's constraint name while dropping the row it was bound to", async () => {
     // The inverse, on the failure an operator most often has to act on. Produced by a real
     // duplicate insert rather than described, because `duplicate key value violates unique
-    // constraint "credentials_active_key_idx"` is a sentence Postgres writes and this file does not.
+    // constraint "credentials_tenant_active_key_idx"` is a sentence Postgres writes and this file does not.
     const keyId = `duplicate-key-sentinel-${randomUUID()}`;
     await liveCredential(keyId, "first-openai-secret");
 
@@ -156,7 +178,7 @@ describe("a rotation the database refuses", () => {
     expect(failure).toBeInstanceOf(Error);
     const sentence = deploymentFaultSentence(failure as Error);
     expect(sentence).toContain(
-      'duplicate key value violates unique constraint "credentials_active_key_idx"',
+      'duplicate key value violates unique constraint "credentials_tenant_active_key_idx"',
     );
     expect(sentence).not.toContain(keyId);
     expect(sentence).not.toContain("ciphertext");
