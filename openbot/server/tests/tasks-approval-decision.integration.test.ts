@@ -178,10 +178,13 @@ const approvalStatus = async (approvalId: string) => {
 };
 
 beforeAll(async () => {
-  await database.insert(users).values([
-    { id: owner, email: `${owner}@example.test` },
-    { id: stranger, email: `${stranger}@example.test` },
-  ]);
+  // Identity rows belong to nobody's frame: written as `platform`, like every fixture user.
+  await runAsTenant("platform", () =>
+    database.insert(users).values([
+      { id: owner, email: `${owner}@example.test` },
+      { id: stranger, email: `${stranger}@example.test` },
+    ]),
+  );
 });
 
 afterAll(async () => {
@@ -201,7 +204,9 @@ afterAll(async () => {
         .where(inArray(approvalRequests.id, approvalIds));
     }
   });
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [owner, stranger])),
+  );
   await database.$client.close();
 });
 
