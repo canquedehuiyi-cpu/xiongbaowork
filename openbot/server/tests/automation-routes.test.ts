@@ -413,9 +413,15 @@ describe("the list says when the breaker stopped it (C1/C3)", () => {
     if (begun.status !== "started") {
       throw new Error(`firing not started: ${begun.status}`);
     }
+    // The breaker trips only on a failed streak that reached its limit (here, one failure).
     await runAsTenant(alice, () =>
-      store.tripBreaker(automation.id, begun.firing.id),
+      store.finishFiring(begun.firing.id, "failed", "Notion 授权已过期"),
     );
+    expect(
+      await runAsTenant(alice, () =>
+        store.tripBreaker(automation.id, begun.firing.id, 1),
+      ),
+    ).toBe(true);
 
     const after = await listed(alice);
     expect(after.find((item) => item.id === automation.id)).toMatchObject({
