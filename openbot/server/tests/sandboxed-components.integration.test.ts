@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+import type { AppVariables } from "../src/auth/guards";
 import { createAuditStore } from "../src/audit";
+import { createAdminScope } from "../src/auth/admin-scope";
+import { createRoleRepository } from "../src/auth/guards";
+import { setRole } from "../src/auth/roles";
 import {
   createSandboxedStore,
   SandboxedNotFoundError,
@@ -13,9 +18,11 @@ import {
   componentFunctions,
   components,
   sandboxedComponents,
+  users,
 } from "../src/db/schema";
-import { runAsTenant } from "../src/tenant/context";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * A component authored in a browser can be edited freely and still reach nobody until it is
@@ -37,25 +44,65 @@ const store = createSandboxedStore(database, createAuditStore(database));
 
 /*
  * The playground is an administrator's page: its route runs inside the signed-in administrator's
- * tenant, so the store calls here do too (G01). The fixtures it is checked against — the compiled
- * catalogue, a Bot, the teardown — are the deployment's, so they run as `platform`.
+ * tenant and through `adminCapability`, which re-reads `user_roles` (G01-E: the source rows are the
+ * team's, and only an administrator holding the capability may read a draft or write one). The store
+ * calls here do the same. The fixtures they are checked against — the compiled catalogue, a Bot, the
+ * teardown — are the deployment's, so they run as `platform`.
  */
 const administrator = `admin_${suite}`;
-function asAdministrator<T>(work: () => T): T {
-  return runAsTenant(administrator, work);
+const scope = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
+let releaseRoleWriter: (() => Promise<void>) | undefined;
+
+async function asAdministrator<T>(work: () => Promise<T>): Promise<T> {
+  let outcome: { value: T } | { error: unknown } | undefined;
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.use(
+    "*",
+    async (context, next) => {
+      context.set("actor", { id: administrator, role: "admin" });
+      await runAsTenant(administrator, () => next());
+    },
+    scope.adminCapability,
+  );
+  app.get("/", async (context) => {
+    outcome = await work().then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    return context.body(null, 204);
+  });
+  await app.request("http://openbot.test/");
+  if (!outcome) throw new Error("The admin request never ran its work.");
+  if ("error" in outcome) throw outcome.error;
+  return outcome.value;
 }
 function asDeployment<T>(work: () => T): T {
   return runAsTenant("platform", work);
 }
 
-afterAll(() =>
-  asDeployment(async () => {
+beforeAll(async () => {
+  releaseRoleWriter = await bindTestRoleWriter(database);
+  await asDeployment(() =>
+    database
+      .insert(users)
+      .values({ id: administrator, email: `${administrator}@openbot.test` }),
+  );
+  await asPlatform(() => setRole(database, administrator, "admin"));
+});
+
+afterAll(async () => {
+  await asDeployment(async () => {
     await database
       .delete(sandboxedComponents)
       .where(eq(sandboxedComponents.name, name));
     await database.delete(components).where(eq(components.name, name));
-  }),
-);
+    // `user_roles` follows its user by cascade.
+    await database.delete(users).where(eq(users.id, administrator));
+  });
+  await releaseRoleWriter?.();
+});
 
 describe("authoring a component without a rebuild", () => {
   test("a saved draft is on the grant grid and is drawn by nobody", () =>

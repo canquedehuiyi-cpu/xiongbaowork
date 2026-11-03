@@ -862,6 +862,13 @@
       "when": 1793629500000,
       "tag": "0123_team_approval_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1793629800000,
+      "tag": "0124_team_sandboxed_components",
+      "breakpoints": true
     }
   ]
 }
