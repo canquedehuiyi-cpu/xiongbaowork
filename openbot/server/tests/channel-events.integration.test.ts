@@ -26,6 +26,7 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -267,9 +268,12 @@ async function createTestUser(name: string): Promise<AgentActor> {
 
 /** A channel with two members, which is what makes "who hears this" a question worth asking. */
 async function createSharedChannel(owner: AgentActor, other: AgentActor) {
-  // The owner makes the channel and admits the second member, as `addMember` does in the owner's
-  // request: every row lands in the owner's tenant.
-  return as(owner, async () => {
+  /*
+   * A shared group (G01-E P11): the only way two people are in one conversation. The owner makes
+   * it (`team`) and admits the second member with a `team` membership, as `addMember` does in the
+   * owner's request. A row stamped with the owner that names somebody else is refused (0128).
+   */
+  const channel = await as(owner, async () => {
     const profile = await profileStore.create(owner, {
       name: "Expense Manager",
       title: "Finance Operations",
@@ -277,22 +281,26 @@ async function createSharedChannel(owner: AgentActor, other: AgentActor) {
       visibility: "public",
     });
     createdAgentIds.push(profile.id);
-    const channel = await store.create(owner, [profile.id]);
-    createdChannelIds.push(channel.id);
-    // `create` writes the creator's membership only; the second member is added directly, with the
-    // thread mapping the roster join requires.
+    const made = await store.create(owner, [profile.id], { shared: true });
+    createdChannelIds.push(made.id);
+    // `create` writes the creator's membership only; the second member is added directly.
     await database.insert(channelMemberships).values({
-      channelId: channel.id,
+      channelId: made.id,
       userId: other.id,
+      tenantId: TEAM_TENANT,
     });
-    await database.insert(intelligenceChannelMappings).values({
+    return made;
+  });
+  // The second member's own thread mapping, which the roster join requires: theirs, in their frame.
+  await as(other, () =>
+    database.insert(intelligenceChannelMappings).values({
       userId: other.id,
       channelId: channel.id,
       // thread_id is globally unique, so the second member's mapping needs one of its own.
       threadId: randomUUID(),
-    });
-    return channel;
-  });
+    }),
+  );
+  return channel;
 }
 
 /** Collect what each person's connection hears, and a promise that settles when one of them does. */

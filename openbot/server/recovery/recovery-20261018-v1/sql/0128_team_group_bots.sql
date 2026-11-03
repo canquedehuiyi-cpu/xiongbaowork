@@ -124,6 +124,30 @@ CREATE POLICY tenant_isolation_delete ON public.group_message_private AS PERMISS
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.group_message_private TO openbot_app;
 --> statement-breakpoint
+/*
+ * Rows written before this table existed keep their private part in the shared row: a waiting
+ * reply's approval id, held text and continuation, a running reply's partial text. Moved here, so
+ * the sender's decision still finds its row (`waitingFor` reads the approval id from this table) and
+ * the shared row keeps only what every member may read (the same keys as SHARED_DETAILS in
+ * src/channels/group.ts). The private row carries the sender's stamp: the row's own, or the sender
+ * for a `team` row.
+ */
+INSERT INTO public.group_message_private (message_id, owner_user_id, tenant_id, text, details)
+SELECT m.id, m.owner_user_id,
+       CASE WHEN m.tenant_id = 'team' THEN m.owner_user_id ELSE m.tenant_id END,
+       m.text,
+       m.details - ARRAY['agentIds', 'answeredBy', 'consent', 'message', 'via']
+  FROM public.group_messages m
+ WHERE m.status IN ('waiting', 'running') AND jsonb_typeof(m.details) = 'object'
+ON CONFLICT (message_id) DO NOTHING;
+--> statement-breakpoint
+UPDATE public.group_messages m
+   SET text = '',
+       details = (SELECT coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb)
+                    FROM jsonb_each(m.details) AS e(key, value)
+                   WHERE e.key IN ('agentIds', 'answeredBy', 'consent', 'message', 'via'))
+ WHERE m.status IN ('waiting', 'running') AND jsonb_typeof(m.details) = 'object';
+--> statement-breakpoint
 DO $$ DECLARE t text; col text; named text; BEGIN
   FOR t, col IN SELECT * FROM (VALUES ('intelligence_channel_mappings', 'user_id'),
                                       ('channel_memberships', 'user_id'),
