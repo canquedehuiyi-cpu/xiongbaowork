@@ -475,10 +475,14 @@ test("a workspace with no subscription is held to the Free ceilings, not left un
   ).rejects.toBeInstanceOf(QuotaExceeded);
 
   // The panel says Free too, rather than "no tier".
-  const panelRoutes = createQuotaRoutes(database, quota, async (context, next) => {
-    context.set("actor", { id: stranger, role: "user" as const });
-    await next();
-  });
+  const panelRoutes = createQuotaRoutes(
+    database,
+    quota,
+    async (context, next) => {
+      context.set("actor", { id: stranger, role: "user" as const });
+      await next();
+    },
+  );
   const response = await runAsTenant(stranger, () =>
     panelRoutes.request(new Request("http://openbot.test/")),
   );
@@ -490,26 +494,38 @@ test("a workspace with no subscription is held to the Free ceilings, not left un
   expect(body.limits?.wakers).toBe(2);
 });
 
-test("two active subscriptions resolve to the most recently changed one, every time", async () => {
+/*
+ * Until 0129 a tenant could hold two active rows, and this test pinned that the reader chose the most
+ * recently changed one every time. The database now refuses the second row
+ * (`subscriptions_tenant_unique`; `subscriptions-unique.integration.test.ts` covers the refusal and
+ * provisioning, `subscriptions-unique-migration.integration.test.ts` that 0129 kept exactly the row
+ * this reader answered with). What remains to pin here is the reader's side: a second write for the
+ * tenant cannot change what it answers, and the one row it reads is the plan.
+ */
+test("a second subscription for one tenant is refused, and the reader answers the one row, every time", async () => {
   const doubled = `q-dup-${suite}`;
   await runAsTenant(doubled, async () => {
     await database
       .insert(users)
       .values({ id: doubled, email: `${doubled}@q.test`, name: doubled });
-    // Older Free row written first, newer Pro row second: a scan in insertion order would pick Free.
-    await database.insert(subscriptions).values({
-      tenantId: doubled,
-      planId: "free",
-      createdAt: new Date("2026-01-01T00:00:00Z"),
-      updatedAt: new Date("2026-01-01T00:00:00Z"),
-    });
     await database.insert(subscriptions).values({
       tenantId: doubled,
       planId: "pro",
-      createdAt: new Date("2026-02-01T00:00:00Z"),
-      updatedAt: new Date("2026-02-01T00:00:00Z"),
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
     });
   });
+  // A newer Free row, the shape that used to sit beside it, no longer lands.
+  await expect(
+    runAsTenant(doubled, async () => {
+      await database.insert(subscriptions).values({
+        tenantId: doubled,
+        planId: "free",
+        createdAt: new Date("2026-02-01T00:00:00Z"),
+        updatedAt: new Date("2026-02-01T00:00:00Z"),
+      });
+    }),
+  ).rejects.toThrow();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     expect((await quota.planFor(doubled)).id).toBe("pro");
   }

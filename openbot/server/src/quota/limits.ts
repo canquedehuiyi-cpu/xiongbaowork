@@ -151,9 +151,9 @@ export function createQuotaService(database: Database): QuotaService {
             eq(subscriptions.status, "active"),
           ),
         )
-        // `subscriptions` has no unique constraint on the active row, so a retried provisioning hook
-        // or two concurrent first switches can leave two. The most recently changed one wins, the
-        // same one every time, rather than whichever the scan happens to reach first.
+        // One row per tenant since 0129 (`subscriptions_tenant_unique`). The order is kept so the
+        // read stays deterministic whatever the table holds, and it is the order 0129 de-duplicated
+        // by, so the row it kept is the row this read had already been answering with.
         .orderBy(
           desc(subscriptions.updatedAt),
           desc(subscriptions.createdAt),
