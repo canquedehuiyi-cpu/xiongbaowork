@@ -42,7 +42,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -77,6 +79,7 @@ import { isComposing } from "@/lib/composing";
 import {
   modelChoiceName,
   modelLibraryQueryOptions,
+  poolChoiceName,
 } from "@/lib/models/queries";
 import {
   deletePersonaTemplateMutationOptions,
@@ -291,23 +294,36 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
 export function useProfileSave(agentId: string, profile: AgentProfile) {
   const queryClient = useQueryClient();
   const updateAgent = useMutation(updateAgentMutationOptions(queryClient));
-  const save = (patch: Partial<AgentFormValues> & { persona?: Persona }) =>
+  const save = ({
+    platformModelRef,
+    ...patch
+  }: Partial<AgentFormValues> & {
+    persona?: Persona;
+    /**
+     * The platform pool binding (stories H1, K1), with `modelRef`'s three-way: absent leaves it,
+     * null clears it. Not a form field, so it rides beside the form's input rather than through it.
+     */
+    platformModelRef?: string | null;
+  }) =>
     updateAgent.mutateAsync({
       agentId,
-      input: agentInputFrom({
-        name: profile.name,
-        title: profile.title,
-        roleDescription: profile.roleDescription,
-        visibility: profile.visibility,
-        /*
-         * Not a built-in coworker's endpoint. That is the managed Bot's own address, which nobody
-         * typed, and the route checks any endpoint it is sent as one somebody did: on a deployment
-         * whose Bot is on localhost it refused every edit. Empty leaves the stored one where it is.
-         */
-        endpoint: profile.builtIn ? "" : (profile.endpoint ?? ""),
-        authValue: "",
-        ...patch,
-      }),
+      input: {
+        ...agentInputFrom({
+          name: profile.name,
+          title: profile.title,
+          roleDescription: profile.roleDescription,
+          visibility: profile.visibility,
+          /*
+           * Not a built-in coworker's endpoint. That is the managed Bot's own address, which nobody
+           * typed, and the route checks any endpoint it is sent as one somebody did: on a deployment
+           * whose Bot is on localhost it refused every edit. Empty leaves the stored one where it is.
+           */
+          endpoint: profile.builtIn ? "" : (profile.endpoint ?? ""),
+          authValue: "",
+          ...patch,
+        }),
+        ...(platformModelRef === undefined ? {} : { platformModelRef }),
+      },
     });
   return { save, saving: updateAgent.isPending };
 }
@@ -358,7 +374,8 @@ function GeneralSection({
           builtIn={profile.builtIn}
           canManage={profile.canManage}
           modelRef={profile.modelRef}
-          onSave={(modelRef) => save({ modelRef })}
+          onSave={(binding) => save(binding)}
+          platformModelRef={profile.platformModelRef ?? null}
         />
         {profile.systemOwned ? (
           <Item variant="muted">
@@ -963,60 +980,132 @@ export function PersonaSection({
   );
 }
 
+/** Where a coworker's model comes from: both null is the deployment's own. Never both set. */
+export type ModelBinding = {
+  modelRef: string | null;
+  platformModelRef: string | null;
+};
+
+/** The picker's value for each shelf. Prefixed, so a pool id and a library id can never collide. */
+const POOL_PREFIX = "pool:";
+const LIBRARY_PREFIX = "own:";
+
 /**
- * Which model this coworker answers with — the deployment's own, or one entry of this person's
- * model library.
+ * What one picker value saves: a pool row clears the library binding, a library entry clears the
+ * pool binding, and "none" clears both, so a coworker is never pointed at two models at once.
+ */
+export function modelBindingFor(value: string): ModelBinding {
+  if (value.startsWith(POOL_PREFIX)) {
+    return {
+      modelRef: null,
+      platformModelRef: value.slice(POOL_PREFIX.length),
+    };
+  }
+  if (value.startsWith(LIBRARY_PREFIX)) {
+    return {
+      modelRef: value.slice(LIBRARY_PREFIX.length),
+      platformModelRef: null,
+    };
+  }
+  return { modelRef: null, platformModelRef: null };
+}
+
+/**
+ * Which model this coworker answers with — the deployment's own, one of the platform's experience
+ * models (stories H1, K1), or one entry of this person's model library (H2).
  *
- * Offered only to a coworker that runs here. A remote one answers on somebody else's server, where
- * the model was chosen long before this screen, and a picker that looked like it worked there would
- * be a second place for a decision this deployment does not make.
+ * A coworker that runs somewhere else is named as such instead (H6). It answers on somebody else's
+ * server, where the model was chosen long before this screen, and a picker that looked like it
+ * worked there would be a second place for a decision this deployment does not make.
  *
- * A model switched off stays in the list, marked, rather than dropping out: the binding is still on
- * the row, and a run on it falls back to the deployment's model. Showing "Deployment model" for a
- * coworker that is pointed at something else would be the screen disagreeing with the person's own
- * last choice.
+ * A library model switched off stays in the list, marked, rather than dropping out: the binding is
+ * still on the row, and a run on it falls back to the deployment's model. A pool row the deployment
+ * holds no key for is listed but cannot be picked, because binding it would quietly be the
+ * deployment's model under another name.
  */
 export function ModelItem({
   modelRef,
+  platformModelRef,
   builtIn,
   canManage,
   onSave,
 }: {
   modelRef: string | null;
+  platformModelRef: string | null;
   /** Whether this coworker runs on this deployment, which is what makes a binding mean anything. */
   builtIn: boolean;
   canManage: boolean;
-  onSave: (modelRef: string | null) => Promise<unknown>;
+  onSave: (binding: ModelBinding) => Promise<unknown>;
 }) {
-  const models = useQuery(modelLibraryQueryOptions());
+  const models = useQuery({
+    ...modelLibraryQueryOptions(),
+    enabled: builtIn,
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!builtIn) return null;
+  if (!builtIn) {
+    return (
+      <Item variant="muted">
+        <ItemContent>
+          <ItemTitle>模型</ItemTitle>
+          <ItemDescription>
+            这位员工运行在它自己的端点上，用哪个模型由那边决定。
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <span className="text-sm text-muted-foreground">外部托管模型</span>
+        </ItemActions>
+      </Item>
+    );
+  }
 
   const connected = models.data?.models ?? [];
-  const items: Record<string, string> = {
-    none: "部署自带的模型",
-    ...Object.fromEntries(
-      connected.map((model) => [
-        model.id,
+  const pool = models.data?.pool ?? [];
+  const poolNames = pool.map(
+    (model) =>
+      [
+        `${POOL_PREFIX}${model.id}`,
+        model.available
+          ? poolChoiceName(model)
+          : `${poolChoiceName(model)}（暂不可用）`,
+      ] as const,
+  );
+  const libraryNames = connected.map(
+    (model) =>
+      [
+        `${LIBRARY_PREFIX}${model.id}`,
         model.enabled
           ? modelChoiceName(model)
-          : `${modelChoiceName(model)} (switched off)`,
-      ]),
-    ),
+          : `${modelChoiceName(model)}（已停用）`,
+      ] as const,
+  );
+  const items: Record<string, string> = {
+    none: "部署自带的模型",
+    ...Object.fromEntries(poolNames),
+    ...Object.fromEntries(libraryNames),
   };
-  // A binding to a model this library no longer lists is shown as what it has become: the run takes
+  const unavailable = new Set(
+    pool
+      .filter((model) => !model.available)
+      .map((model) => `${POOL_PREFIX}${model.id}`),
+  );
+  // A binding to a model neither shelf lists any more is shown as what it has become: the run takes
   // the deployment's model, and the trigger says so instead of holding a dead id.
-  const current = modelRef && items[modelRef] ? modelRef : "none";
+  const stored = platformModelRef
+    ? `${POOL_PREFIX}${platformModelRef}`
+    : modelRef
+      ? `${LIBRARY_PREFIX}${modelRef}`
+      : "none";
+  const current = items[stored] ? stored : "none";
 
   return (
     <Item variant="muted">
       <ItemContent>
         <ItemTitle>模型</ItemTitle>
         <ItemDescription>
-          {connected.length === 0
-            ? "还没有接入任何模型，所以这位员工用部署自带的模型回答。"
+          {connected.length === 0 && pool.length === 0
+            ? "还没有可选的模型，所以这位员工用部署自带的模型回答。"
             : "可以给每位员工选不同的模型：开发用一个，审核用另一个。"}
         </ItemDescription>
         {error ? (
@@ -1031,11 +1120,17 @@ export function ModelItem({
             disabled={saving || models.isPending}
             items={items}
             onValueChange={async (next) => {
-              if ((next === "none" ? null : next) === modelRef) return;
+              const binding = modelBindingFor(next ?? "none");
+              if (
+                binding.modelRef === modelRef &&
+                binding.platformModelRef === platformModelRef
+              ) {
+                return;
+              }
               setError(null);
               setSaving(true);
               try {
-                await onSave(next === "none" ? null : next);
+                await onSave(binding);
               } catch (failure) {
                 setError(
                   failure instanceof Error ? failure.message : "保存失败。",
@@ -1046,15 +1141,35 @@ export function ModelItem({
             }}
             value={current}
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger aria-label="模型" className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(items).map(([value, name]) => (
-                <SelectItem key={value} value={value}>
-                  {name}
-                </SelectItem>
-              ))}
+              <SelectItem value="none">{items.none}</SelectItem>
+              {poolNames.length > 0 ? (
+                <SelectGroup>
+                  <SelectLabel>平台体验模型</SelectLabel>
+                  {poolNames.map(([value, name]) => (
+                    <SelectItem
+                      disabled={unavailable.has(value)}
+                      key={value}
+                      value={value}
+                    >
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ) : null}
+              {libraryNames.length > 0 ? (
+                <SelectGroup>
+                  <SelectLabel>我的模型库</SelectLabel>
+                  {libraryNames.map(([value, name]) => (
+                    <SelectItem key={value} value={value}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ) : null}
             </SelectContent>
           </Select>
         ) : (
