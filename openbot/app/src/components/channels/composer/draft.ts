@@ -23,6 +23,30 @@ export const COMMAND_TRIGGER = "/";
  */
 export const CREW_CHIP_PREFIX = "crew:";
 
+/**
+ * A `@` chip whose value carries this prefix names a coworker picked from under a Group (spec B1).
+ *
+ * It is still a coworker, and `toDraft` reads it as one: the prefix exists only because the menu keys
+ * its rows by value, and the same coworker can be listed on its own and under every Group it belongs
+ * to. The Group id travels in the value so each of those rows is distinct; nothing downstream reads it.
+ */
+export const MEMBER_CHIP_PREFIX = "member:";
+
+/** The chip value for one coworker listed under one Group. */
+export function memberChipValue(groupId: string, agentId: string): string {
+  return `${MEMBER_CHIP_PREFIX}${encodeURIComponent(groupId)}:${agentId}`;
+}
+
+/** The coworker a `@` chip names: its value, or the agent inside a Group member's value. */
+export function chipAgentId(value: string): string {
+  if (!value.startsWith(MEMBER_CHIP_PREFIX)) {
+    return value;
+  }
+  const rest = value.slice(MEMBER_CHIP_PREFIX.length);
+  // The Group id is URI-encoded, so the first colon is the separator however the agent id is spelled.
+  return rest.slice(rest.indexOf(":") + 1);
+}
+
 export type ComposerDraft = {
   /** Plain text, with chips flattened back to `@Agent` / `/command`. */
   text: string;
@@ -59,10 +83,11 @@ export function toDraft(
     (chip) => !chip.value.startsWith(CREW_CHIP_PREFIX),
   );
   const commandChips = getChipsByTrigger(segments, COMMAND_TRIGGER);
+  const lastCoworker = coworkerChips.at(-1);
 
   return {
     text: segmentsToPlainText(segments).trim(),
-    agentId: coworkerChips.at(-1)?.value ?? null,
+    agentId: lastCoworker ? chipAgentId(lastCoworker.value) : null,
     crewTemplateId:
       crewChips.at(-1)?.value.slice(CREW_CHIP_PREFIX.length) ?? null,
     commandIds: commandChips.map((chip) => chip.value),

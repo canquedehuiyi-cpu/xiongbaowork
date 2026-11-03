@@ -1,5 +1,18 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { responsibilityRuns, routineRuns, tasks } from "../db/schema";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import {
+  responsibilityRuns,
+  routineRuns,
+  tasks,
+  workItems,
+} from "../db/schema";
+
+/**
+ * The work-queue kind of an `@` dispatch from a 1:1 conversation (`channels/dispatch.ts`).
+ *
+ * Declared here, and re-exported there, because this is the file that reads it as a ledger: the
+ * CronJob builds the sweep from this module and must not have to import the dispatch route to do it.
+ */
+export const DISPATCH_LEDGER_KIND = "channel.dispatch";
 
 /**
  * Which unattended cards this pass may close, and why age alone is not the answer.
@@ -29,8 +42,13 @@ import { responsibilityRuns, routineRuns, tasks } from "../db/schema";
  *   row and its steps and closes the parent and the parked step together. A generic pass cannot see
  *   that a step's `runRef` is the step's own turn rather than the crew's run, so it would either miss
  *   the parent or close a step the crew is about to resume.
- * - `source = 'chat'`. A card that outlives a closed browser tab is the board remembering a
- *   conversation, not a job somebody abandoned.
+ * - `source = 'chat'`, with ONE exception. A card that outlives a closed browser tab is the board
+ *   remembering a conversation, not a job somebody abandoned. The exception is a chat card filed by an
+ *   `@` dispatch (spec B2): that turn runs on the server with nobody's browser behind it, exactly like a
+ *   routine firing, and it keeps a ledger of its own — its `channel.dispatch` work item, keyed by the
+ *   card's `run_ref`. A dispatch card is closed when that row says the turn is no longer in flight:
+ *   finished, or handed out (the queue hands a dispatch out once) and no longer leased. A row still
+ *   waiting to be claimed is a backlog, not a wreck. A chat card with no such row is never touched.
  * - `status = 'needs_action'`. Those cards are held against an approval row, which is a person's claim
  *   to answer, not a crashed process's leftover: deciding it — either way — moves the card through
  *   `board.resumed`. Reaping by age would silently retire a decision somebody is coming back to make,
@@ -38,7 +56,17 @@ import { responsibilityRuns, routineRuns, tasks } from "../db/schema";
  */
 export function staleUnattendedCards(olderThanMs: number) {
   return and(
-    inArray(tasks.source, ["routine", "responsibility"]),
+    or(
+      inArray(tasks.source, ["routine", "responsibility"]),
+      and(
+        eq(tasks.source, "chat"),
+        sql`exists (
+          select 1 from ${workItems}
+          where ${workItems.kind} = ${DISPATCH_LEDGER_KIND}
+            and ${workItems.key} = ${tasks.runRef}
+        )`,
+      ),
+    ),
     eq(tasks.status, "running"),
     sql`${tasks.updatedAt} < now() - (${olderThanMs} * interval '1 millisecond')`,
     /*
@@ -62,6 +90,16 @@ export function staleUnattendedCards(olderThanMs: number) {
         select 1 from ${responsibilityRuns}
         where ${responsibilityRuns.id} = ${tasks.runRef}
           and ${responsibilityRuns.status} in ('queued', 'running', 'waiting')
+      )
+    )`,
+    sql`not (
+      ${tasks.source} = 'chat'
+      and exists (
+        select 1 from ${workItems}
+        where ${workItems.kind} = ${DISPATCH_LEDGER_KIND}
+          and ${workItems.key} = ${tasks.runRef}
+          and ${workItems.finishedAt} is null
+          and (${workItems.attempts} = 0 or ${workItems.leaseUntil} > now())
       )
     )`,
   );

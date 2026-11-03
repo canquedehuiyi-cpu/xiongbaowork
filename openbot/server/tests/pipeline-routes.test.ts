@@ -33,6 +33,9 @@ const suite = randomUUID().slice(0, 8);
 /** The single-user dev actor, because `createDevRequireUser` answers as this one and no other. */
 const tenant = "dev-local-user";
 const groupId = randomUUID();
+/** Another workspace, with a crew and a plan of its own, for the "not yours" answers. */
+const otherTenant = `pipe-routes-other-${suite}`;
+const otherGroupId = randomUUID();
 
 const store = createPipelineStore({
   database,
@@ -51,6 +54,12 @@ const request = (path: string, init?: RequestInit) =>
 const post = (path: string, body: unknown) =>
   request(path, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+const put = (path: string, body: unknown) =>
+  request(path, {
+    method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -82,6 +91,10 @@ afterAll(async () => {
     await database.delete(groupTaskRuns);
     await database.delete(groupTaskTemplates);
     await database.delete(wakerGroups).where(eq(wakerGroups.id, groupId));
+  });
+  await runAsTenant(otherTenant, async () => {
+    await database.delete(groupTaskTemplates);
+    await database.delete(wakerGroups).where(eq(wakerGroups.id, otherGroupId));
   });
   await database.$client.close();
 });
@@ -179,4 +192,227 @@ test("a run that is not here says so rather than saying whose it is", async () =
   expect(skipped.status).toBe(404);
   const aborted = await post(`/runs/${randomUUID()}/abort`, {});
   expect(aborted.status).toBe(404);
+});
+
+/**
+ * Spec I6 over HTTP: pressing 运行 on a template with a coworker the person may not use is a 403 that
+ * names the refused steps, and nothing was dispatched — no run row, no card.
+ *
+ * The body carries the step list rather than only a sentence because the screen lists the step numbers
+ * the person has to fix, and the check is asked with the person who pressed run, not a default.
+ */
+test("running a template with a coworker the person may not use is a 403 naming the steps", async () => {
+  const asked: { initiatedBy: string; agentId: string }[] = [];
+  const refusing = createPipelineStore({
+    database,
+    board,
+    executeStep: async () => ({ status: "done", output: "不该跑" }),
+    canUse: async (initiatedBy, agentId) => {
+      asked.push({ initiatedBy, agentId });
+      return agentId !== STEPS[1]!.agentId;
+    },
+    newRunId: () => randomUUID(),
+  });
+  const refusingRoutes = createPipelineRoutes(refusing, createDevRequireUser());
+  const created = await refusingRoutes.request(
+    new Request("http://openbot.test/templates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ groupId, name: "含越权员工", steps: STEPS }),
+    }),
+  );
+  expect(created.status).toBe(201);
+  const { templateId } = (await created.json()) as { templateId: string };
+  // Scoped to this press's own task text: the dev actor's board is shared with the other cases here, and
+  // a whole-board count would also see their cards.
+  const cardsForPress = () =>
+    runAsTenant(tenant, async () =>
+      database
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.title, "越权的派活")),
+    );
+  expect(await cardsForPress()).toEqual([]);
+
+  const pressed = await refusingRoutes.request(
+    new Request(`http://openbot.test/templates/${templateId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ task: "越权的派活" }),
+    }),
+  );
+
+  expect(pressed.status).toBe(403);
+  const body = (await pressed.json()) as {
+    error: string;
+    refused: { index: number; stepId: string; agentId: string }[];
+  };
+  expect(body.refused).toEqual([
+    { index: 1, stepId: "review", agentId: STEPS[1]!.agentId },
+  ]);
+  expect(body.error).toContain("第 2 步");
+  expect(body.error).toContain(STEPS[1]!.agentId);
+  // Every step was asked, and asked about the person who pressed run.
+  expect(asked).toEqual(
+    STEPS.map((step) => ({ initiatedBy: tenant, agentId: step.agentId })),
+  );
+  const runs = await runAsTenant(tenant, async () =>
+    database
+      .select({ id: groupTaskRuns.id })
+      .from(groupTaskRuns)
+      .where(eq(groupTaskRuns.templateId, templateId)),
+  );
+  expect(runs).toEqual([]);
+  expect(await cardsForPress()).toEqual([]);
+});
+
+/**
+ * Spec I1's edit and delete over HTTP: the person's own plan answers 200, a plan that cannot be saved is
+ * a 400 in the store's words, a name the crew already uses is a 409, and an id that is not this
+ * workspace's -- malformed, unknown, or another tenant's -- is the same 404 (spec D15).
+ */
+test("a template is edited in place and deleted, and runs already started keep their plan", async () => {
+  const created = await post("/templates", {
+    groupId,
+    name: "要改的流程",
+    steps: STEPS,
+  });
+  expect(created.status).toBe(201);
+  const { templateId } = (await created.json()) as { templateId: string };
+  const started = await post(`/templates/${templateId}/runs`, {
+    task: "改之前按下的",
+  });
+  const { runId } = ((await started.json()) as { run: { runId: string } }).run;
+  await finished(runId);
+
+  // A groupId in the body is ignored: the crew a plan was written for is not editable.
+  const edited = await put(`/templates/${templateId}`, {
+    groupId: otherGroupId,
+    name: "改好的流程",
+    steps: [{ id: "only", agentId: STEPS[1]!.agentId, instruction: "只审" }],
+  });
+  expect(edited.status).toBe(200);
+  expect(await edited.json()).toEqual({ templateId });
+  const listed = (await (
+    await request(`/templates?groupId=${groupId}`)
+  ).json()) as {
+    templates: {
+      id: string;
+      groupId: string;
+      name: string;
+      steps: { id: string }[];
+    }[];
+  };
+  const row = listed.templates.find((template) => template.id === templateId);
+  expect(row).toMatchObject({ groupId, name: "改好的流程" });
+  expect(row?.steps.map((step) => step.id)).toEqual(["only"]);
+  // The run pressed before the edit still reads as the two-step plan it ran.
+  const before = (await (await request(`/runs/${runId}`)).json()) as {
+    run: { steps: { id: string }[] };
+  };
+  expect(before.run.steps.map((step) => step.id)).toEqual(["dev", "review"]);
+
+  const deleted = await request(`/templates/${templateId}`, {
+    method: "DELETE",
+  });
+  expect(deleted.status).toBe(200);
+  const after = (await (
+    await request(`/templates?groupId=${groupId}`)
+  ).json()) as { templates: { id: string }[] };
+  expect(after.templates.map((template) => template.id)).not.toContain(
+    templateId,
+  );
+  // The run outlives the plan.
+  expect((await request(`/runs/${runId}`)).status).toBe(200);
+  // And a second delete, or an edit of what is gone, is "not here".
+  expect(
+    (await request(`/templates/${templateId}`, { method: "DELETE" })).status,
+  ).toBe(404);
+  expect(
+    (await put(`/templates/${templateId}`, { name: "复活", steps: STEPS }))
+      .status,
+  ).toBe(404);
+});
+
+test("an edit that cannot be saved is a 400, and a taken name is a 409", async () => {
+  const first = await post("/templates", {
+    groupId,
+    name: "先占的名字",
+    steps: STEPS,
+  });
+  expect(first.status).toBe(201);
+  const created = await post("/templates", {
+    groupId,
+    name: "后来的流程",
+    steps: STEPS,
+  });
+  const { templateId } = (await created.json()) as { templateId: string };
+
+  const empty = await put(`/templates/${templateId}`, {
+    name: "后来的流程",
+    steps: [],
+  });
+  expect(empty.status).toBe(400);
+  expect((await empty.json()).error).toContain("没有步骤");
+
+  const outsider = await put(`/templates/${templateId}`, {
+    name: "后来的流程",
+    steps: [{ id: "x", agentId: `outsider-${suite}`, instruction: "组外" }],
+  });
+  expect(outsider.status).toBe(400);
+  expect((await outsider.json()).error).toContain("组外");
+
+  const taken = await put(`/templates/${templateId}`, {
+    name: "先占的名字",
+    steps: STEPS,
+  });
+  expect(taken.status).toBe(409);
+  expect((await taken.json()).error).toContain("同名");
+
+  // Create answers the same 409 rather than a raw unique violation.
+  const twice = await post("/templates", {
+    groupId,
+    name: "先占的名字",
+    steps: STEPS,
+  });
+  expect(twice.status).toBe(409);
+});
+
+test("another workspace's template, or no template at all, is a 404 to edit or delete", async () => {
+  const theirs = randomUUID();
+  await runAsTenant(otherTenant, async () => {
+    await database.insert(wakerGroups).values({
+      id: otherGroupId,
+      tenantId: otherTenant,
+      name: `别人的小组-${suite}`,
+    });
+    await database.insert(groupTaskTemplates).values({
+      id: theirs,
+      tenantId: otherTenant,
+      groupId: otherGroupId,
+      name: "别人的流程",
+      steps: [STEPS[0]!],
+    });
+  });
+
+  for (const id of [theirs, randomUUID(), "not-a-uuid"]) {
+    const edited = await put(`/templates/${id}`, {
+      name: "抢过来",
+      steps: STEPS,
+    });
+    expect(edited.status).toBe(404);
+    const deleted = await request(`/templates/${id}`, { method: "DELETE" });
+    expect(deleted.status).toBe(404);
+    // Pressing it is the same "not here", a malformed id included, never a 500 from a uuid cast.
+    const pressed = await post(`/templates/${id}/runs`, { task: "抢跑" });
+    expect(pressed.status).toBe(404);
+  }
+
+  const [row] = await runAsTenant(otherTenant, async () =>
+    database
+      .select({ name: groupTaskTemplates.name })
+      .from(groupTaskTemplates)
+      .where(eq(groupTaskTemplates.id, theirs)),
+  );
+  expect(row?.name).toBe("别人的流程");
 });
