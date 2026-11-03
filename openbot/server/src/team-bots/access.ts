@@ -36,11 +36,20 @@ export const PLACEHOLDER_BOT_NAMES = [
 const tbAgent = alias(agents, "team_bot_agent");
 const tbProfile = alias(agentProfiles, "team_bot_profile");
 
-/** Whether the published Bot is described well enough for a teammate to recognise it. */
+/**
+ * Whether the published Bot is described well enough for a teammate to recognise it.
+ *
+ * It also holds the publication to the Bot's own stamp. Anybody may insert a publication, audience
+ * or assignment row stamped with their OWN tenant naming any agent id, so a row only counts when it
+ * carries the same stamp as the Bot (`team` once the Bot is shared); a stranger's own row never
+ * does. Migration 0122's `openbot_team_bot_visible` asks the same, pinned by the parity test.
+ */
 export const describedForTeam = sql`exists (
   select 1 from ${agentProfiles} ${tbProfile}
   inner join ${agents} ${tbAgent} on ${tbAgent.id} = ${tbProfile.agentId}
   where ${tbProfile.agentId} = ${teamBotPublications.agentId}
+    and ${tbProfile.tenantId} = ${teamBotPublications.tenantId}
+    and ${tbAgent.tenantId} = ${teamBotPublications.tenantId}
     and btrim(${tbProfile.roleDescription}) <> ''
     and lower(btrim(${tbAgent.name})) not in (${sql.join(
       PLACEHOLDER_BOT_NAMES.map((name) => sql`${name}`),
@@ -58,16 +67,13 @@ export function teamBotAccess(actorId: string, agentId: AnyPgColumn): SQL {
         or exists (
           select 1 from ${teamBotAudience}
           where ${teamBotAudience.agentId} = ${teamBotPublications.agentId}
+            and ${teamBotAudience.tenantId} = ${teamBotPublications.tenantId}
             and (
               (${teamBotAudience.kind} = 'user' and ${teamBotAudience.value} = ${actorId})
               or (${teamBotAudience.kind} = 'group' and ${teamBotAudience.value} = any(${groupsOf(actorId)}))
             )
         )
-        or exists (
-          select 1 from ${teamBotAssignments}
-          where ${teamBotAssignments.agentId} = ${teamBotPublications.agentId}
-            and (${teamBotAssignments.groupName} = '*' or ${teamBotAssignments.groupName} = any(${groupsOf(actorId)}))
-        )
+        or ${assignedCondition(actorId)}
       )
   )`;
 }
@@ -77,6 +83,7 @@ export function assignedCondition(actorId: string) {
   return sql`exists (
     select 1 from ${teamBotAssignments}
     where ${teamBotAssignments.agentId} = ${teamBotPublications.agentId}
+      and ${teamBotAssignments.tenantId} = ${teamBotPublications.tenantId}
       and (${teamBotAssignments.groupName} = '*' or ${teamBotAssignments.groupName} = any(${groupsOf(actorId)}))
   )`;
 }

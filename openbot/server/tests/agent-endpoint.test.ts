@@ -222,7 +222,7 @@ describe("the key a customer's agent sits behind", () => {
       store: {
         create: async (value) => {
           stored = { kind: value.kind, keyId: value.keyId };
-          return { ...vaultRow, encryptedValue: value.encryptedValue };
+          return vaultRow;
         },
         revoke: async () => new Date(),
       } as never,
@@ -239,11 +239,15 @@ describe("the key a customer's agent sits behind", () => {
   });
 
   test("the value is encrypted at rest, not stored in the clear", async () => {
+    // The store seals for the row it picks (audit #9): the fake plays the store's part and hands
+    // the seal the binding a real insert would, so what it gets back is what the row would hold.
+    const binding = { id: "cred-1", tenantId: "tenant-a", kind: "agent" as const };
     let written = "";
-    await storeAgentAuth({
+    const auth = await storeAgentAuth({
       store: {
         create: async (value) => {
-          written = value.encryptedValue;
+          if (!value.seal) throw new Error("expected a bound seal, not a v1 envelope");
+          written = await value.seal(binding);
           return vaultRow as never;
         },
         revoke: async () => new Date(),
@@ -254,7 +258,27 @@ describe("the key a customer's agent sits behind", () => {
       value: "Bearer hunter2",
     });
     expect(written).not.toContain("hunter2");
-    expect(written.length).toBeGreaterThan(0);
+    expect(JSON.parse(written).version).toBe(2);
+
+    // And it reads back through the row it was bound to, and through no other.
+    const headersFor = (row: typeof binding) =>
+      agentAuthHeaders({
+        reader: {
+          readSecret: async () => ({
+            encryptedValue: written,
+            revokedAt: null,
+            ...row,
+          }),
+        },
+        encryptionKey: TEST_KEY,
+        auth,
+      });
+    expect(await headersFor(binding)).toEqual({
+      Authorization: "Bearer hunter2",
+    });
+    await expect(
+      headersFor({ ...binding, tenantId: "tenant-b" }),
+    ).rejects.toThrow();
   });
 
   test("a revoked key sends nothing rather than falling back to no auth silently", async () => {

@@ -5,8 +5,9 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
-import { testDatabaseUrl } from "./support/database";
 import { agentProfiles, agents, credentials, users } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
+import { testDatabaseUrl } from "./support/database";
 
 /**
  * Editing a Bot's key, against a real database.
@@ -36,6 +37,8 @@ const profiles = createAgentProfileStore(database, undefined, {
 const suite = randomUUID().slice(0, 8);
 const actor: AgentActor = { id: `user_${suite}`, role: "admin" };
 const created: string[] = [];
+/** Every row here is the actor's own: their user row, their Bots and the keys those Bots hold. */
+const asActor = <T>(fn: () => T): T => runAsTenant(actor.id, fn);
 
 /** An edit that hangs is the failure, so the wait is bounded and the bound is the assertion. */
 const DEADLINE_MS = 5_000;
@@ -60,49 +63,55 @@ async function within<T>(label: string, work: Promise<T>): Promise<T> {
   }
 }
 
-async function liveKeysFor(agentId: string) {
-  return database
-    .select({ id: credentials.id })
-    .from(credentials)
-    .where(
-      and(
-        eq(credentials.kind, "agent"),
-        eq(credentials.keyId, agentId),
-        isNull(credentials.revokedAt),
+function liveKeysFor(agentId: string) {
+  return asActor(() =>
+    database
+      .select({ id: credentials.id })
+      .from(credentials)
+      .where(
+        and(
+          eq(credentials.kind, "agent"),
+          eq(credentials.keyId, agentId),
+          isNull(credentials.revokedAt),
+        ),
       ),
-    );
+  );
 }
 
 beforeAll(async () => {
-  await database.insert(users).values({
-    id: actor.id,
-    email: `${actor.id}@openbot.test`,
-    name: "Key rotation tester",
-    emailVerified: true,
-  });
+  await asActor(async () => {
+    await database.insert(users).values({
+      id: actor.id,
+      email: `${actor.id}@openbot.test`,
+      name: "Key rotation tester",
+      emailVerified: true,
+    });
 
-  const profile = await profiles.create(actor, {
-    name: `key rotation ${suite}`,
-    title: "Tester",
-    roleDescription: "Holds a key that gets replaced.",
-    visibility: "private",
-    endpoint: "https://example.invalid/agent",
-    auth: { header: "Authorization", value: "first-secret" },
+    const profile = await profiles.create(actor, {
+      name: `key rotation ${suite}`,
+      title: "Tester",
+      roleDescription: "Holds a key that gets replaced.",
+      visibility: "private",
+      endpoint: "https://example.invalid/agent",
+      auth: { header: "Authorization", value: "first-secret" },
+    });
+    created.push(profile.id);
   });
-  created.push(profile.id);
 });
 
 afterAll(async () => {
-  if (created.length) {
-    await database
-      .delete(agentProfiles)
-      .where(inArray(agentProfiles.agentId, created));
-    await database.delete(agents).where(inArray(agents.id, created));
-    await database
-      .delete(credentials)
-      .where(inArray(credentials.keyId, created));
-  }
-  await database.delete(users).where(eq(users.id, actor.id));
+  await asActor(async () => {
+    if (created.length) {
+      await database
+        .delete(agentProfiles)
+        .where(inArray(agentProfiles.agentId, created));
+      await database.delete(agents).where(inArray(agents.id, created));
+      await database
+        .delete(credentials)
+        .where(inArray(credentials.keyId, created));
+    }
+    await database.delete(users).where(eq(users.id, actor.id));
+  });
   await database.$client.end();
 });
 
@@ -114,14 +123,16 @@ describe("editing a Bot's key", () => {
 
     await within(
       "the edit",
-      profiles.update(actor, agentId, {
-        name: `key rotation ${suite}`,
-        title: "Tester",
-        roleDescription: "Holds a key that gets replaced.",
-        visibility: "private",
-        endpoint: "https://example.invalid/agent",
-        auth: { header: "Authorization", value: "second-secret" },
-      }),
+      asActor(() =>
+        profiles.update(actor, agentId, {
+          name: `key rotation ${suite}`,
+          title: "Tester",
+          roleDescription: "Holds a key that gets replaced.",
+          visibility: "private",
+          endpoint: "https://example.invalid/agent",
+          auth: { header: "Authorization", value: "second-secret" },
+        }),
+      ),
     );
 
     const live = await liveKeysFor(agentId);
@@ -131,12 +142,14 @@ describe("editing a Bot's key", () => {
 
   test("the credential it replaced is revoked, not merely unreferenced", async () => {
     const [agentId] = created;
-    const rows = await database
-      .select({ id: credentials.id, revokedAt: credentials.revokedAt })
-      .from(credentials)
-      .where(
-        and(eq(credentials.kind, "agent"), eq(credentials.keyId, agentId)),
-      );
+    const rows = await asActor(() =>
+      database
+        .select({ id: credentials.id, revokedAt: credentials.revokedAt })
+        .from(credentials)
+        .where(
+          and(eq(credentials.kind, "agent"), eq(credentials.keyId, agentId)),
+        ),
+    );
 
     expect(rows).toHaveLength(2);
     expect(rows.filter((row) => row.revokedAt === null)).toHaveLength(1);
@@ -144,18 +157,23 @@ describe("editing a Bot's key", () => {
   });
 
   test("deleting the Bot retires the key it was still holding", async () => {
-    const profile = await profiles.create(actor, {
-      name: `key deletion ${suite}`,
-      title: "Tester",
-      roleDescription: "Holds a key until it is deleted.",
-      visibility: "private",
-      endpoint: "https://example.invalid/agent",
-      auth: { header: "Authorization", value: "only-secret" },
-    });
+    const profile = await asActor(() =>
+      profiles.create(actor, {
+        name: `key deletion ${suite}`,
+        title: "Tester",
+        roleDescription: "Holds a key until it is deleted.",
+        visibility: "private",
+        endpoint: "https://example.invalid/agent",
+        auth: { header: "Authorization", value: "only-secret" },
+      }),
+    );
     created.push(profile.id);
 
     expect(await liveKeysFor(profile.id)).toHaveLength(1);
-    await within("the deletion", profiles.softDelete(actor, profile.id));
+    await within(
+      "the deletion",
+      asActor(() => profiles.softDelete(actor, profile.id)),
+    );
     expect(await liveKeysFor(profile.id)).toHaveLength(0);
   });
 });

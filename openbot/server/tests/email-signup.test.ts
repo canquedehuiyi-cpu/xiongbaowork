@@ -64,18 +64,23 @@ const auth = createAuth(
   async () => false,
 );
 
-/** POST one of Better Auth's own endpoints, the way the browser's client does. */
+/**
+ * POST one of Better Auth's own endpoints, the way the browser's client does, and as `app.ts` runs
+ * the handler: as the identity layer (`platform`), whose hooks name the new person themselves.
+ */
 async function post(path: string, body: unknown) {
-  return auth.handler(
-    new Request(`http://127.0.0.1:3000/api/auth${path}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        // The origin Better Auth trusts, which is the deployment's own address.
-        origin: "http://127.0.0.1:3000",
-      },
-      body: JSON.stringify(body),
-    }),
+  return runAsTenant("platform", () =>
+    auth.handler(
+      new Request(`http://127.0.0.1:3000/api/auth${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          // The origin Better Auth trusts, which is the deployment's own address.
+          origin: "http://127.0.0.1:3000",
+        },
+        body: JSON.stringify(body),
+      }),
+    ),
   );
 }
 
@@ -96,9 +101,12 @@ describe("email and password registration", () => {
           .delete(subscriptions)
           .where(eq(subscriptions.tenantId, userId));
       });
-      await database.delete(accounts).where(eq(accounts.userId, userId));
-      await database.delete(sessions).where(eq(sessions.userId, userId));
-      await database.delete(users).where(eq(users.id, userId));
+      // The identity tables carry no tenant: they are the deployment's, cleaned up as the platform.
+      await runAsTenant("platform", async () => {
+        await database.delete(accounts).where(eq(accounts.userId, userId));
+        await database.delete(sessions).where(eq(sessions.userId, userId));
+        await database.delete(users).where(eq(users.id, userId));
+      });
     }
   });
 
@@ -113,10 +121,12 @@ describe("email and password registration", () => {
     expect(body.user?.email).toBe(email);
 
     userId = body.user.id as string;
-    const [row] = await database
-      .select({ id: users.id, name: users.name })
-      .from(users)
-      .where(eq(users.id, userId));
+    const [row] = await runAsTenant("platform", () =>
+      database
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .where(eq(users.id, userId)),
+    );
     expect(row?.email ?? email).toBe(email);
   });
 

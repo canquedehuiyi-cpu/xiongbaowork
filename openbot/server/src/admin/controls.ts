@@ -20,6 +20,7 @@
 
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import postgres from "postgres";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import {
   type AuditStore,
   addAuditTap,
@@ -44,6 +45,7 @@ import { agentProfiles, agents, auditEvents } from "../db/schema";
 import { boundModelName } from "../models/runtime-resolver";
 import { createOtelEventExporter, type EventExporter } from "../telemetry/otel";
 import { scrubCommand } from "../telemetry/scrub";
+import { isPersonTenant, runAsTenant } from "../tenant/context";
 import {
   type Capability,
   type CapabilityRow,
@@ -80,6 +82,13 @@ export type EnterpriseDeps = {
   computerToken?: string;
   /** `provider/model` the built-in Bot runs on, for the model allowlist and usage view. */
   builtInModel?: string;
+  /**
+   * The library model a built-in Bot's run will actually speak, named by the same resolver that builds
+   * it — `null` when the run falls back to {@link builtInModel} (no binding, or a binding whose key is
+   * revoked or will not decrypt). Absent, the rows alone are read ({@link boundModelName}), which
+   * cannot tell a key that will not decrypt.
+   */
+  agentModelName?: (agentId: string) => Promise<string | null>;
   /** Offboarding: ends sessions and deny-lists, and retires what a person granted. */
   people?: {
     revoke: (userId: string, by: string) => Promise<void>;
@@ -346,10 +355,15 @@ async function initializeEnterpriseControls(
   };
 
   try {
+    /*
+     * The settings, capability switches and network policies are the deployment's, and the refresh
+     * runs from boot, from a 60-second timer and from the NOTIFY listener — none of which has a frame.
+     * So it reads as `platform` (G01) rather than leaving it to the legacy `system` fallback.
+     */
     const refresh = async () => {
       if (closing) return;
       try {
-        snapshot = await loadSnapshot(store);
+        snapshot = await runAsTenant("platform", () => loadSnapshot(store));
       } catch (error) {
         console.error(
           JSON.stringify({
@@ -450,13 +464,22 @@ async function initializeEnterpriseControls(
     const policyForBot = async (botId: string): Promise<EgressPolicy> => {
       const current = snapshot;
       if (!current) return { mode: "deny_all", rules: [] };
-      const [profile] = await deps.database
-        .select({ owner: agentProfiles.ownerUserId })
-        .from(agentProfiles)
-        .where(eq(agentProfiles.agentId, botId))
-        .limit(1);
-      const member: Member = profile?.owner
-        ? await store.member(profile.owner)
+      /*
+       * As `platform` (G01): "whose Bot is this" is asked by the 30-second push and by a computer
+       * waking, for a Bot of any tenant. Left to the caller's frame it ran as `system` (or as whoever
+       * woke it), row-level security hid the owner's profile, and the Bot was given the network policy
+       * of nobody in particular instead of its owner's.
+       */
+      const [profile] = await runAsTenant("platform", () =>
+        deps.database
+          .select({ owner: agentProfiles.ownerUserId })
+          .from(agentProfiles)
+          .where(eq(agentProfiles.agentId, botId))
+          .limit(1),
+      );
+      const owner = profile?.owner;
+      const member: Member = owner
+        ? await runAsTenant("platform", () => store.member(owner))
         : { role: "user", groups: [] };
       const cloudNetwork = resolveCapability(
         current.rows,
@@ -504,13 +527,29 @@ async function initializeEnterpriseControls(
       return pushing;
     };
 
+    /*
+     * Every Bot this person owns, whichever frame asks: an administrator's request (whose own tenant
+     * cannot see the member's profiles) or SCIM's deferred offboarding. As `platform` (G01), because
+     * the question is about the person, not about the asker's rows.
+     */
     const ownedBots = async (userId: string) =>
       (
-        await deps.database
-          .select({ agentId: agentProfiles.agentId })
-          .from(agentProfiles)
-          .where(eq(agentProfiles.ownerUserId, userId))
+        await runAsTenant("platform", () =>
+          deps.database
+            .select({ agentId: agentProfiles.agentId })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.ownerUserId, userId)),
+        )
       ).map((row) => row.agentId);
+
+    /**
+     * Whose a Bot is: its owner (`agents/bot-owner.ts`) — the tenant stamped on its own `agents` row,
+     * or for a team Bot the person its profile names — or `platform` when that is nobody. The
+     * stopped-computer row is then filed in its owner's trail rather than in `system`'s or `team`'s.
+     * Same rule as the idle computer culler.
+     */
+    const botTenant = async (botId: string): Promise<string> =>
+      (await ownerTenantOfBot(deps.database, botId)) ?? "platform";
 
     const terminateMemberComputers: EnterpriseControls["terminateMemberComputers"] =
       async (userId, by) => {
@@ -572,21 +611,28 @@ async function initializeEnterpriseControls(
         ).filter((computer) => computer.status === "running");
         if (running.length === 0) return { stopped: [] };
         const bot = sql<string>`${auditEvents.payload}->>'bot'`;
+        // As `platform` (G01): when each running Bot, of any tenant, last acted. Unframed this read
+        // only `system` rows, so every person's computer looked idle since it started.
         const used = new Map(
           (
-            await tx
-              .select({ bot, last: sql<string>`max(${auditEvents.createdAt})` })
-              .from(auditEvents)
-              .where(
-                and(
-                  like(auditEvents.eventType, "computer.%"),
-                  inArray(
-                    bot,
-                    running.map((computer) => computer.botId),
+            await runAsTenant("platform", () =>
+              tx
+                .select({
+                  bot,
+                  last: sql<string>`max(${auditEvents.createdAt})`,
+                })
+                .from(auditEvents)
+                .where(
+                  and(
+                    like(auditEvents.eventType, "computer.%"),
+                    inArray(
+                      bot,
+                      running.map((computer) => computer.botId),
+                    ),
                   ),
-                ),
-              )
-              .groupBy(bot)
+                )
+                .groupBy(bot),
+            )
           ).map((row) => [row.bot, new Date(row.last)] as const),
         );
         const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -599,17 +645,24 @@ async function initializeEnterpriseControls(
           try {
             await (deps.provider as ComputerProvider).stop(computer.botId);
             stopped.push(computer.botId);
-            await audit({
-              eventType: "computer.terminated_inactive",
-              targetType: "computer",
-              targetId: computer.botId,
-              initiator: DEPLOYMENT_INITIATOR,
-              payload: {
-                bot: computer.botId,
-                idleSince: since.toISOString(),
-                inactiveDays: days,
-              },
-            });
+            // The computer is already stopped: a failed owner lookup must not cost it its audit row
+            // or report the stop as failed, so it files as the deployment's, like a Bot naming nobody.
+            const owner = await botTenant(computer.botId).catch(
+              () => "platform",
+            );
+            await runAsTenant(owner, () =>
+              audit({
+                eventType: "computer.terminated_inactive",
+                targetType: "computer",
+                targetId: computer.botId,
+                initiator: DEPLOYMENT_INITIATOR,
+                payload: {
+                  bot: computer.botId,
+                  idleSince: since.toISOString(),
+                  inactiveDays: days,
+                },
+              }),
+            );
           } catch (error) {
             console.warn(
               JSON.stringify({
@@ -686,20 +739,21 @@ async function initializeEnterpriseControls(
             }),
           ),
         );
-        void store
-          .purgeActions(
+        // Retention across every tenant's Action Recording rows: `platform` (G01).
+        void runAsTenant("platform", () =>
+          store.purgeActions(
             new Date(
               Date.now() - ACTION_RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000,
             ),
-          )
-          .catch((error) =>
-            console.error(
-              JSON.stringify({
-                type: "action-record-purge-failed",
-                error: String(error),
-              }),
-            ),
-          );
+          ),
+        ).catch((error) =>
+          console.error(
+            JSON.stringify({
+              type: "action-record-purge-failed",
+              error: String(error),
+            }),
+          ),
+        );
       }, 60 * 60_000),
     );
     for (const timer of timers) timer.unref?.();
@@ -1015,9 +1069,7 @@ export async function headlessTurnRefusal(input: {
      * spoke.
      */
     const builtIn = row?.type === "built_in";
-    const bound = builtIn
-      ? await boundModelName(controls.deps.database, input.agentId)
-      : null;
+    const bound = builtIn ? await modelBoundFor(controls, input.agentId) : null;
     const model = builtIn ? (bound ?? controls.deps.builtInModel) : undefined;
     if (!model || allowlist.models.includes(model)) return null;
     await controls.store
@@ -1052,5 +1104,107 @@ export async function headlessTurnRefusal(input: {
       }),
     );
     return "This deployment's enterprise controls could not be checked, so the Bot did not run.";
+  }
+}
+
+/** See {@link EnterpriseDeps.agentModelName}: the bound model this Bot's run will speak, or null. */
+async function modelBoundFor(
+  controls: EnterpriseControls,
+  agentId: string,
+): Promise<string | null> {
+  if (!controls.deps.agentModelName)
+    return boundModelName(controls.deps.database, agentId);
+  return controls.deps.agentModelName(agentId).catch(() => null);
+}
+
+/** The first model an AG-UI stream names, the way the HTTP gate reads a remote Bot's. */
+const MODEL_IN_EVENT = /"model"\s*:\s*"([^"]{1,200})"/;
+
+/** The model a stream event names, if any — for a remote Bot, which chooses its own. */
+export function modelNamedIn(event: unknown): string | undefined {
+  try {
+    return MODEL_IN_EVENT.exec(JSON.stringify(event) ?? "")?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The usage row for a headless run that answered — the row the HTTP gate writes for a browser run.
+ *
+ * A routine firing, a crew's step, a responsibility run or a hop never crosses that gate, so without
+ * this its card on the board names no model and the usage view never counts it. `runId` is the run
+ * reference the task card is keyed by, which is what the board reads the model back with.
+ *
+ * The model is the one that ran: a built-in Bot's bound model only when the resolver actually built
+ * it (see {@link EnterpriseDeps.agentModelName}), the deployment's otherwise; a remote Bot's is what
+ * its stream named, or `unknown`. Written in the run's own tenant, and never in `system` or
+ * `platform`, where the person whose card it is could not read it. Never throws: a usage row that
+ * cannot be written must not turn an answered turn into a failed one.
+ */
+export async function recordHeadlessModelUsage(input: {
+  tenantId: string;
+  ownerUserId: string;
+  agentId: string;
+  threadId: string | null;
+  runId: string;
+  observedModel?: string;
+}): Promise<void> {
+  const controls = installed;
+  if (!controls) return;
+  if (!isPersonTenant(input.tenantId)) {
+    console.error(
+      JSON.stringify({
+        type: "model-usage-without-tenant",
+        agentId: input.agentId,
+      }),
+    );
+    return;
+  }
+  try {
+    await runAsTenant(input.tenantId, async () => {
+      const [row] = await controls.deps.database
+        .select({ type: agents.type })
+        .from(agents)
+        .where(eq(agents.id, input.agentId))
+        .limit(1);
+      const builtIn = row?.type === "built_in";
+      const bound = builtIn
+        ? await modelBoundFor(controls, input.agentId)
+        : null;
+      const configured = builtIn
+        ? (bound ?? controls.deps.builtInModel)
+        : undefined;
+      const model =
+        configured ?? input.observedModel ?? `remote:${input.agentId}`;
+      const source = builtIn
+        ? bound
+          ? "bound"
+          : "configured"
+        : input.observedModel
+          ? "observed"
+          : "unknown";
+      if (builtIn && !configured) return;
+      // Judged as the gate judges it; a built-in Bot off the list never got this far.
+      const allowlist = controls.snapshot()?.settings.modelAllowlist;
+      const allowed = !allowlist?.enabled || allowlist.models.includes(model);
+      return await controls.store.recordModelUsage({
+        userId: input.ownerUserId,
+        agentId: input.agentId,
+        threadId: input.threadId,
+        runId: input.runId,
+        model,
+        source,
+        allowed,
+      });
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "model-usage-write-failed",
+        agentId: input.agentId,
+        error: String(error),
+      }),
+    );
   }
 }
