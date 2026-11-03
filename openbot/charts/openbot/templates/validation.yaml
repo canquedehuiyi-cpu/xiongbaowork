@@ -40,6 +40,18 @@ This template renders nothing.
 {{- fail "The bundled database connects the API as the superuser postgres, which row-level security does not bind, and the server refuses that in production. To run it anyway, knowing tenant isolation then rests on the application alone, say so: config.extraEnv: [{name: OPENBOT_RLS_ENFORCE, value: warn}]. For isolation in the database, use your own database (database.existingSecret) with a URL naming openbot_app." }}
 {{- end }}
 
+{{- /*
+  An external database given by URL, with no role writer.
+
+  The API refuses to start without ROLE_WRITER_DATABASE_URL, so this install would succeed and every
+  API pod would crash-loop. With `database.existingSecret` the URL is read from that Secret under
+  `database.roleWriterExistingSecretKey`, which a render cannot see; a missing key there stops the
+  pod with an error naming the key, so that path is not refused here.
+*/}}
+{{- if and (not .Values.postgresql.enabled) .Values.database.url (not .Values.database.existingSecret) (not (.Values.database).roleWriterUrl) (not (.Values.database).roleWriterExistingSecret) }}
+{{- fail "An external database needs two URLs. database.url is the API's (openbot_app); also set database.roleWriterUrl to openbot_role_writer's (migration 0109), with its own password, or database.roleWriterExistingSecret to a Secret holding it. The API refuses to start without ROLE_WRITER_DATABASE_URL. Prefer database.existingSecret with both keys (database-url, role-writer-database-url): a URL in values is readable by anybody who can read the release." }}
+{{- end }}
+
 {{- if and .Values.postgresql.enabled (or .Values.database.url .Values.database.existingSecret) }}
 {{- fail "Two databases. postgresql.enabled is true and database.url is also set, so it is not clear which one is meant. Pick one." }}
 {{- end }}

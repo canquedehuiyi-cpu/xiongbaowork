@@ -31,16 +31,24 @@ single most common reason a first install comes up with a pod stuck `Pending` an
 why.
 
 **A database, and the Secret that names it**, unless you are using the bundled one. The chart reads
-a URL out of a Secret you make; it never writes your database credentials into a values file:
+two URLs out of a Secret you make; it never writes your database credentials into a values file.
+Two roles, each with its own password: the API's `openbot_app`, and `openbot_role_writer`
+(migration 0109), the only login allowed to write identity roles. The API refuses to start without
+the second (`ROLE_WRITER_DATABASE_URL is required`). Set both roles' passwords after the first
+migration; the ones the migration creates them with are public.
 
 ```sh
 kubectl create namespace openbot
 kubectl -n openbot create secret generic openbot-database \
-  --from-literal=database-url='postgresql://USER:PASSWORD@HOST:5432/openbot?sslmode=require'
+  --from-literal=database-url='postgresql://openbot_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
+  --from-literal=role-writer-database-url='postgresql://openbot_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
 ```
 
-Then `--set database.existingSecret=openbot-database`. The key must be `database-url`, or name a
-different one with `database.existingSecretKey`. See
+Then `--set database.existingSecret=openbot-database`. The keys must be `database-url` and
+`role-writer-database-url`, or name different ones with `database.existingSecretKey` and
+`database.roleWriterExistingSecretKey` (or a separate Secret with `database.roleWriterExistingSecret`).
+With `database.url` instead of a Secret, `database.roleWriterUrl` is required too, and the install
+is refused without it. See
 [Your own database](#your-own-database-which-is-what-a-real-deployment-uses) for `sslmode` and the
 `vector` extension, both of which a managed database will otherwise fail on in a way that names the
 wrong problem.
@@ -176,7 +184,7 @@ and asking for it with more than one replica is refused at install time.
 
 ```sh
 --set postgresql.enabled=false \
---set database.existingSecret=openbot-database   # key: database-url
+--set database.existingSecret=openbot-database   # keys: database-url, role-writer-database-url
 ```
 
 `postgresql.enabled` is **off by default and not production-grade**. A database on a pod goes away
