@@ -342,6 +342,12 @@ export type DeploymentConfig = {
    * tenant owns. `device` refuses when no machine is reachable rather than running the work here.
    */
   tenantRuntime: "cloud" | "device";
+  /**
+   * Why {@link tenantRuntime} is what it is, in words for the one start-up line that says so: named
+   * by `TENANT_RUNTIME`, or the default for this `NODE_ENV`. An operator whose Bots suddenly ask
+   * for a paired machine can read the reason off the boot log instead of the source.
+   */
+  tenantRuntimeReason: string;
   /** How far one Bot handing work to another may go. */
   handoff: HandoffCaps;
   /**
@@ -956,14 +962,43 @@ function runtimeCapabilities(environment: Environment): RuntimeCapabilities {
   return { mode: "local", durableHistory: true };
 }
 
-/** `TENANT_RUNTIME`, with the two answers named so a typo cannot pick one of them for you. */
-function tenantRuntime(environment: Environment): "cloud" | "device" {
+/**
+ * `TENANT_RUNTIME`, with the two answers named so a typo cannot pick one of them for you.
+ *
+ * UNSET DEPENDS ON WHERE IT RUNS (F6). A deployed server — `NODE_ENV=production`, which the image
+ * and the chart both set — defaults to `device`: the tenant's own machine is the product, and the
+ * server-side computer (the supervisor chain, the embedded browser) is a development and demo
+ * fallback. A laptop and the test suite keep `cloud`, so `bun run dev` with no runner paired still
+ * walks the whole flow. `TENANT_RUNTIME=cloud` is still honoured in production, for a demo
+ * deployment that wants the server's own computer.
+ *
+ * Through `isProduction`, so `NODE_ENV="production "` cannot land a deployed server on `cloud`.
+ */
+function tenantRuntime(
+  environment: Environment,
+): Pick<DeploymentConfig, "tenantRuntime" | "tenantRuntimeReason"> {
   const named = optional(environment, "TENANT_RUNTIME")?.trim().toLowerCase();
-  if (!named || named === "cloud") return "cloud";
-  if (named === "device") return "device";
-  throw new Error(
-    `TENANT_RUNTIME must be "cloud" or "device". Received "${named}".`,
-  );
+  if (named === "cloud" || named === "device") {
+    return {
+      tenantRuntime: named,
+      tenantRuntimeReason: `TENANT_RUNTIME=${named}`,
+    };
+  }
+  if (named) {
+    throw new Error(
+      `TENANT_RUNTIME must be "cloud" or "device". Received "${named}".`,
+    );
+  }
+  return isProduction(environment)
+    ? {
+        tenantRuntime: "device",
+        tenantRuntimeReason:
+          "TENANT_RUNTIME is unset and NODE_ENV=production; set TENANT_RUNTIME=cloud to use this deployment's own computer",
+      }
+    : {
+        tenantRuntime: "cloud",
+        tenantRuntimeReason: "TENANT_RUNTIME is unset outside production",
+      };
 }
 
 /**
@@ -1371,15 +1406,16 @@ export function loadConfig(
     modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
-     * container, which is what a development machine and every existing install already run.
-     * `device` sends them to the tenant's paired machine, and refuses when none is reachable — a
-     * deployment that says "my machine" does not silently do the work somewhere else.
+     * container, which is what a development machine runs. `device` sends them to the tenant's
+     * paired machine, and refuses when none is reachable — a deployment that says "my machine" does
+     * not silently do the work somewhere else. Unset, production gets `device` and everything else
+     * `cloud` (F6, see `tenantRuntime`).
      *
      * Anything that is neither is refused rather than fallen back to. This is the one switch where a
      * typo decides whose computer a Bot acts on, and a silent `cloud` answer would run it here while
      * the operator believed it was running on theirs.
      */
-    tenantRuntime: tenantRuntime(environment),
+    ...tenantRuntime(environment),
     handoff: handoffCaps(environment),
     ...(optional(environment, "AGENT_TOOL_TOKEN")
       ? { agentToolToken: optional(environment, "AGENT_TOOL_TOKEN") as string }

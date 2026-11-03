@@ -339,6 +339,11 @@ import {
 import { PostgresAgentRunner } from "./threads/postgres-runner";
 import { markUntrusted } from "./untrusted-content";
 import { createUserInstructionsStore } from "./user-instructions";
+import {
+  avatarSourcesForActor,
+  createAvatarSourceRoutes,
+  createAvatarSourceStore,
+} from "./avatar-sources";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
@@ -1280,6 +1285,15 @@ await startupLifecycle.run(async (startup) => {
       ...(isolation.warning ? { warning: isolation.warning } : {}),
     }),
   );
+  // Which computer a coworker acts on, and why, once per boot. Production with TENANT_RUNTIME unset
+  // is `device` (F6), so a deployment whose Bots now ask for a paired machine can see the reason here.
+  console.info(
+    JSON.stringify({
+      type: "tenant-runtime",
+      runtime: config.tenantRuntime,
+      reason: config.tenantRuntimeReason,
+    }),
+  );
   /**
    * One Bot's endpoint must not take down the platform.
    *
@@ -1496,6 +1510,14 @@ await startupLifecycle.run(async (startup) => {
    */
   const loadInstructionsForActor = (actorId: string) => () =>
     userInstructionsStore.read(actorId);
+
+  /*
+   * The information sources a person declared for their 分身 (story F1), read per build for the
+   * reason the instructions above are: a source added or removed applies to the next run. Answered
+   * only for the asker's own 分身; every other Bot gets none without a read.
+   */
+  const avatarSourceStore = createAvatarSourceStore(database);
+  const loadAvatarSourcesForActor = avatarSourcesForActor(avatarSourceStore);
 
   /*
    * The file behind an attachment reference, read when a turn turns out to name one.
@@ -2006,6 +2028,8 @@ await startupLifecycle.run(async (startup) => {
       markAttachmentsSentForActor(actor.id),
       loadPersonalMemoryForActor(actor.id),
       resolveAgentModel,
+      // And the owner's 分身's declared sources, exactly as their chat turn is told them.
+      loadAvatarSourcesForActor(actor.id),
     );
     const agent = agents[agentId];
     if (!agent) {
@@ -2273,6 +2297,8 @@ await startupLifecycle.run(async (startup) => {
     // The thread store, and the runtime's runner: one object, `threads/postgres-runner.ts`.
     localThreadRunner,
     resolveAgentModel,
+    // What a person declared about where their material is, told to their own 分身 only (story F1).
+    loadAvatarSourcesForActor,
   );
 
   const responsibilityQueue = createWorkQueue(database);
@@ -4114,6 +4140,17 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
   app.route("/api/runner", createRunnerRoutes(deviceStore, quota));
+
+  // Story F1: the information sources of the signed-in person's own 分身, in their own frame.
+  app.route(
+    "/api/me/avatar/sources",
+    createAvatarSourceRoutes(
+      avatarSourceStore,
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
 
   app.route(
     "/api/agents",

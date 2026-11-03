@@ -267,8 +267,9 @@ jobs:
 
   # Packages outside the server/app suites. None of them has a test counterpart in the frozen
   # baseline run, so the gate is head only: Bun must report Ran N > 0, 0 fail, no unhandled errors.
-  # runner/ has no tests of its own: they live in server/tests and run in the server-test shards,
-  # and its native Windows path is exercised by win1-windows below.
+  # runner/ protocol tests live in server/tests and run in the server-test shards; its own tests
+  # (runner/tests: data directory, credential store, and the `bun build --compile` package test)
+  # run here, and its native Windows path is exercised by win1-windows below.
   workspaces-test:
     name: workspace tests (${{ matrix.pkg }})
     runs-on: ubuntu-latest
@@ -289,6 +290,11 @@ jobs:
           # Root workspace (typechecked by static); its tests import only worker/src and ../shared.
           - pkg: worker
             own-lockfile: false
+          # Root workspace (typechecked by static). Its tests need the root install: runner/src reaches
+          # yaml through agent-computer, and the package test serves the server's own runner routes.
+          - pkg: runner
+            own-lockfile: false
+            root-install: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -300,6 +306,9 @@ jobs:
         id: install
         if: matrix.own-lockfile
         working-directory: openbot/${{ matrix.pkg }}
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        if: matrix.root-install
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Head tests
         working-directory: openbot/${{ matrix.pkg }}
