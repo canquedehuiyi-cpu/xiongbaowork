@@ -5,6 +5,7 @@ import {
   type AutomationFiring,
   createAutomationStore,
 } from "../src/automations/store";
+import { ABANDONED_FIRING_MS } from "../src/automations/sweep";
 import {
   AUTOMATION_BREAKER_LIMIT,
   AUTOMATION_SKIPPED_ACCESS_REVOKED,
@@ -258,6 +259,75 @@ describe("a firing that runs (AUT3, C2)", () => {
     expect((await firingRow(firing.id))?.error).toBe("reaped");
   });
 
+  test("what the turn drew or handed over is kept on the card, and the card is the turn's run", async () => {
+    const { automation, trigger } = await newAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    const components = [{ name: "show_table", args: { rows: [["周一", 3]] } }];
+    turnOutcome = async () => ({
+      replyText: "周报已生成。",
+      components,
+      attachments: ["attachment-1", "attachment-1"],
+    });
+    await fire(firing);
+
+    expect(turns[0]?.input.runRef).toBe(firing.id);
+    const card = (await cardFor(firing.id))[0];
+    expect(card?.status).toBe("awaiting_review");
+    expect(card?.deliverableRef).toEqual({
+      kind: "deliverable",
+      components,
+      attachments: ["attachment-1"],
+    });
+  });
+
+  test("a reply with nothing drawn leaves the card without a deliverable", async () => {
+    const { automation, trigger } = await newAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    await fire(firing);
+    expect((await cardFor(firing.id))[0]?.deliverableRef).toBeNull();
+  });
+
+  test("a firing waiting for its thread keeps its clock fresh, so the reaper leaves it", async () => {
+    const { automation, trigger } = await newAutomation();
+    const first = await begin(automation.id, trigger.id);
+    const second = await begin(automation.id, trigger.id);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    turnOutcome = async () => {
+      if (turns.length === 1) await gate;
+      return { replyText: "好了" };
+    };
+    const shared = executor({ laneHeartbeatMs: 20 });
+    const both = Promise.all([
+      as(() => shared.run(first)),
+      as(() => shared.run(second)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    // Made to look long abandoned while it waits behind the first turn ...
+    await as(async () => {
+      await database
+        .update(automationFirings)
+        .set({ updatedAt: new Date(Date.now() - ABANDONED_FIRING_MS - 60_000) })
+        .where(eq(automationFirings.id, second.id));
+    });
+    // ... its heartbeat restarts the clock before the reaper looks.
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const stale = new Date(Date.now() - ABANDONED_FIRING_MS);
+    expect(
+      ((await firingRow(second.id))?.updatedAt.getTime() ?? 0) >
+        stale.getTime(),
+    ).toBe(true);
+    await store.reapAbandonedFirings(ABANDONED_FIRING_MS, "reaped");
+    expect((await firingRow(second.id))?.status).toBe("running");
+
+    release();
+    await both;
+    expect(turns).toHaveLength(2);
+    expect((await firingRow(second.id))?.status).toBe("succeeded");
+  });
+
   test("firings that share a thread run one at a time, in arrival order", async () => {
     const { automation, trigger } = await newAutomation();
     const first = await begin(automation.id, trigger.id);
@@ -462,7 +532,7 @@ describe("failures and the breaker (C3)", () => {
     expect(card?.deliverableRef).toEqual({
       kind: "circuit_breaker",
       automationId: automation.id,
-      consecutiveFailures: AUTOMATION_BREAKER_LIMIT,
+      failures: AUTOMATION_BREAKER_LIMIT,
       reason: "Notion 授权已过期",
     });
     // The earlier cards are plain failures.

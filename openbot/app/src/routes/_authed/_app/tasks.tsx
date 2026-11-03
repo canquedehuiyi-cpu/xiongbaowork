@@ -321,10 +321,20 @@ export const laneOfTask = (task: {
  *
  * The routine runner closes the tenth consecutive failure's card with
  * `deliverableRef: { kind: "circuit_breaker", failures, routineId }`, written only once the routine
- * really has been switched off. `kind` is what is asked, so a later deliverable reference of another
+ * really has been switched off; an automation's executor (D06) writes the same with `automationId`
+ * in place of `routineId`. `kind` is what is asked, so a later deliverable reference of another
  * kind is simply not a breaker; a malformed one is read as no breaker rather than a broken card.
  */
-export type CircuitBreaker = { failures: number; routineId: string };
+export type CircuitBreaker = {
+  failures: number;
+  routineId: string;
+  /** Present when what the breaker switched off is an automation rather than a routine. */
+  automationId?: string;
+};
+
+/** What the breaker switched off, in the card's own words. */
+export const breakerSubject = (breaker: CircuitBreaker): string =>
+  breaker.automationId !== undefined ? "自动任务已停用" : "例行任务已暂停";
 
 export const breakerOf = (task: {
   status: string;
@@ -339,6 +349,9 @@ export const breakerOf = (task: {
   return {
     failures: typeof record.failures === "number" ? record.failures : 0,
     routineId: typeof record.routineId === "string" ? record.routineId : "",
+    ...(typeof record.automationId === "string"
+      ? { automationId: record.automationId }
+      : {}),
   };
 };
 
@@ -774,7 +787,7 @@ function TaskCard({
             已熔断·已自动停用
           </span>
           <span className="opacity-70">
-            连续失败 {breaker.failures} 次，例行任务已暂停
+            连续失败 {breaker.failures} 次，{breakerSubject(breaker)}
           </span>
           <Link className="underline opacity-80" to="/autonomous">
             去自主工作页处理

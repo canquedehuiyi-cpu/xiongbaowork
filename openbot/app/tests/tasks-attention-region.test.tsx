@@ -366,6 +366,33 @@ test("a breaker-closed failure shows 已熔断·已自动停用 with a link to �
   expect(badges[0]?.closest("li")?.textContent).toContain("归档");
 });
 
+test("an automation's breaker card reads as an automation, with its count", async () => {
+  // The shape `server/src/automations/waker-executor.ts` writes.
+  const automationBreaker = {
+    kind: "circuit_breaker",
+    failures: 10,
+    automationId: "automation-1",
+    reason: "Notion 授权已过期",
+  };
+  expect(
+    breakerOf({ status: "failed", deliverableRef: automationBreaker }),
+  ).toEqual({ failures: 10, routineId: "", automationId: "automation-1" });
+
+  const view = drawRouted([
+    failedCard("automation", automationBreaker),
+    failedCard("routine", BREAKER),
+  ]);
+  await view.findByText("automation card");
+  const automationCard = view
+    .getByText("automation card")
+    .closest("li")?.textContent;
+  expect(automationCard).toContain("连续失败 10 次，自动任务已停用");
+  expect(automationCard).not.toContain("例行任务");
+  expect(view.getByText("routine card").closest("li")?.textContent).toContain(
+    "连续失败 10 次，例行任务已暂停",
+  );
+});
+
 test("a breaker-closed failure stays in 需要关注 until archived, then moves to 已结束", async () => {
   const open = failedCard("tripped", BREAKER);
   const archived = failedCard("tripped", BREAKER, new Date().toISOString());
