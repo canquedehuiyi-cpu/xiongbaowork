@@ -13,10 +13,25 @@
  * the same for everyone. A teammate's OWN account on a server the owner has not connected is used
  * only with their consent: Allow once, Always allow for this Bot, or Skip. Everything else about the
  * call (grant, policy, approvals, audit) is still decided as the teammate who is asking.
+ *
+ * WHERE THE ROWS LIVE (G01-E P9). A published Bot lives in the shared `team` tenant, moved there by
+ * its owner (`moveToTeam`), and its publication, audience and assignment rows are stamped `team` too:
+ * row security shows them to a teammate only where `openbot_team_bot_visible` admits the Bot. The
+ * owner writes the publication and audience in their own frame; an administrator assigns with the
+ * capability, and unpublishes another person's Bot in that OWNER's frame (`adminActAsOwner`, opened
+ * by the route), so the Bot goes back to its owner exactly as if the owner had unpublished it.
+ * Migration 0126 refuses a roster row stamped anything but `team` outside `platform`: the three
+ * tables are keyed by agent id, and a row a stranger stamped with their own tenant would otherwise
+ * hold the key and block the owner's publish.
  */
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { capabilityRefusal } from "../admin/capabilities";
 import { enterpriseControls } from "../admin/controls";
+import {
+  moveToOwner,
+  moveToTeam,
+  OwnerlessBotPrivateError,
+} from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
 import type { Database } from "../db/client";
 import { agents, users } from "../db/schema/core";
@@ -28,7 +43,9 @@ import {
   teamBotConsents,
   teamBotPublications,
 } from "../db/schema/team-bots";
+import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
 import { PluginRefusedError } from "../plugins/store";
+import { capabilityFor, currentTenant } from "../tenant/context";
 import {
   assignedCondition,
   describedForTeam,
@@ -117,6 +134,7 @@ export function createTeamBots(options: {
       .where(
         and(
           eq(teamBotPublications.agentId, botId),
+          eq(teamBotPublications.tenantId, TEAM_TENANT),
           isNull(agentProfiles.deletedAt),
         ),
       )
@@ -124,7 +142,12 @@ export function createTeamBots(options: {
     return row ?? null;
   }
 
-  /** The Bot as its owner, for owner-only acts; administrators may unpublish and assign. */
+  /**
+   * The Bot as its owner, for owner-only acts; administrators may unpublish and assign.
+   *
+   * Read in the frame the caller runs in: the owner's own, or, for an administrator, the one the
+   * route opened (`adminActAsOwner` for another person's Bot, `asAdminPlatform` for one nobody owns).
+   */
   async function owned(actor: AgentActor, botId: string, allowAdmin: boolean) {
     const [row] = await database
       .select({
@@ -132,6 +155,8 @@ export function createTeamBots(options: {
         name: agents.name,
         roleDescription: agentProfiles.roleDescription,
         ownerUserId: agentProfiles.ownerUserId,
+        stamp: agentProfiles.tenantId,
+        visibility: agentProfiles.visibility,
       })
       .from(agents)
       .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
@@ -143,8 +168,42 @@ export function createTeamBots(options: {
     return row;
   }
 
+  /**
+   * An administrator's assignment writes hold the capability (I10): as `platform`, opened by the
+   * route's admin door after it re-read the role, or in their own frame holding it. A session that
+   * still says admin after the role was taken away holds neither, and is told so instead of meeting
+   * a raw row-security failure or a delete that silently matches nothing (I9).
+   */
+  function requireAssignCapability(actor: AgentActor) {
+    const frame = currentTenant();
+    if (frame === PLATFORM_TENANT) return;
+    if (frame === actor.id && capabilityFor(actor.id) === "admin") return;
+    throw new TeamBotForbiddenError(
+      "Your administrator role could not be confirmed. Sign in again, or ask an administrator.",
+    );
+  }
+
   return {
     teamBotAccess,
+
+    /**
+     * Who owns this live Bot: their id, null when nobody does any more, undefined when this frame
+     * finds no such Bot. The route asks it as `platform` to decide where an administrator's
+     * unpublish runs.
+     */
+    async ownerOf(botId: string): Promise<string | null | undefined> {
+      const [row] = await database
+        .select({ ownerUserId: agentProfiles.ownerUserId })
+        .from(agentProfiles)
+        .where(
+          and(
+            eq(agentProfiles.agentId, botId),
+            isNull(agentProfiles.deletedAt),
+          ),
+        )
+        .limit(1);
+      return row ? row.ownerUserId : undefined;
+    },
 
     /**
      * Whose account a Team Bot's call to `ref` goes out on, for the person asking.
@@ -300,6 +359,13 @@ export function createTeamBots(options: {
           throw new TeamBotForbiddenError(capabilityRefusal("teamBots"));
       }
       const bot = await owned(actor, botId, false);
+      // Only a Bot kept under the owner's own account (or already in `team`) moves to `team`. One
+      // still stamped `system` from before G01-E is the deployment's row, which the owner's frame
+      // can read but never move.
+      if (bot.stamp !== TEAM_TENANT && bot.stamp !== actor.id)
+        throw new TeamBotRefusedError(
+          "This Bot is stored with the deployment's own Bots, not under your account, so it cannot be published. Duplicate it and publish the copy.",
+        );
       // A teammate cannot tell an undescribed Bot from any other, so it is not published.
       if (
         !bot.roleDescription.trim() ||
@@ -334,17 +400,24 @@ export function createTeamBots(options: {
           "Name at least one person or group, or publish to the whole team.",
         );
       await database.transaction(async (tx) => {
-        await tx
+        // The Bot itself first: its audience reads it through `team`, and the publication's own
+        // write policy asks that the profile be the caller's `team` profile.
+        if (bot.stamp !== TEAM_TENANT) await moveToTeam(tx, botId);
+        const published = await tx
           .insert(teamBotPublications)
           .values({
             agentId: botId,
             publishedBy: actor.id,
             audience: input.audience,
+            tenantId: TEAM_TENANT,
           })
           .onConflictDoUpdate({
             target: teamBotPublications.agentId,
-            set: { audience: input.audience, publishedBy: actor.id },
-          });
+            // `published_by` is a fixed link (0122 row guard); only the owner publishes anyway.
+            set: { audience: input.audience },
+          })
+          .returning({ agentId: teamBotPublications.agentId });
+        if (published.length !== 1) throw new TeamBotNotFoundError();
         await tx
           .delete(teamBotAudience)
           .where(eq(teamBotAudience.agentId, botId));
@@ -353,11 +426,13 @@ export function createTeamBots(options: {
             agentId: botId,
             kind: "user" as const,
             value: person.id,
+            tenantId: TEAM_TENANT,
           })),
           ...groups.map((group) => ({
             agentId: botId,
             kind: "group" as const,
             value: group,
+            tenantId: TEAM_TENANT,
           })),
         ];
         if (input.audience === "people" && rows.length)
@@ -365,12 +440,54 @@ export function createTeamBots(options: {
       });
     },
 
-    /** Teammates lose access until it is published again. Assignments wait, inert. */
+    /**
+     * Teammates lose access until it is published again. Assignments wait, inert.
+     *
+     * Runs in the OWNER's frame (the owner, or an administrator through `adminActAsOwner`), which is
+     * the only person frame the team policies let delete the rows; a private Bot then goes back to its
+     * owner (`moveToOwner`), as if it had never been published. A Bot nobody owns is unpublished as
+     * `platform` (`asAdminPlatform`), and only while it stays public: private and unpublished, nobody
+     * could reach it again ({@link OwnerlessBotPrivateError}); deleting it is the administrator's way
+     * to take it down.
+     *
+     * A Bot with no publication is answered as not found, from every frame and before the ownerless
+     * refusal: there is nothing to take back (I9), and nothing to refuse.
+     *
+     * OPERATOR NOTE. No app path deletes a person's account, but an operator can, directly in the
+     * database. That cascades their publications away (`published_by` ON DELETE CASCADE) and sets the
+     * owner of their Bots null. A Bot they had published while it was private is left stamped `team`,
+     * with no owner, private and unpublished: `openbot_team_bot_visible` admits nobody, it is on nobody's
+     * Team Bots page, and unpublishing it answers 404 because no publication is left. It is not lost:
+     * an administrator finds it on the admin agents pages (`platform`, with the capability) and
+     * deletes it there, or makes it public. Better, unpublish or hand over a person's Bots before
+     * deleting their account.
+     */
     async unpublish(actor: AgentActor, botId: string) {
-      await owned(actor, botId, true);
-      await database
-        .delete(teamBotPublications)
-        .where(eq(teamBotPublications.agentId, botId));
+      const bot = await owned(actor, botId, true);
+      const frame = currentTenant();
+      // Anywhere else every delete below would match nothing and report success (I9).
+      if (frame !== bot.ownerUserId && frame !== PLATFORM_TENANT)
+        throw new TeamBotNotFoundError();
+      const ownerUserId = bot.ownerUserId;
+      await database.transaction(async (tx) => {
+        const removed = await tx
+          .delete(teamBotPublications)
+          .where(eq(teamBotPublications.agentId, botId))
+          .returning({ agentId: teamBotPublications.agentId });
+        if (!removed.length) throw new TeamBotNotFoundError();
+        // Thrown inside the transaction, so the delete above is rolled back.
+        if (!ownerUserId && bot.visibility !== "public")
+          throw new OwnerlessBotPrivateError(botId);
+        await tx
+          .delete(teamBotAudience)
+          .where(eq(teamBotAudience.agentId, botId));
+        if (
+          ownerUserId &&
+          bot.stamp === TEAM_TENANT &&
+          bot.visibility !== "public"
+        )
+          await moveToOwner(tx, botId, ownerUserId);
+      });
     },
 
     async assign(actor: AgentActor, botId: string, groupName: string) {
@@ -380,11 +497,18 @@ export function createTeamBots(options: {
         );
       if (!(await publication(botId)))
         throw new TeamBotRefusedError("Publish this Bot before assigning it.");
+      // Asked after the publication, so a Bot this frame cannot see is still "publish it first".
+      requireAssignCapability(actor);
       const group = groupName.trim();
       if (!group) throw new TeamBotRefusedError("Name a group, or * for all.");
       await database
         .insert(teamBotAssignments)
-        .values({ agentId: botId, groupName: group, assignedBy: actor.id })
+        .values({
+          agentId: botId,
+          groupName: group,
+          assignedBy: actor.id,
+          tenantId: TEAM_TENANT,
+        })
         .onConflictDoNothing();
     },
 
@@ -393,14 +517,18 @@ export function createTeamBots(options: {
         throw new TeamBotRefusedError(
           "Only an administrator can assign Team Bots.",
         );
-      await database
+      requireAssignCapability(actor);
+      const removed = await database
         .delete(teamBotAssignments)
         .where(
           and(
             eq(teamBotAssignments.agentId, botId),
             eq(teamBotAssignments.groupName, groupName),
           ),
-        );
+        )
+        .returning({ agentId: teamBotAssignments.agentId });
+      // No such assignment, or none this frame may remove: never a silent success (I9).
+      if (!removed.length) throw new TeamBotNotFoundError();
     },
 
     /** Whether this Bot is in this person's sidebar by assignment, which they cannot hide. */
@@ -438,6 +566,7 @@ export function createTeamBots(options: {
         .where(
           and(
             isNull(agentProfiles.deletedAt),
+            eq(teamBotPublications.tenantId, TEAM_TENANT),
             actor.role === "admin"
               ? undefined
               : or(
@@ -503,7 +632,11 @@ export function createTeamBots(options: {
       });
     },
 
-    /** The owner's own Bots that could be published, for the publish list. */
+    /**
+     * The owner's own Bots that could be published, for the publish list: kept under their own
+     * account or already in `team`, the only stamps `publish` moves or keeps. A Bot still stamped
+     * `system` from before G01-E is left off; `publish` refuses it.
+     */
     async publishable(actor: AgentActor) {
       return database
         .select({
@@ -520,6 +653,7 @@ export function createTeamBots(options: {
         .where(
           and(
             eq(agentProfiles.ownerUserId, actor.id),
+            inArray(agentProfiles.tenantId, [actor.id, TEAM_TENANT]),
             isNull(agentProfiles.deletedAt),
             isNull(teamBotPublications.agentId),
           ),

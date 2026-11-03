@@ -1,14 +1,50 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, inArray, isNull, notLike, sql } from "drizzle-orm";
 import { type AuditStore, recordAuditEvent } from "./audit";
 import type { Database } from "./db/client";
 import { reasonWithoutStatement } from "./db/query-failure";
 import { type credentialKind, credentials } from "./db/schema";
+import { TEAM_TENANT } from "./db/schema/tenant";
+import { capabilityFor, currentTenant } from "./tenant/context";
 
 type CredentialEnvelope = {
   version: 1;
   iv: string;
   ciphertext: string;
 };
+
+/**
+ * A credential row's envelope, bound to the row it was written for (audit #9).
+ *
+ * v1 carries no additional data, so its ciphertext decrypts wherever it is pasted: into another
+ * tenant's row, another kind, another id. v2 authenticates the row's own identity as AES-GCM
+ * additional data. The binding is NEVER read from the envelope: `bind` only names which binding the
+ * reader must rebuild, from the row's own columns, so a copied envelope meets a different tenant or
+ * id and fails its tag. `kid` leaves room for a later key-encryption-key rotation.
+ */
+type CredentialEnvelopeV2 = {
+  version: 2;
+  alg: "A256GCM";
+  bind: "credential";
+  kid: string;
+  iv: string;
+  ciphertext: string;
+};
+
+/** What a v2 envelope is bound to: the row's tenant, its id, and the purpose its kind names. */
+export type CredentialBinding = {
+  tenantId: string;
+  id: string;
+  kind: CredentialKind;
+};
+
+/** Seals a plaintext for the row a store is about to write, once that row's identity is known. */
+export type CredentialSeal = (binding: CredentialBinding) => Promise<string>;
+
+const CREDENTIAL_AAD_LABEL = "openbot.vault.credential.v2";
+const CREDENTIAL_KID = "k1";
+/** Model-library keys are named after the library row, so the deployment lookup never meets one. */
+export const MODEL_REGISTRY_KEY_PREFIX = "model_registry:";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -36,13 +72,22 @@ type StoredCredential = {
   revokedAt: Date | null;
 };
 
+/**
+ * A credential to write. Either an envelope already sealed (legacy v1, still accepted while the
+ * remaining writers move over), or `seal`: the store picks the row's id and tenant first and asks
+ * for a v2 envelope bound to exactly those, so the bound tenant is the column's and not a guess.
+ */
 export type CredentialStoreValue = {
   kind: CredentialKind;
   provider: string;
   keyId: string;
   metadata: Record<string, unknown>;
-  encryptedValue: string;
-};
+  /** Seal to the shared `team` tenant instead of the caller's own. See {@link credentialTenant}. */
+  target?: CredentialTarget;
+} & (
+  | { encryptedValue: string; seal?: never }
+  | { seal: CredentialSeal; encryptedValue?: never }
+);
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -83,7 +128,7 @@ export type CredentialStore = {
    */
   updateSecret: (
     id: string,
-    encryptedValue: string,
+    secret: string | CredentialSeal,
     executor?: CredentialExecutor,
   ) => Promise<void>;
   /**
@@ -101,18 +146,35 @@ export type CredentialStore = {
     input: CredentialStoreValue & { previousCredentialId: string },
     executor?: CredentialExecutor,
   ) => Promise<StoredCredential>;
-  revoke: (id: string, executor?: CredentialExecutor) => Promise<Date>;
+  /**
+   * With `target`, only a live `team` server secret is revoked, under the same admin-capability
+   * refusal as {@link credentialTenant}; without it, behaviour is unchanged.
+   */
+  revoke: (
+    id: string,
+    executor?: CredentialExecutor,
+    target?: CredentialTarget,
+  ) => Promise<Date>;
   /** Whether this credential exists and has not been revoked. */
   isLive: (id: string, executor?: CredentialExecutor) => Promise<boolean>;
   /**
-   * The live credential for a key, if this deployment holds one.
+   * The live credential for a key, if the CURRENT TENANT holds one.
    *
-   * At most one can exist, which is what `credentials_active_key_idx`
-   * enforces, so a caller about to store a secret for a key can ask whether it
-   * is replacing something rather than finding out from a failed insert.
+   * At most one can exist per tenant, which is what
+   * `credentials_tenant_active_key_idx` enforces, so a caller about to store a
+   * secret for a key can ask whether it is replacing something rather than
+   * finding out from a failed insert. Filtered by tenant explicitly, because row
+   * security also shows `system` rows, and another scope's row is never this
+   * tenant's to replace.
    */
   findLiveByKey: (
-    key: { kind: CredentialKind; provider: string; keyId: string },
+    key: {
+      kind: CredentialKind;
+      provider: string;
+      keyId: string;
+      /** Look in the shared `team` tenant instead of the caller's own. */
+      target?: CredentialTarget;
+    },
     executor?: CredentialExecutor,
   ) => Promise<{ id: string } | null>;
 };
@@ -121,6 +183,10 @@ export type CredentialSecretReader = {
   readSecret: (id: string) => Promise<{
     encryptedValue: string;
     revokedAt: Date | null;
+    /** The row's identity, which a v2 envelope is bound to. A v1 envelope opens without it. */
+    id?: string;
+    tenantId?: string;
+    kind?: CredentialKind;
   } | null>;
 };
 
@@ -132,7 +198,12 @@ export type ModelCredentialSecretReader = {
   readModelSecret: (input: {
     provider: "openai" | "anthropic";
     keyId: string;
-  }) => Promise<{ encryptedValue: string } | null>;
+  }) => Promise<{
+    encryptedValue: string;
+    id?: string;
+    tenantId?: string;
+    kind?: CredentialKind;
+  } | null>;
 };
 
 type CredentialService = {
@@ -182,6 +253,7 @@ export async function encryptSecret(encodedKey: string, plaintext: string) {
   } satisfies CredentialEnvelope);
 }
 
+/** Refuses a v2 envelope: one of those opens only through {@link openCredential}, with its row. */
 export async function decryptSecret(encodedKey: string, value: string) {
   const envelope = parseEnvelope(value);
   const plaintext = await crypto.subtle.decrypt(
@@ -190,6 +262,134 @@ export async function decryptSecret(encodedKey: string, value: string) {
     Buffer.from(envelope.ciphertext, "base64"),
   );
 
+  return decoder.decode(plaintext);
+}
+
+/** Length-prefixed UTF-8 frames, so no two different bindings can produce the same bytes. */
+function credentialAad(binding: CredentialBinding) {
+  const parts = [
+    CREDENTIAL_AAD_LABEL,
+    binding.tenantId,
+    binding.id,
+    binding.kind,
+  ].map((part) => encoder.encode(part));
+  const out = new Uint8Array(
+    parts.reduce((total, part) => total + 4 + part.byteLength, 0),
+  );
+  const view = new DataView(out.buffer);
+  let offset = 0;
+  for (const part of parts) {
+    view.setUint32(offset, part.byteLength, false);
+    out.set(part, offset + 4);
+    offset += 4 + part.byteLength;
+  }
+  return out;
+}
+
+function requireBinding(
+  binding: Partial<CredentialBinding>,
+): CredentialBinding {
+  const { tenantId, id, kind } = binding;
+  if (!tenantId || !id || !kind) {
+    throw new Error("Credential binding is incomplete");
+  }
+  return { tenantId, id, kind };
+}
+
+/** A v2 envelope for one credential row, authenticated against that row's tenant, id and kind. */
+export async function sealCredential(
+  encodedKey: string,
+  binding: CredentialBinding,
+  plaintext: string,
+) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv,
+      additionalData: credentialAad(requireBinding(binding)),
+    },
+    await aesKey(encodedKey),
+    encoder.encode(plaintext),
+  );
+
+  return JSON.stringify({
+    version: 2,
+    alg: "A256GCM",
+    bind: "credential",
+    kid: CREDENTIAL_KID,
+    iv: Buffer.from(iv).toString("base64"),
+    ciphertext: Buffer.from(ciphertext).toString("base64"),
+  } satisfies CredentialEnvelopeV2);
+}
+
+/**
+ * Whether this deployment refuses unbound (v1) credential envelopes: `VAULT_REQUIRE_AAD=1|true`.
+ *
+ * OFF BY DEFAULT, AND THAT IS THE OPEN HALF OF AUDIT #9. Every row written before the v2 envelope
+ * is v1, so refusing v1 today would stop every existing credential. While it is off, a v1 envelope
+ * copied into another row — another tenant's, or written over a v2 row (a downgrade) — still opens,
+ * because v1 authenticates nothing about the row it sits in and nothing records that a row was v2.
+ * The switch exists so the reseal plan has something to flip once every live row is v2.
+ */
+export function vaultRequiresAad(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const value = environment.VAULT_REQUIRE_AAD?.trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
+/**
+ * Open a credential row's envelope.
+ *
+ * v1 opens as before unless {@link vaultRequiresAad}: rows written before audit #9 have no binding
+ * and must keep working until they are resealed. v2 opens only with the binding rebuilt from the
+ * row the value was read from; a value copied to another tenant, id or kind fails GCM
+ * authentication and throws, which is a fault and deliberately not a
+ * {@link CredentialUnusableError}. Anything else is refused.
+ */
+export async function openCredential(
+  encodedKey: string,
+  row: Partial<CredentialBinding> & { encryptedValue: string },
+  options: { requireAad?: boolean } = {},
+) {
+  let version: unknown;
+  try {
+    version = (JSON.parse(row.encryptedValue) as { version?: unknown })
+      ?.version;
+  } catch {
+    throw new Error("Credential envelope is invalid");
+  }
+  if (version === 1) {
+    if (options.requireAad ?? vaultRequiresAad()) {
+      throw new Error(
+        "Credential envelope is unbound and this deployment requires bound envelopes",
+      );
+    }
+    return decryptSecret(encodedKey, row.encryptedValue);
+  }
+  if (version !== 2) {
+    throw new Error("Credential envelope is invalid");
+  }
+  const envelope = JSON.parse(row.encryptedValue) as CredentialEnvelopeV2;
+  if (
+    envelope.alg !== "A256GCM" ||
+    envelope.bind !== "credential" ||
+    envelope.kid !== CREDENTIAL_KID ||
+    typeof envelope.iv !== "string" ||
+    typeof envelope.ciphertext !== "string"
+  ) {
+    throw new Error("Credential envelope is invalid");
+  }
+  const plaintext = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: Buffer.from(envelope.iv, "base64"),
+      additionalData: credentialAad(requireBinding(row)),
+    },
+    await aesKey(encodedKey),
+    Buffer.from(envelope.ciphertext, "base64"),
+  );
   return decoder.decode(plaintext);
 }
 
@@ -231,9 +431,9 @@ export class CredentialUnusableError extends Error {
  * gone already.
  */
 export class CredentialRefusedError extends Error {
-  readonly status: 404 | 409;
+  readonly status: 403 | 404 | 409;
 
-  constructor(message: string, status: 404 | 409) {
+  constructor(message: string, status: 403 | 404 | 409) {
     super(message);
     this.name = "CredentialRefusedError";
     this.status = status;
@@ -253,7 +453,7 @@ export async function decryptCredentialForUse(
     throw new CredentialUnusableError("Credential is revoked");
   }
 
-  return decryptSecret(encodedKey, credential.encryptedValue);
+  return openCredential(encodedKey, credential);
 }
 
 export async function resolveModelApiKey(input: {
@@ -268,7 +468,7 @@ export async function resolveModelApiKey(input: {
     keyId: input.keyId,
   });
   if (stored) {
-    return decryptSecret(input.encryptionKey, stored.encryptedValue);
+    return openCredential(input.encryptionKey, stored);
   }
 
   const environmentKey =
@@ -276,6 +476,94 @@ export async function resolveModelApiKey(input: {
       input.provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"
     ]?.trim();
   return environmentKey || null;
+}
+
+/** The only tenant a credential may be written to other than the caller's own. */
+export type CredentialTarget = typeof TEAM_TENANT;
+
+/** The kinds that are a shared server's secret, and so the only kinds a `team` target may carry. */
+const TEAM_CREDENTIAL_KINDS = [
+  "mcp",
+  "mcp_oauth_client",
+] as const satisfies readonly CredentialKind[];
+
+/**
+ * Whether a credential of this kind is a shared MCP server's secret, which is always sealed to
+ * `team` (G01-E P10, Q3): the server it belongs to is `team`, and a member reaches it only through
+ * the `openbot_team_server_secret` broker, which returns `team` rows alone.
+ */
+export function isTeamServerSecretKind(kind: CredentialKind): boolean {
+  return (TEAM_CREDENTIAL_KINDS as readonly CredentialKind[]).includes(kind);
+}
+
+/**
+ * Which tenant a credential write is sealed to and filtered by (G01-E).
+ *
+ * Without `target` it is the caller's own frame, as it always was. With `target: "team"` it is the
+ * shared tenant a team MCP server's secret lives in, and that is allowed only to an administrator
+ * holding the admin capability in this very frame (see `auth/admin-scope.ts`), or to `platform`
+ * (P10: an operator path or the deployment's own background work, which row security already lets
+ * write any stamp), and only for a server secret's kind: a person's own token or an agent key is
+ * never sealed where anybody else's frame could reach it (I8). Anything else is refused before a row
+ * is read or written.
+ */
+function credentialTenant(
+  kind: CredentialKind | undefined,
+  target: CredentialTarget | undefined,
+): string {
+  const tenant = currentTenant();
+  if (target === undefined) return tenant;
+  if (target !== TEAM_TENANT) {
+    throw new CredentialRefusedError("Unknown credential target", 403);
+  }
+  if (tenant !== "platform" && capabilityFor(tenant) !== "admin") {
+    throw new CredentialRefusedError(
+      "Only an administrator may write a shared credential",
+      403,
+    );
+  }
+  if (kind !== undefined && !isTeamServerSecretKind(kind)) {
+    throw new CredentialRefusedError(
+      "Only an MCP server's credential may be shared",
+      403,
+    );
+  }
+  return target;
+}
+
+/**
+ * The row to insert. A sealed value gets its id and tenant chosen here, explicitly, so the binding
+ * in its envelope is exactly the row's columns rather than whatever the column default resolves to.
+ * `tenant` is the one {@link credentialTenant} answered; a caller that already resolved it passes it
+ * so the check and the binding cannot disagree.
+ */
+async function sealedRow(
+  value: CredentialStoreValue,
+  tenant: string = credentialTenant(value.kind, value.target),
+) {
+  const base = {
+    kind: value.kind,
+    provider: value.provider,
+    keyId: value.keyId,
+    metadata: value.metadata,
+    // Written explicitly only for a target: the caller's own rows keep taking the column default.
+    ...(value.target === undefined ? {} : { tenantId: tenant }),
+  };
+  const { seal, encryptedValue } = value;
+  if (!seal) {
+    if (typeof encryptedValue !== "string") {
+      throw new Error(
+        "Credential value carries neither an envelope nor a seal",
+      );
+    }
+    return { ...base, encryptedValue };
+  }
+  const binding: CredentialBinding = {
+    id: randomUUID(),
+    tenantId: tenant,
+    kind: value.kind,
+  };
+  return { ...base, ...binding, encryptedValue: await seal(binding) };
 }
 
 export function createCredentialStore(
@@ -288,7 +576,7 @@ export function createCredentialStore(
     create: async (value, executor = database) => {
       const [credential] = await executor
         .insert(credentials)
-        .values(value)
+        .values(await sealedRow(value))
         .returning({ id: credentials.id, revokedAt: credentials.revokedAt });
 
       if (!credential) {
@@ -296,7 +584,25 @@ export function createCredentialStore(
       }
       return credential;
     },
-    updateSecret: async (id, encryptedValue, executor = database) => {
+    updateSecret: async (id, secret, executor = database) => {
+      let encryptedValue: string;
+      if (typeof secret === "string") {
+        encryptedValue = secret;
+      } else {
+        /*
+         * The row's own tenant and kind, read under a lock in the caller's executor, are what the new
+         * envelope is bound to. A missing or revoked row is refused below by the same guarded UPDATE.
+         */
+        const [row] = await executor
+          .select({ tenantId: credentials.tenantId, kind: credentials.kind })
+          .from(credentials)
+          .where(and(eq(credentials.id, id), isNull(credentials.revokedAt)))
+          .for("update");
+        if (!row) {
+          throw new Error("Credential was not found or is revoked");
+        }
+        encryptedValue = await secret({ id, ...row });
+      }
       const [credential] = await executor
         .update(credentials)
         .set({ encryptedValue, updatedAt: new Date() })
@@ -314,6 +620,12 @@ export function createCredentialStore(
       }
     },
     rotate: async (input, executor) => {
+      /*
+       * Read here, before `write` runs: the tenant whose row is retired and whose envelope is sealed
+       * is the caller's (or the target's), decided once, so the check and the binding agree whatever
+       * frame the transaction's callback happens to run in.
+       */
+      const tenant = credentialTenant(input.kind, input.target);
       const write = async (transaction: CredentialExecutor) => {
         /**
          * The previous credential, locked for the rest of the transaction.
@@ -332,7 +644,13 @@ export function createCredentialStore(
             keyId: credentials.keyId,
           })
           .from(credentials)
-          .where(eq(credentials.id, input.previousCredentialId))
+          .where(
+            and(
+              eq(credentials.id, input.previousCredentialId),
+              // Row security also shows `system` rows; only this tenant's own row is its to retire.
+              eq(credentials.tenantId, tenant),
+            ),
+          )
           .for("update");
         if (!previous) {
           throw new CredentialRefusedError(
@@ -381,13 +699,7 @@ export function createCredentialStore(
 
         const [inserted] = await transaction
           .insert(credentials)
-          .values({
-            kind: input.kind,
-            provider: input.provider,
-            keyId: input.keyId,
-            metadata: input.metadata,
-            encryptedValue: input.encryptedValue,
-          })
+          .values(await sealedRow(input, tenant))
           .returning({
             id: credentials.id,
             revokedAt: credentials.revokedAt,
@@ -403,7 +715,15 @@ export function createCredentialStore(
       // the credential belongs to it rather than to a transaction of its own.
       return executor ? write(executor) : database.transaction(write);
     },
-    revoke: async (id, executor = database) => {
+    revoke: async (id, executor = database, target) => {
+      // A target is checked before anything is written; its kind is pinned in the WHERE below.
+      const shared =
+        target === undefined
+          ? undefined
+          : and(
+              eq(credentials.tenantId, credentialTenant(undefined, target)),
+              inArray(credentials.kind, [...TEAM_CREDENTIAL_KINDS]),
+            );
       const revokedAt = new Date();
       const [credential] = await executor
         .update(credentials)
@@ -411,7 +731,9 @@ export function createCredentialStore(
         // Only a live row is stamped. Without the guard a second revoke would
         // overwrite the first one's timestamp and report success, so a caller
         // could not tell retiring a credential from finding it already gone.
-        .where(and(eq(credentials.id, id), isNull(credentials.revokedAt)))
+        .where(
+          and(eq(credentials.id, id), isNull(credentials.revokedAt), shared),
+        )
         .returning({ revokedAt: credentials.revokedAt });
 
       if (!credential?.revokedAt) {
@@ -430,12 +752,17 @@ export function createCredentialStore(
 
       return credential !== undefined;
     },
-    findLiveByKey: async ({ kind, provider, keyId }, executor = database) => {
+    findLiveByKey: async (
+      { kind, provider, keyId, target },
+      executor = database,
+    ) => {
+      const tenant = credentialTenant(kind, target);
       const [credential] = await executor
         .select({ id: credentials.id })
         .from(credentials)
         .where(
           and(
+            eq(credentials.tenantId, tenant),
             eq(credentials.kind, kind),
             eq(credentials.provider, provider),
             eq(credentials.keyId, keyId),
@@ -450,6 +777,9 @@ export function createCredentialStore(
         .select({
           encryptedValue: credentials.encryptedValue,
           revokedAt: credentials.revokedAt,
+          id: credentials.id,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
         })
         .from(credentials)
         .where(eq(credentials.id, id));
@@ -458,17 +788,30 @@ export function createCredentialStore(
     },
     readModelSecret: async ({ provider, keyId }) => {
       const [credential] = await database
-        .select({ encryptedValue: credentials.encryptedValue })
+        .select({
+          encryptedValue: credentials.encryptedValue,
+          id: credentials.id,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
+        })
         .from(credentials)
         .where(
           and(
             eq(credentials.kind, "model"),
             eq(credentials.provider, provider),
             eq(credentials.keyId, keyId),
+            // A model-library key is reached by the library row's id, never by this name.
+            notLike(credentials.keyId, `${MODEL_REGISTRY_KEY_PREFIX}%`),
             isNull(credentials.revokedAt),
           ),
         )
         .orderBy(
+          /*
+           * The deployment's key before any tenant's. Row security shows this tenant's rows beside
+           * `system`'s, and with keys unique per tenant (audit #9) a tenant can hold a row under the
+           * same name; it must not become the key the deployment runs on.
+           */
+          desc(sql`(${credentials.tenantId} = 'system')`),
           desc(credentials.createdAt),
           // UUID descending selects the lexicographically greatest ID on a timestamp tie.
           desc(credentials.id),
@@ -521,6 +864,15 @@ export type CredentialAdminService = CredentialStatusReader & {
   }>;
 };
 
+/**
+ * Where an administrator's credential is sealed: a shared MCP server's own token goes to `team`
+ * (G01-E P10, Q3), so the team server it is attached to can hand it to a member through the broker.
+ * Model and connector keys stay in the administrator's own frame, as they were (Q3).
+ */
+function adminTarget(kind: CredentialKind): CredentialTarget | undefined {
+  return isTeamServerSecretKind(kind) ? TEAM_TENANT : undefined;
+}
+
 async function persistCredential(
   service: CredentialService,
   input: CredentialInput,
@@ -530,7 +882,9 @@ async function persistCredential(
     provider: input.provider,
     keyId: input.keyId,
     metadata: input.metadata,
-    encryptedValue: await encryptSecret(service.encryptionKey, input.plaintext),
+    target: adminTarget(input.kind),
+    seal: (binding) =>
+      sealCredential(service.encryptionKey, binding, input.plaintext),
   });
 
   return {
@@ -555,7 +909,7 @@ async function persistCredential(
  * Revoke and has no rotate control, so replacing a model key is done by adding
  * one for the same provider and keyId. Refusing that would leave no way to
  * replace a key at all, and inserting it would raise a bare unique violation
- * from `credentials_active_key_idx`.
+ * from `credentials_tenant_active_key_idx`.
  */
 export async function createCredential(
   service: CredentialService,
@@ -565,6 +919,7 @@ export async function createCredential(
     kind: input.kind,
     provider: input.provider,
     keyId: input.keyId,
+    target: adminTarget(input.kind),
   });
   if (existing) {
     return rotateCredential(service, {
@@ -594,10 +949,11 @@ export async function rotateCredential(
   service: CredentialService,
   input: CredentialInput & { previousCredentialId: string },
 ): Promise<CredentialStatus> {
-  // Encryption happens before the transaction opens, so no database connection
-  // is held while it runs. The store then performs both writes atomically, and
-  // a failure leaves the vault as it was, which is why the success event below
-  // is written only once that has returned.
+  // The store seals the new secret for the row id it picks, inside its
+  // transaction, because the envelope is bound to that id (audit #9); one
+  // AES-GCM call is all that runs while the connection is held. Both writes are
+  // atomic, and a failure leaves the vault as it was, which is why the success
+  // event below is written only once that has returned.
   let stored: StoredCredential;
   try {
     stored = await service.store.rotate({
@@ -606,10 +962,9 @@ export async function rotateCredential(
       provider: input.provider,
       keyId: input.keyId,
       metadata: input.metadata,
-      encryptedValue: await encryptSecret(
-        service.encryptionKey,
-        input.plaintext,
-      ),
+      target: adminTarget(input.kind),
+      seal: (binding) =>
+        sealCredential(service.encryptionKey, binding, input.plaintext),
     });
   } catch (error) {
     /*

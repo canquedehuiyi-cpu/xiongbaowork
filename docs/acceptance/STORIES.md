@@ -88,9 +88,9 @@
 
 | 门 | 要求 | 状态 |
 | --- | --- | --- |
-| 1 | 同一最终SHA正式镜像8 GET 200且未知API404 | 未证成 |
+| 1 | 同一最终SHA正式镜像8 GET 200且未知API404 | 部分：image job 在 run 41440923225 通过（镜像构建、容器启动、smoke 断言）；GHCR 推送与按 digest 断言待发布流程 |
 | 2 | 未登录拒绝、跨租户私有资源404、无越权或拒绝后的上游调用 | 未证成 |
-| 3 | 前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI | 未证成 |
+| 3 | 前后端全套测试无fail和Unhandled error，锁文件安装环境通过严格CI | 部分：app-test 与 server-test 1–6 在 run 41440923225 零失败；agent-computer/shared/supervisor/runner 和 Windows job 尚未进入 CI |
 | 4 | WakerFlow实际生成-编辑-保存-执行-中止-查收及重启恢复 | 未证成 |
 | 5 | 用户设备浏览器真实动作及离线重连、授权审批闭环 | 未证成 |
 | 6 | 真实模型最小授权运行与正确计费 | 未证成 |

@@ -81,9 +81,10 @@ function toPlatformRow(message: Message): PlatformMessageRow {
  *
  * So the five answers are: existence is written by the run itself (`postgres-runner.ts` persists the
  * `threads` row when a run finalizes, which is the same moment the platform would have created it);
- * history is read out of the runner, which is tenant-guarded at the store level; and the lock is a
- * no-op that succeeds, because `InMemoryAgentRunner` already arbitrates concurrent runs on a thread
- * in-process (`onConcurrentRun: "supersede"`). Callers keep their shape: `run-turn.ts` awaits the
+ * history is read out of the runner, which is tenant-guarded at the store level and loads the
+ * tenant's stored threads into it first after a restart; and the lock is a no-op that succeeds,
+ * because `InMemoryAgentRunner` already arbitrates concurrent runs on a thread in-process
+ * (`onConcurrentRun: "supersede"`). Callers keep their shape: `run-turn.ts` awaits the
  * lock and never reads a field of it, and a caller that DID read one would get this process's own
  * identifiers back rather than a platform-issued join token — which is exactly why `joinToken` is
  * empty and named here rather than invented.
@@ -102,9 +103,13 @@ export function createLocalThreadPlatform(
       };
       return { thread: summary, created: stored === null };
     },
-    getThreadMessages: async ({ threadId }) => ({
-      messages: runner.getThreadMessages(threadId).map(toPlatformRow),
-    }),
+    getThreadMessages: async ({ threadId }) => {
+      // The store is cold after a restart until this tenant's threads are loaded (G01-E P18).
+      await runner.hydrate();
+      return {
+        messages: runner.getThreadMessages(threadId).map(toPlatformRow),
+      };
+    },
     "ɵacquireThreadLock": async ({ threadId, runId }) => ({
       threadId,
       runId,

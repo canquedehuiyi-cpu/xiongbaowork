@@ -3,7 +3,11 @@ import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
 import type { CredentialSecretReader, CredentialStore } from "../credentials";
-import { encryptSecret } from "../credentials";
+import {
+  MODEL_REGISTRY_KEY_PREFIX,
+  openCredential,
+  sealCredential,
+} from "../credentials";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
@@ -141,7 +145,15 @@ export function createModelRoutes(
         throw thrown;
       }
     }
-    const encrypted = await encryptSecret(encryptionKey, apiKey);
+    /*
+     * The key is named after the library row it belongs to, not after the model (audit #9).
+     *
+     * `modelName` is the tenant's own text: as a vault key it collided with every other tenant
+     * connecting the same model, and it shared a namespace with the deployment's
+     * `credentialSecretRef`, so a tenant could name a model after it. Nothing reads a library key by
+     * its name — the row's `credential_id` is the reference — so the id is the only name it needs.
+     */
+    const registryId = crypto.randomUUID();
     /*
      * ONE TRANSACTION FOR THE KEY AND THE ROW THAT POINTS AT IT.
      *
@@ -163,8 +175,8 @@ export function createModelRoutes(
           {
             kind: "model",
             provider,
-            keyId: modelName,
-            encryptedValue: encrypted,
+            keyId: `${MODEL_REGISTRY_KEY_PREFIX}${registryId}`,
+            seal: (binding) => sealCredential(encryptionKey, binding, apiKey),
             metadata: {},
           },
           transaction,
@@ -172,6 +184,7 @@ export function createModelRoutes(
         return await transaction
           .insert(modelRegistry)
           .values({
+            id: registryId,
             provider,
             baseUrl: baseUrl || null,
             credentialId: credential.id,
@@ -204,8 +217,7 @@ export function createModelRoutes(
     }
     const secret = await credentials.readSecret(row.credentialId);
     if (!secret) return context.json({ ok: false, error: "Key revoked." }, 200);
-    const { decryptSecret } = await import("../credentials");
-    const apiKey = await decryptSecret(encryptionKey, secret.encryptedValue);
+    const apiKey = await openCredential(encryptionKey, secret);
     const answer = await probe(
       row.provider,
       row.baseUrl,
@@ -391,19 +403,22 @@ export async function probe(
         : { ok: false, error: `HTTP ${response.status}` };
   try {
     if (provider === "anthropic") {
-      const response = await toFixedHost("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
+      const response = await toFixedHost(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelName,
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ping" }],
+          }),
         },
-        body: JSON.stringify({
-          model: modelName,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "ping" }],
-        }),
-      });
+      );
       return verdict(response, true);
     }
     if (provider === "google") {
