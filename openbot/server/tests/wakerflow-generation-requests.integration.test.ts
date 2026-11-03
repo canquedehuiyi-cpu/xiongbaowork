@@ -157,7 +157,13 @@ async function fixture(baseUrl: string) {
     pipeline,
     board,
     canUse,
-    models: createFlowModelResolver({ database, encryptionKey }),
+    // The provider mock listens on 127.0.0.1 over plain http, which only the development private-host
+    // opt-in admits (audit defect #6): the same policy a local development deployment runs with.
+    models: createFlowModelResolver({
+      database,
+      encryptionKey,
+      outbound: { allowPrivateHosts: true },
+    }),
     generator: createFlowGenerator(),
     quota: {
       assertCapacity: async (tenant: string) => {

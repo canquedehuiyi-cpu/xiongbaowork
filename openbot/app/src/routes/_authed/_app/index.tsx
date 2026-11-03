@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AgentCard } from "@/components/agents/agent-card";
-import { Composer, toAgentOptions } from "@/components/channels/composer";
+import {
+  Composer,
+  toAgentOptions,
+  toGroupOptions,
+  withGroupMembers,
+} from "@/components/channels/composer";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
 import {
   Carousel,
@@ -18,6 +23,7 @@ import { agentListQueryOptions, isSharedWithYou } from "@/lib/agents/queries";
 import { routeMessage } from "@/lib/channels/route";
 import { useStartChannel } from "@/lib/channels/start";
 import { appConfig } from "@/lib/generated/application-config";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 export const Route = createFileRoute("/_authed/_app/")({
   component: RouteComponent,
@@ -30,6 +36,9 @@ function RouteComponent() {
     isError: failed,
   } = useQuery(agentListQueryOptions());
   const explore = agents?.filter(isSharedWithYou);
+  // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
+  const groups = useQuery(wakerGroupsQueryOptions()).data;
+  const roster = toAgentOptions(agents);
   const { start, startChosen, pending } = useStartChannel();
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +62,7 @@ function RouteComponent() {
         </div>
         <div className="mt-8 w-full flex flex-col items-center">
           <Composer
-            agents={toAgentOptions(agents)}
+            agents={withGroupMembers(roster, toGroupOptions(groups, roster))}
             className="w-full max-w-2xl"
             disabled={!fallback}
             onSubmit={async (draft) => {
