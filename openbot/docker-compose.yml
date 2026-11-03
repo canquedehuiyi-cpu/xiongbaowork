@@ -74,6 +74,12 @@ services:
       - data
 
   # The Bot's computer is long-lived so browser sessions remain signed in across turns.
+  #
+  # This computer, and the supervisor chain below, are the server-side computer: a development and
+  # demo fallback (F6). The API server on the host uses them with TENANT_RUNTIME=cloud, which is its
+  # default under `bun run dev`. Under NODE_ENV=production an unset TENANT_RUNTIME means `device`
+  # (the tenant's paired machine), so a production server meant to act on these sets
+  # TENANT_RUNTIME=cloud explicitly.
   agent-computer:
     build:
       context: .
