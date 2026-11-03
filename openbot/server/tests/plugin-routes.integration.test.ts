@@ -8,7 +8,7 @@ import { encryptSecret } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { credentials, mcpServers, mcpTools } from "../src/db/schema";
 import { atServerAddress, createPluginStore } from "../src/plugins/store";
-import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -47,7 +47,9 @@ const store = createPluginStore({
 });
 
 const ADMIN = {
-  id: "admin-1",
+  // An administrator in `user_roles` (G01-E P10): the admin routes hold the capability, and row
+  // security asks that table whether the frame is an administrator's.
+  id: `admin-route-${randomUUID().slice(0, 8)}`,
   email: "admin@openbot.test",
   name: "An Administrator",
   image: null,
@@ -56,15 +58,19 @@ const ADMIN = {
 /**
  * Read or clean up in the frame the request itself ran in.
  *
- * The auth guard wraps every request in `runAsTenant(session.user.id)`, so the rows this suite writes
- * belong to `admin-1` — and a SELECT outside any frame is a `system` frame, which cannot see them. Left
- * that way, "nothing was written" passed because the reader was blind rather than because the refusal
- * stopped the write, and the teardown could not delete the rows it had just created: the credential
- * rows it tried to free stayed referenced, and the foreign key reported that as an anonymous failure.
+ * The auth guard wraps every request in `runAsTenant(session.user.id)`, and the admin routes hold the
+ * admin capability, so that is how this suite reads too. The servers and their tokens are `team` rows
+ * (G01-E P10), which only an administrator with the capability may read back and remove — and a
+ * SELECT outside any frame is a `system` frame, which sees none of them. Left that way, "nothing was
+ * written" passed because the reader was blind rather than because the refusal stopped the write,
+ * and the teardown could not delete the rows it had just created: the credential rows it tried to
+ * free stayed referenced, and the foreign key reported that as an anonymous failure.
  */
+const adminRequest = createAdminRequest(database);
 function asAdmin<T>(read: () => Promise<T>) {
-  return runAsTenant(ADMIN.id, read);
+  return adminRequest(ADMIN.id, read);
 }
+let releaseAdmin: (() => Promise<void>) | undefined;
 
 function request(
   body: unknown,
@@ -101,36 +107,44 @@ const ownCredentialId = randomUUID();
 let existing: Awaited<ReturnType<typeof entryRow>> = null;
 
 beforeAll(async () => {
+  releaseAdmin = await seedAdministrator(database, ADMIN.id);
   existing = await entryRow();
 
   const encrypted = await encryptSecret(`${"A".repeat(43)}=`, "not-read-here");
-  await database.insert(credentials).values([
-    {
-      id: personalCredentialId,
-      kind: "mcp_user_token",
-      provider: serverId,
-      keyId: `user_someone_else_${suffix}`,
-      encryptedValue: encrypted,
-      metadata: {},
-    },
-    {
-      id: foreignCredentialId,
-      kind: "mcp",
-      // Minted for a different server, which is what makes it somebody else's to spend.
-      provider: `route-elsewhere-${suffix}`,
-      keyId: `mcp-elsewhere-${suffix}`,
-      encryptedValue: encrypted,
-      metadata: {},
-    },
-    {
-      id: ownCredentialId,
-      kind: "mcp",
-      provider: customServerId,
-      keyId: `mcp-${customServerId}`,
-      encryptedValue: encrypted,
-      metadata: {},
-    },
-  ]);
+  // The vault the request reads: a person's token in the administrator's own frame, and two server
+  // tokens sealed to `team` as the credentials screen stores them (G01-E P10). What makes two of them
+  // unspendable is their kind and server, not their owner.
+  await asAdmin(() =>
+    database.insert(credentials).values([
+      {
+        id: personalCredentialId,
+        kind: "mcp_user_token",
+        provider: serverId,
+        keyId: `user_someone_else_${suffix}`,
+        encryptedValue: encrypted,
+        metadata: {},
+      },
+      {
+        id: foreignCredentialId,
+        tenantId: "team",
+        kind: "mcp",
+        // Minted for a different server, which is what makes it somebody else's to spend.
+        provider: `route-elsewhere-${suffix}`,
+        keyId: `mcp-elsewhere-${suffix}`,
+        encryptedValue: encrypted,
+        metadata: {},
+      },
+      {
+        id: ownCredentialId,
+        tenantId: "team",
+        kind: "mcp",
+        provider: customServerId,
+        keyId: `mcp-${customServerId}`,
+        encryptedValue: encrypted,
+        metadata: {},
+      },
+    ]),
+  );
 });
 
 afterAll(async () => {
@@ -160,24 +174,27 @@ afterAll(async () => {
       await database.delete(mcpServers).where(eq(mcpServers.id, custom.id));
     }
   });
-  await database
-    .delete(credentials)
-    .where(
-      inArray(credentials.id, [
-        personalCredentialId,
-        foreignCredentialId,
-        ownCredentialId,
-      ]),
-    );
+  await asAdmin(() =>
+    database
+      .delete(credentials)
+      .where(
+        inArray(credentials.id, [
+          personalCredentialId,
+          foreignCredentialId,
+          ownCredentialId,
+        ]),
+      ),
+  );
+  await releaseAdmin?.();
 });
 
 /**
- * The row this tenant holds for the catalogue entry.
+ * The row the deployment holds for the catalogue entry: the team's (G01-E P10).
  *
- * Addressed by the entry, not by a name the suite assumed: after ADR-0002 the row's identity is the
- * tenant's own and `catalogue_key` is what says which app it instantiates. The tenant filter is
- * deliberate even inside the tenant's frame, because the frame can also see the platform's rows, and
- * "which row did MY add write" has one answer.
+ * Addressed by the entry, not by a name the suite assumed: after ADR-0002 the row's identity is its
+ * own and `catalogue_key` is what says which app it instantiates. The tenant filter is deliberate,
+ * because the frame can also see the platform's rows, and "which row did the add write" has one
+ * answer.
  */
 async function entryRow() {
   return await asAdmin(async () => {
@@ -188,7 +205,7 @@ async function entryRow() {
         url: mcpServers.url,
       })
       .from(mcpServers)
-      .where(and(atServerAddress(serverId), eq(mcpServers.tenantId, ADMIN.id)));
+      .where(and(atServerAddress(serverId), eq(mcpServers.tenantId, "team")));
     return row ?? null;
   });
 }
@@ -204,10 +221,7 @@ async function customRow() {
       })
       .from(mcpServers)
       .where(
-        and(
-          eq(mcpServers.id, customServerId),
-          eq(mcpServers.tenantId, ADMIN.id),
-        ),
+        and(eq(mcpServers.id, customServerId), eq(mcpServers.tenantId, "team")),
       );
     return row ?? null;
   });

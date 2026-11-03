@@ -23,14 +23,23 @@ import {
 export function createSandboxedRoutes(
   store: SandboxedStore,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
+  /**
+   * `createAdminScope(...).adminCapability`. Playground sources are stamped `team`, and row-level
+   * security admits reading a draft or writing one only with the admin capability (G01-E I10), so
+   * without it an admin's change is refused by the database: fail closed, never wider. Mounted on the
+   * admin routes only; `/published` runs without it.
+   */
+  adminCapability?: MiddlewareHandler<{ Variables: AppVariables }>,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  const capability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminCapability ?? ((_context, next) => next());
 
   const actorEmail = (context: { var: AppVariables }) =>
     context.var.actor?.email ?? "unknown";
 
   /** Everything the playground edits. Admin-only: this is the source of what Bots draw. */
-  routes.get("/", requireUser, async (context) => {
+  routes.get("/", requireUser, capability, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -48,7 +57,7 @@ export function createSandboxedRoutes(
     context.json({ components: await store.published() }),
   );
 
-  routes.post("/", requireUser, async (context) => {
+  routes.post("/", requireUser, capability, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -147,7 +156,7 @@ export function createSandboxedRoutes(
     }
   });
 
-  routes.post("/:name/publish", requireUser, async (context) => {
+  routes.post("/:name/publish", requireUser, capability, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -165,7 +174,7 @@ export function createSandboxedRoutes(
     }
   });
 
-  routes.delete("/:name", requireUser, async (context) => {
+  routes.delete("/:name", requireUser, capability, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 

@@ -34,6 +34,7 @@ import {
   type TriggerConfig,
 } from "../src/responsibilities/triggers";
 import type { ResponsibilityEvent } from "../src/responsibilities/types";
+import { requireTenant, runAsTenant } from "../src/tenant/context";
 
 const TRIGGER_ID = "5b0f5a36-8f3e-4b0e-9f53-0a4c1d1e2f30";
 const NOW = 1_790_000_000_000;
@@ -191,6 +192,7 @@ function trigger(
 ): ResolvedTrigger {
   return {
     id: TRIGGER_ID,
+    tenantId: "owner-1",
     ownerUserId: "owner-1",
     responsibilityId: "goal-1",
     responsibilityStatus: "active",
@@ -594,6 +596,72 @@ describe("Slack triggers", () => {
       externalId: `${TRIGGER_ID}:Ev1`,
     });
     await expect(ingest({ ...base, teamId: "lowercase" })).rejects.toThrow();
+  });
+  test("ingestSlackEvent lists listeners as platform and delivers each in its own owner's tenant, refusing the untrusted", async () => {
+    const frames: string[] = [];
+    const events: ResponsibilityEvent[] = [];
+    const owned = (id: string, ownerUserId: string, tenantId: string) => ({
+      ...slack({ mode: "message" }),
+      id,
+      ownerUserId,
+      tenantId,
+    });
+    const ingest = createSlackTriggerIngest({
+      directory: {
+        resolve: async () => null,
+        slackTriggers: async () => {
+          frames.push(`directory:${requireTenant()}`);
+          return [
+            owned("t-a", "owner-a", "owner-a"),
+            owned("t-b", "owner-b", "owner-b"),
+            // Nobody's three ways, and one stamped with a person who is not its owner.
+            owned("t-system", "owner-c", "system"),
+            owned("t-platform", "owner-c", "platform"),
+            owned("t-empty", "owner-c", ""),
+            owned("t-stranger", "owner-d", "owner-a"),
+          ];
+        },
+      },
+      slackAccess: () => ({
+        linkedIdentity: async (ownerUserId) => {
+          frames.push(`access:${ownerUserId}:${requireTenant()}`);
+          return "U1";
+        },
+        isMember: async () => true,
+      }),
+      ingest: async (event) => {
+        frames.push(`ingest:${event.triggerId}:${requireTenant()}`);
+        events.push(event);
+        return { eventId: "e", duplicate: false, runIds: ["r"] };
+      },
+    });
+    // Arriving in one person's frame decides nothing about anybody else's trigger.
+    const result = await runAsTenant("owner-b", () => ingest(base));
+    expect(result.matched).toBe(2);
+    expect(frames).toEqual([
+      "directory:platform",
+      "access:owner-a:owner-a",
+      "ingest:t-a:owner-a",
+      "access:owner-b:owner-b",
+      "ingest:t-b:owner-b",
+    ]);
+    expect(events.map((event) => event.ownerUserId)).toEqual([
+      "owner-a",
+      "owner-b",
+    ]);
+    const outcome = (id: string) =>
+      result.deliveries.find((delivery) => delivery.triggerId === id)?.outcome;
+    expect(outcome("t-a")).toMatchObject({ status: "queued" });
+    expect(outcome("t-b")).toMatchObject({ status: "queued" });
+    for (const id of ["t-system", "t-platform", "t-empty"])
+      expect(outcome(id)).toMatchObject({
+        status: "ignored",
+        reason: expect.stringContaining("untrusted tenant"),
+      });
+    expect(outcome("t-stranger")).toMatchObject({
+      status: "ignored",
+      reason: expect.stringContaining("owner/tenant mismatch"),
+    });
   });
 });
 

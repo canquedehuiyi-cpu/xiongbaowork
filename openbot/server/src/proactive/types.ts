@@ -64,6 +64,8 @@ export const proactiveMemoryInputSchema = z
 export type ProactiveSettingInput = z.infer<typeof proactiveSettingInputSchema>;
 export type ProactiveSetting = {
   id: string;
+  /** The owner's tenant, as the row was written: whose a background run is, off a timer. */
+  tenantId: string;
   ownerUserId: string;
   agentId: string;
   channelId: string;

@@ -1,7 +1,10 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createAgentProfileStore } from "../src/agents/profile-store";
+import {
+  createAgentProfileStore,
+  moveToTeam,
+} from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
 import { createChannelStore } from "../src/channels/routes";
@@ -16,8 +19,11 @@ import {
   channelMemberships,
   channels,
   intelligenceChannelMappings,
+  teamBotAudience,
+  teamBotPublications,
   users,
 } from "../src/db/schema";
+import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const databaseUrl = testDatabaseUrl();
@@ -43,22 +49,28 @@ const createdUserIds: string[] = [];
 const createdAgentIds: string[] = [];
 const createdChannelIds: string[] = [];
 
+/** A person's rows are written and read in that person's own frame, as their requests would be. */
+const as = <T>(actor: AgentActor, fn: () => T): T => runAsTenant(actor.id, fn);
+
 afterEach(async () => {
-  for (const channelId of createdChannelIds.splice(0)) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, channelId));
-    await database.delete(channels).where(eq(channels.id, channelId));
-  }
-  for (const agentId of createdAgentIds.splice(0)) {
-    await database
-      .delete(agentProfiles)
-      .where(eq(agentProfiles.agentId, agentId));
-    await database.delete(agents).where(eq(agents.id, agentId));
-  }
-  for (const userId of createdUserIds.splice(0)) {
-    await database.delete(users).where(eq(users.id, userId));
-  }
+  // The cleanup spans every tenant a test wrote to: the deployment's own frame.
+  await runAsTenant("platform", async () => {
+    for (const channelId of createdChannelIds.splice(0)) {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, channelId));
+      await database.delete(channels).where(eq(channels.id, channelId));
+    }
+    for (const agentId of createdAgentIds.splice(0)) {
+      await database
+        .delete(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId));
+      await database.delete(agents).where(eq(agents.id, agentId));
+    }
+    for (const userId of createdUserIds.splice(0)) {
+      await database.delete(users).where(eq(users.id, userId));
+    }
+  });
 });
 
 afterAll(async () => {
@@ -67,11 +79,13 @@ afterAll(async () => {
 
 async function createUser(role: AgentActor["role"] = "user") {
   const id = `${testPrefix}-user-${randomUUID()}`;
-  await database.insert(users).values({
-    id,
-    email: `${id}@example.test`,
-    name: "Runtime Agents Test User",
-  });
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      name: "Runtime Agents Test User",
+    }),
+  );
   createdUserIds.push(id);
   return { id, role } satisfies AgentActor;
 }
@@ -113,108 +127,114 @@ function idsOf(loaded: Awaited<ReturnType<typeof loadAgents>>) {
 describe("runtime agent loading", () => {
   test("carries the owner's coworker with its standing role and managed endpoint", async () => {
     const owner = await createUser();
-    const profile = await createCoworker(owner);
+    await as(owner, async () => {
+      const profile = await createCoworker(owner);
 
-    const loaded = await loadAgents(owner);
+      const loaded = await loadAgents(owner);
 
-    expect(loaded).toContainEqual({
-      id: profile.id,
-      name: "Expense Manager",
-      type: "remote_ag_ui",
-      endpoint: managedEndpoint.toString(),
-      headers: { "x-openbot-agent-token": managedAgentToken },
-      standingMessage: standingRoleMessage({
+      expect(loaded).toContainEqual({
         id: profile.id,
         name: "Expense Manager",
-        title: "Finance Operations",
-        roleDescription:
-          "Review receipts, categorize expenses, and prepare reimbursement reports.",
-      }),
+        type: "remote_ag_ui",
+        endpoint: managedEndpoint.toString(),
+        headers: { "x-openbot-agent-token": managedAgentToken },
+        standingMessage: standingRoleMessage({
+          id: profile.id,
+          name: "Expense Manager",
+          title: "Finance Operations",
+          roleDescription:
+            "Review receipts, categorize expenses, and prepare reimbursement reports.",
+        }),
+      });
     });
   });
 
   test("carries the managed deployment token to a Mastra endpoint this deployment runs", async () => {
     const owner = await createUser();
-    const profile = await createCoworker(owner);
-    await setAgentRun(profile.id, {
-      type: "remote_mastra",
-      configuration: {
-        endpoint: mastraManagedEndpoint.toString(),
-        remoteAgentId: "openbot",
-      },
-    });
+    await as(owner, async () => {
+      const profile = await createCoworker(owner);
+      await setAgentRun(profile.id, {
+        type: "remote_mastra",
+        configuration: {
+          endpoint: mastraManagedEndpoint.toString(),
+          remoteAgentId: "openbot",
+        },
+      });
 
-    const loaded = await loadAgents(owner);
+      const loaded = await loadAgents(owner);
 
-    expect(loaded).toContainEqual({
-      id: profile.id,
-      name: "Expense Manager",
-      type: "remote_mastra",
-      endpoint: mastraManagedEndpoint.toString(),
-      remoteAgentId: "openbot",
-      headers: { "x-openbot-agent-token": managedAgentToken },
-      standingMessage: standingRoleMessage({
+      expect(loaded).toContainEqual({
         id: profile.id,
         name: "Expense Manager",
-        title: "Finance Operations",
-        roleDescription:
-          "Review receipts, categorize expenses, and prepare reimbursement reports.",
-      }),
+        type: "remote_mastra",
+        endpoint: mastraManagedEndpoint.toString(),
+        remoteAgentId: "openbot",
+        headers: { "x-openbot-agent-token": managedAgentToken },
+        standingMessage: standingRoleMessage({
+          id: profile.id,
+          name: "Expense Manager",
+          title: "Finance Operations",
+          roleDescription:
+            "Review receipts, categorize expenses, and prepare reimbursement reports.",
+        }),
+      });
     });
   });
 
   test("resolves vault auth headers for a Mastra endpoint that names a credential", async () => {
     const owner = await createUser();
-    const profile = await createCoworker(owner, { name: "Research Mastra" });
-    const vaultReads: string[] = [];
-    const credentialId = `credential-${randomUUID()}`;
-    const reader: CredentialSecretReader = {
-      readSecret: async (id) => {
-        vaultReads.push(id);
-        return id === credentialId
-          ? {
-              encryptedValue: await encryptSecret(
-                encryptionKey,
-                "Bearer mastra-secret",
-              ),
-              revokedAt: null,
-            }
-          : null;
-      },
-    };
-    await setAgentRun(profile.id, {
-      type: "remote_mastra",
-      configuration: {
-        endpoint: "https://customer-mastra.example.test",
-        remoteAgentId: "research",
-        auth: {
-          header: "Authorization",
-          credentialId,
+    await as(owner, async () => {
+      const profile = await createCoworker(owner, { name: "Research Mastra" });
+      const vaultReads: string[] = [];
+      const credentialId = `credential-${randomUUID()}`;
+      const reader: CredentialSecretReader = {
+        readSecret: async (id) => {
+          vaultReads.push(id);
+          return id === credentialId
+            ? {
+                encryptedValue: await encryptSecret(
+                  encryptionKey,
+                  "Bearer mastra-secret",
+                ),
+                revokedAt: null,
+              }
+            : null;
         },
-      },
-    });
-    const loadWithVault = createRuntimeAgentLoader(database, {
-      reader,
-      encryptionKey,
-    });
+      };
+      await setAgentRun(profile.id, {
+        type: "remote_mastra",
+        configuration: {
+          endpoint: "https://customer-mastra.example.test",
+          remoteAgentId: "research",
+          auth: {
+            header: "Authorization",
+            credentialId,
+          },
+        },
+      });
+      const loadWithVault = createRuntimeAgentLoader(database, {
+        reader,
+        encryptionKey,
+      });
 
-    const loaded = await loadWithVault(owner);
+      const loaded = await loadWithVault(owner);
 
-    expect(vaultReads).toEqual([credentialId]);
-    expect(loaded).toContainEqual({
-      id: profile.id,
-      name: "Research Mastra",
-      type: "remote_mastra",
-      endpoint: "https://customer-mastra.example.test",
-      remoteAgentId: "research",
-      headers: { Authorization: "Bearer mastra-secret" },
-      standingMessage: standingRoleMessage({
+      expect(vaultReads).toEqual([credentialId]);
+      expect(loaded).toContainEqual({
         id: profile.id,
         name: "Research Mastra",
-        title: "Finance Operations",
-        roleDescription:
-          "Review receipts, categorize expenses, and prepare reimbursement reports.",
-      }),
+        type: "remote_mastra",
+        endpoint: "https://customer-mastra.example.test",
+        remoteAgentId: "research",
+        headers: { Authorization: "Bearer mastra-secret" },
+        standingMessage: standingRoleMessage({
+          id: profile.id,
+          name: "Research Mastra",
+          title: "Finance Operations",
+          roleDescription:
+            "Review receipts, categorize expenses, and prepare reimbursement reports.",
+        }),
+      });
     });
   });
 
@@ -222,166 +242,268 @@ describe("runtime agent loading", () => {
     const owner = await createUser();
     const otherUser = await createUser();
     const administrator = await createUser("admin");
-    const profile = await createCoworker(owner);
+    const profile = await as(owner, () => createCoworker(owner));
 
-    expect(idsOf(await loadAgents(owner))).toContain(profile.id);
-    expect(idsOf(await loadAgents(otherUser))).not.toContain(profile.id);
-    expect(idsOf(await loadAgents(administrator))).toContain(profile.id);
+    expect(idsOf(await as(owner, () => loadAgents(owner)))).toContain(
+      profile.id,
+    );
+    expect(
+      idsOf(await as(otherUser, () => loadAgents(otherUser))),
+    ).not.toContain(profile.id);
+    // An administrator reaches it as `platform`, which is where the admin pages read (Q1)...
+    expect(idsOf(await asPlatform(() => loadAgents(administrator)))).toContain(
+      profile.id,
+    );
+    // ...and their own chat runtime, in their own frame, does not offer it.
+    expect(
+      idsOf(await as(administrator, () => loadAgents(administrator))),
+    ).not.toContain(profile.id);
   });
 
   test("shares a public coworker with everybody", async () => {
     const owner = await createUser();
     const otherUser = await createUser();
-    const profile = await createCoworker(owner, {
-      name: "Company Helper",
-      visibility: "public",
+    const profile = await as(owner, () =>
+      createCoworker(owner, {
+        name: "Company Helper",
+        visibility: "public",
+      }),
+    );
+    const stampOf = async () =>
+      (
+        await asPlatform(() =>
+          database
+            .select({ tenantId: agentProfiles.tenantId })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, profile.id)),
+        )
+      )[0]?.tenantId;
+
+    expect(idsOf(await as(otherUser, () => loadAgents(otherUser)))).toContain(
+      profile.id,
+    );
+    expect(await stampOf()).toBe("team");
+
+    // Made private again: back to its owner, and nobody else's runtime offers it.
+    await as(owner, () =>
+      profileStore.update(owner, profile.id, {
+        name: "Company Helper",
+        title: profile.title,
+        roleDescription: profile.roleDescription,
+        visibility: "private",
+      }),
+    );
+    expect(
+      idsOf(await as(otherUser, () => loadAgents(otherUser))),
+    ).not.toContain(profile.id);
+    expect(idsOf(await as(owner, () => loadAgents(owner)))).toContain(
+      profile.id,
+    );
+    expect(await stampOf()).toBe(owner.id);
+  });
+
+  test("offers a Team Bot published to named people only to those people", async () => {
+    const owner = await createUser();
+    const audience = await createUser();
+    const outsider = await createUser();
+    const profile = await as(owner, async () => {
+      const created = await createCoworker(owner, { name: "Payroll Desk" });
+      // Published to one person, as the team-bots publication stamps it in `team`.
+      await database.transaction(async (transaction) => {
+        await moveToTeam(transaction, created.id);
+        await transaction.insert(teamBotPublications).values({
+          agentId: created.id,
+          publishedBy: owner.id,
+          audience: "people",
+          tenantId: "team",
+        });
+        await transaction.insert(teamBotAudience).values({
+          agentId: created.id,
+          kind: "user",
+          value: audience.id,
+          tenantId: "team",
+        });
+      });
+      return created;
     });
 
-    expect(idsOf(await loadAgents(otherUser))).toContain(profile.id);
+    expect(idsOf(await as(audience, () => loadAgents(audience)))).toContain(
+      profile.id,
+    );
+    expect(idsOf(await as(owner, () => loadAgents(owner)))).toContain(
+      profile.id,
+    );
+    expect(idsOf(await as(outsider, () => loadAgents(outsider)))).not.toContain(
+      profile.id,
+    );
   });
 
   test("drops a deleted coworker that has no history to restore", async () => {
     const owner = await createUser();
-    const profile = await createCoworker(owner);
+    await as(owner, async () => {
+      const profile = await createCoworker(owner);
 
-    await profileStore.softDelete(owner, profile.id);
+      await profileStore.softDelete(owner, profile.id);
 
-    expect(idsOf(await loadAgents(owner))).not.toContain(profile.id);
+      expect(idsOf(await loadAgents(owner))).not.toContain(profile.id);
+    });
   });
 
   test("keeps a deleted coworker as a tombstone for a channel member", async () => {
     const owner = await createUser();
     const otherUser = await createUser();
-    const profile = await createCoworker(owner);
-    const channel = await channelStore.create(owner, [profile.id]);
-    createdChannelIds.push(channel.id);
+    await as(owner, async () => {
+      const profile = await createCoworker(owner);
+      const channel = await channelStore.create(owner, [profile.id]);
+      createdChannelIds.push(channel.id);
 
-    await profileStore.softDelete(owner, profile.id);
+      await profileStore.softDelete(owner, profile.id);
 
-    expect(await loadAgents(owner)).toContainEqual({
-      id: profile.id,
-      name: "Expense Manager",
-      type: "unavailable",
-      reason:
-        "Expense Manager has been deleted and can no longer run. Its conversations remain readable.",
+      expect(await loadAgents(owner)).toContainEqual({
+        id: profile.id,
+        name: "Expense Manager",
+        type: "unavailable",
+        reason:
+          "Expense Manager has been deleted and can no longer run. Its conversations remain readable.",
+      });
+      // Somebody with no channel of their own gets no tombstone: history is what authorizes it.
+      expect(
+        idsOf(await as(otherUser, () => loadAgents(otherUser))),
+      ).not.toContain(profile.id);
+      // Also in the platform's frame, which sees the owner's rows: the loader itself must refuse.
+      expect(
+        idsOf(await runAsTenant("platform", () => loadAgents(otherUser))),
+      ).not.toContain(profile.id);
     });
-    // Somebody with no channel of their own gets no tombstone: history is what authorizes it.
-    expect(idsOf(await loadAgents(otherUser))).not.toContain(profile.id);
   });
 
   test("authorizes deleted coworker tombstones only through live channels", async () => {
     const owner = await createUser();
     const otherUser = await createUser();
-    const deletedOnlyProfile = await createCoworker(owner, {
-      name: "Deleted Only Helper",
-    });
-    const preservedProfile = await createCoworker(owner, {
-      name: "Preserved Helper",
-    });
-    const deletedOnlyChannel = await channelStore.create(owner, [
-      deletedOnlyProfile.id,
-    ]);
-    const deletedPreservedChannel = await channelStore.create(owner, [
-      preservedProfile.id,
-    ]);
-    const livePreservedChannel = await channelStore.create(owner, [
-      preservedProfile.id,
-    ]);
-    createdChannelIds.push(
-      deletedOnlyChannel.id,
-      deletedPreservedChannel.id,
-      livePreservedChannel.id,
-    );
+    await as(owner, async () => {
+      const deletedOnlyProfile = await createCoworker(owner, {
+        name: "Deleted Only Helper",
+      });
+      const preservedProfile = await createCoworker(owner, {
+        name: "Preserved Helper",
+      });
+      const deletedOnlyChannel = await channelStore.create(owner, [
+        deletedOnlyProfile.id,
+      ]);
+      const deletedPreservedChannel = await channelStore.create(owner, [
+        preservedProfile.id,
+      ]);
+      const livePreservedChannel = await channelStore.create(owner, [
+        preservedProfile.id,
+      ]);
+      createdChannelIds.push(
+        deletedOnlyChannel.id,
+        deletedPreservedChannel.id,
+        livePreservedChannel.id,
+      );
 
-    await profileStore.softDelete(owner, deletedOnlyProfile.id);
-    await profileStore.softDelete(owner, preservedProfile.id);
-    await channelStore.softDelete(owner, deletedOnlyChannel.id);
-    await channelStore.softDelete(owner, deletedPreservedChannel.id);
+      await profileStore.softDelete(owner, deletedOnlyProfile.id);
+      await profileStore.softDelete(owner, preservedProfile.id);
+      await channelStore.softDelete(owner, deletedOnlyChannel.id);
+      await channelStore.softDelete(owner, deletedPreservedChannel.id);
 
-    const retainedDeletedOnlyRows = await database
-      .select({
-        channelDeletedAt: channels.deletedAt,
-        memberUserId: channelMemberships.userId,
-        agentId: channelAgents.agentId,
-        profileDeletedAt: agentProfiles.deletedAt,
-      })
-      .from(channels)
-      .innerJoin(
-        channelMemberships,
-        eq(channelMemberships.channelId, channels.id),
-      )
-      .innerJoin(channelAgents, eq(channelAgents.channelId, channels.id))
-      .innerJoin(
-        agentProfiles,
-        eq(agentProfiles.agentId, channelAgents.agentId),
-      )
-      .where(eq(channels.id, deletedOnlyChannel.id));
-    expect(retainedDeletedOnlyRows).toHaveLength(1);
-    expect(retainedDeletedOnlyRows[0]).toMatchObject({
-      memberUserId: owner.id,
-      agentId: deletedOnlyProfile.id,
-    });
-    expect(retainedDeletedOnlyRows[0]?.channelDeletedAt).toBeInstanceOf(Date);
-    expect(retainedDeletedOnlyRows[0]?.profileDeletedAt).toBeInstanceOf(Date);
+      const retainedDeletedOnlyRows = await database
+        .select({
+          channelDeletedAt: channels.deletedAt,
+          memberUserId: channelMemberships.userId,
+          agentId: channelAgents.agentId,
+          profileDeletedAt: agentProfiles.deletedAt,
+        })
+        .from(channels)
+        .innerJoin(
+          channelMemberships,
+          eq(channelMemberships.channelId, channels.id),
+        )
+        .innerJoin(channelAgents, eq(channelAgents.channelId, channels.id))
+        .innerJoin(
+          agentProfiles,
+          eq(agentProfiles.agentId, channelAgents.agentId),
+        )
+        .where(eq(channels.id, deletedOnlyChannel.id));
+      expect(retainedDeletedOnlyRows).toHaveLength(1);
+      expect(retainedDeletedOnlyRows[0]).toMatchObject({
+        memberUserId: owner.id,
+        agentId: deletedOnlyProfile.id,
+      });
+      expect(retainedDeletedOnlyRows[0]?.channelDeletedAt).toBeInstanceOf(Date);
+      expect(retainedDeletedOnlyRows[0]?.profileDeletedAt).toBeInstanceOf(Date);
 
-    const retainedLivePreservedRows = await database
-      .select({
-        channelDeletedAt: channels.deletedAt,
-        memberUserId: channelMemberships.userId,
-        agentId: channelAgents.agentId,
-        profileDeletedAt: agentProfiles.deletedAt,
-      })
-      .from(channels)
-      .innerJoin(
-        channelMemberships,
-        eq(channelMemberships.channelId, channels.id),
-      )
-      .innerJoin(channelAgents, eq(channelAgents.channelId, channels.id))
-      .innerJoin(
-        agentProfiles,
-        eq(agentProfiles.agentId, channelAgents.agentId),
-      )
-      .where(eq(channels.id, livePreservedChannel.id));
-    expect(retainedLivePreservedRows).toHaveLength(1);
-    expect(retainedLivePreservedRows[0]).toMatchObject({
-      channelDeletedAt: null,
-      memberUserId: owner.id,
-      agentId: preservedProfile.id,
-    });
-    expect(retainedLivePreservedRows[0]?.profileDeletedAt).toBeInstanceOf(Date);
+      const retainedLivePreservedRows = await database
+        .select({
+          channelDeletedAt: channels.deletedAt,
+          memberUserId: channelMemberships.userId,
+          agentId: channelAgents.agentId,
+          profileDeletedAt: agentProfiles.deletedAt,
+        })
+        .from(channels)
+        .innerJoin(
+          channelMemberships,
+          eq(channelMemberships.channelId, channels.id),
+        )
+        .innerJoin(channelAgents, eq(channelAgents.channelId, channels.id))
+        .innerJoin(
+          agentProfiles,
+          eq(agentProfiles.agentId, channelAgents.agentId),
+        )
+        .where(eq(channels.id, livePreservedChannel.id));
+      expect(retainedLivePreservedRows).toHaveLength(1);
+      expect(retainedLivePreservedRows[0]).toMatchObject({
+        channelDeletedAt: null,
+        memberUserId: owner.id,
+        agentId: preservedProfile.id,
+      });
+      expect(retainedLivePreservedRows[0]?.profileDeletedAt).toBeInstanceOf(
+        Date,
+      );
 
-    const ownerRoster = await loadAgents(owner);
-    expect(ownerRoster).not.toContainEqual(
-      expect.objectContaining({ id: deletedOnlyProfile.id }),
-    );
-    expect(ownerRoster).toContainEqual({
-      id: preservedProfile.id,
-      name: "Preserved Helper",
-      type: "unavailable",
-      reason:
-        "Preserved Helper has been deleted and can no longer run. Its conversations remain readable.",
+      const ownerRoster = await loadAgents(owner);
+      expect(ownerRoster).not.toContainEqual(
+        expect.objectContaining({ id: deletedOnlyProfile.id }),
+      );
+      expect(ownerRoster).toContainEqual({
+        id: preservedProfile.id,
+        name: "Preserved Helper",
+        type: "unavailable",
+        reason:
+          "Preserved Helper has been deleted and can no longer run. Its conversations remain readable.",
+      });
+      expect(
+        idsOf(await as(otherUser, () => loadAgents(otherUser))),
+      ).not.toEqual(
+        expect.arrayContaining([deletedOnlyProfile.id, preservedProfile.id]),
+      );
+      // Also in the platform's frame, which sees the owner's rows: the loader itself must refuse.
+      expect(
+        idsOf(await runAsTenant("platform", () => loadAgents(otherUser))),
+      ).not.toEqual(
+        expect.arrayContaining([deletedOnlyProfile.id, preservedProfile.id]),
+      );
     });
-    expect(idsOf(await loadAgents(otherUser))).not.toEqual(
-      expect.arrayContaining([deletedOnlyProfile.id, preservedProfile.id]),
-    );
   });
 
   test("applies an edited role to the next load without a restart", async () => {
     const owner = await createUser();
-    const profile = await createCoworker(owner);
+    await as(owner, async () => {
+      const profile = await createCoworker(owner);
 
-    await profileStore.update(owner, profile.id, {
-      name: "Expense Manager",
-      title: "Finance Operations",
-      roleDescription: "Reconcile corporate card statements.",
-      visibility: "private",
+      await profileStore.update(owner, profile.id, {
+        name: "Expense Manager",
+        title: "Finance Operations",
+        roleDescription: "Reconcile corporate card statements.",
+        visibility: "private",
+      });
+
+      const reloaded = (await loadAgents(owner)).find(
+        (agent) => agent.id === profile.id,
+      );
+      expect(
+        reloaded?.type === "remote_ag_ui" && reloaded.standingMessage.content,
+      ).toContain("Reconcile corporate card statements.");
     });
-
-    const reloaded = (await loadAgents(owner)).find(
-      (agent) => agent.id === profile.id,
-    );
-    expect(
-      reloaded?.type === "remote_ag_ui" && reloaded.standingMessage.content,
-    ).toContain("Reconcile corporate card statements.");
   });
 });
