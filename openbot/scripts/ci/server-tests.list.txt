@@ -352,6 +352,8 @@ tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
 tests/stall-guard.test.ts
+tests/subscriptions-unique-migration.integration.test.ts
+tests/subscriptions-unique.integration.test.ts
 tests/support/database.test.ts
 tests/support/load-order.test.ts
 tests/task-card-reclaim.test.ts
