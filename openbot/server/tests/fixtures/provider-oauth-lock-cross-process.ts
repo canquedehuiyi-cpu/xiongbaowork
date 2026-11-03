@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CredentialLockUnavailable,
+  LOCK_HELPER_TIMING,
   lockProviderCredentials,
 } from "../../src/provider-oauth-lock";
 
@@ -33,14 +34,23 @@ function holder(command: string[]) {
     try {
       let output = "";
       for (;;) {
-        const lines = output.split("\n").slice(0, -1).map((line) => line.trim());
+        const lines = output
+          .split("\n")
+          .slice(0, -1)
+          .map((line) => line.trim());
         if (lines[0] !== undefined && lines[0] !== "waiting")
           throw new Error(`Unexpected readiness: ${output}`);
         if (lines.length >= 1 && !sawWaiting) {
           sawWaiting = true;
           markWaiting();
           clearTimeout(timeout);
-          timeout = setTimeout(() => child.kill(), 15000);
+          // A Bun owner says `waiting` before its PowerShell helper exists, so from here it may
+          // still need the helper's whole budget: 60 s to start, then 15 s to lock (75 s, as the
+          // desktop cross-writer test allows). A native owner answers well inside it.
+          timeout = setTimeout(
+            () => child.kill(),
+            LOCK_HELPER_TIMING.startupMs + LOCK_HELPER_TIMING.lockMs,
+          );
         }
         if (lines.length >= 2) {
           if (lines[1] !== "locked" || lines.length > 2)
