@@ -1,4 +1,4 @@
-import { IconBook, IconPencil, IconPlus } from "@tabler/icons-react";
+import { IconBook, IconPencil, IconPlus, IconRoute } from "@tabler/icons-react";
 import {
   useMutation,
   useQueries,
@@ -57,6 +57,7 @@ import {
   modelChoiceName,
   modelLibraryQueryOptions,
   PROVIDER_NAMES,
+  poolChoiceName,
 } from "@/lib/models/queries";
 import {
   connectionsQueryOptions,
@@ -90,12 +91,39 @@ function ResourcesPage() {
       description="你的员工能被赋予的东西：它们用来回答的模型、它们持有的技能与连接器、它们读取的来源，以及它们直接给出的界面。"
       title="能力与资源"
     >
+      <PlatformModelZone />
       <ModelZone />
+      <WakerFlowEntry />
       <SkillZone />
       <ConnectorZone />
       <KnowledgeZone />
       <ComponentZone />
     </PageShell>
+  );
+}
+
+/**
+ * The way into WakerFlow management (story WF1).
+ *
+ * Kept as one self-contained block on purpose: where this entry finally lives (here or in the
+ * sidebar) is still open, and moving it should be a change to one file.
+ */
+function WakerFlowEntry() {
+  return (
+    <PageSection
+      action={
+        <Button
+          render={(props) => <Link to="/wakerflows" {...props} />}
+          size="sm"
+          variant="outline"
+        >
+          <IconRoute />
+          管理
+        </Button>
+      }
+      description="用一句话描述想要的流程，生成由多位员工分步执行、可以修改保存的计划。"
+      title="WakerFlow"
+    />
   );
 }
 
@@ -162,11 +190,18 @@ function ModelZone() {
   const library = useQuery(modelLibraryQueryOptions());
   const [connecting, setConnecting] = useState(false);
   const models = library.data?.models ?? [];
+  /*
+   * Connecting a model with one's own key is a Pro capability (K1). The server refuses the write on
+   * Free whatever this screen shows; the screen's part is to say so before the key is typed, and to
+   * point at the one place that changes it. Until the library answers, the button waits too.
+   */
+  const locked = library.data ? !library.data.customModels : true;
 
   return (
     <PageSection
       action={
         <Button
+          disabled={locked}
           onClick={() => setConnecting((open) => !open)}
           size="sm"
           variant={connecting ? "secondary" : "default"}
@@ -178,7 +213,11 @@ function ModelZone() {
       description="每位员工都在这些模型之一上回答，或者用这个部署启动时自带的模型——正因如此，开发者可以跑在一个模型上、它的审核员跑在另一个上。"
       title="模型"
     >
-      {connecting ? <ConnectForm onDone={() => setConnecting(false)} /> : null}
+      {library.data && locked ? (
+        <ConnectForm locked onDone={() => {}} />
+      ) : connecting ? (
+        <ConnectForm onDone={() => setConnecting(false)} />
+      ) : null}
       <ZoneRows
         empty={models.length === 0}
         error={library.error}
@@ -199,7 +238,62 @@ function ModelZone() {
   );
 }
 
-function ConnectForm({ onDone }: { onDone: () => void }) {
+/**
+ * The platform's own experience models (stories H1, K1), read-only.
+ *
+ * They are keyed and run by the platform, so nothing here edits them: a person sees which ones their
+ * plan offers, how many of their coworkers answer on each, and which ones cannot be picked right now
+ * because the deployment holds no key for them. Binding one is done on the coworker, like any model.
+ */
+function PlatformModelZone() {
+  const library = useQuery(modelLibraryQueryOptions());
+  const pool = library.data?.pool ?? [];
+  return (
+    <PageSection
+      description="平台提供并托管密钥的共享模型，套餐内可直接给员工使用，不需要你自己的 key。"
+      title="平台体验模型"
+    >
+      <ZoneRows
+        empty={pool.length === 0}
+        error={library.error}
+        pending={library.isPending}
+      >
+        {pool.map((model) => (
+          <Item key={model.id} variant="muted">
+            <ItemContent>
+              <ItemTitle>{poolChoiceName(model)}</ItemTitle>
+              <ItemDescription>
+                {model.available
+                  ? `有 ${model.coworkers} 位员工在它上面回答`
+                  : `暂不可用——平台还没有为它配置密钥（有 ${model.coworkers} 位员工绑定了它）`}
+              </ItemDescription>
+            </ItemContent>
+          </Item>
+        ))}
+      </ZoneRows>
+      {!library.isPending && !library.error && pool.length === 0 ? (
+        <ZoneEmpty
+          description="你的套餐目前没有可用的平台体验模型。"
+          title="暂无平台体验模型"
+        />
+      ) : null}
+    </PageSection>
+  );
+}
+
+/**
+ * The form a person connects a model of their own through.
+ *
+ * `locked` is the Free plan's view of it (K1): drawn whole, so it is plain what Pro unlocks, but
+ * every field and the submit disabled, with the way to the plans page beside it.
+ */
+function ConnectForm({
+  locked = false,
+  onDone,
+}: {
+  locked?: boolean;
+  onDone: () => void;
+}) {
   const queryClient = useQueryClient();
   const library = useQuery(modelLibraryQueryOptions());
   const templates = library.data?.templates ?? [];
@@ -217,7 +311,7 @@ function ConnectForm({ onDone }: { onDone: () => void }) {
       className="mb-4 flex flex-col gap-3 rounded-lg border border-border p-4"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!ready) return;
+        if (locked || !ready) return;
         connect.mutate(
           {
             provider,
@@ -231,9 +325,18 @@ function ConnectForm({ onDone }: { onDone: () => void }) {
         );
       }}
     >
-      <fieldset className="flex flex-col gap-3">
+      {locked ? (
+        <p className="text-sm" role="note">
+          免费版只能使用平台体验模型。
+          <Link className="underline" to="/plans">
+            升级 Pro 解锁自定义 key
+          </Link>
+        </p>
+      ) : null}
+      <fieldset className="flex flex-col gap-3" disabled={locked}>
         <legend className="font-medium text-sm">接入一个模型</legend>
         <Select
+          disabled={locked}
           // The label map, so the closed trigger names the provider rather than its slug.
           items={Object.fromEntries(
             templates.map((entry) => [
@@ -256,18 +359,21 @@ function ConnectForm({ onDone }: { onDone: () => void }) {
           </SelectContent>
         </Select>
         <Input
+          disabled={locked}
           onChange={(event) => setModelName(event.target.value)}
           placeholder="模型名，例如 gpt-6"
           value={modelName}
         />
         {template?.allowsBaseUrl ? (
           <Input
+            disabled={locked}
             onChange={(event) => setBaseUrl(event.target.value)}
             placeholder="接口地址，例如 https://llm.internal/v1"
             value={baseUrl}
           />
         ) : null}
         <Input
+          disabled={locked}
           onChange={(event) => setApiKey(event.target.value)}
           placeholder="API 密钥"
           type="password"
@@ -283,21 +389,23 @@ function ConnectForm({ onDone }: { onDone: () => void }) {
         ) : null}
         <div className="flex gap-2">
           <Button
-            disabled={connect.isPending || !ready}
+            disabled={locked || connect.isPending || !ready}
             size="sm"
             type="submit"
           >
             {connect.isPending ? "正在接入…" : "接入"}
           </Button>
-          <Button
-            disabled={connect.isPending}
-            onClick={onDone}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            取消
-          </Button>
+          {locked ? null : (
+            <Button
+              disabled={connect.isPending}
+              onClick={onDone}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+          )}
         </div>
       </fieldset>
     </form>

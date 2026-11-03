@@ -315,7 +315,17 @@ test("one screen holds all five zones, in order: models, skills, connectors, kno
   const titles = view
     .getAllByRole("heading", { level: 2 })
     .map((heading) => heading.textContent);
-  expect(titles).toEqual(["模型", "技能", "连接器", "知识来源", "组件"]);
+  // The five zones in order, with the two sections the integration branch added around them: the
+  // platform pool (H1/K1) ahead of the person's own models, and the WakerFlow entry (WF1) after them.
+  expect(titles).toEqual([
+    "平台体验模型",
+    "模型",
+    "WakerFlow",
+    "技能",
+    "连接器",
+    "知识来源",
+    "组件",
+  ]);
   // No zone is in a failed state on a healthy screen.
   expect(view.queryByText(/^读不到/)).toBeNull();
 });

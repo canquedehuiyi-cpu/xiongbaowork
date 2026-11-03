@@ -54,6 +54,7 @@ import {
   refreshPluginServerMutationOptions,
   registerOAuthClientMutationOptions,
   removePluginServerMutationOptions,
+  replaceServerTokenMutationOptions,
 } from "@/lib/plugins/mutations";
 import {
   type CatalogueItem,
@@ -262,6 +263,10 @@ function RouteComponent() {
     ...addCuratedServerMutationOptions(queryClient),
     ...report,
   });
+  const replaceServerToken = useMutation({
+    ...replaceServerTokenMutationOptions(queryClient),
+    ...report,
+  });
   const registerClient = useMutation({
     ...registerOAuthClientMutationOptions(queryClient),
     ...report,
@@ -385,6 +390,54 @@ function RouteComponent() {
       }
       setToken("");
       setClient({ clientId: "", clientSecret: "" });
+      setDialog(null);
+    } catch (thrown) {
+      setError((thrown as Error).message);
+    }
+  };
+
+  /*
+   * Replacing the token of a server that is already here, in ONE request.
+   *
+   * Not `storeMcpToken` and then a re-add, which is how this was first written. Storing a token for
+   * a key that holds one revokes the old one at once (`createCredential` rotates), so a re-add that
+   * failed after it left the server naming a revoked credential, with the token that worked gone.
+   * `POST /servers/:id/token` stores the token and points the server at it in one transaction, and
+   * reads nothing else from the request, so the server's url, instance host and title stay its own.
+   *
+   * Nothing typed is nothing to replace, so the dialog closes having written nothing.
+   */
+  const replaceToken = async () => {
+    setError(null);
+    if (!token.trim()) {
+      setDialog(null);
+      return;
+    }
+    try {
+      await replaceServerToken.mutateAsync({ serverId: key, token });
+      setToken("");
+      setDialog(null);
+    } catch (thrown) {
+      setError((thrown as Error).message);
+    }
+  };
+
+  /*
+   * Moving a catalogue server that is already here to another instance host.
+   *
+   * A re-add with the new host and NO credential id: the add keeps the pointer when it is sent none,
+   * so the server keeps its token, and the host is matched against the vendor's own pattern before
+   * anything is stored. Nothing typed is nothing to move.
+   */
+  const moveInstance = async () => {
+    setError(null);
+    if (!instanceHost.trim()) {
+      setDialog(null);
+      return;
+    }
+    try {
+      await addCurated.mutateAsync({ key, instanceHost: instanceHost.trim() });
+      setInstanceHost("");
       setDialog(null);
     } catch (thrown) {
       setError((thrown as Error).message);
@@ -1147,6 +1200,14 @@ function RouteComponent() {
               onClick={() => {
                 if (!server) {
                   void add();
+                  return;
+                }
+                if (dialog === "token") {
+                  void replaceToken();
+                  return;
+                }
+                if (dialog === "instance") {
+                  void moveInstance();
                   return;
                 }
                 if (dialog === "client") {

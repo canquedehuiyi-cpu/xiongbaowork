@@ -1,9 +1,16 @@
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { BotAccessCheck } from "../agents/profile-policy";
+import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import { reasonWithoutStatement } from "../db/query-failure";
+import {
+  capabilityFor,
+  currentTenant,
+  isPersonTenant,
+  runAsTenant,
+} from "../tenant/context";
 import {
   type BrokerApp,
   type BrokerField,
@@ -193,8 +200,32 @@ export function createPluginRoutes(
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
   composio?: { broker: ComposioBroker },
+  /**
+   * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
+   * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
+   * those are `team` rows, and row security admits the write only for an administrator holding the
+   * capability, so without it the write is refused: fail closed, never wider. `adminActAsOwner` and
+   * `asAdminPlatform` are how an administrator's grant on somebody else's Bot runs in that Bot's
+   * owner's frame (I6).
+   */
+  adminScope?: Pick<
+    AdminScope,
+    "adminCapability" | "adminActAsOwner" | "asAdminPlatform"
+  >,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  const adminCapability = adminScope?.adminCapability;
+  const signedInWithCapability: MiddlewareHandler<{
+    Variables: AppVariables;
+  }> = (context, next) =>
+    requireUser(context, async () => {
+      await (adminCapability ?? ((_context, inner) => inner()))(context, next);
+    });
+  /**
+   * The same, for the routes that write the deployment's servers, their OAuth clients and their
+   * secrets (G01-E P10). A member passes through it unchanged, and the handler decides as before.
+   */
+  const capable = signedInWithCapability;
 
   const actorEmail = (context: { var: AppVariables }) =>
     context.var.actor?.email ?? "unknown";
@@ -279,7 +310,7 @@ export function createPluginRoutes(
   );
 
   /** Add a curated server. The URL comes from the catalogue, never from the request. */
-  routes.post("/servers", requireUser, async (context) => {
+  routes.post("/servers", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -365,7 +396,7 @@ export function createPluginRoutes(
    * deployment at an address of their own" is a distinct act in the code, in the audit trail and in
    * anything that reads either.
    */
-  routes.post("/servers/custom", requireUser, async (context) => {
+  routes.post("/servers/custom", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -429,6 +460,47 @@ export function createPluginRoutes(
   });
 
   /**
+   * Replace the deployment token of a server that is already added, and point the server at it.
+   *
+   * Its own endpoint rather than `POST /api/admin/credentials` followed by a re-add, because those
+   * are two requests and the first revokes the token the server is using: a failure between them
+   * left the server on a revoked credential. The store writes both in one transaction — see
+   * `replaceServerToken`. Nothing else about the server is taken from the request.
+   */
+  routes.post("/servers/:id/token", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+
+    const body = (await context.req.json().catch(() => null)) as {
+      token?: unknown;
+    } | null;
+    if (typeof body?.token !== "string" || !body.token.trim()) {
+      return context.json({ error: "A token is required." }, 400);
+    }
+
+    try {
+      const server = await store.replaceServerToken({
+        serverId: context.req.param("id"),
+        token: body.token,
+        by: actorEmail(context),
+      });
+      return context.json({ server });
+    } catch (error) {
+      if (
+        error instanceof CatalogueEntryUnknownError ||
+        error instanceof CustomServerRefusedError
+      ) {
+        return context.json({ error: error.message }, 400);
+      }
+      // As on the add routes: this refreshes before it answers, over a row that now holds the token.
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
    * Register this deployment's OAuth client for a server reached as the person asking.
    *
    * Its own endpoint rather than a field on `POST /servers`, because it is a separate act with a
@@ -436,7 +508,7 @@ export function createPluginRoutes(
    * should not require re-typing a client. An administrator's, like everything else that decides what
    * a Bot can reach.
    */
-  routes.post("/servers/:id/oauth-client", requireUser, async (context) => {
+  routes.post("/servers/:id/oauth-client", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -518,7 +590,7 @@ export function createPluginRoutes(
    * what makes pressing it safe: nothing here is deleted until the withdrawals have been asked
    * for, so a second press asks only for what is left.
    */
-  routes.delete("/servers/:id", requireUser, async (context) => {
+  routes.delete("/servers/:id", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -528,6 +600,10 @@ export function createPluginRoutes(
     } catch (error) {
       if (isDeploymentFault(error)) {
         return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      // Without the capability (a role removed since sign-in): refused before anything was touched.
+      if (error instanceof CustomServerRefusedError) {
+        return context.json({ error: error.message }, 403);
       }
       /*
        * WHAT THE MAPPING COST, PUT BACK, exactly as the enable route below does it. An unhandled
@@ -565,7 +641,7 @@ export function createPluginRoutes(
   });
 
   /** Ask a server what it offers now. Reported rather than thrown, so the page can say what broke. */
-  routes.post("/servers/:id/refresh", requireUser, async (context) => {
+  routes.post("/servers/:id/refresh", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -582,6 +658,10 @@ export function createPluginRoutes(
     } catch (error) {
       if (error instanceof CatalogueEntryUnknownError) {
         return context.json({ error: error.message }, 404);
+      }
+      // Without the capability (a role removed since sign-in): the servers are `team` rows (P10).
+      if (error instanceof CustomServerRefusedError) {
+        return context.json({ error: error.message }, 403);
       }
       /*
        * The one audience the sentence was written for, and the only route that may show it.
@@ -725,7 +805,7 @@ export function createPluginRoutes(
    * The title comes off the directory entry too. The caller chose an app; they did not choose a
    * name for it.
    */
-  routes.post("/composio/apps", requireUser, async (context) => {
+  routes.post("/composio/apps", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
 
@@ -994,7 +1074,7 @@ export function createPluginRoutes(
    * Answers with a URL rather than redirecting, so the browser decides when to leave the page. The
    * state is minted here, from the session, and the person's identity never comes off the callback.
    */
-  routes.post("/servers/:id/connect", requireUser, async (context) => {
+  routes.post("/servers/:id/connect", capable, async (context) => {
     const serverId = context.req.param("id");
 
     /*
@@ -1642,6 +1722,14 @@ export function createPluginRoutes(
           409,
         );
       }
+      /*
+       * A first connect to a self-registering vendor by somebody who may not store the deployment's
+       * client (G01-E P10): an administrator's connect registers it. The same 409 as a client nobody
+       * has pasted in, for the same reason: an administrator has the step to take.
+       */
+      if (error instanceof PluginRefusedError) {
+        return context.json({ error: error.message }, 409);
+      }
       throw error;
     }
     if (!client) {
@@ -2010,6 +2098,21 @@ export function createPluginRoutes(
       if (!code || !state) return context.redirect(failed);
 
       /*
+       * WHOSE FRAME THIS RUNS IN IS THE SEALED STATE'S PERSON, AND NOBODY ELSE'S (G01).
+       *
+       * There is no session here, so no guard opened a tenant frame, and without one every read and
+       * write below ran as `system`: the person's refresh token and their connection row were filed
+       * where every tenant can read them, and the swap looked for their existing grant in a partition
+       * it is not in. The state was sealed by this deployment for one person at connect time, so it
+       * is the trusted claim, and everything that touches the database runs as that person — exactly
+       * the frame the connect route that sealed it ran in. A state naming nobody (`system`,
+       * `platform`, empty) cannot have been sealed by that route, and fails like a forged one.
+       */
+      const userId = state.userId;
+      if (!isPersonTenant(userId)) return context.redirect(failed);
+      const asPerson = <T>(work: () => Promise<T>) => runAsTenant(userId, work);
+
+      /*
        * Is the person in the state still somebody here?
        *
        * Asked here, before the code is redeemed and before anything is written, because a state is
@@ -2022,14 +2125,14 @@ export function createPluginRoutes(
        * The same anonymous failure as an unreadable state. Whether an address is deny-listed is not a
        * fact this endpoint owes an unauthenticated caller.
        */
-      if (!(await connect.personHasAccess(state.userId))) {
+      if (!(await asPerson(() => connect.personHasAccess(userId)))) {
         return context.redirect(failed);
       }
 
       const entry = catalogueEntry(state.serverId);
       if (entry?.auth.kind !== "user-oauth") return context.redirect(failed);
 
-      const client = await store.oauthClientFor(state.serverId);
+      const client = await asPerson(() => store.oauthClientFor(state.serverId));
       if (!client) return context.redirect(failed);
 
       const grant = await redeemAuthorizationCode({
@@ -2055,12 +2158,14 @@ export function createPluginRoutes(
        * logged: it is the one thing here worth stealing, and the row it belonged to was never written.
        */
       try {
-        await store.recordConnection({
-          serverId: state.serverId,
-          userId: state.userId,
-          refreshToken: grant.refreshToken,
-          scope: grant.scope,
-        });
+        await asPerson(() =>
+          store.recordConnection({
+            serverId: state.serverId,
+            userId,
+            refreshToken: grant.refreshToken,
+            scope: grant.scope,
+          }),
+        );
       } catch (error) {
         console.error(
           JSON.stringify({
@@ -2072,7 +2177,7 @@ export function createPluginRoutes(
              * IS THE ONE WHOSE MESSAGE CARRIES THE REFRESH TOKEN.
              *
              * `recordConnection` runs `swapUserCredential` → `credentials.create/rotate`, whose
-             * bound parameters include `encryptedValue: await encryptSecret(key, refreshToken)`.
+             * bound parameters include the refresh token's sealed envelope (`sealCredential`).
              * drizzle wraps a driver failure as a `DrizzleQueryError` whose own message is
              * `Failed query: insert into "credentials" … params: …, <the envelope>, …`, so
              * `String(error)` here put the envelope on this deployment's stdout and into whatever
@@ -2231,7 +2336,15 @@ export function createPluginRoutes(
     const refusal = await skillRefusal(context, slug);
     if (refusal) return context.json({ error: refusal }, 403);
 
-    await store.uninstallSkill(slug, actorEmail(context));
+    try {
+      await store.uninstallSkill(slug, actorEmail(context));
+    } catch (error) {
+      // The platform's own row under this name: a workspace may shadow it, never remove it.
+      if (error instanceof PluginRefusedError) {
+        return context.json({ error: error.message }, 403);
+      }
+      throw error;
+    }
     return context.json({ ok: true });
   });
 
@@ -2516,7 +2629,38 @@ export function createPluginRoutes(
     return null;
   }
 
-  routes.post("/grants", requireUser, async (context) => {
+  /**
+   * Where an administrator's grant or revoke on a Bot runs (G01-E P10, I6; carried forward from P8b).
+   *
+   * On somebody else's Bot (their private Bot, or a team Bot they own) it runs in that owner's frame
+   * through `adminActAsOwner`: the existence checks see the Bot the way its owner does, the grant is
+   * stamped as its owner's Bot needs (the owner's tenant for a private Bot, `team` for a team Bot;
+   * 0127 admits no other stamp) and the trail row lands with the owner. Whose Bot it is is read under
+   * `asAdminPlatform`, because the administrator's own frame usually cannot see it. Everybody else,
+   * an administrator on their own Bot or an ownerless one, and an administrator without the
+   * capability (a role removed since sign-in) act in their own frame, as before.
+   */
+  async function asBotOwner<T>(
+    context: { var: AppVariables },
+    agentId: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const actor = context.var.actor;
+    if (
+      actor?.role !== "admin" ||
+      !adminScope ||
+      capabilityFor(currentTenant()) !== "admin"
+    ) {
+      return work();
+    }
+    const owner = await adminScope.asAdminPlatform(actor, () =>
+      store.botOwnerTenant(agentId),
+    );
+    if (!owner || owner === actor.id) return work();
+    return adminScope.adminActAsOwner(actor, owner, work);
+  }
+
+  routes.post("/grants", signedInWithCapability, async (context) => {
     const body = (await context.req.json().catch(() => null)) as {
       kind?: unknown;
       ref?: string;
@@ -2547,28 +2691,37 @@ export function createPluginRoutes(
      */
     const grantRef = body.ref.trim();
     const grantAgentId = body.agentId.trim();
-    const decision = await enablementDecision(
-      context,
-      kind,
-      grantRef,
-      grantAgentId,
-      "grant",
-    );
-    if (decision.refusal !== null) {
-      return context.json({ error: decision.refusal }, 403);
-    }
+    return asBotOwner(context, grantAgentId, async () => {
+      const decision = await enablementDecision(
+        context,
+        kind,
+        grantRef,
+        grantAgentId,
+        "grant",
+      );
+      if (decision.refusal !== null) {
+        return context.json({ error: decision.refusal }, 403);
+      }
 
-    if (decision.selfService) {
-      await store.grant(kind, grantRef, grantAgentId, actorEmail(context), {
-        selfService: true,
-      });
-    } else {
-      await store.grant(kind, grantRef, grantAgentId, actorEmail(context));
-    }
-    return context.json({ ok: true });
+      try {
+        if (decision.selfService) {
+          await store.grant(kind, grantRef, grantAgentId, actorEmail(context), {
+            selfService: true,
+          });
+        } else {
+          await store.grant(kind, grantRef, grantAgentId, actorEmail(context));
+        }
+      } catch (error) {
+        // A shared Bot's grant that is not this person's to write (see `store.grant`).
+        if (error instanceof PluginRefusedError)
+          return context.json({ error: error.message }, 403);
+        throw error;
+      }
+      return context.json({ ok: true });
+    });
   });
 
-  routes.delete("/grants", requireUser, async (context) => {
+  routes.delete("/grants", signedInWithCapability, async (context) => {
     const kind = asGrantKind(context.req.query("kind"));
     const ref = context.req.query("ref");
     const agentId = context.req.query("agentId");
@@ -2592,29 +2745,42 @@ export function createPluginRoutes(
     }
     const trimmedRef = ref.trim();
     const trimmedAgentId = agentId.trim();
-    const decision = await enablementDecision(
-      context,
-      kind,
-      trimmedRef,
-      trimmedAgentId,
-      "revoke",
-    );
-    if (decision.refusal !== null) {
-      return context.json({ error: decision.refusal }, 403);
-    }
-
-    if (decision.selfService) {
-      await store.revoke(
+    return asBotOwner(context, trimmedAgentId, async () => {
+      const decision = await enablementDecision(
+        context,
         kind,
         trimmedRef,
         trimmedAgentId,
-        actorEmail(context),
-        { selfService: true },
+        "revoke",
       );
-    } else {
-      await store.revoke(kind, trimmedRef, trimmedAgentId, actorEmail(context));
-    }
-    return context.json({ ok: true });
+      if (decision.refusal !== null) {
+        return context.json({ error: decision.refusal }, 403);
+      }
+
+      try {
+        if (decision.selfService) {
+          await store.revoke(
+            kind,
+            trimmedRef,
+            trimmedAgentId,
+            actorEmail(context),
+            { selfService: true },
+          );
+        } else {
+          await store.revoke(
+            kind,
+            trimmedRef,
+            trimmedAgentId,
+            actorEmail(context),
+          );
+        }
+      } catch (error) {
+        if (error instanceof PluginRefusedError)
+          return context.json({ error: error.message }, 403);
+        throw error;
+      }
+      return context.json({ ok: true });
+    });
   });
 
   /**

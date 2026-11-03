@@ -3,10 +3,14 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { eq, inArray } from "drizzle-orm";
+import { moveToOwner, moveToTeam } from "../src/agents/profile-store";
 import { createDatabase } from "../src/db/client";
 import { agentProfiles, agents, users } from "../src/db/schema";
 import { knowledgeNotebooks } from "../src/db/schema/knowledge-foundations";
-import { createKnowledgeStore } from "../src/knowledge/store";
+import {
+  createKnowledgeStore,
+  KnowledgeForbiddenError,
+} from "../src/knowledge/store";
 import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "../src/knowledge/tools";
 import { REFUSAL_MARKER } from "../src/plugins/tools";
 import { runAsTenant } from "../src/tenant/context";
@@ -25,6 +29,7 @@ const stranger = `kbt-${suite}-stranger`;
 const boundWaker = `kbt-${suite}-bound`;
 const idleWaker = `kbt-${suite}-idle`;
 const strangerWaker = `kbt-${suite}-stranger-waker`;
+const teamWaker = `kbt-${suite}-team`;
 let ownerNotebook = "";
 let ownerOtherNotebook = "";
 let strangerNotebook = "";
@@ -80,16 +85,25 @@ async function run(
 }
 
 beforeAll(async () => {
-  await database
-    .insert(users)
-    .values([
-      { id: owner, email: `${owner}@example.test`, name: "Owner" },
-      { id: stranger, email: `${stranger}@example.test`, name: "Stranger" },
-    ])
-    .onConflictDoNothing();
+  // Each person is seeded in their own frame: a test has no unframed fallback since G01-E.
+  for (const [id, name] of [
+    [owner, "Owner"],
+    [stranger, "Stranger"],
+  ] as const)
+    await runAsTenant(id, () =>
+      database
+        .insert(users)
+        .values({ id, email: `${id}@example.test`, name })
+        .onConflictDoNothing(),
+    );
   await wakerFor(owner, boundWaker);
   await wakerFor(owner, idleWaker);
   await wakerFor(stranger, strangerWaker);
+  // The owner's published Waker: G01-E stamps it `team`, the profile still names its owner.
+  await wakerFor(owner, teamWaker);
+  await runAsTenant(owner, () =>
+    database.transaction((tx) => moveToTeam(tx, teamWaker)),
+  );
   ownerNotebook = await notebookWith(owner, "发布计划", INJECTION);
   ownerOtherNotebook = await notebookWith(
     owner,
@@ -108,8 +122,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await runAsTenant(owner, () =>
+    database.transaction((tx) => moveToOwner(tx, teamWaker, owner)),
+  );
   for (const [tenant, ids] of [
-    [owner, [boundWaker, idleWaker]],
+    [owner, [boundWaker, idleWaker, teamWaker]],
     [stranger, [strangerWaker]],
   ] as const) {
     await runAsTenant(tenant, async () => {
@@ -122,7 +139,10 @@ afterAll(async () => {
       await database.delete(agents).where(inArray(agents.id, [...ids]));
     });
   }
-  await database.delete(users).where(inArray(users.id, [owner, stranger]));
+  // Cleanup spans both people this file seeded, which only the platform reaches.
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, [owner, stranger])),
+  );
   await database.$client.close();
 });
 
@@ -233,6 +253,28 @@ describe("RES1 Waker knowledge tools", () => {
     );
     expect(refused.startsWith(REFUSAL_MARKER)).toBe(true);
     expect(refused).not.toContain("周二");
+  });
+
+  test("an owner lends a notebook to their published Waker; a teammate running it gets nothing of theirs", async () => {
+    await runAsTenant(owner, () => store.bind(owner, ownerNotebook, teamWaker));
+    expect(
+      (await toolsFor(owner, teamWaker)).map((t) => t.name).sort(),
+    ).toEqual([...KNOWLEDGE_TOOL_NAMES].sort());
+    expect(
+      await run(owner, teamWaker, "search_knowledge", { query: "周二" }),
+    ).toContain("周二");
+    // The teammate's run of the same team Waker reads in the teammate's frame, where no binding is.
+    expect(await toolsFor(stranger, teamWaker)).toEqual([]);
+    // Nor may the teammate lend their own notebook to a Bot that is not theirs.
+    await expect(
+      runAsTenant(stranger, () =>
+        store.bind(stranger, strangerNotebook, teamWaker),
+      ),
+    ).rejects.toBeInstanceOf(KnowledgeForbiddenError);
+    await runAsTenant(owner, () =>
+      store.unbind(owner, ownerNotebook, teamWaker),
+    );
+    expect(await toolsFor(owner, teamWaker)).toEqual([]);
   });
 
   test("revoking the binding or deleting the notebook stops a run that already holds the tools", async () => {

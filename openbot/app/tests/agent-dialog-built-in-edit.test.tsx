@@ -78,6 +78,7 @@ function serve(endpoint: string) {
     deletedAt: null,
     endpoint,
     modelRef: null,
+    platformModelRef: null,
     persona: null,
     hasAuth: false,
     hasCallbackToken: false,
