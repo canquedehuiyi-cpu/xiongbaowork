@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { AbstractAgent, type Message, type RunAgentInput } from "@ag-ui/client";
 import { EMPTY } from "rxjs";
 import { createTurnRunner } from "../src/routines/run-turn";
+import { runAsTenant } from "../src/tenant/context";
 
 class Agent extends AbstractAgent {
   run() {
@@ -59,16 +60,19 @@ test("verified inbound person message keeps canonical run ID and persists exact 
     content: "My actual Slack message",
   };
   expect(
-    await turn({
-      ownerUserId: "owner",
-      routineId: "delivery:inbox-id",
-      runId: "inbox-id",
-      agentId: "bot",
-      threadId: "canonical-thread",
-      instruction: userMessage.content,
-      userMessage,
-      initiator: { kind: "person" },
-    }),
+    // A delivered turn runs as the person it was delivered for, as its caller frames it.
+    await runAsTenant("owner", () =>
+      turn({
+        ownerUserId: "owner",
+        routineId: "delivery:inbox-id",
+        runId: "inbox-id",
+        agentId: "bot",
+        threadId: "canonical-thread",
+        instruction: userMessage.content,
+        userMessage,
+        initiator: { kind: "person" },
+      }),
+    ),
   ).toEqual({ replyText: "Hello" });
   expect(locks).toEqual(["inbox-id", "inbox-id", "inbox-id"]);
   expect(persisted).toEqual([[userMessage]]);

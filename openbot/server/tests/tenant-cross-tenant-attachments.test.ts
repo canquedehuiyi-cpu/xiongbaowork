@@ -16,6 +16,7 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -29,9 +30,10 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * tells a stranger the file is there, in a body of zero bytes, and the cache line looks exactly like
  * the owner's. The 304 has to be earned by the same join the 200 is, so that is what gets asserted.
  *
- * Like the channel seam it sits beside, this visibility is the application's, not the database's: the
- * rows are written without a tenant scope, so they land in the `system` partition every tenant can
- * read. `visibleToActor` is the whole of the guard.
+ * The fixture is the owner's, written in the owner's frame, and each request runs in a tenant frame as
+ * the real guard opens one. A stranger is asked twice: from their own frame, the production shape,
+ * where row security already hides the row; and from the owner's frame, where row security would let
+ * it through, so that `visibleToActor` alone is shown to be a whole guard and not leaning on RLS.
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const profileStore = createAgentProfileStore(
@@ -50,19 +52,24 @@ const channelIds: string[] = [];
 const agentIds: string[] = [];
 const attachmentIds: string[] = [];
 
-const routesFor = (actorId: string) => {
+const routesFor = (actorId: string, frameTenant: string = actorId) => {
   const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
     context,
     next,
   ) => {
     context.set("actor", { id: actorId, role: "user" as const });
-    await next();
+    await runAsTenant(frameTenant, () => next());
   };
   return createAttachmentRoutes(database, requireUser);
 };
 
-const read = (actorId: string, id: string, etag?: string) =>
-  routesFor(actorId).request(
+const read = (
+  actorId: string,
+  id: string,
+  etag?: string,
+  frameTenant: string = actorId,
+) =>
+  routesFor(actorId, frameTenant).request(
     new Request(`http://openbot.test/${id}`, {
       ...(etag ? { headers: { "if-none-match": etag } } : {}),
     }),
@@ -72,66 +79,75 @@ let attachmentId = "";
 
 beforeAll(async () => {
   for (const tenantId of [owner, stranger]) {
-    await database.insert(users).values({
-      id: tenantId,
-      email: `${tenantId}@example.test`,
-      name: "Attachment tenancy fixture",
-    });
+    await runAsTenant(tenantId, () =>
+      database.insert(users).values({
+        id: tenantId,
+        email: `${tenantId}@example.test`,
+        name: "Attachment tenancy fixture",
+      }),
+    );
   }
 
-  const coworker = await profileStore.create(
-    { id: owner, role: "user" },
-    {
-      name: `Coworker ${suite}`,
-      title: "Reads the mail",
-      roleDescription: "Summarises what arrived.",
-      visibility: "private",
-    },
-  );
-  agentIds.push(coworker.id);
-  const channel = await channelStore.create({ id: owner, role: "user" }, [
-    coworker.id,
-  ]);
-  channelIds.push(channel.id);
+  // The owner's Bot, channel and sent file, written the way the owner's own request writes them.
+  const inserted = await runAsTenant(owner, async () => {
+    const coworker = await profileStore.create(
+      { id: owner, role: "user" },
+      {
+        name: `Coworker ${suite}`,
+        title: "Reads the mail",
+        roleDescription: "Summarises what arrived.",
+        visibility: "private",
+      },
+    );
+    agentIds.push(coworker.id);
+    const channel = await channelStore.create({ id: owner, role: "user" }, [
+      coworker.id,
+    ]);
+    channelIds.push(channel.id);
 
-  /*
-   * `attachedAt` set is what makes this a sent file rather than one still staged in a composer. The
-   * visibility predicate admits either to its uploader but only the sent one to another member, so
-   * leaving it null would test the wrong half of the join.
-   */
-  const [inserted] = await database
-    .insert(attachments)
-    .values({
-      channelId: channel.id,
-      uploadedBy: owner,
-      name: `${suite}.txt`,
-      mimeType: "text/plain",
-      sizeBytes: Buffer.byteLength("contents of a private file"),
-      bytes: Buffer.from("contents of a private file"),
-      attachedAt: new Date(),
-    })
-    .returning({ id: attachments.id });
+    /*
+     * `attachedAt` set is what makes this a sent file rather than one still staged in a composer. The
+     * visibility predicate admits either to its uploader but only the sent one to another member, so
+     * leaving it null would test the wrong half of the join.
+     */
+    const [inserted] = await database
+      .insert(attachments)
+      .values({
+        channelId: channel.id,
+        uploadedBy: owner,
+        name: `${suite}.txt`,
+        mimeType: "text/plain",
+        sizeBytes: Buffer.byteLength("contents of a private file"),
+        bytes: Buffer.from("contents of a private file"),
+        attachedAt: new Date(),
+      })
+      .returning({ id: attachments.id });
+    return inserted;
+  });
   attachmentId = inserted!.id;
   attachmentIds.push(attachmentId);
 });
 
 afterAll(async () => {
-  for (const id of attachmentIds) {
-    await database.delete(attachments).where(eq(attachments.id, id));
-  }
-  for (const id of channelIds) {
-    await database
-      .delete(intelligenceChannelMappings)
-      .where(eq(intelligenceChannelMappings.channelId, id));
-    await database.delete(channels).where(eq(channels.id, id));
-  }
-  for (const id of agentIds) {
-    await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
-    await database.delete(agents).where(eq(agents.id, id));
-  }
-  for (const id of [owner, stranger]) {
-    await database.delete(users).where(eq(users.id, id));
-  }
+  // Cleanup reaches whichever partition the fixture landed in, and two people's rows: the platform.
+  await runAsTenant("platform", async () => {
+    for (const id of attachmentIds) {
+      await database.delete(attachments).where(eq(attachments.id, id));
+    }
+    for (const id of channelIds) {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, id));
+      await database.delete(channels).where(eq(channels.id, id));
+    }
+    for (const id of agentIds) {
+      await database.delete(agentProfiles).where(eq(agentProfiles.agentId, id));
+      await database.delete(agents).where(eq(agents.id, id));
+    }
+    for (const id of [owner, stranger]) {
+      await database.delete(users).where(eq(users.id, id));
+    }
+  });
 });
 
 test("the uploader reads the file back, and its own revalidation is a 304", async () => {
@@ -143,20 +159,30 @@ test("the uploader reads the file back, and its own revalidation is a 304", asyn
   expect(revalidated.status).toBe(304);
 });
 
-test("a stranger's plain read is a 404 rather than a 403", async () => {
-  const response = await read(stranger, attachmentId);
-  expect(response.status).toBe(404);
-});
+for (const [where, frameTenant] of [
+  ["from their own frame", stranger],
+  ["even from the owner's frame", owner],
+] as const) {
+  test(`a stranger's plain read is a 404 rather than a 403, ${where}`, async () => {
+    const response = await read(stranger, attachmentId, undefined, frameTenant);
+    expect(response.status).toBe(404);
+  });
 
-test("a stranger who guesses the ETag gets a 404, not the cheap 304", async () => {
-  /*
-   * The validator is a string built from the id in the path, so this is not a stolen value — it is
-   * arithmetic on something the attacker already has. A 304 here would still be a confirmation that
-   * the file exists and is reachable at this id, delivered on the fastest path the route has.
-   */
-  const response = await read(stranger, attachmentId, `"${attachmentId}"`);
-  expect(response.status).toBe(404);
-});
+  test(`a stranger who guesses the ETag gets a 404, not the cheap 304, ${where}`, async () => {
+    /*
+     * The validator is a string built from the id in the path, so this is not a stolen value — it is
+     * arithmetic on something the attacker already has. A 304 here would still be a confirmation that
+     * the file exists and is reachable at this id, delivered on the fastest path the route has.
+     */
+    const response = await read(
+      stranger,
+      attachmentId,
+      `"${attachmentId}"`,
+      frameTenant,
+    );
+    expect(response.status).toBe(404);
+  });
+}
 
 test("an id that cannot be a uuid answers 404 instead of 500", async () => {
   /*

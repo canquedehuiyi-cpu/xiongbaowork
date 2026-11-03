@@ -5,10 +5,16 @@ import type { ConverseResult } from "../src/delivery/router";
 import { createDeliveryWebhookRoutes } from "../src/delivery/routes";
 import { createTwilioTransport } from "../src/delivery/twilio";
 import type { DeliveryBinding } from "../src/delivery/types";
+import { currentTenant } from "../src/tenant/context";
 
 const SECRET = "x".repeat(48);
 const APPROVAL = "0f8fad5b-d9cb-469f-a165-70867728950e";
-const bound: DeliveryBinding = {
+/*
+ * Rows carry the tenant the database stamped on them; tenants are 1:1 with people, so a person's
+ * binding and link challenge are stamped with the owner's id (G01).
+ */
+const bound: DeliveryBinding & { tenantId: string } = {
+  tenantId: "owner",
   id: "b1",
   ownerUserId: "owner",
   channelId: "ch",
@@ -20,9 +26,20 @@ const bound: DeliveryBinding = {
   address: "U1",
   enabled: true,
 };
-function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
+function fixture(
+  options: {
+    converse?: ConverseResult;
+    bound?: boolean;
+    /** The tenant stamped on the binding and on the link challenge. */
+    stamp?: string;
+  } = {},
+) {
   const calls: unknown[] = [];
   const decisions: unknown[] = [];
+  /** Which tenant each store, router and approvals call ran as. */
+  const frames: string[] = [];
+  const frame = (name: string) => frames.push(`${name}:${currentTenant()}`);
+  const stamped = { ...bound, tenantId: options.stamp ?? bound.tenantId };
   const twilio = createTwilioTransport({
     accountSid: "AC1",
     authToken: "token",
@@ -38,6 +55,7 @@ function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
         return { queued: true };
       },
       notify: async (scope, input) => {
+        frame("notify");
         calls.push({ notify: [scope, input] });
       },
       smsOptOut: async (...input) => {
@@ -45,6 +63,7 @@ function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
         return 1;
       },
       converse: async (input) => {
+        frame("converse");
         calls.push({ converse: input });
         return (
           options.converse ?? {
@@ -59,8 +78,9 @@ function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
     },
     store: {
       readChallenge: async (id: string) =>
-        id === "11111111-2222-4333-8444-555555555555"
+        frame("readChallenge") && id === "11111111-2222-4333-8444-555555555555"
           ? {
+              tenantId: stamped.tenantId,
               id,
               ownerUserId: "owner",
               channelId: "ch",
@@ -70,8 +90,9 @@ function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
               address: null,
             }
           : null,
-      consumeChallenge: async () => true,
+      consumeChallenge: async () => frame("consumeChallenge") > 0,
       bind: async (input) => {
+        frame("bind");
         calls.push({ bind: input });
         return { ...bound, ...input };
       },
@@ -79,11 +100,12 @@ function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
         calls.push(input);
       },
       findBinding: async (transport, realm, identity) =>
+        frame("findBinding") &&
         options.bound !== false &&
         transport === "slack" &&
         realm === "T1" &&
         identity === "U1"
-          ? bound
+          ? stamped
           : null,
       botIdentity: async (agentId) => ({ agentId, name: "Research Bot" }),
     },
@@ -115,17 +137,19 @@ function fixture(options: { converse?: ConverseResult; bound?: boolean } = {}) {
         },
       },
       decide: async (...input) => {
+        frame("decide");
         decisions.push(input);
         return {};
       },
       answerQuestion: async (...input) => {
+        frame("answerQuestion");
         decisions.push({ answer: input });
         return {};
       },
       inbox: async () => ({ questions: [] }),
     },
   });
-  return { routes, calls, decisions };
+  return { routes, calls, decisions, frames };
 }
 const sender = (
   user = "slack:T1:U1",
@@ -602,4 +626,108 @@ test("a channel message from a colleague who never linked still reaches the owne
       text: "deploy is broken",
     }),
   ]);
+});
+
+/*
+ * The OpenTag route is nobody's: its secret names no person. So which person a sender, a card or a
+ * link code belongs to is looked up as the platform, and the link, the turn, the private answer,
+ * the question's answer and the card's decision all run as the tenant stamped on that row (G01).
+ * Without that frame every binding, notification and approval resume made here would be filed as
+ * `system`, which the delivery sweep and the approval loop refuse to run.
+ */
+test("OpenTag links, converses, answers privately and decides as the row's own tenant", async () => {
+  const linked = fixture({ bound: false });
+  const link = await run(linked, {
+    context: [sender()],
+    messages: [
+      {
+        id: "m1",
+        role: "user",
+        content: "<@UBOT> link 11111111-2222-4333-8444-555555555555",
+      },
+    ],
+  });
+  expect(said(link.events)).toContain("Linked");
+  expect(linked.frames).toEqual([
+    "readChallenge:platform",
+    "consumeChallenge:owner",
+    "bind:owner",
+  ]);
+
+  const f = fixture({
+    converse: {
+      kind: "waiting",
+      binding: bound,
+      inboxId: "in1",
+      replyText: "Private reply.",
+      extras: { approvals: [APPROVAL], questions: [] },
+    },
+  });
+  await run(f, {
+    context: [sender("slack:T1:U1", { id: "C0123456789", kind: "channel" })],
+    messages: [{ id: "m1", role: "user", content: "<@UBOT> status?" }],
+  });
+  expect(f.frames).toEqual([
+    "findBinding:platform",
+    "converse:owner",
+    "notify:owner",
+    "notify:owner",
+  ]);
+
+  f.frames.length = 0;
+  await run(f, {
+    forwardedProps: {
+      command: {
+        resume: {
+          "0f8fad5bd9cb469fa16570867728950e": {
+            confirmed: true,
+            by: "slack:T1:U1",
+          },
+        },
+      },
+    },
+  });
+  expect(f.frames).toEqual(["findBinding:platform", "decide:owner"]);
+});
+
+test("a binding or link code stamped as nobody's runs, binds and decides nothing", async () => {
+  for (const stamp of ["system", "platform", "other"]) {
+    const linking = fixture({ bound: false, stamp });
+    const link = await run(linking, {
+      context: [sender()],
+      messages: [
+        {
+          id: "m1",
+          role: "user",
+          content: "<@UBOT> link 11111111-2222-4333-8444-555555555555",
+        },
+      ],
+    });
+    expect(said(link.events)).toContain("expired");
+    expect(linking.calls).toHaveLength(0);
+
+    const f = fixture({ stamp });
+    const chat = await run(f, {
+      context: [sender()],
+      messages: [{ id: "m1", role: "user", content: "<@UBOT> hi" }],
+    });
+    expect(said(chat.events)).toContain("link <code>");
+    const card = await run(f, {
+      forwardedProps: {
+        command: {
+          resume: {
+            "0f8fad5bd9cb469fa16570867728950e": {
+              confirmed: true,
+              by: "slack:T1:U1",
+            },
+          },
+        },
+      },
+    });
+    expect(said(card.events)).toContain("not linked");
+    expect(
+      f.calls.filter((c) => !(c as { trigger?: unknown }).trigger),
+    ).toEqual([]);
+    expect(f.decisions).toHaveLength(0);
+  }
 });

@@ -12,7 +12,7 @@ export type ConnectModelInput = {
   label?: string;
 };
 
-const FALLBACK = "That could not be done with this model.";
+const FALLBACK = "无法对这个模型完成这项操作。";
 
 function refresh(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: modelKeys.all });
@@ -24,7 +24,7 @@ export function connectModelMutationOptions(queryClient: QueryClient) {
       client("/api/models", "model", {
         method: "POST",
         body: input,
-        fallback: "That model could not be connected.",
+        fallback: "无法接入这个模型。",
       }),
     onSuccess: () => refresh(queryClient),
   });
@@ -50,7 +50,7 @@ export function testModelMutationOptions() {
       if (!response.ok) {
         return {
           ok: false,
-          error: body?.error ?? "The connectivity test could not be run.",
+          error: body?.error ?? "无法运行连接测试。",
         };
       }
       return { ok: body?.ok === true, error: body?.error };
@@ -95,7 +95,7 @@ export function modelReferencesMutationOptions() {
       coworkers: { id: string; name: string; title: string }[];
     }> =>
       client(`/api/models/${id}/references`, {
-        fallback: "The coworkers using this model could not be loaded.",
+        fallback: "无法加载正在使用这个模型的员工。",
       }).then(async (response) => response.json()),
   });
 }

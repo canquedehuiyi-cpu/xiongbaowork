@@ -3,6 +3,7 @@ import { inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { sessions, users } from "../src/db/schema";
 import { createPeopleStore } from "../src/people/store";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -20,7 +21,16 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
-const store = createPeopleStore(database, []);
+/**
+ * The people list is the deployment's, not anybody's: the identity rows are seeded, read and removed
+ * as `platform`, the way the identity layer writes them.
+ */
+const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
+const people = createPeopleStore(database, []);
+const store: Pick<typeof people, "list" | "find"> = {
+  list: (...args) => asPlatform(() => people.list(...args)),
+  find: (...args) => asPlatform(() => people.find(...args)),
+};
 const PREFIX = "paging-test-";
 const ids: string[] = [];
 
@@ -32,34 +42,38 @@ async function person(
 ): Promise<string> {
   const id = `${PREFIX}${String(index).padStart(3, "0")}`;
   ids.push(id);
-  await database.insert(users).values({
-    id,
-    email: `${id}@openbot.test`,
-    name: name ?? `Person ${index}`,
-    emailVerified: true,
-    lastSignedInAt: signedInAt,
-  });
-  if (signedInAt) {
-    await database.insert(sessions).values({
-      id: `${id}-session`,
-      userId: id,
-      token: `${id}-token`,
-      expiresAt: new Date(Date.now() + 86_400_000),
-      createdAt: signedInAt,
+  await asPlatform(async () => {
+    await database.insert(users).values({
+      id,
+      email: `${id}@openbot.test`,
+      name: name ?? `Person ${index}`,
+      emailVerified: true,
+      lastSignedInAt: signedInAt,
     });
-  }
+    if (signedInAt) {
+      await database.insert(sessions).values({
+        id: `${id}-session`,
+        userId: id,
+        token: `${id}-token`,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: signedInAt,
+      });
+    }
+  });
   return id;
 }
 
 afterEach(async () => {
   if (ids.length === 0) return;
-  await database.delete(sessions).where(
-    inArray(
-      sessions.userId,
-      ids.map((id) => id),
-    ),
-  );
-  await database.delete(users).where(inArray(users.id, ids));
+  await asPlatform(async () => {
+    await database.delete(sessions).where(
+      inArray(
+        sessions.userId,
+        ids.map((id) => id),
+      ),
+    );
+    await database.delete(users).where(inArray(users.id, ids));
+  });
   ids.length = 0;
 });
 
