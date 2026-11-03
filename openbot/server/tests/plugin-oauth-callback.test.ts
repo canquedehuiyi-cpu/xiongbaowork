@@ -8,6 +8,11 @@ import {
   sealConnectState,
 } from "../src/plugins/oauth";
 import { createPluginRoutes } from "../src/plugins/routes";
+import {
+  isTenantFramed,
+  requireTenant,
+  runAsTenant,
+} from "../src/tenant/context";
 
 /**
  * `GET /oauth/callback`: the request the vendor sends somebody back on.
@@ -210,6 +215,83 @@ describe("a consent that outlived the person's access", () => {
       expect(response.headers.get("location")).toBe(FAILED);
     });
     expect(recorded).toEqual([]);
+  });
+});
+
+describe("whose frame the callback writes in (G01)", () => {
+  /*
+   * The callback has no session, so no guard opens a tenant frame for it. Without one every read and
+   * write ran as the legacy `system` tenant, which filed a person's refresh token where every tenant
+   * can read it. The sealed state's person is the only trusted claim on this route, so every store
+   * call runs as them — and arriving in somebody else's frame decides nothing.
+   */
+  test("the access check, the client read and the grant all run as the state's person", async () => {
+    const frames: string[] = [];
+    const recorded: Recorded[] = [];
+    const hono = app({
+      recorded,
+      personHasAccess: async (userId) => {
+        frames.push(`access:${userId}:${requireTenant()}`);
+        return true;
+      },
+      oauthClientFor: async () => {
+        frames.push(`client:${requireTenant()}`);
+        return { clientId: "dyn-1", clientSecret: "" };
+      },
+      recordConnection: async (connection) => {
+        frames.push(`record:${connection.userId}:${requireTenant()}`);
+        recorded.push(connection);
+      },
+    });
+    const state = await sealConnectState(
+      { userId: "user-1", serverId: "notion", verifier: "v-1" },
+      KEY,
+    );
+
+    await withWillingVendor(async () => {
+      const response = await runAsTenant("user-2", () =>
+        hono.request(callbackUrl(state)),
+      );
+      expect(response.headers.get("location")).toBe(
+        "https://app.example/settings/connected-accounts/notion",
+      );
+    });
+    expect(frames).toEqual([
+      "access:user-1:user-1",
+      "client:user-1",
+      "record:user-1:user-1",
+    ]);
+    expect(recorded.map((connection) => connection.userId)).toEqual(["user-1"]);
+  });
+
+  test("a state naming nobody's tenant is refused before anything is read, asked or written", async () => {
+    for (const userId of ["system", "platform"]) {
+      const recorded: Recorded[] = [];
+      const touched: string[] = [];
+      const hono = app({
+        recorded,
+        personHasAccess: async () => {
+          touched.push(`access:${isTenantFramed()}`);
+          return true;
+        },
+        oauthClientFor: async () => {
+          touched.push("client");
+          return { clientId: "dyn-1", clientSecret: "" };
+        },
+      });
+      const state = await sealConnectState(
+        { userId, serverId: "notion", verifier: "v-1" },
+        KEY,
+      );
+      const requests = await withWillingVendor(async (requests) => {
+        const response = await hono.request(callbackUrl(state));
+        expect(response.headers.get("location")).toBe(FAILED);
+        return requests;
+      });
+      expect(touched).toEqual([]);
+      expect(recorded).toEqual([]);
+      expect(requests).toEqual([]);
+    }
   });
 });
 

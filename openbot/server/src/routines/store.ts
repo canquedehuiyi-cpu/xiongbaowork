@@ -239,14 +239,38 @@ export type RoutineStore = {
    */
   dueRoutines(
     limit: number,
-  ): Promise<{ id: string; nextRunAt: Date; tenantId: string }[]>;
+    /**
+     * The moment to judge "due" at. Unset — production — it is the database's own `now()`. A test
+     * that stamps rows in another year passes its clock here, so the database's comparison and the
+     * sweep's arithmetic are made on that one clock rather than on two that disagree.
+     */
+    asOf?: Date,
+  ): Promise<
+    {
+      id: string;
+      nextRunAt: Date;
+      tenantId: string;
+      /** Whose routine it is; the sweep only offers a row whose stamp is this person (G01). */
+      ownerUserId: string;
+      /**
+       * The clock this row was judged due by: `asOf` when given, else the database's `now()` in the
+       * same statement, to the millisecond (floored, so it is never earlier than a stamp it let
+       * through). The sweep measures lateness and lands a stale clock on THIS, never on its own
+       * process clock, so a node whose clock is off cannot replay or drop what the database said.
+       */
+      asOf: Date;
+    }[]
+  >;
   /**
    * Compare-and-set the clock forward. False means another sweep got there first.
    *
    * The CAS always compares against `from`, the stamp the caller read. `computeFrom` is for the
    * stale-backlog case: a routine whose stamp is a month behind used to be stepped one occurrence
    * per pass — a fifteen-minute routine idle a month stayed silent another fortnight while its
-   * clock caught up — so the sweep passes `now` here and one advance makes the clock current.
+   * clock caught up — so the sweep passes `now` here and one advance makes the clock current. The
+   * sweep's `now` is the `asOf` that `dueRoutines` returned, the database's clock, so a node whose
+   * own clock is behind cannot land the row somewhere the database already calls due. On a firing
+   * it offers, the sweep passes the later of the stamp and that clock, for the same reason.
    */
   advanceNextRun(id: string, from: Date, computeFrom?: Date): Promise<boolean>;
   /** Open a run row. Its status stays null until something finishes it. */
@@ -265,10 +289,16 @@ export type RoutineStore = {
    * item's own payload, not from a person, so there is no owner to check it against. Answers exactly
    * what the consumer's re-read needs before firing: has the routine been deleted or switched off
    * since the offer. Null means deleted; otherwise `enabled` says the rest.
+   *
+   * `tenantId` and `ownerUserId` are the routine's own, so the consumer can check the claimed work
+   * item's stamp against the routine it names before firing anything in that tenant (G01).
    */
-  routineForFiring(
-    id: string,
-  ): Promise<{ id: string; enabled: boolean } | null>;
+  routineForFiring(id: string): Promise<{
+    id: string;
+    enabled: boolean;
+    tenantId: string;
+    ownerUserId: string;
+  } | null>;
   /** Close a run row with its outcome, and the capped error when there was one. */
   finishRun(
     runId: string,
@@ -793,7 +823,7 @@ export function createRoutineStore(database: Database): RoutineStore {
      * hide the firing.
      * ========================================================================================= */
 
-    async dueRoutines(limit) {
+    async dueRoutines(limit, asOf) {
       /*
        * NOT OWNER-SCOPED, ON PURPOSE. Every other method in this file is guarded by the owner, so
        * an unguarded one reads like an oversight; this one is the sweep's read, and the sweep has
@@ -802,20 +832,31 @@ export function createRoutineStore(database: Database): RoutineStore {
        * any one tenant's frame this query answers with that tenant's rows only, and a timer has no
        * tenant at all, which is every tenant's rows being none.
        */
-      return await runAsTenant("platform", () =>
+      /*
+       * ONE CLOCK FOR THE QUESTION AND THE ANSWER. The comparison is Postgres's against its own
+       * `now()` (a replica's `Date.now()` here would decide what is due from a clock the row was
+       * never written by), and that same `now()` comes back with every row, so the sweep's "how
+       * late is it" and "where does a stale clock land" are measured on the clock that said "due".
+       * Floored to the millisecond, the precision of every stamp: `now()` carries microseconds, and
+       * a floored value is never earlier than a stamp it admitted.
+       */
+      const rows = await runAsTenant("platform", () =>
         database
           .select({
             id: routines.id,
             nextRunAt: routines.nextRunAt,
             tenantId: routines.tenantId,
+            ownerUserId: routines.ownerUserId,
+            databaseNowMs:
+              sql<number>`floor(extract(epoch from now()) * 1000)::bigint`.mapWith(
+                Number,
+              ),
           })
           .from(routines)
           .where(
             and(
               eq(routines.enabled, true),
-              // The comparison Postgres makes against its own clock. A replica's `Date.now()` here
-              // would decide what is due from a clock the row was never written by.
-              lte(routines.nextRunAt, sql`now()`),
+              lte(routines.nextRunAt, asOf ?? sql`now()`),
             ),
           )
           // Oldest due first, so a backlog drains in the order it built up. The id is a tiebreak, so
@@ -824,6 +865,10 @@ export function createRoutineStore(database: Database): RoutineStore {
           .orderBy(asc(routines.nextRunAt), asc(routines.id))
           .limit(limit),
       );
+      return rows.map(({ databaseNowMs, ...row }) => ({
+        ...row,
+        asOf: asOf ?? new Date(databaseNowMs),
+      }));
     },
 
     async advanceNextRun(id, from, computeFrom) {
@@ -921,7 +966,12 @@ export function createRoutineStore(database: Database): RoutineStore {
       // worker that claimed it is not in it.
       const [row] = await runAsTenant("platform", () =>
         database
-          .select({ id: routines.id, enabled: routines.enabled })
+          .select({
+            id: routines.id,
+            enabled: routines.enabled,
+            tenantId: routines.tenantId,
+            ownerUserId: routines.ownerUserId,
+          })
           .from(routines)
           .where(eq(routines.id, id))
           .limit(1),
