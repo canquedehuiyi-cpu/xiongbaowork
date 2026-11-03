@@ -24,7 +24,7 @@ import type { AgentChannel, ChannelStore } from "../channels/routes";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import type { TurnRunner } from "../routines/runner";
-import type { TaskProjector } from "../tasks/projector";
+import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
 import { assertPersonTenant, runAsTenant } from "../tenant/context";
 import { markUntrusted } from "../untrusted-content";
 import type { AutomationFiring, AutomationStore } from "./store";
@@ -84,6 +84,12 @@ export type WakerAutomationExecutorDeps = {
   accessRevokedOf?: (userId: string) => Promise<boolean>;
   isBotPaused?: (ownerUserId: string, agentId: string) => Promise<boolean>;
   deviceIdOf?: (agentId: string) => Promise<string | null>;
+  /**
+   * How often a firing waiting for its thread says it is still alive (`startFiring` restarts its
+   * clock), so the abandoned-firing reaper never takes a queued firing for a dead one. Default a
+   * minute, far inside the reaper's ten.
+   */
+  laneHeartbeatMs?: number;
 };
 
 function reasonOf(error: unknown): string {
@@ -252,7 +258,9 @@ export function createWakerAutomationExecutor(
           deliverableRef: {
             kind: "circuit_breaker",
             automationId: automation.id,
-            consecutiveFailures: failures,
+            // The board's reader (`breakerOf` in the app's tasks route) reads `failures`, and
+            // `automationId` tells it the switched-off thing is an automation, not a routine.
+            failures,
             reason: shorten(reason),
           },
         });
@@ -332,8 +340,14 @@ export function createWakerAutomationExecutor(
 
     // 6. The turn.
     let replyText: string;
+    // What the turn drew or handed over, kept for the card a person opens in 查收结果 (spec A9),
+    // as the routine runner keeps it.
+    let produced: Pick<
+      Awaited<ReturnType<TurnRunner>>,
+      "components" | "attachments"
+    > = {};
     try {
-      ({ replyText } = await deps.runTurn({
+      ({ replyText, ...produced } = await deps.runTurn({
         ownerUserId,
         routineId: `automation:${automation.id}`,
         agentId,
@@ -341,6 +355,8 @@ export function createWakerAutomationExecutor(
         instruction: automationInstruction(automation.name, event),
         // Names this firing, so the approval it may stop for can settle it (`firingOfInitiator`).
         initiator: automationFiringInitiator(firing.id),
+        // The card's key, so the model this turn ran on is read back onto the card.
+        runRef,
         // The card opened above is this firing's record; the runner files none of its own.
         cardOwnedByCaller: carded,
       }));
@@ -357,7 +373,8 @@ export function createWakerAutomationExecutor(
 
     await say(replyText);
     await store.finishFiring(firing.id, "succeeded");
-    await closeCard();
+    const deliverableRef = deliverableRefOf(produced);
+    await closeCard(deliverableRef ? { deliverableRef } : {});
   }
 
   /*
@@ -368,6 +385,7 @@ export function createWakerAutomationExecutor(
    * claimed by two replicas at the same moment can still meet, and the loser is then a failure.
    */
   const lanes = new Map<string, Promise<void>>();
+  const laneHeartbeatMs = deps.laneHeartbeatMs ?? 60_000;
   function inLane(key: string, work: () => Promise<void>): Promise<void> {
     const previous = lanes.get(key) ?? Promise.resolve();
     const current = previous.then(work, work);
@@ -392,7 +410,33 @@ export function createWakerAutomationExecutor(
           runAsTenant(ownerUserId, async () => {
             await runAsOwner(firing, ownerUserId, event);
           });
-        await (lane === null ? work() : inLane(lane, work));
+        if (lane === null) {
+          await work();
+        } else {
+          /*
+           * Already counted and recorded `running` by `beginFiring`, a firing queued behind earlier
+           * turns could otherwise pass the reaper's cutoff before its turn comes and be closed as
+           * abandoned with its run already spent. While it waits, it keeps its clock fresh.
+           */
+          const heartbeat = lanes.has(lane)
+            ? setInterval(() => {
+                void runAsTenant(ownerUserId, () =>
+                  store.startFiring(firing.id),
+                ).catch((error: unknown) =>
+                  log("automation-lane-heartbeat-failed", firing, error),
+                );
+              }, laneHeartbeatMs)
+            : undefined;
+          heartbeat?.unref?.();
+          try {
+            await inLane(lane, async () => {
+              clearInterval(heartbeat);
+              await work();
+            });
+          } finally {
+            clearInterval(heartbeat);
+          }
+        }
       } catch (error) {
         // `run` never throws: an outcome that could not be recorded is said out loud instead.
         log("automation-run-crashed", firing, error);
