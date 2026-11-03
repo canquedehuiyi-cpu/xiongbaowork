@@ -1,4 +1,4 @@
-import type { Hono as HonoApp, MiddlewareHandler } from "hono";
+import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
@@ -126,7 +126,7 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { PackageStatusReader } from "./tenant-package";
-import { isPersonTenant, runAsTenant } from "./tenant/context";
+import { capabilityFor, isPersonTenant, runAsTenant } from "./tenant/context";
 import {
   INSTRUCTIONS_LIMIT,
   InstructionsTooLongError,
@@ -633,10 +633,23 @@ export function createApp(
   const adminScope = roleRepository
     ? createAdminScope({ roleRepository })
     : undefined;
+  // Mounted on the admin routes below that read across people (G01-E P7). Without a role repository
+  // nobody can be shown to be an administrator, so it passes through and those routes refuse.
+  const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminScope?.adminCapability ?? ((_context, next) => next());
+  // The session's role is decided at sign-in; the capability is decided per request from the role
+  // repository. A role removed since then fails here as a 403, not as a refused platform read.
+  const capabilityMissing = (context: Context<{ Variables: AppVariables }>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: "Administrator access required." }, 403);
   // Enterprise controls: capability switches and the model allowlist in front of the routes they
   // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
   app.use("/api/*", createEnterpriseGate(requireUser));
-  app.route("/api/admin/enterprise", createEnterpriseAdminRoutes(requireUser));
+  app.route(
+    "/api/admin/enterprise",
+    createEnterpriseAdminRoutes(requireUser, adminScope),
+  );
   app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
     auth
       ? asIdentityLayer(() => auth.handler(context.req.raw))
@@ -801,26 +814,48 @@ export function createApp(
     const denied = requireAdmin(context);
     return denied ?? context.json({ status: "ok" });
   });
-  app.get("/api/admin/audit-events", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) {
-      return denied;
-    }
-    if (!auditReader) {
-      return context.json({ error: "Audit logging is not configured." }, 503);
-    }
-
-    try {
-      return context.json(
-        await auditReader.list(auditQueryFromUrl(new URL(context.req.url))),
-      );
-    } catch (error) {
-      if (error instanceof AuditQueryError) {
-        return context.json({ error: error.message }, 400);
+  app.get(
+    "/api/admin/audit-events",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
       }
-      throw error;
-    }
-  });
+      if (!auditReader) {
+        return context.json({ error: "Audit logging is not configured." }, 503);
+      }
+      if (!adminScope) {
+        return context.json(
+          { error: "Administrator access is not configured." },
+          503,
+        );
+      }
+      const withoutCapability = capabilityMissing(context);
+      if (withoutCapability) return withoutCapability;
+
+      try {
+        const query = auditQueryFromUrl(new URL(context.req.url));
+        /*
+         * The whole deployment's trail, as `platform` (G01-E P7). Every row is stamped with the person
+         * it is about, so in the administrator's own frame this read answered with their rows only and
+         * the screen looked like a quiet deployment. Only an administrator holding the capability, which
+         * `adminCapability` grants after re-reading their role, gets past `asAdminPlatform`.
+         */
+        return context.json(
+          await adminScope.asAdminPlatform(context.var.actor, () =>
+            auditReader.list(query),
+          ),
+        );
+      } catch (error) {
+        if (error instanceof AuditQueryError) {
+          return context.json({ error: error.message }, 400);
+        }
+        throw error;
+      }
+    },
+  );
   /*
    * Who is here, and what they may do.
    *
@@ -946,66 +981,93 @@ export function createApp(
     return context.json({ person: await peopleStore.find(userId) });
   });
 
-  app.post("/api/admin/people/:userId/access", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) {
-      return denied;
-    }
-    if (!peopleStore) {
-      return context.json({ error: "People are not available." }, 503);
-    }
-
-    const body = await context.req.json().catch(() => null);
-    const revoked = (body as { revoked?: unknown } | null)?.revoked;
-    if (typeof revoked !== "boolean") {
-      return context.json({ error: "revoked must be true or false." }, 400);
-    }
-
-    const userId = context.req.param("userId");
-    const person = await peopleStore.find(userId);
-    if (!person) {
-      return context.json({ error: "That person is not here." }, 404);
-    }
-
-    // The same floor, for the same reason: removing somebody the configuration names would last
-    // until their next sign-in and no longer.
-    if (person.configuredAdmin && revoked) {
-      return context.json(
-        {
-          error:
-            "This deployment names that address in INITIAL_ADMIN_EMAILS, so they cannot be removed here. Change the configuration instead.",
-        },
-        409,
-      );
-    }
-
-    // Nobody can remove themselves. An administrator who does has locked themselves out of the
-    // screen that would undo it.
-    if (revoked && context.var.actor.id === userId) {
-      return context.json({ error: "You cannot remove your own access." }, 409);
-    }
-
-    if (person.revoked !== revoked) {
-      if (revoked) {
-        await peopleStore.revoke(userId, context.var.actor.id);
-      } else {
-        await peopleStore.restore(userId);
+  app.post(
+    "/api/admin/people/:userId/access",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
       }
-      await recordPersonEvent(
-        auditStore,
-        context,
-        revoked ? "person.access_revoked" : "person.access_restored",
-        person,
-        {},
-      );
-    }
+      if (!peopleStore) {
+        return context.json({ error: "People are not available." }, 503);
+      }
+      // Checked before anything is written: removing somebody without retiring what they own is the
+      // half-done removal the retirement below exists to prevent.
+      if (!adminScope) {
+        return context.json(
+          { error: "Administrator access is not configured." },
+          503,
+        );
+      }
+      const withoutCapability = capabilityMissing(context);
+      if (withoutCapability) return withoutCapability;
 
-    if (revoked) {
-      await peopleStore.retireOwned(userId, context.var.actor.id);
-    }
+      const body = await context.req.json().catch(() => null);
+      const revoked = (body as { revoked?: unknown } | null)?.revoked;
+      if (typeof revoked !== "boolean") {
+        return context.json({ error: "revoked must be true or false." }, 400);
+      }
 
-    return context.json({ person: await peopleStore.find(userId) });
-  });
+      const userId = context.req.param("userId");
+      const person = await peopleStore.find(userId);
+      if (!person) {
+        return context.json({ error: "That person is not here." }, 404);
+      }
+
+      // The same floor, for the same reason: removing somebody the configuration names would last
+      // until their next sign-in and no longer.
+      if (person.configuredAdmin && revoked) {
+        return context.json(
+          {
+            error:
+              "This deployment names that address in INITIAL_ADMIN_EMAILS, so they cannot be removed here. Change the configuration instead.",
+          },
+          409,
+        );
+      }
+
+      // Nobody can remove themselves. An administrator who does has locked themselves out of the
+      // screen that would undo it.
+      if (revoked && context.var.actor.id === userId) {
+        return context.json(
+          { error: "You cannot remove your own access." },
+          409,
+        );
+      }
+
+      if (person.revoked !== revoked) {
+        if (revoked) {
+          await peopleStore.revoke(userId, context.var.actor.id);
+        } else {
+          await peopleStore.restore(userId);
+        }
+        await recordPersonEvent(
+          auditStore,
+          context,
+          revoked ? "person.access_revoked" : "person.access_restored",
+          person,
+          {},
+        );
+      }
+
+      if (revoked && adminScope) {
+        /*
+         * In the removed person's own frame (G01-E I6). Their credentials and brokered connections are
+         * stamped with them, so from the administrator's frame the sweep found none, retired nothing
+         * and reported that as done. `adminActAsOwner` refuses without the capability, and the trail
+         * rows the retirement writes are the person's.
+         */
+        const actorId = context.var.actor.id;
+        await adminScope.adminActAsOwner(context.var.actor, userId, () =>
+          peopleStore.retireOwned(userId, actorId),
+        );
+      }
+
+      return context.json({ person: await peopleStore.find(userId) });
+    },
+  );
 
   /*
    * The identity providers this deployment has registered.
@@ -1308,6 +1370,7 @@ export function createApp(
         agentProfileStore ? computerAccessCheck(agentProfileStore) : canUseBot,
         pageFrames,
         auditReader,
+        adminScope,
       ),
     );
   }
