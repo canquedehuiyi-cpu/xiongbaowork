@@ -191,6 +191,8 @@ export const pluginKeys = {
   composioApps: (query: string) =>
     ["plugins", "composio", "apps", query] as const,
   listings: () => ["plugins", "listings"] as const,
+  installedByMe: (agentId: string) =>
+    ["plugins", "installed-by-me", agentId] as const,
 };
 
 /**
@@ -239,6 +241,49 @@ export function listedRefs(
       .filter((listing) => listing.kind === kind)
       .map((listing) => listing.ref),
   );
+}
+
+/**
+ * The name grants and listings call this app by.
+ *
+ * Not `server.id`. Since G01-E a curated connector is the team's row `team:<catalogue key>`, while a
+ * grant ref (`<app>/<tool>`), a listing and the self-install check all name the catalogue key; a row
+ * that is not a catalogue entry is called by its own id. Read off the refs the server composed for
+ * this row, which are the names `plugin_grants` stores, and only without any from the row id itself.
+ */
+export function appKeyOf(server: PluginServer): string {
+  const ref = server.tools[0]?.ref ?? server.withdrawn[0]?.ref;
+  const slash = ref?.indexOf("/") ?? -1;
+  if (ref && slash > 0) return ref.slice(0, slash);
+  return server.id.startsWith("team:") ? server.id.slice(5) : server.id;
+}
+
+/**
+ * The tools and skills on one Waker that this person installed themselves (spec E3).
+ *
+ * What they may still take off after an administrator unlists the entry: the server lets the person
+ * who installed a grant remove it, and nobody else but an administrator.
+ */
+export function installedByMeQueryOptions(agentId: string) {
+  return queryOptions({
+    queryKey: pluginKeys.installedByMe(agentId),
+    enabled: agentId.length > 0,
+    queryFn: async (): Promise<{ tools: string[]; skills: string[] }> => {
+      const response = await client(
+        `/api/plugins/for/${encodeURIComponent(agentId)}/installed-by-me`,
+        { fallback: "读不到你自己装上的工具。" },
+      );
+      const body = (await response.json()) as {
+        tools?: unknown;
+        skills?: unknown;
+      };
+      const strings = (value: unknown) =>
+        Array.isArray(value)
+          ? value.filter((item): item is string => typeof item === "string")
+          : [];
+      return { tools: strings(body.tools), skills: strings(body.skills) };
+    },
+  });
 }
 
 /**

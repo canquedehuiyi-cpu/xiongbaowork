@@ -55,6 +55,8 @@ const store = createPluginStore({
   credentials: { readSecret: async () => null },
   encryptionKey: "x".repeat(44),
   policy: () => policy,
+  // The MCP mock below listens on plain http on loopback; the outbound guard admits it only when told.
+  customServerPrivateHosts: true,
 });
 
 const mock = new MCPMock();

@@ -112,6 +112,18 @@ const MAX_NOTIFIED_REASON = 160;
 /** Consecutive failed firings after which a routine stops being fired at all. */
 const FATIGUE_LIMIT = 10;
 
+/**
+ * What a card closed by the fatigue rule carries in `tasks.deliverable_ref` (spec C3).
+ *
+ * `kind` discriminates it from any other deliverable reference the column may hold later.
+ */
+export type CircuitBreakerRef = {
+  kind: "circuit_breaker";
+  /** The consecutive failures that tripped it, this firing included. */
+  failures: number;
+  routineId: string;
+};
+
 const SWITCHED_OFF =
   "This routine has failed ten times in a row, so I have switched it off. Ask me to turn it back on when whatever it needs is working.";
 
@@ -316,16 +328,18 @@ export function createRoutineRunner(options: {
      * The run row stays the ledger: a board that cannot be written is logged and the turn goes ahead,
      * because the person asked for the job, not for the card. `finished` matches on the same run ref,
      * so a card that was never opened leaves that update matching nothing rather than mis-filing
-     * somebody else's row.
+     * somebody else's row. Opened and closed in the tenant read off the routine (`context.tenantId`),
+     * the one this whole firing runs in, never one inferred from who owns it.
      */
     let carded = false;
     if (board) {
       try {
         await board.opened({
-          tenantId: ownerUserId,
+          tenantId: context.tenantId,
           title: instruction,
           executorAgentId: agentId,
           source: "routine",
+          triggerSource: "routine",
           channelRef: channelId,
           runRef: routineRunId,
           deviceId: (await deviceIdOf?.(agentId, routineRunId)) ?? null,
@@ -387,7 +401,7 @@ export function createRoutineRunner(options: {
          */
         if (carded && board) {
           await board
-            .finished({ tenantId: ownerUserId, runRef: routineRunId })
+            .finished({ tenantId: context.tenantId, runRef: routineRunId })
             .catch((boardError) =>
               console.error(
                 JSON.stringify({
@@ -404,12 +418,53 @@ export function createRoutineRunner(options: {
       }
       const reason = reasonOf(error);
       await routineStore.finishRun(routineRunId, "failed", reason);
+
+      /*
+       * THE FATIGUE RULE, read after the failure is recorded — the count has to include this
+       * firing, or the tenth failure in a row reads as the ninth and the routine keeps going.
+       *
+       * Read before the card is closed, because the card is where the breaker is shown (spec C3): the
+       * tenth failure's card closes failed carrying `circuit_breaker`, which is what the board draws as
+       * 已熔断·已自动停用. Its own try/catch, around the read and the switching-off: all of it happens
+       * after `finishRun`, and nothing in it is allowed to throw its way out of a firing whose failure
+       * is already on the row — nor to keep the card from closing.
+       */
+      let failures: number | null = null;
+      let switchedOff = false;
+      try {
+        failures = await routineStore.consecutiveFailures(routineId);
+        if (failures >= FATIGUE_LIMIT) {
+          // A dead integration should not burn model spend for ever.
+          await routineStore.setEnabled(ownerUserId, routineId, false);
+          switchedOff = true;
+        }
+      } catch (fatigueError) {
+        console.error(
+          JSON.stringify({
+            type: "routine-fatigue-rule-failed",
+            routineId,
+            routineRunId,
+            reason: reasonOf(fatigueError),
+          }),
+        );
+      }
+
       if (carded && board) {
+        /*
+         * The breaker rides the card only once the routine really is off: the badge says 已自动停用,
+         * and a switch-off that failed must not be drawn as one that happened. A discriminated `kind`,
+         * so a later deliverable ref (`{ kind: "deliverable", ... }`) can share the column.
+         */
+        const breaker: CircuitBreakerRef | null =
+          switchedOff && failures !== null
+            ? { kind: "circuit_breaker", failures, routineId }
+            : null;
         await board
           .finished({
-            tenantId: ownerUserId,
+            tenantId: context.tenantId,
             runRef: routineRunId,
             failed: true,
+            ...(breaker ? { deliverableRef: breaker } : {}),
           })
           .catch((boardError) =>
             console.error(
@@ -423,38 +478,16 @@ export function createRoutineRunner(options: {
           );
       }
 
-      /*
-       * THE FATIGUE RULE, read after the failure is recorded — the count has to include this
-       * firing, or the tenth failure in a row reads as the ninth and the routine keeps going.
-       *
-       * Its own try/catch, around the read and the switching-off as well as the message: this all
-       * happens after `finishRun`, and nothing in it is allowed to throw its way out of a firing
-       * whose failure is already on the row.
-       */
-      try {
-        const failures = await routineStore.consecutiveFailures(routineId);
-        if (failures === 1) {
-          // Only the first failure after a success. A routine that fails every night at three has
-          // one line in the channel, not one line a night for a month.
-          await say(`This routine failed: ${shorten(reason)}`);
-        } else if (failures >= FATIGUE_LIMIT) {
-          // A dead integration should not burn model spend for ever. Switched off, and said out
-          // loud, because a routine that goes quiet without explaining itself is worse than one
-          // that fails.
-          await routineStore.setEnabled(ownerUserId, routineId, false);
-          await say(SWITCHED_OFF);
-        }
-        // In between, nothing is said. The run rows carry it, and the routines page reads them.
-      } catch (fatigueError) {
-        console.error(
-          JSON.stringify({
-            type: "routine-fatigue-rule-failed",
-            routineId,
-            routineRunId,
-            reason: reasonOf(fatigueError),
-          }),
-        );
+      if (failures === 1) {
+        // Only the first failure after a success. A routine that fails every night at three has
+        // one line in the channel, not one line a night for a month.
+        await say(`This routine failed: ${shorten(reason)}`);
+      } else if (switchedOff) {
+        // Said out loud, because a routine that goes quiet without explaining itself is worse than
+        // one that fails.
+        await say(SWITCHED_OFF);
       }
+      // In between, nothing is said. The run rows carry it, and the routines page reads them.
       return;
     }
 
@@ -468,7 +501,7 @@ export function createRoutineRunner(options: {
     if (carded && board) {
       await board
         .finished({
-          tenantId: ownerUserId,
+          tenantId: context.tenantId,
           runRef: routineRunId,
           // What the firing drew or handed over, for the person who opens 查收结果 (spec A9).
           deliverableRef: deliverableRefOf(produced),

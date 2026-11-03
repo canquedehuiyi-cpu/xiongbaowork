@@ -483,8 +483,10 @@ async function lockOwner(file: string, mode?: "legacy") {
   const reader = child.stdout.getReader();
   const timeout = setTimeout(() => child.kill(), 15000);
   try {
+    // The owner says `waiting` before its attempt and `locked` once it holds the lock.
     let message = "";
-    while (!message.includes("\n")) {
+    const lines = () => message.split("\n").slice(0, -1).map((line) => line.trim());
+    while (!lines().includes("locked")) {
       const { value, done } = await reader.read();
       if (done)
         throw new Error(
@@ -492,7 +494,7 @@ async function lockOwner(file: string, mode?: "legacy") {
         );
       message += new TextDecoder().decode(value);
     }
-    expect(message.trim()).toBe("locked");
+    expect(lines()).toEqual(["waiting", "locked"]);
   } finally {
     clearTimeout(timeout);
     reader.releaseLock();

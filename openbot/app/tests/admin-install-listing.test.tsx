@@ -70,11 +70,15 @@ const skill = (slug: string, ownerUserId: string | null): PluginSkill => ({
   tools: [],
 });
 
-const page: PluginsPage = {
+/**
+ * The plugin page, with the Notion row under `serverId`. A curated connector is the team's row
+ * `team:notion` since G01-E, while its tools' grant refs still name the catalogue key `notion`.
+ */
+const pageFor = (serverId: string): PluginsPage => ({
   catalogue: [],
   servers: [
     {
-      id: APP_KEY,
+      id: serverId,
       title: "Notion",
       vendor: "Notion",
       url: "https://mcp.notion.com/mcp",
@@ -89,7 +93,7 @@ const page: PluginsPage = {
       authScheme: null,
       tools: [
         {
-          serverId: APP_KEY,
+          serverId,
           name: TOOL_NAME,
           description: "搜索页面。",
           inputSchema: {},
@@ -106,10 +110,12 @@ const page: PluginsPage = {
   botsMayCallBack: true,
   redirectUri: null,
   composioConfigured: false,
-};
+});
+let page = pageFor(APP_KEY);
 
 beforeEach(() => {
   listings = [];
+  page = pageFor(APP_KEY);
   refuse = false;
   writes = [];
   globalThis.fetch = Object.assign(
@@ -174,7 +180,7 @@ afterEach(() => restoreRouteState(AdminToolRoute, snapshot));
 type Updatable = { update: (options: unknown) => unknown };
 
 /** `/admin/plugins/$key/tools/$tool`, at the id its `useParams` reads (as in `plugin-read-failure`). */
-function drawTool() {
+function drawTool(serverId = APP_KEY) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
     id: "/_authed",
@@ -196,7 +202,9 @@ function drawTool() {
       authedRoute.addChildren([adminRoute.addChildren([tool as never])]),
     ]),
     history: createMemoryHistory({
-      initialEntries: [`/admin/plugins/${APP_KEY}/tools/${TOOL_NAME}`],
+      initialEntries: [
+        `/admin/plugins/${encodeURIComponent(serverId)}/tools/${TOOL_NAME}`,
+      ],
     }),
   });
   const view = render(
@@ -270,6 +278,45 @@ test("the tool page lists the whole app, and switching it back unlists it", asyn
     },
   ]);
   expect(view.getByText(/已上架：员工的主人可以在装配页里/)).toBeTruthy();
+
+  writes = [];
+  await user.click(view.getByRole("switch", { name: "上架 Notion" }));
+  await waitFor(() =>
+    expect(checked(view.getByRole("switch", { name: "上架 Notion" }))).toBe(
+      false,
+    ),
+  );
+  expect(writes).toEqual([
+    { method: "DELETE", path: `/api/plugins/listings?kind=mcp&ref=${APP_KEY}` },
+  ]);
+});
+
+test("a team-scoped curated connector is listed under its catalogue key, which its grants name", async () => {
+  page = pageFor("team:notion");
+  const { view, user } = drawTool("team:notion");
+
+  const toggle = await view.findByRole("switch", { name: "上架 Notion" });
+  await waitFor(() =>
+    expect(
+      view
+        .getByRole("switch", { name: "上架 Notion" })
+        .hasAttribute("data-disabled"),
+    ).toBe(false),
+  );
+  await user.click(toggle);
+  await waitFor(() =>
+    expect(checked(view.getByRole("switch", { name: "上架 Notion" }))).toBe(
+      true,
+    ),
+  );
+  // `notion`, as `notion/search` names it, never the row id `team:notion` no grant could match.
+  expect(writes).toEqual([
+    {
+      method: "POST",
+      path: "/api/plugins/listings",
+      body: { kind: "mcp", ref: APP_KEY },
+    },
+  ]);
 
   writes = [];
   await user.click(view.getByRole("switch", { name: "上架 Notion" }));

@@ -95,14 +95,29 @@ function draw({
     { kind: "mcp", ref: "notion", listedAt: null },
   ],
   held = [],
+  mine = [],
   refuse = false,
+  teamScoped = false,
+  hold = false,
 }: {
   profile?: AgentProfile;
   listings?: InstallListing[];
   held?: string[];
+  /** Which of `held` this person installed themselves (`/for/:id/installed-by-me`). */
+  mine?: string[];
   refuse?: boolean;
+  /** The Notion row as G01-E stores a curated connector: id `team:notion`, refs `notion/...`. */
+  teamScoped?: boolean;
+  /** Keep every grant write open until `release()`, to see what is in flight. */
+  hold?: boolean;
 } = {}) {
   const grants = new Set(held);
+  const installedByMe = new Set(mine);
+  const serverId = teamScoped ? "team:notion" : "notion";
+  const waiting: (() => void)[] = [];
+  const release = () => {
+    for (const resume of waiting.splice(0)) resume();
+  };
   const page = (): PluginsPage => ({
     catalogue: [
       {
@@ -117,7 +132,7 @@ function draw({
     ],
     servers: [
       {
-        id: "notion",
+        id: serverId,
         title: "Notion",
         vendor: "Notion",
         url: "https://mcp.notion.com/mcp",
@@ -131,7 +146,7 @@ function draw({
         dynamicClient: false,
         authScheme: null,
         tools: ["search", "create_page"].map((name) => ({
-          serverId: "notion",
+          serverId,
           name,
           description: `${name} 的说明。`,
           inputSchema: {},
@@ -196,15 +211,26 @@ function draw({
     if (path === "/api/plugins/listings") return Response.json({ listings });
     if (path === `/api/plugins/for/${agentId}`)
       return Response.json(forAgent());
+    if (path === `/api/plugins/for/${agentId}/installed-by-me`)
+      return Response.json({
+        tools: [...installedByMe].filter((ref) => ref.includes("/")),
+        skills: [...installedByMe].filter((ref) => !ref.includes("/")),
+      });
     if (path === "/api/plugins/grants") {
+      if (hold) await new Promise<void>((resume) => waiting.push(resume));
       if (refuse) return Response.json({ error: REFUSAL }, { status: 403 });
       const ref =
         method === "POST"
           ? body?.ref
           : (new URL(url, "http://x").searchParams.get("ref") ?? undefined);
       if (ref) {
-        if (method === "POST") grants.add(ref);
-        else grants.delete(ref);
+        if (method === "POST") {
+          grants.add(ref);
+          installedByMe.add(ref);
+        } else {
+          grants.delete(ref);
+          installedByMe.delete(ref);
+        }
       }
       return Response.json({ ok: true });
     }
@@ -240,6 +266,8 @@ function draw({
   return {
     view,
     grants,
+    release,
+    waiting,
     user: userEvent.setup({ document: view.baseElement.ownerDocument }),
   };
 }
@@ -366,4 +394,100 @@ test("a coworker the viewer cannot manage gets boxes that cannot be ticked", asy
   await user.click(toolBox);
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(grantCalls()).toEqual([]);
+});
+
+test("a team-scoped curated connector is matched to its listing by catalogue key", async () => {
+  const { view } = draw({ teamScoped: true });
+
+  // The listing names `notion`; the row is `team:notion`. Matched, its tools are boxes, not "not added".
+  await view.findByRole("checkbox", { name: TOOL_BOX });
+  expect(view.queryByText(/已上架，但这个部署还没有添加它/)).toBeNull();
+  // And the catalogue entry's `user-oauth` is found under the same key.
+  expect(view.getByText(/这个应用以使用者本人的账号访问/)).toBeTruthy();
+});
+
+test("after an app and a skill are unlisted, what this person installed stays, for taking off only", async () => {
+  const { view, user, grants } = draw({
+    listings: [],
+    // `notion/create_page` was an administrator's grant; the other two this person installed.
+    held: ["notion/search", "notion/create_page", "weekly-report"],
+    mine: ["notion/search", "weekly-report"],
+  });
+
+  const tool = await view.findByRole("checkbox", {
+    name: "安装工具 Notion/search",
+  });
+  const skillBox = await view.findByRole("checkbox", { name: SKILL_BOX });
+  await waitFor(() => expect(tool.getAttribute("aria-checked")).toBe("true"));
+  expect(skillBox.getAttribute("aria-checked")).toBe("true");
+  expect(view.getByText(/已下架：你之前装上的工具仍在/)).toBeTruthy();
+  // The administrator's grant is not this person's to take off, so it gets no box here.
+  expect(view.queryByRole("checkbox", { name: TOOL_BOX })).toBeNull();
+  // Unlisted skills nobody installed are still counted as an administrator's.
+  await view.findByText(/另有 2 个部署技能由管理员在插件页里授予/);
+
+  await user.click(tool);
+  await user.click(view.getByRole("checkbox", { name: SKILL_BOX }));
+  await waitFor(() =>
+    expect([...grants].sort()).toEqual(["notion/create_page"]),
+  );
+  expect(grantCalls()).toEqual([
+    {
+      method: "DELETE",
+      path: `/api/plugins/grants?kind=mcp&ref=notion%2Fsearch&agentId=${agentId}`,
+    },
+    {
+      method: "DELETE",
+      path: `/api/plugins/grants?kind=skill&ref=weekly-report&agentId=${agentId}`,
+    },
+  ]);
+  // Taken off and unlisted: nothing left to offer.
+  await waitFor(() =>
+    expect(
+      view.queryByRole("checkbox", { name: "安装工具 Notion/search" }),
+    ).toBeNull(),
+  );
+  expect(view.queryByRole("checkbox", { name: SKILL_BOX })).toBeNull();
+});
+
+test("every box with a write in flight stays disabled, not only the latest one", async () => {
+  const { view, user, release, waiting } = draw({ hold: true });
+
+  const search = await view.findByRole("checkbox", {
+    name: "安装工具 Notion/search",
+  });
+  await user.click(search);
+  await waitFor(() => expect(waiting).toHaveLength(1));
+  await user.click(view.getByRole("checkbox", { name: TOOL_BOX }));
+  await waitFor(() => expect(waiting).toHaveLength(2));
+
+  // The first request is still out, so its box must still refuse a second press.
+  expect(
+    view
+      .getByRole("checkbox", { name: "安装工具 Notion/search" })
+      .hasAttribute("data-disabled"),
+  ).toBe(true);
+  expect(
+    view
+      .getByRole("checkbox", { name: TOOL_BOX })
+      .hasAttribute("data-disabled"),
+  ).toBe(true);
+  await user.click(
+    view.getByRole("checkbox", { name: "安装工具 Notion/search" }),
+  );
+  expect(grantCalls()).toHaveLength(2);
+
+  release();
+  await waitFor(() =>
+    expect(
+      view
+        .getByRole("checkbox", { name: "安装工具 Notion/search" })
+        .hasAttribute("data-disabled"),
+    ).toBe(false),
+  );
+  expect(
+    view
+      .getByRole("checkbox", { name: TOOL_BOX })
+      .hasAttribute("data-disabled"),
+  ).toBe(false);
 });

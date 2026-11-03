@@ -47,6 +47,7 @@ import {
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import {
   capabilityFor,
@@ -88,7 +89,7 @@ import { inspectToolArguments } from "./content-governance";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
-import { transportFor } from "./transport";
+import { type TransportKind, transportFor } from "./transport";
 
 /**
  * Plugins: what this deployment has added, which Bots may use it, and the one path a call takes.
@@ -875,6 +876,30 @@ const reachedAsFor = (access: ServerAccess, actorId: string): string =>
     : DEPLOYMENT_ACTOR;
 
 /**
+ * The outbound guard, for an MCP server whose URL an administrator typed rather than the catalogue.
+ *
+ * `customUrlRefusal` judged the string when it was stored; this has every request judged by where
+ * the name resolves, and refuses redirects so the token is never carried across one. The policy is
+ * the strict default: no private-host opt-in exists for custom servers, as the static rule has none.
+ * A catalogue-pinned server keeps dialling as before. `lookup` is the resolver seam
+ * ({@link PluginStoreOptions.outboundLookup}); absent, the system resolver answers.
+ */
+function tenantChosenOutbound(
+  entry: CatalogueEntry | null,
+  transport: TransportKind,
+  lookup: OutboundLookup | undefined,
+  allowPrivateHosts = false,
+): { outbound?: OutboundPolicy } {
+  if (entry !== null || transport !== "mcp") return {};
+  return {
+    outbound: {
+      ...(lookup ? { lookup } : {}),
+      ...(allowPrivateHosts ? { allowPrivateHosts: true } : {}),
+    },
+  };
+}
+
+/**
  * Where this server actually is, when the stored row and the catalogue disagree.
  *
  * `mcp_servers.url` is written once, when a server is added, by copying what the catalogue said at
@@ -1149,10 +1174,22 @@ export type PluginStoreOptions = {
       token?: string;
       actorId?: string;
       botId?: string;
+      outbound?: OutboundPolicy;
     },
     toolName: string,
     args: Record<string, unknown>,
   ) => Promise<{ text: string; isError: boolean }>;
+  /**
+   * The resolver the outbound guard asks where a custom server's name points. Defaults to the
+   * system resolver. Injected by tests whose vendor hosts are reserved names that never resolve, so
+   * the guarded path reaches their stubbed `fetch` instead of stopping at `unresolved`.
+   */
+  outboundLookup?: OutboundLookup;
+  /**
+   * Let custom MCP servers live on a private or loopback address and plain http (a local mock in
+   * tests, a developer's own server). Off unless set; production never sets it.
+   */
+  customServerPrivateHosts?: boolean;
   /** Trading a refresh token for a short-lived access token. Defaults to a real HTTP exchange. */
   exchangeRefreshToken?: (input: {
     tokenUrl: string;
@@ -1357,6 +1394,8 @@ export function createPluginStore(options: PluginStoreOptions) {
    * to assert what a call was about to go out with.
    */
   const injectedVendor = options.callVendor;
+  const outboundLookup = options.outboundLookup;
+  const customServerPrivateHosts = options.customServerPrivateHosts === true;
   const exchangeRefreshToken =
     options.exchangeRefreshToken ?? exchangeRefreshTokenOverHttp;
   const registerClient = options.registerClient ?? registerDynamicClient;
@@ -4377,6 +4416,12 @@ export function createPluginStore(options: PluginStoreOptions) {
         listed = await transport.listTools({
           url: effectiveUrl(row, entry),
           token,
+          ...tenantChosenOutbound(
+            entry,
+            access.transport,
+            outboundLookup,
+            customServerPrivateHosts,
+          ),
         });
       } catch (error) {
         /*
@@ -5375,6 +5420,34 @@ export function createPluginStore(options: PluginStoreOptions) {
         )
         .limit(1);
       return row ? row.grantedBy : undefined;
+    },
+
+    /**
+     * The grants on one Bot that `by` wrote, as kind and ref.
+     *
+     * The list form of {@link grantedBy}: after an administrator unlists an entry, an owner may still
+     * take off what they installed themselves (and only that), so the assembly page asks which of a
+     * Waker's grants those are rather than drawing a box for every grant and letting the rest bounce.
+     * Read in the caller's frame, under the same policies as every other grant read.
+     */
+    async grantsWrittenBy(
+      agentId: string,
+      by: string,
+    ): Promise<Array<{ kind: PluginKind; ref: string }>> {
+      const rows = await database
+        .select({ kind: pluginGrants.kind, ref: pluginGrants.ref })
+        .from(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.agentId, agentId),
+            eq(pluginGrants.grantedBy, by),
+          ),
+        )
+        .orderBy(asc(pluginGrants.kind), asc(pluginGrants.ref));
+      return rows.map((row) => ({
+        kind: row.kind as PluginKind,
+        ref: row.ref,
+      }));
     },
 
     /**
@@ -8270,6 +8343,12 @@ export function createPluginStore(options: PluginStoreOptions) {
             token,
             actorId: input.credentialActorId ?? input.actorId,
             botId: input.botId,
+            ...tenantChosenOutbound(
+              entry,
+              access.transport,
+              outboundLookup,
+              customServerPrivateHosts,
+            ),
           },
           toolName,
           vendorArgs,
