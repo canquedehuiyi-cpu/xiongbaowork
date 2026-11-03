@@ -80,7 +80,7 @@ export function checkAgentEndpoint(
   } = {},
 ): EndpointVerdict {
   if (typeof raw !== "string" || !raw.trim()) {
-    return { allowed: false, reason: "An agent needs a web address." };
+    return { allowed: false, reason: "请填写员工端点的网址。" };
   }
 
   const verdict = checkNavigationTarget(raw.trim(), options);
@@ -186,7 +186,7 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
   if (body === null || body === undefined) return {};
   if (typeof body !== "string") {
     throw new EndpointNotAllowedError(
-      "That address redirected to another host, and this deployment will not forward the run to it.",
+      "该地址重定向到了另一台主机，本部署不会把这次运行转发过去。",
     );
   }
 
@@ -196,7 +196,7 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
   } catch {
     // Not ours to sanitise and not ours to leak. The same reasoning as the non-string case.
     throw new EndpointNotAllowedError(
-      "That address redirected to another host, and this deployment will not forward the run to it.",
+      "该地址重定向到了另一台主机，本部署不会把这次运行转发过去。",
     );
   }
   if (parsed === null || typeof parsed !== "object") return { body };
@@ -321,10 +321,7 @@ export function createAgentFetch(
         error instanceof OutboundRefusedError &&
         error.kind === "destination"
       ) {
-        throw refuse(
-          address,
-          `This deployment will not dial ${address}: ${error.message}`,
-        );
+        throw refuse(address, `本部署不会连接 ${address}：${error.message}`);
       }
       throw error;
     }
@@ -333,10 +330,7 @@ export function createAgentFetch(
   return async function guardedFetch(url: string, init?: RequestInit) {
     const stored = check(url);
     if (!stored.allowed) {
-      throw refuse(
-        url,
-        `This deployment will not dial ${url}: ${stored.reason.charAt(0).toLowerCase()}${stored.reason.slice(1)}`,
-      );
+      throw refuse(url, `本部署不会连接 ${url}：${stored.reason}`);
     }
 
     const origin = stored.url;
@@ -363,10 +357,7 @@ export function createAgentFetch(
       const next = new URL(location, target).toString();
       const verdict = check(next);
       if (!verdict.allowed) {
-        throw refuse(
-          next,
-          `That address redirected to ${next}, and ${verdict.reason.charAt(0).toLowerCase()}${verdict.reason.slice(1)}`,
-        );
+        throw refuse(next, `该地址重定向到了 ${next}：${verdict.reason}`);
       }
       if (!sameCredentialScope(origin, verdict.url)) {
         // A body this cannot strip refuses the hop rather than forwarding it, and that refusal is
@@ -388,7 +379,7 @@ export function createAgentFetch(
     // failing in a way only the trail can show is happening repeatedly.
     throw refuse(
       target,
-      `That address redirected more than ${MAX_REDIRECTS} times without arriving anywhere.`,
+      `该地址重定向超过 ${MAX_REDIRECTS} 次，仍未到达目标。`,
     );
   };
 }
