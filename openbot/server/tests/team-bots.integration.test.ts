@@ -445,17 +445,19 @@ describe("Team Bots in PostgreSQL", () => {
     await expect(
       as(admin, () => teamBots.assign(admin, bot, "support")),
     ).rejects.toThrow(TeamBotRefusedError);
-    // ...and a raw assignment from it is refused without the capability.
-    await expect(
-      as(admin, async () => {
-        await database.insert(teamBotAssignments).values({
-          agentId: bot,
-          groupName: "support",
-          assignedBy: admin.id,
-          tenantId: TEAM_TENANT,
-        });
-      }),
-    ).rejects.toThrow();
+    // ...and a raw assignment from it is refused without the capability, whatever its stamp: an
+    // own-tenant row would hold the (Bot, group) key and make the real assignment do nothing (0126).
+    for (const tenantId of [TEAM_TENANT, admin.id])
+      await expect(
+        as(admin, async () => {
+          await database.insert(teamBotAssignments).values({
+            agentId: bot,
+            groupName: "support",
+            assignedBy: admin.id,
+            tenantId,
+          });
+        }),
+      ).rejects.toThrow();
     // The admin page assigns, holding the capability.
     expect(
       (
@@ -498,6 +500,91 @@ describe("Team Bots in PostgreSQL", () => {
       false,
     );
     expect(await as(member, () => profiles.get(member, bot))).toBeNull();
+  });
+
+  test("a stranger cannot squat an unpublished Bot's publication, audience or assignment key", async () => {
+    /*
+     * The roster tables are keyed by agent id. A row a stranger stamped with their own tenant used to
+     * be accepted, grant nothing, and still hold the key: the owner's publish then failed on a row
+     * the owner can neither see nor delete, and an administrator's assignment of the same group did
+     * nothing at all (ON CONFLICT DO NOTHING). Since 0126 the stranger's rows are refused, so the
+     * owner's publish and the administrator's assignment go through.
+     */
+    const owner = await person();
+    const stranger = await person();
+    const admin = await person("admin");
+    const member = await person("user", ["support"]);
+    const bot = await privateBot(owner);
+    const squats = [
+      () =>
+        database.insert(teamBotPublications).values({
+          agentId: bot,
+          publishedBy: stranger.id,
+          audience: "team",
+          tenantId: stranger.id,
+        }),
+      () =>
+        database.insert(teamBotAudience).values({
+          agentId: bot,
+          kind: "user",
+          value: member.id,
+          tenantId: stranger.id,
+        }),
+      () =>
+        database.insert(teamBotAssignments).values({
+          agentId: bot,
+          groupName: "support",
+          assignedBy: stranger.id,
+          tenantId: stranger.id,
+        }),
+    ];
+    for (const squat of squats) {
+      await expect(
+        as(stranger, async () => {
+          await squat();
+        }),
+      ).rejects.toThrow();
+    }
+    expect(await stampsOf(bot)).toEqual({
+      agent: owner.id,
+      profile: owner.id,
+      publications: [],
+      audience: [],
+      assignments: [],
+    });
+
+    await publish(owner, bot, {
+      audience: "people",
+      emails: [member.email],
+      groups: [],
+    });
+    expect(
+      (
+        await teamBotRequest(admin, "POST", `/${bot}/assignments`, {
+          group: "support",
+        })
+      ).status,
+    ).toBe(204);
+    expect(await stampsOf(bot)).toEqual({
+      agent: TEAM_TENANT,
+      profile: TEAM_TENANT,
+      publications: [TEAM_TENANT],
+      audience: [TEAM_TENANT],
+      assignments: [TEAM_TENANT],
+    });
+    expect(await as(member, () => profiles.get(member, bot))).not.toBeNull();
+    expect(await as(member, () => teamBots.isAssignedTo(member.id, bot))).toBe(
+      true,
+    );
+    // Once it is `team`, the stranger still writes nothing next to it.
+    for (const squat of squats) {
+      await expect(
+        as(stranger, async () => {
+          await squat();
+        }),
+      ).rejects.toThrow();
+    }
+    expect(await as(stranger, () => profiles.get(stranger, bot))).toBeNull();
   });
 
   test("an administrator unpublishes another person's Bot in the owner's frame, and the owner keeps it", async () => {

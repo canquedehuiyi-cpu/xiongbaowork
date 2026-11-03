@@ -876,6 +876,13 @@
       "when": 1793630100000,
       "tag": "0125_team_bots",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1793630400000,
+      "tag": "0126_team_bot_roster_stamp",
+      "breakpoints": true
     }
   ]
 }

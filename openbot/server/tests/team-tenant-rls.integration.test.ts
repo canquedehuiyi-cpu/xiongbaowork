@@ -494,14 +494,17 @@ describe("Team Bot rows (agents, profiles, publications, audience, assignments, 
   });
 
   test("(i) a stranger's own-tenant audience, assignment or publication row opens nothing", async () => {
-    // Row security lets anybody insert a roster row stamped with their OWN tenant naming any agent
-    // id. Such a row must not count for the Team Bot, which is stamped `team`.
+    // Until 0126, row security let anybody insert a roster row stamped with their OWN tenant naming
+    // any agent id. Such a row must not count for the Team Bot, which is stamped `team`. Since 0126
+    // the stranger cannot write one (case (l)), so the rows a stranger wrote before it are planted
+    // here as they were left, stamped with the stranger, and read back in the stranger's own frame.
     const unpublishedBot = `${suite}-unpublished-bot`;
     await privateBot(unpublishedBot, owner);
     await moveToTeam(unpublishedBot, owner);
     const forged = (bot: string, insert: string) =>
-      inFrame(as(stranger), async (tx) => {
+      inFrame({ tenant: "platform" }, async (tx) => {
         await tx.unsafe(insert, [bot, stranger]);
+        await tx`select set_config('app.tenant_id', ${stranger}, true)`;
         const [row] = await tx.unsafe(
           `select public.openbot_team_bot_visible($1) as visible,
                   (select count(*)::int from public.agents where id = $1) as agents,
@@ -535,6 +538,79 @@ describe("Team Bot rows (agents, profiles, publications, audience, assignments, 
         `insert into team_bot_publications (agent_id, published_by, audience, tenant_id) values ($1, $2, 'team', $2)`,
       ),
     ).toEqual(nothing);
+  });
+
+  test("(l) nobody squats a Bot's roster key: outside platform a roster row is stamped team, by its rightful writer", async () => {
+    // The three tables are keyed by agent id. A row a stranger stamped with their own tenant used to
+    // hold the key of somebody's unpublished Bot, and the owner's publish then failed on a row the
+    // owner could neither see nor delete (0126).
+    const squatted = `${suite}-squatted-bot`;
+    await privateBot(squatted, owner);
+    const inserts = {
+      publication: `insert into team_bot_publications (agent_id, published_by, audience, tenant_id) values ($1, $2, 'team', $3)`,
+      audience: `insert into team_bot_audience (agent_id, kind, value, tenant_id) values ($1, 'user', $2, $3)`,
+      assignment: `insert into team_bot_assignments (agent_id, group_name, assigned_by, tenant_id) values ($1, '*', $2, $3)`,
+    };
+    for (const insert of Object.values(inserts)) {
+      // Neither with the stranger's own stamp, nor with `team`, nor before or after the owner moves it.
+      await refused(as(stranger), (tx) =>
+        tx.unsafe(insert, [squatted, stranger, stranger]),
+      );
+      await refused(as(stranger), (tx) =>
+        tx.unsafe(insert, [squatted, stranger, "team"]),
+      );
+      // An administrator with the capability writes assignments, but only stamped `team`.
+      await refused(asAdmin, (tx) =>
+        tx.unsafe(insert, [squatted, admin, admin]),
+      );
+      // The owner, too, writes the Bot's roster only stamped `team`.
+      await refused(as(owner), (tx) =>
+        tx.unsafe(insert, [squatted, owner, owner]),
+      );
+    }
+    await moveToTeam(squatted, owner);
+    for (const insert of Object.values(inserts)) {
+      await refused(as(stranger), (tx) =>
+        tx.unsafe(insert, [squatted, stranger, stranger]),
+      );
+      await refused(as(stranger), (tx) =>
+        tx.unsafe(insert, [squatted, stranger, "team"]),
+      );
+    }
+    expect(
+      await count(
+        { tenant: "platform" },
+        "team_bot_publications",
+        "agent_id",
+        squatted,
+      ),
+    ).toBe(0);
+    // The key is free: the owner publishes, and the administrator assigns, stamped `team`.
+    await inFrame(as(owner), async (tx) => {
+      await tx.unsafe(inserts.publication, [squatted, owner, "team"]);
+      await tx.unsafe(inserts.audience, [squatted, audience, "team"]);
+    });
+    await inFrame(asAdmin, (tx) =>
+      tx.unsafe(inserts.assignment, [squatted, admin, "team"]),
+    );
+    for (const table of [
+      "team_bot_publications",
+      "team_bot_audience",
+      "team_bot_assignments",
+    ])
+      expect(
+        `${table}:${await count(as(owner), table, "agent_id", squatted)}`,
+      ).toBe(`${table}:1`);
+    // `platform` (fixtures, operator scripts, the migrations) keeps writing any stamp.
+    expect(
+      await changed({ tenant: "platform" }, (tx) =>
+        tx.unsafe(inserts.audience, [squatted, stranger, stranger]),
+      ),
+    ).toBe(1);
+    // Profiles, publications, audience and assignments follow their agent by cascade.
+    await asPlatform(() =>
+      database.delete(agents).where(eq(agents.id, squatted)),
+    );
   });
 
   test("(k) the owner's re-stamp needs app.team_move for that Bot; a stranger with the GUC changes nothing", async () => {
@@ -779,7 +855,9 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
       `update public.channels set created_by = null where id = '${group}'`,
     );
     const [row] = await asPlatform(() =>
-      database.execute(sql`select created_by from channels where id = ${group}`),
+      database.execute(
+        sql`select created_by from channels where id = ${group}`,
+      ),
     );
     expect(row).toEqual({ created_by: creator });
   });
