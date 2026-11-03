@@ -4,8 +4,13 @@ import { useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import {
+  ApprovalActions,
+  useApprovalDecision,
+} from "@/components/tasks/approval-actions";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import type { ApprovalDecision } from "@/lib/approvals";
 import { client, RequestError } from "@/lib/client";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
@@ -100,8 +105,26 @@ type Task = {
    * reading `failed`, and this is what moves it from 需要关注 to 已结束. Absent from an older server.
    */
   archivedAt?: string | null;
+  /**
+   * The approval this card is parked against while it is `needs_action` (spec A8), or null. It is what
+   * the card's 批准/拒绝 answer, and every card carrying the same id moves together. Absent from an
+   * older server, which simply draws no buttons.
+   */
+  pendingApprovalId?: string | null;
   updatedAt: string;
 };
+
+/**
+ * A8's answer, threaded to every card: the board's one decision write and which approvals it is
+ * currently answering. Optional so a card drawn without it (a test of the region alone) simply has no
+ * approval buttons, rather than buttons that do nothing.
+ */
+type ApprovalWiring = {
+  onDecide?: (approvalId: string, decision: ApprovalDecision) => void;
+  decidingIds?: ReadonlySet<string>;
+};
+
+const NOTHING_DECIDING: ReadonlySet<string> = new Set();
 
 /**
  * Where a card is found, which is not the same fact as what the card says it is.
@@ -518,6 +541,8 @@ function TaskCard({
   onReview,
   onArchive,
   pendingIds,
+  onDecide,
+  decidingIds,
 }: {
   task: Task;
   /** Which of the tenant's machines did it, already named — or its id if the machine is gone. */
@@ -525,7 +550,7 @@ function TaskCard({
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
-}) {
+} & ApprovalWiring) {
   const busy = pendingIds.has(task.id);
   /*
    * A3 asks the board to show which coworker did the work — its name and avatar, the same identity
@@ -651,6 +676,12 @@ function TaskCard({
           >
             {busy ? "归档中…" : "归档"}
           </button>
+        ) : onDecide ? (
+          <ApprovalActions
+            onDecide={onDecide}
+            pending={decidingIds ?? NOTHING_DECIDING}
+            task={task}
+          />
         ) : null}
       </div>
     </li>
@@ -686,13 +717,15 @@ export function AttentionRegion({
   onReview,
   onArchive,
   pendingIds,
+  onDecide,
+  decidingIds,
 }: {
   tasks: Task[];
   machineLabel: (deviceId: string | null) => string | null;
   onReview: (id: string) => void;
   onArchive: (id: string) => void;
   pendingIds: ReadonlySet<string>;
-}) {
+} & ApprovalWiring) {
   const [tab, setTab] = useState<"needsYou" | "review">("needsYou");
   const groups = attentionGroups(tasks);
   const shown = groups[tab];
@@ -735,9 +768,11 @@ export function AttentionRegion({
           {shown.map((task) => (
             // TaskCard is an `li` of its own — the board's cards and these are the same cards.
             <TaskCard
+              decidingIds={decidingIds}
               key={task.id}
               machine={machineLabel(task.deviceId)}
               onArchive={onArchive}
+              onDecide={onDecide}
               onReview={onReview}
               pendingIds={pendingIds}
               task={task}
@@ -868,6 +903,12 @@ function TasksPage() {
     setPendingIds(new Set(inflight.current));
     act.mutate({ id, verb });
   };
+  /*
+   * A8: 批准/拒绝 on the card itself. Its own write rather than a third verb on `act`, because it is a
+   * different endpoint with a different gate (one approval, however many cards share it) and it moves
+   * the card ahead of the server instead of after it.
+   */
+  const approval = useApprovalDecision();
   const list = shownForStatus(tasks.data ?? [], status);
   /*
    * 51665048 froze three states that may not overlap: a read that failed says 失败, a first read
@@ -929,6 +970,15 @@ function TasksPage() {
     };
   };
   const failure = act.isError ? actionFailure() : null;
+  /*
+   * A refused decision has already been rolled back on the cards; this says why, in the server's own
+   * sentence. Whatever the outcome, the reads were refreshed after it, so the board shows the truth.
+   */
+  const approvalFailure = approval.error
+    ? approval.error instanceof RequestError
+      ? `审批没有提交：${approval.error.message}（服务端返回 ${approval.error.status}）`
+      : "审批结果未确认，请刷新任务后核对"
+    : null;
   const refreshReadsOnly = () => {
     void tasks.refetch();
     void summary.refetch();
@@ -969,6 +1019,14 @@ function TasksPage() {
           </Button>
         </div>
       ) : null}
+      {approvalFailure ? (
+        <div className="mb-4 flex items-center gap-3 text-sm" role="alert">
+          <p className="text-destructive">{approvalFailure}</p>
+          <Button onClick={approval.reset} size="sm" variant="outline">
+            知道了
+          </Button>
+        </div>
+      ) : null}
       {/*
        * A7's region, fixed above the board. It reads the same list the board renders, on purpose: a
        * second fetch would put two answers to "what needs me" on one screen, and they would disagree
@@ -978,8 +1036,10 @@ function TasksPage() {
        */}
       {tasks.data !== undefined ? (
         <AttentionRegion
+          decidingIds={approval.pending}
           machineLabel={machineLabel}
           onArchive={(id) => runAction(id, "archive")}
+          onDecide={approval.decide}
           onReview={(id) => runAction(id, "review")}
           pendingIds={pendingIds}
           tasks={list}
@@ -1121,6 +1181,8 @@ function TasksPage() {
               onReview={(id) => runAction(id, "review")}
               onArchive={(id) => runAction(id, "archive")}
               pendingIds={pendingIds}
+              onDecide={approval.decide}
+              decidingIds={approval.pending}
             />
           ))}
           {/*
@@ -1171,6 +1233,8 @@ function TasksPage() {
                         onReview={(id) => runAction(id, "review")}
                         onArchive={(id) => runAction(id, "archive")}
                         pendingIds={pendingIds}
+                        onDecide={approval.decide}
+                        decidingIds={approval.pending}
                       />
                     ))}
                 </ul>
