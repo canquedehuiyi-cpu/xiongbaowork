@@ -8,6 +8,7 @@ import {
   inArray,
   isNull,
   like,
+  or,
   sql,
 } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -24,6 +25,7 @@ import {
   taskSource,
   tasks,
   wakerFlows,
+  wakerGroupMembers,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
 import type { TaskProjector } from "./projector";
@@ -351,6 +353,15 @@ export function createTaskRoutes(
      * has.
      */
     const executors = context.req.query("executors");
+    /*
+     * Spec A4's Group choice, by the crew's own id. Its roster alone is not the crew's work: a crew
+     * run's parent card names no coworker (`tasks.executor_agent_id` is null on it, see the schema), so
+     * an `executors=` roster filter drops exactly the card that stands for the whole run. A group is
+     * therefore its members' cards, the parent card of every run of this crew, and those runs' step
+     * cards (a step whose coworker has since left the crew is still part of that run). Read under the
+     * caller's own scope like the rest; a malformed id names no crew and matches nothing.
+     */
+    const group = context.req.query("group");
     if (status) conditions.push(eq(tasks.status, status as never));
     /*
      * Spec A4/C2: 触发方式 is one choice on the screen and more than one value here — 自主工作 is a
@@ -381,6 +392,29 @@ export function createTaskRoutes(
       conditions.push(
         ids.length > 0 ? inArray(tasks.executorAgentId, ids) : sql`false`,
       );
+    }
+    if (group !== undefined) {
+      if (!UUID_PATTERN.test(group)) {
+        conditions.push(sql`false`);
+      } else {
+        const runParents = database
+          .select({ id: groupTaskRuns.parentTaskId })
+          .from(groupTaskRuns)
+          .where(eq(groupTaskRuns.groupId, group));
+        conditions.push(
+          or(
+            inArray(
+              tasks.executorAgentId,
+              database
+                .select({ id: wakerGroupMembers.agentId })
+                .from(wakerGroupMembers)
+                .where(eq(wakerGroupMembers.groupId, group)),
+            ),
+            inArray(tasks.id, runParents),
+            inArray(tasks.parentTaskId, runParents),
+          ),
+        );
+      }
     }
     if (search) conditions.push(like(tasks.title, `%${search}%`));
     if (deviceId) conditions.push(eq(tasks.deviceId, deviceId));

@@ -8,6 +8,8 @@ import {
   sourceLabelOf,
   statusLabelOf,
   TRIGGERS,
+  whoAddress,
+  whoValue,
 } from "@/routes/_authed/_app/tasks";
 
 /**
@@ -15,13 +17,16 @@ import {
  * case below is a link somebody could paste into chat: the coercions are what a stale or hand-edited
  * URL meets, and the defaults are what a bare /tasks has to answer with.
  *
- * The mapping onto the wire (machineId to deviceId, crew to executors, 触发方式 to a source list) is
+ * The mapping onto the wire (machineId to deviceId, crew to executors, executor and group as
+ * themselves, 触发方式 to a source list) is
  * `boardQuery`, which is what the page itself sends — one source of truth about the request format,
  * so the round trip below is the page's own and not a copy of it.
  */
 const EMPTY = {
   machineId: "",
   crew: "",
+  executor: "",
+  group: "",
   status: "",
   q: "",
   period: "month",
@@ -34,8 +39,15 @@ describe("boardSearch", () => {
     expect(boardSearch({})).toEqual(EMPTY);
   });
 
-  test("the four text fields keep strings and drop everything else", () => {
-    const TEXT_KEYS = ["machineId", "crew", "status", "q"] as const;
+  test("the text fields keep strings and drop everything else", () => {
+    const TEXT_KEYS = [
+      "machineId",
+      "crew",
+      "executor",
+      "group",
+      "status",
+      "q",
+    ] as const;
     for (const key of TEXT_KEYS) {
       expect(boardSearch({ [key]: "a-value" })[key]).toBe("a-value");
       for (const junk of [undefined, null, 7, true, {}, []]) {
@@ -70,10 +82,12 @@ describe("boardSearch", () => {
     }
   });
 
-  test("all seven axes survive together rather than one replacing another", () => {
+  test("all the axes survive together rather than one replacing another", () => {
     const shared: ReturnType<typeof boardSearch> = {
       machineId: "d-1",
       crew: "增长小组",
+      executor: "agent-a",
+      group: "group-1",
       status: "needs_action",
       q: "周报",
       period: "all",
@@ -165,6 +179,26 @@ describe("boardQuery", () => {
     expect(counted.get("source")).toBe("handoff,group_run");
   });
 
+  test("a coworker chosen in the dropdown rides as executor, whole, on both reads", () => {
+    // A package coworker's id may contain a comma: as `executors=` the server would split it in two.
+    const { list, scope } = wire({ executor: "pkg,agent" });
+    for (const read of [list, scope]) {
+      const asked = new URLSearchParams(read);
+      expect(asked.get("executor")).toBe("pkg,agent");
+      expect(asked.has("executors")).toBe(false);
+    }
+  });
+
+  test("a crew chosen in the dropdown rides as group, by its id, on both reads", () => {
+    // By id rather than roster, so the server can include the crew's run cards (no executor on them).
+    const { list, scope } = wire({ group: "group-1" });
+    for (const read of [list, scope]) {
+      const asked = new URLSearchParams(read);
+      expect(asked.get("group")).toBe("group-1");
+      expect(asked.has("executors")).toBe(false);
+    }
+  });
+
   test("ended is the screen's own filter and is never sent as a status", () => {
     expect(
       new URLSearchParams(wire({ status: "ended" }).list).has("status"),
@@ -193,29 +227,45 @@ describe("boardQuery", () => {
 });
 
 describe("the Waker/Group dropdown (A4)", () => {
-  test("a coworker is its id and a crew is its roster, which is what /wakers links with", () => {
+  test("a coworker is offered by id and a crew by its own id, empty crews included", () => {
     const options = executorOptions(
       [
         { id: "agent-a", name: "阿开" },
-        { id: "agent-b", name: "阿审" },
+        { id: "pkg,agent", name: "包里的员工" },
       ],
       [
-        {
-          id: "group-1",
-          name: "编程小组",
-          members: [{ agentId: "agent-a" }, { agentId: "agent-b" }],
-        },
-        { id: "group-empty", name: "空组", members: [] },
+        { id: "group-1", name: "编程小组" },
+        // No members today, but its runs are still its work.
+        { id: "group-empty", name: "空组" },
       ],
     );
     expect(options).toEqual([
-      { kind: "waker", value: "agent-a", label: "阿开" },
-      { kind: "waker", value: "agent-b", label: "阿审" },
-      { kind: "group", value: "agent-a,agent-b", label: "小组 · 编程小组" },
+      { kind: "waker", value: "waker:agent-a", label: "阿开" },
+      { kind: "waker", value: "waker:pkg,agent", label: "包里的员工" },
+      { kind: "group", value: "group:group-1", label: "小组 · 编程小组" },
+      { kind: "group", value: "group:group-empty", label: "小组 · 空组" },
     ]);
-    // Chosen, it is an ordinary crew address, and parses back to the same roster.
-    expect(boardSearch({ crew: options[2]?.value }).crew).toBe(
-      "agent-a,agent-b",
+  });
+
+  test("a choice writes one who-axis and clears the other two, and reads back as the same choice", () => {
+    expect(whoAddress("waker:pkg,agent")).toEqual({
+      crew: "",
+      executor: "pkg,agent",
+      group: "",
+    });
+    expect(whoAddress("group:group-1")).toEqual({
+      crew: "",
+      executor: "",
+      group: "group-1",
+    });
+    // 全部 clears all three, including a roster a /wakers link left.
+    expect(whoAddress("")).toEqual({ crew: "", executor: "", group: "" });
+    for (const value of ["waker:pkg,agent", "group:group-1", "crew:a,b"]) {
+      expect(whoValue(boardSearch(whoAddress(value)))).toBe(value);
+    }
+    // A /wakers link's roster is still shown as the filter it is.
+    expect(whoValue(boardSearch({ crew: "agent-a,agent-b" }))).toBe(
+      "crew:agent-a,agent-b",
     );
   });
 });
