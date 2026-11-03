@@ -329,5 +329,5 @@ test("saving the persona PATCHes it and keeps the other fields as they are", asy
   expect(patch?.body).not.toHaveProperty("auth");
   // Nothing but the profile was written.
   expect(writes().length).toBe(1);
-  await view.findByText("Saved. It applies from the coworker's next turn.");
+  await view.findByText("已保存，员工下一轮开始生效。");
 });
