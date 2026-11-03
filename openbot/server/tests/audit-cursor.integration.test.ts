@@ -5,6 +5,7 @@ import { createAuditReader } from "../src/audit";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { auditEvents } from "../src/db/schema";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -106,32 +107,38 @@ describe("a cursor the trail's own columns have to parse", () => {
  */
 describe("a cursor over rows written within one millisecond", () => {
   const reader = createAuditReader(database);
+  /** One person's trail: the rows are written and walked in the same tenant frame. */
+  const tenant = `audit-cursor-${crypto.randomUUID()}`;
 
   /** Rows in one statement, so they share `now()`, at the given microsecond offsets into its millisecond. */
   async function rowsAt(targetId: string, micros: number[]) {
-    return database
-      .insert(auditEvents)
-      .values(
-        micros.map((offset) => ({
-          eventType: "configuration.changed",
-          targetType: "audit_cursor_test",
-          targetId,
-          payload: {},
-          createdAt: sql`date_trunc('milliseconds', now()) + ${offset}::int * interval '1 microsecond'`,
-        })),
-      )
-      .returning({ id: auditEvents.id });
+    return runAsTenant(tenant, () =>
+      database
+        .insert(auditEvents)
+        .values(
+          micros.map((offset) => ({
+            eventType: "configuration.changed",
+            targetType: "audit_cursor_test",
+            targetId,
+            payload: {},
+            createdAt: sql`date_trunc('milliseconds', now()) + ${offset}::int * interval '1 microsecond'`,
+          })),
+        )
+        .returning({ id: auditEvents.id }),
+    );
   }
 
   async function walk(targetId: string) {
     const seen: string[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 10; page += 1) {
-      const result = await reader.list({
-        targetId,
-        limit: 1,
-        ...(cursor ? { cursor } : {}),
-      });
+      const result = await runAsTenant(tenant, () =>
+        reader.list({
+          targetId,
+          limit: 1,
+          ...(cursor ? { cursor } : {}),
+        }),
+      );
       seen.push(...result.events.map((event) => event.id));
       if (!result.nextCursor) break;
       cursor = result.nextCursor;

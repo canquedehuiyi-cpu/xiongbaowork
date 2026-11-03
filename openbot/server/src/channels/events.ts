@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import type { Database } from "../db/client";
+import { runAsTenant } from "../tenant/context";
 
 /**
  * Live channel activity, from whoever ran an agent to everybody else in the channel.
@@ -67,9 +68,12 @@ export type ChannelActivityEvent = {
  * instances' boards stale until their next refetch, but loses no data, so the caller can fire and
  * forget it.
  *
- * `pg_notify` reads no table, so the tenant frame it runs in (whatever the caller's is) grants and
- * withholds nothing; the recipients are named by `memberIds` alone. The failure line carries the
- * error's name and SQLSTATE, not its message, which can quote the statement and its payload.
+ * `pg_notify` reads no table, so its frame grants and withholds nothing; the recipients are named by
+ * `memberIds` alone. It still runs in the board owner's own frame, opened here: the projector
+ * announces after its own frame has closed, from whatever frame its caller had (a background run may
+ * have none), and a statement with no frame is refused before it is sent (G01-E). The failure line
+ * carries the error's name and SQLSTATE, not its message, which can quote the statement and its
+ * payload.
  */
 export function announceTaskUpdate(
   database: Pick<Database, "execute">,
@@ -100,13 +104,16 @@ export function announceTaskUpdate(
     );
   };
   try {
-    return database
-      .execute(
-        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
-      )
-      .then(() => undefined, failed);
+    // `then` is called inside the frame, so the statement starts while the frame is open.
+    return runAsTenant(tenantId, () =>
+      database
+        .execute(
+          sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
+        )
+        .then(() => undefined, failed),
+    );
   } catch (error) {
-    // Building the statement threw before there was a query to run.
+    // Opening the frame or building the statement threw before there was a query to run.
     failed(error);
     return Promise.resolve();
   }

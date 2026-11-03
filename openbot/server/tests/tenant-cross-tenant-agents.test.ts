@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createAgentRoutes } from "../src/agents/routes";
@@ -28,6 +28,8 @@ const store = createAgentProfileStore(database, undefined);
 const suite = randomUUID().slice(0, 8);
 const owner = `agent-tenant-${suite}-owner`;
 const stranger = `agent-tenant-${suite}-stranger`;
+/** Every coworker this file made, for the cleanup of the ones no person's frame can delete. */
+const createdAgentIds: string[] = [];
 
 /**
  * A coworker's owner is a person, and `agent_profiles.owner_user_id` is a foreign key onto `users`.
@@ -36,14 +38,16 @@ const stranger = `agent-tenant-${suite}-stranger`;
  * stranger's 404 ends up being asserted about a coworker that was never created.
  */
 async function ensureUser(tenantId: string) {
-  await database
-    .insert(users)
-    .values({
-      id: tenantId,
-      email: `${tenantId}@example.test`,
-      name: "Cross-tenant coworker fixture",
-    })
-    .onConflictDoNothing();
+  await runAsTenant(tenantId, () =>
+    database
+      .insert(users)
+      .values({
+        id: tenantId,
+        email: `${tenantId}@example.test`,
+        name: "Cross-tenant coworker fixture",
+      })
+      .onConflictDoNothing(),
+  );
 }
 
 await Promise.all([ensureUser(owner), ensureUser(stranger)]);
@@ -94,6 +98,7 @@ async function makeCoworker(visibility: "private" | "public") {
       },
     ),
   );
+  createdAgentIds.push(created.id);
   return { id: created.id, name };
 }
 
@@ -112,8 +117,21 @@ afterAll(async () => {
       .where(eq(agentProfiles.ownerUserId, owner));
     await database.delete(agents).where(eq(agents.tenantId, owner));
   });
-  await database.delete(users).where(eq(users.id, owner));
-  await database.delete(users).where(eq(users.id, stranger));
+  /*
+   * A public coworker lives in `team` (G01-E P8b): the owner's frame above deletes neither its
+   * `agents` row (only the owner's own tenant is deletable there) nor, once its owner is gone below,
+   * anything at all. The deployment's cleanup, by id, so no ownerless public Bot outlives the run.
+   */
+  if (createdAgentIds.length > 0)
+    await runAsTenant("platform", () =>
+      database.delete(agents).where(inArray(agents.id, createdAgentIds)),
+    );
+  await runAsTenant(owner, () =>
+    database.delete(users).where(eq(users.id, owner)),
+  );
+  await runAsTenant(stranger, () =>
+    database.delete(users).where(eq(users.id, stranger)),
+  );
 });
 
 let privateAgentId = "";
@@ -192,8 +210,26 @@ test("a coworker public inside its own tenant is still invisible to a stranger",
    * widest possible read grant this table offers. Cross-tenant invisibility is therefore not the
    * application's doing here: the row-level policy is what refuses, and this is the case that says so.
    * If the two layers were ever collapsed into one another, this is the test that would notice.
+   *
+   * Since G01-E P8b a public coworker made through the store is moved to the shared `team` tenant
+   * (decision 2) and is meant to be seen by everybody; the next test pins that. This one keeps the
+   * row-level claim by building the case the store no longer produces: a profile that SAYS public but
+   * is still stamped with its owner's tenant. Row security must refuse it whatever the column says.
    */
-  const coworker = await makeCoworker("public");
+  const coworker = await makeCoworker("private");
+  await runAsTenant(owner, () =>
+    database
+      .update(agentProfiles)
+      .set({ visibility: "public" })
+      .where(eq(agentProfiles.agentId, coworker.id)),
+  );
+  const [stamped] = await runAsTenant(owner, () =>
+    database
+      .select({ tenantId: agentProfiles.tenantId, visibility: agentProfiles.visibility })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, coworker.id)),
+  );
+  expect(stamped).toEqual({ tenantId: owner, visibility: "public" });
 
   const ownRead = await call(owner, coworker.id);
   expect(ownRead.status).toBe(200);
@@ -204,4 +240,26 @@ test("a coworker public inside its own tenant is still invisible to a stranger",
   const strangerList = await call(stranger, "");
   const listed = (await strangerList.json()) as { agents: { id: string }[] };
   expect(listed.agents.map((entry) => entry.id)).not.toContain(coworker.id);
+});
+
+test("a coworker made public through the store is shared with every person (team tenant)", async () => {
+  // Decision 2: public rows live in the shared `team` tenant, which every person may read.
+  const coworker = await makeCoworker("public");
+  const [stamped] = await runAsTenant(owner, () =>
+    database
+      .select({ tenantId: agentProfiles.tenantId })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, coworker.id)),
+  );
+  expect(stamped?.tenantId).toBe("team");
+
+  const strangerRead = await call(stranger, coworker.id);
+  expect(strangerRead.status).toBe(200);
+  const strangerList = await call(stranger, "");
+  const listed = (await strangerList.json()) as { agents: { id: string }[] };
+  expect(listed.agents.map((entry) => entry.id)).toContain(coworker.id);
+
+  // Visible is not writable: the stranger still cannot edit or delete it.
+  expect([403, 404]).toContain((await call(stranger, coworker.id, "PATCH", edit)).status);
+  expect([403, 404]).toContain((await call(stranger, coworker.id, "DELETE")).status);
 });

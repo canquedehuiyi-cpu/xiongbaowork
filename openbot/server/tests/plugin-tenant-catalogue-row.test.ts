@@ -1,25 +1,30 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createDatabase } from "../src/db/client";
 import { agents, mcpServers, mcpTools, pluginGrants } from "../src/db/schema";
-import { createPluginStore } from "../src/plugins/store";
+import {
+  CustomServerRefusedError,
+  createPluginStore,
+} from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
+import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
- * Ticket 028 / ADR-0002: two tenants opening the same catalogue entry get two rows.
+ * Who holds the row a catalogue entry is opened into.
  *
- * Spec J4 says the platform publishes a catalogue and each tenant opens an entry **into its own
- * account**. `mcp_servers.id` was the catalogue key itself and the primary key was global, so a
- * deployment could hold exactly one `google-drive` row: the first tenant to add it owned it, and every
- * later tenant's own connection was refused by row-level security on the UPDATE check and surfaced as
- * a 500 — the two tenants were not provisioning, they were competing for one row.
- *
- * The suite is deliberately about the two rows and who owns them, not about which id scheme won: the id
- * is the implementation's choice, and "each tenant that opens an entry has its own row to attach its
- * credential, its grants and its consent history to" is the product's requirement.
+ * Ticket 028 / ADR-0002 made it one row PER TENANT: `mcp_servers.id` had been the catalogue key with a
+ * global primary key, so the first tenant to add `google-drive` owned it and every later tenant's add
+ * was refused by row security and surfaced as a 500. G01-E P10 (decision "team-tenant", Q3) settles
+ * the same collision the other way: the deployment's servers are `team` rows, ONE per entry, which an
+ * administrator holding the admin capability writes and every person's Bots may be granted. So a
+ * second administrator's add lands on the row the first one opened rather than competing for it, and
+ * a person who is not such an administrator writes no server row at all, neither the team's nor one
+ * of their own. What ticket 028 also asked of each tenant's row still holds of the one row: its
+ * identity is derived, so adding twice is one row; the surfaces a person uses resolve it; and an
+ * action granted through it resolves for each workspace's own coworker and nobody else's.
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const store = createPluginStore({
@@ -43,47 +48,44 @@ const entryKey = "google-drive";
 const suffix = randomUUID().slice(0, 8);
 const tenantA = `cat-a-${suffix}`;
 const tenantB = `cat-b-${suffix}`;
+/** Two administrators, each pressing Add on the same entry. */
+const adminA = `cat-admin-a-${suffix}`;
+const adminB = `cat-admin-b-${suffix}`;
+const adminRequest = createAdminRequest(database);
+let releaseAdmins: (() => Promise<void>) | undefined;
+/** Whether a team row for the entry was here before this suite, so the suite removes only its own. */
+let teamRowBefore: string | null = null;
 
-const rowsForTenant = async (tenant: string) =>
-  await runAsTenant(tenant, async () =>
+/** Every row for the entry, whoever holds it, read as the deployment. */
+const entryRows = async () =>
+  await runAsTenant("platform", async () =>
     database
-      .select({
-        id: mcpServers.id,
-        tenantId: mcpServers.tenantId,
-        catalogueKey: mcpServers.catalogueKey,
-      })
-      .from(mcpServers),
+      .select({ id: mcpServers.id, tenantId: mcpServers.tenantId })
+      .from(mcpServers)
+      .where(eq(mcpServers.catalogueKey, entryKey)),
   );
 
-/**
- * The rows THIS tenant owns for the entry under test.
- *
- * Filtering by owner rather than looking at everything the tenant can see is not a weakening: a SELECT
- * policy that admits `system` rows means a row published by the platform is visible inside every
- * tenant's list, which is a pre-existing rule about platform-published shared rows and not what this
- * ticket moves. What the ticket promises is one row PER TENANT, so the suite measures the tenant's own
- * rows and leaves the shared ones out of the count.
- */
-const ownRowsForTenant = async (tenant: string) =>
-  (await rowsForTenant(tenant)).filter(
-    (row) => row.catalogueKey === entryKey && row.tenantId === tenant,
+/** The rows stamped with this suite's own people: there must never be any. */
+const ownStampedRows = async () =>
+  (await entryRows()).filter((row) =>
+    [tenantA, tenantB, adminA, adminB].includes(row.tenantId),
   );
+
+const teamRows = async () =>
+  (await entryRows()).filter((row) => row.tenantId === "team");
+
+beforeAll(async () => {
+  releaseAdmins = await seedAdministrator(database, adminA, adminB);
+  teamRowBefore = (await teamRows())[0]?.id ?? null;
+});
 
 afterAll(async () => {
-  // Only this suite's two tenants. Deleting by catalogue key alone would reach into another file's
-  // fixture mid-run — the suite runs files in one process, and that is how one file goes red because
-  // a different file cleaned up after itself.
-  const strays = await runAsTenant("platform", async () =>
-    database
-      .select({ id: mcpServers.id })
-      .from(mcpServers)
-      .where(
-        and(
-          eq(mcpServers.catalogueKey, entryKey),
-          inArray(mcpServers.tenantId, [tenantA, tenantB]),
-        ),
-      ),
-  );
+  // Only rows this suite could have written: the team row when it was not here before, and any row
+  // stamped with the suite's own people (there should be none).
+  const strays = [
+    ...(await ownStampedRows()),
+    ...(teamRowBefore ? [] : await teamRows()),
+  ];
   await runAsTenant("platform", async () => {
     if (strays.length === 0) return;
     await database.delete(mcpTools).where(
@@ -117,94 +119,107 @@ afterAll(async () => {
       async () => await database.delete(agents).where(eq(agents.id, bot)),
     );
   }
+  await releaseAdmins?.();
 });
 
-test("each tenant that adds the entry gets its own row", async () => {
-  await runAsTenant(
-    tenantA,
-    async () =>
-      await store.addServer({ key: entryKey, by: `${tenantA}@example.test` }),
+test("a person who is not an administrator with the capability writes no server row at all", async () => {
+  // Before ticket 028 this was a 500 for the second tenant; with per-tenant rows it was a row of
+  // their own. Now it is a refusal before anything is written, for both of them.
+  for (const tenant of [tenantA, tenantB]) {
+    await expect(
+      runAsTenant(tenant, () =>
+        store.addServer({ key: entryKey, by: `${tenant}@example.test` }),
+      ),
+    ).rejects.toBeInstanceOf(CustomServerRefusedError);
+  }
+  // An administrator's own frame without the capability (a routine, a Bot turn) neither.
+  await expect(
+    runAsTenant(adminA, () =>
+      store.addServer({ key: entryKey, by: `${adminA}@example.test` }),
+    ),
+  ).rejects.toBeInstanceOf(CustomServerRefusedError);
+
+  expect(await ownStampedRows()).toEqual([]);
+  expect((await teamRows()).map((row) => row.id)).toEqual(
+    teamRowBefore ? [teamRowBefore] : [],
   );
-  // Today this is the one that fails, and it fails as a database error rather than a product answer.
-  await runAsTenant(
-    tenantB,
-    async () =>
-      await store.addServer({ key: entryKey, by: `${tenantB}@example.test` }),
+});
+
+test("each administrator who adds the entry opens the one team row", async () => {
+  await adminRequest(adminA, () =>
+    store.addServer({ key: entryKey, by: `${adminA}@example.test` }),
+  );
+  // The second press is not a competitor for the row any more: it lands on the same one.
+  await adminRequest(adminB, () =>
+    store.addServer({ key: entryKey, by: `${adminB}@example.test` }),
   );
 
-  const mineA = await ownRowsForTenant(tenantA);
-  const mineB = await ownRowsForTenant(tenantB);
-
-  expect(mineA).toHaveLength(1);
-  expect(mineB).toHaveLength(1);
-
-  // Two rows, not one shared: the identity of the row has to differ for the credential, the consent
-  // and the tool list to be each tenant's own.
-  expect(mineA[0]?.id).not.toBe(mineB[0]?.id);
-
-  // And neither one is the platform's: a row stamped `system` would be readable by everybody, which is
-  // the other way a shared connector could come back.
-  expect(mineA[0]?.tenantId).toBe(tenantA);
-  expect(mineB[0]?.tenantId).toBe(tenantB);
+  const shared = await teamRows();
+  expect(shared).toHaveLength(1);
+  // Neither administrator's, and not the platform's: a row stamped `system` would be the catalogue's
+  // own, and a row stamped with either administrator would be readable by that administrator alone.
+  expect(shared[0]?.tenantId).toBe("team");
+  expect(await ownStampedRows()).toEqual([]);
+  if (teamRowBefore) expect(shared[0]?.id).toBe(teamRowBefore);
 });
 
 /**
- * Adding the same entry twice for the same tenant is one row, not two — the reason the write's identity
- * is derived rather than random. A second row would mean two tool lists, two grants and two consent
- * histories for one connection nobody asked to duplicate.
+ * Adding the same entry again is one row, not two — the reason the write's identity is derived
+ * rather than random. A second row would mean two tool lists, two grants and two consent histories for
+ * one connection nobody asked to duplicate.
  */
-test("adding it again for the same tenant updates that tenant's row instead of adding a second", async () => {
-  await runAsTenant(
-    tenantA,
-    async () =>
-      await store.addServer({ key: entryKey, by: `${tenantA}@example.test` }),
+test("adding it again updates the team's row instead of adding a second", async () => {
+  const [before] = await teamRows();
+  await adminRequest(adminA, () =>
+    store.addServer({ key: entryKey, by: `${adminA}@example.test` }),
   );
 
-  expect(await ownRowsForTenant(tenantA)).toHaveLength(1);
+  const after = await teamRows();
+  expect(after).toHaveLength(1);
+  expect(after[0]?.id).toBe(before?.id);
 });
 
 /**
- * The surfaces a tenant actually uses have to keep working on the new row.
+ * The surfaces a person actually uses have to resolve the row, from their own frame.
  *
  * This is the failure mode ADR-0002 warns about for a missed read point: "the connector is in the list,
  * and the call says there is none." A store that resolves a row back to its catalogue entry by `id`
  * stops finding the entry the moment `id` stops being the key, and a lookup by row identity that is
  * given that identity still has to answer — so both directions are asserted here, through the three
- * reads the product path makes.
+ * reads the product path makes, by a person who did not add it.
  */
-test("the tenant's own surfaces still resolve the row it was given", async () => {
-  const [mine] = await ownRowsForTenant(tenantA);
-  expect(mine).toBeDefined();
+test("a person's own surfaces resolve the team's row", async () => {
+  const [shared] = await teamRows();
+  expect(shared).toBeDefined();
 
   const listed = await runAsTenant(
     tenantA,
     async () => await store.listServers(),
   );
-  // The listing has to carry this tenant's row, not just something Google-shaped: a list that resolved
-  // the entry by the shared identity while hiding the tenant's row would look correct here and fail
-  // every later call that names the row.
-  expect(listed.map((server) => server.id)).toContain(mine?.id);
+  expect(listed.map((server) => server.id)).toContain(shared?.id);
 
   await runAsTenant(tenantA, async () => {
-    const id = mine?.id ?? "";
+    const id = shared?.id ?? "";
     expect(await store.serverExists(id)).toBe(true);
     expect(await store.serverAddress(id)).toBeDefined();
+    // And by the entry's own name, which is what a grant's ref carries.
+    expect((await store.serverAddress(entryKey))?.id).toBe(shared?.id);
   });
 });
 
 /**
- * The grant path, which is what having your own row is FOR.
+ * The grant path, which is what the row is FOR.
  *
  * A tool ref names the APP (`google-drive/search_files`) while `mcp_tools.server_id` names the ROW, and
- * those were the same string until this ticket. A listing that composes a ref from the row id writes a
+ * those were the same string until ticket 028. A listing that composes a ref from the row id writes a
  * grant no later read can match — the administrator sees the action, presses Grant, and the Bot is
  * offered nothing — and it fails silently, one screen away from where it was caused.
  *
- * Asked of BOTH tenants because that is the shape only two rows can answer wrong: a lookup that landed
- * on the other workspace's tool rows would hand back the same ref with somebody else's actions behind
- * it.
+ * Asked of BOTH workspaces, each granting the action to its own coworker through the one row: the
+ * grant is the coworker's own (stamped with its workspace), so releasing one workspace's grant must
+ * leave the other's standing, and neither workspace's frame sees the other's coworker's tools.
  */
-test("a granted action resolves through each tenant's own row", async () => {
+test("a granted action resolves through the team's row for each workspace's own coworker", async () => {
   const ref = `${entryKey}/search_files`;
   const botA = `bot-a-${suffix}`;
   const botB = `bot-b-${suffix}`;
@@ -224,13 +239,13 @@ test("a granted action resolves through each tenant's own row", async () => {
     );
   }
 
-  // What the Plugins page hands the browser to grant with.
-  const [mineA] = await ownRowsForTenant(tenantA);
+  // What the Plugins page hands the browser to grant with, in a workspace's own frame.
+  const [shared] = await teamRows();
   const offered = await runAsTenant(
     tenantA,
     async () => await store.listServers(),
   );
-  const driveRow = offered.find((server) => server.id === mineA?.id);
+  const driveRow = offered.find((server) => server.id === shared?.id);
   expect(driveRow?.tools.map((tool) => tool.ref)).toContain(ref);
 
   await runAsTenant(
@@ -249,13 +264,30 @@ test("a granted action resolves through each tenant's own row", async () => {
 
   expect(await refsFor(tenantA, botA)).toContain(ref);
   expect(await refsFor(tenantB, botB)).toContain(ref);
+  // A coworker of one workspace is not a coworker of another.
+  expect(await refsFor(tenantB, botA)).toEqual([]);
 
-  // Releasing one workspace's grant leaves the other's standing: the two Bots hold the same words,
-  // over two rows, and a revoke that reached both would be the shared connector back again.
+  // Releasing one workspace's grant leaves the other's standing: the two Bots hold the same words
+  // over one row, and a revoke that reached both would be one workspace deciding for another.
   await runAsTenant(
     tenantA,
     async () => await store.revoke("mcp", ref, botA, `${tenantA}@example.test`),
   );
   expect(await refsFor(tenantA, botA)).not.toContain(ref);
   expect(await refsFor(tenantB, botB)).toContain(ref);
+  const left = await runAsTenant("platform", async () =>
+    database
+      .select({
+        agentId: pluginGrants.agentId,
+        tenantId: pluginGrants.tenantId,
+      })
+      .from(pluginGrants)
+      .where(
+        and(
+          eq(pluginGrants.ref, ref),
+          inArray(pluginGrants.agentId, [botA, botB]),
+        ),
+      ),
+  );
+  expect(left).toEqual([{ agentId: botB, tenantId: tenantB }]);
 });

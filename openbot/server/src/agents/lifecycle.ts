@@ -17,6 +17,7 @@
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { botLifecycle, updateRoutingPreferences } from "../db/schema/lifecycle";
+import { currentTenant, runAsTenant } from "../tenant/context";
 
 /** The sentence every skipped dispatch records, so the trail and the run rows say the same thing. */
 export const BOT_PAUSED_REASON = "The Bot is paused, so it did not run.";
@@ -43,7 +44,15 @@ export const UPDATE_TRANSPORTS: readonly UpdateTransport[] = [
   "push",
 ];
 
-type RunningTurn = { controller: AbortController; startedAt: number };
+/**
+ * `tenant` is the frame the turn was started in, which is the tenant its pause row lives in (G01).
+ * The cross-replica watcher has no frame of its own, so it re-reads each pause as that tenant.
+ */
+type RunningTurn = {
+  controller: AbortController;
+  startedAt: number;
+  tenant: string;
+};
 
 /**
  * How long a turn registered by {@link guardBotTurn} is kept after it started.
@@ -146,12 +155,14 @@ export async function guardBotTurn(input: {
   if (await isBotPaused(input.ownerUserId, input.agentId))
     throw new BotPausedError();
   const controller = new AbortController();
+  // Read from the frame the guard itself just read the pause in, never from the input.
+  const tenant = currentTenant();
   const key = keyOf(input.ownerUserId, input.agentId);
   const now = Date.now();
   const turns = state.running.get(key) ?? new Set<RunningTurn>();
   for (const turn of turns)
     if (now - turn.startedAt > TURN_RETENTION_MS) turns.delete(turn);
-  turns.add({ controller, startedAt: now });
+  turns.add({ controller, startedAt: now, tenant });
   state.running.set(key, turns);
   startWatcher();
   return input.signal
@@ -204,9 +215,25 @@ async function checkRunningTurns() {
   }
   const database = state.database;
   if (!database) return;
-  for (const key of [...state.running.keys()]) {
+  for (const [key, turns] of [...state.running]) {
     const [ownerUserId, agentId] = JSON.parse(key) as [string, string];
-    const paused = await readPause(database, ownerUserId, agentId);
+    /*
+     * Each pause is read as the tenant its turns were started in (G01). The interval has no frame of
+     * its own — or, worse, the frame of whichever person's turn happened to start it — so a read left
+     * to it ran as `system`, or as that one person, and row-level security hid every other person's
+     * pause row: the read answered "not paused" and a pause made on another replica never stopped the
+     * turn running here.
+     */
+    const answers: (boolean | undefined)[] = [];
+    for (const tenant of new Set([...turns].map((turn) => turn.tenant)))
+      answers.push(
+        await runAsTenant(tenant, () =>
+          readPause(database, ownerUserId, agentId),
+        ),
+      );
+    const paused = answers.includes(undefined)
+      ? undefined
+      : answers.includes(true);
     if (paused === undefined) {
       const failures = (state.unreadable.get(key) ?? 0) + 1;
       state.unreadable.set(key, failures);
