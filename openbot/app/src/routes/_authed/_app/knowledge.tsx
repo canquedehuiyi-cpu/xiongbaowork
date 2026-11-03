@@ -364,7 +364,14 @@ function SourcesSection({
   feedback: Feedback;
 }) {
   const queryClient = useQueryClient();
-  const remove = useMutation(removeSourceMutationOptions(queryClient));
+  // A stale delete is the same conflict a stale edit is: said once at the top, with the refetch the
+  // write settles with already showing the newer copy.
+  const remove = useMutation({
+    ...removeSourceMutationOptions(queryClient),
+    onError: (error: Error) => {
+      if (isKnowledgeConflict(error)) feedback.onConflict();
+    },
+  });
   const [editing, setEditing] = useState<string | null>(null);
   const { notebook, sources } = detail;
   const editingSource = sources.find((source) => source.id === editing);
@@ -412,6 +419,8 @@ function SourcesSection({
                     remove.mutate({
                       notebookId: notebook.id,
                       sourceId: source.id,
+                      // What this row shows, so a newer copy saved elsewhere is refused (409), not erased.
+                      revision: source.revision,
                     });
                   }}
                   size="sm"
@@ -424,7 +433,7 @@ function SourcesSection({
           ))}
         </ItemGroup>
       )}
-      {remove.error ? (
+      {remove.error && !isKnowledgeConflict(remove.error) ? (
         <p className="mt-2 text-destructive text-sm" role="alert">
           {remove.error.message}
         </p>
@@ -677,15 +686,30 @@ function SourceEditorForm({
  *
  * Only Wakers the person created are offered — the server refuses a binding to anybody else's with
  * a 403, and a box that can only bounce is worse than not drawing it.
+ *
+ * Hidden ones too: `/api/agents` leaves out the Wakers this person has hidden, which only come back
+ * with `?hidden=true`, and a binding one of them holds still lets it read the notebook. Reading the
+ * default list alone dropped that box, so the grant could neither be seen nor taken back here.
  */
 function AuthorizeFieldset({ detail }: { detail: KnowledgeNotebookDetail }) {
   const queryClient = useQueryClient();
-  const agents = useQuery(agentListQueryOptions());
+  const shown = useQuery(agentListQueryOptions());
+  const hidden = useQuery(agentListQueryOptions(true));
+  const agents = {
+    isPending: shown.isPending || hidden.isPending,
+    error: shown.error ?? hidden.error,
+  };
   const setBinding = useMutation(
     setKnowledgeBindingMutationOptions(queryClient),
   );
   const { notebook, bindings } = detail;
-  const owned = (agents.data ?? []).filter((agent) => agent.mine);
+  const hiddenIds = new Set((hidden.data ?? []).map((agent) => agent.id));
+  const owned = [
+    ...(shown.data ?? []),
+    ...(hidden.data ?? []).filter(
+      (agent) => !(shown.data ?? []).some((other) => other.id === agent.id),
+    ),
+  ].filter((agent) => agent.mine);
   const bound = new Set(bindings.map((binding) => binding.agentId));
 
   return (
@@ -729,6 +753,9 @@ function AuthorizeFieldset({ detail }: { detail: KnowledgeNotebookDetail }) {
                   }
                 />
                 <label htmlFor={id}>{agent.name}</label>
+                {hiddenIds.has(agent.id) ? (
+                  <span className="text-muted-foreground text-xs">已隐藏</span>
+                ) : null}
               </div>
             );
           })

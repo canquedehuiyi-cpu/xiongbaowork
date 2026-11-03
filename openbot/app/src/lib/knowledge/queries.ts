@@ -283,9 +283,14 @@ export function updateSourceMutationOptions(queryClient: QueryClient) {
 
 export function removeSourceMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: async (input: { notebookId: string; sourceId: string }) => {
+    mutationFn: async (input: {
+      notebookId: string;
+      sourceId: string;
+      revision: number;
+    }) => {
       await client(sourcePath(input.notebookId, input.sourceId), {
         method: "DELETE",
+        body: { revision: input.revision },
         fallback: "资料没能删除。",
       });
     },

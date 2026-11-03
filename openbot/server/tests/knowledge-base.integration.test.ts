@@ -357,7 +357,7 @@ describe("RES1 knowledge base", () => {
     expect(JSON.stringify(audit[0]?.payload)).not.toContain("周二");
   });
 
-  test("editing a source is revisioned, and removing one is audited", async () => {
+  test("editing and removing a source are revisioned, and removing one is audited", async () => {
     const next = "熊宝的发布日期改到周三。";
     const edited = await call(
       owner,
@@ -387,6 +387,34 @@ describe("RES1 knowledge base", () => {
       (await call(owner, "GET", `/notebooks/${notebookId}/sources/${sourceId}`))
         .json.source.content,
     ).toBe(next);
+
+    // A delete from a stale view is refused like a stale edit, and erases nothing.
+    const kept = await call(owner, "POST", `/notebooks/${notebookId}/sources`, {
+      title: "两个标签页",
+      content: "第一版",
+    });
+    const keptId = kept.json.source.id;
+    const keptPath = `/notebooks/${notebookId}/sources/${keptId}`;
+    expect(
+      (await call(owner, "PATCH", keptPath, { content: "第二版", revision: 1 }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await call(owner, "DELETE", keptPath, { revision: 1 })).status,
+    ).toBe(409);
+    expect((await call(owner, "GET", keptPath)).json.source.content).toBe(
+      "第二版",
+    );
+    expect(
+      (await auditTypesFor(owner, keptId)).map((e) => e.eventType),
+    ).not.toContain("knowledge.source_removed");
+    expect(
+      (await call(owner, "DELETE", keptPath, { revision: "2" })).status,
+    ).toBe(400);
+    expect(
+      (await call(owner, "DELETE", keptPath, { revision: 2 })).status,
+    ).toBe(204);
+    expect((await call(owner, "GET", keptPath)).status).toBe(404);
 
     const scratch = await call(
       owner,

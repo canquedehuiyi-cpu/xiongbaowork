@@ -97,6 +97,11 @@ const AGENTS = [
   profile("waker-ops", "小熊运营", true),
   profile("waker-theirs", "别人的熊", false),
 ];
+/* What `/api/agents?hidden=true` answers: the Wakers this person hid, which the plain list omits. */
+const HIDDEN_AGENTS = [
+  { ...profile("waker-hidden", "小熊归档", true), hidden: true },
+  { ...profile("waker-theirs-hidden", "别人藏的熊", false), hidden: true },
+];
 
 const chars = (value: string) => [...value].length;
 
@@ -140,7 +145,10 @@ function draw(initial: FakeNotebook[] = []) {
     const parts = url.pathname.split("/").filter(Boolean);
 
     if (url.pathname === "/api/agents")
-      return Response.json({ agents: AGENTS });
+      return Response.json({
+        agents:
+          url.searchParams.get("hidden") === "true" ? HIDDEN_AGENTS : AGENTS,
+      });
     if (
       parts[0] !== "api" ||
       parts[1] !== "knowledge" ||
@@ -234,6 +242,9 @@ function draw(initial: FakeNotebook[] = []) {
         });
       }
       if (method === "DELETE") {
+        // The server's rule: a revision that is not the current one is a 409, and nothing is erased.
+        if (body?.revision !== undefined && body.revision !== source.revision)
+          return stale();
         notebook.sources = notebook.sources.filter((entry) => entry !== source);
         return new Response(null, { status: 204 });
       }
@@ -244,8 +255,12 @@ function draw(initial: FakeNotebook[] = []) {
 
     if (child === "bindings" && childId) {
       if (method === "PUT") {
-        // The server's rule: only the person's own Wakers.
-        if (!AGENTS.some((agent) => agent.id === childId && agent.mine))
+        // The server's rule: only the person's own Wakers, hidden or not.
+        if (
+          ![...AGENTS, ...HIDDEN_AGENTS].some(
+            (agent) => agent.id === childId && agent.mine,
+          )
+        )
           return Response.json(
             { error: "只能授权给你自己的 Waker。" },
             { status: 403 },
@@ -392,9 +407,11 @@ test("授权给 offers only the person's own Wakers, and ticking grants read-onl
   expect(boxes.map((box) => box.getAttribute("aria-label"))).toEqual([
     "小熊审稿",
     "小熊运营",
+    "小熊归档",
   ]);
-  // Somebody else's Waker is not offered at all.
+  // Somebody else's Waker is not offered at all, hidden or not.
   expect(within(group).queryByText("别人的熊")).toBeNull();
+  expect(within(group).queryByText("别人藏的熊")).toBeNull();
 
   const reviewer = within(group).getByRole("checkbox", { name: "小熊审稿" });
   expect(reviewer.getAttribute("aria-checked")).toBe("false");
@@ -533,4 +550,99 @@ test("deleting a knowledge base asks first and sends the revision it was shown",
     },
   ]);
   expect(state.notebooks).toEqual([]);
+});
+
+test("a Waker the person hid keeps its box, so a grant it holds can still be seen and taken back", async () => {
+  const { view, user, state } = draw([
+    notebook({ bindings: ["waker-hidden"] }),
+  ]);
+
+  const group = await view.findByRole("group", { name: "授权给" });
+  const archived = await within(group).findByRole("checkbox", {
+    name: "小熊归档",
+  });
+  expect(archived.getAttribute("aria-checked")).toBe("true");
+  expect(within(group).getByText("已隐藏")).toBeTruthy();
+  expect(
+    calls.some(
+      (entry) => entry.method === "GET" && entry.path === "/api/agents",
+    ),
+  ).toBe(true);
+
+  await user.click(archived);
+  await waitFor(() =>
+    expect(
+      within(group)
+        .getByRole("checkbox", { name: "小熊归档" })
+        .getAttribute("aria-checked"),
+    ).toBe("false"),
+  );
+  expect(writes()).toEqual([
+    {
+      method: "DELETE",
+      path: `/api/knowledge/notebooks/${NOTEBOOK_ID}/bindings/waker-hidden`,
+    },
+  ]);
+  expect(state.notebooks[0]?.bindings).toEqual([]);
+});
+
+test("deleting a source sends the revision it was shown, and a stale delete erases nothing", async () => {
+  const { view, user, state } = draw([
+    notebook({
+      sources: [
+        {
+          id: SOURCE_ID,
+          title: "安装指南",
+          kind: "markdown",
+          content: "# 旧内容",
+          revision: 1,
+        },
+      ],
+    }),
+  ]);
+
+  await view.findByRole("button", { name: "删除 安装指南" });
+  // Another tab saves a newer copy after this one loaded.
+  const source = state.notebooks[0]?.sources[0];
+  if (!source) throw new Error("the seeded source is missing");
+  source.content = "# 别人写的新内容";
+  source.revision = 2;
+
+  await user.click(view.getByRole("button", { name: "删除 安装指南" }));
+  expect((await view.findByRole("alert")).textContent).toBe(
+    "别人刚改过，已刷新",
+  );
+  expect(writes()).toEqual([
+    {
+      method: "DELETE",
+      path: `/api/knowledge/notebooks/${NOTEBOOK_ID}/sources/${SOURCE_ID}`,
+      body: { revision: 1 },
+    },
+  ]);
+  expect(state.notebooks[0]?.sources).toHaveLength(1);
+
+  // The 409 settles with a refetch of the notebook; once that has answered, the row shows the newer
+  // copy, and deleting it now is deleting what was seen.
+  const refused = calls.findIndex((entry) => entry.method === "DELETE");
+  await waitFor(() =>
+    expect(
+      calls.some(
+        (entry, index) =>
+          index > refused &&
+          entry.method === "GET" &&
+          entry.path === `/api/knowledge/notebooks/${NOTEBOOK_ID}`,
+      ),
+    ).toBe(true),
+  );
+  await settleReactWork();
+  calls.length = 0;
+  await user.click(view.getByRole("button", { name: "删除 安装指南" }));
+  await waitFor(() => expect(state.notebooks[0]?.sources).toEqual([]));
+  expect(writes()).toEqual([
+    {
+      method: "DELETE",
+      path: `/api/knowledge/notebooks/${NOTEBOOK_ID}/sources/${SOURCE_ID}`,
+      body: { revision: 2 },
+    },
+  ]);
 });
