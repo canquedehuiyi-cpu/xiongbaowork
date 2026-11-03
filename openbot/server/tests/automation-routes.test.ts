@@ -379,3 +379,89 @@ describe("triggers (AUT1)", () => {
     expect(gone).toEqual({ status: 200, json: { result: "removed" } });
   });
 });
+
+describe("the list says when the breaker stopped it (C1/C3)", () => {
+  test("tripped: off with the breaker's firing as its newest; switched back on, no longer", async () => {
+    const automation = await createAs(alice, wakerA);
+    const plain = await createAs(alice, wakerA);
+    const added = await call(alice, "POST", `/${automation.id}/triggers`, {
+      kind: "schedule",
+      cron: "0 9 * * *",
+      timezone: "Asia/Shanghai",
+    });
+    expect(added.status).toBe(201);
+    const trigger = added.json.trigger as { id: string };
+
+    const listed = async (user: string) =>
+      (await call(user, "GET", "/")).json.automations as {
+        id: string;
+        enabled: boolean;
+        breakerTripped: boolean;
+      }[];
+    expect(
+      (await listed(alice)).find((item) => item.id === automation.id),
+    ).toMatchObject({ enabled: true, breakerTripped: false });
+
+    const begun = await runAsTenant(alice, () =>
+      store.beginFiring({
+        automationId: automation.id,
+        triggerId: trigger.id,
+        externalId: `breaker:${randomUUID()}`,
+        fingerprint: "breaker",
+      }),
+    );
+    if (begun.status !== "started") {
+      throw new Error(`firing not started: ${begun.status}`);
+    }
+    // The breaker trips only on a failed streak that reached its limit (here, one failure).
+    await runAsTenant(alice, () =>
+      store.finishFiring(begun.firing.id, "failed", "Notion 授权已过期"),
+    );
+    expect(
+      await runAsTenant(alice, () =>
+        store.tripBreaker(automation.id, begun.firing.id, 1),
+      ),
+    ).toBe(true);
+
+    const after = await listed(alice);
+    expect(after.find((item) => item.id === automation.id)).toMatchObject({
+      enabled: false,
+      breakerTripped: true,
+    });
+    // Paused by hand, never tripped: off, but not the breaker's doing.
+    const pausedByHand = await call(alice, "PUT", `/${plain.id}/enabled`, {
+      enabled: false,
+    });
+    expect(pausedByHand.status).toBe(200);
+    expect(
+      (await listed(alice)).find((item) => item.id === plain.id),
+    ).toMatchObject({ enabled: false, breakerTripped: false });
+    // Another tenant sees neither.
+    expect(
+      (await listed(bob)).some(
+        (item) => item.id === automation.id || item.id === plain.id,
+      ),
+    ).toBe(false);
+
+    const back = await call(alice, "PUT", `/${automation.id}/enabled`, {
+      enabled: true,
+    });
+    expect(back.status).toBe(200);
+    expect(
+      (await listed(alice)).find((item) => item.id === automation.id),
+    ).toMatchObject({ enabled: true, breakerTripped: false });
+
+    // Resumed, then paused by hand: off, but no longer the breaker's doing.
+    const pausedAgain = await call(alice, "PUT", `/${automation.id}/enabled`, {
+      enabled: false,
+    });
+    expect(pausedAgain.status).toBe(200);
+    expect(
+      (await listed(alice)).find((item) => item.id === automation.id),
+    ).toMatchObject({ enabled: false, breakerTripped: false });
+    // The retired marker still ends the failed streak: nothing is counted from before the trip.
+    expect(
+      await runAsTenant(alice, () => store.consecutiveFailures(automation.id)),
+    ).toBe(0);
+  });
+});

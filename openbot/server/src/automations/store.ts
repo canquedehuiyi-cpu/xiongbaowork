@@ -117,10 +117,18 @@ export type AutomationFiringOutcome =
   | "skipped"
   | "waiting";
 
+/**
+ * One automation as the management list shows it (D06 C1/C3): `breakerTripped` says that the
+ * circuit breaker is what switched it off: it is off now, and its newest finished firing is the one
+ * that tripped the breaker. It is only ever reported for a switched-off automation, so switching it
+ * back on clears it, and so does any firing that finishes after that.
+ */
+export type AutomationListing = Automation & { breakerTripped: boolean };
+
 export type AutomationStore = {
   create(input: AutomationCreateInput): Promise<Automation>;
   /** The caller's automations, newest first. Deleted ones are gone from here. */
-  list(): Promise<Automation[]>;
+  list(): Promise<AutomationListing[]>;
   get(id: string): Promise<Automation | null>;
   update(id: string, input: AutomationUpdateInput): Promise<Automation>;
   setEnabled(id: string, enabled: boolean, now?: Date): Promise<Automation>;
@@ -232,6 +240,20 @@ const WAKERFLOW_NOT_AVAILABLE =
   "WakerFlow 自动执行尚未开放，暂时只能选择 Waker。";
 const ONCE_MISSED = "一次性触发错过了预定时间，没有执行。";
 const TRIGGER_UNREADABLE = "这个触发条件无法读取，已停用。";
+/**
+ * The firings that have finished, newest first, as the breaker counts its streak and the list reads
+ * whether the breaker stopped an automation. `circuit_breaker` is the firing that tripped it;
+ * `circuit_breaker_resumed` is that same firing after a person switched the automation back on, so
+ * it still ends the streak but no longer says the breaker is why the automation is off.
+ */
+const FINISHED_FIRING_STATUSES = [
+  "failed",
+  "succeeded",
+  "waiting",
+  "circuit_breaker",
+  "circuit_breaker_resumed",
+] as const;
+
 /** A firing's error is a sentence for a person, not a stack: kept to a length a row can show. */
 const MAX_FIRING_ERROR = 2000;
 
@@ -550,7 +572,39 @@ export function createAutomationStore(
           and(eq(automations.tenantId, tenant), isNull(automations.deletedAt)),
         )
         .orderBy(desc(automations.createdAt), asc(automations.id));
-      return rows.map(toAutomation);
+      // Only a switched-off automation can be one the breaker stopped, so only those are asked about.
+      const off = rows.filter((row) => !row.enabled).map((row) => row.id);
+      const tripped = new Set<string>();
+      if (off.length > 0) {
+        const latest = await database
+          .selectDistinctOn([automationFirings.automationId], {
+            automationId: automationFirings.automationId,
+            status: automationFirings.status,
+          })
+          .from(automationFirings)
+          .where(
+            and(
+              eq(automationFirings.tenantId, tenant),
+              inArray(automationFirings.automationId, off),
+              // Finished firings only, the same set the breaker's streak is counted over.
+              inArray(automationFirings.status, [...FINISHED_FIRING_STATUSES]),
+            ),
+          )
+          .orderBy(
+            automationFirings.automationId,
+            desc(automationFirings.createdAt),
+            desc(automationFirings.id),
+          );
+        for (const firing of latest) {
+          if (firing.status === "circuit_breaker") {
+            tripped.add(firing.automationId);
+          }
+        }
+      }
+      return rows.map((row) => ({
+        ...toAutomation(row),
+        breakerTripped: tripped.has(row.id),
+      }));
     },
 
     async get(id) {
@@ -647,6 +701,22 @@ export function createAutomationStore(
           }
         }
         if (current.enabled === enabled) return current;
+        if (enabled) {
+          /*
+           * Switched back on: the breaker's marker is retired, so a later pause by hand is not read
+           * as the breaker's doing (`list`'s `breakerTripped`). It still ends the failed streak.
+           */
+          await tx
+            .update(automationFirings)
+            .set({ status: "circuit_breaker_resumed", updatedAt: new Date() })
+            .where(
+              and(
+                eq(automationFirings.tenantId, current.tenantId),
+                eq(automationFirings.automationId, current.id),
+                eq(automationFirings.status, "circuit_breaker"),
+              ),
+            );
+        }
         const [updated] = await tx
           .update(automations)
           .set({ enabled })
@@ -1198,12 +1268,7 @@ export function createAutomationStore(
           and(
             eq(automationFirings.tenantId, tenant),
             eq(automationFirings.automationId, automationId),
-            inArray(automationFirings.status, [
-              "failed",
-              "succeeded",
-              "waiting",
-              "circuit_breaker",
-            ]),
+            inArray(automationFirings.status, [...FINISHED_FIRING_STATUSES]),
           ),
         )
         .orderBy(desc(automationFirings.createdAt), desc(automationFirings.id))
@@ -1229,12 +1294,7 @@ export function createAutomationStore(
             and(
               eq(automationFirings.tenantId, automation.tenantId),
               eq(automationFirings.automationId, automation.id),
-              inArray(automationFirings.status, [
-                "failed",
-                "succeeded",
-                "waiting",
-                "circuit_breaker",
-              ]),
+              inArray(automationFirings.status, [...FINISHED_FIRING_STATUSES]),
             ),
           )
           .orderBy(
