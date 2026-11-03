@@ -227,3 +227,60 @@ export function runAsTenant<T>(tenantId: string, fn: () => T): T {
  */
 export const asPlatform = <T>(work: () => T): T =>
   runAsTenant(PLATFORM_TENANT, work);
+
+/**
+ * THE ADMIN CAPABILITY (G01-E, I10). Being an administrator is a fact about a person; acting with
+ * the administrator's write powers over shared governance rows is a fact about one REQUEST. An
+ * admin's routines, proactive work and Bot turns run in the admin's frame too, and they must not
+ * carry those powers, so the capability is held apart from the frame: only the `adminCapability`
+ * middleware in `auth/admin-scope.ts` grants it, after re-reading the role, and the database client
+ * hands it to Postgres as `app.capability` on every statement.
+ *
+ * It names the tenant it was granted for. A statement whose tenant is anything else — a nested
+ * `runAsTenant(other)`, an `asPlatform` lookup — sees no capability, so it never travels with a
+ * frame change.
+ */
+type Capability = { tenant: string; capability: "admin" };
+const capabilityStore = new AsyncLocalStorage<Capability>();
+
+/** `"admin"` only when the capability was granted for exactly this tenant; otherwise `""`. */
+export function capabilityFor(tenant: string): "admin" | "" {
+  const held = capabilityStore.getStore();
+  return held !== undefined && held.tenant === tenant ? held.capability : "";
+}
+
+/**
+ * Run `work` holding the admin capability for `tenant`. INTERNAL: only `auth/admin-scope.ts` may
+ * call it, after it has re-verified the role; the G01-E allowlist pins that.
+ */
+export function withCapability<T>(tenant: string, work: () => T): T {
+  if (!isPersonTenant(tenant))
+    throw new TenantContextError("the admin capability belongs to a person");
+  return capabilityStore.run({ tenant, capability: "admin" }, work);
+}
+
+/**
+ * The capability as it stands for `tenant` right now, captured so it can be carried somewhere Bun
+ * does not carry AsyncLocalStorage: a transaction callback, or a statement whose `then` Bun calls
+ * outside the caller's context (see `db/client.ts`). INTERNAL to the database client.
+ *
+ * It can only reproduce what is held at the moment of capture — `run` re-enters exactly that grant,
+ * or no grant at all — so it is a way to keep the capability, never a way to obtain one.
+ */
+export type CapturedCapability = {
+  readonly capability: "admin" | "";
+  run<T>(work: () => T): T;
+};
+
+export function captureCapability(tenant: string): CapturedCapability {
+  const held = capabilityStore.getStore();
+  const granted =
+    held !== undefined && held.tenant === tenant ? held : undefined;
+  return {
+    capability: granted === undefined ? "" : granted.capability,
+    run: (work) =>
+      granted === undefined
+        ? capabilityStore.exit(work)
+        : capabilityStore.run(granted, work),
+  };
+}

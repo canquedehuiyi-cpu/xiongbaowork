@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, notLike, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notLike, sql } from "drizzle-orm";
 import { type AuditStore, recordAuditEvent } from "./audit";
 import type { Database } from "./db/client";
 import { reasonWithoutStatement } from "./db/query-failure";
 import { type credentialKind, credentials } from "./db/schema";
-import { currentTenant } from "./tenant/context";
+import { TEAM_TENANT } from "./db/schema/tenant";
+import { capabilityFor, currentTenant } from "./tenant/context";
 
 type CredentialEnvelope = {
   version: 1;
@@ -81,6 +82,8 @@ export type CredentialStoreValue = {
   provider: string;
   keyId: string;
   metadata: Record<string, unknown>;
+  /** Seal to the shared `team` tenant instead of the caller's own. See {@link credentialTenant}. */
+  target?: CredentialTarget;
 } & (
   | { encryptedValue: string; seal?: never }
   | { seal: CredentialSeal; encryptedValue?: never }
@@ -143,7 +146,15 @@ export type CredentialStore = {
     input: CredentialStoreValue & { previousCredentialId: string },
     executor?: CredentialExecutor,
   ) => Promise<StoredCredential>;
-  revoke: (id: string, executor?: CredentialExecutor) => Promise<Date>;
+  /**
+   * With `target`, only a live `team` server secret is revoked, under the same admin-capability
+   * refusal as {@link credentialTenant}; without it, behaviour is unchanged.
+   */
+  revoke: (
+    id: string,
+    executor?: CredentialExecutor,
+    target?: CredentialTarget,
+  ) => Promise<Date>;
   /** Whether this credential exists and has not been revoked. */
   isLive: (id: string, executor?: CredentialExecutor) => Promise<boolean>;
   /**
@@ -157,7 +168,13 @@ export type CredentialStore = {
    * tenant's to replace.
    */
   findLiveByKey: (
-    key: { kind: CredentialKind; provider: string; keyId: string },
+    key: {
+      kind: CredentialKind;
+      provider: string;
+      keyId: string;
+      /** Look in the shared `team` tenant instead of the caller's own. */
+      target?: CredentialTarget;
+    },
     executor?: CredentialExecutor,
   ) => Promise<{ id: string } | null>;
 };
@@ -269,7 +286,9 @@ function credentialAad(binding: CredentialBinding) {
   return out;
 }
 
-function requireBinding(binding: Partial<CredentialBinding>): CredentialBinding {
+function requireBinding(
+  binding: Partial<CredentialBinding>,
+): CredentialBinding {
   const { tenantId, id, kind } = binding;
   if (!tenantId || !id || !kind) {
     throw new Error("Credential binding is incomplete");
@@ -412,9 +431,9 @@ export class CredentialUnusableError extends Error {
  * gone already.
  */
 export class CredentialRefusedError extends Error {
-  readonly status: 404 | 409;
+  readonly status: 403 | 404 | 409;
 
-  constructor(message: string, status: 404 | 409) {
+  constructor(message: string, status: 403 | 404 | 409) {
     super(message);
     this.name = "CredentialRefusedError";
     this.status = status;
@@ -459,27 +478,81 @@ export async function resolveModelApiKey(input: {
   return environmentKey || null;
 }
 
+/** The only tenant a credential may be written to other than the caller's own. */
+export type CredentialTarget = typeof TEAM_TENANT;
+
+/** The kinds that are a shared server's secret, and so the only kinds a `team` target may carry. */
+const TEAM_CREDENTIAL_KINDS = [
+  "mcp",
+  "mcp_oauth_client",
+] as const satisfies readonly CredentialKind[];
+
+/**
+ * Which tenant a credential write is sealed to and filtered by (G01-E).
+ *
+ * Without `target` it is the caller's own frame, as it always was. With `target: "team"` it is the
+ * shared tenant a team MCP server's secret lives in, and that is allowed only to an administrator
+ * holding the admin capability in this very frame (see `auth/admin-scope.ts`) and only for a server
+ * secret's kind: a person's own token or an agent key is never sealed where anybody else's frame
+ * could reach it (I8). Anything else is refused before a row is read or written.
+ */
+function credentialTenant(
+  kind: CredentialKind | undefined,
+  target: CredentialTarget | undefined,
+): string {
+  const tenant = currentTenant();
+  if (target === undefined) return tenant;
+  if (target !== TEAM_TENANT) {
+    throw new CredentialRefusedError("Unknown credential target", 403);
+  }
+  if (capabilityFor(tenant) !== "admin") {
+    throw new CredentialRefusedError(
+      "Only an administrator may write a shared credential",
+      403,
+    );
+  }
+  if (
+    kind !== undefined &&
+    !(TEAM_CREDENTIAL_KINDS as readonly CredentialKind[]).includes(kind)
+  ) {
+    throw new CredentialRefusedError(
+      "Only an MCP server's credential may be shared",
+      403,
+    );
+  }
+  return target;
+}
+
 /**
  * The row to insert. A sealed value gets its id and tenant chosen here, explicitly, so the binding
  * in its envelope is exactly the row's columns rather than whatever the column default resolves to.
+ * `tenant` is the one {@link credentialTenant} answered; a caller that already resolved it passes it
+ * so the check and the binding cannot disagree.
  */
-async function sealedRow(value: CredentialStoreValue) {
+async function sealedRow(
+  value: CredentialStoreValue,
+  tenant: string = credentialTenant(value.kind, value.target),
+) {
   const base = {
     kind: value.kind,
     provider: value.provider,
     keyId: value.keyId,
     metadata: value.metadata,
+    // Written explicitly only for a target: the caller's own rows keep taking the column default.
+    ...(value.target === undefined ? {} : { tenantId: tenant }),
   };
   const { seal, encryptedValue } = value;
   if (!seal) {
     if (typeof encryptedValue !== "string") {
-      throw new Error("Credential value carries neither an envelope nor a seal");
+      throw new Error(
+        "Credential value carries neither an envelope nor a seal",
+      );
     }
     return { ...base, encryptedValue };
   }
   const binding: CredentialBinding = {
     id: randomUUID(),
-    tenantId: currentTenant(),
+    tenantId: tenant,
     kind: value.kind,
   };
   return { ...base, ...binding, encryptedValue: await seal(binding) };
@@ -539,6 +612,12 @@ export function createCredentialStore(
       }
     },
     rotate: async (input, executor) => {
+      /*
+       * Read here, before `write` runs: the tenant whose row is retired and whose envelope is sealed
+       * is the caller's (or the target's), decided once, so the check and the binding agree whatever
+       * frame the transaction's callback happens to run in.
+       */
+      const tenant = credentialTenant(input.kind, input.target);
       const write = async (transaction: CredentialExecutor) => {
         /**
          * The previous credential, locked for the rest of the transaction.
@@ -561,7 +640,7 @@ export function createCredentialStore(
             and(
               eq(credentials.id, input.previousCredentialId),
               // Row security also shows `system` rows; only this tenant's own row is its to retire.
-              eq(credentials.tenantId, currentTenant()),
+              eq(credentials.tenantId, tenant),
             ),
           )
           .for("update");
@@ -612,7 +691,7 @@ export function createCredentialStore(
 
         const [inserted] = await transaction
           .insert(credentials)
-          .values(await sealedRow(input))
+          .values(await sealedRow(input, tenant))
           .returning({
             id: credentials.id,
             revokedAt: credentials.revokedAt,
@@ -628,7 +707,15 @@ export function createCredentialStore(
       // the credential belongs to it rather than to a transaction of its own.
       return executor ? write(executor) : database.transaction(write);
     },
-    revoke: async (id, executor = database) => {
+    revoke: async (id, executor = database, target) => {
+      // A target is checked before anything is written; its kind is pinned in the WHERE below.
+      const shared =
+        target === undefined
+          ? undefined
+          : and(
+              eq(credentials.tenantId, credentialTenant(undefined, target)),
+              inArray(credentials.kind, [...TEAM_CREDENTIAL_KINDS]),
+            );
       const revokedAt = new Date();
       const [credential] = await executor
         .update(credentials)
@@ -636,7 +723,9 @@ export function createCredentialStore(
         // Only a live row is stamped. Without the guard a second revoke would
         // overwrite the first one's timestamp and report success, so a caller
         // could not tell retiring a credential from finding it already gone.
-        .where(and(eq(credentials.id, id), isNull(credentials.revokedAt)))
+        .where(
+          and(eq(credentials.id, id), isNull(credentials.revokedAt), shared),
+        )
         .returning({ revokedAt: credentials.revokedAt });
 
       if (!credential?.revokedAt) {
@@ -655,13 +744,17 @@ export function createCredentialStore(
 
       return credential !== undefined;
     },
-    findLiveByKey: async ({ kind, provider, keyId }, executor = database) => {
+    findLiveByKey: async (
+      { kind, provider, keyId, target },
+      executor = database,
+    ) => {
+      const tenant = credentialTenant(kind, target);
       const [credential] = await executor
         .select({ id: credentials.id })
         .from(credentials)
         .where(
           and(
-            eq(credentials.tenantId, currentTenant()),
+            eq(credentials.tenantId, tenant),
             eq(credentials.kind, kind),
             eq(credentials.provider, provider),
             eq(credentials.keyId, keyId),

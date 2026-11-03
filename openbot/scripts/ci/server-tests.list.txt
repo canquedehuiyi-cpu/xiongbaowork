@@ -1,3 +1,4 @@
+tests/admin-capability.test.ts
 tests/admin-controls-shutdown.test.ts
 tests/admin-people-credentials-validation.test.ts
 tests/agent-auth-header.test.ts
@@ -360,6 +361,7 @@ tests/tenant-package-duplicates.test.ts
 tests/tenant-package-switch-retires.test.ts
 tests/tenant-package.test.ts
 tests/tenant-rls.test.ts
+tests/tenant-transaction-frame.integration.test.ts
 tests/test-database-url.integration.test.ts
 tests/thread-identity.test.ts
 tests/thread-routes.test.ts
