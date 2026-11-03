@@ -14,7 +14,7 @@
  * channel. `openbot_team_row_guard` (BEFORE UPDATE) is what keeps `tenant_id` and the link columns
  * fixed outside `platform`. The only re-stamp it allows is the owner's explicit Bot move, keyed by
  * the transaction-local `app.team_move = <agent id>`. It also refuses a soft delete of a shared
- * group by anybody but its creator.
+ * group, or the undoing of one, by anybody but its creator.
  *
  * WHY SECURITY DEFINER. The membership and Bot-visibility questions read FORCE-RLS tables whose rows
  * the asking person cannot see yet (the creator's first membership insert cannot see the channel it
@@ -65,6 +65,9 @@ CREATE FUNCTION public.openbot_team_channel_creator(p_channel_id text) RETURNS b
 /*
  * Mirror of src/team-bots/access.ts teamBotAccess + describedForTeam, plus public and owner, for a
  * live Bot profile stamped `team`. Pinned by tests/team-bot-visibility-parity.integration.test.ts.
+ * Every roster row it counts (agent, publication, audience, assignment) must carry the profile's
+ * stamp, `team`: anybody may insert a row stamped with their OWN tenant naming any agent id, and
+ * this function reads past row security, so a row a stranger stamped must never count.
  */
 CREATE FUNCTION public.openbot_team_bot_visible(p_agent_id text) RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $f$
@@ -75,17 +78,17 @@ CREATE FUNCTION public.openbot_team_bot_visible(p_agent_id text) RETURNS boolean
                   AND p.deleted_at IS NULL
                   AND (p.visibility = 'public' OR p.owner_user_id = me.id
                        OR EXISTS (SELECT 1 FROM public.team_bot_publications pub
-                                   JOIN public.agents a ON a.id = pub.agent_id
-                                  WHERE pub.agent_id = p_agent_id
+                                   JOIN public.agents a ON a.id = pub.agent_id AND a.tenant_id = 'team'
+                                  WHERE pub.agent_id = p_agent_id AND pub.tenant_id = 'team'
                                     AND btrim(p.role_description) <> ''
                                     AND lower(btrim(a.name)) NOT IN ('', 'new bot', 'new coworker', 'untitled', 'my bot')
                                     AND (pub.audience = 'team'
                                          OR EXISTS (SELECT 1 FROM public.team_bot_audience au, my_groups
-                                                     WHERE au.agent_id = pub.agent_id
+                                                     WHERE au.agent_id = pub.agent_id AND au.tenant_id = 'team'
                                                        AND ((au.kind = 'user' AND au.value = (SELECT id FROM me))
                                                          OR (au.kind = 'group' AND au.value = ANY(my_groups.g))))
                                          OR EXISTS (SELECT 1 FROM public.team_bot_assignments ta, my_groups
-                                                     WHERE ta.agent_id = pub.agent_id
+                                                     WHERE ta.agent_id = pub.agent_id AND ta.tenant_id = 'team'
                                                        AND (ta.group_name = '*' OR ta.group_name = ANY(my_groups.g))))))) $f$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.openbot_team_channel_member(text) FROM PUBLIC;
@@ -133,17 +136,23 @@ BEGIN
   IF TG_NARGS > 0 THEN
     FOREACH col IN ARRAY TG_ARGV LOOP
       IF (to_jsonb(OLD) -> col) IS DISTINCT FROM (to_jsonb(NEW) -> col)
-         -- A foreign key's ON DELETE SET NULL (agent_profiles.owner_user_id when the user is deleted)
-         -- runs inside the referential trigger, one level down; clearing a link that way is allowed.
-         AND NOT (pg_trigger_depth() > 1 AND jsonb_typeof(to_jsonb(NEW) -> col) = 'null') THEN
+         -- The one foreign key with ON DELETE SET NULL on a fixed link: agent_profiles.owner_user_id
+         -- when that user is deleted. It runs inside the referential trigger, one level down. Depth
+         -- alone proves nothing (a session with TEMP can nest its own trigger), so the user must
+         -- also be gone.
+         AND NOT (pg_trigger_depth() > 1 AND TG_TABLE_NAME = 'agent_profiles' AND col = 'owner_user_id'
+                  AND jsonb_typeof(to_jsonb(NEW) -> col) = 'null'
+                  AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = to_jsonb(OLD)->>col)) THEN
         RAISE EXCEPTION '%.% is fixed', TG_TABLE_NAME, col USING ERRCODE = '42501';
       END IF;
     END LOOP;
   END IF;
+  -- Deleting a shared group and bringing it back are both the creator's: a member who could clear
+  -- deleted_at would resurrect a group the creator deleted for everyone.
   IF TG_TABLE_NAME = 'channels' AND OLD.tenant_id = 'team'
-     AND (to_jsonb(OLD)->>'deleted_at') IS NULL AND (to_jsonb(NEW)->>'deleted_at') IS NOT NULL
+     AND (to_jsonb(OLD)->'deleted_at') IS DISTINCT FROM (to_jsonb(NEW)->'deleted_at')
      AND (to_jsonb(OLD)->>'created_by') IS DISTINCT FROM frame THEN
-    RAISE EXCEPTION 'only the creator deletes a shared group' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'only the creator deletes or restores a shared group' USING ERRCODE = '42501';
   END IF;
   RETURN NEW;
 END $f$;

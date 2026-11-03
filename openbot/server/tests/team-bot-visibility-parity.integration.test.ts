@@ -49,6 +49,11 @@ type Bot = {
   audience?: "team" | "people";
   audienceRows?: { kind: "user" | "group"; value: string }[];
   assignments?: string[];
+  /**
+   * Roster rows the outsider inserted stamped with their OWN tenant, which row security lets anybody
+   * do for any agent id. Neither copy of the rule may count them.
+   */
+  forged?: ("audience" | "assignment" | "publication")[];
 };
 
 const bots: Bot[] = [
@@ -80,6 +85,13 @@ const bots: Bot[] = [
     id: `${suite}-audience-unpublished`,
     audienceRows: [{ kind: "user", value: named }],
   },
+  { id: `${suite}-forged-audience`, audience: "people", forged: ["audience"] },
+  {
+    id: `${suite}-forged-assignment`,
+    audience: "people",
+    forged: ["assignment"],
+  },
+  { id: `${suite}-forged-publication`, forged: ["publication"] },
 ];
 
 beforeAll(async () => {
@@ -131,6 +143,29 @@ beforeAll(async () => {
           groupName,
           assignedBy: owner,
         });
+      for (const kind of bot.forged ?? []) {
+        if (kind === "audience")
+          await database.insert(teamBotAudience).values({
+            agentId: bot.id,
+            tenantId: outsider,
+            kind: "user",
+            value: outsider,
+          });
+        if (kind === "assignment")
+          await database.insert(teamBotAssignments).values({
+            agentId: bot.id,
+            tenantId: outsider,
+            groupName: "*",
+            assignedBy: outsider,
+          });
+        if (kind === "publication")
+          await database.insert(teamBotPublications).values({
+            agentId: bot.id,
+            tenantId: outsider,
+            publishedBy: outsider,
+            audience: "team",
+          });
+      }
     }
   });
 });

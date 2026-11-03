@@ -124,6 +124,26 @@ async function refused(
   expect((caught as { errno?: string }).errno).toBe("42501");
 }
 
+/**
+ * Runs `statement` from inside a trigger the frame itself creates on a temporary table, so the
+ * row guard sees `pg_trigger_depth() > 1` without any foreign key being involved. Any role with
+ * TEMP on the database can do this; the guard must not take depth for a referential action.
+ */
+async function refusedFromNestedTrigger(frame: Frame, statement: string) {
+  const tag = `zz_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  await refused(frame, async (tx) => {
+    await tx.unsafe(`create temp table ${tag} (x int) on commit drop`);
+    await tx.unsafe(
+      `create function pg_temp.${tag}_f() returns trigger language plpgsql as $f$
+       begin ${statement}; return new; end $f$`,
+    );
+    await tx.unsafe(
+      `create trigger ${tag}_tr after insert on ${tag} for each row execute function pg_temp.${tag}_f()`,
+    );
+    await tx.unsafe(`insert into ${tag} values (1)`);
+  });
+}
+
 /** An app signed in as `id`, through `adminCapability`, the way an admin route runs. */
 function adminRequest<T>(id: string, handler: () => Promise<T>) {
   const signedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -473,6 +493,50 @@ describe("Team Bot rows (agents, profiles, publications, audience, assignments, 
     );
   });
 
+  test("(i) a stranger's own-tenant audience, assignment or publication row opens nothing", async () => {
+    // Row security lets anybody insert a roster row stamped with their OWN tenant naming any agent
+    // id. Such a row must not count for the Team Bot, which is stamped `team`.
+    const unpublishedBot = `${suite}-unpublished-bot`;
+    await privateBot(unpublishedBot, owner);
+    await moveToTeam(unpublishedBot, owner);
+    const forged = (bot: string, insert: string) =>
+      inFrame(as(stranger), async (tx) => {
+        await tx.unsafe(insert, [bot, stranger]);
+        const [row] = await tx.unsafe(
+          `select public.openbot_team_bot_visible($1) as visible,
+                  (select count(*)::int from public.agents where id = $1) as agents,
+                  (select count(*)::int from public.agent_profiles where agent_id = $1) as profiles,
+                  (select count(*)::int from public.team_bot_publications
+                    where agent_id = $1 and tenant_id = 'team') as publications`,
+          [bot],
+        );
+        // Undo the forged row so later cases see the fixture as it was.
+        throw Object.assign(new Error("rollback"), { seen: row });
+      }).catch((error: { seen?: unknown }) => {
+        if (!error.seen) throw error;
+        return error.seen;
+      });
+    const nothing = { visible: false, agents: 0, profiles: 0, publications: 0 };
+    expect(
+      await forged(
+        restrictedBot,
+        `insert into team_bot_audience (agent_id, kind, value, tenant_id) values ($1, 'user', $2, $2)`,
+      ),
+    ).toEqual(nothing);
+    expect(
+      await forged(
+        restrictedBot,
+        `insert into team_bot_assignments (agent_id, group_name, assigned_by, tenant_id) values ($1, '*', $2, $2)`,
+      ),
+    ).toEqual(nothing);
+    expect(
+      await forged(
+        unpublishedBot,
+        `insert into team_bot_publications (agent_id, published_by, audience, tenant_id) values ($1, $2, 'team', $2)`,
+      ),
+    ).toEqual(nothing);
+  });
+
   test("(k) the owner's re-stamp needs app.team_move for that Bot; a stranger with the GUC changes nothing", async () => {
     await privateBot(movingBot, owner);
     await refused(
@@ -549,6 +613,11 @@ describe("deleting a person", () => {
       as(owner),
       (tx) =>
         tx`update agent_profiles set owner_user_id = null where agent_id = ${restrictedBot}`,
+    );
+    // So is clearing it from a trigger of the owner's own, while the owner still exists.
+    await refusedFromNestedTrigger(
+      as(owner),
+      `update public.agent_profiles set owner_user_id = null where agent_id = '${restrictedBot}'`,
     );
   });
 });
@@ -703,6 +772,16 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
       (tx) =>
         tx`update channels set created_by = ${member} where id = ${group}`,
     );
+    // Nor clear the creator from a nested trigger of their own (only a foreign key's SET NULL on
+    // agent_profiles.owner_user_id may clear a fixed link one level down).
+    await refusedFromNestedTrigger(
+      as(member),
+      `update public.channels set created_by = null where id = '${group}'`,
+    );
+    const [row] = await asPlatform(() =>
+      database.execute(sql`select created_by from channels where id = ${group}`),
+    );
+    expect(row).toEqual({ created_by: creator });
   });
 
   test("(g) only the creator soft-deletes a shared group", async () => {
@@ -719,6 +798,18 @@ describe("shared group rows (channels, memberships, channel Bots, messages, thre
           tx`update channels set deleted_at = now() where id = ${doomedGroup}`,
       ),
     ).toBe(1);
+    // Bringing it back is the creator's too: a member cannot resurrect it for everybody.
+    await refused(
+      as(member),
+      (tx) =>
+        tx`update channels set deleted_at = null where id = ${doomedGroup}`,
+    );
+    const [doomed] = await asPlatform(() =>
+      database.execute(
+        sql`select deleted_at is not null as deleted from channels where id = ${doomedGroup}`,
+      ),
+    );
+    expect(doomed).toEqual({ deleted: true });
     // Removing someone else's membership is the creator's power, not a member's.
     expect(
       await changed(
