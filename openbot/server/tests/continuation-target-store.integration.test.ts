@@ -12,7 +12,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { EMPTY, of } from "rxjs";
 import { createDatabase, type Database } from "../src/db/client";
-import { createDisposableTestDatabase } from "./support/database";
+import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from "./support/database";
 import {
   approvalContinuations,
   approvalContinuationSteps,
@@ -114,7 +114,7 @@ afterAll(async () => {
   await dbB.$client.close();
   await dbLedger.$client.close();
   await disposable.drop();
-});
+}, DISPOSABLE_DROP_TIMEOUT_MS);
 class FixtureAgent extends AbstractAgent {
   run() {
     return EMPTY;
