@@ -1,6 +1,7 @@
 /** One import path for every table, with schema files grouped by owner. */
 
 export * from "./admin";
+export * from "./agent-security-settings";
 export * from "./approvals";
 export * from "./components";
 export * from "./computer";
