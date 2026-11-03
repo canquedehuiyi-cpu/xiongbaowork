@@ -1,7 +1,8 @@
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 import {
-  capabilityFor,
+  type CapturedCapability,
+  captureCapability,
   currentTenant,
   runAsTenant,
   TenantContextError,
@@ -185,16 +186,22 @@ export function createDatabase(
    * `tenantOf` answers which tenant that is. For a client pinned to a tenant (see `clientFor`) it is
    * that tenant, whatever frame happens to be current when the statement runs; for the unpinned
    * client it is the frame current at that moment. It is asked synchronously, before the first await.
+   *
+   * `capabilityOf` answers the admin capability the same way: the one captured with the pin for a
+   * pinned client, so a statement Bun runs outside the caller's context keeps it exactly as it keeps
+   * the tenant; the one held right now for the unpinned client.
    */
+  type CapabilityOf = (tenant: string) => CapturedCapability;
   const withTenant = async <T>(
     tenantOf: () => string,
+    capabilityOf: CapabilityOf,
     run: (scoped: SQL) => Promise<T>,
   ): Promise<T> => {
     const tenant = refuseTeam(tenantOf());
     // Read with the tenant, synchronously: the capability is granted for one tenant (see
     // `capabilityFor`), and it is ALWAYS written, as `''` when absent, so no pooled connection
     // carries an earlier request's capability into this statement.
-    const capability = capabilityFor(tenant);
+    const { capability } = capabilityOf(tenant);
     const conn = await raw.reserve();
     try {
       await conn`select set_config('app.tenant_id', ${tenant}, false), set_config('app.capability', ${capability}, false)`;
@@ -210,9 +217,12 @@ export function createDatabase(
    * so the await path and the values path are wrapped together.
    */
   type UnsafeCall = (query: string, params?: unknown[]) => unknown;
-  const tenantUnsafe = (tenantOf: () => string): UnsafeCall => {
+  const tenantUnsafe = (
+    tenantOf: () => string,
+    capabilityOf: CapabilityOf,
+  ): UnsafeCall => {
     const run = (query: string, params?: unknown[]) =>
-      withTenant(tenantOf, async (scoped) => {
+      withTenant(tenantOf, capabilityOf, async (scoped) => {
         const result = await (
           scoped.unsafe as (
             q: string,
@@ -246,7 +256,7 @@ export function createDatabase(
           // biome-ignore lint/suspicious/noAssignInExpressions: one run shared by both arms, so `??=` is the memo
           (objectRun ??= run(query, params)).finally(onF),
         values: () =>
-          (valuesRun ??= withTenant(tenantOf, async (scoped) => {
+          (valuesRun ??= withTenant(tenantOf, capabilityOf, async (scoped) => {
             const rows = await (
               scoped.unsafe as (
                 q: string,
@@ -279,14 +289,26 @@ export function createDatabase(
    * instance's client to the tenant it was made for carries that tenant into execution with nothing
    * wrapped -- no builder, table or SQL chunk changes identity, and `instanceof`, `.as()`, subquery
    * embedding, `.toSQL()` and `.prepare()` behave exactly as drizzle wrote them.
+   *
+   * The admin capability is pinned alongside the tenant (G01-E), for the same reason: it lives in
+   * AsyncLocalStorage too, so read at execution time it was gone exactly when the tenant would have
+   * been, and an administrator's `await x; return database.update(...)` ran without
+   * `app.capability`. `pinnedCapability` is what was held for `pinned` when the instance was chosen.
    */
-  const clientFor = (pinned: string | undefined) => {
+  const clientFor = (
+    pinned: string | undefined,
+    pinnedCapability?: CapturedCapability,
+  ) => {
     if (pinned !== undefined) refuseTeam(pinned);
     const tenantOf = pinned === undefined ? currentTenant : () => pinned;
+    const capabilityOf: CapabilityOf =
+      pinned === undefined || pinnedCapability === undefined
+        ? captureCapability
+        : () => pinnedCapability;
     return new Proxy(raw, {
       get(target, property, receiver) {
         if (property === "unsafe") {
-          return tenantUnsafe(tenantOf);
+          return tenantUnsafe(tenantOf, capabilityOf);
         }
         if (property === "begin" || property === "savepoint") {
           const method = (
@@ -317,12 +339,15 @@ export function createDatabase(
              * connection machinery, outside the caller's frame, so without this a `currentTenant()`
              * read anywhere inside the transaction — a store stamping a row, `sealedRow` binding an
              * envelope — fell back to `system` while the session's `app.tenant_id` said otherwise.
+             * The capability is re-entered with it, from the same capture that wrote
+             * `app.capability`, so `capabilityFor(currentTenant())` inside the callback (a credential
+             * sealed to `team`, say) answers what the session says rather than `''`.
              */
             const tenant = refuseTeam(tenantOf());
-            const capability = capabilityFor(tenant);
+            const held = capabilityOf(tenant);
             return method.call(target, async (tx) => {
-              await tx`select set_config('app.tenant_id', ${tenant}, true), set_config('app.capability', ${capability}, true)`;
-              return runAsTenant(tenant, () => fn(tx));
+              await tx`select set_config('app.tenant_id', ${tenant}, true), set_config('app.capability', ${held.capability}, true)`;
+              return held.run(() => runAsTenant(tenant, () => fn(tx)));
             });
           };
         }
@@ -345,13 +370,21 @@ export function createDatabase(
    * no frame executes it either.
    */
   const unframed = drizzle({ client: clientFor(undefined), schema });
+  /*
+   * Keyed by frame AND capability: an administrator's request and the same administrator's routine
+   * share a frame but not a capability, and each instance's client carries the one it was made for.
+   * Keeping their statement caches apart is right for the same reason as keeping tenants apart —
+   * the capability changes what row-level security answers.
+   */
   const byTenant = new Map<string, typeof unframed>();
   const instanceFor = (frame: string | undefined) => {
     if (frame === undefined) return unframed;
-    let instance = byTenant.get(frame);
+    const held = captureCapability(frame);
+    const key = `${held.capability}\u0000${frame}`;
+    let instance = byTenant.get(key);
     if (!instance) {
-      instance = drizzle({ client: clientFor(frame), schema });
-      byTenant.set(frame, instance);
+      instance = drizzle({ client: clientFor(frame, held), schema });
+      byTenant.set(key, instance);
     }
     return instance;
   };

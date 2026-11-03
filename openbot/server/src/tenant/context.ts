@@ -258,3 +258,29 @@ export function withCapability<T>(tenant: string, work: () => T): T {
     throw new TenantContextError("the admin capability belongs to a person");
   return capabilityStore.run({ tenant, capability: "admin" }, work);
 }
+
+/**
+ * The capability as it stands for `tenant` right now, captured so it can be carried somewhere Bun
+ * does not carry AsyncLocalStorage: a transaction callback, or a statement whose `then` Bun calls
+ * outside the caller's context (see `db/client.ts`). INTERNAL to the database client.
+ *
+ * It can only reproduce what is held at the moment of capture — `run` re-enters exactly that grant,
+ * or no grant at all — so it is a way to keep the capability, never a way to obtain one.
+ */
+export type CapturedCapability = {
+  readonly capability: "admin" | "";
+  run<T>(work: () => T): T;
+};
+
+export function captureCapability(tenant: string): CapturedCapability {
+  const held = capabilityStore.getStore();
+  const granted =
+    held !== undefined && held.tenant === tenant ? held : undefined;
+  return {
+    capability: granted === undefined ? "" : granted.capability,
+    run: (work) =>
+      granted === undefined
+        ? capabilityStore.exit(work)
+        : capabilityStore.run(granted, work),
+  };
+}

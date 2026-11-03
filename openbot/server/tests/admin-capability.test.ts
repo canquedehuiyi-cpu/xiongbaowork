@@ -18,6 +18,7 @@ import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema";
 import {
   asPlatform,
+  capabilityFor,
   currentTenant,
   runAsTenant,
   TenantContextError,
@@ -69,6 +70,22 @@ function appFor<T>(
   app.get("/", async (context) => context.json({ value: await handler() }));
   return async () =>
     ((await (await app.request("http://test/")).json()) as { value: T }).value;
+}
+
+/**
+ * A pool of ONE connection that has never connected, closed afterwards. Bun runs a transaction's
+ * callback from its connection machinery, and on a connection it has to open first that callback
+ * starts outside the caller's AsyncLocalStorage: the case the transaction tests must cover.
+ */
+async function onFreshDatabase<T>(
+  work: (fresh: typeof database) => Promise<T>,
+): Promise<T> {
+  const fresh = createDatabase(testDatabaseUrl(), { max: 1 });
+  try {
+    return await work(fresh);
+  } finally {
+    await fresh.$client.close();
+  }
 }
 
 /** What `adminCapability` hands a handler, for code that needs the capability outside a route. */
@@ -141,6 +158,60 @@ describe("adminCapability", () => {
       platform: "",
       back: "admin",
     });
+  });
+
+  test("a statement returned unawaited after an await still carries it", async () => {
+    // Bun 1.3.14 calls the returned builder's `then` outside the caller's AsyncLocalStorage. The
+    // tenant survived that because the instance is pinned to it; the capability must too.
+    const seen = await withAdminRequest(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return database.execute(
+        sql`select current_setting('app.capability', true) as capability`,
+      );
+    });
+    expect(seen).toEqual([{ capability: "admin" }]);
+    const built = await withAdminRequest(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return database
+        .select({
+          capability: sql<string>`current_setting('app.capability', true)`,
+        })
+        .from(users)
+        .where(eq(users.id, admin));
+    });
+    expect(built).toEqual([{ capability: "admin" }]);
+  });
+
+  test("a transaction's callback holds it, matching the session", async () => {
+    const seen = await withAdminRequest(() =>
+      onFreshDatabase((fresh) =>
+        fresh.transaction(async (transaction) => {
+          const rows = (await transaction.execute(
+            sql`select current_setting('app.capability', true) as capability`,
+          )) as unknown as { capability: unknown }[];
+          return {
+            tenant: currentTenant(),
+            held: capabilityFor(currentTenant()),
+            session: rows[0]?.capability,
+            outer: await capability(),
+          };
+        }),
+      ),
+    );
+    expect(seen).toEqual({
+      tenant: admin,
+      held: "admin",
+      session: "admin",
+      outer: "admin",
+    });
+    // And a member's transaction holds none.
+    expect(
+      await appFor({ id: member, role: "user" }, () =>
+        onFreshDatabase((fresh) =>
+          fresh.transaction(async () => capabilityFor(currentTenant())),
+        ),
+      )(),
+    ).toBe("");
   });
 
   test("an administrator's routine, which runs in their frame without the middleware, does not", async () => {
@@ -298,5 +369,31 @@ describe("a credential sealed to team", () => {
     expect(await withAdminRequest(() => store.findLiveByKey(shared))).toBe(
       null,
     );
+  });
+
+  test("with the capability, is allowed through an executor inside a transaction", async () => {
+    // How the plugin store writes a server's secret: inside its own `database.transaction`, handing
+    // the transaction to the credential store, which checks the capability inside the callback.
+    const seen = await withAdminRequest(() =>
+      onFreshDatabase((fresh) => {
+        const freshStore = createCredentialStore(fresh);
+        return fresh.transaction(async (transaction) => ({
+          found: await freshStore.findLiveByKey(shared, transaction),
+          rotated: await statusOf(() => freshStore.rotate(shared, transaction)),
+        }));
+      }),
+    );
+    expect(seen).toEqual({ found: null, rotated: 404 });
+    // Without the capability the same shape is still refused.
+    expect(
+      await runAsTenant(admin, () =>
+        onFreshDatabase((fresh) => {
+          const freshStore = createCredentialStore(fresh);
+          return fresh.transaction((transaction) =>
+            statusOf(() => freshStore.rotate(shared, transaction)),
+          );
+        }),
+      ),
+    ).toBe(403);
   });
 });
