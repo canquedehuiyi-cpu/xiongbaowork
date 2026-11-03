@@ -16,7 +16,7 @@ import {
   headlessTurnRefusal,
   installEnterpriseControls,
 } from "./admin/controls";
-import { deviceTargetForBot } from "./agents/bot-owner";
+import { ownerTenantOfBot } from "./agents/bot-owner";
 import {
   mintRunAssertion,
   type RunAssertion,
@@ -192,12 +192,10 @@ import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
 import { createDemonstrationRecorder } from "./demonstrations/recording";
 import { createDemonstrationStore } from "./demonstrations/store";
-import {
-  createDeviceChannel,
-  type DispatchTarget,
-} from "./devices/channel";
+import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import { createDeviceRoutes, createRunnerRoutes } from "./devices/routes";
+import { computerProviderFor, createDeviceSelector } from "./devices/selection";
 import { runnerClose, runnerMessage, runnerOpen } from "./devices/socket";
 import { createDeviceStore, type DeviceOwner } from "./devices/store";
 import {
@@ -625,12 +623,17 @@ await startupLifecycle.run(async (startup) => {
       : undefined;
   // Each computer is pushed its network policy on the way to the action that woke it, because a
   // computer refuses every connection until one arrives (see `withPolicyPushOnWake`).
-  const computerProvider = config.computer
-    ? withPolicyPushOnWake(createComputerProvider(config.computer), {
-        policyForBot: (botId) => enterpriseControls()?.policyForBot(botId),
-        ...(config.computer.token ? { token: config.computer.token } : {}),
-      })
-    : undefined;
+  // Device mode with no container of its own still gets a gateway: its actions go to the tenant's
+  // machines, and the provider only answers lifecycle questions (audit defect #12).
+  const computerProvider = computerProviderFor(
+    config.tenantRuntime,
+    config.computer
+      ? withPolicyPushOnWake(createComputerProvider(config.computer), {
+          policyForBot: (botId) => enterpriseControls()?.policyForBot(botId),
+          ...(config.computer.token ? { token: config.computer.token } : {}),
+        })
+      : undefined,
+  );
 
   if (computerProvider?.warm) {
     void computerProvider.warm();
@@ -851,40 +854,48 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
   /*
-   * In device mode, whose machine a coworker's action runs on (ticket 017).
+   * In device mode, whose machine a coworker's action runs on (tickets 017 and 018, audit defect #12).
    *
    * The coworker's owner, read from the rows that already exist (`agents/bot-owner.ts`): a Bot belongs
    * to the person who registered it, team Bot or not, and the machines in `registered_devices` are theirs. Nothing here asks the caller
    * which tenant or which device it meant — an address that came from a request body would be the
    * beginning of a very short product.
    *
-   * With no machine reachable it refuses rather than falling back to this deployment's container. A
-   * person who said "run on my machine" and got a browser on somebody else's server is not a degraded
-   * mode but a wrong answer, and the kind they would have no way to notice.
+   * Each task picks one of the tenant's machines and keeps it (see devices/selection.ts). A machine that
+   * is away is still a valid pick: the channel parks the action in the durable queue and runs it when
+   * the runner reconnects, instead of throwing it away. It never falls back to this deployment's
+   * container — a person who said "run on my machine" and got a browser on somebody else's server is not
+   * a degraded mode but a wrong answer.
    */
-  async function deviceForBot(botId: string): Promise<DispatchTarget> {
+  const deviceSelector = createDeviceSelector({
     // The Bot's OWNER (G01-E): a team Bot is stamped `team`, which has no machines, so the stamp is
-    // not the answer for it; its profile's owner is.
-    return deviceTargetForBot(
-      {
-        database,
-        reachableDevice: (tenantId) => deviceChannel.reachableDevice(tenantId),
-        isRegistered: (target) => deviceStore.isRegistered(target),
-      },
-      botId,
-    );
+    // not the answer for it; its profile's owner is. Read as a narrow identity lookup in bot-owner.ts.
+    ownerOf: (botId) => ownerTenantOfBot(database, botId),
+    // In the owner's own frame (device store), whoever's turn asked.
+    devicesOf: (tenantId) => deviceStore.list(tenantId),
+    isReachable: (target) => deviceChannel.isReachable(target),
+  });
+  async function deviceForBot(botId: string): Promise<DispatchTarget> {
+    return await deviceSelector.forBot(botId);
   }
 
   /**
    * The same answer in the one form the task board takes: a machine id, or nothing.
    *
-   * Cloud mode records no machine and neither does a tenant whose laptop is away — a conversation that
-   * happened without a device still happened, so the board says nothing rather than guessing (tickets
-   * 017 and 020).
+   * Asked once when a task opens, with that task's own ref, so the card names the machine the task
+   * picked and the task's actions follow it there. Cloud mode records no machine and neither does a
+   * tenant with none paired — a conversation that happened without a device still happened, so the
+   * board says nothing rather than guessing (tickets 017 and 020).
    */
-  async function deviceIdForBot(agentId: string): Promise<string | null> {
+  async function deviceIdForBot(
+    agentId: string,
+    taskRef?: string,
+  ): Promise<string | null> {
     if (config.tenantRuntime !== "device") return null;
-    return await deviceForBot(agentId).then(
+    return await (taskRef
+      ? deviceSelector.forTask(agentId, taskRef)
+      : deviceSelector.forBot(agentId)
+    ).then(
       (target) => target.deviceId,
       () => null,
     );
@@ -1914,7 +1925,7 @@ await startupLifecycle.run(async (startup) => {
         proactiveReadOnlyRefs,
       ),
       signRunForActor(actor.id, initiator, depth),
-      config.computer ? COMPUTER_GUIDANCE : undefined,
+      computerProvider ? COMPUTER_GUIDANCE : undefined,
       loadVendors,
       selectionForActor(actor.id),
       agentFetch,

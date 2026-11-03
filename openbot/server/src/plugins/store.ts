@@ -3389,6 +3389,124 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * Replace the deployment token of a server that is already here, and point the server at it.
+     *
+     * ONE TRANSACTION FOR THE VAULT WRITE AND THE POINTER, which is the whole reason this exists
+     * beside `POST /api/admin/credentials` followed by a re-add. A key holds one live credential, so
+     * storing the new token there REVOKES the old one at once (`createCredential` rotates), and the
+     * re-add that points the server at the new id is a second request. Anything that failed between
+     * them — a refused re-add, a dropped connection — left the server naming a revoked credential:
+     * configured on every screen and unable to make a single call, with the token that worked gone.
+     * Here the rotation and the pointer commit together or not at all, the way
+     * {@link writeOAuthClient} stores an OAuth client.
+     *
+     * NOTHING ELSE ABOUT THE SERVER MOVES. Its url, instance host, title and provenance are the row's
+     * own and are not taken from the caller, so there is no address for a token to be carried to and
+     * the address rule in {@link addCustomServer} has nothing to ask.
+     *
+     * THE SAME KEY THE PLUGINS SCREEN MINTS (`storeMcpToken`): kind `mcp`, provider the server's name
+     * as the page lists it, keyId `mcp-<name>`, sealed beside the row — `team` for a team server,
+     * which the vault itself refuses to anybody but an administrator holding the capability. So a
+     * token stored either way is the same row to {@link requireCredentialOfKind}, to the credentials
+     * screen, and to `removeServer` retiring it.
+     *
+     * Only a server reached with the deployment's own token: a brokered app, a `user-oauth` vendor
+     * and one needing no credential are refused before anything is written.
+     */
+    async replaceServerToken(input: {
+      serverId: string;
+      token: string;
+      by: string;
+    }): Promise<ServerRecord> {
+      requireServerWriter();
+      const plaintext = input.token.trim();
+      if (!plaintext) {
+        throw new CustomServerRefusedError("A token is required.");
+      }
+      const { row, entry, access } = await requireServer(input.serverId);
+      requireNotBrokered(input.serverId, row);
+      if (access.credential !== "deployment-token") {
+        throw new CustomServerRefusedError(
+          `${input.serverId} is not reached with a deployment token.`,
+        );
+      }
+      // Only the team's row or the frame's own, as for an OAuth client: see writeOAuthClient.
+      if (row.tenantId !== TEAM_TENANT && row.tenantId !== currentTenant()) {
+        throw new CustomServerRefusedError(
+          `${input.serverId} is not a server whose token can be stored here.`,
+        );
+      }
+      // The name the page lists it under, which is what `storeMcpToken` writes into the key.
+      const name = row.catalogueKey ?? row.id;
+      const shared: { target?: typeof TEAM_TENANT } =
+        row.tenantId === TEAM_TENANT ? { target: TEAM_TENANT } : {};
+      const key = {
+        kind: "mcp" as const,
+        provider: entry?.key ?? name,
+        keyId: `mcp-${name}`,
+        ...shared,
+      };
+
+      const { credentialId, previousCredentialId } = await database.transaction(
+        async (transaction) => {
+          await transaction.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${`mcp-token-${row.id}`}))`,
+          );
+          const value = {
+            ...key,
+            metadata: { server: name },
+            seal: (binding: CredentialBinding) =>
+              sealCredential(encryptionKey, binding, plaintext),
+          };
+          const live = await credentials.findLiveByKey(key, transaction);
+          const stored = live
+            ? await credentials.rotate(
+                { ...value, previousCredentialId: live.id },
+                transaction,
+              )
+            : await credentials.create(value, transaction);
+          const pointed = await transaction
+            .update(mcpServers)
+            .set({ credentialId: stored.id, updatedAt: new Date() })
+            .where(eq(mcpServers.id, row.id))
+            .returning({ id: mcpServers.id });
+          // Row security filters an UPDATE it refuses to zero rows without raising (I9).
+          if (pointed.length === 0) {
+            throw new PluginInvariantError(
+              `${input.serverId}: the token was stored but the server could not be pointed at it, so nothing was kept.`,
+            );
+          }
+          return {
+            credentialId: stored.id,
+            previousCredentialId: live?.id ?? null,
+          };
+        },
+      );
+
+      // After the commit, for the reason recordClientRegistered gives. The id, never the secret.
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: name,
+        payload: {
+          actor: input.by,
+          change: "mcp_server_token_replaced",
+          server: name,
+          credentialId,
+          previousCredentialId,
+        },
+      });
+
+      // As on both add paths: a bad token is reported now rather than the first time a Bot uses it.
+      await this.refreshTools(row.id);
+      const replaced = (await this.listServers()).find(
+        (server) => server.id === name,
+      );
+      if (!replaced) throw new CatalogueEntryUnknownError(input.serverId);
+      return replaced;
+    },
+
+    /**
      * Enable one app of the broker's catalogue, which is a third way for a server to arrive.
      *
      * NO URL IS TAKEN FROM A CALLER, WHICH IS WHY THERE IS NO HOST RULE HERE. `addCustomServer`
