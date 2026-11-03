@@ -9,8 +9,10 @@ import { useRef, useState } from "react";
 import {
   type ApprovalDecision,
   approvalInboxOptions,
+  approvalRequestOptions,
   decideApproval,
 } from "@/lib/approvals";
+import { RequestError } from "@/lib/client";
 
 /**
  * Spec A8: a card waiting on a person's approval is answered on the board itself, and the card moves
@@ -183,9 +185,14 @@ export function useApprovalDecision() {
 
 /**
  * The buttons on one card. Nothing at all for a card that is not parked on an approval, and nothing for
- * one whose approval the inbox already reports as decided elsewhere (the board catches up on its next
- * read). Whether the action was handed to the person is read from the same owner-scoped inbox the 审批
- * page reads; until that read answers, the card offers the ordinary 批准/拒绝.
+ * one whose approval is reported as decided elsewhere or is no longer there (the board catches up on
+ * its next read).
+ *
+ * Whether the action was handed to the person decides the affirmative button (批准 or 已处理), and the
+ * server refuses the wrong one, so it is offered only once the request's policy is KNOWN. The policy is
+ * read from the same owner-scoped inbox the 审批 page reads; a request the inbox does not list (it
+ * carries only the newest hundred) is read by its own id. Until one of those answers, the card offers
+ * 拒绝 alone, which is a valid answer to either kind.
  */
 export function ApprovalActions({
   task,
@@ -201,18 +208,34 @@ export function ApprovalActions({
     ...approvalInboxOptions(),
     enabled: approvalId !== null,
   });
-  if (approvalId === null) return null;
   const inboxData = inbox.data;
   // Read defensively: an inbox that answered without a list is "not known yet", not a crash.
-  const requests =
-    inboxData && Array.isArray(inboxData.requests) ? inboxData.requests : [];
-  const request = requests.find((entry) => entry.id === approvalId);
+  const listed =
+    inboxData && Array.isArray(inboxData.requests)
+      ? inboxData.requests.find((entry) => entry.id === approvalId)
+      : undefined;
+  const unlisted = approvalId !== null && inbox.isSuccess && !listed;
+  const single = useQuery({
+    ...approvalRequestOptions(approvalId ?? ""),
+    enabled: unlisted,
+  });
+  if (approvalId === null) return null;
+  const request = listed ?? (unlisted ? single.data : undefined);
   if (request && request.status !== "pending") return null;
-  const handOff = request?.action.policy?.behaviour === "hand_off";
+  // Gone, or never this person's: there is nothing left to answer here.
+  if (
+    unlisted &&
+    single.error instanceof RequestError &&
+    single.error.status === 404
+  )
+    return null;
+  const choices = request
+    ? approvalChoices(request.action.policy?.behaviour === "hand_off")
+    : approvalChoices(false).filter(({ decision }) => decision === "deny");
   const busy = pending.has(approvalId);
   return (
     <>
-      {approvalChoices(handOff).map(({ decision, label }) => (
+      {choices.map(({ decision, label }) => (
         <button
           aria-busy={busy}
           className={
