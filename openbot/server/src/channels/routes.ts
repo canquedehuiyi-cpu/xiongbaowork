@@ -8,6 +8,7 @@ import {
   isNull,
   lt,
   ne,
+  notExists,
   or,
   sql,
 } from "drizzle-orm";
@@ -29,6 +30,8 @@ import {
   channels,
   intelligenceChannelMappings,
 } from "../db/schema";
+import { TEAM_TENANT } from "../db/schema/tenant";
+import { currentTenant, isTenantFramed } from "../tenant/context";
 import {
   CHANNEL_ACTIVITY_TOPIC,
   type ChannelActivityEvent,
@@ -168,8 +171,19 @@ const ROSTER_ORDER = [
 /** The transaction `create` and `direct` share, as the driver hands it to a callback. */
 type ChannelTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
+/**
+ * How a channel is made. `shared` makes a group conversation other people can be added to: the
+ * channel, its memberships and its Bots are stamped `team` (G01-E), so every member reads them in
+ * their own frame. Without it the channel is the caller's own, as every channel was before.
+ */
+export type ChannelOptions = { shared?: boolean };
+
 export type ChannelStore = {
-  create(actor: AgentActor, agentIds: string[]): Promise<AgentChannel>;
+  create(
+    actor: AgentActor,
+    agentIds: string[],
+    options?: ChannelOptions,
+  ): Promise<AgentChannel>;
   /**
    * The one conversation this person has with this Bot alone, made if they have not had one yet.
    *
@@ -253,6 +267,11 @@ function channelName(names: string[]) {
   return `${codePoints.slice(0, MAX_CHANNEL_NAME_CODE_POINTS - 1).join("")}…`;
 }
 
+/** A channel's Bot this reader can still use: its profile is visible to them and not deleted. */
+function usable(row: { profileId: string | null; deletedAt: Date | null }) {
+  return row.profileId !== null && row.deletedAt === null;
+}
+
 export function createChannelStore(
   database: Database,
   profileStore: AgentProfileStore,
@@ -271,6 +290,7 @@ export function createChannelStore(
     transaction: ChannelTransaction,
     actor: AgentActor,
     agentIds: string[],
+    options: ChannelOptions = {},
   ): Promise<AgentChannel> => {
     // Validated on this transaction, not through `profileStore.get`: the read has to share
     // the connection this transaction already holds, and has to hold the profile so an agent
@@ -298,18 +318,31 @@ export function createChannelStore(
       }),
     );
 
+    /*
+     * A SHARED GROUP is stamped `team`, in this order, because each row is admitted by the one
+     * before it (0122): the channel (whose `created_by` the database fills from this frame, so it
+     * is not a column here), then the creator's own membership (the "seedable" window: a team
+     * channel this frame opened that has no member yet), then its Bots (now as a member, and only
+     * Bots this person may use, 0128). The creator's mapping to their thread stays their own.
+     * Without `shared`, every row takes the caller's own stamp from the frame, as before.
+     */
+    const stamp = options.shared ? { tenantId: TEAM_TENANT } : {};
     await transaction.insert(channels).values({
       id,
       name,
       description: PRIVATE_AGENT_CHANNEL_DESCRIPTION,
+      ...stamp,
     });
     await transaction.insert(channelMemberships).values({
       channelId: id,
       userId: actor.id,
+      ...stamp,
     });
     await transaction
       .insert(channelAgents)
-      .values(agentIds.map((agentId) => ({ channelId: id, agentId })));
+      .values(
+        agentIds.map((agentId) => ({ channelId: id, agentId, ...stamp })),
+      );
     await transaction.insert(intelligenceChannelMappings).values({
       userId: actor.id,
       channelId: id,
@@ -319,10 +352,82 @@ export function createChannelStore(
     return { id, name, agentIds, threadId, active: true, lastMessageAt: null };
   };
 
+  /**
+   * The caller's own mapping to each shared group they were added to, written the first time they
+   * read it.
+   *
+   * The channel store reads a member's channel through their own mapping row (it carries their
+   * thread), and that row is stamped with them. Whoever added them to the group runs in the
+   * inviter's frame and cannot write a row stamped with somebody else, so the mapping is made here,
+   * in the reader's own frame, for any `team` membership of theirs that has none yet. Only when the
+   * frame IS the reader: anywhere else (the platform, an unframed boot read) the row would carry the
+   * wrong stamp, and the read goes on without it.
+   */
+  const ensureMappings = async (actor: AgentActor, channelIds: string[]) => {
+    if (channelIds.length === 0) return;
+    if (!isTenantFramed() || currentTenant() !== actor.id) return;
+    const missing = await database
+      .select({ channelId: channelMemberships.channelId })
+      .from(channelMemberships)
+      .where(
+        and(
+          inArray(channelMemberships.channelId, channelIds),
+          eq(channelMemberships.userId, actor.id),
+          eq(channelMemberships.tenantId, TEAM_TENANT),
+          notExists(
+            database
+              .select({ one: sql`1` })
+              .from(intelligenceChannelMappings)
+              .where(
+                and(
+                  eq(
+                    intelligenceChannelMappings.channelId,
+                    channelMemberships.channelId,
+                  ),
+                  eq(intelligenceChannelMappings.userId, actor.id),
+                ),
+              ),
+          ),
+        ),
+      );
+    if (missing.length === 0) return;
+    const wanted = missing.map((row) => row.channelId);
+    await database
+      .insert(intelligenceChannelMappings)
+      .values(
+        wanted.map((channelId) => ({
+          userId: actor.id,
+          channelId,
+          threadId: threadIdentity.mint(),
+        })),
+      )
+      // Two first reads at once both found it missing; the second one's row is the same fact.
+      .onConflictDoNothing();
+    /*
+     * And it must now be there, readable by this person. A conflict with a row they cannot see
+     * (somebody else's row holding their key, which 0128 refuses and cleans up) would leave the
+     * group invisible to its own member with nothing said, so it is a fault, not "not found".
+     */
+    const written = await database
+      .select({ channelId: intelligenceChannelMappings.channelId })
+      .from(intelligenceChannelMappings)
+      .where(
+        and(
+          inArray(intelligenceChannelMappings.channelId, wanted),
+          eq(intelligenceChannelMappings.userId, actor.id),
+        ),
+      );
+    if (written.length !== wanted.length)
+      throw new Error(
+        "This person's place in a group conversation is held by a row they cannot read.",
+      );
+  };
+
   const store: ChannelStore = {
-    create(actor, agentIds) {
+    create(actor, agentIds, options) {
       return database.transaction(
-        async (transaction) => makeChannel(transaction, actor, agentIds),
+        async (transaction) =>
+          makeChannel(transaction, actor, agentIds, options),
         { isolationLevel: "read committed" },
       );
     },
@@ -393,6 +498,7 @@ export function createChannelStore(
     },
 
     async get(actor, channelId) {
+      await ensureMappings(actor, [channelId]);
       const rows = await database
         .select({
           id: channels.id,
@@ -400,6 +506,7 @@ export function createChannelStore(
           agentId: channelAgents.agentId,
           threadId: intelligenceChannelMappings.threadId,
           lastMessageAt: channels.lastMessageAt,
+          profileId: agentProfiles.agentId,
           deletedAt: agentProfiles.deletedAt,
         })
         .from(channels)
@@ -418,7 +525,12 @@ export function createChannelStore(
           ),
         )
         .innerJoin(channelAgents, eq(channelAgents.channelId, channels.id))
-        .innerJoin(
+        /*
+         * Left, not inner: in a shared group a member may be unable to see another member's Bot
+         * (somebody's private one), and an inner join made the whole group vanish for them. The Bot
+         * stays on the channel and counts as unavailable to this reader (see `usable`).
+         */
+        .leftJoin(
           agentProfiles,
           eq(agentProfiles.agentId, channelAgents.agentId),
         )
@@ -433,7 +545,7 @@ export function createChannelStore(
         name: first.name,
         agentIds: rows.map((row) => row.agentId),
         threadId: first.threadId,
-        active: rows.every((row) => row.deletedAt === null),
+        active: rows.every(usable),
         lastMessageAt: first.lastMessageAt,
       };
     },
@@ -498,6 +610,10 @@ export function createChannelStore(
           : null;
 
       if (wanted.length === 0) return { channels: [], nextCursor: null };
+      await ensureMappings(
+        actor,
+        wanted.map((row) => row.id),
+      );
 
       const rows = await database
         .select({
@@ -505,6 +621,7 @@ export function createChannelStore(
           name: channels.name,
           agentId: channelAgents.agentId,
           threadId: intelligenceChannelMappings.threadId,
+          profileId: agentProfiles.agentId,
           deletedAt: agentProfiles.deletedAt,
           channelSummary: channels.summary,
           lastMessage: channels.lastMessage,
@@ -530,7 +647,12 @@ export function createChannelStore(
           ),
         )
         .innerJoin(channelAgents, eq(channelAgents.channelId, channels.id))
-        .innerJoin(
+        /*
+         * Left, not inner: in a shared group a member may be unable to see another member's Bot
+         * (somebody's private one), and an inner join made the whole group vanish for them. The Bot
+         * stays on the channel and counts as unavailable to this reader (see `usable`).
+         */
+        .leftJoin(
           agentProfiles,
           eq(agentProfiles.agentId, channelAgents.agentId),
         )
@@ -556,7 +678,7 @@ export function createChannelStore(
         const summary = summaries.get(row.id);
         if (summary) {
           summary.agentIds.push(row.agentId);
-          summary.active &&= row.deletedAt === null;
+          summary.active &&= usable(row);
           continue;
         }
         summaries.set(row.id, {
@@ -564,7 +686,7 @@ export function createChannelStore(
           name: row.name,
           agentIds: [row.agentId],
           threadId: row.threadId,
-          active: row.deletedAt === null,
+          active: usable(row),
           summary: row.channelSummary,
           lastMessage: row.lastMessage,
           lastMessageAt: row.lastMessageAt,
@@ -668,7 +790,14 @@ export function createChannelStore(
       return await database.transaction(
         async (transaction) => {
           const [row] = await transaction
-            .select({ packageId: channels.packageId })
+            .select({
+              packageId: channels.packageId,
+              tenantId: channels.tenantId,
+              deletedAt: channels.deletedAt,
+              // `created_by` is read by the database's own function rather than declared in the
+              // schema (0122): the creator of a shared group who is still in it.
+              creator: sql<boolean>`public.openbot_team_channel_creator(${channels.id})`,
+            })
             .from(channels)
             .innerJoin(
               channelMemberships,
@@ -684,18 +813,38 @@ export function createChannelStore(
           if (row.packageId !== null) {
             throw new ChannelPackageOwnedError(channelId);
           }
+          /*
+           * A shared group is deleted for everybody in it, so only the person who started it may
+           * (and the database's row guard refuses anybody else, 0122). Another member gets the
+           * not-found answer every refusal here gives; they can still leave the group.
+           */
+          if (row.tenantId === TEAM_TENANT && !row.creator)
+            throw new ChannelNotFoundError(channelId);
+          /*
+           * And the rest of the no-op: a repeat changes nothing, so nothing is announced. Without
+           * this, every repeat told every member again, and the route wrote another
+           * `channel.deleted` row to an append-only trail for a deletion that had not happened.
+           */
+          if (row.deletedAt !== null) return false;
           // The guard on deletedAt is what makes a repeat call a no-op rather than a new stamp.
           const stamped = await transaction
             .update(channels)
             .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(and(eq(channels.id, channelId), isNull(channels.deletedAt)))
             .returning({ id: channels.id });
-          /*
-           * And the rest of the no-op: a repeat changed nothing, so nothing is announced. Without
-           * this, every repeat told every member again, and the route wrote another
-           * `channel.deleted` row to an append-only trail for a deletion that had not happened.
-           */
-          if (stamped.length === 0) return false;
+          if (stamped.length === 0) {
+            /*
+             * Zero rows is a no-op only if somebody else's delete got there first. Otherwise row
+             * security filtered the write out, and that is a refusal to say aloud, not a deletion
+             * that "already happened".
+             */
+            const [now] = await transaction
+              .select({ deletedAt: channels.deletedAt })
+              .from(channels)
+              .where(eq(channels.id, channelId));
+            if (now?.deletedAt) return false;
+            throw new ChannelNotFoundError(channelId);
+          }
 
           // Read on this transaction, so the members told are the ones the channel had when it was
           // hidden. Soft leaves the membership rows in place, so this reads the same list a repeat

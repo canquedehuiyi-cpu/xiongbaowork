@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
+import { moveToTeam } from "../src/agents/profile-store";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -89,6 +90,45 @@ test("the platform scope lists every tenant with its plan and counts", async () 
   expect(b?.wakers).toBe(1);
   expect(b?.activeRoutines).toBe(1);
   expect(b?.suspended).toBe(false);
+});
+
+test("a Waker its owner made public, now stamped `team`, still counts for its owner", async () => {
+  const teamWaker = `team-waker-${tenantA.id}`;
+  await runAsTenant(tenantA.id, () =>
+    database.transaction(async (transaction) => {
+      await transaction.insert(agents).values({
+        id: teamWaker,
+        name: "Team Waker",
+        type: "built_in",
+        configuration: { systemPrompt: "x" },
+      });
+      await transaction.insert(agentProfiles).values({
+        agentId: teamWaker,
+        ownerUserId: tenantA.id,
+        title: "Shared",
+        roleDescription: "Shared with the team.",
+        avatarSeed: teamWaker,
+        visibility: "public",
+      });
+      await moveToTeam(transaction, teamWaker);
+    }),
+  );
+  try {
+    const [stamp] = await runAsTenant("platform", () =>
+      database
+        .select({ tenantId: agentProfiles.tenantId })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, teamWaker)),
+    );
+    expect(stamp?.tenantId).toBe("team");
+    const tenants = await listTenants(database);
+    expect(tenants.find((t) => t.id === tenantA.id)?.wakers).toBe(2);
+    expect(tenants.find((t) => t.id === tenantB.id)?.wakers).toBe(1);
+  } finally {
+    await runAsTenant("platform", () =>
+      database.delete(agents).where(eq(agents.id, teamWaker)),
+    );
+  }
 });
 
 test("suspend blocks sign-in, drops sessions and freezes the schedule", async () => {

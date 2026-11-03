@@ -6,6 +6,7 @@ import type { AppVariables } from "../src/auth/guards";
 import {
   type CredentialSecretReader,
   createCredentialStore,
+  openCredential,
 } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
@@ -22,7 +23,7 @@ import { createModelRoutes } from "../src/models/routes";
 import { createAgentModelResolver } from "../src/models/runtime-resolver";
 import type { TaskProjector } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
-import { runAsTenant } from "../src/tenant/context";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -37,13 +38,15 @@ const encryptionKey = Buffer.alloc(32, 11).toString("base64");
 const credentialStore = createCredentialStore(database);
 const suite = randomUUID().slice(0, 8);
 const tenant = `lib-${suite}`;
-const actor = { id: tenant, role: "user" as const };
+/** A second tenant, connecting the same model as the first (audit #9). */
+const otherTenant = `lib2-${suite}`;
 
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", actor);
+  // The person is the tenant whose scope the request runs in (D12: one person, one tenant).
+  context.set("actor", { id: currentTenant(), role: "user" as const });
   await next();
 };
 
@@ -65,8 +68,9 @@ async function call<T>(
   method: string,
   path: string,
   body?: unknown,
+  scope: string = tenant,
 ): Promise<{ status: number; body: T }> {
-  const response = await runAsTenant(tenant, () =>
+  const response = await runAsTenant(scope, () =>
     routes.request(
       new Request(`http://openbot.test${path}`, {
         method,
@@ -105,11 +109,13 @@ await runAsTenant("platform", async () => {
     .values({ id: `tpl-${suite}`, label: "Test provider", allowsBaseUrl: true })
     .onConflictDoNothing();
 });
-await runAsTenant(tenant, async () => {
-  await database
-    .insert(users)
-    .values({ id: tenant, email: `${tenant}@example.test`, name: tenant });
-});
+for (const scope of [tenant, otherTenant]) {
+  await runAsTenant(scope, async () => {
+    await database
+      .insert(users)
+      .values({ id: scope, email: `${scope}@example.test`, name: scope });
+  });
+}
 
 test("connecting a model masks the key and the row starts unused", async () => {
   const created = await call<Written>("POST", "/", {
@@ -131,6 +137,79 @@ test("connecting a model masks the key and the row starts unused", async () => {
   expect(
     library.body.templates.some((entry) => entry.id === `tpl-${suite}`),
   ).toBeTrue();
+});
+
+test("two tenants connect the same model, and neither key is named after it", async () => {
+  // Audit #9: the vault key used to be the model name, under a deployment-wide unique index, so the
+  // second tenant to connect `gpt-shared` was refused — with an error that told it the first had.
+  const written: { scope: string; id: string; credentialId: string }[] = [];
+  for (const scope of [tenant, otherTenant]) {
+    const created = await call<Written>(
+      "POST",
+      "/",
+      {
+        provider: `tpl-${suite}`,
+        modelName: "gpt-shared",
+        apiKey: `sk-${scope}-key`,
+      },
+      scope,
+    );
+    expect(created.status).toBe(201);
+    written.push({
+      scope,
+      id: created.body.model.id,
+      credentialId: created.body.model.credentialId,
+    });
+  }
+
+  for (const { scope, id, credentialId } of written) {
+    const [vault] = await runAsTenant(scope, () =>
+      database
+        .select({
+          keyId: credentials.keyId,
+          tenantId: credentials.tenantId,
+          kind: credentials.kind,
+          encryptedValue: credentials.encryptedValue,
+        })
+        .from(credentials)
+        .where(eq(credentials.id, credentialId)),
+    );
+    // Named after the library row, never after text the tenant typed.
+    expect(vault?.keyId).toBe(`model_registry:${id}`);
+    expect(vault?.keyId.includes("gpt-shared")).toBeFalse();
+    expect(vault?.tenantId).toBe(scope);
+    // Sealed to its own row, and it opens there with the key that tenant gave.
+    expect(JSON.parse(vault?.encryptedValue ?? "{}").version).toBe(2);
+    await expect(
+      openCredential(encryptionKey, {
+        id: credentialId,
+        tenantId: vault?.tenantId,
+        kind: vault?.kind,
+        encryptedValue: vault?.encryptedValue ?? "",
+      }),
+    ).resolves.toBe(`sk-${scope}-key`);
+  }
+  // Each tenant's key, opened in the other's row, does not open.
+  const [first, second] = written;
+  const [firstVault] = await runAsTenant(tenant, () =>
+    database
+      .select({ encryptedValue: credentials.encryptedValue })
+      .from(credentials)
+      .where(eq(credentials.id, first!.credentialId)),
+  );
+  await expect(
+    openCredential(encryptionKey, {
+      id: second!.credentialId,
+      tenantId: otherTenant,
+      kind: "model",
+      encryptedValue: firstVault?.encryptedValue ?? "",
+    }),
+  ).rejects.toThrow();
+
+  // Gone again, so the rest of the suite describes the library it set up.
+  for (const { scope, id } of written) {
+    expect((await call("DELETE", `/${id}`, undefined, scope)).status).toBe(200);
+  }
 });
 
 test("switching a model off is a write the library shows", async () => {
@@ -205,7 +284,7 @@ test("a bound coworker is counted, named, and answered with the model it chose",
   expect((model as unknown as { modelId: string }).modelId).toBe("gpt-6");
 });
 
-test("removing a model unbinds the coworker and retires the key", async () => {
+test("a model still in use is refused with 409 and kept, then removed once unbound", async () => {
   const library = await call<Library>("GET", "/");
   const row = library.body.models.find((entry) => entry.modelName === "gpt-6");
   if (!row) throw new Error("The connected model disappeared.");
@@ -216,18 +295,56 @@ test("removing a model unbinds the coworker and retires the key", async () => {
       .where(eq(modelRegistry.id, row.id)),
   );
 
-  const removed = await call("DELETE", `/${row.id}`);
-  expect(removed.status).toBe(200);
+  // Audit #13: bypassing the screen must not silently unbind a coworker (`on delete set null`).
+  const refused = await call<{
+    error: string;
+    code: string;
+    references: number;
+  }>("DELETE", `/${row.id}`);
+  expect(refused.status).toBe(409);
+  expect(refused.body.code).toBe("model_in_use");
+  expect(refused.body.references).toBe(1);
+  expect(typeof refused.body.error).toBe("string");
 
-  const [profile] = await runAsTenant(tenant, () =>
+  const [kept] = await runAsTenant(tenant, () =>
+    database
+      .select({ id: modelRegistry.id })
+      .from(modelRegistry)
+      .where(eq(modelRegistry.id, row.id)),
+  );
+  expect(kept?.id).toBe(row.id);
+  const [stillBound] = await runAsTenant(tenant, () =>
     database
       .select({ modelRef: agentProfiles.modelRef })
       .from(agentProfiles)
       .where(eq(agentProfiles.agentId, `${suite}-dev`)),
   );
-  // Set null rather than left dangling: the coworker answers on the deployment's model next turn.
-  expect(profile?.modelRef).toBeNull();
+  expect(stillBound?.modelRef).toBe(row.id);
+  const [vaultKept] = await runAsTenant(tenant, () =>
+    database
+      .select({ revokedAt: credentials.revokedAt })
+      .from(credentials)
+      .where(eq(credentials.id, entry!.credentialId!)),
+  );
+  expect(vaultKept?.revokedAt).toBeNull();
 
+  // Unbound, the same delete goes through and the key goes with the model.
+  await runAsTenant(tenant, () =>
+    database
+      .update(agentProfiles)
+      .set({ modelRef: null })
+      .where(eq(agentProfiles.agentId, `${suite}-dev`)),
+  );
+  const removed = await call("DELETE", `/${row.id}`);
+  expect(removed.status).toBe(200);
+
+  const [gone] = await runAsTenant(tenant, () =>
+    database
+      .select({ id: modelRegistry.id })
+      .from(modelRegistry)
+      .where(eq(modelRegistry.id, row.id)),
+  );
+  expect(gone).toBeUndefined();
   const [vault] = await runAsTenant(tenant, () =>
     database
       .select({ revokedAt: credentials.revokedAt })
@@ -235,6 +352,9 @@ test("removing a model unbinds the coworker and retires the key", async () => {
       .where(eq(credentials.id, entry!.credentialId!)),
   );
   expect(vault?.revokedAt).not.toBeNull();
+
+  const missing = await call("DELETE", `/${row.id}`);
+  expect(missing.status).toBe(404);
 });
 
 test("the board says which model answered each task", async () => {
@@ -290,9 +410,9 @@ test("the board says which model answered each task", async () => {
 });
 
 afterAll(async () => {
-  for (const scope of [tenant, "platform"]) {
+  for (const scope of [tenant, otherTenant, "platform"]) {
     await runAsTenant(scope, async () => {
-      if (scope === tenant) {
+      if (scope !== "platform") {
         await database.delete(agentProfiles);
         await database.delete(tasks);
         await database.delete(modelUsage);
@@ -309,6 +429,6 @@ afterAll(async () => {
   await runAsTenant("platform", () =>
     database
       .delete(modelRegistry)
-      .where(inArray(modelRegistry.tenantId, [tenant])),
+      .where(inArray(modelRegistry.tenantId, [tenant, otherTenant])),
   );
 });

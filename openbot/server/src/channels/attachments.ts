@@ -96,7 +96,10 @@ function isUuidShaped(value: string): boolean {
  * IS mapped, so the degrade branch does not apply, the subquery yields B, and A ≠ B refuses. The
  * branch only opens for a thread nobody is shown.
  */
-function inTheTurnsChannel(database: Database, threadId: string) {
+function inTheTurnsChannel(
+  database: Pick<Database, "select">,
+  threadId: string,
+) {
   const channelOfThisThread = () =>
     database
       .select({ channelId: intelligenceChannelMappings.channelId })
@@ -392,7 +395,7 @@ export async function markAttachmentsSent(
             inArray(attachments.id, known),
             eq(attachments.uploadedBy, turn.actorId),
             // The channel this send actually happened in. See {@link inTheTurnsChannel}.
-            inTheTurnsChannel(database, turn.threadId),
+            inTheTurnsChannel(transaction, turn.threadId),
             isNull(attachments.attachedAt),
           ),
         );
@@ -403,7 +406,7 @@ export async function markAttachmentsSent(
         .where(
           and(
             inArray(attachments.id, known),
-            inTheTurnsChannel(database, turn.threadId),
+            inTheTurnsChannel(transaction, turn.threadId),
             isNotNull(attachments.attachedAt),
           ),
         );

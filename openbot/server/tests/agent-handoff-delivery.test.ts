@@ -3,6 +3,7 @@ import type { AbstractAgent, BaseEvent, Message } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import type { HandoffWork } from "../src/agents/handoff-runner";
+import { runAsTenant } from "../src/tenant/context";
 
 /**
  * Turning a hop into a turn.
@@ -107,12 +108,14 @@ describe("turning a hop into a turn", () => {
   test("the addressed Bot reads the conversation before the ask", async () => {
     const { delivery: deliver, requests } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "assistant has asked you to help",
-      shown: "Assistant asked Researcher for this on your behalf: find it",
-      assertion: "signed",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "assistant has asked you to help",
+        shown: "Assistant asked Researcher for this on your behalf: find it",
+        assertion: "signed",
+      }),
+    );
 
     const messages = requests[0]?.input.messages as Message[];
     // The conversation, then the ask. A Bot handed only the task answers a question whose other half
@@ -127,12 +130,14 @@ describe("turning a hop into a turn", () => {
   test("the run carries the deployment's signed statement of what it is", async () => {
     const { delivery: deliver, requests } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "signed-assertion",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "signed-assertion",
+      }),
+    );
 
     expect(requests[0]?.input.forwardedProps).toEqual({
       openbotRun: "signed-assertion",
@@ -151,7 +156,14 @@ describe("turning a hop into a turn", () => {
     ] as unknown as BaseEvent[]);
 
     await expect(
-      deliver.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      runAsTenant(WORK.actorId, () =>
+        deliver.deliver({
+          work: WORK,
+          message: "m",
+          shown: "s",
+          assertion: "s",
+        }),
+      ),
     ).rejects.toThrow("the model refused");
   });
 
@@ -159,7 +171,14 @@ describe("turning a hop into a turn", () => {
     const { delivery: deliver } = delivery(FINISHED, null);
 
     await expect(
-      deliver.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      runAsTenant(WORK.actorId, () =>
+        deliver.deliver({
+          work: WORK,
+          message: "m",
+          shown: "s",
+          assertion: "s",
+        }),
+      ),
     ).rejects.toThrow("researcher");
   });
 });
@@ -175,12 +194,14 @@ describe("holding the conversation while a Bot answers", () => {
   test("the lock is taken before anything is streamed, and given back after", async () => {
     const { delivery: deliver, lockCalls } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     expect(lockCalls[0]).toBe("acquire");
     expect(lockCalls.at(-1)).toBe("release");
@@ -189,12 +210,14 @@ describe("holding the conversation while a Bot answers", () => {
   test("the run uses the platform's own run id", async () => {
     const { delivery: deliver, requests } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     // The platform's id, not the one asked for: it is what the gateway checks every event against.
     expect(requests[0]?.input.runId).toBe("platform-run");
@@ -212,7 +235,14 @@ describe("holding the conversation while a Bot answers", () => {
     );
 
     await expect(
-      deliver.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      runAsTenant(WORK.actorId, () =>
+        deliver.deliver({
+          work: WORK,
+          message: "m",
+          shown: "s",
+          assertion: "s",
+        }),
+      ),
     ).rejects.toThrow("busy");
     expect(requests).toEqual([]);
   });
@@ -227,7 +257,14 @@ describe("holding the conversation while a Bot answers", () => {
     ] as unknown as BaseEvent[]);
 
     await expect(
-      deliver.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      runAsTenant(WORK.actorId, () =>
+        deliver.deliver({
+          work: WORK,
+          message: "m",
+          shown: "s",
+          assertion: "s",
+        }),
+      ),
     ).rejects.toThrow();
     expect(lockCalls).toContain("release");
   });
@@ -244,12 +281,14 @@ describe("which conversation the turn runs in", () => {
   test("a scratch thread of the addressed Bot's own, not the one that asked", async () => {
     const { delivery: deliver, requests } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     expect(requests[0]?.threadId).toBe("scratch-thread");
     expect(requests[0]?.input.threadId).toBe("scratch-thread");
@@ -258,12 +297,14 @@ describe("which conversation the turn runs in", () => {
   test("but it reads the conversation that asked", async () => {
     const { delivery: deliver, requests } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     // Its own conversation is new and empty; reading that would tell it nothing.
     const messages = requests[0]?.input.messages as Array<{ id: string }>;
@@ -302,12 +343,14 @@ describe("the conversation that crosses a hop", () => {
       },
     );
 
-    await deliver.deliver({
-      work: WORK,
-      message: "the ask",
-      shown: "one line",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "the ask",
+        shown: "one line",
+        assertion: "s",
+      }),
+    );
 
     const messages = requests[0]?.input.messages as Message[];
     expect(messages.map((message) => message.id)).toEqual([
@@ -348,7 +391,14 @@ describe("a delivery that never finishes", () => {
     });
 
     await expect(
-      stalled.deliver({ work: WORK, message: "m", shown: "s", assertion: "s" }),
+      runAsTenant(WORK.actorId, () =>
+        stalled.deliver({
+          work: WORK,
+          message: "m",
+          shown: "s",
+          assertion: "s",
+        }),
+      ),
     ).rejects.toThrow("did not finish within");
     // Given back, or the conversation stays unusable until the lock expires.
     expect(lockCalls).toContain("release");
@@ -358,12 +408,14 @@ describe("a delivery that never finishes", () => {
   test("the lock is given back on the conversation it was taken on", async () => {
     const { delivery: deliver, released } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     // Not `thread-1`, which is the conversation that ASKED and whose lock this run never held.
     expect(released).toEqual(["scratch-thread"]);
@@ -382,12 +434,15 @@ describe("what a hop leaves in the transcript", () => {
   test("is the one line, not the prompt", async () => {
     const { delivery: deliver, requests } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "assistant has asked you to help\n\nTask: ...\nConstraints: ...",
-      shown: "Assistant asked Researcher for this on your behalf: find it",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message:
+          "assistant has asked you to help\n\nTask: ...\nConstraints: ...",
+        shown: "Assistant asked Researcher for this on your behalf: find it",
+        assertion: "s",
+      }),
+    );
 
     expect(requests[0]?.persistedInputMessages).toEqual([
       {
@@ -417,12 +472,14 @@ describe("what the addressed Bot is actually given", () => {
     const agent = stubAgent();
     const { delivery: deliver } = delivery(FINISHED, agent);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "the ask",
-      shown: "one line",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "the ask",
+        shown: "one line",
+        assertion: "s",
+      }),
+    );
 
     const given = (agent as unknown as { messages: Message[] }).messages;
     expect(given.map((message) => message.id)).toEqual([
@@ -475,12 +532,14 @@ describe("the working indicator", () => {
   test("a forward hop lights the asking channel, on then off", async () => {
     const { busy, deliver } = withBusy();
 
-    await deliver.deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     // Keyed on the asking thread, not the scratch thread the run happens in.
     expect(busy).toEqual([
@@ -492,11 +551,13 @@ describe("the working indicator", () => {
   test("a backwards hop leaves the indicator to the runtime lock", async () => {
     const { busy, deliver } = withBusy();
 
-    await deliver.deliver({
-      work: { ...WORK, answerIn: "thread-1" },
-      message: "m",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: { ...WORK, answerIn: "thread-1" },
+        message: "m",
+        assertion: "s",
+      }),
+    );
 
     expect(busy).toEqual([]);
   });
@@ -568,12 +629,14 @@ describe("what comes back for the relay", () => {
       { type: "TEXT_MESSAGE_END" },
     ]);
 
-    const { answer } = await throughTheAgent(agent).deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    const { answer } = await runAsTenant(WORK.actorId, () =>
+      throughTheAgent(agent).deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     expect(answer).toBe("The outage was Tuesday.");
   });
@@ -588,12 +651,14 @@ describe("what comes back for the relay", () => {
       { type: "TEXT_MESSAGE_END" },
     ]);
 
-    const { answer } = await throughTheAgent(agent).deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    const { answer } = await runAsTenant(WORK.actorId, () =>
+      throughTheAgent(agent).deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     expect(answer).toBe("Looking now.\n\nFound it: Tuesday.");
   });
@@ -638,11 +703,13 @@ describe("what comes back for the relay", () => {
     });
 
     // A backwards hop: the relay, landing where the person is watching.
-    await deliver.deliver({
-      work: { ...WORK, answerIn: "thread-1" },
-      message: "m",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: { ...WORK, answerIn: "thread-1" },
+        message: "m",
+        assertion: "s",
+      }),
+    );
 
     expect(announced).toEqual([
       { threadId: "thread-1", agentId: WORK.toBotId, text: "Tuesday." },
@@ -655,12 +722,14 @@ describe("what comes back for the relay", () => {
       { type: "TOOL_CALL_END" },
     ]);
 
-    const { answer } = await throughTheAgent(agent).deliver({
-      work: WORK,
-      message: "m",
-      shown: "s",
-      assertion: "s",
-    });
+    const { answer } = await runAsTenant(WORK.actorId, () =>
+      throughTheAgent(agent).deliver({
+        work: WORK,
+        message: "m",
+        shown: "s",
+        assertion: "s",
+      }),
+    );
 
     expect(answer).toBeNull();
   });
@@ -695,12 +764,14 @@ describe("a conversation that is not all plain strings", () => {
       },
     );
 
-    await deliver.deliver({
-      work: WORK,
-      message: "the ask",
-      shown: "one line",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "the ask",
+        shown: "one line",
+        assertion: "s",
+      }),
+    );
 
     const messages = requests[0]?.input.messages as Message[];
     expect(messages.map((message) => message.id)).toEqual([
@@ -728,12 +799,14 @@ describe("a conversation that is not all plain strings", () => {
       },
     );
 
-    await deliver.deliver({
-      work: WORK,
-      message: "the ask",
-      shown: "one line",
-      assertion: "s",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "the ask",
+        shown: "one line",
+        assertion: "s",
+      }),
+    );
 
     const messages = requests[0]?.input.messages as Message[];
     expect(messages.map((message) => message.id)).toEqual([
@@ -779,11 +852,13 @@ describe("a history read that fails", () => {
     });
 
     await expect(
-      deliver.deliver({
-        work: { ...WORK, answerIn: WORK.threadId },
-        message: "you asked researcher; it answered",
-        assertion: "signed",
-      }),
+      runAsTenant(WORK.actorId, () =>
+        deliver.deliver({
+          work: { ...WORK, answerIn: WORK.threadId },
+          message: "you asked researcher; it answered",
+          assertion: "signed",
+        }),
+      ),
     ).rejects.toThrow("the platform answered 500");
     expect(lockCalls).toEqual([]);
   });
@@ -793,12 +868,14 @@ describe("what the trail is told started the hop", () => {
   test("the addressed Bot is built for the Bot that handed the work on", async () => {
     const { delivery: deliver, builtFor } = delivery(FINISHED);
 
-    await deliver.deliver({
-      work: WORK,
-      message: "assistant has asked you to help",
-      shown: "Assistant asked Researcher for this on your behalf: find it",
-      assertion: "signed",
-    });
+    await runAsTenant(WORK.actorId, () =>
+      deliver.deliver({
+        work: WORK,
+        message: "assistant has asked you to help",
+        shown: "Assistant asked Researcher for this on your behalf: find it",
+        assertion: "signed",
+      }),
+    );
 
     expect(builtFor).toEqual([
       { actorId: "user-1", botId: "researcher", fromBotId: "assistant" },
@@ -861,12 +938,14 @@ describe("a hop to a Bot that is paused while it works", () => {
       },
     });
     try {
-      const delivered = hop.deliver({
-        work: WORK,
-        message: "m",
-        shown: "s",
-        assertion: "s",
-      });
+      const delivered = runAsTenant(WORK.actorId, () =>
+        hop.deliver({
+          work: WORK,
+          message: "m",
+          shown: "s",
+          assertion: "s",
+        }),
+      );
       await running;
       pause.at = new Date();
       await checkRunningTurnsForTests();

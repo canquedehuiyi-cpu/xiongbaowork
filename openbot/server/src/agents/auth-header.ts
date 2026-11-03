@@ -1,9 +1,10 @@
 import {
+  type CredentialBinding,
   type CredentialExecutor,
   type CredentialSecretReader,
   type CredentialStore,
-  decryptSecret,
-  encryptSecret,
+  openCredential,
+  sealCredential,
 } from "../credentials";
 
 /**
@@ -86,7 +87,9 @@ export async function storeAgentAuth(input: {
     // The header name is metadata precisely because it is not a secret; keeping it here makes the
     // vault row self-describing for later audit.
     metadata: { header: input.header },
-    encryptedValue: await encryptSecret(input.encryptionKey, input.value),
+    // Sealed by the store for the row it picks, so the envelope is bound to that row (audit #9).
+    seal: (binding: CredentialBinding) =>
+      sealCredential(input.encryptionKey, binding, input.value),
   };
 
   // A live previous credential is rotated, so the agent never holds two. Any
@@ -169,6 +172,12 @@ function credentialIdOf(
  * agent with its own 401, which is the truthful outcome: the key is gone. Substituting an empty
  * header or falling back to no auth would turn a revoked key into a confusing agent error
  * with no mention of the key anywhere.
+ *
+ * Only an agent key is ever sent (G01-E P10, R5). The configuration names a vault row by id, and
+ * `readSecret` reads by id alone, so a configuration naming any other credential the frame can read
+ * (a team server's token, somebody's connector key) would put that secret in a header to an endpoint
+ * the Bot's author chose. A row of any other kind sends nothing. (The vault's own reader always
+ * says what a row is; a reader that does not, a test double, is taken at its word as it was before.)
  */
 export async function agentAuthHeaders(input: {
   reader: CredentialSecretReader;
@@ -178,10 +187,8 @@ export async function agentAuthHeaders(input: {
   if (!input.auth) return undefined;
   const stored = await input.reader.readSecret(input.auth.credentialId);
   if (!stored || stored.revokedAt) return undefined;
+  if (stored.kind !== undefined && stored.kind !== "agent") return undefined;
   return {
-    [input.auth.header]: await decryptSecret(
-      input.encryptionKey,
-      stored.encryptedValue,
-    ),
+    [input.auth.header]: await openCredential(input.encryptionKey, stored),
   };
 }

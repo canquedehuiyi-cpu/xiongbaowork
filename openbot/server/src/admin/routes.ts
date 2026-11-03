@@ -8,6 +8,7 @@
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { recordAuditEvent } from "../audit";
+import type { AdminScope } from "../auth/admin-scope";
 import { type AppVariables, requireAdmin } from "../auth/guards";
 import { scimStatus } from "../auth/scim";
 import {
@@ -20,6 +21,7 @@ import {
 } from "../computer/policy-network";
 import { mcpServers } from "../db/schema";
 import { otelConfigured } from "../telemetry/otel";
+import { capabilityFor, runAsTenant } from "../tenant/context";
 import {
   CAPABILITIES,
   CAPABILITY_LABELS,
@@ -65,9 +67,16 @@ const settingInputs: {
 
 export function createEnterpriseAdminRoutes(
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
+  /**
+   * The admin capability (G01-E P7), mounted on the whole router: it grants nothing to anybody who
+   * is not an administrator, so `/me` is unchanged. The cross-person reads below go through
+   * `asAdminPlatform`. Absent (the router built on its own) they stay in the caller's frame.
+   */
+  adminScope?: Pick<AdminScope, "adminCapability" | "asAdminPlatform">,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   routes.use("*", requireUser);
+  if (adminScope) routes.use("*", adminScope.adminCapability);
 
   const unavailable = (context: Context) =>
     context.json(
@@ -104,6 +113,9 @@ export function createEnterpriseAdminRoutes(
     const settings = await controls.store.settings();
     const groups = await controls.store.groups();
     const network = await controls.store.networkPolicies();
+    // In the administrator's own frame on purpose: the allowlist offers the servers this
+    // deployment shares and the administrator's own, which RLS already answers here. A `platform`
+    // read would add every person's private custom servers to a list meant for everybody.
     const servers = await controls.deps.database
       .select({
         id: mcpServers.id,
@@ -330,8 +342,19 @@ export function createEnterpriseAdminRoutes(
       Math.max(Number(context.req.query("days") ?? 30) || 30, 1),
       365,
     );
-    const summary = await controls.store.modelUsageSummary(days);
-    const recent = await controls.store.recentModelUsage(50);
+    /*
+     * Usage rows are filed under the tenant of the person whose run it was (#88), so the
+     * deployment-wide view an administrator asks for here is read in the explicit platform frame,
+     * as admin routes do (decision 2). `requireAdmin` above is what keeps it administrators-only.
+     */
+    const [summary, recent] = await runAsTenant(
+      "platform",
+      async () =>
+        [
+          await controls.store.modelUsageSummary(days),
+          await controls.store.recentModelUsage(50),
+        ] as const,
+    );
     const emails = await controls.store.usersById([
       ...new Set(recent.flatMap((row) => (row.userId ? [row.userId] : []))),
     ]);
@@ -349,7 +372,18 @@ export function createEnterpriseAdminRoutes(
     const controls = enterpriseControls();
     if (!controls) return unavailable(context);
     const limit = Number(context.req.query("limit") ?? 100) || 100;
-    return context.json({ actions: await controls.store.actions(limit) });
+    // Every person's recorded actions, as `platform`: each row is stamped with the person whose Bot
+    // acted, so the administrator's own frame showed only their own (G01-E P7).
+    // A role removed since sign-in holds no capability: a 403, not a refused platform read.
+    if (adminScope && capabilityFor(context.var.actor.id) !== "admin") {
+      return context.json({ error: "Administrator access required." }, 403);
+    }
+    const actions = () => controls.store.actions(limit);
+    return context.json({
+      actions: adminScope
+        ? await adminScope.asAdminPlatform(context.var.actor, actions)
+        : await actions(),
+    });
   });
 
   routes.post("/people/:userId/terminate-computers", async (context) => {
