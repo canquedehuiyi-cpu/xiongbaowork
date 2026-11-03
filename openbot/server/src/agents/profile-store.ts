@@ -154,6 +154,11 @@ export class ModelNotInLibraryError extends Error {
  * is nobody: the Bot would stay in the database, unreachable from every chat, and no person's frame
  * could ever change it back. So the change is refused. An administrator takes such a Bot down by
  * deleting it on the admin pages, which still works.
+ *
+ * The account deletion itself can reach that state: it also deletes the person's publications
+ * (`published_by` ON DELETE CASCADE), so a Bot they had published while private is left ownerless,
+ * private and unpublished at once. No app path deletes accounts; the operator note on Team Bots'
+ * `unpublish` says how an administrator finds and removes such a Bot.
  */
 export class OwnerlessBotPrivateError extends Error {
   constructor(id: string) {

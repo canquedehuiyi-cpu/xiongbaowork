@@ -36,6 +36,8 @@ import {
   intelligenceChannelMappings,
   users,
 } from "../src/db/schema";
+import { createTeamBotRoutes } from "../src/team-bots/routes";
+import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
@@ -1301,6 +1303,100 @@ describe("agent profile store integration", () => {
     expect(
       (await agentRequest(member, "GET", `/${source.agentId}`)).status,
     ).toBe(404);
+  });
+
+  test("a published private Bot whose owner's account is deleted is unpublished by the cascade; the admin agents pages still find and delete it", async () => {
+    /*
+     * G01-E P9 review. No app path deletes a person's account, but an operator can. The publication
+     * goes with it (`published_by` ON DELETE CASCADE) and the owner is set null, which leaves a
+     * `team` Bot that is private, unpublished and ownerless: visible to nobody, and on nobody's
+     * Team Bots page. Unpublishing it again answers 404 (there is nothing to take back), not the
+     * ownerless refusal's 409. The admin agents pages (`platform`, with the capability) still find
+     * it and take it down.
+     */
+    const owner = await createUser();
+    const teammate = await createUser();
+    const admin = await createUser("admin");
+    const teamBots = createTeamBots({
+      database,
+      connectedServers: async () => new Set(),
+    });
+    const source = await createProfileFixture({
+      owner,
+      visibility: "private",
+      frame: owner.id,
+    });
+    await as(owner, () =>
+      teamBots.publish(owner, source.agentId, {
+        audience: "people",
+        emails: [`${teammate.id}@example.test`],
+        groups: [],
+      }),
+    );
+    expect(
+      (await agentRequest(teammate, "GET", `/${source.agentId}`)).status,
+    ).toBe(200);
+
+    await asPlatform(() =>
+      database.delete(users).where(eq(users.id, owner.id)),
+    );
+    const profileRow = async () =>
+      (
+        await asPlatform(() =>
+          database
+            .select({
+              ownerUserId: agentProfiles.ownerUserId,
+              tenantId: agentProfiles.tenantId,
+              visibility: agentProfiles.visibility,
+              deletedAt: agentProfiles.deletedAt,
+            })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, source.agentId)),
+        )
+      )[0];
+    expect(await profileRow()).toEqual({
+      ownerUserId: null,
+      tenantId: "team",
+      visibility: "private",
+      deletedAt: null,
+    });
+    // Reachable by nobody's own frame, the admin's included.
+    expect(
+      (await agentRequest(teammate, "GET", `/${source.agentId}`)).status,
+    ).toBe(404);
+    expect(await as(admin, () => store.get(admin, source.agentId))).toBeNull();
+
+    // The Team Bots admin page: nothing is published any more, so not found, not 409.
+    const teamBotApp = new Hono<{ Variables: AppVariables }>();
+    teamBotApp.route(
+      "/",
+      createTeamBotRoutes(teamBots, signedInAs(admin), adminScope),
+    );
+    const unpublished = await teamBotApp.request(
+      `http://test/${source.agentId}/publication`,
+      { method: "DELETE" },
+    );
+    expect(unpublished.status).toBe(404);
+    const page = (await (await teamBotApp.request("http://test/")).json()) as {
+      teamBots: { id: string }[];
+    };
+    expect(page.teamBots.map((row) => row.id)).not.toContain(source.agentId);
+
+    // The admin agents pages find it, as `platform`, and take it down.
+    const found = await agentRequest(admin, "GET", `/${source.agentId}`);
+    expect(found.status).toBe(200);
+    expect(((await found.json()) as { agent: { id: string } }).agent.id).toBe(
+      source.agentId,
+    );
+    expectListed(
+      await onAdminPage(admin, () => store.list(admin)),
+      source.agentId,
+      true,
+    );
+    expect(
+      (await agentRequest(admin, "DELETE", `/${source.agentId}`)).status,
+    ).toBe(204);
+    expect((await profileRow())?.deletedAt).not.toBeNull();
   });
 
   test("duplicates a profile as a caller-owned private agent with copied presentation fields", async () => {

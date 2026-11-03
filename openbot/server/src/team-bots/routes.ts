@@ -34,9 +34,8 @@ export function createTeamBotRoutes(
     adminScope && actor.role === "admin" && capabilityFor(actor.id) === "admin"
       ? adminScope
       : undefined;
-  routes.onError((error, context) =>
-    context.json(
-      { error: error.message },
+  routes.onError((error, context) => {
+    const status =
       error instanceof TeamBotForbiddenError
         ? 403
         : error instanceof OwnerlessBotPrivateError
@@ -46,9 +45,22 @@ export function createTeamBotRoutes(
             : error instanceof TeamBotRefusedError ||
                 error instanceof z.ZodError
               ? 400
-              : 500,
-    ),
-  );
+              : undefined;
+    if (status) return context.json({ error: error.message }, status);
+    // Anything else (a database failure among them) may carry SQL and its parameters: kept in the
+    // server log, never sent to the browser.
+    console.error(
+      JSON.stringify({
+        type: "team-bots-route-error",
+        errorType: error.name,
+        message: error.message,
+      }),
+    );
+    return context.json(
+      { error: "Team Bots are unavailable right now. Try again." },
+      500,
+    );
+  });
   routes.get("/", async (context) => {
     const actor = context.var.actor;
     const doors = adminDoors(actor);
