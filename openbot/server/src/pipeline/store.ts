@@ -39,7 +39,11 @@ import { reapAbandonedPipelineRuns } from "./reap";
  * they start to disagree.
  */
 export type PipelineStep = PipelineStepRow;
-export type StepRecord = PipelineStepStateRow;
+/**
+ * WF8: a step parked on a question (no approval row) also keeps the question it asked, so the
+ * WakerFlow layer can show it and record the person's answer (`flow_confirmations`).
+ */
+export type StepRecord = PipelineStepStateRow & { question?: string };
 
 export type RunOutcome = {
   status: "running" | "awaiting_action" | "done" | "failed" | "aborted";
@@ -59,7 +63,12 @@ export type RunOutcome = {
  */
 export type StepResult =
   | { status: "done"; output: string }
-  | { status: "awaiting_action"; approvalId?: string }
+  | {
+      status: "awaiting_action";
+      approvalId?: string;
+      /** What the coworker asked, when it stopped on a question rather than an approval (WF8). */
+      question?: string;
+    }
   | { status: "failed"; error: string };
 
 /**
@@ -212,7 +221,40 @@ type RunRow = {
   revision: number;
   advanceOwner: string | null;
   inputs: Record<string, string>;
+  flowId: string | null;
+  /** What this process last wrote, so the next change is compared with it and not with the read. */
+  written?: { status: string; steps: StepRecord[] };
 };
+
+/** The transaction a {@link PipelineEventWriter} is handed; its writes commit or roll back with the run's. */
+export type PipelineTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
+
+/**
+ * One state change of a WakerFlow's run (WF8, spec §3.4 E-A), as `writeRun` (or `start`) made it.
+ * `before` is null for the run's first row. `revision` is the run's revision after the change, so
+ * one change is named once however often it is reported.
+ */
+export type PipelineRunTransition = {
+  tenantId: string;
+  runId: string;
+  flowId: string;
+  revision: number;
+  inputs: Record<string, string>;
+  before: { status: string; steps: StepRecord[] } | null;
+  after: { status: string; cursor: number; steps: StepRecord[] };
+};
+
+/**
+ * Records a run's state change inside the transaction that made it, so a change that lost its
+ * revision race (and so did not happen) leaves nothing behind, and a record that cannot be written
+ * undoes the change. Asked only for runs a WakerFlow started; a crew's own runs are not recorded.
+ */
+export type PipelineEventWriter = (
+  tx: PipelineTransaction,
+  transition: PipelineRunTransition,
+) => Promise<void>;
 
 export function createPipelineStore(options: {
   database: Database;
@@ -240,6 +282,8 @@ export function createPipelineStore(options: {
    */
   quota?: QuotaService;
   newRunId?: () => string;
+  /** WF8: the WakerFlow run-event writer (`wakerflows/store.ts` `flowRunEventWriter`). */
+  events?: PipelineEventWriter;
 }) {
   const { database, board, executeStep, canUse } = options;
   const newRunId = options.newRunId ?? (() => randomUUID());
@@ -256,6 +300,7 @@ export function createPipelineStore(options: {
         revision: groupTaskRuns.revision,
         advanceOwner: groupTaskRuns.advanceOwner,
         inputs: groupTaskRuns.inputs,
+        flowId: groupTaskRuns.flowId,
       })
       .from(groupTaskRuns)
       .where(
@@ -298,6 +343,7 @@ export function createPipelineStore(options: {
       revision: row.revision,
       advanceOwner: row.advanceOwner,
       inputs: row.inputs,
+      flowId: row.flowId ?? null,
     };
   }
 
@@ -312,8 +358,12 @@ export function createPipelineStore(options: {
     expected: RunRow,
     owner?: string,
   ) {
-    const [updated] = await runAsTenant(tenantId, async () => {
-      return await database
+    const before = {
+      status: expected.status,
+      steps: expected.written?.steps ?? expected.steps,
+    };
+    const update = (db: Database | PipelineTransaction) =>
+      db
         .update(groupTaskRuns)
         .set({
           ...patch,
@@ -331,10 +381,39 @@ export function createPipelineStore(options: {
           ),
         )
         .returning({ revision: groupTaskRuns.revision });
+    const { events } = options;
+    const flowId = expected.flowId;
+    const changes = patch.status !== undefined || patch.steps !== undefined;
+    const [updated] = await runAsTenant(tenantId, async () => {
+      // WF8: a WakerFlow run's change and its record commit together, or neither does.
+      if (!events || !flowId || !changes) return await update(database);
+      return await database.transaction(async (tx) => {
+        const rows = await update(tx);
+        const [row] = rows;
+        if (row)
+          await events(tx, {
+            tenantId,
+            runId,
+            flowId,
+            revision: row.revision,
+            inputs: expected.inputs,
+            before,
+            after: {
+              status: patch.status ?? before.status,
+              cursor: patch.cursor ?? expected.cursor,
+              steps: patch.steps ?? before.steps,
+            },
+          });
+        return rows;
+      });
     });
     if (!updated) return false;
     expected.revision = updated.revision;
     if (patch.status !== undefined) expected.status = patch.status;
+    expected.written = {
+      status: expected.status,
+      steps: [...(patch.steps ?? before.steps)],
+    };
     return true;
   }
 
@@ -731,22 +810,45 @@ export function createPipelineStore(options: {
         quotaUnits: declared.length + 1,
       });
 
+      const steps = declared.map<StepRecord>((step) => ({
+        ...step,
+        state: "pending",
+      }));
+      const row = {
+        id: runId,
+        tenantId: input.tenantId,
+        templateId: input.templateId,
+        groupId: template.groupId,
+        parentTaskId,
+        status: "running",
+        cursor: 0,
+        steps,
+        initiatedBy: input.initiatedBy,
+        inputs: input.inputs ?? {},
+        flowId: input.flowId ?? null,
+      };
+      const { events } = options;
+      const flowId = input.flowId;
       await runAsTenant(input.tenantId, async () => {
-        await database.insert(groupTaskRuns).values({
-          id: runId,
-          tenantId: input.tenantId,
-          templateId: input.templateId,
-          groupId: template.groupId,
-          parentTaskId,
-          status: "running",
-          cursor: 0,
-          steps: declared.map<StepRecord>((step) => ({
-            ...step,
-            state: "pending",
-          })),
-          initiatedBy: input.initiatedBy,
-          inputs: input.inputs ?? {},
-          flowId: input.flowId ?? null,
+        if (!events || !flowId) {
+          await database.insert(groupTaskRuns).values(row);
+          return;
+        }
+        // WF8: the run's first row and its `run_started` commit together.
+        await database.transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(groupTaskRuns)
+            .values(row)
+            .returning({ revision: groupTaskRuns.revision });
+          await events(tx, {
+            tenantId: input.tenantId,
+            runId,
+            flowId,
+            revision: inserted?.revision ?? 0,
+            inputs: row.inputs,
+            before: null,
+            after: { status: "running", cursor: 0, steps },
+          });
         });
       });
       return { runId, parentTaskId };
@@ -966,6 +1068,7 @@ export function createPipelineStore(options: {
             // The park is over — whether the person approved or the queue is simply driving the step again.
             // Leaving it would make the run claim to be waiting on a decision that has been made.
             approvalId: undefined,
+            question: undefined,
           };
           if (
             !(await writeRun(
@@ -1047,11 +1150,13 @@ export function createPipelineStore(options: {
 
           if (result.status === "awaiting_action") {
             const approvalId = result.approvalId;
+            const question = approvalId ? undefined : result.question?.trim();
             records[cursor] = {
               // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
               ...records[cursor]!,
               state: "awaiting_action",
               ...(approvalId ? { approvalId } : {}),
+              ...(question ? { question } : {}),
             };
             if (
               !(await writeRun(
@@ -1315,6 +1420,11 @@ export function createPipelineStore(options: {
       output?: string;
       /** Why the step did not produce one: declined, or the replayed turn failed. */
       error?: string;
+      /**
+       * WF8: false records the answer and returns, leaving the rest of the plan to the caller's own
+       * driver, so a person's answer is not held open while the crew works through what follows.
+       */
+      drive?: boolean;
     }): Promise<RunOutcome> {
       const run = await readRun(input.tenantId, input.runId);
       if (!run) throw new PipelineNotFoundError("这个工作区里没有这次运行。");
@@ -1342,6 +1452,7 @@ export function createPipelineStore(options: {
           state: "failed",
           error: input.error,
           approvalId: undefined,
+          question: undefined,
         };
         if (
           !(await writeRun(
@@ -1370,6 +1481,7 @@ export function createPipelineStore(options: {
         state: "done",
         output,
         approvalId: undefined,
+        question: undefined,
       };
       const next = cursor + 1;
       if (
@@ -1395,6 +1507,8 @@ export function createPipelineStore(options: {
        * off `awaiting_action`, which is the fact that says a person is no longer being asked.
        */
       if (next < records.length) {
+        if (input.drive === false)
+          return { status: "running", cursor: next, steps: records };
         return store.advance({
           tenantId: input.tenantId,
           runId: input.runId,

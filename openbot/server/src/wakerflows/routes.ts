@@ -282,6 +282,86 @@ export function createWakerFlowRoutes(options: {
     }
   });
 
+  /*
+   * WF8: a run's recorded state changes, paged by sequence, and the questions its steps stopped on.
+   * Answering or skipping one moves the run on in the background; the request id makes a retry safe.
+   */
+  routes.get("/:id/runs/:runId/events", requireUser, async (context) => {
+    const after = Number(context.req.query("after") ?? 0);
+    const limit = Number(context.req.query("limit") ?? 50);
+    try {
+      return context.json(
+        await store.events(
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("runId"),
+          { after, limit },
+        ),
+      );
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.get("/:id/runs/:runId/confirmations", requireUser, async (context) => {
+    try {
+      return context.json({
+        confirmations: await store.confirmations(
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("runId"),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/runs/:runId/confirmations/:confirmationId/answer",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        return context.json({
+          confirmation: await store.answer(
+            tenant(context),
+            context.req.param("id"),
+            context.req.param("runId"),
+            context.req.param("confirmationId"),
+            {
+              requestId: String(input.requestId ?? ""),
+              answer: typeof input.answer === "string" ? input.answer : "",
+            },
+          ),
+        });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
+  routes.post(
+    "/:id/runs/:runId/confirmations/:confirmationId/skip",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        return context.json({
+          confirmation: await store.skipConfirmation(
+            tenant(context),
+            context.req.param("id"),
+            context.req.param("runId"),
+            context.req.param("confirmationId"),
+            { requestId: String(input.requestId ?? "") },
+          ),
+        });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
   return routes;
 }
 

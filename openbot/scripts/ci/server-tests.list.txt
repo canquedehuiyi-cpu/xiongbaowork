@@ -443,6 +443,7 @@ tests/wakerflow-plan-inputs.test.ts
 tests/wakerflow-plan.test.ts
 tests/wakerflow-restart-recovery.integration.test.ts
 tests/wakerflow-routes.test.ts
+tests/wakerflow-run-events.integration.test.ts
 tests/wakerflow-run.integration.test.ts
 tests/wakerflow-task-open.integration.test.ts
 tests/wakerflow-versions.integration.test.ts
