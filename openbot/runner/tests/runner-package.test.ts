@@ -93,6 +93,8 @@ function memoryDeviceStore() {
         platform: input.platform,
         lastSeenAt: null,
         online: false,
+        // The read-only folders the machine offers (F1 stage 2); a fresh pairing offers none.
+        roots: [],
         tokenHash: hash(token),
       };
       devices.set(`${tenantId}/${input.deviceId}`, device);
