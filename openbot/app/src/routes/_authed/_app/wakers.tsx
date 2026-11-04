@@ -186,15 +186,25 @@ function RouteComponent() {
   return (
     <PageShell
       action={
-        <Button
-          render={(props) => (
-            <Link search={{ new: true }} to="/agents" {...props} />
-          )}
-          size="sm"
-          variant="outline"
-        >
-          新建员工
-        </Button>
+        <div className="flex gap-2">
+          {/* Story ROLE1: the role templates new and existing coworkers are made from. */}
+          <Button
+            render={(props) => <Link to="/role-templates" {...props} />}
+            size="sm"
+            variant="ghost"
+          >
+            角色模板
+          </Button>
+          <Button
+            render={(props) => (
+              <Link search={{ new: true }} to="/agents" {...props} />
+            )}
+            size="sm"
+            variant="outline"
+          >
+            新建员工
+          </Button>
+        </div>
       }
       description="这个工作空间里的每一位员工、它此刻是否在干活，以及一组员工可以被叫成的名字。"
       title="数字员工"

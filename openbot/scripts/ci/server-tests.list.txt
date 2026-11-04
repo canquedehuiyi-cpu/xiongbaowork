@@ -337,6 +337,9 @@ tests/restart-recovery-sweep.test.ts
 tests/rls-role.test.ts
 tests/rls-write-scope.test.ts
 tests/role-bible-prompt.test.ts
+tests/role-generation.integration.test.ts
+tests/role-profile-markdown.test.ts
+tests/role-templates.integration.test.ts
 tests/role-writer-lifecycle.test.ts
 tests/roles.test.ts
 tests/route-ids-validation.test.ts
@@ -443,6 +446,7 @@ tests/wakerflow-restart-recovery.integration.test.ts
 tests/wakerflow-routes.test.ts
 tests/wakerflow-run.integration.test.ts
 tests/wakerflow-task-open.integration.test.ts
+tests/wakerflow-versions.integration.test.ts
 tests/wakerflows-store.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
