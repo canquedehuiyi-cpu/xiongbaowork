@@ -182,7 +182,9 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/index.ts": { 'runAsTenant("platform"': 2 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
-  "src/pipeline/store.ts": { 'runAsTenant("platform"': 1 },
+  // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;
+  // each run found is then settled in the tenant on its own row.
+  "src/pipeline/store.ts": { 'runAsTenant("platform"': 2 },
   // Spec J5's operator reads, after `requireAdmin` and the re-checked admin capability: a page of
   // the tenant list and one tenant's audit trail as `platform`, and each listed tenant's model tokens
   // in that tenant's own frame (`model_token_calls` is owner-only), through the audited owner door.

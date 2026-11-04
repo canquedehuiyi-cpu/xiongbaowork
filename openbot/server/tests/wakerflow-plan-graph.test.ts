@@ -938,7 +938,7 @@ describe("other node fields", () => {
 });
 
 describe("what the server runs today", () => {
-  test("decisions and jumps are accepted on Save; nested Flows and actions wait for their execution", () => {
+  test("decisions, jumps and nested Flows are accepted on Save; actions wait for their execution", () => {
     expect(wakerFlowPlanSchema.safeParse(branching()).success).toBe(true);
     const later = base([
       {
@@ -964,7 +964,7 @@ describe("what the server runs today", () => {
       issues
         .filter((issue) => issue.message === "这种步骤暂时还不能运行。")
         .map((issue) => issue.path.join(".")),
-    ).toEqual(["steps.0.kind", "steps.1.kind"]);
+    ).toEqual(["steps.1.kind"]);
   });
 
   test("the planning model is held to coworker steps without jumps (D9)", async () => {

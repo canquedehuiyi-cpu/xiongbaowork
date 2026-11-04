@@ -143,6 +143,7 @@ const stepSchema = z.discriminatedUnion(
 export const RUNNABLE_STEP_KINDS: readonly WakerFlowStepKind[] = [
   "worker",
   "decision",
+  "flow",
 ];
 /** Whether the orchestrator follows `next` jumps yet; until it does, a jump is refused on Save. */
 export const RUNNABLE_JUMPS = true;
@@ -425,11 +426,35 @@ export const wakerFlowPlanSchema = createWakerFlowPlanSchema();
  * written ahead of each of that coworker's steps). A worker step of a plan saved before WF7 compiles
  * exactly as it did.
  */
-export function compiledSteps(plan: WakerFlowPlan): PipelineStepRow[] {
+export function compiledSteps(
+  plan: WakerFlowPlan,
+  /** For each `flow` step, by step id: the pinned revision's template and the child's name. */
+  children: ReadonlyMap<
+    string,
+    { templateId: string; name: string }
+  > = new Map(),
+): PipelineStepRow[] {
   const members = new Map(
     plan.members.map((member) => [member.agentId, member]),
   );
   return plan.steps.map((step): PipelineStepRow => {
+    if (step.kind === "flow") {
+      const child = children.get(step.id);
+      if (!child) throw new Error(`子流程 ${step.id} 没有可运行的版本。`);
+      return {
+        id: step.id,
+        kind: "flow",
+        agentId: "",
+        instruction: `子流程「${child.name}」`,
+        targetFlowId: step.targetFlowId,
+        targetRevision: step.targetRevision,
+        targetTemplateId: child.templateId,
+        inputMap: { ...step.inputMap },
+        outputKey: step.outputKey,
+        ...(step.resultKey === undefined ? {} : { resultKey: step.resultKey }),
+        ...(step.next === undefined ? {} : { next: step.next }),
+      };
+    }
     if (step.kind === "decision")
       // No coworker of its own; `instruction` is what the run view calls it.
       return {
