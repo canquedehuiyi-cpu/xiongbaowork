@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "xiongbao-device",
+  "bundle": {
+    "linux": {
+      "deb": { "desktopTemplate": "linux/desktop-entry.hbs" }
+    }
+  }
+}
