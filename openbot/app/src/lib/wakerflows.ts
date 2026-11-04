@@ -312,6 +312,9 @@ export const wakerFlowKeys = {
   versions: (id: string) => ["wakerflows", "versions", id] as const,
   confirmations: (id: string, runId: string) =>
     ["wakerflows", "confirmations", id, runId] as const,
+  sessions: (id: string) => ["wakerflows", "sessions", id] as const,
+  turns: (id: string, sessionId: string) =>
+    ["wakerflows", "sessions", id, sessionId, "turns"] as const,
 };
 
 /** One recorded state change of a run (WF8). The payload never carries a step's output. */
@@ -751,4 +754,168 @@ export function planProblems(plan: WakerFlowPlan): Record<string, string> {
     available.add(step.outputKey);
   });
   return problems;
+}
+
+/** WF9: one customization session of a Flow, as the history list shows it. */
+export type WakerFlowSession = {
+  id: string;
+  requestId: string;
+  title: string;
+  description: string;
+  revision: number;
+  turnCount: number;
+  /** Whether the Flow's page opens on this session. */
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** WF9: one change request of a session, with the candidate plan it produced. */
+export type WakerFlowSessionTurn = {
+  id: string;
+  requestId: string;
+  prompt: string;
+  modelRef: string;
+  status: WakerFlowRequestStatus;
+  error: string | null;
+  plan: WakerFlowPlan | null;
+  /** Written into the draft when it arrived, or the Flow's plan is this candidate now. */
+  applied: boolean;
+  createdAt: string;
+};
+
+const sessionAt = (id: string, sessionId: string) =>
+  `${at(id)}/sessions/${encodeURIComponent(sessionId)}`;
+
+export async function listWakerFlowSessions(
+  id: string,
+): Promise<{ sessions: WakerFlowSession[]; activeSessionId: string | null }> {
+  const response = await client(`${at(id)}/sessions`, {
+    fallback: "修改会话没能加载。",
+  });
+  const body = (await response.json().catch(() => null)) as {
+    sessions?: WakerFlowSession[];
+    activeSessionId?: string | null;
+  } | null;
+  return {
+    sessions: Array.isArray(body?.sessions) ? body.sessions : [],
+    activeSessionId: body?.activeSessionId ?? null,
+  };
+}
+
+/** A new session becomes the one the page opens on. The request id makes a repeat safe. */
+export function createWakerFlowSession(
+  id: string,
+  input: { requestId: string; title?: string },
+) {
+  return client<WakerFlowSession>(`${at(id)}/sessions`, "session", {
+    method: "POST",
+    body: input,
+    fallback: "没能新建修改会话。",
+  });
+}
+
+export function activateWakerFlowSession(id: string, sessionId: string) {
+  return client<WakerFlowSession>(
+    `${sessionAt(id, sessionId)}/activate`,
+    "session",
+    { method: "POST", fallback: "没能切换到这个会话。" },
+  );
+}
+
+export function deleteWakerFlowSession(
+  id: string,
+  sessionId: string,
+  revision: number,
+) {
+  return client<boolean>(
+    `${sessionAt(id, sessionId)}?revision=${revision}`,
+    "deleted",
+    { method: "DELETE", fallback: "没能删除这个会话。" },
+  );
+}
+
+export function listWakerFlowSessionTurns(id: string, sessionId: string) {
+  return client<WakerFlowSessionTurn[]>(
+    `${sessionAt(id, sessionId)}/turns`,
+    "turns",
+    { fallback: "修改记录没能加载。" },
+  );
+}
+
+/**
+ * One change request. It answers when the model does; Cancel is the planning cancel
+ * ({@link cancelWakerFlowGeneration}) with the same request id. Without `members` the server offers
+ * the current plan's own coworkers.
+ */
+export function sendWakerFlowSessionTurn(
+  id: string,
+  sessionId: string,
+  input: { requestId: string; modelRef: string; prompt: string },
+) {
+  return client<WakerFlowRequest>(
+    `${sessionAt(id, sessionId)}/turns`,
+    "request",
+    {
+      method: "POST",
+      body: input,
+      fallback: "这次修改没能生成，请重试。",
+    },
+  );
+}
+
+/**
+ * What a candidate plan changes against the current one, one sentence each, for the session panel.
+ * Steps are matched by their name (`id`); an empty list means the two plans do the same thing.
+ */
+export function planDifferences(
+  current: WakerFlowPlan | null,
+  candidate: WakerFlowPlan,
+): string[] {
+  if (!current) return ["当前还没有计划，应用后会使用这份候选计划。"];
+  const out: string[] = [];
+  if (current.name !== candidate.name)
+    out.push(`名称：「${current.name}」改为「${candidate.name}」`);
+  const roleOf = (plan: WakerFlowPlan, agentId: string) =>
+    plan.members.find((member) => member.agentId === agentId)?.role ?? agentId;
+  for (const member of candidate.members) {
+    const before = current.members.find((m) => m.agentId === member.agentId);
+    if (!before) out.push(`新增员工：${member.role}`);
+    else if (before.role !== member.role)
+      out.push(`员工职责：「${before.role}」改为「${member.role}」`);
+  }
+  for (const member of current.members)
+    if (!candidate.members.some((m) => m.agentId === member.agentId))
+      out.push(`移除员工：${member.role}`);
+  for (const input of candidate.inputs)
+    if (!current.inputs.some((i) => i.key === input.key))
+      out.push(`新增输入：${input.label}（${input.key}）`);
+  for (const input of current.inputs)
+    if (!candidate.inputs.some((i) => i.key === input.key))
+      out.push(`移除输入：${input.label}（${input.key}）`);
+  for (const [index, step] of candidate.steps.entries()) {
+    const before = current.steps.find((s) => s.id === step.id);
+    if (!before) {
+      out.push(`新增第 ${index + 1} 步「${step.id}」：${step.instruction}`);
+      continue;
+    }
+    if (before.instruction !== step.instruction)
+      out.push(`修改步骤「${step.id}」：${step.instruction}`);
+    if (before.agentId !== step.agentId)
+      out.push(
+        `步骤「${step.id}」改由「${roleOf(candidate, step.agentId)}」执行`,
+      );
+  }
+  for (const step of current.steps)
+    if (!candidate.steps.some((s) => s.id === step.id))
+      out.push(`删除步骤「${step.id}」`);
+  const kept = (plan: WakerFlowPlan, other: WakerFlowPlan) =>
+    plan.steps
+      .map((step) => step.id)
+      .filter((id) => other.steps.some((step) => step.id === id));
+  const before = kept(current, candidate);
+  const after = kept(candidate, current);
+  if (before.join("\u0000") !== after.join("\u0000"))
+    out.push(`步骤顺序：${before.join(" → ")} 改为 ${after.join(" → ")}`);
+  return out;
 }
