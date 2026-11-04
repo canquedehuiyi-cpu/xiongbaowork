@@ -4,6 +4,7 @@ import {
   queryOptions,
 } from "@tanstack/react-query";
 import { client } from "@/lib/client";
+import type { WakerFlowInput } from "@/lib/wakerflows";
 
 /**
  * D06 automations (AUT1-AUT4, C1): a person's own automations at `/api/automations`.
@@ -19,7 +20,12 @@ export const MAX_AUTOMATION_NAME = 80;
 
 export type AutomationTarget =
   | { kind: "waker"; agentId: string }
-  | { kind: "wakerflow"; flowId: string };
+  | {
+      kind: "wakerflow";
+      flowId: string;
+      /** WF8: the Flow inputs every firing runs with, checked by the server when saved. */
+      inputs?: Record<string, string>;
+    };
 
 export type AutomationTriggerConfig =
   | { kind: "schedule"; cron: string; timezone: string }
@@ -186,7 +192,12 @@ export function automationCapabilitiesQueryOptions() {
   });
 }
 
-export type WakerFlowChoice = { id: string; name: string };
+/** A Flow that can be chosen, with the inputs its saved plan asks for (WF8). */
+export type WakerFlowChoice = {
+  id: string;
+  name: string;
+  inputs: WakerFlowInput[];
+};
 
 /** The WakerFlows that already exist, for a WakerFlow target. Asked only when one can be chosen. */
 export function wakerflowChoicesQueryOptions(enabled: boolean) {
@@ -200,15 +211,19 @@ export function wakerflowChoicesQueryOptions(enabled: boolean) {
       if (!Array.isArray(flows)) return [];
       return flows.flatMap((flow: unknown) => {
         if (!flow || typeof flow !== "object") return [];
-        const { id, name, status } = flow as {
+        const { id, name, status, plan } = flow as {
           id?: unknown;
           name?: unknown;
           status?: unknown;
+          plan?: { inputs?: unknown } | null;
         };
         // Only a saved Flow can run; a draft would only be refused when the automation is saved.
         if (status !== undefined && status !== "ready") return [];
+        const inputs = Array.isArray(plan?.inputs)
+          ? (plan.inputs as WakerFlowInput[])
+          : [];
         return typeof id === "string"
-          ? [{ id, name: typeof name === "string" && name ? name : id }]
+          ? [{ id, name: typeof name === "string" && name ? name : id, inputs }]
           : [];
       });
     },

@@ -209,6 +209,81 @@ test("AUT3: with the capability, an existing WakerFlow is sent as the target", a
   });
 });
 
+test("WF8: a chosen Flow's inputs appear, typed, and a missing required one blocks the submit", async () => {
+  serve(accept);
+  const answer = globalThis.fetch;
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) =>
+    String(input) === "/api/wakerflows" && (init?.method ?? "GET") === "GET"
+      ? Response.json({
+          flows: [
+            {
+              id: FLOW_ID,
+              name: "周报流程",
+              status: "ready",
+              plan: {
+                inputs: [
+                  { key: "topic", label: "主题", required: true },
+                  {
+                    key: "tone",
+                    label: "语气",
+                    required: true,
+                    type: "select",
+                    options: ["正式", "轻松"],
+                    default: "正式",
+                  },
+                  {
+                    key: "urgent",
+                    label: "加急",
+                    required: false,
+                    type: "boolean",
+                    description: "加急会跳过复核",
+                  },
+                ],
+              },
+            },
+          ],
+        })
+      : answer(input, init)) as typeof fetch;
+  const { view, user } = draw({ wakerflow: true });
+  fireEvent.change(view.getByLabelText("执行对象"), {
+    target: { value: "wakerflow" },
+  });
+  const topic = await view.findByLabelText("主题（必填）");
+  const tone = view.getByLabelText("语气（必填）") as HTMLSelectElement;
+  // The default is filled in, and each type is entered its own way.
+  expect(tone.tagName).toBe("SELECT");
+  expect(tone.value).toBe("正式");
+  const urgent = view.getByLabelText("加急（选填）") as HTMLInputElement;
+  expect(urgent.getAttribute("role")).toBe("switch");
+  expect(view.getByText("加急会跳过复核")).toBeTruthy();
+
+  await user.type(view.getByLabelText("要做的事"), "生成周报");
+  await user.type(view.getByLabelText("cron 规则 1"), "0 9 * * 1");
+  await user.click(view.getByRole("button", { name: "建立自动任务" }));
+  expect(await view.findByText("请填写 主题。")).toBeTruthy();
+  expect(topic.getAttribute("aria-invalid")).toBe("true");
+  expect(writes()).toEqual([]);
+
+  await user.type(topic, "第 45 周");
+  fireEvent.change(tone, { target: { value: "轻松" } });
+  await user.click(urgent);
+  await user.click(view.getByRole("button", { name: "建立自动任务" }));
+  await waitFor(() => expect(writes()).toHaveLength(2));
+  expect(writes()[0]?.body).toEqual({
+    name: "生成周报",
+    target: {
+      kind: "wakerflow",
+      flowId: FLOW_ID,
+      inputs: { topic: "第 45 周", tone: "轻松", urgent: "true" },
+    },
+    maxRuns: null,
+    endDate: null,
+  });
+});
+
 test("AUT3: the deployment's own answer turns WakerFlow on, and only saved Flows are offered", async () => {
   serve((method, path, body) => {
     if (method === "GET" && path === "/api/capabilities") {

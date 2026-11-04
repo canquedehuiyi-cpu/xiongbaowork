@@ -2,12 +2,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { RequestError } from "@/lib/client";
 import { newId } from "@/lib/new-id";
+import { FlowInputFields } from "./flow-input-fields";
 import {
   abortWakerFlowRun,
+  filledInputValues,
   getWakerFlowRun,
+  initialInputValues,
   isTerminalRunStatus,
   laterRunReading,
   listWakerFlowRuns,
@@ -72,7 +74,9 @@ export function RunPanel(props: {
   const poll = props.pollIntervalMs ?? POLL_INTERVAL_MS;
   const queryClient = useQueryClient();
 
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    initialInputValues(plan.inputs),
+  );
   const [problems, setProblems] = useState<Record<string, string>>({});
   const [starting, setStarting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -109,12 +113,7 @@ export function RunPanel(props: {
     const found = runInputProblems(plan, values);
     setProblems(found);
     if (Object.keys(found).length > 0) return;
-    // Only declared inputs, and only what was filled: the server refuses a name it did not declare.
-    const inputs: Record<string, string> = {};
-    for (const input of plan.inputs) {
-      const value = values[input.key] ?? "";
-      if (value.trim()) inputs[input.key] = value;
-    }
+    const inputs = filledInputValues(plan.inputs, values);
     const key = JSON.stringify([flow.revision, inputs]);
     if (
       !pending.current ||
@@ -136,7 +135,7 @@ export function RunPanel(props: {
       request.spent = true;
       if (answer.status === "completed" && answer.runId) {
         setSelected(answer.runId);
-        setValues({});
+        setValues(initialInputValues(plan.inputs));
       } else if (answer.error) {
         setFailure(answer.error);
       } else if (answer.status === "pending") {
@@ -177,35 +176,18 @@ export function RunPanel(props: {
             这个流程不需要输入，可以直接运行。
           </p>
         ) : (
-          plan.inputs.map((input) => {
-            const id = `run-input-${input.key}`;
-            return (
-              <div className="flex flex-col gap-1" key={input.key}>
-                <label className="font-medium text-sm" htmlFor={id}>
-                  {input.label}
-                  {input.required ? "（必填）" : "（选填）"}
-                </label>
-                <Textarea
-                  aria-invalid={problems[input.key] ? true : undefined}
-                  aria-required={input.required}
-                  id={id}
-                  onChange={(event) => {
-                    const next = { ...values, [input.key]: event.target.value };
-                    setValues(next);
-                    if (Object.keys(problems).length > 0)
-                      setProblems(runInputProblems(plan, next));
-                  }}
-                  rows={2}
-                  value={values[input.key] ?? ""}
-                />
-                {problems[input.key] ? (
-                  <p className="text-destructive text-xs" role="alert">
-                    {problems[input.key]}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })
+          <FlowInputFields
+            idPrefix="run-input"
+            inputs={plan.inputs}
+            onChange={(key, value) => {
+              const next = { ...values, [key]: value };
+              setValues(next);
+              if (Object.keys(problems).length > 0)
+                setProblems(runInputProblems(plan, next));
+            }}
+            problems={problems}
+            values={values}
+          />
         )}
         {failure ? (
           <p className="text-destructive text-sm" role="alert">
