@@ -8,6 +8,38 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.0
+
+- **`TENANT_RUNTIME` now defaults to `device` in production (F6).** With `NODE_ENV=production` and no
+  `TENANT_RUNTIME`, coworkers run their computer actions on a paired device instead of the server's
+  Docker computer. A Helm upgrade switches to `device`; to keep the old behaviour set
+  `config.tenantRuntime: cloud`. Development, tests and `docker/delivery.env.example` stay on `cloud`.
+- **Coworker tool permissions (SEC1).** Rules gain `deny` (an unknown value is read as `deny`), and a
+  fixed floor of dangerous commands and sensitive paths always asks for approval. Tightening rules an
+  employee's owner sets now also apply when someone else uses that employee. Migration `0131`.
+- **New migrations, applied in order: `0130`–`0134`, `0137`–`0142`** (`0135` and `0136` are unused).
+  They add the 分身's information sources (`0130`, `0132`, `0142`), employee security settings
+  (`0131`), role profiles (`0133`), WakerFlow versions (`0134`), run events and confirmations
+  (`0137`), resource projects (`0138`), nested-flow parents (`0139`), customization sessions (`0140`)
+  and share links (`0141`). Take a backup first; none of them rewrites existing rows.
+- **WakerFlow:** typed inputs, versions with rollback, run events, retry from the failed step,
+  decision branches, nested Flows (pinned to the child's revision, at most 3 deep), action steps (one
+  governed MCP call, behind the same pause, Use Bots and approval gates as a turn), 「确认」 steps that
+  ask a person, persistent customization sessions, and share links with an expiry (at most 30 days)
+  and a use limit (at most 100). Importing a shared Flow copies only its definition; the importer maps
+  each role to their own coworkers.
+- **Role templates (ROLE1):** templates, Markdown and generated Persona Bibles. Every coworker except
+  the 分身 can take a template; applying one also updates a built-in coworker's system prompt.
+- **Resource projects (RES2):** a local folder or Git clone on the device, shared or per coworker.
+  File and shell actions run in the coworker's current project. Local folders are read-only unless the
+  person registers them as writable in the device app; the server can only narrow that.
+- **The 分身's information sources (F1):** declarations, local folders on a paired device (read-only),
+  the person's own knowledge bases, and connectors the person authorized themselves (read tools only,
+  and only connectors an administrator listed for self-install).
+- **Device app (F2):** a desktop app 「熊宝数字员工 设备端」 (`com.xiongbao.device`) runs the runner,
+  pairs, starts at login, shows the live screen and lets a person take over. Its own release workflow
+  (`device-v*` tags) publishes unsigned builds only as prereleases.
+
 - **Before upgrading: merge any catalogue server two administrators each added.** Migration
   `0127_team_connectors` makes every administrator's MCP server the team's, and the team holds one
   row per catalogue entry, so it stops before changing anything when two administrators' rows share a
