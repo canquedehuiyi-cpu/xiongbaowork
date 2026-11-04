@@ -25,6 +25,10 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { isRunnerAddress, runnerAddress } from "../devices/channel";
+import {
+  DEVICE_HUMAN_HAS_CONTROL,
+  type DeviceTakeovers,
+} from "../devices/takeover";
 import { withUntrustedNotice } from "../untrusted-content";
 import { computerActionIdentity } from "./action-identity";
 import {
@@ -32,6 +36,7 @@ import {
   type ComputerTransport,
   ComputerUnavailableError,
   createComputerTransport,
+  HumanHasControlError,
   StaleSnapshotError,
 } from "./client";
 import { HeadlessToolSuspension } from "./headless-tools";
@@ -94,6 +99,9 @@ import {
   type StoredSnapshot,
 } from "./snapshot-store";
 
+/** The rule a takeover refusal names on its audit row, so an operator can count them apart. */
+export const DEVICE_TAKEOVER_RULE = "device.takeover";
+
 export class ActionRefusedError extends Error {
   /** The rule that refused it, so the surface can show which one and an operator can find it. */
   readonly rule: string | null;
@@ -133,6 +141,14 @@ export type ComputerGatewayOptions = {
   resolveDevice?: (
     botId: string,
   ) => Promise<{ tenantId: string; deviceId: string } | null>;
+  /**
+   * Who holds the wheel of a Bot's browser on a tenant's own machine (F2 stage 2).
+   *
+   * Asked for every governed action that resolves to a device: while a person holds it, or has been
+   * asked to, the Bot's action is refused here, before anything is sent to the machine. The handover
+   * calls answer from it too, because a device has no control state of its own to post to.
+   */
+  deviceTakeovers?: DeviceTakeovers;
   approvalGate?: ApprovalGate;
   provider: ComputerProvider;
   auditStore: AuditStore;
@@ -358,6 +374,19 @@ export function createComputerGateway(
       throw new ComputerUnavailableError(verdict.reason);
     }
     return verdict.url;
+  }
+
+  /**
+   * The machine whose takeover state answers this Bot's handovers, or null for a container.
+   *
+   * Only with a takeover registry: without one a device-mode gateway keeps the old behaviour of
+   * posting the handover to the transport, which a runner refuses.
+   */
+  async function takeoverTarget(
+    botId: string,
+  ): Promise<{ tenantId: string; deviceId: string } | null> {
+    if (!options.deviceTakeovers || !options.resolveDevice) return null;
+    return options.resolveDevice(botId);
   }
 
   async function get<T>(
@@ -662,6 +691,47 @@ export function createComputerGateway(
     const target = options.resolveDevice
       ? await options.resolveDevice(botId).catch(() => "unknown" as const)
       : null;
+    /*
+     * A person has the wheel of this Bot's browser on this machine: refused here, before the approval
+     * gate and before `run`, so nothing reaches the device at all (F2 stage 2).
+     *
+     * Not a policy verdict, and the row says so by naming its own rule. Nothing about the action is
+     * wrong; it is the wrong moment for the Bot to act, which is why the Bot is handed the same
+     * "a person has control" the container's computer answers with, and its turn waits for the
+     * handback instead of failing.
+     */
+    if (
+      target &&
+      target !== "unknown" &&
+      options.deviceTakeovers?.blocks(target, botId)
+    ) {
+      const handoff = options.deviceTakeovers.current(target, botId);
+      await write(auditStore, {
+        toolName,
+        botId,
+        actor,
+        element,
+        ref,
+        ...(subject.key ? { key: subject.key } : {}),
+        ...(subject.command ? { command: subject.command } : {}),
+        filePath,
+        pageUrl,
+        decision: {
+          allowed: false,
+          mode: decision.mode,
+          matched: DEVICE_TAKEOVER_RULE,
+          source: "deny",
+          forward: false,
+          reason: DEVICE_HUMAN_HAS_CONTROL,
+        },
+        device: target.deviceId,
+      });
+      throw new HumanHasControlError(
+        DEVICE_HUMAN_HAS_CONTROL,
+        handoff?.id,
+        handoff,
+      );
+    }
     await write(auditStore, {
       toolName,
       botId,
@@ -832,10 +902,19 @@ export function createComputerGateway(
       reason: string,
       toolCallId?: string,
     ) {
-      const state = await post<ControlState>(botId, "/control/request", {
-        reason,
-        ...(toolCallId ? { toolCallId } : {}),
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).request(
+            device,
+            botId,
+            reason,
+            toolCallId ? "model" : "manual",
+            toolCallId,
+          )
+        : await post<ControlState>(botId, "/control/request", {
+            reason,
+            ...(toolCallId ? { toolCallId } : {}),
+          });
       await writeControlEvent(auditStore, "computer.help_requested", {
         botId,
         actor,
@@ -845,9 +924,17 @@ export function createComputerGateway(
     },
 
     async takeControl(botId: string, actor: ActionActor, requestId: string) {
-      const state = await post<ControlState>(botId, "/control/take", {
-        requestId,
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).take(
+            device,
+            botId,
+            actor.id,
+            requestId,
+          )
+        : await post<ControlState>(botId, "/control/take", {
+            requestId,
+          });
       await writeControlEvent(auditStore, "computer.control_taken", {
         botId,
         actor,
@@ -859,9 +946,16 @@ export function createComputerGateway(
     },
 
     async releaseControl(botId: string, actor: ActionActor, requestId: string) {
-      const state = await post<ControlState>(botId, "/control/release", {
-        requestId,
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).release(
+            device,
+            botId,
+            requestId,
+          )
+        : await post<ControlState>(botId, "/control/release", {
+            requestId,
+          });
       await writeControlEvent(auditStore, "computer.control_released", {
         botId,
         actor,
@@ -870,9 +964,16 @@ export function createComputerGateway(
     },
 
     async cancelControl(botId: string, actor: ActionActor, requestId: string) {
-      const state = await post<ControlState>(botId, "/control/cancel", {
-        requestId,
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).cancel(
+            device,
+            botId,
+            requestId,
+          )
+        : await post<ControlState>(botId, "/control/cancel", {
+            requestId,
+          });
       await writeControlEvent(auditStore, "computer.help_cancelled", {
         botId,
         actor,
@@ -880,7 +981,14 @@ export function createComputerGateway(
       return state;
     },
 
-    control(botId: string, requestId?: string): Promise<ControlState> {
+    async control(botId: string, requestId?: string): Promise<ControlState> {
+      const device = await takeoverTarget(botId);
+      if (device)
+        return (options.deviceTakeovers as DeviceTakeovers).state(
+          device,
+          botId,
+          requestId,
+        );
       return get<ControlState>(
         botId,
         `/control${requestId ? `?requestId=${encodeURIComponent(requestId)}` : ""}`,

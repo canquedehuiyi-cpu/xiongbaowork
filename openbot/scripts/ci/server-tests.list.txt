@@ -161,7 +161,9 @@ tests/desktop-connection-failure.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-queue.test.ts
 tests/device-safety.integration.test.ts
+tests/device-screen.test.ts
 tests/device-selection.test.ts
+tests/device-takeover.test.ts
 tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
@@ -430,6 +432,7 @@ tests/wake-up-settle.integration.test.ts
 tests/waker-groups.test.ts
 tests/wakerflow-generation-requests.integration.test.ts
 tests/wakerflow-generator.test.ts
+tests/wakerflow-plan-inputs.test.ts
 tests/wakerflow-plan.test.ts
 tests/wakerflow-restart-recovery.integration.test.ts
 tests/wakerflow-routes.test.ts

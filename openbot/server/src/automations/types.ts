@@ -31,6 +31,7 @@ export class AutomationNotFoundError extends Error {
 }
 
 const TARGET_REFUSED = "执行对象只能是一位 Waker 或一个已创建的 WakerFlow。";
+const FLOW_INPUTS_REFUSED = "流程输入格式不正确。";
 
 /**
  * AUT3: an automation runs either one Waker or one WakerFlow that already exists. Nothing else: an
@@ -53,6 +54,24 @@ export const automationTargetSchema = z.discriminatedUnion(
       .object({
         kind: z.literal("wakerflow"),
         flowId: z.uuid("请选择一个已创建的 WakerFlow。"),
+        /**
+         * WF8 (AUT3): the Flow inputs this automation runs with, fixed when it is saved. Checked
+         * against the Flow's plan then (`wakerflowAutomationTarget`) and again at every firing; a
+         * webhook's request body never fills or overrides them (D3).
+         */
+        inputs: z
+          .record(
+            z.string(FLOW_INPUTS_REFUSED).max(40, FLOW_INPUTS_REFUSED),
+            z
+              .string(FLOW_INPUTS_REFUSED)
+              .max(10000, "单个流程输入不能超过 10000 字。"),
+            FLOW_INPUTS_REFUSED,
+          )
+          .refine(
+            (inputs) => Object.keys(inputs).length <= 20,
+            "流程输入最多 20 个。",
+          )
+          .optional(),
       })
       .strict(),
   ],

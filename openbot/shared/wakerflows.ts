@@ -1,8 +1,34 @@
+/**
+ * How a Flow input is entered (WF8). Every value is still a string on the wire and in the run; the
+ * type only says how it is entered and what `flowInputs` accepts. A plan without a type is `text`.
+ */
+export const WAKERFLOW_INPUT_TYPES = [
+  "text",
+  "textarea",
+  "number",
+  "select",
+  "boolean",
+] as const;
+export type WakerFlowInputType = (typeof WAKERFLOW_INPUT_TYPES)[number];
+
+export type WakerFlowInput = {
+  key: string;
+  label: string;
+  required: boolean;
+  /** Absent means `text`, so plans saved before WF8 read exactly as they did. */
+  type?: WakerFlowInputType;
+  description?: string;
+  /** Used when the input is left empty. Must itself be a valid value of the type. */
+  default?: string;
+  /** Only for `select`: the values a person may choose from (1–20, each at most 80 characters). */
+  options?: string[];
+};
+
 export type WakerFlowPlan = {
   name: string;
   description: string;
   members: { agentId: string; role: string }[];
-  inputs: { key: string; label: string; required: boolean }[];
+  inputs: WakerFlowInput[];
   steps: {
     id: string;
     agentId: string;
