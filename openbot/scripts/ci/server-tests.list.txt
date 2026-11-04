@@ -71,6 +71,7 @@ tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
+tests/avatar-local-folder.test.ts
 tests/avatar-sources.test.ts
 tests/ban-freezes-execution.test.ts
 tests/bot-access.test.ts
