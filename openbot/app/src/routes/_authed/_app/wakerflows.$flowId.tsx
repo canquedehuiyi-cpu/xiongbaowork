@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Flowchart } from "@/components/wakerflow/flowchart";
 import { RunPanel } from "@/components/wakerflow/run-panel";
 import { SessionPanel } from "@/components/wakerflow/session-panel";
+import { ShareDialog } from "@/components/wakerflow/share-dialog";
 import { VersionList } from "@/components/wakerflow/version-list";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
@@ -217,6 +218,7 @@ export function WakerFlowDetail(props: {
               {copying ? "正在复用…" : "复用"}
             </Button>
           ) : null}
+          {current.status === "ready" ? <ShareDialog flow={current} /> : null}
           <Button
             disabled={deleting || deleteBlocked !== null}
             onClick={() => remove(current)}

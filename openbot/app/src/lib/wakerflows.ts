@@ -343,6 +343,9 @@ export const wakerFlowKeys = {
   sessions: (id: string) => ["wakerflows", "sessions", id] as const,
   turns: (id: string, sessionId: string) =>
     ["wakerflows", "sessions", id, sessionId, "turns"] as const,
+  shares: (id: string) => ["wakerflows", "shares", id] as const,
+  sharePreview: (token: string) =>
+    ["wakerflows", "share-preview", token] as const,
 };
 
 /** One recorded state change of a run (WF8). The payload never carries a step's output. */
@@ -1158,4 +1161,137 @@ export function planDifferences(
   if (before.join("\u0000") !== after.join("\u0000"))
     out.push(`步骤顺序：${before.join(" → ")} 改为 ${after.join(" → ")}`);
   return out;
+}
+
+/** WF9: where a share link stands, as its owner's list shows it. */
+export type WakerFlowShareStatus =
+  | "active"
+  | "expired"
+  | "revoked"
+  | "exhausted";
+
+export const SHARE_STATUS_LABEL: Record<WakerFlowShareStatus, string> = {
+  active: "可用",
+  expired: "已过期",
+  revoked: "已撤销",
+  exhausted: "次数已用完",
+};
+
+/** WF9: one share link of a Flow. Its token is never part of it. */
+export type WakerFlowShare = {
+  id: string;
+  flowId: string;
+  status: WakerFlowShareStatus;
+  expiresAt: string;
+  maxUses: number;
+  uses: number;
+  remainingUses: number;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+/** WF9: what a link holds, as the import page shows it before anything is imported. */
+export type WakerFlowSharePreview = {
+  name: string;
+  description: string;
+  slots: { slot: string; role: string; prompt?: string }[];
+  inputCount: number;
+  stepCount: number;
+  expiresAt: string;
+  remainingUses: number;
+};
+
+/** D4/D5: what a new link offers, and how far each may go. */
+export const SHARE_DEFAULT_DAYS = 7;
+export const SHARE_MAX_DAYS = 30;
+export const SHARE_DEFAULT_USES = 10;
+export const SHARE_MAX_USES = 100;
+
+/** The page a share link opens, in this app. */
+export const shareImportPath = (token: string) =>
+  `/wakerflows/import/${encodeURIComponent(token)}`;
+
+export function listWakerFlowShares(id: string) {
+  return client<WakerFlowShare[]>(`${at(id)}/shares`, "shares", {
+    fallback: "分享链接没能加载。",
+  });
+}
+
+/**
+ * Make a link. The token is in this answer only: the server keeps its hash, so a repeat of the
+ * same id answers with `token: null`.
+ */
+export async function createWakerFlowShare(
+  id: string,
+  input: { id: string; expiresInDays: number; maxUses: number },
+): Promise<{ share: WakerFlowShare; token: string | null }> {
+  const response = await client(`${at(id)}/shares`, {
+    method: "POST",
+    body: input,
+    fallback: "没能创建分享链接。",
+  });
+  const body = (await response.json().catch(() => null)) as {
+    share?: WakerFlowShare;
+    token?: string | null;
+  } | null;
+  if (!body?.share) throw new Error("没能创建分享链接。");
+  return { share: body.share, token: body.token ?? null };
+}
+
+export function revokeWakerFlowShare(id: string, shareId: string) {
+  return client<WakerFlowShare>(
+    `${at(id)}/shares/${encodeURIComponent(shareId)}/revoke`,
+    "share",
+    { method: "POST", fallback: "没能撤销这个分享链接。" },
+  );
+}
+
+const shareAt = (token: string) =>
+  `/api/wakerflow-shares/${encodeURIComponent(token)}`;
+
+export function getWakerFlowSharePreview(token: string) {
+  return client<WakerFlowSharePreview>(shareAt(token), "share", {
+    fallback: "这个分享链接没能打开。",
+  });
+}
+
+/** Import as a draft of the person's own; a repeat of the request id answers with the same draft. */
+export function importWakerFlowShare(
+  token: string,
+  input: { requestId: string; members: Record<string, string> },
+) {
+  return client<{ flowId: string; name: string }>(
+    `${shareAt(token)}/import`,
+    "imported",
+    { method: "POST", body: input, fallback: "没能导入这个 WakerFlow。" },
+  );
+}
+
+/*
+ * D9: a share link needs a signed-in person. Somebody who opens one signed out is sent to sign in,
+ * and comes back to the link afterwards: the token is held for this tab only (sessionStorage, which
+ * survives a provider's redirect and back) and taken once. Only a token of the link's own shape is
+ * ever held, so nothing else can be sent back to.
+ */
+const RETURN_KEY = "openbot.wakerflow-share-return";
+const SHARE_PATH = /^\/wakerflows\/import\/([A-Za-z0-9_-]{43})$/;
+
+export function rememberShareImport(pathname: string) {
+  const token = SHARE_PATH.exec(pathname)?.[1];
+  if (!token) return;
+  try {
+    sessionStorage.setItem(RETURN_KEY, token);
+  } catch {
+    // Storage may be unavailable (a private window); the person opens the link again instead.
+  }
+}
+
+export function takeShareImport(): string | null {
+  try {
+    const token = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
+  } catch {
+    return null;
+  }
 }

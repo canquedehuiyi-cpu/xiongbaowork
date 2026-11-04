@@ -3,6 +3,7 @@ import { QuotaGuidanceDialog } from "../components/quota/quota-guidance-dialog";
 import { currentUserQueryOptions, needsOnboarding } from "../lib/auth/queries";
 import { CopilotProvider } from "../lib/copilot/provider";
 import { AppHotkeys } from "../lib/hotkeys/app-hotkeys";
+import { rememberShareImport, takeShareImport } from "../lib/wakerflows";
 
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ context, location }) => {
@@ -10,6 +11,8 @@ export const Route = createFileRoute("/_authed")({
       currentUserQueryOptions(),
     );
     if (!user) {
+      // WF9 (D9): a WakerFlow share link opened signed out is come back to after signing in.
+      rememberShareImport(location.pathname);
       throw redirect({ to: "/sign" });
     }
     /*
@@ -19,6 +22,14 @@ export const Route = createFileRoute("/_authed")({
      */
     if (needsOnboarding(user) && location.pathname !== "/onboarding") {
       throw redirect({ to: "/onboarding" });
+    }
+    if (!needsOnboarding(user)) {
+      const token = takeShareImport();
+      if (token && !location.pathname.endsWith(token))
+        throw redirect({
+          to: "/wakerflows/import/$token",
+          params: { token },
+        });
     }
   },
   // Mounted INSIDE the authed boundary, not at the root: the runtime endpoint requires a session, so
