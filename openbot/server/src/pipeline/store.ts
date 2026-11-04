@@ -20,6 +20,7 @@ import {
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
+import type { ActionStepRunner } from "./action-step";
 import { decide, routeAfter, stepBudget } from "./decision";
 import { reapAbandonedPipelineRuns } from "./reap";
 
@@ -208,7 +209,7 @@ function passOver(records: StepRecord[], from: number, to: number) {
 }
 
 /** The kinds this orchestrator runs; any other is failed closed rather than guessed at. */
-const RUNNABLE_KINDS = new Set(["worker", "decision", "flow"]);
+const RUNNABLE_KINDS = new Set(["worker", "decision", "flow", "action"]);
 
 /** How deep runs may nest (D10): a run at this depth may not start another. */
 const MAX_NESTING = WAKERFLOW_MAX_NESTING;
@@ -398,6 +399,11 @@ export function createPipelineStore(options: {
   newRunId?: () => string;
   /** WF8: the WakerFlow run-event writer (`wakerflows/store.ts` `flowRunEventWriter`). */
   events?: PipelineEventWriter;
+  /**
+   * WF7: how an action step's fixed MCP call is made (`pipeline/action-step.ts`, ADR-0001's
+   * 2026-11-04 exception). Without it an action step fails closed.
+   */
+  actions?: ActionStepRunner;
 }) {
   const { database, board, executeStep, canUse } = options;
   const newRunId = options.newRunId ?? (() => randomUUID());
@@ -1574,25 +1580,62 @@ export function createPipelineStore(options: {
           }
 
           const earlier = records.slice(0, cursor);
-          const result = await executeStep({
-            tenantId: input.tenantId,
-            agentId: record.agentId,
-            instruction: stepInstruction({
-              record,
-              task: run.instruction,
-              inputs: run.inputs,
-              earlier,
-              prior,
-              missing,
-            }),
-            prior: record.inputKeys
-              ? record.inputKeys.map((key) => readKey(key, run.inputs, earlier))
-              : prior,
-            initiatedBy: initiator,
-            runId: input.runId,
-            stepRunRef: runRef,
-            signal: controller.signal,
-          });
+          /*
+           * ADR-0001 = A: a worker step is a coworker's turn, and only `executeStep` (the unattended
+           * turn channel) runs it. An action step (WF7, the ADR's 2026-11-04 exception) is a fixed
+           * MCP call through `actions`, which passes the same gates and never opens a turn.
+           */
+          const { actions } = options;
+          const result =
+            kind === "action"
+              ? actions
+                ? // In the run's own tenant frame: the grant, the policy and the approval gate are
+                  // the run's initiator's, read under row security as a turn reads them.
+                  await runAsTenant(input.tenantId, () =>
+                    actions({
+                      tenantId: input.tenantId,
+                      runId: input.runId,
+                      stepRunRef: runRef,
+                      stepId: record.id,
+                      agentId: record.agentId,
+                      tool: record.tool ?? "",
+                      args: record.args ?? {},
+                      values: Object.fromEntries(
+                        (record.inputKeys ?? []).map((key) => [
+                          key,
+                          run.inputs[key] ??
+                            earlier.find((step) => step.outputKey === key)
+                              ?.output,
+                        ]),
+                      ),
+                      initiatedBy: initiator,
+                    }),
+                  )
+                : {
+                    status: "failed" as const,
+                    error: `第 ${cursor + 1} 步是动作，但这里不能运行动作，没有执行。`,
+                  }
+              : await executeStep({
+                  tenantId: input.tenantId,
+                  agentId: record.agentId,
+                  instruction: stepInstruction({
+                    record,
+                    task: run.instruction,
+                    inputs: run.inputs,
+                    earlier,
+                    prior,
+                    missing,
+                  }),
+                  prior: record.inputKeys
+                    ? record.inputKeys.map((key) =>
+                        readKey(key, run.inputs, earlier),
+                      )
+                    : prior,
+                  initiatedBy: initiator,
+                  runId: input.runId,
+                  stepRunRef: runRef,
+                  signal: controller.signal,
+                });
 
           if (result.status === "done") {
             records[cursor] = {
@@ -2025,6 +2068,50 @@ export function createPipelineStore(options: {
     },
 
     /**
+     * WF7: which run, if any, has an action step waiting on this approval. Read in the platform frame
+     * like {@link runHoldingApproval}; the caller asserts the run's owner and resumes in that frame.
+     */
+    async actionHoldingApproval(input: { approvalId: string }) {
+      return store.runHoldingApproval({ ...input, kind: "action" });
+    },
+
+    /**
+     * WF7: carry on an action step parked on this approval, after the person decided it.
+     *
+     * The step is driven again with the same identity it asked with (its card reference, its thread
+     * and its step id), so the approval gate inside `callTool` finds the same request: approved, it
+     * is consumed and the call carried out once; denied, the step fails; already carried out, its
+     * saved result is replayed. Answers false when the run is not parked on an action holding this
+     * approval, so the caller handles the approval the usual way.
+     */
+    async resumeAction(input: {
+      tenantId: string;
+      runId: string;
+      approvalId: string;
+    }): Promise<boolean> {
+      const run = await readRun(input.tenantId, input.runId);
+      if (!run) return false;
+      const parked = run.steps[run.cursor];
+      if (
+        run.status !== "awaiting_action" ||
+        parked?.kind !== "action" ||
+        parked.approvalId !== input.approvalId
+      )
+        return false;
+      if (
+        !(await writeRun(
+          input.tenantId,
+          input.runId,
+          { status: "running" },
+          run,
+        ))
+      )
+        return false;
+      await store.advance({ tenantId: input.tenantId, runId: input.runId });
+      return true;
+    },
+
+    /**
      * Which run, if any, is waiting on this approval.
      *
      * Asked by the approval machinery's resume path rather than by the screen: a person answers in the
@@ -2037,7 +2124,10 @@ export function createPipelineStore(options: {
      */
     async runHoldingApproval(input: {
       approvalId: string;
+      /** WF7: only a run whose step holding the approval is of this kind (an action step). */
+      kind?: "action";
     }): Promise<{ tenantId: string; runId: string } | null> {
+      const kind = input.kind;
       const [row] = await runAsTenant("platform", async () =>
         database
           .select({ id: groupTaskRuns.id, tenantId: groupTaskRuns.tenantId })
@@ -2054,7 +2144,9 @@ export function createPipelineStore(options: {
                * match. Measured, not guessed -- and the same double-encoding the shared `db/schema/json`
                * helper exists to avoid, arriving from the other side.
                */
-              sql`exists (select 1 from jsonb_array_elements(${groupTaskRuns.steps}) as step where step->>'approvalId' = ${input.approvalId})`,
+              kind
+                ? sql`exists (select 1 from jsonb_array_elements(${groupTaskRuns.steps}) as step where step->>'approvalId' = ${input.approvalId} and step->>'kind' = ${kind})`
+                : sql`exists (select 1 from jsonb_array_elements(${groupTaskRuns.steps}) as step where step->>'approvalId' = ${input.approvalId})`,
             ),
           )
           .limit(1),
