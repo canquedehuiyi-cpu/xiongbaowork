@@ -938,16 +938,33 @@ describe("other node fields", () => {
 });
 
 describe("what the server runs today", () => {
-  test("only coworker steps without jumps are accepted on Save, until their execution lands", () => {
-    expect(wakerFlowPlanSchema.safeParse(branching()).success).toBe(false);
-    const issues =
-      wakerFlowPlanSchema.safeParse(branching()).error?.issues ?? [];
-    expect(issues.map((issue) => issue.message)).toContain(
-      "这种步骤暂时还不能运行。",
-    );
-    expect(issues.map((issue) => issue.message)).toContain(
-      "步骤跳转暂时还不能运行。",
-    );
+  test("decisions and jumps are accepted on Save; nested Flows and actions wait for their execution", () => {
+    expect(wakerFlowPlanSchema.safeParse(branching()).success).toBe(true);
+    const later = base([
+      {
+        id: "child",
+        kind: "flow",
+        targetFlowId: FLOW_ID,
+        targetRevision: 1,
+        inputMap: {},
+        outputKey: "child_out",
+      },
+      {
+        id: "post",
+        kind: "action",
+        agentId: "writer",
+        tool: "slack/post_message",
+        args: {},
+        inputKeys: [],
+        outputKey: "posted",
+      },
+    ]);
+    const issues = wakerFlowPlanSchema.safeParse(later).error?.issues ?? [];
+    expect(
+      issues
+        .filter((issue) => issue.message === "这种步骤暂时还不能运行。")
+        .map((issue) => issue.path.join(".")),
+    ).toEqual(["steps.0.kind", "steps.1.kind"]);
   });
 
   test("the planning model is held to coworker steps without jumps (D9)", async () => {

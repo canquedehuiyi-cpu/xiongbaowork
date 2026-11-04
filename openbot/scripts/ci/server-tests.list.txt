@@ -246,6 +246,7 @@ tests/people-routes.test.ts
 tests/persona.test.ts
 tests/picked-harness-auth.test.ts
 tests/pipeline-control.integration.test.ts
+tests/pipeline-decision.test.ts
 tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
 tests/pipeline-template-edit.test.ts

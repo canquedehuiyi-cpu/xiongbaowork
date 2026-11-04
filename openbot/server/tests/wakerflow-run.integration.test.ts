@@ -5,6 +5,8 @@ import type { WakerFlowPlan } from "../../shared/wakerflows";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
+  flowConfirmations,
+  flowRunEvents,
   groupTaskRuns,
   groupTaskTemplates,
   tasks,
@@ -22,6 +24,7 @@ import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import {
   createWakerFlowStore,
+  flowRunEventWriter,
   WakerFlowNotRunnableError,
   WakerFlowRequestConflictError,
   WakerFlowRunNotFoundError,
@@ -43,6 +46,12 @@ const tenants: string[] = [];
 afterAll(async () => {
   for (const tenantId of tenants) {
     await runAsTenant(tenantId, async () => {
+      await database
+        .delete(flowConfirmations)
+        .where(eq(flowConfirmations.tenantId, tenantId));
+      await database
+        .delete(flowRunEvents)
+        .where(eq(flowRunEvents.tenantId, tenantId));
       await database.delete(tasks).where(eq(tasks.tenantId, tenantId));
       await database
         .delete(groupTaskRuns)
@@ -605,4 +614,158 @@ test("several saved Flows in one workspace all run, and a plain crew's template 
       initiatedBy: f.tenantId,
     }),
   ).rejects.toThrow("这个工作区里没有这条模板。");
+});
+
+/**
+ * WF7-2 (spec 2026-11-04-wf7 §3.3, §5 WF7-2): a decision step on the real database. It is evaluated
+ * by the orchestrator: the fake step runner is asked only for the taken branch's coworker steps.
+ */
+async function branchingFixture(
+  executeStep?: (call: StepCall) => ReturnType<PipelineStepRunner>,
+  when = 'inputs.kind == "a"',
+) {
+  const f = await fixture(executeStep && ((call) => executeStep(call)));
+  const plan: WakerFlowPlan = {
+    ...f.plan,
+    members: [
+      {
+        agentId: f.member,
+        role: "记录员",
+        prompt: "你只负责把内容整理清楚，不下结论。",
+      },
+      { agentId: f.reviewer, role: "复核员" },
+    ],
+    inputs: [
+      { key: "notes", label: "会议内容", required: true },
+      { key: "kind", label: "类型", required: true },
+    ],
+    steps: [
+      {
+        id: "route",
+        kind: "decision",
+        inputKeys: ["kind"],
+        branches: [{ label: "走甲", when, next: "a_step" }],
+        otherwise: "b_step",
+      },
+      {
+        id: "a_step",
+        agentId: f.member,
+        instruction: "甲分支整理",
+        inputKeys: ["notes"],
+        outputKey: "a_out",
+        next: "join",
+      },
+      {
+        id: "b_step",
+        agentId: f.reviewer,
+        instruction: "乙分支复核",
+        inputKeys: ["notes"],
+        outputKey: "b_out",
+      },
+      {
+        id: "join",
+        agentId: f.reviewer,
+        instruction: "汇总",
+        inputKeys: ["notes"],
+        outputKey: "final",
+      },
+    ],
+  };
+  const pipeline = createPipelineStore({
+    ...f.pipelineOptions,
+    events: flowRunEventWriter,
+  });
+  const store = f.storeFor(pipeline);
+  const flow = await store.save(f.tenantId, f.tenantId, f.flow.id, {
+    revision: f.flow.revision,
+    plan,
+  });
+  const run = async (kind: string) => {
+    const request = await store.start(f.tenantId, f.tenantId, flow.id, {
+      requestId: randomUUID(),
+      revision: flow.revision,
+      inputs: { notes: "周会", kind },
+    });
+    if (!request.runId) throw new Error("No run registered.");
+    await Promise.all(f.drives);
+    const detail = await store.run(f.tenantId, flow.id, request.runId);
+    const events = await store.events(f.tenantId, flow.id, request.runId);
+    return { runId: request.runId, detail, events: events.events };
+  };
+  return { ...f, pipeline, store, flow, run };
+}
+
+test("a decision whose condition is true runs only the A branch; B is skipped by the branch, not missing", async () => {
+  const f = await branchingFixture();
+  const { detail, events } = await f.run("a");
+  expect(detail.status).toBe("done");
+  // The step runner is asked exactly as many times as the A branch has coworker steps (a_step, join).
+  expect(f.calls.map((call) => call.instruction.split("\n")[0])).toEqual([
+    "本流程中你的角色：记录员",
+    "汇总",
+  ]);
+  expect(f.calls).toHaveLength(2);
+  const byId = Object.fromEntries(detail.steps.map((step) => [step.id, step]));
+  expect(byId.route).toMatchObject({
+    state: "done",
+    branch: { label: "走甲", index: 0 },
+  });
+  expect(byId.route).not.toHaveProperty("taskId");
+  expect(byId.route).not.toHaveProperty("runRef");
+  expect(byId.a_step).toMatchObject({ state: "done" });
+  expect(byId.b_step).toMatchObject({ state: "skipped", skipReason: "branch" });
+  expect(byId.join).toMatchObject({ state: "done" });
+  // The summary is not told a branch-skipped step is missing work.
+  expect(f.calls[1]?.instruction).not.toContain("没有产出");
+  expect(f.calls[1]?.instruction).not.toContain("b_step");
+  // No card for the decision: the parent and the two coworker steps only.
+  expect(await f.cards()).toHaveLength(1 + 2);
+  const taken = events.filter((event) => event.type === "branch_taken");
+  expect(taken).toHaveLength(1);
+  expect(taken[0]?.payload).toEqual({
+    stepId: "route",
+    index: 0,
+    label: "走甲",
+    branch: 0,
+  });
+  expect(
+    events.find(
+      (event) =>
+        event.type === "step_skipped" && event.payload.stepId === "b_step",
+    )?.payload,
+  ).toMatchObject({ skipReason: "branch" });
+});
+
+test("a decision with no true branch takes otherwise, recorded as branch -1", async () => {
+  const f = await branchingFixture();
+  const { detail, events } = await f.run("b");
+  expect(detail.status).toBe("done");
+  expect(f.calls.map((call) => call.instruction.split("\n")[0])).toEqual([
+    "乙分支复核",
+    "汇总",
+  ]);
+  const byId = Object.fromEntries(detail.steps.map((step) => [step.id, step]));
+  expect(byId.a_step).toMatchObject({ state: "skipped", skipReason: "branch" });
+  expect(byId.route).toMatchObject({
+    branch: { label: "否则", index: -1 },
+  });
+  expect(
+    events.find((event) => event.type === "branch_taken")?.payload,
+  ).toMatchObject({ label: "否则", branch: -1 });
+});
+
+test("a condition that fails at run time fails the decision and the run; nothing after it runs", async () => {
+  const f = await branchingFixture(undefined, "int(inputs.kind) > 1");
+  const { detail, events } = await f.run("not-a-number");
+  expect(detail.status).toBe("failed");
+  expect(f.calls).toHaveLength(0);
+  const [route, ...rest] = detail.steps;
+  expect(route).toMatchObject({ id: "route", state: "failed" });
+  expect(route?.error).toContain("分支「走甲」的条件（第 1 个）求值出错");
+  expect(route?.error).not.toContain("not-a-number");
+  for (const step of rest) expect(step.state).toBe("pending");
+  expect(events.map((event) => event.type)).toContain("run_failed");
+  expect(events.map((event) => event.type)).not.toContain("branch_taken");
+  // Only the parent card, and it closed failed.
+  expect(await f.cards()).toHaveLength(1);
 });
