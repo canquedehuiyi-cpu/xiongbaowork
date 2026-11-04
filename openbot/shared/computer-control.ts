@@ -34,6 +34,11 @@ export type ComputerControlState = {
   secretWanted?: string;
   secretRef?: string;
   secretSnapshotId?: number;
+  /**
+   * Set when this Bot's browser runs on the tenant's own machine rather than in a container (F2).
+   * The surface offers the live screen from there, and says whose machine it is.
+   */
+  device?: { deviceId: string };
 };
 export type RequestHelpInput = { reason: string; toolCallId?: string };
 export type ControlRequestInput = { requestId: string };
