@@ -163,6 +163,7 @@ tests/device-queue.test.ts
 tests/device-safety.integration.test.ts
 tests/device-screen.test.ts
 tests/device-selection.test.ts
+tests/device-takeover.test.ts
 tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
