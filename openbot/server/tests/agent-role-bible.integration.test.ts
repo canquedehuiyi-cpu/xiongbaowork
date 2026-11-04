@@ -16,6 +16,7 @@ import {
   users,
 } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
+import { avatarAgentId } from "../src/tenant/provisioning";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -323,8 +324,8 @@ describe("ROLE1-1: the Bible on a coworker", () => {
       agent: { bible: string; acceptsRoleTemplate: boolean };
     };
     expect(agent.bible).toBe("周报写在飞书的「工作 / 周报」里。");
-    // D4: no template may be applied to it.
-    expect(agent.acceptsRoleTemplate).toBe(false);
+    // D4, revised 2026-11-04: only the 分身 itself is refused a template, and this is not it.
+    expect(agent.acceptsRoleTemplate).toBe(true);
     const row = await storedRow(actor, agentId);
     expect(row?.bible).toBe("周报写在飞书的「工作 / 周报」里。");
     expect(row?.configuration).toEqual({
@@ -382,7 +383,7 @@ describe("ROLE1-1: the Bible on a coworker", () => {
     });
     expect(malformed.status).toBe(400);
 
-    // A coworker that runs here on its systemPrompt keeps the content and records no template (D4).
+    // A coworker that runs here on its systemPrompt records its template too (D4, revised 2026-11-04).
     const builtIn = await request(
       actor,
       "POST",
@@ -399,8 +400,8 @@ describe("ROLE1-1: the Bible on a coworker", () => {
       };
     };
     agentIds.push(agent.id);
-    expect(agent.roleTemplate).toBeNull();
-    expect(agent.acceptsRoleTemplate).toBe(false);
+    expect(agent.roleTemplate).toEqual({ id: own, version: 3 });
+    expect(agent.acceptsRoleTemplate).toBe(true);
 
     // A copy carries the handbook and, for the template's own owner, where it came from.
     const copied = await request(actor, "POST", `/${created.id}/duplicate`);
@@ -458,24 +459,94 @@ describe("ROLE1-1: applying a role to a coworker in the store", () => {
     expect((await storedRow(actor, agent.id))?.roleTemplateVersion).toBe(2);
   });
 
-  test("a built_in coworker is refused a template and keeps everything (D4)", async () => {
+  test("a built_in coworker that is not the 分身 takes a template, and its prompt moves with the role (D4, revised 2026-11-04)", async () => {
     const actor = await person("apply-builtin");
     const response = await request(actor, "POST", "/", form, unmanaged);
     const { agent } = (await response.json()) as { agent: { id: string } };
     agentIds.push(agent.id);
     const templateId = await template(actor, "代码审核员");
+    const applied = await runAsTenant(actor.id, () =>
+      unmanaged.applyRole(actor, agent.id, role, {
+        id: templateId,
+        version: 1,
+      }),
+    );
+    expect(applied).toMatchObject({
+      roleDescription: role.roleDescription,
+      persona: role.persona,
+      bible: role.bible,
+      roleTemplate: { id: templateId, version: 1 },
+      acceptsRoleTemplate: true,
+    });
+    // It runs on its systemPrompt alone, so the template's role description is what it now runs on.
+    expect(await storedRow(actor, agent.id)).toMatchObject({
+      bible: role.bible,
+      roleTemplateId: templateId,
+      roleTemplateVersion: 1,
+      configuration: { systemPrompt: role.roleDescription },
+    });
+
+    // A template that leaves the role description as it is leaves the prompt alone too.
+    const personaOnly = await template(actor, "只换语气");
+    await runAsTenant(actor.id, () =>
+      unmanaged.applyRole(
+        actor,
+        agent.id,
+        { ...role, persona: { tone: "温和", principles: "", habits: "" } },
+        { id: personaOnly, version: 1 },
+      ),
+    );
+    expect((await storedRow(actor, agent.id))?.configuration).toEqual({
+      systemPrompt: role.roleDescription,
+    });
+  });
+
+  test("the 分身 is still refused a template and keeps everything (D4)", async () => {
+    const actor = await person("apply-avatar");
+    const agentId = avatarAgentId(actor.id);
+    agentIds.push(agentId);
+    await runAsTenant(actor.id, async () => {
+      await database.insert(agents).values({
+        id: agentId,
+        name: "我的分身",
+        type: "built_in",
+        configuration: { systemPrompt: "你是用户的个人分身。" },
+      });
+      await database.insert(agentProfiles).values({
+        agentId,
+        ownerUserId: actor.id,
+        title: "个人分身",
+        roleDescription: "代表你本人收集和整理工作信息。",
+        avatarSeed: agentId,
+        visibility: "private",
+      });
+    });
+    const read = await runAsTenant(actor.id, () =>
+      unmanaged.get(actor, agentId),
+    );
+    expect(read?.acceptsRoleTemplate).toBe(false);
+    const templateId = await template(actor, "代码审核员");
     await expect(
       runAsTenant(actor.id, () =>
-        unmanaged.applyRole(actor, agent.id, role, {
+        unmanaged.applyRole(actor, agentId, role, {
           id: templateId,
           version: 1,
         }),
       ),
-    ).rejects.toThrow("内置员工（包括我的分身）不能套用角色模板");
-    expect(await storedRow(actor, agent.id)).toMatchObject({
+    ).rejects.toThrow("我的分身不能套用角色模板");
+    expect(await storedRow(actor, agentId)).toEqual({
       bible: null,
       roleTemplateId: null,
-      configuration: { systemPrompt: form.roleDescription },
+      roleTemplateVersion: null,
+      configuration: { systemPrompt: "你是用户的个人分身。" },
+    });
+    expect(
+      await runAsTenant(actor.id, () => unmanaged.get(actor, agentId)),
+    ).toMatchObject({
+      title: "个人分身",
+      roleDescription: "代表你本人收集和整理工作信息。",
+      persona: null,
+      roleTemplate: null,
     });
   });
 
