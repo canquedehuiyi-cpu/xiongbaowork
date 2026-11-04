@@ -9,8 +9,9 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { PlanEditor } from "@/components/wakerflow/plan-editor";
 import type { AgentProfile } from "@/lib/agents/queries";
 import {
   laterRunReading,
@@ -578,4 +579,191 @@ test("an ended run is never moved back to running by a later reading", () => {
     topic: "请填写 会议主题。",
   });
   expect(runInputProblems(plan, { topic: "复盘" })).toEqual({});
+});
+
+/*
+ * WF8: typed Flow inputs. The editor declares a type, a default and a select's options; the run
+ * panel enters each type its own way and sends strings.
+ */
+test("the editor sets a type, options and a default, and a select without options cannot be saved", async () => {
+  const puts: unknown[] = [];
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (init?.method === "PUT") {
+      puts.push(body);
+      return Response.json({ flow: flow({ plan: body.plan, revision: 4 }) });
+    }
+    return Response.json(
+      { error: `unexpected ${String(input)}` },
+      { status: 500 },
+    );
+  }) as typeof fetch;
+  const saved: WakerFlow[] = [];
+  const view = render(
+    <PlanEditor
+      coworkers={[{ id: "agent-a", name: "阿记" }]}
+      flowId={FLOW_ID}
+      onReload={() => {}}
+      onSaved={(next) => saved.push(next)}
+      plan={plan}
+      revision={3}
+    />,
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  const type = view.getByLabelText("第 2 个输入的类型") as HTMLSelectElement;
+  expect(Array.from(type.options).map((option) => option.textContent)).toEqual([
+    "单行文本",
+    "多行文本",
+    "数字",
+    "下拉选择",
+    "开关",
+  ]);
+  fireEvent.change(type, { target: { value: "select" } });
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  expect(
+    await view.findByText("下拉输入「补充说明」至少需要一个选项。"),
+  ).toBeDefined();
+  expect(puts).toEqual([]);
+
+  await user.type(view.getByLabelText("第 2 个输入的选项"), "简短{Enter}详细");
+  fireEvent.change(view.getByLabelText("第 2 个输入的默认值"), {
+    target: { value: "详细" },
+  });
+  await user.type(view.getByLabelText("第 2 个输入的说明"), "篇幅");
+  // A number's default must be a number.
+  fireEvent.change(view.getByLabelText("第 1 个输入的类型"), {
+    target: { value: "number" },
+  });
+  await user.type(view.getByLabelText("第 1 个输入的默认值"), "很多");
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  expect(
+    await view.findByText("「会议主题」的默认值无效：会议主题 需要填写数字。"),
+  ).toBeDefined();
+  expect(puts).toEqual([]);
+
+  const fallback = view.getByLabelText("第 1 个输入的默认值");
+  await user.clear(fallback);
+  await user.type(fallback, "3");
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect((puts[0] as { plan: WakerFlowPlan }).plan.inputs).toEqual([
+    {
+      key: "topic",
+      label: "会议主题",
+      required: true,
+      type: "number",
+      default: "3",
+    },
+    {
+      key: "notes",
+      label: "补充说明",
+      required: false,
+      type: "select",
+      description: "篇幅",
+      default: "详细",
+      options: ["简短", "详细"],
+    },
+  ]);
+  expect(saved).toHaveLength(1);
+});
+
+test("the run form renders each type its own way and sends strings", async () => {
+  const typed: WakerFlowPlan = {
+    ...plan,
+    inputs: [
+      { key: "topic", label: "会议主题", required: true, type: "textarea" },
+      { key: "count", label: "人数", required: true, type: "number" },
+      {
+        key: "tone",
+        label: "语气",
+        required: false,
+        type: "select",
+        options: ["正式", "轻松"],
+        default: "轻松",
+      },
+      {
+        key: "urgent",
+        label: "加急",
+        required: true,
+        type: "boolean",
+        description: "加急会跳过复核",
+      },
+    ],
+  };
+  serve((call) => {
+    if (call.path === `/api/wakerflows/${FLOW_ID}` && call.method === "GET")
+      return Response.json({ flow: flow({ plan: typed }) });
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "POST"
+    )
+      return Response.json(
+        startAnswer((call.body as { requestId: string }).requestId),
+      );
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({ run: run("running") });
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+
+  const topic = await view.findByLabelText("会议主题（必填）");
+  expect(topic.tagName).toBe("TEXTAREA");
+  const count = view.getByLabelText("人数（必填）") as HTMLInputElement;
+  expect(count.getAttribute("type")).toBe("number");
+  const tone = view.getByLabelText("语气（选填）") as HTMLSelectElement;
+  expect(tone.tagName).toBe("SELECT");
+  expect(Array.from(tone.options).map((option) => option.value)).toEqual([
+    "",
+    "正式",
+    "轻松",
+  ]);
+  expect(tone.value).toBe("轻松");
+  const urgent = view.getByLabelText("加急（必填）") as HTMLInputElement;
+  expect(urgent.getAttribute("role")).toBe("switch");
+  expect(urgent.checked).toBe(false);
+  expect(view.getByText("加急会跳过复核")).toBeDefined();
+
+  await user.click(view.getByRole("button", { name: "运行" }));
+  expect(await view.findByText("请填写 人数。")).toBeDefined();
+  expect(runPosts()).toEqual([]);
+
+  await user.type(topic, "季度复盘{Enter}只谈 Q3");
+  await user.type(count, "12");
+  await user.click(urgent);
+  await user.click(view.getByRole("button", { name: "运行" }));
+  await waitFor(() => expect(runPosts()).toHaveLength(1));
+  expect((runPosts()[0]?.body as { inputs: unknown }).inputs).toEqual({
+    topic: "季度复盘\n只谈 Q3",
+    count: "12",
+    tone: "轻松",
+    urgent: "true",
+  });
+});
+
+test("runInputProblems checks each type and a default stands in for an empty required input", () => {
+  const typed: WakerFlowPlan = {
+    ...plan,
+    inputs: [
+      { key: "count", label: "人数", required: true, type: "number" },
+      {
+        key: "tone",
+        label: "语气",
+        required: true,
+        type: "select",
+        options: ["正式"],
+        default: "正式",
+      },
+    ],
+  };
+  expect(runInputProblems(typed, { count: "abc" })).toEqual({
+    count: "人数 需要填写数字。",
+  });
+  expect(runInputProblems(typed, { count: "3", tone: "随意" })).toEqual({
+    tone: "语气 需要从选项中选择。",
+  });
+  expect(runInputProblems(typed, { count: "3" })).toEqual({});
+  // The automation form's rule: no default stands in for a required value.
+  expect(runInputProblems(typed, { count: "3" }, { defaults: false })).toEqual({
+    tone: "请填写 语气。",
+  });
 });
