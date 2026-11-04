@@ -220,7 +220,7 @@ export function Flowchart(props: {
           );
         })}
       </svg>
-      <ol className="flex flex-col">
+      <div className="flex flex-col">
         {steps.map((step, index) => {
           const kind = stepKind(step);
           const look = stateLook(props.states?.[step.id]);
@@ -286,7 +286,7 @@ export function Flowchart(props: {
               </div>
             );
           return (
-            <li
+            <div
               className="flex flex-col"
               data-kind={kind}
               data-state={look.key}
@@ -337,10 +337,10 @@ export function Flowchart(props: {
                 ) : null}
                 {props.extra?.(step, index)}
               </div>
-            </li>
+            </div>
           );
         })}
-        <li
+        <div
           className="flex items-center"
           data-step={WAKERFLOW_END}
           style={{ height: NODE }}
@@ -348,8 +348,8 @@ export function Flowchart(props: {
           <span className="rounded-full border border-border px-4 py-1 text-muted-foreground text-xs">
             结束
           </span>
-        </li>
-      </ol>
+        </div>
+      </div>
     </figure>
   );
 }

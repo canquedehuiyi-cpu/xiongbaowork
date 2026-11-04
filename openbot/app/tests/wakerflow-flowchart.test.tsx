@@ -400,3 +400,161 @@ test("a nested Flow's node opens the child Flow, and says when the child has a n
   expect(editor.getByText("固定在第 5 版")).toBeDefined();
   expect(editor.queryByText(/子流程有新版本/)).toBeNull();
 });
+
+test("the run detail keeps its own step list first, each step's status in plain words beside the chart", async () => {
+  const RUN_ID = "44444444-4444-4444-8444-444444444444";
+  const linear: WakerFlowPlan = {
+    ...branching,
+    steps: branching.steps,
+  };
+  globalThis.fetch = (async (input: unknown) => {
+    const path = String(input);
+    if (path.startsWith("/api/agents")) return Response.json({ agents: [] });
+    if (path === "/api/wakerflows")
+      return Response.json({ flows: [flowOf({ plan: linear })] });
+    if (path === `/api/wakerflows/${FLOW_ID}`)
+      return Response.json({ flow: flowOf({ plan: linear }) });
+    if (path === `/api/wakerflows/${FLOW_ID}/runs`)
+      return Response.json({
+        runs: [
+          {
+            id: RUN_ID,
+            status: "done",
+            templateId: null,
+            parentTaskId: null,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+    if (path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({
+        run: {
+          id: RUN_ID,
+          flowId: FLOW_ID,
+          status: "done",
+          cursor: 4,
+          parentTaskId: null,
+          inputs: { level: "高" },
+          steps: [
+            {
+              id: "route",
+              kind: "decision",
+              agentId: "",
+              instruction: "条件判断：紧急",
+              inputKeys: ["level"],
+              branches:
+                linear.steps[0]?.kind === "decision"
+                  ? linear.steps[0].branches
+                  : [],
+              otherwise: "normal",
+              state: "done",
+              branch: { label: "紧急", index: 0 },
+            },
+            { ...linear.steps[1], state: "done", output: "已处理" },
+            { ...linear.steps[2], state: "skipped", skipReason: "branch" },
+            { ...linear.steps[3], state: "done", output: "汇总好了" },
+          ],
+        },
+      });
+    if (path.includes("/events?"))
+      return Response.json({ events: [], next: null });
+    if (path.endsWith("/confirmations"))
+      return Response.json({ confirmations: [] });
+    if (path.endsWith("/versions")) return Response.json({ versions: [] });
+    return Response.json({ error: "unexpected" }, { status: 500 });
+  }) as typeof fetch;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const root = createRootRoute({ component: () => <Outlet /> });
+  const router = createRouter({
+    context: {},
+    history: createMemoryHistory({
+      initialEntries: [`/wakerflows/${FLOW_ID}`],
+    }),
+    routeTree: root.addChildren([
+      createRoute({
+        getParentRoute: () => root,
+        path: "/wakerflows/$flowId",
+        component: () => <WakerFlowDetail flowId={FLOW_ID} />,
+      } as never),
+      createRoute({
+        getParentRoute: () => root,
+        path: "/approvals",
+        component: () => null,
+      } as never),
+    ]),
+  });
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  await user.click(await view.findByRole("button", { name: /已完成/ }));
+  const status = await view.findByTestId("run-detail-status");
+  // The G4 e2e reads a step's status here: two levels up from the run's status, the first `ol > li`.
+  const detail = status.parentElement?.parentElement as HTMLElement;
+  const items = [...detail.querySelectorAll("ol > li")] as HTMLElement[];
+  expect(items).toHaveLength(4);
+  expect(
+    within(items[0] as HTMLElement).getByText("已完成", { exact: true }),
+  ).toBeDefined();
+  expect(within(items[0] as HTMLElement).getByText(/第 1 步/)).toBeDefined();
+  expect(
+    within(items[2] as HTMLElement).getByText("分支未选中", { exact: true }),
+  ).toBeDefined();
+  // And the chart beside it, coloured by the same states.
+  expect(
+    detail
+      .querySelector('[aria-label="运行流程图"] [data-step="normal"]')
+      ?.getAttribute("data-state"),
+  ).toBe("skipped-branch");
+});
+
+test("an action step added in the editor saves with its tool, arguments and reads", async () => {
+  const saved: { plan: WakerFlowPlan }[] = [];
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      saved.push(JSON.parse(String(init.body)));
+      return Response.json({ flow: flowOf({ plan: branching }) });
+    }
+    return Response.json({ flows: [] });
+  }) as typeof fetch;
+  const view = render(
+    withQueries(
+      <PlanEditor
+        coworkers={[{ id: "agent-a", name: "阿处" }]}
+        flowId={FLOW_ID}
+        onReload={() => undefined}
+        onSaved={() => undefined}
+        plan={branching}
+        revision={1}
+      />,
+    ),
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  await user.selectOptions(view.getByLabelText("新步骤的类型"), "action");
+  await user.click(view.getByRole("button", { name: "添加步骤" }));
+  await user.type(view.getByLabelText("第 5 步调用的工具"), "crm/create_note");
+  await user.click(view.getByLabelText("第 5 步读取 final"));
+  await user.click(view.getByRole("button", { name: "添加参数" }));
+  await user.clear(view.getByLabelText("第 5 步第 1 个参数名"));
+  await user.type(view.getByLabelText("第 5 步第 1 个参数名"), "text");
+  await user.type(
+    view.getByLabelText("第 5 步参数 text 的值"),
+    "结论：{{{{final}}",
+  );
+  await user.type(view.getByLabelText("第 5 步的输出名称"), "note");
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await waitFor(() => expect(saved).toHaveLength(1));
+  expect(saved[0]?.plan.steps[4]).toEqual({
+    id: "step_5",
+    kind: "action",
+    agentId: "agent-a",
+    tool: "crm/create_note",
+    args: { text: "结论：{{final}}" },
+    inputKeys: ["final"],
+    outputKey: "note",
+  });
+});

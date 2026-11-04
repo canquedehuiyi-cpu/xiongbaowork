@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { client, RequestError } from "@/lib/client";
 import {
   type FlowModelChoice,
+  isWorkerStep,
   stepAgentId,
   stepKind,
   stepOutputKey,
@@ -21,6 +22,7 @@ import {
   type WakerFlowSaveInput,
   type WakerFlowStep,
   type WakerFlowStepKind,
+  type WakerFlowWorkerStep,
 } from "../../../shared/wakerflows";
 
 export type {
@@ -36,6 +38,7 @@ export type {
   WakerFlowSaveInput,
   WakerFlowStep,
   WakerFlowStepKind,
+  WakerFlowWorkerStep,
 };
 export {
   isWorkerStep,
@@ -1112,18 +1115,36 @@ export function planDifferences(
   for (const input of current.inputs)
     if (!candidate.inputs.some((i) => i.key === input.key))
       out.push(`移除输入：${input.label}（${input.key}）`);
+  // WF7: a step may be another kind than a coworker's turn; it is named by what it does.
+  const summary = (step: WakerFlowStep) => {
+    switch (step.kind) {
+      case "decision":
+        return `条件判断（${step.branches.map((branch) => branch.label).join(" / ")}）`;
+      case "flow":
+        return "嵌套子流程";
+      case "action":
+        return `调用工具 ${step.tool}`;
+      default:
+        return step.instruction;
+    }
+  };
   for (const [index, step] of candidate.steps.entries()) {
     const before = current.steps.find((s) => s.id === step.id);
     if (!before) {
-      out.push(`新增第 ${index + 1} 步「${step.id}」：${step.instruction}`);
+      out.push(`新增第 ${index + 1} 步「${step.id}」：${summary(step)}`);
       continue;
     }
-    if (before.instruction !== step.instruction)
-      out.push(`修改步骤「${step.id}」：${step.instruction}`);
-    if (before.agentId !== step.agentId)
-      out.push(
-        `步骤「${step.id}」改由「${roleOf(candidate, step.agentId)}」执行`,
-      );
+    if (isWorkerStep(before) && isWorkerStep(step)) {
+      if (before.instruction !== step.instruction)
+        out.push(`修改步骤「${step.id}」：${step.instruction}`);
+    } else if (
+      stepKind(before) !== stepKind(step) ||
+      JSON.stringify(before) !== JSON.stringify(step)
+    )
+      out.push(`修改步骤「${step.id}」：${summary(step)}`);
+    const agent = stepAgentId(step);
+    if (agent !== undefined && stepAgentId(before) !== agent)
+      out.push(`步骤「${step.id}」改由「${roleOf(candidate, agent)}」执行`);
   }
   for (const step of current.steps)
     if (!candidate.steps.some((s) => s.id === step.id))
