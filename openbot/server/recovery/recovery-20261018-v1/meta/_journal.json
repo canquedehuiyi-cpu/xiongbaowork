@@ -918,6 +918,13 @@
       "when": 1793631900000,
       "tag": "0131_employee_tool_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1793632500000,
+      "tag": "0133_role_profiles",
+      "breakpoints": true
     }
   ]
 }

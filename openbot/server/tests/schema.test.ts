@@ -333,6 +333,24 @@ describe("OpenBot database schema", () => {
         hasDefault: false,
         primary: false,
       },
+      /*
+       * Story ROLE1 (option C): the coworker's 工作手册, at most 8000 characters, and the role template
+       * and version its identity, persona and handbook were last taken from — both null or both set.
+       * Null throughout is every coworker written before templates existed.
+       */
+      { name: "bible", notNull: false, hasDefault: false, primary: false },
+      {
+        name: "role_template_id",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
+      {
+        name: "role_template_version",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
       {
         name: "deleted_at",
         notNull: false,

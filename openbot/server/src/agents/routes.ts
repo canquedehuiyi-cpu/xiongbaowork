@@ -22,6 +22,8 @@ import {
   OwnerlessBotPrivateError,
   PlatformModelNotAvailableError,
   ProtectedAgentError,
+  RoleTemplateNotApplicableError,
+  RoleTemplateSourceError,
 } from "./profile-store";
 import type {
   AgentActor,
@@ -44,8 +46,13 @@ type AgentInputObject = {
   modelRef?: unknown;
   platformModelRef?: unknown;
   persona?: unknown;
+  bible?: unknown;
   avatarSeed?: unknown;
+  roleTemplate?: unknown;
 };
+
+/** The longest 工作手册 a coworker may carry (ROLE1, D3), in characters as the database counts them. */
+export const BIBLE_MAX_CHARACTERS = 8000;
 
 /**
  * What an avatar seed may be: what the form draws from and what every surface hands boring-avatars.
@@ -151,6 +158,8 @@ export function parseAgentInput(
    */
   const persona = parsePersona(input.persona);
   if (typeof persona === "string") return { ok: false, error: persona };
+  const bible = parseBible(input.bible);
+  if (typeof bible === "object" && bible !== null) return bible;
 
   // Optional on create and on update alike. Absent means "the default" on a create and "leave it"
   // on an update, so a form that never showed the avatar cannot redraw it; anything sent is checked.
@@ -203,6 +212,8 @@ export function parseAgentInput(
       // Only sent when the form knew about it, so a save that never touched the persona boxes leaves
       // the stored one where it is.
       ...(persona === undefined ? {} : { persona }),
+      // The same: a form that never showed the handbook leaves it alone.
+      ...(bible === undefined ? {} : { bible }),
       ...(avatarSeed === undefined ? {} : { avatarSeed }),
     },
   };
@@ -262,6 +273,55 @@ function parsePersona(value: unknown): Persona | undefined | string {
     principles: parts.principles ?? "",
     habits: parts.habits ?? "",
   };
+}
+
+/**
+ * The 工作手册 (ROLE1): absent leaves it, null or blank clears it, text up to 8000 characters writes it.
+ *
+ * Counted in code points, as the database's CHECK counts them, so a handbook the form accepted is one
+ * the row accepts. Over the limit is refused, never cut: a handbook missing its last section reads as
+ * complete to the model.
+ */
+function parseBible(
+  value: unknown,
+): string | null | undefined | { ok: false; error: string } {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string")
+    return { ok: false, error: "手册必须是文字。" };
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if ([...trimmed].length > BIBLE_MAX_CHARACTERS) {
+    return {
+      ok: false,
+      error: `手册不能超过 ${BIBLE_MAX_CHARACTERS} 字。`,
+    };
+  }
+  return trimmed;
+}
+
+/**
+ * The role template a new coworker starts from (ROLE1): absent, or a template id and the version
+ * the form loaded. Whether it is the creator's is decided in the store, under their frame.
+ */
+function parseRoleTemplateSource(
+  value: unknown,
+): { id: string; version: number } | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  const { id, version } = value as { id?: unknown; version?: unknown };
+  if (
+    typeof id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      id,
+    ) ||
+    typeof version !== "number" ||
+    !Number.isInteger(version) ||
+    version < 1
+  ) {
+    return null;
+  }
+  return { id, version };
 }
 
 function isAgentInputObject(input: unknown): input is AgentInputObject {
@@ -698,12 +758,16 @@ export function createAgentRoutes(
 
   routes.post("/", requireUser, async (context) => {
     // Malformed JSON is a recoverable client-input error and is validated by the same parser.
-    const parsed = parseAgentInput(
-      await context.req.json().catch(() => null),
-      allowPrivateHosts,
-      allowedHosts,
-    );
+    const body = await context.req.json().catch(() => null);
+    const parsed = parseAgentInput(body, allowPrivateHosts, allowedHosts);
     if (!parsed.ok) return context.json({ error: parsed.error }, 400);
+    // Create-only (ROLE1): the template the form started from. `update` never reads it.
+    const roleTemplate = parseRoleTemplateSource(
+      isAgentInputObject(body) ? body.roleTemplate : undefined,
+    );
+    if (roleTemplate === null) {
+      return context.json({ error: "所选角色模板无效，请重新选择。" }, 400);
+    }
 
     // The plan is asked before the row is written, and answers with its arithmetic.
     const blocked = await overPlan(context.var.actor.id);
@@ -727,6 +791,7 @@ export function createAgentRoutes(
           ...(parsed.value.endpoint
             ? {}
             : { systemPrompt: parsed.value.roleDescription }),
+          ...(roleTemplate ? { roleTemplate } : {}),
         },
         quota
           ? (transaction) =>
@@ -1022,6 +1087,11 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     // Which platform pool model it answers on instead, if any. Never both.
     platformModelRef: agent.platformModelRef,
     persona: agent.persona,
+    // ROLE1: the handbook, the template it came from, and whether a template may be applied at all.
+    // The store always sets all three; a profile without them publishes none.
+    bible: agent.bible,
+    roleTemplate: agent.roleTemplate,
+    acceptsRoleTemplate: agent.acceptsRoleTemplate,
     hasAuth: agent.hasAuth,
     // Whether one exists, never what it is.
     hasCallbackToken: agent.hasCallbackToken,
@@ -1061,6 +1131,12 @@ function mapStoreError(context: Context, error: unknown): Response {
     return context.json({ error: error.message }, 400);
   }
   if (error instanceof ModelBindingConflictError) {
+    return context.json({ error: error.message }, 400);
+  }
+  if (
+    error instanceof RoleTemplateNotApplicableError ||
+    error instanceof RoleTemplateSourceError
+  ) {
     return context.json({ error: error.message }, 400);
   }
   if (error instanceof AgentAssignedError) {
