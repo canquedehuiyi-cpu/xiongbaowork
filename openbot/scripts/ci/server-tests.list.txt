@@ -441,6 +441,7 @@ tests/wake-up-settle.integration.test.ts
 tests/waker-groups.test.ts
 tests/wakerflow-generation-requests.integration.test.ts
 tests/wakerflow-generator.test.ts
+tests/wakerflow-plan-graph.test.ts
 tests/wakerflow-plan-inputs.test.ts
 tests/wakerflow-plan.test.ts
 tests/wakerflow-restart-recovery.integration.test.ts

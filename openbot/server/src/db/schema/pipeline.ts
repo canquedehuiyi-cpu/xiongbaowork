@@ -32,13 +32,37 @@ function jsonbArray<Row>() {
   })();
 }
 
-/** One step as a template holds it. */
+/**
+ * One step as a template holds it.
+ *
+ * WF7: a WakerFlow step may be another kind than a coworker's turn. The array is jsonb, so the kinds
+ * are optional fields rather than columns, and a step without `kind` is a `worker` exactly as every
+ * template written before WF7 is. `agentId` and `instruction` stay required: a decision or a nested
+ * Flow has no coworker of its own (`""`) and its `instruction` is what its card and the run view call it.
+ */
 export type PipelineStepRow = {
   id: string;
   agentId: string;
   instruction: string;
   inputKeys?: string[];
   outputKey?: string;
+  kind?: "worker" | "decision" | "flow" | "action";
+  /** The member's role and prompt in this Flow (D2), put ahead of the step's own instruction. */
+  rolePrompt?: string;
+  /** Jump forward to this step id (or `__end__`) when the step ends; absent is the next one. */
+  next?: string;
+  /** `decision`: the branches in order, and where to go when none is true. */
+  branches?: { label: string; when: string; next: string }[];
+  otherwise?: string;
+  /** `flow`: the child Flow, the revision pinned on Save (D5), and that revision's template. */
+  targetFlowId?: string;
+  targetRevision?: number;
+  targetTemplateId?: string;
+  inputMap?: Record<string, string>;
+  resultKey?: string;
+  /** `action`: the MCP tool (`<serverId>/<toolName>`) and its argument templates. */
+  tool?: string;
+  args?: Record<string, string>;
 };
 
 /** One step as a run records it: the template's step, plus where it got to. */
@@ -63,6 +87,15 @@ export type PipelineStepStateRow = PipelineStepRow & {
   approvalId?: string;
   output?: string;
   error?: string;
+  /**
+   * WF7: why a `skipped` step was skipped. `branch` is a step no taken path reached (it is not
+   * missing work); `person` is a person's deliberate skip. Absent on skips recorded before WF7.
+   */
+  skipReason?: "branch" | "person";
+  /** WF7: the branch a finished decision took; `index` is -1 for `otherwise`. */
+  branch?: { label: string; index: number };
+  /** WF7: the child run a `flow` step started. */
+  childRunId?: string;
 };
 
 /**
