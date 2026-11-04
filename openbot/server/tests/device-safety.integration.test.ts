@@ -24,6 +24,20 @@ import {
   runnerOpen,
 } from "../src/devices/socket";
 import { createDeviceStore } from "../src/devices/store";
+import { TOOL_DISABLED } from "../src/approvals/policy";
+import { createApprovalService } from "../src/approvals/service";
+import { createApprovalStore } from "../src/approvals/store";
+import {
+  type ApprovalContinuation,
+  ApprovalRefusedError,
+  withApprovalContext,
+} from "../src/approvals/types";
+import { createComputerGateway } from "../src/computer/gateway";
+import { HeadlessToolSuspension } from "../src/computer/headless-tools";
+import { createRunnerTransport } from "../src/computer/runner-transport";
+import { computerActionIdentity } from "../src/computer/action-identity";
+import { Database as Sqlite } from "bun:sqlite";
+import { mkdir, stat } from "node:fs/promises";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -525,6 +539,221 @@ test("real runner sockets stop after removal, credential rotation, ban, or owner
     ).toBe(401);
     channel.revoke(target);
     server.stop(true);
+  }
+});
+
+/*
+ * SEC1 (docs/specs/2026-11-02-sec1-employee-tool-permissions.md §6.3): the employee's settings drive
+ * the gate in front of a paired machine. The real gateway, the real runner transport and device
+ * channel, a real runner executor behind its real journal, and the real approval store: an action
+ * the gate refuses or holds sends the runner no frame and leaves its journal empty, and an approved
+ * one runs on the machine exactly once.
+ */
+async function governedRunner(
+  options: { hostCommandsCap?: "allow" | "ask" | "never" } = {},
+) {
+  const { root, target } = await fixture();
+  const botId = `${suite}-bot-${targets.length}`;
+  await runAsTenant(target.tenantId, () =>
+    database.insert(users).values({
+      id: target.tenantId,
+      email: `${target.tenantId}@example.test`,
+      name: "Owner",
+    }),
+  );
+  const store = createApprovalStore(database);
+  const policy = store.policy;
+  if (!policy) throw new Error("The approval store has no policy surface.");
+  if (options.hostCommandsCap) {
+    // The team row is written by an administrator's request (covered in
+    // approvals-policy.integration); here only the value the gate reads is changed.
+    const teamSettings = policy.teamSettings.bind(policy);
+    policy.teamSettings = async () => ({
+      ...(await teamSettings()),
+      hostCommandsCap: options.hostCommandsCap as "allow" | "ask" | "never",
+    });
+  }
+  const service = createApprovalService(store);
+  const execute = createRunnerExecutor(root);
+  const journalPath = join(root, "runner-actions.sqlite");
+  const journal = createActionJournal(journalPath);
+  const channel = createDeviceChannel();
+  let frames = 0;
+  const connection = channel.attach(target, {
+    send(raw) {
+      const frame = JSON.parse(raw);
+      if (frame.type !== "action") return;
+      frames += 1;
+      void journal
+        .execute("sec1/device", frame.key ?? frame.id, frame, execute)
+        .then((outcome) => channel.settle(target, { id: frame.id, ...outcome }));
+    },
+  });
+  const gateway = createComputerGateway({
+    provider: {
+      name: "unused",
+      isolation: "per-bot",
+      locate: async () => {
+        throw new Error("A paired machine is never located through the provider.");
+      },
+      status: async (id) => ({ botId: id, state: "ready" }),
+      list: async () => [],
+      stop: async () => ({ wasRunning: false }),
+      reset: async () => ({ cleared: false }),
+    },
+    transport: createRunnerTransport(channel),
+    resolveDevice: async () => target,
+    auditStore: { insert: async () => undefined },
+    policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
+    approvalGate: service.gate,
+  });
+  const context = (command: string): ApprovalContinuation => ({
+    runId: `${botId}-run`,
+    threadId: `${botId}-thread`,
+    toolCallId: `${botId}-call-${command}`,
+    toolName: "computer_run_command",
+    args: { command },
+    messages: [],
+    state: {},
+    context: [],
+    forwardedProps: {},
+    initiator: { kind: "routine", id: `${botId}-routine` },
+  });
+  const run = (command: string) =>
+    runAsTenant(target.tenantId, () =>
+      withApprovalContext(context(command), () =>
+        computerActionIdentity.run(`${botId}-call-${command}`, () =>
+          gateway.runCommand(
+            botId,
+            { id: target.tenantId, userId: target.tenantId },
+            { command },
+          ),
+        ),
+      ),
+    );
+  const journalRows = () => {
+    const db = new Sqlite(journalPath, { readonly: true });
+    try {
+      return (
+        db.query("SELECT count(*) AS n FROM actions").get() as { n: number }
+      ).n;
+    } finally {
+      db.close();
+    }
+  };
+  return {
+    root,
+    target,
+    botId,
+    store,
+    service,
+    run,
+    frames: () => frames,
+    journalRows,
+    close: () => {
+      journal.close();
+      channel.detach(connection);
+    },
+  };
+}
+
+test("SEC1: a runner command the employee disabled is refused at the gate; the runner gets no frame and its journal stays empty", async () => {
+  const runner = await governedRunner();
+  try {
+    await runAsTenant(runner.target.tenantId, () =>
+      runner.service.createRule(runner.target.tenantId, {
+        botId: runner.botId,
+        toolRef: "computer_run_command",
+        effect: "*",
+        scope: "*",
+        behaviour: "deny",
+      }),
+    );
+    await mkdir(join(runner.root, "keep"));
+    const refused = await runner.run("rm -rf keep").catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(ApprovalRefusedError);
+    expect((refused as Error).message).toBe(TOOL_DISABLED);
+    // A harmless command is refused just the same: the tool itself is off.
+    await expect(runner.run("pwd")).rejects.toThrow(TOOL_DISABLED);
+    expect(runner.frames()).toBe(0);
+    expect(runner.journalRows()).toBe(0);
+    expect((await stat(join(runner.root, "keep"))).isDirectory()).toBeTrue();
+    // Nothing was opened for anybody to approve.
+    expect(
+      await runAsTenant(runner.target.tenantId, () =>
+        runner.store.list(runner.target.tenantId),
+      ),
+    ).toEqual([]);
+  } finally {
+    runner.close();
+  }
+});
+
+test("SEC1: a dangerous runner command waits for approval with no frame sent, then runs on the machine exactly once", async () => {
+  const runner = await governedRunner();
+  try {
+    await mkdir(join(runner.root, "scratch"));
+    await Bun.write(join(runner.root, "scratch", "data.txt"), "x");
+    const held = await runner.run("rm -rf scratch").catch((error: unknown) => error);
+    expect(held).toBeInstanceOf(HeadlessToolSuspension);
+    expect(runner.frames()).toBe(0);
+    expect(runner.journalRows()).toBe(0);
+    expect((await stat(join(runner.root, "scratch"))).isDirectory()).toBeTrue();
+    const [request] = await runAsTenant(runner.target.tenantId, () =>
+      runner.store.list(runner.target.tenantId),
+    );
+    expect(request?.action.policy).toMatchObject({
+      behaviour: "ask",
+      source: "dangerous_command",
+    });
+    // Asking again while it waits sends nothing either.
+    await expect(runner.run("rm -rf scratch")).rejects.toBeInstanceOf(
+      HeadlessToolSuspension,
+    );
+    expect(runner.frames()).toBe(0);
+    await runAsTenant(runner.target.tenantId, () =>
+      runner.service.decide(
+        runner.target.tenantId,
+        request?.id as string,
+        "allow_once",
+      ),
+    );
+    await expect(runner.run("rm -rf scratch")).resolves.toMatchObject({
+      exitCode: 0,
+    });
+    expect(runner.frames()).toBe(1);
+    expect(runner.journalRows()).toBe(1);
+    await expect(stat(join(runner.root, "scratch"))).rejects.toThrow();
+    // The approval is spent: the same call again is not a second run.
+    await runner.run("rm -rf scratch").catch(() => undefined);
+    expect(runner.frames()).toBe(1);
+  } finally {
+    runner.close();
+  }
+});
+
+test("SEC1: with the team's host-command cap at never, a runner command is refused before anything reaches the machine (D5)", async () => {
+  const runner = await governedRunner({ hostCommandsCap: "never" });
+  try {
+    await expect(runner.run("ls")).rejects.toThrow("set to never run");
+    expect(runner.frames()).toBe(0);
+    expect(runner.journalRows()).toBe(0);
+  } finally {
+    runner.close();
+  }
+});
+
+test("SEC1: with the cap at ask, a harmless runner command waits for approval and sends nothing (D5)", async () => {
+  const runner = await governedRunner({ hostCommandsCap: "ask" });
+  try {
+    await expect(runner.run("ls")).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    expect(runner.frames()).toBe(0);
+    const [request] = await runAsTenant(runner.target.tenantId, () =>
+      runner.store.list(runner.target.tenantId),
+    );
+    expect(request?.action.policy?.source).toBe("host_command_cap");
+  } finally {
+    runner.close();
   }
 });
 

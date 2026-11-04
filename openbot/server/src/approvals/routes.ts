@@ -2,6 +2,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { type AppVariables, requireAdmin } from "../auth/guards";
 import type { ApprovalService } from "./service";
+import { DEFAULT_SENSITIVE_PATHS, SENSITIVE_PATH_PATTERN } from "./policy";
 import {
   ApprovalNotFoundError,
   ApprovalRefusedError,
@@ -18,6 +19,35 @@ const ruleInput = z.strictObject({
   behaviour: z.enum(RULE_BEHAVIOURS),
 });
 const hostCommands = z.enum(["ask", "allow", "never"]);
+/** One tool's mode on a Bot's permissions page, or `default` to remove the owner's rule. */
+const toolModeInput = z.strictObject({
+  toolRef: pattern,
+  mode: z.enum(["direct", "ask", "disabled", "default"]),
+});
+const floorMode = z.enum(["off", "ask"]);
+/**
+ * A Bot's floors. Added paths use the same narrow glob form as the defaults; a default can only be
+ * switched off, so `disabledDefaultPaths` names defaults and nothing else (D8). Commands cannot be
+ * added to the dangerous list in v1.0 (D7), so there is no field for it.
+ */
+const securityInput = z
+  .strictObject({
+    dangerousCommands: floorMode,
+    sensitivePaths: floorMode,
+    extraSensitivePaths: z
+      .array(z.string().trim().regex(SENSITIVE_PATH_PATTERN))
+      .max(50)
+      .transform((paths) => [...new Set(paths)]),
+    disabledDefaultPaths: z
+      .array(z.enum(DEFAULT_SENSITIVE_PATHS))
+      .max(DEFAULT_SENSITIVE_PATHS.length)
+      .transform((paths) => [...new Set(paths)]),
+  })
+  .partial()
+  .refine(
+    (input) => Object.keys(input).length > 0,
+    "Change at least one setting.",
+  );
 /** A change to a saved rule: any of its fields, and at least one. */
 const ruleChange = z
   .strictObject({
@@ -164,6 +194,7 @@ export function createApprovalRoutes(
         enforceAutoReview: z.boolean().optional(),
         customRulesEnabled: z.boolean().optional(),
         hostCommandsCap: hostCommands.optional(),
+        enforceDangerousCommands: z.boolean().optional(),
       })
       .parse(await context.req.json());
     return context.json(
@@ -200,6 +231,38 @@ export function createApprovalRoutes(
     await service.revokeTeamRule(context.var.actor.id, context.req.param("id"));
     return context.json({ revoked: true });
   });
+  /*
+   * One Bot's permissions (SEC1 §4.5). Anybody may read them for a Bot whose owner's rules apply to
+   * their runs; only the owner changes them, checked by the service and by row security.
+   */
+  routes.get("/employees/:botId", async (context) =>
+    context.json(
+      await service.employeePermissions(
+        context.var.actor.id,
+        context.req.param("botId"),
+      ),
+    ),
+  );
+  routes.put("/employees/:botId/tools", async (context) => {
+    const input = toolModeInput.parse(await context.req.json());
+    return context.json({
+      rule: await service.setEmployeeToolMode(
+        context.var.actor.id,
+        context.req.param("botId"),
+        input.toolRef,
+        input.mode,
+      ),
+    });
+  });
+  routes.patch("/employees/:botId/security", async (context) =>
+    context.json(
+      await service.setEmployeeSecurity(
+        context.var.actor.id,
+        context.req.param("botId"),
+        securityInput.parse(await context.req.json()),
+      ),
+    ),
+  );
   routes.post("/questions/:id/respond", async (context) => {
     const input = z
       .strictObject({ response: z.string().trim().min(1).max(6000) })

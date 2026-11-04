@@ -12,17 +12,15 @@
  * bought — kept here, on disk, in a file this process creates for itself. There is no password to
  * enter, no login to keep alive, and nothing a screenshot could give away.
  */
-import { randomUUID } from "node:crypto";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
-import { dirname, join, resolve, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { createRunnerBrowser } from "./browser";
+import {
+  type CredentialStore,
+  createFileCredentialStore,
+  deviceIdFor,
+} from "./credentials";
 import { createRunnerDispatcher } from "./dispatch";
 import {
   browserProfileRootFor,
@@ -31,16 +29,36 @@ import {
 } from "./execute";
 import { createActionJournal } from "./journal";
 
-/** Where this machine's files for the assistant live. The browser profiles are kept beside it. */
-const WORKSPACE_DIR = resolve(join(process.cwd(), "runner-workspace"));
+/** The environment twin of `--data-dir`, for a desktop shell that starts the runner as a sidecar. */
+export const DATA_DIR_ENV = "OPENBOT_RUNNER_DATA_DIR";
 
-type State = { deviceId: string; token: string; server: string };
+/**
+ * Every place this process writes to, worked out once from the arguments.
+ *
+ * `dataDir` is the one root. With `--data-dir` (or its environment variable) it is that directory;
+ * without, it is the directory the runner was started in, which is where a runner has always put its
+ * files — so a machine started the old way finds its token where it left it. Everything else is named
+ * relative to it, with the same file names as before:
+ *
+ *   <dataDir>/runner-state.json                 the credentials (see `credentials.ts`)
+ *   <dataDir>/runner-state.json.actions.sqlite  the action journal, beside whichever state file is used
+ *   <dataDir>/runner-workspace/                 what the file and shell tools reach
+ *   <dataDir>/runner-browser-profiles/          browser profiles, beside the workspace, never inside
+ */
+export type RunnerPaths = {
+  dataDir: string;
+  /** True when the root was asked for, rather than defaulted to the launch directory. */
+  explicitDataDir: boolean;
+  workspaceDir: string;
+  stateFile: string;
+  journalFile: string;
+};
 
-type Options = {
+export type Options = {
   server: string;
   name: string;
   pair?: string;
-  stateFile: string;
+  paths: RunnerPaths;
   intervalMs: number;
   browser: {
     profileRoot: string;
@@ -61,14 +79,18 @@ function usage(): string {
     "",
     "  --pair CODE     the pairing code shown on the owner's Devices screen",
     "  --name NAME     what this machine is called (default: its hostname)",
-    "  --state PATH    where to keep the device token (default: ./runner-state.json)",
+    "  --data-dir PATH where this runner keeps everything it writes: its token, its action journal,",
+    "                  the workspace and browser profiles. Also read from OPENBOT_RUNNER_DATA_DIR.",
+    "                  Default: the directory the runner is started in.",
+    "  --state PATH    where to keep the device token (default: <data dir>/runner-state.json;",
+    "                  a relative path is taken inside the data directory)",
     "  --interval SEC  heartbeat interval, default 20",
     "",
     "Browser. A coworker's assistant can drive a real browser on this machine. Nothing is downloaded:",
     "by default it uses the Chrome installed here, in a window you can see and can close.",
     "  --browser-executable PATH  a Chrome or Chromium binary already on this machine",
     "  --browser-channel NAME     chrome | msedge | chromium, to use an installed one by name",
-    "  --browser-profile PATH     where browser profiles live (default: beside the state file)",
+    "  --browser-profile PATH     where browser profiles live (default: beside the workspace)",
     "  --browser-headless BOOL    run without a window (default: false; for tests, not for work)",
     "  --browser-private-hosts BOOL  let it open addresses on your own network (default: false)",
     "",
@@ -106,7 +128,10 @@ function booleanFlag(
  * The defaults are the owner's installed Chrome in a window they can see. Headless is a switch a test
  * may turn on, and the reason it is not the default is in `usage()`.
  */
-function browserOptions(args: Map<string, string>): Options["browser"] | string {
+function browserOptions(
+  args: Map<string, string>,
+  paths: RunnerPaths,
+): Options["browser"] | string {
   const headless = booleanFlag(args, "browser-headless", false);
   if (typeof headless === "string") return headless;
   const allowPrivateHosts = booleanFlag(args, "browser-private-hosts", false);
@@ -122,9 +147,13 @@ function browserOptions(args: Map<string, string>): Options["browser"] | string 
   }
 
   const given = args.get("browser-profile")?.trim() ?? "";
+  const workspaceDir = paths.workspaceDir;
   // The default is the same helper the executor uses when it is handed only a workspace, so the two
-  // cannot drift into two profile roots on one machine.
-  const profileRoot = resolve(given || browserProfileRootFor(WORKSPACE_DIR));
+  // cannot drift into two profile roots on one machine. A relative path is taken inside the data
+  // directory, like `--state`.
+  const profileRoot = given
+    ? resolve(paths.dataDir, given)
+    : browserProfileRootFor(workspaceDir);
   /*
    * A profile beside the workspace is a set of live sessions the file tools can read.
    *
@@ -134,8 +163,8 @@ function browserOptions(args: Map<string, string>): Options["browser"] | string 
    * protected from it.
    */
   if (
-    profileRoot === WORKSPACE_DIR ||
-    profileRoot.startsWith(WORKSPACE_DIR + sep)
+    profileRoot === workspaceDir ||
+    profileRoot.startsWith(workspaceDir + sep)
   ) {
     return "--browser-profile cannot be inside the runner's workspace, where the file tools reach.";
   }
@@ -149,7 +178,46 @@ function browserOptions(args: Map<string, string>): Options["browser"] | string 
   };
 }
 
-function parseArgs(argv: string[]): Options | string {
+/**
+ * The data directory and everything named inside it.
+ *
+ * The flag wins over the environment, and either one means nothing is written to the launch directory:
+ * a packaged app is started from wherever its launcher happens to be, and a file left there is a
+ * token nobody knows to protect. A relative `--state` is taken inside the root for the same reason.
+ * Absolute paths are honoured as given, because a person who typed one meant it.
+ */
+function runnerPaths(
+  args: Map<string, string>,
+  env: Record<string, string | undefined>,
+  cwd: string,
+): RunnerPaths | string {
+  const flag = args.has("data-dir") ? (args.get("data-dir") ?? "") : undefined;
+  if (flag !== undefined && !flag.trim()) {
+    return "--data-dir needs a directory.";
+  }
+  const asked = flag?.trim() || env[DATA_DIR_ENV]?.trim() || "";
+  const dataDir = resolve(cwd, asked || ".");
+  const stateFile = resolve(dataDir, args.get("state") || "runner-state.json");
+  const workspaceDir = join(dataDir, "runner-workspace");
+  // The same reason as the browser profile below: `files.read` reaches everything in the workspace,
+  // and the state file is the device token.
+  if (stateFile.startsWith(workspaceDir + sep)) {
+    return "--state cannot be inside the runner's workspace, where the file tools reach.";
+  }
+  return {
+    dataDir,
+    explicitDataDir: Boolean(asked),
+    workspaceDir,
+    stateFile,
+    journalFile: `${stateFile}.actions.sqlite`,
+  };
+}
+
+export function parseArgs(
+  argv: string[],
+  env: Record<string, string | undefined> = process.env,
+  cwd: string = process.cwd(),
+): Options | string {
   const args = new Map<string, string>();
   for (let index = 0; index < argv.length; index += 1) {
     const entry = argv[index];
@@ -166,59 +234,18 @@ function parseArgs(argv: string[]): Options | string {
   if (!Number.isFinite(interval) || interval < 5) {
     return "--interval must be at least 5 seconds.";
   }
-  const stateFile = args.get("state") || "runner-state.json";
-  const browser = browserOptions(args);
+  const paths = runnerPaths(args, env, cwd);
+  if (typeof paths === "string") return paths;
+  const browser = browserOptions(args, paths);
   if (typeof browser === "string") return browser;
   return {
     server: server.replace(/\/+$/, ""),
     name: (args.get("name") || hostname()).slice(0, 120),
     ...(args.get("pair") ? { pair: args.get("pair") as string } : {}),
-    stateFile,
+    paths,
     intervalMs: interval * 1000,
     browser,
   };
-}
-
-function readState(path: string): State | null {
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<State>;
-    if (
-      typeof parsed.deviceId === "string" &&
-      typeof parsed.token === "string" &&
-      typeof parsed.server === "string"
-    ) {
-      return {
-        deviceId: parsed.deviceId,
-        token: parsed.token,
-        server: parsed.server,
-      };
-    }
-  } catch {
-    // No file, or one that is not ours yet. Either way, this run needs a pairing.
-  }
-  return null;
-}
-
-/** The device token is a credential, so the file holding it is not world-readable. */
-function writeState(path: string, state: State): void {
-  mkdirSync(dirname(path) === "" ? "." : dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-  try {
-    chmodSync(path, 0o600);
-  } catch {
-    // A filesystem without modes still got a file it created private.
-  }
-}
-
-/**
- * This machine's stable id.
- *
- * A hostname alone collides — two "Surface" laptops in one tenant would be one device to the server —
- * and a random id per start would make the device list grow every time somebody restarted the runner.
- * So: hostname for the human, a minted suffix for the identity, and both kept in the state file.
- */
-function deviceIdFor(state: State | null): string {
-  return state?.deviceId ?? `${hostname()}-${randomUUID().slice(0, 8)}`;
 }
 
 async function pair(options: Options, deviceId: string): Promise<string> {
@@ -298,19 +325,36 @@ function connect(
   });
 }
 
-async function main(): Promise<number> {
-  const parsed = parseArgs(process.argv.slice(2));
+/**
+ * Run the runner until it is stopped.
+ *
+ * `credentialsAt` is the seam a desktop shell replaces: it is handed the state file path this run
+ * would use and answers with the store to keep the token in. The default is the 0600 file.
+ */
+export async function main(
+  argv: string[] = process.argv.slice(2),
+  credentialsAt: (
+    stateFile: string,
+  ) => CredentialStore = createFileCredentialStore,
+): Promise<number> {
+  const parsed = parseArgs(argv);
   if (typeof parsed === "string") {
     console.error(parsed);
     return 2;
   }
-  const stored = readState(parsed.stateFile);
+  const { paths } = parsed;
+  if (paths.explicitDataDir) {
+    // Private by default, like the token inside it. An existing directory keeps the mode it has.
+    mkdirSync(paths.dataDir, { recursive: true, mode: 0o700 });
+  }
+  const credentials = credentialsAt(paths.stateFile);
+  const stored = await credentials.load();
   const deviceId = deviceIdFor(stored);
 
   let token = stored?.token ?? "";
   if (parsed.pair) {
     token = await pair(parsed, deviceId);
-    writeState(parsed.stateFile, { deviceId, token, server: parsed.server });
+    await credentials.save({ deviceId, token, server: parsed.server });
     console.log(`runner: paired as ${deviceId}`);
   } else if (!token) {
     console.error(
@@ -324,6 +368,10 @@ async function main(): Promise<number> {
     return 2;
   }
 
+  // Made now rather than by the first command: listing the files of a machine that was just paired
+  // is an empty folder, not an error about a folder that does not exist yet.
+  mkdirSync(paths.workspaceDir, { recursive: true });
+
   /*
    * Built after the arguments are known, and held for the shutdown handler.
    *
@@ -334,14 +382,14 @@ async function main(): Promise<number> {
    * in a folder nothing was looking at.
    */
   const executor = createRunnerExecutor(
-    WORKSPACE_DIR,
+    paths.workspaceDir,
     createRunnerBrowser(parsed.browser),
   );
   running = executor;
 
   // Backoff between dials, capped: a deployment that is down should cost one request every half
   // minute, not one per second for a day.
-  const journal = createActionJournal(`${parsed.stateFile}.actions.sqlite`);
+  const journal = createActionJournal(paths.journalFile);
   const dispatch = createRunnerDispatcher(journal, executor);
   let delay = 1_000;
   for (;;) {
@@ -380,12 +428,6 @@ async function shutDown(reason: string): Promise<void> {
     // Best effort. A browser that would not close is not a reason to stay alive.
   }
   process.exit(0);
-}
-
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => {
-    void shutDown(signal);
-  });
 }
 
 /**
@@ -429,4 +471,15 @@ async function handleFrame(
   }
 }
 
-process.exit(await main());
+/*
+ * Started, not imported. A test reads `parseArgs` without dialling anything, and the compiled binary
+ * (`bun build --compile`) reports itself as the main module the same way `bun src/index.ts` does.
+ */
+if (import.meta.main) {
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      void shutDown(signal);
+    });
+  }
+  process.exit(await main());
+}

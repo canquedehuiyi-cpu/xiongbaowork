@@ -1,8 +1,11 @@
-import { currentTenant } from "../tenant/context";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import { TEAM_TENANT } from "../db/schema/tenant";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
+import { agentSecuritySettings } from "../db/schema/agent-security-settings";
+import { agents } from "../db/schema/core";
 import {
   approvalPreferences,
   approvalRequests,
@@ -22,6 +25,9 @@ import {
   ApprovalRefusedError,
   type ApprovalStore,
   type ApprovalTeamSettings,
+  DEFAULT_EMPLOYEE_SECURITY,
+  type EmployeePolicy,
+  type EmployeeSecuritySettings,
 } from "./types";
 
 /**
@@ -38,6 +44,7 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
   customRulesEnabled: true,
   hostCommandsCap: "allow",
+  enforceDangerousCommands: false,
 };
 
 /** The real transaction callback type supplied by the tenant-bound DB client. */
@@ -340,6 +347,41 @@ export function createApprovalStore(
 
 function createPolicyStore(database: Database): ApprovalPolicyStore {
   const audit = createAuditStore(database);
+  /** One Bot's floors as the CURRENT frame sees them: its owner's row, or the defaults. */
+  const securityOf = async (
+    owner: string,
+    botId: string,
+  ): Promise<EmployeeSecuritySettings> => {
+    const [row] = await database
+      .select()
+      .from(agentSecuritySettings)
+      .where(
+        and(
+          eq(agentSecuritySettings.tenantId, owner),
+          eq(agentSecuritySettings.agentId, botId),
+        ),
+      )
+      .limit(1);
+    return row
+      ? {
+          dangerousCommands: row.dangerousCommands,
+          sensitivePaths: row.sensitivePaths,
+          extraSensitivePaths: row.extraSensitivePaths,
+          disabledDefaultPaths: row.disabledDefaultPaths,
+        }
+      : structuredClone(DEFAULT_EMPLOYEE_SECURITY);
+  };
+  const liveRules = (owner: string) =>
+    database
+      .select()
+      .from(approvalRules)
+      .where(
+        and(
+          eq(approvalRules.ownerUserId, owner),
+          isNull(approvalRules.revokedAt),
+        ),
+      )
+      .orderBy(desc(approvalRules.createdAt));
   const preferences = async (owner: string): Promise<ApprovalPreferences> => {
     const [row] = await database
       .select()
@@ -370,6 +412,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           enforceAutoReview: row.enforceAutoReview,
           customRulesEnabled: row.customRulesEnabled,
           hostCommandsCap: row.hostCommandsCap,
+          enforceDangerousCommands: row.enforceDangerousCommands,
         }
       : { ...DEFAULT_TEAM };
   };
@@ -607,6 +650,66 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         });
       }
       return withdrawn;
+    },
+    /*
+     * The owner's side of a Bot, whoever asks (SEC1 D9). Whose the Bot is comes from the narrow
+     * identity lookup in `agents/bot-owner.ts` (its own `platform` read, where only the owner's id
+     * leaves). The owner's rules and floors are then read in the OWNER's frame, under the owner's own
+     * row security, exactly as the owner's own request would read them: no policy is widened and no
+     * new door is opened, the same way the device selector reads an owner's machines for whoever's
+     * turn asked. Nothing is written there. A Bot that belongs to nobody (the catalogue, a team Bot
+     * naming no person) has no owner rules and the default floors.
+     */
+    /*
+     * Read under the asker's own row security on `agents`, which shows them their own Bots, the team
+     * Bots they may use and the catalogue, and nobody else's private Bot.
+     */
+    async botVisible(botId) {
+      const rows = await database
+        .select({ id: agents.id })
+        .from(agents)
+        .where(eq(agents.id, botId))
+        .limit(1);
+      return rows.length === 1;
+    },
+    async employee(botId): Promise<EmployeePolicy> {
+      const owner = await ownerTenantOfBot(database, botId);
+      if (!owner)
+        return {
+          ownerUserId: null,
+          rules: [],
+          security: structuredClone(DEFAULT_EMPLOYEE_SECURITY),
+        };
+      const read = async () => {
+        const [rules, security] = await Promise.all([
+          liveRules(owner),
+          securityOf(owner, botId),
+        ]);
+        return { ownerUserId: owner, rules, security };
+      };
+      return owner === currentTenant() ? read() : runAsTenant(owner, read);
+    },
+    /*
+     * In the writer's own frame: row security admits the row only when the writer owns the Bot
+     * (0131), so somebody else's Bot is refused by the database, not just by the route.
+     */
+    async setEmployeeSecurity(by, botId, input) {
+      const next = { ...(await securityOf(by, botId)), ...input };
+      await database
+        .insert(agentSecuritySettings)
+        .values({ agentId: botId, ...next, updatedBy: by })
+        .onConflictDoUpdate({
+          target: [agentSecuritySettings.tenantId, agentSecuritySettings.agentId],
+          set: { ...next, updatedBy: by, updatedAt: sql`now()` },
+        });
+      await recordAuditEvent(audit, {
+        eventType: "approval.settings_changed",
+        targetType: "approval_settings",
+        targetId: botId,
+        actorUserId: by,
+        payload: { changed: input, settings: next, layer: "employee", bot: botId },
+      });
+      return next;
     },
     async recordDecision(input) {
       await recordAuditEvent(audit, {

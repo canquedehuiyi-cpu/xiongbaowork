@@ -153,6 +153,19 @@ config:
       issuer: ""
   tenantPackageDir: /app/examples/qoderwake
 
+  # Where a coworker's actions are carried out (TENANT_RUNTIME).
+  #
+  #   device  The tenant's own paired machine, over the runner's outbound websocket. An action waits
+  #           for a paired machine that is away, and is REFUSED, never run in the cluster, when the
+  #           tenant has none. The default, because the server-side computer is a development and
+  #           demo fallback.
+  #   cloud   The computer `computers` below runs. Set this to keep Bots acting on it, as every
+  #           release of this chart before the default changed did.
+  #
+  # Under `device` the computers below still answer lifecycle questions (status, stop, reset), but
+  # no action is sent to them.
+  tenantRuntime: device
+
   # How far one Bot may hand work to another.
   #
   # A Bot addressing another is a grant an administrator makes, and these are the ceilings on what

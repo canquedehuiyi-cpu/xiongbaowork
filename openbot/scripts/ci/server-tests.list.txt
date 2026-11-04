@@ -37,6 +37,7 @@ tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
 tests/approvals-continuation-protocol.test.ts
 tests/approvals-continuation-recovery.test.ts
+tests/approvals-employee-permissions.integration.test.ts
 tests/approvals-execute.test.ts
 tests/approvals-frontend.test.ts
 tests/approvals-interactive.integration.test.ts
@@ -70,6 +71,7 @@ tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
+tests/avatar-sources.test.ts
 tests/ban-freezes-execution.test.ts
 tests/bot-access.test.ts
 tests/bot-lifecycle-audit.test.ts
@@ -167,6 +169,7 @@ tests/duplicate-run.test.ts
 tests/egress-policy-on-wake.test.ts
 tests/email-domain.test.ts
 tests/email-signup.test.ts
+tests/employee-tool-permissions-migration.integration.test.ts
 tests/encrypt-sso-config.test.ts
 tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts

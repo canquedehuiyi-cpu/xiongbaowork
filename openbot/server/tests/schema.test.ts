@@ -323,6 +323,16 @@ describe("OpenBot database schema", () => {
        * first sends no section into the prompt.
        */
       { name: "persona", notNull: false, hasDefault: false, primary: false },
+      /*
+       * When the person first saved an information source for their 分身 (F1, D2). Null is what the
+       * employee list shows as 待配置; it stays set once written.
+       */
+      {
+        name: "configured_at",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
       {
         name: "deleted_at",
         notNull: false,

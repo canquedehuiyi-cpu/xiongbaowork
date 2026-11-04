@@ -67,7 +67,7 @@ import {
   TenantContextError,
 } from "./tenant/context";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
-import { UNTRUSTED_GUIDANCE } from "./untrusted-content";
+import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 
 /**
  * The CopilotKit runtime, in one of two thread backends.
@@ -97,6 +97,12 @@ type RegisteredBuiltInAgent = {
   systemPrompt: string;
   /** Who this coworker is, as its owner wrote it. Absent or empty sends no section. See ticket 014. */
   persona?: Persona | null;
+  /**
+   * What the person asking declared about where their material lives, when this Bot is their own
+   * 分身 (story F1). Set per build by {@link buildAgents} from {@link LoadAvatarSources}, never from
+   * the row, so it is always the asker's and always current. Absent or empty sends no section.
+   */
+  avatarSources?: readonly AvatarSourceForPrompt[];
 };
 
 type RegisteredRemoteAgentFacts = {
@@ -359,6 +365,60 @@ export function standingInstructionsGuidance(
   ].join("\n\n");
 }
 
+/** One information source a person declared for their 分身, as its prompt carries it (story F1). */
+export type AvatarSourceForPrompt = { label: string; note: string };
+
+/**
+ * The information sources of the Bot being built, when it is the asker's own 分身.
+ *
+ * A closure bound to one person and asked per Bot, like {@link LoadToolsForBot}: it answers the
+ * sources only for `avatar-<the asker>` and an empty list, without a read, for every other Bot, so
+ * the sources of one person's 分身 never reach a run somebody else started, an administrator's
+ * included. Read on every build rather than held, like {@link LoadInstructions}: a source added or
+ * removed applies to the next run.
+ */
+export type LoadAvatarSources = (
+  agentId: string,
+) => Promise<readonly AvatarSourceForPrompt[]>;
+
+/**
+ * What the person told their 分身 about where their material is (story F1, stage 1).
+ *
+ * BUILT-IN 分身 ONLY, AND AT RUN TIME. The 分身 is `built_in`, so neither its role description nor a
+ * standing role message reaches it (`registeredAgentFromRow` gives it its `systemPrompt` only), and
+ * writing the sources into that prompt would be undone by the next edit of its role description,
+ * which `agents/profile-store.ts` copies over the prompt. So the list is appended here, per run,
+ * beside the person's standing instructions.
+ *
+ * A LIST AND HOW TO USE IT, NEVER THE FILES. A declaration grants no access: the 分身 is told what
+ * the person said exists and where, so it can ask for the right thing or say what it cannot see,
+ * and it is told not to pretend it has read any of it. The label and note are the person's own
+ * typing and are carried inside the untrusted-content envelope, so a note cannot pose as an
+ * instruction.
+ *
+ * Null for none, so the caller has one thing to test.
+ */
+export function avatarSourcesGuidance(
+  sources: readonly AvatarSourceForPrompt[] | null | undefined,
+): string | null {
+  if (!sources || sources.length === 0) return null;
+  return [
+    "The person you represent has told you where their own material lives. These are information sources they declared: a name and a note in their own words. A declaration gives you no access to the source itself. When a question depends on one of them, say which source the answer would come from and ask the person for the relevant content, or say plainly that you cannot see it. Never claim to have read a source you were only told about.",
+    JSON.stringify(
+      withUntrustedNotice(
+        {
+          sources: sources.map((source) => ({
+            label: source.label,
+            note: source.note,
+          })),
+        },
+        "information source declaration",
+        ["sources"],
+      ),
+    ),
+  ].join("\n\n");
+}
+
 export function builtInAgentConfiguration(
   agent: RegisteredBuiltInAgent,
   model: RuntimeModel,
@@ -418,6 +478,7 @@ export function builtInAgentConfiguration(
   }
 
   const standing = standingInstructionsGuidance(standingInstructions);
+  const sources = avatarSourcesGuidance(agent.avatarSources);
   const persona = personaGuidance(agent.persona);
 
   return {
@@ -439,6 +500,8 @@ export function builtInAgentConfiguration(
       // Who it is, before whose preferences it is working under and before what it holds.
       ...(persona ? [persona] : []),
       ...(standing ? [standing] : []),
+      // The 分身's declared sources, beside the person's instructions: both are about who it works for.
+      ...(sources ? [sources] : []),
       /*
        * Unconditional, unlike the two below it.
        *
@@ -584,6 +647,12 @@ export async function buildAgents(
    * existed. Appended last because the parameters above are positional.
    */
   resolveAgentModel?: AgentModelResolver,
+  /**
+   * The information sources of the asker's 分身 (story F1). Asked per built-in Bot and answered
+   * only for the 分身; see {@link LoadAvatarSources}. Absent means no Bot is told any, which is what
+   * every deployment did before sources existed. Appended last, positionally.
+   */
+  loadAvatarSources?: LoadAvatarSources,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -623,8 +692,27 @@ export async function buildAgents(
   return Object.fromEntries(
     await Promise.all(
       agents.map(async (agent) => {
+        /*
+         * A failed read costs the 分身 its source list for one run, not the conversation, like the
+         * instructions above. Reported without the thrown value, which could carry row contents.
+         */
+        let avatarSources: readonly AvatarSourceForPrompt[] = [];
+        if (agent.type === "built_in" && loadAvatarSources) {
+          try {
+            avatarSources = await loadAvatarSources(agent.id);
+          } catch {
+            console.error({
+              error: "avatar_source_read_failed",
+              context: { operation: "loadAvatarSources" },
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
         const built = await buildAgent(
-          agent,
+          // Carried on the Bot rather than as one more positional argument, like its persona.
+          agent.type === "built_in" && avatarSources.length > 0
+            ? { ...agent, avatarSources }
+            : agent,
           model,
           apiKey,
           stallGuard,
@@ -1937,6 +2025,8 @@ export async function resolveRuntimeAgents(
   loadPersonalMemory?: LoadPersonalMemory,
   /** Appended after `loadPersonalMemory`, for the positional reason it gives. See {@link buildAgents}. */
   resolveAgentModel?: AgentModelResolver,
+  /** The asker's 分身's information sources. Appended last; see {@link buildAgents}. */
+  loadAvatarSources?: LoadAvatarSources,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -1973,6 +2063,7 @@ export async function resolveRuntimeAgents(
     markAttachmentsSent,
     loadPersonalMemory,
     resolveAgentModel,
+    loadAvatarSources,
   );
 }
 
@@ -2113,6 +2204,11 @@ export function createRequestAgents(
    * that decides whose model library the read goes through.
    */
   resolveAgentModel?: AgentModelResolver,
+  /**
+   * The information sources of the asker's 分身, resolved for whoever is asking (story F1). Per
+   * actor through `identifyActor`, like the instructions: whose 分身 it is is the session's to say.
+   */
+  loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources,
 ) {
   return async ({ request }: { request: Request }) => {
     const actor = await identifyActor(request);
@@ -2138,6 +2234,7 @@ export function createRequestAgents(
       markAttachmentsSentForActor?.(actor.id),
       loadPersonalMemoryForActor?.(actor.id),
       resolveAgentModel,
+      loadAvatarSourcesForActor?.(actor.id),
     );
   };
 }
@@ -2268,6 +2365,11 @@ export function mountCopilotRuntime(
    * does. Absent means every Bot speaks the deployment model.
    */
   resolveAgentModel?: AgentModelResolver,
+  /**
+   * The information sources of the asker's 分身 (story F1), resolved per person, on both paths
+   * below for the reason `loadInstructionsForActor` is. Appended last. Absent means none is told.
+   */
+  loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources,
 ): MountedCopilotRuntime {
   /*
    * The roster, read in the frame of the person it is for, wherever the Bot is built. The request
@@ -2338,6 +2440,7 @@ export function mountCopilotRuntime(
       markAttachmentsSentForActor?.(actor.id),
       loadPersonalMemoryForActor?.(actor.id),
       resolveAgentModel,
+      loadAvatarSourcesForActor?.(actor.id),
     );
     return agents[input.botId] ?? null;
   };
@@ -2412,6 +2515,7 @@ export function mountCopilotRuntime(
       markAttachmentsSentForActor,
       loadPersonalMemoryForActor,
       resolveAgentModel,
+      loadAvatarSourcesForActor,
     ) as never,
   };
 

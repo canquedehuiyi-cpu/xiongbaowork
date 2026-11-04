@@ -19,12 +19,30 @@ export type ApprovalDecision =
  * action only when the person explicitly asked for that exact action in this run's request; ask
  * before taking action; hand it off to the person.
  */
-export type RuleBehaviour = "allow" | "pre_approved" | "ask" | "hand_off";
+export type RuleBehaviour =
+  | "allow"
+  | "pre_approved"
+  | "ask"
+  | "hand_off"
+  /**
+   * SEC1 (spec §4.1): the tool is disabled. A matching `deny` refuses the action at the gate with no
+   * request to approve, and is the strictest behaviour of all. The gate read it before the database
+   * accepted it (0131), so a row carrying it is never misread as allow.
+   */
+  | "deny";
+/** The behaviours a rule may be saved with. `deny` (disable the tool) is accepted from 0131. */
 export const RULE_BEHAVIOURS = [
   "allow",
   "pre_approved",
   "ask",
   "hand_off",
+  "deny",
+] as const satisfies readonly RuleBehaviour[];
+/** The behaviours that only ever make the gate stricter: kept when custom rules are off (D6). */
+export const TIGHTENING_BEHAVIOURS = [
+  "ask",
+  "hand_off",
+  "deny",
 ] as const satisfies readonly RuleBehaviour[];
 /** Commands on the person's own computer. */
 export type HostCommandPolicy = "ask" | "allow" | "never";
@@ -35,7 +53,15 @@ export type ApprovalPolicyOutcome = {
   source:
     | "safety"
     | "team_rule"
+    /** A rule the Bot's owner saved, applied to another person using that Bot (SEC1 D9). */
+    | "owner_rule"
     | "personal_rule"
+    /** The deterministic dangerous-command floor (SEC1 §4.3). */
+    | "dangerous_command"
+    /** The sensitive-path floor (SEC1 §4.4). */
+    | "sensitive_path"
+    /** The team's host-command cap, applied to a command on a paired machine (SEC1 D5). */
+    | "host_command_cap"
     | "auto_review"
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
@@ -70,6 +96,20 @@ export const withApprovalContext = <T>(
 ): Promise<T> => actionContext.run(context, run);
 export const currentApprovalContext = () => actionContext.getStore();
 
+/**
+ * What the action will actually run or touch, as the call site holds it rather than as the model
+ * phrased its arguments: the command a shell call runs, the path a file call names, and whether the
+ * command goes to a paired machine (a runner) rather than this deployment's container.
+ *
+ * Read by the deterministic floors (SEC1 §4.3, §4.4, D5) only. It is not part of the action's
+ * identity or digest and is not saved with a request: the floors are asked again from the call site
+ * whenever the gate is.
+ */
+export type ApprovalSubject = {
+  command?: string;
+  path?: string;
+  runner?: boolean;
+};
 export type ApprovalCandidate = {
   actorId: string;
   botId: string;
@@ -78,6 +118,7 @@ export type ApprovalCandidate = {
   scope: string;
   args: unknown;
   target?: unknown;
+  subject?: ApprovalSubject;
   continuation?: ApprovalContinuation;
 };
 export type ApprovalAction = ApprovalCandidate & {
@@ -141,6 +182,46 @@ export type ApprovalTeamSettings = {
   enforceAutoReview: boolean;
   customRulesEnabled: boolean;
   hostCommandsCap: HostCommandPolicy;
+  /** Every Bot asks before a dangerous command, whatever its own switch says (SEC1 D10). */
+  enforceDangerousCommands: boolean;
+};
+/** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
+export type EmployeeToolMode = "direct" | "ask" | "disabled";
+/** Each mode is one rule behaviour: 直接 is allow, 询问 is ask, 禁用 is deny. */
+export const EMPLOYEE_TOOL_BEHAVIOUR: Record<EmployeeToolMode, RuleBehaviour> = {
+  direct: "allow",
+  ask: "ask",
+  disabled: "deny",
+};
+/** A floor's switch on one Bot: off, or ask before acting. */
+export type SecurityFloorMode = "off" | "ask";
+/**
+ * One Bot's own security floors (SEC1 §4.1 B1), set by its owner. Absent means every default: both
+ * floors ask, no extra paths, every default path in force.
+ */
+export type EmployeeSecuritySettings = {
+  dangerousCommands: SecurityFloorMode;
+  sensitivePaths: SecurityFloorMode;
+  /** Paths the owner added beside the defaults, in the same glob form. */
+  extraSensitivePaths: string[];
+  /** Default paths the owner switched off. A default can be switched off, never removed (D8). */
+  disabledDefaultPaths: string[];
+};
+export const DEFAULT_EMPLOYEE_SECURITY: EmployeeSecuritySettings = {
+  dangerousCommands: "ask",
+  sensitivePaths: "ask",
+  extraSensitivePaths: [],
+  disabledDefaultPaths: [],
+};
+/**
+ * What a Bot's owner has said about it, read in the owner's own frame: who the owner is (`null` for
+ * nobody: a catalogue Bot or a team Bot whose profile names no person), the owner's saved rules, and
+ * the Bot's security floors.
+ */
+export type EmployeePolicy = {
+  ownerUserId: string | null;
+  rules: ApprovalRule[];
+  security: EmployeeSecuritySettings;
 };
 /** Rules, preferences and team settings. Optional on the store so older fakes keep working. */
 export type ApprovalPolicyStore = {
@@ -191,6 +272,20 @@ export type ApprovalPolicyStore = {
     reason: string,
     match: (action: ApprovalAction) => boolean,
   ): Promise<string[]>;
+  /**
+   * The owner's side of one Bot (SEC1 D9): its owner, the owner's rules and its security floors,
+   * read in the owner's frame whoever asks. Optional so older fakes keep working; absent, no owner
+   * rule applies and the floors are their defaults.
+   */
+  employee?(botId: string): Promise<EmployeePolicy>;
+  /** Whether the current frame can see this Bot at all (its own, a team Bot it may use, the catalogue). */
+  botVisible?(botId: string): Promise<boolean>;
+  /** The owner changes one of their Bots' floors, in their own frame. Another person's Bot is refused. */
+  setEmployeeSecurity?(
+    by: string,
+    botId: string,
+    input: Partial<EmployeeSecuritySettings>,
+  ): Promise<EmployeeSecuritySettings>;
   /** One audit row per settled action, so every verdict can be read back. */
   recordDecision(input: {
     ownerUserId: string;
@@ -336,6 +431,8 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
     ].every((value) => typeof value === "string" && value.trim())
   )
     throw new ApprovalRefusedError("The action identity is incomplete.");
+  // The call site's own view of the action is for the floors, never part of what is saved.
+  const { subject: _subject, ...identity } = candidate;
   const actionDigest = createHash("sha256")
     .update(
       canonical({
@@ -350,7 +447,7 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
     )
     .digest("hex");
   return {
-    ...candidate,
+    ...identity,
     continuation,
     runId: continuation.runId,
     threadId: continuation.threadId,

@@ -10,6 +10,7 @@ import {
   answerPersonQuestion,
   approvalInboxOptions,
   BEHAVIOUR_LABELS,
+  POLICY_SOURCE_LABELS,
   createApprovalRule,
   createTeamApprovalRule,
   decideApproval,
@@ -262,6 +263,11 @@ export function ApprovalInbox() {
                       ? "交给你："
                       : ""}
                     {request.action.policy.reason}
+                    {POLICY_SOURCE_LABELS[request.action.policy.source] ? (
+                      <span className="ml-2 text-muted-foreground">
+                        （来源：{POLICY_SOURCE_LABELS[request.action.policy.source]}）
+                      </span>
+                    ) : null}
                   </p>
                 ) : null}
               </div>
@@ -401,6 +407,31 @@ export function ApprovalInbox() {
               disabled={team.isPending}
               onCheckedChange={(customRulesEnabled) =>
                 team.mutate({ customRulesEnabled })
+              }
+            />
+          </label>
+          <label
+            htmlFor="enforce-dangerous-commands"
+            className="flex items-center justify-between gap-4 rounded-lg border p-4"
+          >
+            <span>
+              <span
+                id="enforce-dangerous-commands-title"
+                className="block font-medium"
+              >
+                强制危险命令审批
+              </span>
+              <span className="text-sm text-muted-foreground">
+                所有员工运行危险命令前都要先问，员工自己的开关关不掉。
+              </span>
+            </span>
+            <Switch
+              id="enforce-dangerous-commands"
+              aria-labelledby="enforce-dangerous-commands-title"
+              checked={inbox.data.team.enforceDangerousCommands === true}
+              disabled={team.isPending}
+              onCheckedChange={(enforceDangerousCommands) =>
+                team.mutate({ enforceDangerousCommands })
               }
             />
           </label>
