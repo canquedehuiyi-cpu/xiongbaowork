@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   WAKERFLOW_CONFLICT_MESSAGE,
@@ -14,6 +14,8 @@ import {
 } from "../../../shared/wakerflows";
 import type { Database } from "../db/client";
 import {
+  flowConfirmations,
+  flowRunEvents,
   groupTaskRuns,
   groupTaskTemplates,
   wakerFlowRequests,
@@ -23,9 +25,12 @@ import {
   wakerGroups,
 } from "../db/schema";
 import {
+  type PipelineEventWriter,
   PipelineNotFoundError,
+  type PipelineRunTransition,
   type PipelineStore,
   PipelineValidationError,
+  type StepRecord,
 } from "../pipeline/store";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
@@ -190,6 +195,241 @@ export class WakerFlowVersionNotFoundError extends WakerFlowError {
     super(404, "这个 WakerFlow 没有这个版本。");
     this.name = "WakerFlowVersionNotFoundError";
   }
+}
+
+/** One recorded state change of a run (WF8, spec §3.4). The payload never holds a step's output (D10). */
+export type WakerFlowRunEvent = {
+  sequence: number;
+  type: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+/** A step that stopped on a question, and what became of it (WF8, spec §3.3). */
+export type WakerFlowConfirmation = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  question: string;
+  inputs: Record<string, string>;
+  status: "pending" | "answered" | "skipped";
+  answer: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A question this run never asked, or one of a run this workspace cannot see. */
+export class WakerFlowConfirmationNotFoundError extends WakerFlowError {
+  constructor() {
+    super(404, "这里没有这个提问。");
+    this.name = "WakerFlowConfirmationNotFoundError";
+  }
+}
+
+/** The question was already answered or skipped, by this request with other content or by another. */
+export class WakerFlowConfirmationSettledError extends WakerFlowError {
+  constructor() {
+    super(409, "这个提问已经处理过了，请刷新后查看。");
+    this.name = "WakerFlowConfirmationSettledError";
+  }
+}
+
+const MAX_ANSWER = 10000;
+const MAX_EVENT_PAGE = 100;
+/** What a step parked without a question of its own is shown as. */
+const DEFAULT_QUESTION = "这一步在等你的回答。";
+
+/** A failure's reason as an event keeps it: the first line, bounded, never the step's output. */
+function errorSummary(error: string | undefined): string | undefined {
+  if (!error) return undefined;
+  const line = Array.from(error.split("\n")[0] ?? "");
+  return line.length > 200 ? `${line.slice(0, 199).join("")}…` : line.join("");
+}
+
+/** What a step read when it stopped: its declared inputs, from the run's inputs or earlier outputs. */
+function stepInputs(
+  steps: StepRecord[],
+  index: number,
+  inputs: Record<string, string>,
+): Record<string, string> {
+  const step = steps[index];
+  if (!step?.inputKeys) return {};
+  return Object.fromEntries(
+    step.inputKeys.map((key) => [
+      key,
+      inputs[key] ??
+        steps.slice(0, index).find((earlier) => earlier.outputKey === key)
+          ?.output ??
+        "（此输入未产生）",
+    ]),
+  );
+}
+
+const STEP_EVENT: Partial<Record<StepRecord["state"], string>> = {
+  running: "step_started",
+  done: "step_done",
+  awaiting_action: "step_parked",
+  skipped: "step_skipped",
+  failed: "step_failed",
+};
+const RUN_EVENT: Record<string, string> = {
+  done: "run_done",
+  failed: "run_failed",
+  aborted: "run_aborted",
+};
+
+/**
+ * The events one run transition means, in order: each step whose state moved, then the run's own end.
+ *
+ * `correlation_id` is unique per run (0088's index): the step's card reference (the run id for the
+ * run's own events), then the event type and the run revision the change produced, so a step that
+ * starts and finishes, or parks twice, is two distinct facts, and the same change is never recorded
+ * twice. The payload is the state, an error's summary and lengths, never a step's output (D10).
+ */
+export function flowRunEventsOf(transition: PipelineRunTransition): {
+  type: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+}[] {
+  const { runId, revision, before, after } = transition;
+  if (!before)
+    return [
+      {
+        type: "run_started",
+        correlationId: `${runId}:run_started:${revision}`,
+        payload: { status: after.status, stepCount: after.steps.length },
+      },
+    ];
+  const out: ReturnType<typeof flowRunEventsOf> = [];
+  after.steps.forEach((step, index) => {
+    const from = before.steps[index]?.state;
+    if (from === step.state) return;
+    let type = STEP_EVENT[step.state];
+    if (!type) return;
+    // A parked step that is now done was answered: by the person, or by the approval it waited on.
+    if (type === "step_done" && from === "awaiting_action")
+      type = "step_answered";
+    const payload: Record<string, unknown> = {
+      stepId: step.id,
+      index,
+      state: step.state,
+      from: from ?? null,
+    };
+    if (step.state === "done")
+      payload.outputLength = (step.output ?? "").length;
+    if (step.state === "failed") payload.error = errorSummary(step.error);
+    if (step.state === "awaiting_action") {
+      payload.waitingOn = step.approvalId ? "approval" : "question";
+      if (step.approvalId) payload.approvalId = step.approvalId;
+    }
+    out.push({
+      type,
+      correlationId: `${step.runRef ?? `${runId}/${step.id}`}:${type}:${revision}`,
+      payload,
+    });
+  });
+  const ended = RUN_EVENT[after.status];
+  if (ended && before.status !== after.status)
+    out.push({
+      type: ended,
+      correlationId: `${runId}:${ended}:${revision}`,
+      payload: { status: after.status, cursor: after.cursor },
+    });
+  return out;
+}
+
+/**
+ * WF8: the pipeline's event writer for WakerFlow runs (spec §3.4 E-A and §3.3).
+ *
+ * Inside the transaction of the change it records: every event the change means goes into
+ * `flow_run_events`, and a step that stopped on a question (parked with no approval row, and with the
+ * question its step runner reported) becomes one `pending` row of `flow_confirmations` with the
+ * question and the inputs it was reading. A park on an approval writes no confirmation: the approval
+ * inbox is the one place to answer it (D5).
+ */
+export const flowRunEventWriter: PipelineEventWriter = async (
+  tx,
+  transition,
+) => {
+  const events = flowRunEventsOf(transition);
+  if (events.length === 0) return;
+  await tx.insert(flowRunEvents).values(
+    events.map((event) => ({
+      tenantId: transition.tenantId,
+      flowId: transition.flowId,
+      runId: transition.runId,
+      correlationId: event.correlationId,
+      type: event.type,
+      payload: event.payload,
+    })),
+  );
+  // Only a park that says it is a question: a step waiting on a device or a sign-in is not one, and
+  // an answer typed for it would stand in for work that never happened.
+  const asks = transition.after.steps.flatMap((step, index) =>
+    step.state === "awaiting_action" &&
+    !step.approvalId &&
+    step.question &&
+    transition.before?.steps[index]?.state !== "awaiting_action"
+      ? [{ step, index }]
+      : [],
+  );
+  if (asks.length === 0) return;
+  await tx.insert(flowConfirmations).values(
+    asks.map(({ step, index }) => ({
+      id: randomUUID(),
+      tenantId: transition.tenantId,
+      flowId: transition.flowId,
+      runId: transition.runId,
+      nodeId: step.id,
+      question: { text: step.question ?? DEFAULT_QUESTION },
+      inputs: stepInputs(transition.after.steps, index, transition.inputs),
+    })),
+  );
+};
+
+const confirmationColumns = {
+  id: flowConfirmations.id,
+  runId: flowConfirmations.runId,
+  nodeId: flowConfirmations.nodeId,
+  question: flowConfirmations.question,
+  inputs: flowConfirmations.inputs,
+  status: flowConfirmations.status,
+  answer: flowConfirmations.answer,
+  requestId: flowConfirmations.requestId,
+  createdAt: flowConfirmations.createdAt,
+  updatedAt: flowConfirmations.updatedAt,
+};
+
+type ConfirmationRow = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  question: unknown;
+  inputs: unknown;
+  status: string;
+  answer: string | null;
+  requestId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function confirmation(row: ConfirmationRow): WakerFlowConfirmation {
+  const question = row.question as { text?: unknown } | null;
+  return {
+    id: row.id,
+    runId: row.runId,
+    nodeId: row.nodeId,
+    question:
+      typeof question?.text === "string" ? question.text : DEFAULT_QUESTION,
+    inputs: (row.inputs ?? {}) as Record<string, string>,
+    status: (["pending", "answered", "skipped"].includes(row.status)
+      ? row.status
+      : "pending") as WakerFlowConfirmation["status"],
+    answer: row.answer,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 export type WakerFlowStore = ReturnType<typeof createWakerFlowStore>;
@@ -512,6 +752,83 @@ export function createWakerFlowStore(options: {
         ),
     );
   };
+
+  /**
+   * Answer or skip one pending question, once. The row moves off `pending` under a condition, so of
+   * two submissions (a double press, two people) exactly one wins; a repeat of the winning request
+   * reads back the same outcome, and anything else is a 409. Only then is the run moved, and only if
+   * it is still parked on that very step, so a repeat cannot answer a later question with this one.
+   */
+  async function settle(
+    tenantId: string,
+    id: string,
+    runId: string,
+    confirmationId: string,
+    outcome: {
+      status: "answered" | "skipped";
+      requestId: string;
+      answer: string | null;
+    },
+  ): Promise<WakerFlowConfirmation> {
+    await ownRun(tenantId, id, runId);
+    if (!isUuid(confirmationId)) throw new WakerFlowConfirmationNotFoundError();
+    const mine = and(
+      eq(flowConfirmations.tenantId, tenantId),
+      eq(flowConfirmations.id, confirmationId),
+      eq(flowConfirmations.runId, runId),
+      eq(flowConfirmations.flowId, id),
+    );
+    const [won] = await runAsTenant(tenantId, async () =>
+      database
+        .update(flowConfirmations)
+        .set({
+          status: outcome.status,
+          answer: outcome.answer,
+          requestId: outcome.requestId,
+          updatedAt: new Date(),
+        })
+        .where(and(mine, eq(flowConfirmations.status, "pending")))
+        .returning(confirmationColumns),
+    );
+    let row: ConfirmationRow | undefined = won;
+    if (!row) {
+      const [existing] = await runAsTenant(tenantId, async () =>
+        database
+          .select(confirmationColumns)
+          .from(flowConfirmations)
+          .where(mine),
+      );
+      if (!existing) throw new WakerFlowConfirmationNotFoundError();
+      const repeat =
+        existing.requestId === outcome.requestId &&
+        existing.status === outcome.status &&
+        existing.answer === outcome.answer;
+      if (!repeat) throw new WakerFlowConfirmationSettledError();
+      row = existing;
+    }
+    const settled = row;
+    const run = await options.pipeline.inspect({ tenantId, runId });
+    const parked =
+      run?.status === "awaiting_action" &&
+      (run.steps as StepRecord[])[run.cursor]?.id === settled.nodeId;
+    if (parked) {
+      if (outcome.status === "answered")
+        await options.pipeline.resume({
+          tenantId,
+          runId,
+          output: outcome.answer ?? "",
+          drive: false,
+        });
+      else
+        await options.pipeline.skip({
+          tenantId,
+          runId,
+          stepId: settled.nodeId,
+        });
+      drive({ tenantId, runId });
+    }
+    return confirmation(settled);
+  }
 
   const store = {
     async create(tenantId: string, input: WakerFlowCreateInput) {
@@ -1337,6 +1654,134 @@ export function createWakerFlowStore(options: {
     async abortRun(tenantId: string, id: string, runId: string) {
       await ownRun(tenantId, id, runId);
       return options.pipeline.abort({ tenantId, runId });
+    },
+
+    /**
+     * WF8: the recorded state changes of a run of this Flow, oldest first, `limit` (at most 100,
+     * default 50) after the `after` sequence. `next` is the sequence to ask after for the next page,
+     * or null when this page reached the end.
+     */
+    async events(
+      tenantId: string,
+      id: string,
+      runId: string,
+      page: { after?: number; limit?: number } = {},
+    ): Promise<{ events: WakerFlowRunEvent[]; next: number | null }> {
+      await ownRun(tenantId, id, runId);
+      const after =
+        Number.isSafeInteger(page.after) && (page.after ?? 0) > 0
+          ? (page.after as number)
+          : 0;
+      const limit =
+        Number.isSafeInteger(page.limit) && (page.limit ?? 0) > 0
+          ? Math.min(page.limit as number, MAX_EVENT_PAGE)
+          : 50;
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select({
+            sequence: flowRunEvents.sequence,
+            type: flowRunEvents.type,
+            correlationId: flowRunEvents.correlationId,
+            payload: flowRunEvents.payload,
+            createdAt: flowRunEvents.createdAt,
+          })
+          .from(flowRunEvents)
+          .where(
+            and(
+              eq(flowRunEvents.tenantId, tenantId),
+              eq(flowRunEvents.runId, runId),
+              eq(flowRunEvents.flowId, id),
+              gt(flowRunEvents.sequence, BigInt(after)),
+            ),
+          )
+          .orderBy(asc(flowRunEvents.sequence))
+          .limit(limit + 1),
+      );
+      const shown = rows.slice(0, limit).map((row) => ({
+        sequence: Number(row.sequence),
+        type: row.type,
+        correlationId: row.correlationId,
+        payload: (row.payload ?? {}) as Record<string, unknown>,
+        createdAt: row.createdAt.toISOString(),
+      }));
+      return {
+        events: shown,
+        next:
+          rows.length > limit
+            ? (shown[shown.length - 1]?.sequence ?? null)
+            : null,
+      };
+    },
+
+    /** WF8: the questions a run of this Flow stopped on, oldest first, with what became of each. */
+    async confirmations(
+      tenantId: string,
+      id: string,
+      runId: string,
+    ): Promise<WakerFlowConfirmation[]> {
+      await ownRun(tenantId, id, runId);
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select(confirmationColumns)
+          .from(flowConfirmations)
+          .where(
+            and(
+              eq(flowConfirmations.tenantId, tenantId),
+              eq(flowConfirmations.runId, runId),
+              eq(flowConfirmations.flowId, id),
+            ),
+          )
+          .orderBy(asc(flowConfirmations.createdAt)),
+      );
+      return rows.map(confirmation);
+    },
+
+    /**
+     * WF8: answer a question a step stopped on (spec §3.3). The answer becomes that step's output, the
+     * steps after it read it as usual, and the run is driven on in the background.
+     */
+    async answer(
+      tenantId: string,
+      id: string,
+      runId: string,
+      confirmationId: string,
+      input: { requestId: string; answer: string },
+    ): Promise<WakerFlowConfirmation> {
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      const answer = typeof input.answer === "string" ? input.answer : "";
+      if (!answer.trim()) throw new WakerFlowValidationError("请填写回答。");
+      if (answer.length > MAX_ANSWER)
+        throw new WakerFlowValidationError(`回答不能超过 ${MAX_ANSWER} 字。`);
+      return settle(tenantId, id, runId, confirmationId, {
+        status: "answered",
+        requestId: input.requestId,
+        answer,
+      });
+    },
+
+    /**
+     * WF8: skip a question a step stopped on. The step is recorded as skipped (never cleared), later
+     * steps that read its output see 「（此输入未产生）」, and the run is driven on in the background.
+     */
+    async skipConfirmation(
+      tenantId: string,
+      id: string,
+      runId: string,
+      confirmationId: string,
+      input: { requestId: string },
+    ): Promise<WakerFlowConfirmation> {
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      return settle(tenantId, id, runId, confirmationId, {
+        status: "skipped",
+        requestId: input.requestId,
+        answer: null,
+      });
     },
 
     /** The planning model picker; 501 without a resolver. */
