@@ -6,7 +6,8 @@ import { STEP_KIND_LABEL, stepKind, WAKERFLOW_END } from "@/lib/wakerflows";
  * inline SVG, no graph library.
  *
  * Coworker steps, actions and nested Flows are rectangles, a decision is a diamond whose branches are
- * listed beside it. A step that goes on to the next one in order is joined to it by a short arrow; a
+ * listed beside it, and a confirmation (a question to a person, WF8 §3.3) is a speech bubble with a
+ * question mark. A step that goes on to the next one in order is joined to it by a short arrow; a
  * jump (a branch, a `next`, the end) is drawn in the lanes on the left, from the step's left edge
  * down to its target's. Every jump points forward (P-A), so a lane line only ever runs downwards.
  *
@@ -239,7 +240,13 @@ export function Flowchart(props: {
                 {props.detail?.(step, index)
                   ? ` · ${props.detail(step, index)}`
                   : ""}
-                {look.text ? ` · ${look.text}` : ""}
+                {look.text
+                  ? ` · ${
+                      kind === "confirm" && look.key === "awaiting_action"
+                        ? "等你回答"
+                        : look.text
+                    }`
+                  : ""}
               </span>
             </>
           );
@@ -279,6 +286,21 @@ export function Flowchart(props: {
                   />
                 </svg>
                 <span className="relative">{body}</span>
+              </div>
+            ) : kind === "confirm" ? (
+              // A question to a person: a bubble, not a coworker's box.
+              <div
+                className={`${nodeClass.replace("rounded-md", "rounded-3xl")} border-double pl-10`}
+                data-shape="bubble"
+                style={{ borderWidth: 3 }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1/2 left-2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-current font-semibold text-xs"
+                >
+                  ？
+                </span>
+                {body}
               </div>
             ) : (
               <div className={nodeClass} data-shape="box">

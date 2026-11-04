@@ -20,7 +20,11 @@
  *      input (a 下拉 with a default, WF8) entered as a select and sent with its default;
  *  10. retry the recovered run 2 from its failed step (WF8): the page names the step that runs again
  *      and warns before anything is sent; the new run carries step 1's output without asking the model
- *      again, runs steps 2 and 3, and the source run records that it was retried.
+ *      again, runs steps 2 and 3, and the source run records that it was retried;
+ *  11. a second Flow whose step 2 is a 确认 (confirm) step (WF8 §3.3, a WF7 node kind): run with typed
+ *      inputs -> step 1 runs, step 2 asks its filled question on the page -> the answer is typed on
+ *      the page -> step 2's output is the answer, step 3 reads it, and the run completes. The question
+ *      itself asks no model.
  *
  * Recovery horizon. The server only closes a `running` Flow run whose heartbeat (`updated_at`) is older
  * than ABANDONED_RUN_MS (10 minutes, on the database clock), in a sweep that runs 60 s after start and
@@ -213,6 +217,8 @@ const held: (() => void)[] = [];
 const releaseHeld = () => {
   for (const release of held.splice(0)) release();
 };
+/** What step 3 of the 确认 Flow was told: it must carry the person's answer. */
+const confirmPublishTexts: string[] = [];
 
 /**
  * The text of the newest user message, whatever shape the provider protocol gave it: Chat
@@ -358,14 +364,17 @@ const proxy = Bun.serve({
     try {
       parsed = JSON.parse(body);
     } catch {}
+    const text = lastUserText(parsed);
     const call: Call = {
-      kind: classify(lastUserText(parsed)),
+      kind: classify(text),
       phase,
       path: url.pathname,
       cancelled: false,
       answered: false,
     };
     calls.push(call);
+    if (phase === "confirm" && call.kind === "publish")
+      confirmPublishTexts.push(text);
     request.signal.addEventListener("abort", () => {
       if (!call.answered) call.cancelled = true;
     });
@@ -1173,6 +1182,177 @@ try {
     },
   );
 
+  await step(
+    "a Flow with a 确认 step: typed inputs -> step 2 asks -> answered on the page -> run completes",
+    async () => {
+      phase = "confirm";
+      const ANSWER = "标题：E2E 确认回答";
+      const created = await api<{ flow: { id: string; revision: number } }>(
+        "POST",
+        "/api/wakerflows",
+        { idea: "起草后先问我标题，再整理终稿" },
+      );
+      equal(created.status, 201, "a second Flow is created");
+      const confirmFlow = created.body.flow.id;
+      const saved = await api<{
+        flow: {
+          status: string;
+          plan: { steps: { kind?: string; question?: string }[] };
+        };
+      }>("PUT", `/api/wakerflows/${confirmFlow}`, {
+        revision: created.body.flow.revision,
+        plan: {
+          name: "E2E 确认流程",
+          description: "起草、确认标题、定稿",
+          members: [{ agentId: ids.writer, role: "撰稿人" }],
+          inputs: [
+            { key: "topic", label: "选题", required: true },
+            { key: "count", label: "篇数", required: true, type: "number" },
+            {
+              key: "tone",
+              label: "语气",
+              required: false,
+              type: "select",
+              options: ["正式", "轻松"],
+              default: "正式",
+            },
+          ],
+          steps: [
+            {
+              id: "draft",
+              agentId: ids.writer,
+              instruction: `${MARK.draft} 根据选题写草稿`,
+              inputKeys: ["topic", "count", "tone"],
+              outputKey: "draft",
+            },
+            {
+              id: "ask",
+              kind: "confirm",
+              question: "选题「{{topic}}」的草稿：{{draft}}。终稿用什么标题？",
+              inputKeys: ["topic", "draft"],
+              outputKey: "title",
+            },
+            {
+              id: "publish",
+              agentId: ids.writer,
+              instruction: `${MARK.publish} 按确认的标题整理成终稿`,
+              inputKeys: ["title"],
+              outputKey: "final",
+            },
+          ],
+        },
+      });
+      equal(saved.status, 200, "a plan with a 确认 step is accepted on Save");
+      equal(saved.body.flow.status, "ready", "the 确认 Flow is ready to run");
+      equal(
+        saved.body.flow.plan.steps[1]?.kind,
+        "confirm",
+        "the stored plan keeps step 2 as a 确认 step",
+      );
+
+      await p.goto(`${ORIGIN}/wakerflows/${confirmFlow}`);
+      await p.getByText("已保存，可以运行。").waitFor();
+      await p
+        .getByLabel("计划流程图")
+        .locator('[data-step="ask"][data-kind="confirm"] [data-shape="bubble"]')
+        .waitFor();
+      check(true, "the plan's flowchart draws step 2 as a 确认 bubble");
+      await p.getByLabel("选题（必填）").fill("确认流程的选题");
+      await p.getByLabel("篇数（必填）").fill("3");
+      equal(
+        await p.getByLabel("语气（选填）").inputValue(),
+        "正式",
+        "the typed select starts at its default",
+      );
+      await p.getByRole("button", { name: "运行", exact: true }).click();
+      const runId = await until("the 确认 run to be registered", async () => {
+        const runs = await api<{ runs: { id: string }[] }>(
+          "GET",
+          `/api/wakerflows/${confirmFlow}/runs`,
+        );
+        return runs.body.runs[0]?.id;
+      });
+      const asked = `选题「确认流程的选题」的草稿：${OUTPUT.draft}。终稿用什么标题？`;
+      await p.getByText(`这一步在问你：${asked}`).waitFor({ timeout: 60_000 });
+      check(true, "step 2's filled question is on the page with an answer box");
+      await expectStep(p, 0, "已完成", OUTPUT.draft);
+      await expectStep(p, 1, "等待处理");
+      const parked = await readRun(confirmFlow, runId);
+      equal(parked.status, "awaiting_action", "API: the run waits on step 2");
+      equal(
+        [parked.inputs?.topic, parked.inputs?.count, parked.inputs?.tone],
+        ["确认流程的选题", "3", "正式"],
+        "API: the run was sent the typed inputs, the select with its default",
+      );
+      const pending = await api<{
+        confirmations: { status: string; question: string; nodeId: string }[];
+      }>("GET", `/api/wakerflows/${confirmFlow}/runs/${runId}/confirmations`);
+      equal(
+        pending.body.confirmations.map((row) => [
+          row.nodeId,
+          row.status,
+          row.question,
+        ]),
+        [["ask", "pending", asked]],
+        "API: one pending confirmation holds the filled question",
+      );
+      equal(
+        calls
+          .filter((call) => call.phase === "confirm")
+          .map((call) => call.kind)
+          .filter((kind) => kind !== "other"),
+        ["draft"],
+        "only step 1 reached the model; the question asked none",
+      );
+
+      await p.getByLabel("你的回答").fill(ANSWER);
+      await p.getByRole("button", { name: "提交回答", exact: true }).click();
+      await p
+        .locator("[data-testid=run-detail-status]")
+        .getByText("已完成", { exact: true })
+        .waitFor({ timeout: 60_000 });
+      check(true, "the 确认 run reads 已完成 on screen after the answer");
+      await expectStep(p, 1, "已完成", ANSWER);
+      await expectStep(p, 2, "已完成", OUTPUT.publish);
+      const run = await readRun(confirmFlow, runId);
+      equal(run.status, "done", "API: the 确认 run is done");
+      equal(
+        run.steps.map((s) => [s.state, s.output]),
+        [
+          ["done", OUTPUT.draft],
+          ["done", ANSWER],
+          ["done", OUTPUT.publish],
+        ],
+        "API: step 2's output is the answer typed on the page",
+      );
+      equal(confirmPublishTexts.length, 1, "step 3 reached the model once");
+      check(
+        confirmPublishTexts[0]?.includes(ANSWER),
+        "step 3 was given the answer as its input",
+      );
+      const settled = await api<{
+        confirmations: { status: string; answer: string | null }[];
+      }>("GET", `/api/wakerflows/${confirmFlow}/runs/${runId}/confirmations`);
+      equal(
+        settled.body.confirmations.map((row) => [row.status, row.answer]),
+        [["answered", ANSWER]],
+        "API: the confirmation is answered with the page's answer",
+      );
+      const events = await api<{ events: { type: string }[] }>(
+        "GET",
+        `/api/wakerflows/${confirmFlow}/runs/${runId}/events?after=0&limit=100`,
+      );
+      const types = events.body.events.map((event) => event.type);
+      check(
+        types.includes("step_parked") &&
+          types.filter((type) => type === "step_answered").length === 1 &&
+          types.at(-1) === "run_done",
+        `API: the run records the park, one answer and its end (${types.join(",")})`,
+      );
+      await screenshot("confirm-run-answered");
+    },
+  );
+
   equal(
     calls.map((call) => `${call.phase}:${call.kind}`),
     [
@@ -1186,6 +1366,8 @@ try {
       "run3:publish",
       "retry:review-edited",
       "retry:publish",
+      "confirm:draft",
+      "confirm:publish",
     ],
     "the whole lifecycle made exactly these model requests, all to the mock",
   );
