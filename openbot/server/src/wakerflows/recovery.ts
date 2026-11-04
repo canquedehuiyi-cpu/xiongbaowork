@@ -12,6 +12,7 @@ import {
 } from "../db/schema/pipeline";
 import { runAsTenant } from "../tenant/context";
 import {
+  flowRunEventWriter,
   GENERATE,
   RUN,
   RUN_UNCERTAIN_MESSAGE,
@@ -89,6 +90,8 @@ export async function recoverInterruptedFlowRuns(
         parentTaskId: groupTaskRuns.parentTaskId,
         steps: groupTaskRuns.steps,
         revision: groupTaskRuns.revision,
+        flowId: groupTaskRuns.flowId,
+        cursor: groupTaskRuns.cursor,
       })
       .from(groupTaskRuns)
       .where(
@@ -154,8 +157,23 @@ export async function recoverInterruptedFlowRuns(
               sql`${groupTaskRuns.updatedAt} < now() - (${input.olderThanMs} * interval '1 millisecond')`,
             ),
           )
-          .returning({ id: groupTaskRuns.id });
+          .returning({
+            id: groupTaskRuns.id,
+            revision: groupTaskRuns.revision,
+          });
         if (!run) return false;
+        // WF8: the closing is recorded with it, like every other change of a Flow's run: each step it
+        // closed as failed, then `run_failed`.
+        if (row.flowId)
+          await flowRunEventWriter(tx, {
+            tenantId: owner,
+            runId: row.id,
+            flowId: row.flowId,
+            revision: run.revision,
+            inputs: {},
+            before: { status: "running", steps: records },
+            after: { status: "failed", cursor: row.cursor, steps: closedSteps },
+          });
         /*
          * In the same transaction as the run, so a run reported failed never leaves its cards saying
          * "running": the reaper does not look at a failed run again, so a card left open here would be

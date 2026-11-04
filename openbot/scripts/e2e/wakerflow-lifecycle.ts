@@ -1070,6 +1070,29 @@ try {
         ["重启之后的选题", "正式"],
         "API: run 3 was sent the topic and the typed input's default",
       );
+      const events = await api<{ events: { type: string }[] }>(
+        "GET",
+        `/api/wakerflows/${flowId}/runs/${run3}/events?after=0&limit=100`,
+      );
+      equal(
+        events.body.events.map((event) => event.type),
+        [
+          "run_started",
+          "step_started",
+          "step_done",
+          "step_started",
+          "step_done",
+          "step_started",
+          "step_done",
+          "run_done",
+        ],
+        "API: run 3's events, recorded by the running server, in order",
+      );
+      await runDetail(p)
+        .getByLabel("运行时间线")
+        .getByText("运行完成", { exact: true })
+        .waitFor({ timeout: 20_000 });
+      check(true, "run 3's timeline on screen ends with 运行完成");
       equal(
         calls
           .filter((call) => call.phase === "run3")

@@ -24,6 +24,7 @@ import {
 } from "../src/pipeline/store";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
+import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWakerFlowRoutes } from "../src/wakerflows/routes";
 import {
   createWakerFlowStore,
@@ -300,6 +301,49 @@ describe("run events (spec §3.4)", () => {
       (await broken.allEvents(brokenRun)).map((event) => event.type),
     ).toEqual(["run_started"]);
     expect(broken.calls).toHaveLength(0);
+  });
+
+  test("a run closed by restart recovery records each step it closed and run_failed", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = await fixture(async () => {
+      await gate;
+      return { status: "done", output: "重启前的结果" };
+    });
+    const request = await f.store.start(f.tenantId, f.tenantId, f.flow.id, {
+      requestId: randomUUID(),
+      revision: f.flow.revision,
+      inputs: { topic: "发布会" },
+    });
+    const runId = request.runId ?? "";
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Stand-in for the restart sweep finding this run past the horizon with no live driver.
+    await recoverInterruptedFlowRuns(database, f.board, { olderThanMs: 0 });
+    release();
+    await f.settle();
+    const events = await f.allEvents(runId);
+    expect(events.map((event) => event.type)).toEqual([
+      "run_started",
+      "step_started",
+      "step_failed",
+      "step_failed",
+      "step_failed",
+      "run_failed",
+    ]);
+    expect(events[2]?.payload).toMatchObject({
+      stepId: "draft",
+      from: "running",
+    });
+    expect(events[3]?.payload).toMatchObject({
+      stepId: "review",
+      from: "pending",
+    });
+    // The late result lost to the closing: no step_done.
+    expect((await f.store.run(f.tenantId, f.flow.id, runId)).status).toBe(
+      "failed",
+    );
   });
 
   test("a crew run that no Flow started records no events", async () => {
