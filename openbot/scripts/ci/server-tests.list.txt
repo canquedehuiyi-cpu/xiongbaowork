@@ -436,6 +436,7 @@ tests/wakerflow-restart-recovery.integration.test.ts
 tests/wakerflow-routes.test.ts
 tests/wakerflow-run.integration.test.ts
 tests/wakerflow-task-open.integration.test.ts
+tests/wakerflow-versions.integration.test.ts
 tests/wakerflows-store.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts

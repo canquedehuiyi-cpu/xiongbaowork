@@ -18,6 +18,7 @@ import {
   groupTaskTemplates,
   wakerFlowRequests,
   wakerFlows,
+  wakerFlowVersions,
   wakerGroupMembers,
   wakerGroups,
 } from "../db/schema";
@@ -166,6 +167,30 @@ export type WakerFlowRunSummary = {
   parentTaskId: string | null;
   createdAt: string;
 };
+
+/** One saved version of a Flow, as the version list shows it: no plan, only what tells them apart. */
+export type WakerFlowVersionSummary = {
+  revision: number;
+  name: string;
+  stepCount: number;
+  modelRef: string | null;
+  templateId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
+/** One saved version with the whole plan it was saved with. */
+export type WakerFlowVersion = WakerFlowVersionSummary & {
+  plan: WakerFlowPlan;
+};
+
+/** A revision this Flow never had, or one of a Flow this workspace cannot see. */
+export class WakerFlowVersionNotFoundError extends WakerFlowError {
+  constructor() {
+    super(404, "这个 WakerFlow 没有这个版本。");
+    this.name = "WakerFlowVersionNotFoundError";
+  }
+}
 
 export type WakerFlowStore = ReturnType<typeof createWakerFlowStore>;
 
@@ -347,6 +372,36 @@ function outcome(row: RequestRow): WakerFlowRequestOutcome {
   };
 }
 
+const versionSummaryColumns = {
+  revision: wakerFlowVersions.revision,
+  name: sql<string>`coalesce(${wakerFlowVersions.plan}->>'name', '')`,
+  stepCount: sql<number>`coalesce(jsonb_array_length(${wakerFlowVersions.plan}->'steps'), 0)::int`,
+  modelRef: wakerFlowVersions.modelRef,
+  templateId: wakerFlowVersions.templateId,
+  createdBy: wakerFlowVersions.createdBy,
+  createdAt: wakerFlowVersions.createdAt,
+};
+
+function versionSummary(row: {
+  revision: number;
+  name: string;
+  stepCount: number;
+  modelRef: string | null;
+  templateId: string | null;
+  createdBy: string | null;
+  createdAt: Date;
+}): WakerFlowVersionSummary {
+  return {
+    revision: row.revision,
+    name: row.name,
+    stepCount: Number(row.stepCount),
+    modelRef: row.modelRef,
+    templateId: row.templateId,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export function createWakerFlowStore(options: {
   database: Database;
   /** WF-C: a run is the existing pipeline's run of the compiled template, driven by its `advance`. */
@@ -458,7 +513,7 @@ export function createWakerFlowStore(options: {
     );
   };
 
-  return {
+  const store = {
     async create(tenantId: string, input: WakerFlowCreateInput) {
       const idea = typeof input.idea === "string" ? input.idea.trim() : "";
       if (idea.length > 4000)
@@ -670,11 +725,93 @@ export function createWakerFlowStore(options: {
               and(eq(wakerFlows.id, id), eq(wakerFlows.tenantId, tenantId)),
             )
             .returning(columns);
+          // WF8: the whole definition this Save made, kept for the version list and for a rollback.
+          // In the same transaction, so a version exists exactly when its revision does.
+          if (saved)
+            await tx.insert(wakerFlowVersions).values({
+              tenantId,
+              flowId: id,
+              revision: saved.revision,
+              plan,
+              modelRef: saved.modelRef,
+              templateId: saved.templateId,
+              createdBy: actor,
+            });
           return saved;
         }),
       );
       if (!row) throw new WakerFlowNotFoundError();
       return shape(row);
+    },
+
+    /** WF8: the saved versions of this Flow, newest first, without their plans. */
+    async versions(
+      tenantId: string,
+      id: string,
+    ): Promise<WakerFlowVersionSummary[]> {
+      if (!(await visibleFlow(tenantId, id)))
+        throw new WakerFlowNotFoundError();
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select(versionSummaryColumns)
+          .from(wakerFlowVersions)
+          .where(
+            and(
+              eq(wakerFlowVersions.tenantId, tenantId),
+              eq(wakerFlowVersions.flowId, id),
+            ),
+          )
+          .orderBy(desc(wakerFlowVersions.revision)),
+      );
+      return rows.map(versionSummary);
+    },
+
+    /** WF8: one saved version of this Flow, with its whole plan. */
+    async version(
+      tenantId: string,
+      id: string,
+      revision: number,
+    ): Promise<WakerFlowVersion> {
+      if (!(await visibleFlow(tenantId, id)))
+        throw new WakerFlowNotFoundError();
+      if (!Number.isInteger(revision) || revision < 1)
+        throw new WakerFlowVersionNotFoundError();
+      const [row] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ ...versionSummaryColumns, plan: wakerFlowVersions.plan })
+          .from(wakerFlowVersions)
+          .where(
+            and(
+              eq(wakerFlowVersions.tenantId, tenantId),
+              eq(wakerFlowVersions.flowId, id),
+              eq(wakerFlowVersions.revision, revision),
+            ),
+          )
+          .limit(1),
+      );
+      if (!row) throw new WakerFlowVersionNotFoundError();
+      return { ...versionSummary(row), plan: row.plan };
+    },
+
+    /**
+     * WF8: roll back to a saved version, which is saving that version's plan (and model) again. It
+     * goes through the whole of `save`: fenced on the revision the person was looking at, every
+     * member asked again (I6), a new template, the next revision. History is never rewritten, so
+     * the restore is itself a new version, and a run already going keeps the template it started on.
+     */
+    async restore(
+      tenantId: string,
+      actor: string,
+      id: string,
+      revision: number,
+      input: { revision: number },
+    ): Promise<WakerFlow> {
+      const version = await store.version(tenantId, id, revision);
+      return store.save(tenantId, actor, id, {
+        revision: input.revision,
+        plan: version.plan,
+        modelRef: version.modelRef,
+      });
     },
 
     /**
@@ -1208,4 +1345,5 @@ export function createWakerFlowStore(options: {
       return options.models.choices(tenantId);
     },
   };
+  return store;
 }
