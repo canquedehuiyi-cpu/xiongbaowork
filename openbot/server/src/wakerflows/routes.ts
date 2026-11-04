@@ -104,6 +104,57 @@ export function createWakerFlowRoutes(options: {
     }
   });
 
+  /*
+   * WF8: the saved versions of a Flow, and rolling back to one. A rollback is a Save of the old
+   * plan, fenced by the revision the person was looking at, so a stale page answers 409 like a Save.
+   */
+  routes.get("/:id/versions", requireUser, async (context) => {
+    try {
+      return context.json({
+        versions: await store.versions(
+          tenant(context),
+          context.req.param("id"),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.get("/:id/versions/:revision", requireUser, async (context) => {
+    try {
+      return context.json({
+        version: await store.version(
+          tenant(context),
+          context.req.param("id"),
+          Number(context.req.param("revision")),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/versions/:revision/restore",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        const flow = await store.restore(
+          tenant(context),
+          tenant(context),
+          context.req.param("id"),
+          Number(context.req.param("revision")),
+          { revision: input.revision as number },
+        );
+        return context.json({ flow });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
   routes.delete("/:id", requireUser, async (context) => {
     const raw = context.req.query("revision");
     const revision = raw === undefined ? undefined : Number(raw);
@@ -230,6 +281,107 @@ export function createWakerFlowRoutes(options: {
       return refuse(context, error);
     }
   });
+
+  /*
+   * WF8: a run's recorded state changes, paged by sequence, and the questions its steps stopped on.
+   * Answering or skipping one moves the run on in the background; the request id makes a retry safe.
+   */
+  routes.get("/:id/runs/:runId/events", requireUser, async (context) => {
+    const after = Number(context.req.query("after") ?? 0);
+    const limit = Number(context.req.query("limit") ?? 50);
+    try {
+      return context.json(
+        await store.events(
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("runId"),
+          { after, limit },
+        ),
+      );
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  /*
+   * WF8: retry a failed run from the step that failed, with the definition it ran on. The request id
+   * makes a repeat safe: it answers from the retry ledger and never starts a second run.
+   */
+  routes.post("/:id/runs/:runId/retry", requireUser, async (context) => {
+    const input = await body(context);
+    try {
+      return context.json({
+        retry: await store.retry(
+          tenant(context),
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("runId"),
+          { requestId: String(input.requestId ?? "") },
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.get("/:id/runs/:runId/confirmations", requireUser, async (context) => {
+    try {
+      return context.json({
+        confirmations: await store.confirmations(
+          tenant(context),
+          context.req.param("id"),
+          context.req.param("runId"),
+        ),
+      });
+    } catch (error) {
+      return refuse(context, error);
+    }
+  });
+
+  routes.post(
+    "/:id/runs/:runId/confirmations/:confirmationId/answer",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        return context.json({
+          confirmation: await store.answer(
+            tenant(context),
+            context.req.param("id"),
+            context.req.param("runId"),
+            context.req.param("confirmationId"),
+            {
+              requestId: String(input.requestId ?? ""),
+              answer: typeof input.answer === "string" ? input.answer : "",
+            },
+          ),
+        });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
+
+  routes.post(
+    "/:id/runs/:runId/confirmations/:confirmationId/skip",
+    requireUser,
+    async (context) => {
+      const input = await body(context);
+      try {
+        return context.json({
+          confirmation: await store.skipConfirmation(
+            tenant(context),
+            context.req.param("id"),
+            context.req.param("runId"),
+            context.req.param("confirmationId"),
+            { requestId: String(input.requestId ?? "") },
+          ),
+        });
+      } catch (error) {
+        return refuse(context, error);
+      }
+    },
+  );
 
   return routes;
 }

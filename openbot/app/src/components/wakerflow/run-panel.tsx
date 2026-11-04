@@ -5,13 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RequestError } from "@/lib/client";
 import { newId } from "@/lib/new-id";
+import { FlowInputFields } from "./flow-input-fields";
+import { RunTimeline } from "./run-timeline";
 import {
   abortWakerFlowRun,
+  answerWakerFlowConfirmation,
+  filledInputValues,
   getWakerFlowRun,
+  initialInputValues,
   isTerminalRunStatus,
   laterRunReading,
+  listWakerFlowConfirmations,
   listWakerFlowRuns,
+  retryWakerFlowRun,
   runInputProblems,
+  skipWakerFlowConfirmation,
   startWakerFlowRun,
   type WakerFlow,
   type WakerFlowPlan,
@@ -47,6 +55,11 @@ const LOST_MESSAGE =
 
 const runStatusLabel = (status: string) => RUN_STATUS[status] ?? status;
 
+const LOST_ANSWER_MESSAGE =
+  "网络连接中断，暂时无法确认回答是否已提交。可以直接再提交一次，同一个回答不会重复生效。";
+const LOST_RETRY_MESSAGE =
+  "网络连接中断，暂时无法确认是否已开始重试。可以直接再按一次，不会重复重试。";
+
 /** One request id per set of inputs; `spent` once the server settled it, so the next run is a new one. */
 type PendingStart = { key: string; id: string; spent: boolean };
 
@@ -72,7 +85,9 @@ export function RunPanel(props: {
   const poll = props.pollIntervalMs ?? POLL_INTERVAL_MS;
   const queryClient = useQueryClient();
 
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    initialInputValues(plan.inputs),
+  );
   const [problems, setProblems] = useState<Record<string, string>>({});
   const [starting, setStarting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -109,12 +124,7 @@ export function RunPanel(props: {
     const found = runInputProblems(plan, values);
     setProblems(found);
     if (Object.keys(found).length > 0) return;
-    // Only declared inputs, and only what was filled: the server refuses a name it did not declare.
-    const inputs: Record<string, string> = {};
-    for (const input of plan.inputs) {
-      const value = values[input.key] ?? "";
-      if (value.trim()) inputs[input.key] = value;
-    }
+    const inputs = filledInputValues(plan.inputs, values);
     const key = JSON.stringify([flow.revision, inputs]);
     if (
       !pending.current ||
@@ -136,7 +146,7 @@ export function RunPanel(props: {
       request.spent = true;
       if (answer.status === "completed" && answer.runId) {
         setSelected(answer.runId);
-        setValues({});
+        setValues(initialInputValues(plan.inputs));
       } else if (answer.error) {
         setFailure(answer.error);
       } else if (answer.status === "pending") {
@@ -177,35 +187,18 @@ export function RunPanel(props: {
             这个流程不需要输入，可以直接运行。
           </p>
         ) : (
-          plan.inputs.map((input) => {
-            const id = `run-input-${input.key}`;
-            return (
-              <div className="flex flex-col gap-1" key={input.key}>
-                <label className="font-medium text-sm" htmlFor={id}>
-                  {input.label}
-                  {input.required ? "（必填）" : "（选填）"}
-                </label>
-                <Textarea
-                  aria-invalid={problems[input.key] ? true : undefined}
-                  aria-required={input.required}
-                  id={id}
-                  onChange={(event) => {
-                    const next = { ...values, [input.key]: event.target.value };
-                    setValues(next);
-                    if (Object.keys(problems).length > 0)
-                      setProblems(runInputProblems(plan, next));
-                  }}
-                  rows={2}
-                  value={values[input.key] ?? ""}
-                />
-                {problems[input.key] ? (
-                  <p className="text-destructive text-xs" role="alert">
-                    {problems[input.key]}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })
+          <FlowInputFields
+            idPrefix="run-input"
+            inputs={plan.inputs}
+            onChange={(key, value) => {
+              const next = { ...values, [key]: value };
+              setValues(next);
+              if (Object.keys(problems).length > 0)
+                setProblems(runInputProblems(plan, next));
+            }}
+            problems={problems}
+            values={values}
+          />
         )}
         {failure ? (
           <p className="text-destructive text-sm" role="alert">
@@ -237,6 +230,12 @@ export function RunPanel(props: {
                 flow={flow}
                 key={run.id}
                 onEnded={remember}
+                onRetried={async (newRunId) => {
+                  setSelected(newRunId);
+                  await queryClient.invalidateQueries({
+                    queryKey: wakerFlowKeys.runs(flow.id),
+                  });
+                }}
                 onToggle={() =>
                   setSelected((current) => (current === run.id ? null : run.id))
                 }
@@ -260,6 +259,7 @@ function RunRow(props: {
   pollIntervalMs: number;
   onToggle: () => void;
   onEnded: (run: WakerFlowRun) => void;
+  onRetried: (newRunId: string) => void;
 }) {
   const { flow, run, ended } = props;
   const status = ended?.status ?? run.status;
@@ -297,6 +297,7 @@ function RunRow(props: {
           ended={ended}
           flowId={flow.id}
           onEnded={props.onEnded}
+          onRetried={props.onRetried}
           pollIntervalMs={props.pollIntervalMs}
           runId={run.id}
         />
@@ -311,6 +312,7 @@ function RunDetail(props: {
   ended: WakerFlowRun | null;
   pollIntervalMs: number;
   onEnded: (run: WakerFlowRun) => void;
+  onRetried: (newRunId: string) => void;
 }) {
   const { flowId, runId, ended, onEnded } = props;
   const queryClient = useQueryClient();
@@ -421,9 +423,262 @@ function RunDetail(props: {
             {step.error ? (
               <p className="mt-2 text-destructive text-xs">{step.error}</p>
             ) : null}
+            {run.status === "awaiting_action" &&
+            index === run.cursor &&
+            step.state === "awaiting_action" ? (
+              step.approvalId ? (
+                // D5: an approval has one place to be answered, and it is not here.
+                <p className="mt-2 text-xs">
+                  这一步在等审批。{" "}
+                  <Link className="underline" to="/approvals">
+                    去审批
+                  </Link>
+                </p>
+              ) : (
+                <StepQuestion
+                  flowId={flowId}
+                  onSettled={() => refetchDetail()}
+                  runId={runId}
+                  stepId={step.id}
+                />
+              )
+            ) : null}
           </li>
         ))}
       </ol>
+      {run.status === "failed" ? (
+        <RetryFromFailure
+          flowId={flowId}
+          onRetried={props.onRetried}
+          run={run}
+        />
+      ) : null}
+      <RunTimeline
+        flowId={flowId}
+        runId={runId}
+        version={`${run.status}:${run.cursor}:${run.steps
+          .map((step) => step.state)
+          .join(",")}`}
+      />
+    </div>
+  );
+}
+
+/**
+ * A step that stopped on a question (WF8, spec §3.3): the question, a box for the answer, and 跳过.
+ * One request id per answer: a retry after a lost reply sends the same one, so the answer is taken
+ * once; a question someone else already settled is said so, in the server's words.
+ */
+function StepQuestion(props: {
+  flowId: string;
+  runId: string;
+  stepId: string;
+  onSettled: () => unknown;
+}) {
+  const { flowId, runId, stepId } = props;
+  const queryClient = useQueryClient();
+  const asked = useQuery({
+    queryKey: wakerFlowKeys.confirmations(flowId, runId),
+    queryFn: () => listWakerFlowConfirmations(flowId, runId),
+  });
+  const [answer, setAnswer] = useState("");
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const pendingRequest = useRef<{ key: string; id: string } | null>(null);
+  const confirmation = (asked.data ?? []).find(
+    (entry) => entry.nodeId === stepId && entry.status === "pending",
+  );
+  if (!confirmation) return null;
+  const confirmationId = confirmation.id;
+
+  async function settle(kind: "answer" | "skip") {
+    if (sending) return;
+    if (kind === "answer" && !answer.trim()) {
+      setFailure("请填写回答。");
+      return;
+    }
+    const key = JSON.stringify([confirmationId, kind, answer]);
+    if (pendingRequest.current?.key !== key)
+      pendingRequest.current = { key, id: newId() };
+    const requestId = pendingRequest.current.id;
+    setSending(true);
+    setFailure(null);
+    try {
+      if (kind === "answer")
+        await answerWakerFlowConfirmation(flowId, runId, confirmationId, {
+          requestId,
+          answer,
+        });
+      else
+        await skipWakerFlowConfirmation(flowId, runId, confirmationId, {
+          requestId,
+        });
+      pendingRequest.current = null;
+      await queryClient.invalidateQueries({
+        queryKey: wakerFlowKeys.confirmations(flowId, runId),
+      });
+      await props.onSettled();
+    } catch (error) {
+      if (error instanceof RequestError && error.status < 500) {
+        pendingRequest.current = null;
+        setFailure(error.message);
+        await queryClient.invalidateQueries({
+          queryKey: wakerFlowKeys.confirmations(flowId, runId),
+        });
+      } else {
+        setFailure(LOST_ANSWER_MESSAGE);
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const field = `answer-${confirmationId}`;
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-md border bg-background p-2 text-xs">
+      <p className="font-medium">这一步在问你：{confirmation.question}</p>
+      <label className="sr-only" htmlFor={field}>
+        你的回答
+      </label>
+      <Textarea
+        id={field}
+        onChange={(event) => setAnswer(event.target.value)}
+        placeholder="你的回答会作为这一步的产出，后面的步骤会读到它。"
+        rows={2}
+        value={answer}
+      />
+      {failure ? (
+        <p className="text-destructive" role="alert">
+          {failure}
+        </p>
+      ) : null}
+      <div className="flex flex-row gap-2">
+        <Button
+          disabled={sending}
+          onClick={() => void settle("answer")}
+          size="sm"
+          type="button"
+        >
+          {sending ? "正在提交…" : "提交回答"}
+        </Button>
+        <Button
+          disabled={sending}
+          onClick={() => void settle("skip")}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          跳过这一步
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 从失败步骤重试 (WF8, spec §3.5, D6): asks once more, naming the step that will run again and that
+ * whatever it already did may happen a second time, before the retry is sent. The steps before it
+ * are carried over and not run again; the retry runs on the definition this run used (D7).
+ */
+function RetryFromFailure(props: {
+  flowId: string;
+  run: WakerFlowRun;
+  onRetried: (newRunId: string) => void;
+}) {
+  const { flowId, run } = props;
+  const failedAt = run.steps.findIndex((step) => step.state === "failed");
+  const from = failedAt >= 0 ? failedAt : run.cursor;
+  const step = run.steps[from];
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const request = useRef<string | null>(null);
+  if (!step) return null;
+
+  async function retry() {
+    if (sending) return;
+    request.current ??= newId();
+    setSending(true);
+    setFailure(null);
+    try {
+      const retried = await retryWakerFlowRun(flowId, run.id, {
+        requestId: request.current,
+      });
+      setConfirming(false);
+      props.onRetried(retried.newRunId);
+    } catch (error) {
+      if (error instanceof RequestError && error.status < 500) {
+        request.current = null;
+        setFailure(error.message);
+      } else {
+        // The retry may have been registered: the same id is kept, so pressing again starts no second.
+        setFailure(LOST_RETRY_MESSAGE);
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      {confirming ? (
+        <div
+          className="flex flex-col gap-2 rounded-md border p-2"
+          role="alertdialog"
+          aria-label="确认从失败步骤重试"
+        >
+          <p>
+            将从第 {from + 1} 步「{step.instruction}」重新执行，前面已完成的
+            {from} 步不会再执行，使用的是这次运行时的流程定义。
+          </p>
+          <p className="text-destructive text-xs">
+            注意：失败的那一步会重新执行一次。它失败之前如果已经发出消息或写入文件，这些操作可能会再发生一次。
+          </p>
+          {failure ? (
+            <p className="text-destructive text-xs" role="alert">
+              {failure}
+            </p>
+          ) : null}
+          <div className="flex flex-row gap-2">
+            <Button
+              disabled={sending}
+              onClick={() => void retry()}
+              size="sm"
+              type="button"
+            >
+              {sending ? "正在重试…" : "确认重试"}
+            </Button>
+            <Button
+              disabled={sending}
+              onClick={() => setConfirming(false)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-row items-center gap-2">
+          <Button
+            onClick={() => setConfirming(true)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            从失败步骤重试
+          </Button>
+          <span className="text-muted-foreground text-xs">
+            失败的那一步会重新执行一次。
+          </span>
+          {failure ? (
+            <span className="text-destructive text-xs" role="alert">
+              {failure}
+            </span>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

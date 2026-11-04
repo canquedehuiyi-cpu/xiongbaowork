@@ -9,25 +9,59 @@ import {
   AVATAR_SOURCE_LIMIT,
   AVATAR_SOURCE_NOTE_LIMIT,
   type AvatarSource,
+  type AvatarSourceInput,
   addAvatarSourceMutationOptions,
   avatarSourcesQueryOptions,
   removeAvatarSourceMutationOptions,
   sourceLength,
 } from "@/lib/avatar/sources";
+import {
+  devicesQueryOptions,
+  type RegisteredDevice,
+} from "@/lib/devices/queries";
 import { advanceOnboardingMutationOptions } from "@/lib/onboarding/mutations";
 
 /**
- * Where a person tells their 分身 where their material lives (story F1, stage 1).
+ * Where a person tells their 分身 where their material lives (story F1, stages 1 and 2).
  *
  * Two places, one vocabulary: the onboarding step right after the welcome, and the 分身's own detail
- * page, where a person who skipped the step configures it later (spec D3). Only declarations exist
- * yet: a name and a note in the person's own words. Nothing here reads, uploads or links a file, and
- * the page says so, because "信息来源" otherwise reads like a folder picker. A local folder waits on
- * the desktop runner (F2) and is not offered at all rather than offered greyed out (D4).
+ * page, where a person who skipped the step configures it later (spec D3). Two kinds of source:
  *
- * Sending the names and notes to the model is said in a sentence and agreed to with one tick (D6),
- * before anything can be saved: they go into the 分身's prompt on every run.
+ * - 文字声明: a name and a note in the person's own words. Nothing is read, uploaded or linked, and
+ *   the page says so, because "信息来源" otherwise reads like a folder picker.
+ * - 本地文件夹 (stage 2): one of the read-only folders the person's own machine offers, chosen from
+ *   what their online devices report. The folder was added on the machine, in the device app or
+ *   with the runner's `--add-root`; here it is only picked, by name. With no paired machine the
+ *   option says how to pair one and the other kind can still be saved (D4).
+ *
+ * Each kind says what reaches the model and is agreed to with one tick (D6) before it can be saved:
+ * a declaration's name and note go into every prompt, and a folder's files go to the model when the
+ * 分身 reads them.
  */
+
+type SourceKind = "declaration" | "local_folder";
+
+/** One folder a machine offers, with the machine it is on. */
+type OfferedFolder = {
+  deviceId: string;
+  deviceName: string;
+  ref: string;
+  name: string;
+};
+
+/** The folders the person's online machines offer, in the order the device list gives them. */
+function offeredFolders(devices: RegisteredDevice[]): OfferedFolder[] {
+  return devices
+    .filter((device) => device.online)
+    .flatMap((device) =>
+      (device.roots ?? []).map((root) => ({
+        deviceId: device.deviceId,
+        deviceName: device.name,
+        ref: root.ref,
+        name: root.name,
+      })),
+    );
+}
 
 /** A draft as the person typed it, and whether it can be saved as it stands. */
 function draftProblem(label: string, note: string): string | null {
@@ -108,6 +142,19 @@ function DraftFields({
   );
 }
 
+/** Where a saved folder is, in words: its machine, and whether the machine still offers it. */
+function folderWhere(
+  source: Extract<AvatarSource, { kind: "local_folder" }>,
+  devices: RegisteredDevice[] | undefined,
+): string {
+  if (!devices) return "本地文件夹";
+  const device = devices.find((entry) => entry.deviceId === source.deviceId);
+  if (!device) return "本地文件夹 · 设备已移除";
+  if (!(device.roots ?? []).some((root) => root.ref === source.rootRef))
+    return `本地文件夹 · ${device.name} · 设备上已不再提供这个文件夹`;
+  return `本地文件夹 · ${device.name}${device.online ? "" : " · 离线"}`;
+}
+
 function SavedSources({
   onRemove,
   removingId,
@@ -117,6 +164,9 @@ function SavedSources({
   removingId: string | null;
   sources: AvatarSource[];
 }) {
+  // The machines, only when a folder is on the list: a list of declarations asks nothing more.
+  const hasFolder = sources.some((source) => source.kind === "local_folder");
+  const devices = useQuery({ ...devicesQueryOptions(), enabled: hasFolder });
   if (sources.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">还没有登记信息来源。</p>
@@ -131,6 +181,11 @@ function SavedSources({
         >
           <div className="flex min-w-0 flex-col">
             <span className="font-medium text-sm">{source.label}</span>
+            {source.kind === "local_folder" ? (
+              <span className="text-muted-foreground text-xs">
+                {folderWhere(source, devices.data)}
+              </span>
+            ) : null}
             {source.note ? (
               <span className="text-muted-foreground text-xs">
                 {source.note}
@@ -158,43 +213,256 @@ function useSourceEditor() {
   const state = useQuery(avatarSourcesQueryOptions());
   const add = useMutation(addAvatarSourceMutationOptions(queryClient));
   const remove = useMutation(removeAvatarSourceMutationOptions(queryClient));
+  const [kind, setKind] = React.useState<SourceKind>("declaration");
   const [label, setLabel] = React.useState("");
   const [note, setNote] = React.useState("");
   const [consent, setConsent] = React.useState(false);
+  // The folder draft, kept apart so switching back and forth loses neither.
+  const [folder, setFolder] = React.useState<OfferedFolder | null>(null);
+  const [folderLabel, setFolderLabel] = React.useState("");
+  const [folderNote, setFolderNote] = React.useState("");
+  const [folderConsent, setFolderConsent] = React.useState(false);
 
   const sources = state.data?.sources ?? [];
   const full = sources.length >= AVATAR_SOURCE_LIMIT;
-  const drafted = label.trim().length > 0 || note.trim().length > 0;
-  const problem = draftProblem(label, note);
+  const asFolder = kind === "local_folder";
+  const drafted = asFolder
+    ? folder !== null
+    : label.trim().length > 0 || note.trim().length > 0;
+  const problem = asFolder
+    ? folderProblem(folderLabel, folderNote)
+    : draftProblem(label, note);
+  const agreed = asFolder ? folderConsent : consent;
 
   /** Save the draft, then clear it. Resolves false when it was refused, so a caller can stop. */
   const saveDraft = async () => {
+    const input: AvatarSourceInput | null = asFolder
+      ? folder && {
+          kind: "local_folder",
+          deviceId: folder.deviceId,
+          rootRef: folder.ref,
+          label: folderLabel.trim(),
+          note: folderNote.trim(),
+        }
+      : { label: label.trim(), note: note.trim() };
+    if (!input) return false;
     try {
-      await add.mutateAsync({ label: label.trim(), note: note.trim() });
+      await add.mutateAsync(input);
     } catch {
       return false;
     }
-    setLabel("");
-    setNote("");
+    if (asFolder) {
+      setFolder(null);
+      setFolderLabel("");
+      setFolderNote("");
+    } else {
+      setLabel("");
+      setNote("");
+    }
     return true;
   };
 
   return {
     add,
+    agreed,
     consent,
     drafted,
+    folder,
+    folderConsent,
+    folderLabel,
+    folderNote,
     full,
+    kind,
     label,
     note,
     problem,
     remove,
     saveDraft,
     setConsent,
+    setFolder,
+    setFolderConsent,
+    setFolderLabel,
+    setFolderNote,
+    setKind,
     setLabel,
     setNote,
     sources,
     state,
   };
+}
+
+type SourceEditor = ReturnType<typeof useSourceEditor>;
+
+/** A folder draft's name may be empty (the machine's name for it is used); a note is optional. */
+function folderProblem(label: string, note: string): string | null {
+  if (sourceLength(label.trim()) > AVATAR_SOURCE_LABEL_LIMIT)
+    return `名称最多 ${AVATAR_SOURCE_LABEL_LIMIT} 个字。`;
+  if (sourceLength(note.trim()) > AVATAR_SOURCE_NOTE_LIMIT)
+    return `说明最多 ${AVATAR_SOURCE_NOTE_LIMIT} 个字。`;
+  return null;
+}
+
+/** Which kind of source the draft is. A declaration unless the person picks a folder. */
+function KindSwitch({ editor }: { editor: SourceEditor }) {
+  return (
+    <fieldset aria-label="信息来源类型" className="flex gap-2">
+      {(
+        [
+          ["declaration", "文字声明"],
+          ["local_folder", "本地文件夹"],
+        ] as const
+      ).map(([value, name]) => (
+        <Button
+          aria-pressed={editor.kind === value}
+          key={value}
+          onClick={() => editor.setKind(value)}
+          size="sm"
+          type="button"
+          variant={editor.kind === value ? "default" : "outline"}
+        >
+          {name}
+        </Button>
+      ))}
+    </fieldset>
+  );
+}
+
+/**
+ * Pick one of the folders the person's online machines offer, name it if they like, and agree that
+ * what the 分身 reads in it goes to the model.
+ *
+ * No machine at all is the D4 case: how to pair one, and that the other kind can be saved meanwhile.
+ * `pairingHref` is where My Devices is; during onboarding there is none to follow yet (the rest of
+ * the app opens after it), so the step names the place instead of linking to it.
+ */
+function FolderPicker({
+  editor,
+  idPrefix,
+  pairingHref,
+}: {
+  editor: SourceEditor;
+  idPrefix: string;
+  pairingHref?: string;
+}) {
+  const devices = useQuery(devicesQueryOptions());
+  const taken = new Set(
+    editor.sources.flatMap((source) =>
+      source.kind === "local_folder" ? [source.rootRef] : [],
+    ),
+  );
+
+  if (devices.isPending) {
+    return <p className="text-muted-foreground text-sm">正在读取你的设备…</p>;
+  }
+  if (devices.isError) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        暂时读不到你的设备列表，请稍后再试。你可以先登记文字声明。
+      </p>
+    );
+  }
+  if (devices.data.length === 0) {
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+        <p className="font-medium">还没有配对的设备</p>
+        <p className="text-muted-foreground">
+          本地文件夹放在你自己的电脑上。先在电脑上安装熊宝数字员工设备端，并在「设置
+          ›
+          我的设备」里配对；然后在设备端添加要交给分身的文件夹，再回到这里选择。你可以先保存文字声明。
+        </p>
+        {pairingHref ? (
+          <a className="text-primary underline" href={pairingHref}>
+            前往「我的设备」配对电脑
+          </a>
+        ) : (
+          <p className="text-muted-foreground">
+            完成引导后，可以在分身详情页添加本地文件夹。
+          </p>
+        )}
+      </div>
+    );
+  }
+  const offered = offeredFolders(devices.data);
+  if (offered.length === 0) {
+    const online = devices.data.some((device) => device.online);
+    return (
+      <p className="text-muted-foreground text-sm">
+        {online
+          ? "你的设备还没有提供本地文件夹。请在设备端窗口的「本地文件夹」里添加一个，几秒后这里就会出现。"
+          : "你的设备目前都不在线。打开电脑上的设备端后，这里会列出它提供的文件夹。"}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm">选择一个文件夹</legend>
+        {offered.map((entry) => {
+          const id = `${idPrefix}-folder-${entry.ref}`;
+          const already = taken.has(entry.ref);
+          return (
+            <label
+              className="flex items-center gap-2 rounded-lg bg-card p-2 text-sm"
+              htmlFor={id}
+              key={`${entry.deviceId}/${entry.ref}`}
+            >
+              <input
+                checked={editor.folder?.ref === entry.ref}
+                disabled={already}
+                id={id}
+                name={`${idPrefix}-folder`}
+                onChange={() => editor.setFolder(entry)}
+                type="radio"
+              />
+              <span>
+                {entry.name}
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {entry.deviceName}
+                  {already ? " · 已登记" : ""}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <div className="flex flex-col gap-1 text-sm">
+        <label htmlFor={`${idPrefix}-folder-label`}>名称（可选）</label>
+        <Input
+          id={`${idPrefix}-folder-label`}
+          onChange={(event) => editor.setFolderLabel(event.target.value)}
+          placeholder={editor.folder?.name ?? "留空则使用文件夹在设备上的名称"}
+          value={editor.folderLabel}
+        />
+      </div>
+      <div className="flex flex-col gap-1 text-sm">
+        <label htmlFor={`${idPrefix}-folder-note`}>文件夹说明（可选）</label>
+        <Textarea
+          id={`${idPrefix}-folder-note`}
+          onChange={(event) => editor.setFolderNote(event.target.value)}
+          placeholder="例如：季度报告和客户合同"
+          value={editor.folderNote}
+        />
+      </div>
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+        <p className="text-muted-foreground">
+          分身只能读取这个文件夹，不能修改、删除或在里面运行命令。它需要时会读取其中的文件，读到的内容会发送给你所用的模型服务；读取
+          .env、密钥这类可能含有机密的文件前，会先征求你的同意。服务器只记录文件夹的名称，不记录它在电脑上的位置。
+        </p>
+        <label
+          className="flex items-center gap-2"
+          htmlFor={`${idPrefix}-folder-consent`}
+        >
+          <Checkbox
+            checked={editor.folderConsent}
+            id={`${idPrefix}-folder-consent`}
+            onCheckedChange={(next) => editor.setFolderConsent(next === true)}
+          />
+          我已了解，分身读取的文件内容会发送给模型服务
+        </label>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -219,7 +487,7 @@ export function SourcesStep({
   const moveOn = () => advance.mutate(nextStep, { onSuccess: onAdvanced });
 
   const canAddAnother =
-    editor.consent && editor.drafted && !editor.problem && !editor.full;
+    editor.agreed && editor.drafted && !editor.problem && !editor.full;
   const canContinue = editor.drafted
     ? canAddAnother
     : editor.sources.length > 0;
@@ -247,20 +515,28 @@ export function SourcesStep({
           已经登记了 {AVATAR_SOURCE_LIMIT} 个信息来源，这是上限。
         </p>
       ) : (
-        <DraftFields
-          idPrefix="onboarding-source"
-          label={editor.label}
-          note={editor.note}
-          onLabel={editor.setLabel}
-          onNote={editor.setNote}
-        />
+        <>
+          <KindSwitch editor={editor} />
+          {editor.kind === "local_folder" ? (
+            <FolderPicker editor={editor} idPrefix="onboarding-source" />
+          ) : (
+            <>
+              <DraftFields
+                idPrefix="onboarding-source"
+                label={editor.label}
+                note={editor.note}
+                onLabel={editor.setLabel}
+                onNote={editor.setNote}
+              />
+              <ModelNotice
+                checked={editor.consent}
+                id="onboarding-source-consent"
+                onChange={editor.setConsent}
+              />
+            </>
+          )}
+        </>
       )}
-
-      <ModelNotice
-        checked={editor.consent}
-        id="onboarding-source-consent"
-        onChange={editor.setConsent}
-      />
 
       {editor.drafted && editor.problem ? (
         <p className="text-muted-foreground text-sm">{editor.problem}</p>
@@ -299,7 +575,12 @@ export function SourcesStep({
 }
 
 /** The 分身's detail page: list, add and remove, the same rules as the step. */
-export function AvatarSourcesPanel() {
+export function AvatarSourcesPanel({
+  pairingHref = "/settings",
+}: {
+  /** Where My Devices is, for the pairing guidance (D4). */
+  pairingHref?: string;
+} = {}) {
   const editor = useSourceEditor();
 
   if (editor.state.isPending) {
@@ -314,7 +595,7 @@ export function AvatarSourcesPanel() {
   }
 
   const canAdd =
-    editor.consent && editor.drafted && !editor.problem && !editor.full;
+    editor.agreed && editor.drafted && !editor.problem && !editor.full;
 
   return (
     <div className="flex flex-col gap-4">
@@ -341,18 +622,29 @@ export function AvatarSourcesPanel() {
             if (canAdd) void editor.saveDraft();
           }}
         >
-          <DraftFields
-            idPrefix="avatar-source"
-            label={editor.label}
-            note={editor.note}
-            onLabel={editor.setLabel}
-            onNote={editor.setNote}
-          />
-          <ModelNotice
-            checked={editor.consent}
-            id="avatar-source-consent"
-            onChange={editor.setConsent}
-          />
+          <KindSwitch editor={editor} />
+          {editor.kind === "local_folder" ? (
+            <FolderPicker
+              editor={editor}
+              idPrefix="avatar-source"
+              pairingHref={pairingHref}
+            />
+          ) : (
+            <>
+              <DraftFields
+                idPrefix="avatar-source"
+                label={editor.label}
+                note={editor.note}
+                onLabel={editor.setLabel}
+                onNote={editor.setNote}
+              />
+              <ModelNotice
+                checked={editor.consent}
+                id="avatar-source-consent"
+                onChange={editor.setConsent}
+              />
+            </>
+          )}
           {editor.drafted && editor.problem ? (
             <p className="text-muted-foreground text-sm">{editor.problem}</p>
           ) : null}

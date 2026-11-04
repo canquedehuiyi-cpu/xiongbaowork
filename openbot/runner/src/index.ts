@@ -15,7 +15,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { createRunnerBrowser } from "./browser";
+import { createRunnerBrowser, type RunnerBrowser } from "./browser";
 import {
   type CredentialStore,
   createFileCredentialStore,
@@ -28,6 +28,8 @@ import {
   type RunnerExecutor,
 } from "./execute";
 import { createActionJournal } from "./journal";
+import { createRootRegistry, type RootMode, type RootRegistry } from "./roots";
+import { createRunnerScreens } from "./screencast";
 
 /** The environment twin of `--data-dir`, for a desktop shell that starts the runner as a sidecar. */
 export const DATA_DIR_ENV = "OPENBOT_RUNNER_DATA_DIR";
@@ -100,6 +102,16 @@ function usage(): string {
     "The private-hosts switch is for a local fixture you are throwing away, not for working days:",
     "it lets an assistant reach services on the network this machine is plugged into. Cloud metadata",
     "addresses stay refused either way.",
+    "",
+    "Folders. Your 分身 can read folders you name here, and only those, and never write to them.",
+    "Each command below changes this machine's list and exits; a running runner picks it up.",
+    "  --add-root NAME=PATH       offer the folder at PATH (absolute) under the name NAME",
+    "  --root-mode read|write     with --add-root: write lets a coworker change files and run commands",
+    "                             there, when a project on that folder is also set writable. Default: read.",
+    "                             Your 分身 only ever reads, whatever the mode.",
+    "  --remove-root REF|NAME     stop offering a folder",
+    "  --list-roots               print the folders offered, as JSON",
+    "The server is told each folder's name and an opaque reference, never its path.",
     "",
     "The runner makes no inbound connections: it dials out, and the server never reaches this machine.",
   ].join("\n");
@@ -213,6 +225,144 @@ function runnerPaths(
   };
 }
 
+/**
+ * The runner's own files, which no read-only folder may overlap: the token, the journal, the
+ * workspace, the browser profiles, and, when a data directory was asked for, all of it (a packaged
+ * app's data directory holds nothing a model should read). Without one the data directory is
+ * wherever the runner was started, often a home directory, so only the files themselves are named.
+ */
+function runnerPrivatePaths(paths: RunnerPaths, profileRoot: string): string[] {
+  return [
+    paths.stateFile,
+    paths.journalFile,
+    paths.workspaceDir,
+    profileRoot,
+    ...(paths.explicitDataDir ? [paths.dataDir] : []),
+  ];
+}
+
+/** One change to this machine's read-only folders, asked for on the command line. */
+export type RootCommand =
+  | { kind: "add"; name: string; path: string; mode: RootMode }
+  | { kind: "remove"; target: string }
+  | { kind: "list" };
+
+/** The flags that are a root command rather than a run, and the one of them that takes no value. */
+const ROOT_FLAGS = new Set(["add-root", "remove-root", "list-roots"]);
+
+/**
+ * A root command and where its registry lives, null when the arguments are a normal run, or the
+ * sentence that says what was wrong.
+ *
+ * No `--server`: registering a folder is a fact about this machine, and is done before, after or
+ * without a pairing. The data directory is worked out exactly as a run works it out, so the command
+ * and the runner read the same file; the state file and the browser profiles are named too, because
+ * no folder may be registered over them.
+ */
+export function parseRootCommand(
+  argv: string[],
+  env: Record<string, string | undefined> = process.env,
+  cwd: string = process.cwd(),
+):
+  | { command: RootCommand; dataDir: string; privatePaths: string[] }
+  | string
+  | null {
+  if (!argv.some((entry) => ROOT_FLAGS.has(entry.replace(/^--/, "")))) {
+    return null;
+  }
+  const args = new Map<string, string>();
+  for (let index = 0; index < argv.length; index += 1) {
+    const entry = argv[index];
+    if (!entry?.startsWith("--")) return `Unknown argument: ${entry ?? ""}`;
+    const name = entry.slice(2);
+    if (name === "list-roots") {
+      args.set(name, "");
+      continue;
+    }
+    args.set(name, argv[index + 1] ?? "");
+    index += 1;
+  }
+  const asked = [...ROOT_FLAGS].filter((flag) => args.has(flag));
+  if (asked.length > 1)
+    return "Pass one of --add-root, --remove-root or --list-roots.";
+  if (args.has("root-mode") && !args.has("add-root"))
+    return "--root-mode goes with --add-root.";
+  const modeFlag = (args.get("root-mode") ?? "read").trim().toLowerCase();
+  if (modeFlag !== "read" && modeFlag !== "write")
+    return "--root-mode must be read or write.";
+  const paths = runnerPaths(args, env, cwd);
+  if (typeof paths === "string") return paths;
+  const profile = args.get("browser-profile")?.trim();
+  const privatePaths = runnerPrivatePaths(
+    paths,
+    profile
+      ? resolve(paths.dataDir, profile)
+      : browserProfileRootFor(paths.workspaceDir),
+  );
+  let command: RootCommand;
+  if (args.has("add-root")) {
+    const value = args.get("add-root") ?? "";
+    const split = value.indexOf("=");
+    if (split <= 0)
+      return "--add-root needs NAME=PATH, for example 周报=/Users/me/Documents/周报.";
+    command = {
+      kind: "add",
+      name: value.slice(0, split),
+      path: value.slice(split + 1),
+      mode: modeFlag,
+    };
+  } else if (args.has("remove-root")) {
+    const target = args.get("remove-root")?.trim() ?? "";
+    if (!target) return "--remove-root needs the folder's reference or name.";
+    command = { kind: "remove", target };
+  } else {
+    command = { kind: "list" };
+  }
+  return { command, dataDir: paths.dataDir, privatePaths };
+}
+
+/**
+ * Carry out a root command and print one JSON line, which the device app reads and a person can too.
+ *
+ * The printed list includes each folder's path: it is printed here, on this machine, to its owner.
+ * What the server is sent is `reported()`, which has no path.
+ */
+export function runRootCommand(
+  parsed: { command: RootCommand; dataDir: string; privatePaths: string[] },
+  print: (line: string) => void = (line) => console.log(line),
+): number {
+  const registry = createRootRegistry({
+    dataDir: parsed.dataDir,
+    privatePaths: parsed.privatePaths,
+  });
+  try {
+    const { command } = parsed;
+    if (command.kind === "add") {
+      const root = registry.add(command.name, command.path, command.mode);
+      print(JSON.stringify({ ok: true, root, roots: registry.list() }));
+      return 0;
+    }
+    if (command.kind === "remove") {
+      if (!registry.remove(command.target)) {
+        print(JSON.stringify({ ok: false, error: "没有找到这个文件夹。" }));
+        return 2;
+      }
+      print(JSON.stringify({ ok: true, roots: registry.list() }));
+      return 0;
+    }
+    print(JSON.stringify({ ok: true, roots: registry.list() }));
+    return 0;
+  } catch (error) {
+    print(
+      JSON.stringify({
+        ok: false,
+        error: error instanceof Error ? error.message : "操作没有成功。",
+      }),
+    );
+    return 2;
+  }
+}
+
 export function parseArgs(
   argv: string[],
   env: Record<string, string | undefined> = process.env,
@@ -273,6 +423,16 @@ async function pair(options: Options, deviceId: string): Promise<string> {
 }
 
 /**
+ * A heartbeat, and the folders this machine offers: their references and names, never their paths.
+ *
+ * Carried on every beat rather than once, so a folder added or removed with `--add-root` while this
+ * runs reaches the owner's screen within one interval, without a restart.
+ */
+export function heartbeatFrame(roots: Pick<RootRegistry, "reported">): string {
+  return JSON.stringify({ type: "heartbeat", roots: roots.reported() });
+}
+
+/**
  * One connection's life, resolved when the socket closes.
  *
  * Heartbeats on a timer, and a beat is also the way this finds out the socket has gone away quietly:
@@ -285,15 +445,28 @@ function connect(
   token: string,
   deviceId: string,
   dispatch: ReturnType<typeof createRunnerDispatcher>,
+  browser: RunnerBrowser,
+  roots: RootRegistry,
 ): Promise<void> {
   return new Promise((resolve) => {
     const url = `${options.server.replace(/^http/, "ws")}/api/runner/ws?token=${encodeURIComponent(token)}`;
     const socket = new WebSocket(url);
     let beat: ReturnType<typeof setInterval> | undefined;
     let open = false;
+    /*
+     * The live screen, per connection: it rides this socket and dies with it. The server starts it
+     * again on the next connection for whoever is still watching, so nothing is cast to a socket that
+     * is gone.
+     */
+    const screens = createRunnerScreens({
+      source: browser,
+      send: (frame) => socket.send(JSON.stringify(frame)),
+      buffered: () => socket.bufferedAmount,
+    });
 
     const stop = () => {
       if (beat) clearInterval(beat);
+      void screens.stopAll();
       // Said once per connection that was up. A desktop shell reads these lines for its tray
       // (desktop-device/src-tauri/src/supervise.rs `classify`): without it, a dropped connection would
       // look online until the next dial failed, which can be half a minute away.
@@ -312,10 +485,10 @@ function connect(
     socket.addEventListener("open", () => {
       open = true;
       console.log(`runner: connected as ${deviceId}`);
-      socket.send(JSON.stringify({ type: "heartbeat" }));
+      socket.send(heartbeatFrame(roots));
       beat = setInterval(() => {
         try {
-          socket.send(JSON.stringify({ type: "heartbeat" }));
+          socket.send(heartbeatFrame(roots));
         } catch {
           stop();
         }
@@ -323,7 +496,13 @@ function connect(
     });
     socket.addEventListener("message", (event) => {
       const text = String(event.data);
-      void handleFrame(socket, text, dispatch, `${options.server}/${deviceId}`);
+      void handleFrame(
+        socket,
+        text,
+        dispatch,
+        `${options.server}/${deviceId}`,
+        screens,
+      );
     });
     socket.addEventListener("close", stop);
     socket.addEventListener("error", () => {
@@ -346,6 +525,12 @@ export async function main(
     stateFile: string,
   ) => CredentialStore = createFileCredentialStore,
 ): Promise<number> {
+  const rootCommand = parseRootCommand(argv);
+  if (typeof rootCommand === "string") {
+    console.error(rootCommand);
+    return 2;
+  }
+  if (rootCommand) return runRootCommand(rootCommand);
   const parsed = parseArgs(argv);
   if (typeof parsed === "string") {
     console.error(parsed);
@@ -390,10 +575,13 @@ export async function main(
    * directory for the default path and then be told to use another one, leaving a coworker's cookies
    * in a folder nothing was looking at.
    */
-  const executor = createRunnerExecutor(
-    paths.workspaceDir,
-    createRunnerBrowser(parsed.browser),
-  );
+  const browser = createRunnerBrowser(parsed.browser);
+  // The owner's read-only folders. Never over the runner's own files: see roots.ts.
+  const roots = createRootRegistry({
+    dataDir: paths.dataDir,
+    privatePaths: runnerPrivatePaths(paths, parsed.browser.profileRoot),
+  });
+  const executor = createRunnerExecutor(paths.workspaceDir, browser, roots);
   running = executor;
 
   // Backoff between dials, capped: a deployment that is down should cost one request every half
@@ -402,7 +590,7 @@ export async function main(
   const dispatch = createRunnerDispatcher(journal, executor);
   let delay = 1_000;
   for (;;) {
-    await connect(parsed, token, deviceId, dispatch);
+    await connect(parsed, token, deviceId, dispatch, browser, roots);
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);
   }
@@ -450,6 +638,7 @@ async function handleFrame(
   text: string,
   dispatch: ReturnType<typeof createRunnerDispatcher>,
   scope: string,
+  screens: ReturnType<typeof createRunnerScreens>,
 ): Promise<void> {
   let frame: {
     type?: unknown;
@@ -468,6 +657,9 @@ async function handleFrame(
     console.log(`runner: the deployment said ${JSON.stringify(frame)}`);
     return;
   }
+  // The live screen is not an action: nothing is journalled, and nothing is answered with a result.
+  if (await screens.handle(frame as Record<string, unknown>).catch(() => true))
+    return;
   try {
     await dispatch(scope, frame as Record<string, unknown>, (result) =>
       socket.send(JSON.stringify(result)),

@@ -1,3 +1,4 @@
+import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createShell } from "../../agent-computer/src/shell";
 import { createWorkspace } from "../../agent-computer/src/workspace";
@@ -8,6 +9,8 @@ import {
   createRunnerBrowser,
   type RunnerBrowser,
 } from "./browser";
+import { createGit, type Git } from "./git";
+import { isRootRef, PROJECTS_DIR, type RootRegistry } from "./roots";
 
 /**
  * What a runner does when the server asks it to do something (ticket 017).
@@ -62,10 +65,41 @@ function callerPayload(body: Record<string, unknown>): Record<string, unknown> {
   return rest;
 }
 
+/**
+ * The actions that may name a read-only root (story F1, stage 2). Everything else that names one is
+ * refused: a write, a command run with a root as its folder, and any action added later, because a
+ * root is a folder the owner offered to be read and nothing more.
+ */
+const ROOT_READS = new Set(["files.list", "files.read"]);
+/**
+ * The actions that may write in a root (story RES2, decision D3): a file write and a command run
+ * there. Only in a root its owner registered `write` on this machine, and only when the server's own
+ * frame says the project is writable (`writable: true`, which the gateway writes from the project and
+ * never from a model's arguments). Either one missing and the root is read-only, as every F1 folder
+ * always is.
+ */
+const ROOT_WRITES = new Set(["files.write", "exec"]);
+const READ_ONLY =
+  "That folder is read-only on this machine: it can be listed and read, never written to, changed or run in.";
+
+/** The runner actions for a Git project (story RES2, §3.3). */
+export const PROJECT_SYNC_ACTION = "projects.sync";
+export const PROJECT_BRANCHES_ACTION = "projects.branches";
+
+/** A clone's display name on this machine: the repository's own name, from its address. */
+function repositoryName(url: string): string {
+  const tail = url.replace(/\/+$/, "").split(/[/:]/).pop() ?? "";
+  return tail.replace(/\.git$/, "") || "项目";
+}
+
 /** Where a runner's files live, where its commands run, and whose browser it drives. */
 export function createRunnerExecutor(
   workspaceDir: string,
   browser?: RunnerBrowser,
+  /** The owner's read-only folders. Absent means this machine offers none, so any root is unknown. */
+  roots?: RootRegistry,
+  /** `git`, for a Git project's clone and branch list. Tests hand in their own. */
+  git: Git = createGit(),
 ): RunnerExecutor {
   const workspace = createWorkspace(workspaceDir);
   const shell = createShell(workspaceDir);
@@ -92,6 +126,142 @@ export function createRunnerExecutor(
         error: "The device action was stopped before execution.",
       };
     try {
+      /*
+       * A root is checked before anything else looks at the frame, so no action can reach a root's
+       * files except the two reads below, and an unknown one is refused rather than read as "the
+       * workspace". A command aimed at a root as its folder (`cwd`) is refused the same way: a
+       * command can write wherever it runs.
+       */
+      const rootAsFolder = isRootRef(body.cwd);
+      if (body.root !== undefined || rootAsFolder) {
+        const writes = ROOT_WRITES.has(action);
+        if (
+          rootAsFolder ||
+          (!ROOT_READS.has(action) && !writes) ||
+          (writes && body.writable !== true)
+        ) {
+          return { ok: false, error: READ_ONLY };
+        }
+        if (typeof body.root !== "string" || !roots) {
+          return {
+            ok: false,
+            error: "This machine has no folder by that reference.",
+          };
+        }
+        const folder = roots.open(body.root);
+        if (writes) {
+          // The owner's say on this machine wins over the server's: a `read` root stays read-only.
+          if (folder.mode !== "write" || !folder.write) {
+            return {
+              ok: false,
+              error: `${READ_ONLY} Its owner registered it for reading only.`,
+            };
+          }
+          if (action === "exec") {
+            const command =
+              typeof body.command === "string" ? body.command : undefined;
+            if (!command?.trim()) {
+              return { ok: false, error: "A command is required." };
+            }
+            // The command runs in the project's folder. The file tools stay confined to it whatever
+            // the command does; the command itself is the gateway's to allow (SEC1 and the gate).
+            const output = await createShell(folder.path).run({
+              command,
+              signal,
+              ...(typeof body.timeoutMs === "number"
+                ? { timeoutMs: body.timeoutMs }
+                : {}),
+            });
+            return output.stopped
+              ? { ok: false, error: "The command was stopped on the device." }
+              : { ok: true, output };
+          }
+          if (typeof body.contents !== "string") {
+            return { ok: false, error: "The contents to write are required." };
+          }
+          return {
+            ok: true,
+            output: await folder.write(String(body.path ?? ""), body.contents, {
+              append: body.append === true,
+            }),
+          };
+        }
+        return {
+          ok: true,
+          output:
+            action === "files.list"
+              ? await folder.list(
+                  typeof body.path === "string" ? body.path : undefined,
+                )
+              : await folder.read(String(body.path ?? "")),
+        };
+      }
+      /*
+       * A Git project's sync: clone the branch, or bring this machine's clone to its tip (story RES2,
+       * §3.3). The server sends the stored address and branch; `git.ts` checks both again before
+       * anything runs. The clone lives in `<dataDir>/runner-projects/<ref>/` and is registered as a
+       * `write` root only once `git` succeeded, so a failed clone leaves no root behind.
+       */
+      if (action === PROJECT_SYNC_ACTION) {
+        if (!roots) {
+          return { ok: false, error: "这台设备不能保存项目。" };
+        }
+        const asked = body.rootRef ?? null;
+        if (asked !== null && !isRootRef(asked)) {
+          return { ok: false, error: "项目的本机副本引用不对。" };
+        }
+        if (asked !== null && roots.list().some((root) => root.ref === asked)) {
+          return {
+            ok: false,
+            error: "这个引用属于本机的一个文件夹，不是项目副本。",
+          };
+        }
+        const ref = asked ?? roots.mintCloneRef();
+        const known = roots.clone(ref);
+        const dir = roots.clonePath(ref);
+        const url = typeof body.url === "string" ? body.url : "";
+        mkdirSync(join(dir, ".."), { recursive: true });
+        try {
+          const { commit } = await git.sync({
+            url,
+            branch: String(body.branch ?? ""),
+            dir,
+            ...(signal ? { signal } : {}),
+          });
+          if (!known) roots.registerClone(ref, repositoryName(url));
+          return { ok: true, output: { rootRef: ref, commit } };
+        } catch (error) {
+          // A clone that never became a root is not left on disk for nothing to point at.
+          if (!known && dir.includes(PROJECTS_DIR))
+            rmSync(dir, { recursive: true, force: true });
+          throw error;
+        }
+      }
+      if (action === PROJECT_BRANCHES_ACTION) {
+        return {
+          ok: true,
+          output: {
+            branches: await git.branches({
+              url: typeof body.url === "string" ? body.url : "",
+              ...(signal ? { signal } : {}),
+            }),
+          },
+        };
+      }
+      /*
+       * The person removed the information source that pointed at a root, so the server asks this
+       * machine to forget the folder too (spec §6.5). Only ever a removal: nothing the server sends
+       * can register a folder, and forgetting one only takes access away.
+       */
+      if (action === "roots.forget") {
+        return {
+          ok: true,
+          output: {
+            removed:
+              isRootRef(body.ref) && roots ? roots.remove(body.ref) : false,
+          },
+        };
+      }
       if (BROWSER_ACTIONS.has(action)) {
         // The identity is the server's fact about the frame; the rest is what the caller asked for.
         const identity = browserIdentityOf(body);

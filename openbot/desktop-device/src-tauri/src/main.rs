@@ -18,6 +18,7 @@
 
 mod autostart;
 mod process_tree;
+mod roots;
 mod sidecar;
 mod supervise;
 
@@ -231,9 +232,48 @@ async fn restart(app: AppHandle) -> Result<(), String> {
     start(&app, settings, None)
 }
 
+/// The folders this computer offers its owner's 分身, changed by running the sidecar once (see
+/// roots.rs). Not tied to the pairing: a folder can be added before or after it.
+fn folders(app: &AppHandle, command: roots::RootCommand) -> Result<Vec<roots::Root>, String> {
+    let program = sidecar::sidecar_path().map_err(|error| error.to_string())?;
+    roots::run(&program, &app.state::<Device>().paths.data_dir, &command)
+}
+
+#[tauri::command]
+async fn list_roots(app: AppHandle) -> Result<Vec<roots::Root>, String> {
+    folders(&app, roots::RootCommand::List)
+}
+
+/// Offer a folder, `read` or `write` as the person at this computer chose (RES2 D3; only those two
+/// words are accepted). The runner checks it again and refuses one over its own files.
+#[tauri::command]
+async fn add_root(
+    app: AppHandle,
+    name: String,
+    path: String,
+    mode: String,
+) -> Result<Vec<roots::Root>, String> {
+    let (name, path, mode) = roots::validate_add(&name, &path, &mode)?;
+    folders(&app, roots::RootCommand::Add { name, path, mode })
+}
+
+#[tauri::command]
+async fn remove_root(app: AppHandle, reference: String) -> Result<Vec<roots::Root>, String> {
+    folders(&app, roots::RootCommand::Remove { reference })
+}
+
+/// The window, opened at its folder section, for the tray's 「添加本地文件夹…」.
+fn show_folders(app: &AppHandle) {
+    show_window(app);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.showFolders && window.showFolders()");
+    }
+}
+
 fn chose(app: &AppHandle, id: &str) {
     match id {
         "open" => show_window(app),
+        "folders" => show_folders(app),
         "restart" => {
             let app = app.clone();
             std::thread::spawn(move || {
@@ -261,6 +301,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
     let status = MenuItem::with_id(app, "status", "状态：未配对", false, None::<&str>)?;
     let browser = MenuItem::with_id(app, "browser", BROWSER_MISSING, false, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "打开设备端窗口", true, None::<&str>)?;
+    let folders = MenuItem::with_id(app, "folders", "添加本地文件夹…", true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
         "autostart",
@@ -281,6 +322,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
                 &browser,
                 &separator,
                 &open,
+                &folders,
                 &autostart,
                 &restart,
                 &separator_two,
@@ -294,6 +336,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
                 &status,
                 &separator,
                 &open,
+                &folders,
                 &autostart,
                 &restart,
                 &separator_two,
@@ -357,7 +400,14 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_window(app);
         }))
-        .invoke_handler(tauri::generate_handler![status, pair, restart])
+        .invoke_handler(tauri::generate_handler![
+            status,
+            pair,
+            restart,
+            list_roots,
+            add_root,
+            remove_root
+        ])
         // Closing the window hides it; the app lives in the tray and Quit is there.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

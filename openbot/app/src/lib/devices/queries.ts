@@ -22,6 +22,12 @@ export type RegisteredDevice = {
   uncertain?: number;
   /** The backlog is big enough that it is a decision, not a queue. */
   needsAttention?: boolean;
+  /**
+   * The read-only folders the machine offers its owner's 分身 (story F1, stage 2): an opaque
+   * reference and the name the owner gave it on the machine. Never a path. Empty, or absent from an
+   * older server, when it offers none.
+   */
+  roots?: { ref: string; name: string }[];
 };
 
 export const deviceKeys = {

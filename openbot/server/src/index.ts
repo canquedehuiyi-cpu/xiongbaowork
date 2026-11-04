@@ -80,6 +80,7 @@ import {
   DEPLOYMENT_INITIATOR,
   PERSON_INITIATOR,
   recordAuditEvent,
+  recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
@@ -183,12 +184,14 @@ import { createSnapshotStore } from "./computer/snapshot-store";
 import { streamPathBotId } from "./computer/stream-path";
 import {
   captureInFrame,
+  type DeviceScreenSocketData,
   handleComputerStreamUpgrade,
 } from "./computer/stream-upgrade";
 import { loadConfig } from "./config";
 import {
   type IdentifyActor,
   type IdentifyUser,
+  type LoadCurrentProject,
   mountCopilotRuntime,
   normalizeModelBaseUrls,
   resolveRuntimeAgents,
@@ -223,6 +226,8 @@ import { createDemonstrationStore } from "./demonstrations/store";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import { createDeviceRoutes, createRunnerRoutes } from "./devices/routes";
+import { createDeviceScreens } from "./devices/screen";
+import { createDeviceTakeovers } from "./devices/takeover";
 import { computerProviderFor, createDeviceSelector } from "./devices/selection";
 import { runnerClose, runnerMessage, runnerOpen } from "./devices/socket";
 import { createDeviceStore, type DeviceOwner } from "./devices/store";
@@ -250,6 +255,9 @@ import { createOnboardingStore } from "./people/onboarding";
 import { createPeopleStore } from "./people/store";
 import { createPersonaRoutes } from "./personas/routes";
 import { createPersonaTemplateStore } from "./personas/store";
+import { createRoleGenerator } from "./roles/generator";
+import { createRoleTemplateRoutes } from "./roles/routes";
+import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
@@ -344,6 +352,9 @@ import {
   createAvatarSourceRoutes,
   createAvatarSourceStore,
 } from "./avatar-sources";
+import { createProjectContext } from "./projects/context";
+import { createProjectRoutes } from "./projects/routes";
+import { createProjectStore } from "./projects/store";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
@@ -353,7 +364,10 @@ import { createFlowGenerator } from "./wakerflows/generator";
 import { createFlowModelResolver } from "./wakerflows/model";
 import { recoverInterruptedFlowRuns } from "./wakerflows/recovery";
 import { createWakerFlowRoutes } from "./wakerflows/routes";
-import { createWakerFlowStore } from "./wakerflows/store";
+import {
+  createWakerFlowStore,
+  flowRunEventWriter,
+} from "./wakerflows/store";
 import { repeatAfterEach } from "./work/loop";
 import {
   createWorkQueue,
@@ -530,6 +544,36 @@ await startupLifecycle.run(async (startup) => {
   const deviceChannel = createDeviceChannel({
     queue: deviceQueue,
     authorize: (target, version) => deviceStore.isRegistered(target, version),
+  });
+  /*
+   * The live screen of a coworker on one of those machines (F2 stage 2): frames up the runner's
+   * socket, relayed to the people watching, input back down only from whoever holds the wheel.
+   */
+  const deviceScreens = createDeviceScreens({
+    notify: (target, frame) => deviceChannel.notify(target, frame),
+    holderOf: (target, botId) => deviceTakeovers.holder(target, botId),
+    onViewerGone: (watch) => deviceTakeovers.viewerGone(watch),
+  });
+  /*
+   * Who holds the wheel of a coworker's browser on one of those machines. The gateway asks it before
+   * every action it would send there, and a person whose last screen closes hands the wheel back.
+   */
+  const deviceTakeovers = createDeviceTakeovers({
+    stillWatching: (target, botId, userId) =>
+      deviceScreens.watching(target, botId, userId),
+    // In the device's own tenant: the handback happened on the owner's machine, to the owner's Bot.
+    onReleasedOnDisconnect: ({ target, botId, userId }) =>
+      void recordPersonAuditEvent(bootAuditStore, target.tenantId, {
+        eventType: "computer.control_released",
+        targetType: "computer",
+        targetId: botId,
+        payload: {
+          bot: botId,
+          actor: userId,
+          device: target.deviceId,
+          reason: "The person's live screen closed, so control went back to the coworker.",
+        },
+      }).catch(() => undefined),
   });
   /*
    * What this tenant's plan allows, read from their own subscription.
@@ -933,6 +977,23 @@ await startupLifecycle.run(async (startup) => {
     return await deviceSelector.forBot(botId);
   }
 
+  /*
+   * Story RES2: projects on the person's own machines. The context answers, per action, which project
+   * a coworker works in on the machine the action resolved to (and refuses rather than falls back,
+   * D9), and per run what its prompt says about it. Device mode only (D7): cloud mode has no machine.
+   */
+  const projectStore = createProjectStore(database);
+  const projectContext = createProjectContext(database);
+  const loadCurrentProjectForActor =
+    (_actorId: string): LoadCurrentProject =>
+    async (agentId) =>
+      config.tenantRuntime === "device"
+        ? projectContext.forPrompt(
+            agentId,
+            await deviceForBot(agentId).catch(() => null),
+          )
+        : null;
+
   /**
    * The same answer in the one form the task board takes: a machine id, or nothing.
    *
@@ -963,8 +1024,23 @@ await startupLifecycle.run(async (startup) => {
           ? {
               transport: createRunnerTransport(deviceChannel),
               resolveDevice: deviceForBot,
+              deviceTakeovers,
+              // RES2: the frame's root is the coworker's current project, never the model's.
+              projects: { resolve: projectContext.resolve },
             }
           : {}),
+        /*
+         * Story F1, stage 2: a 分身's read-only folders on its person's own machines. Always the
+         * runner's transport, even when coworkers otherwise use this deployment's container, because
+         * the folder is on the machine and nowhere else. Asked per call: a removed source, or a folder
+         * the machine stopped reporting, is not read. The store is built further down; this runs
+         * only once a turn is underway.
+         */
+        folders: {
+          resolve: (botId, actorId, root) =>
+            avatarSourceStore.folderFor(botId, actorId, root),
+          transport: createRunnerTransport(deviceChannel),
+        },
         auditStore: bootAuditStore,
         approvalGate: approvalService.gate,
         policy: () => policyStore.get(),
@@ -1532,7 +1608,28 @@ await startupLifecycle.run(async (startup) => {
    * reason the instructions above are: a source added or removed applies to the next run. Answered
    * only for the asker's own 分身; every other Bot gets none without a read.
    */
-  const avatarSourceStore = createAvatarSourceStore(database);
+  const avatarSourceStore = createAvatarSourceStore(database, {
+    /*
+     * Spec §6.5: removing a local folder's source also asks its machine to forget the folder. Only
+     * while the machine is connected, so it is never parked for a machine that is away: the forget is
+     * a courtesy on top of the real guarantee, which is that the gateway no longer reads through a
+     * removed source at all. A machine that was away still offers the folder on its own screen, and
+     * nothing can read it through this source.
+     */
+    onFolderRevoked: ({ tenantId, deviceId, rootRef }) => {
+      const target = { tenantId, deviceId };
+      if (!deviceChannel.isReachable(target)) return;
+      void deviceChannel
+        .dispatch(
+          target,
+          "roots.forget",
+          { ref: rootRef },
+          15_000,
+          `roots.forget/${rootRef}`,
+        )
+        .catch(() => undefined);
+    },
+  });
   const loadAvatarSourcesForActor = avatarSourcesForActor(avatarSourceStore);
 
   /*
@@ -2051,6 +2148,8 @@ await startupLifecycle.run(async (startup) => {
       resolveAgentModel,
       // And the owner's 分身's declared sources, exactly as their chat turn is told them.
       loadAvatarSourcesForActor(actor.id),
+      // And the coworker's current project, as their chat turn is told it (RES2).
+      loadCurrentProjectForActor(actor.id),
     );
     const agent = agents[agentId];
     if (!agent) {
@@ -2171,6 +2270,8 @@ await startupLifecycle.run(async (startup) => {
     // Spec I6, asked per step and never substituted: see `canUseCoworker` above.
     canUse: canUseCoworker,
     quota,
+    // WF8: a WakerFlow run's state changes and questions, written with the change itself.
+    events: flowRunEventWriter,
   });
 
   /**
@@ -2321,6 +2422,8 @@ await startupLifecycle.run(async (startup) => {
     resolveAgentModel,
     // What a person declared about where their material is, told to their own 分身 only (story F1).
     loadAvatarSourcesForActor,
+    // The project each coworker works in on the person's machine (story RES2).
+    loadCurrentProjectForActor,
   );
 
   const responsibilityQueue = createWorkQueue(database);
@@ -4166,6 +4269,22 @@ await startupLifecycle.run(async (startup) => {
   );
   app.route("/api/runner", createRunnerRoutes(deviceStore, quota));
 
+  // Story RES2: the signed-in person's projects on their own machines, in their own frame.
+  app.route(
+    "/api/projects",
+    createProjectRoutes(
+      projectStore,
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+      {
+        isReachable: (target) => deviceChannel.isReachable(target),
+        dispatch: (target, action, payload, timeoutMs) =>
+          deviceChannel.dispatch(target, action, payload, timeoutMs),
+      },
+    ),
+  );
+
   // Story F1: the information sources of the signed-in person's own 分身, in their own frame.
   app.route(
     "/api/me/avatar/sources",
@@ -4254,6 +4373,31 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
 
+  // Role templates (story ROLE1): the person's own, and the package's seed cards as read-only ones.
+  const officialRoleTemplates = officialTemplatesFrom(tenantPackage.agents);
+  app.route(
+    "/api/role-templates",
+    createRoleTemplateRoutes(
+      createRoleTemplateStore({
+        database,
+        profiles: agentProfileStore,
+        official: () => officialRoleTemplates,
+        // Smart generation: the person's own model library only (D7), like WakerFlow planning.
+        models: createFlowModelResolver({
+          database,
+          encryptionKey: config.keyEncryptionKey,
+          allowPlatformModel: false,
+          outbound: modelOutbound,
+        }),
+        generator: createRoleGenerator(),
+        quota,
+      }),
+      config.singleUser
+        ? createDevRequireUser()
+        : createRequireUser(auth as AuthService, roleRepository),
+    ),
+  );
+
   // A person's knowledge base (D08, story RES1): notebooks, text sources and read-only Waker bindings.
   app.route(
     "/api/knowledge",
@@ -4299,7 +4443,11 @@ await startupLifecycle.run(async (startup) => {
    * not, rather than either feature quietly taking the slot and breaking the other on connect.
    */
   type ChannelSocket = Parameters<typeof channelSocket.open>[0];
-  type SocketData = StreamData | ChannelSocket["data"] | RunnerSocket;
+  type SocketData =
+    | StreamData
+    | ChannelSocket["data"]
+    | RunnerSocket
+    | DeviceScreenSocketData;
 
   const isProxiedStream = (data: SocketData): data is StreamData =>
     typeof (data as StreamData).upstream === "string";
@@ -4316,6 +4464,10 @@ await startupLifecycle.run(async (startup) => {
   const isRunnerSocket = (data: SocketData): data is RunnerSocket =>
     typeof (data as RunnerSocket).runner === "object" &&
     (data as RunnerSocket).runner !== null;
+  /** A person watching a coworker on a tenant's own machine; see `handleComputerStreamUpgrade`. */
+  const isDeviceScreen = (data: SocketData): data is DeviceScreenSocketData =>
+    typeof (data as DeviceScreenSocketData).screen === "object" &&
+    (data as DeviceScreenSocketData).screen !== null;
 
   // Hono owns the socket's data once it has upgraded it; this hands its own back to it.
   const asChannelSocket = (ws: { data: SocketData }) =>
@@ -4367,7 +4519,9 @@ await startupLifecycle.run(async (startup) => {
             // In the signed-in person's frame: see `handleComputerStreamUpgrade` (G01-E P4).
             const answer = await handleComputerStreamUpgrade(
               {
-                computerConfigured: Boolean(config.computer),
+                // A device-mode deployment has a computer for every coworker: the tenant's own machine.
+                computerConfigured:
+                  Boolean(config.computer) || config.tenantRuntime === "device",
                 resolveRequestActor,
                 accessCheck: computerAccessCheck(agentProfileStore),
                 locate: computerGateway
@@ -4393,9 +4547,27 @@ await startupLifecycle.run(async (startup) => {
                 ws as unknown as Parameters<typeof runnerOpen>[0],
                 deviceStore,
                 deviceChannel,
+                deviceScreens,
               ).catch(() =>
                 ws.close(1008, "Device access could not be verified."),
               );
+              return;
+            }
+            if (isDeviceScreen(ws.data)) {
+              try {
+                deviceScreens.subscribe(ws, ws.data.screen);
+              } catch (error) {
+                ws.send(
+                  JSON.stringify({
+                    type: "error",
+                    error:
+                      error instanceof Error
+                        ? error.message
+                        : "The screen could not be started.",
+                  }),
+                );
+                ws.close();
+              }
               return;
             }
             if (!isProxiedStream(ws.data)) {
@@ -4482,7 +4654,12 @@ await startupLifecycle.run(async (startup) => {
                 deviceStore,
                 deviceChannel,
                 raw,
+                deviceScreens,
               );
+              return;
+            }
+            if (isDeviceScreen(ws.data)) {
+              deviceScreens.input(ws, raw);
               return;
             }
             if (!isProxiedStream(ws.data)) {
@@ -4502,6 +4679,10 @@ await startupLifecycle.run(async (startup) => {
                 ws as unknown as Parameters<typeof runnerClose>[0],
                 deviceChannel,
               );
+              return;
+            }
+            if (isDeviceScreen(ws.data)) {
+              deviceScreens.unsubscribe(ws);
               return;
             }
             if (!isProxiedStream(ws.data)) {

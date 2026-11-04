@@ -1,5 +1,7 @@
 import type { OpenBotRole } from "../auth/roles";
-import { runAsTenant } from "../tenant/context";
+import { parseRunnerAddress } from "../devices/channel";
+import type { ScreenWatch } from "../devices/screen";
+import { currentTenant, runAsTenant } from "../tenant/context";
 import { streamPathBotId } from "./stream-path";
 
 /** What the proxied live-screen socket carries once upgraded. */
@@ -33,11 +35,20 @@ export type ComputerStreamUpgradeDeps = {
   ) => Promise<{ id: string } | null>;
 };
 
+/**
+ * What a live-screen socket carries when the Bot's computer is a tenant's own machine (F2 stage 2).
+ *
+ * Nothing is dialled for it. The frames come up the runner's socket and `devices/screen.ts` relays
+ * them, so this is only who is watching which Bot on which device, fixed here and never re-read from
+ * anything the socket later says.
+ */
+export type DeviceScreenSocketData = { screen: ScreenWatch };
+
 /** The one call this needs of Bun's server. */
 export type ComputerStreamServer = {
   upgrade(
     request: Request,
-    options: { data: ComputerStreamSocketData },
+    options: { data: ComputerStreamSocketData | DeviceScreenSocketData },
   ): boolean;
 };
 
@@ -94,6 +105,32 @@ export async function handleComputerStreamUpgrade(
         return new Response("No computer address is configured.", {
           status: 503,
         });
+      }
+      /*
+       * A tenant's own machine is not a URL to dial: its screen is relayed from the runner's socket.
+       *
+       * Admitted only when the machine belongs to the tenant of the person asking. The access check
+       * above already confined this to a Bot they may watch, and a Bot runs on its owner's machines;
+       * this compares the two facts instead of assuming one follows from the other, so a stranger who
+       * somehow passed the first question still meets the same "no such Bot" as everybody else.
+       */
+      const device = parseRunnerAddress(streamBase);
+      if (device) {
+        const viewerTenant = currentTenant();
+        if (device.tenantId !== viewerTenant) {
+          return new Response("There is no such Bot.", { status: 404 });
+        }
+        const data: DeviceScreenSocketData = {
+          screen: {
+            viewerTenant,
+            userId: actor.id,
+            target: device,
+            botId: streamBotId,
+          },
+        };
+        return server.upgrade(request, { data })
+          ? undefined
+          : new Response("Expected a WebSocket upgrade.", { status: 400 });
       }
       upstream = deps.toStreamUrl(streamBase, streamBotId);
     } catch (error) {

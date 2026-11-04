@@ -918,6 +918,41 @@
       "when": 1793631900000,
       "tag": "0131_employee_tool_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1793632200000,
+      "tag": "0132_device_roots",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1793632500000,
+      "tag": "0133_role_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1793632800000,
+      "tag": "0134_waker_flow_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1793633700000,
+      "tag": "0137_flow_run_coordination_active",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1793634000000,
+      "tag": "0138_resource_projects_active",
+      "breakpoints": true
     }
   ]
 }

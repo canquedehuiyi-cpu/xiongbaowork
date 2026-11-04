@@ -13,9 +13,11 @@ import {
   type PipelineStepStateRow,
   stepIsSettled,
 } from "../db/schema/pipeline";
+import { WAKERFLOW_MAX_STEPS } from "../../../shared/wakerflows";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
+import { decide, routeAfter, stepBudget } from "./decision";
 import { reapAbandonedPipelineRuns } from "./reap";
 
 /**
@@ -39,7 +41,11 @@ import { reapAbandonedPipelineRuns } from "./reap";
  * they start to disagree.
  */
 export type PipelineStep = PipelineStepRow;
-export type StepRecord = PipelineStepStateRow;
+/**
+ * WF8: a step parked on a question (no approval row) also keeps the question it asked, so the
+ * WakerFlow layer can show it and record the person's answer (`flow_confirmations`).
+ */
+export type StepRecord = PipelineStepStateRow & { question?: string };
 
 export type RunOutcome = {
   status: "running" | "awaiting_action" | "done" | "failed" | "aborted";
@@ -59,7 +65,12 @@ export type RunOutcome = {
  */
 export type StepResult =
   | { status: "done"; output: string }
-  | { status: "awaiting_action"; approvalId?: string }
+  | {
+      status: "awaiting_action";
+      approvalId?: string;
+      /** What the coworker asked, when it stopped on a question rather than an approval (WF8). */
+      question?: string;
+    }
   | { status: "failed"; error: string };
 
 /**
@@ -174,6 +185,75 @@ export class PipelineStepForbiddenError extends Error {
 /** How many steps one template may hold. A pipeline is a machine for spending turns, so the number that
  * bounds it has to live somewhere other than the person's patience. */
 const MAX_STEPS = 10;
+/**
+ * How many steps a run may hold. A WakerFlow's compiled template may hold up to 20 (WF7 D4), and it
+ * is written by the WakerFlow store, not by `createTemplate`; a crew's own templates stay at
+ * {@link MAX_STEPS}, which is checked when they are written.
+ */
+const MAX_RUN_STEPS = WAKERFLOW_MAX_STEPS;
+
+/**
+ * Mark the steps a jump passes over as skipped by the branch (WF7): a step no taken path reached is
+ * not missing work, and is recorded so the run says what it did not do and why.
+ */
+function passOver(records: StepRecord[], from: number, to: number) {
+  for (let index = from + 1; index < to && index < records.length; index += 1) {
+    const record = records[index];
+    if (record && record.state === "pending")
+      records[index] = { ...record, state: "skipped", skipReason: "branch" };
+  }
+}
+
+/** The kinds this orchestrator runs; any other is failed closed rather than guessed at. */
+const RUNNABLE_KINDS = new Set(["worker", "decision"]);
+
+/** The value one declared key reads: the run's input, an earlier step's output, or the gap. */
+function readKey(
+  key: string,
+  inputs: Record<string, string>,
+  earlier: StepRecord[],
+): string {
+  return (
+    inputs[key] ??
+    earlier.find((step) => step.outputKey === key)?.output ??
+    "（此输入未产生）"
+  );
+}
+
+/**
+ * What one coworker is told for one step: its role in this Flow (WF7 D2, first, so it frames the
+ * rest), the step's own instruction, the task, what it reads, and which earlier steps produced
+ * nothing. Pure, so the order is pinned by a test rather than by reading a template literal.
+ */
+export function stepInstruction(input: {
+  record: StepRecord;
+  task: string;
+  inputs: Record<string, string>;
+  /** The run's steps before this one. */
+  earlier: StepRecord[];
+  /** Outputs of earlier steps, in order (read when the step declares no inputs). */
+  prior: string[];
+  /** Ids of the earlier steps that were skipped or failed. */
+  missing: string[];
+}): string {
+  const { record } = input;
+  const role = record.rolePrompt?.trim()
+    ? `本流程中你的角色：${record.rolePrompt.trim()}\n\n`
+    : "";
+  return `${role}${record.instruction}\n\n任务：${input.task}${
+    record.inputKeys
+      ? `\n\n此步骤的输入：\n${JSON.stringify(Object.fromEntries(record.inputKeys.map((key) => [key, readKey(key, input.inputs, input.earlier)])))}`
+      : input.prior.length > 0
+        ? `\n\n前面步骤的产出：\n${input.prior
+            .map((line, index) => `${index + 1}. ${line}`)
+            .join("\n")}`
+        : ""
+  }${
+    input.missing.length > 0
+      ? `\n\n注意：${input.missing.join("、")} 这几步没有产出（被跳过或已失败），下面的结论里不要假装它们发生过。`
+      : ""
+  }`;
+}
 
 /** `groupTaskTemplates.group_id` is a uuid, and Postgres answers a malformed one with a 22P02 that
  * reaches the person as a 500. Ask about the shape before the database does. */
@@ -190,9 +270,15 @@ function isUuid(value: string) {
  * pipeline API must not list them, add steps to them, or start them behind the Flow's back.
  */
 const owningFlow = () =>
+  /*
+   * Spelled out, not interpolated: used as a select field, drizzle writes a column without its table,
+   * which turned this into `"group_id" = "group_id"` inside the subquery (the Flow's own column on both
+   * sides), so any Flow of the workspace "owned" every template, a plain crew's template could not be
+   * started, and of two Flows only one could run.
+   */
   sql<
     string | null
-  >`(select ${wakerFlows.id} from ${wakerFlows} where ${wakerFlows.groupId} = ${groupTaskTemplates.groupId} limit 1)`;
+  >`(select owned_flow.id from ${wakerFlows} as owned_flow where owned_flow.group_id = "group_task_templates"."group_id" limit 1)`;
 
 type RunRow = {
   id: string;
@@ -206,7 +292,40 @@ type RunRow = {
   revision: number;
   advanceOwner: string | null;
   inputs: Record<string, string>;
+  flowId: string | null;
+  /** What this process last wrote, so the next change is compared with it and not with the read. */
+  written?: { status: string; steps: StepRecord[] };
 };
+
+/** The transaction a {@link PipelineEventWriter} is handed; its writes commit or roll back with the run's. */
+export type PipelineTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
+
+/**
+ * One state change of a WakerFlow's run (WF8, spec §3.4 E-A), as `writeRun` (or `start`) made it.
+ * `before` is null for the run's first row. `revision` is the run's revision after the change, so
+ * one change is named once however often it is reported.
+ */
+export type PipelineRunTransition = {
+  tenantId: string;
+  runId: string;
+  flowId: string;
+  revision: number;
+  inputs: Record<string, string>;
+  before: { status: string; steps: StepRecord[] } | null;
+  after: { status: string; cursor: number; steps: StepRecord[] };
+};
+
+/**
+ * Records a run's state change inside the transaction that made it, so a change that lost its
+ * revision race (and so did not happen) leaves nothing behind, and a record that cannot be written
+ * undoes the change. Asked only for runs a WakerFlow started; a crew's own runs are not recorded.
+ */
+export type PipelineEventWriter = (
+  tx: PipelineTransaction,
+  transition: PipelineRunTransition,
+) => Promise<void>;
 
 export function createPipelineStore(options: {
   database: Database;
@@ -234,6 +353,8 @@ export function createPipelineStore(options: {
    */
   quota?: QuotaService;
   newRunId?: () => string;
+  /** WF8: the WakerFlow run-event writer (`wakerflows/store.ts` `flowRunEventWriter`). */
+  events?: PipelineEventWriter;
 }) {
   const { database, board, executeStep, canUse } = options;
   const newRunId = options.newRunId ?? (() => randomUUID());
@@ -250,6 +371,7 @@ export function createPipelineStore(options: {
         revision: groupTaskRuns.revision,
         advanceOwner: groupTaskRuns.advanceOwner,
         inputs: groupTaskRuns.inputs,
+        flowId: groupTaskRuns.flowId,
       })
       .from(groupTaskRuns)
       .where(
@@ -292,6 +414,7 @@ export function createPipelineStore(options: {
       revision: row.revision,
       advanceOwner: row.advanceOwner,
       inputs: row.inputs,
+      flowId: row.flowId ?? null,
     };
   }
 
@@ -306,8 +429,12 @@ export function createPipelineStore(options: {
     expected: RunRow,
     owner?: string,
   ) {
-    const [updated] = await runAsTenant(tenantId, async () => {
-      return await database
+    const before = {
+      status: expected.status,
+      steps: expected.written?.steps ?? expected.steps,
+    };
+    const update = (db: Database | PipelineTransaction) =>
+      db
         .update(groupTaskRuns)
         .set({
           ...patch,
@@ -325,10 +452,39 @@ export function createPipelineStore(options: {
           ),
         )
         .returning({ revision: groupTaskRuns.revision });
+    const { events } = options;
+    const flowId = expected.flowId;
+    const changes = patch.status !== undefined || patch.steps !== undefined;
+    const [updated] = await runAsTenant(tenantId, async () => {
+      // WF8: a WakerFlow run's change and its record commit together, or neither does.
+      if (!events || !flowId || !changes) return await update(database);
+      return await database.transaction(async (tx) => {
+        const rows = await update(tx);
+        const [row] = rows;
+        if (row)
+          await events(tx, {
+            tenantId,
+            runId,
+            flowId,
+            revision: row.revision,
+            inputs: expected.inputs,
+            before,
+            after: {
+              status: patch.status ?? before.status,
+              cursor: patch.cursor ?? expected.cursor,
+              steps: patch.steps ?? before.steps,
+            },
+          });
+        return rows;
+      });
     });
     if (!updated) return false;
     expected.revision = updated.revision;
     if (patch.status !== undefined) expected.status = patch.status;
+    expected.written = {
+      status: expected.status,
+      steps: [...(patch.steps ?? before.steps)],
+    };
     return true;
   }
 
@@ -642,6 +798,23 @@ export function createPipelineStore(options: {
       inputs?: Record<string, string>;
       flowId?: string;
       runId?: string;
+      /**
+       * WF8 retry: the steps before `cursor` start as these records (each `done` or `skipped`, with
+       * the output it already produced) and are never run again; the run starts at `cursor`. Only
+       * the steps from there on are asked about (I6) and counted against the month.
+       */
+      seed?: {
+        cursor: number;
+        records: Pick<
+          StepRecord,
+          "state" | "output" | "skipReason" | "branch"
+        >[];
+      };
+      /**
+       * Written in the same transaction as the run's first row, so whatever it records exists exactly
+       * when the run does (the retry ledger, whose row names this run).
+       */
+      register?: (tx: PipelineTransaction, runId: string) => Promise<void>;
     }): Promise<{ runId: string; parentTaskId: string }> {
       // A malformed id is "not here" (spec D15), the same answer edit and delete give, not a cast error.
       if (!isUuid(input.templateId)) {
@@ -671,9 +844,9 @@ export function createPipelineStore(options: {
       const declared = Array.isArray(template.steps)
         ? (template.steps as PipelineStep[])
         : [];
-      if (declared.length > MAX_STEPS) {
+      if (declared.length > MAX_RUN_STEPS) {
         throw new PipelineValidationError(
-          `一条流水线最多 ${MAX_STEPS} 步，这条有 ${declared.length} 步。`,
+          `一条流水线最多 ${MAX_RUN_STEPS} 步，这条有 ${declared.length} 步。`,
         );
       }
       /*
@@ -684,8 +857,28 @@ export function createPipelineStore(options: {
        * person could never finish. A check that errors counts as a refusal: failing open is how a
        * flaky lookup becomes "the platform ran it anyway".
        */
+      const seed = input.seed;
+      if (
+        seed &&
+        (!Number.isInteger(seed.cursor) ||
+          seed.cursor < 0 ||
+          seed.cursor >= declared.length ||
+          seed.records.length !== seed.cursor ||
+          seed.records.some(
+            (record) => record.state !== "done" && record.state !== "skipped",
+          ))
+      ) {
+        throw new PipelineValidationError("重试的起点与这条流程的步骤对不上。");
+      }
+      const from = seed?.cursor ?? 0;
+      // WF7 D4: what can still open a card, over the longest path; a decision opens none.
+      const remaining = stepBudget(declared, from);
       const refused: { index: number; stepId: string; agentId: string }[] = [];
       for (const [index, step] of declared.entries()) {
+        // Steps a retry carries over already ran; only what will run is asked about.
+        if (index < from) continue;
+        // A decision runs as nobody: the orchestrator evaluates it, no coworker is asked.
+        if (step.kind === "decision") continue;
         const allowed = await canUse(input.initiatedBy, step.agentId).catch(
           () => false,
         );
@@ -704,7 +897,7 @@ export function createPipelineStore(options: {
       await options.quota?.assertCapacity(
         input.tenantId,
         "tasksPerMonth",
-        declared.length + 1,
+        remaining + 1,
       );
       /*
        * The run id IS the parent card's run reference. The parent stands for this run rather than for
@@ -722,25 +915,65 @@ export function createPipelineStore(options: {
         // filtered the card out of every `executors=` view.
         source: "group_run",
         runRef: runId,
-        quotaUnits: declared.length + 1,
+        quotaUnits: remaining + 1,
       });
 
+      const steps = declared.map<StepRecord>((step, index) => {
+        const carried = seed?.records[index];
+        return carried
+          ? {
+              ...step,
+              state: carried.state,
+              ...(carried.output === undefined
+                ? {}
+                : { output: carried.output }),
+              ...(carried.skipReason === undefined
+                ? {}
+                : { skipReason: carried.skipReason }),
+              ...(carried.branch === undefined
+                ? {}
+                : { branch: carried.branch }),
+            }
+          : { ...step, state: "pending" };
+      });
+      const row = {
+        id: runId,
+        tenantId: input.tenantId,
+        templateId: input.templateId,
+        groupId: template.groupId,
+        parentTaskId,
+        status: "running",
+        cursor: from,
+        steps,
+        initiatedBy: input.initiatedBy,
+        inputs: input.inputs ?? {},
+        flowId: input.flowId ?? null,
+      };
+      const { events } = options;
+      const flowId = input.flowId;
+      const { register } = input;
       await runAsTenant(input.tenantId, async () => {
-        await database.insert(groupTaskRuns).values({
-          id: runId,
-          tenantId: input.tenantId,
-          templateId: input.templateId,
-          groupId: template.groupId,
-          parentTaskId,
-          status: "running",
-          cursor: 0,
-          steps: declared.map<StepRecord>((step) => ({
-            ...step,
-            state: "pending",
-          })),
-          initiatedBy: input.initiatedBy,
-          inputs: input.inputs ?? {},
-          flowId: input.flowId ?? null,
+        if ((!events || !flowId) && !register) {
+          await database.insert(groupTaskRuns).values(row);
+          return;
+        }
+        // WF8: the run's first row, its `run_started` and whatever `register` records commit together.
+        await database.transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(groupTaskRuns)
+            .values(row)
+            .returning({ revision: groupTaskRuns.revision });
+          if (events && flowId)
+            await events(tx, {
+              tenantId: input.tenantId,
+              runId,
+              flowId,
+              revision: inserted?.revision ?? 0,
+              inputs: row.inputs,
+              before: null,
+              after: { status: "running", cursor: from, steps },
+            });
+          await register?.(tx, runId);
         });
       });
       return { runId, parentTaskId };
@@ -880,7 +1113,10 @@ export function createPipelineStore(options: {
          */
         const missing = records
           .filter(
-            (record) => record.state === "skipped" || record.state === "failed",
+            (record) =>
+              // WF7: a step no taken branch reached is not missing work (spec §3.3).
+              (record.state === "skipped" && record.skipReason !== "branch") ||
+              record.state === "failed",
           )
           .map((record) => record.id);
 
@@ -891,6 +1127,89 @@ export function createPipelineStore(options: {
           }
           // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
           const record = records[cursor]!;
+          // A step a person skipped ahead of time is passed over, along its own route.
+          if (record.state === "skipped") {
+            const to = routeAfter(records, cursor);
+            passOver(records, cursor, to);
+            cursor = to;
+            continue;
+          }
+          const kind = record.kind ?? "worker";
+          if (!RUNNABLE_KINDS.has(kind)) {
+            // Save refuses a kind this orchestrator cannot run; a template that holds one anyway
+            // fails here, closed, rather than being handed to a coworker as if it were a turn.
+            records[cursor] = {
+              ...record,
+              state: "failed",
+              error: `第 ${cursor + 1} 步是暂时还不能运行的步骤类型，没有执行。`,
+            };
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                { cursor, status: "failed", steps: records },
+                run,
+                owner,
+              ))
+            )
+              return currentOutcome(input.tenantId, input.runId);
+            await closeParent(run, input.tenantId, true);
+            return { status: "failed", cursor, steps: records };
+          }
+          if (kind === "decision") {
+            /*
+             * WF7 (spec §3.3): a condition is the orchestrator's, not a coworker's. No card, no turn,
+             * no model, no I6 question: nobody is dispatched. An expression that cannot be evaluated
+             * fails the step and the run (fail closed), never falls through to `otherwise`.
+             */
+            const decided = decide(
+              record,
+              run.inputs,
+              records.slice(0, cursor),
+            );
+            if (!decided.ok) {
+              records[cursor] = {
+                ...record,
+                state: "failed",
+                error: decided.error,
+              };
+              if (
+                !(await writeRun(
+                  input.tenantId,
+                  input.runId,
+                  { cursor, status: "failed", steps: records },
+                  run,
+                  owner,
+                ))
+              )
+                return currentOutcome(input.tenantId, input.runId);
+              await closeParent(run, input.tenantId, true);
+              return { status: "failed", cursor, steps: records };
+            }
+            records[cursor] = {
+              ...record,
+              state: "done",
+              branch: { label: decided.label, index: decided.index },
+            };
+            const to = routeAfter(records, cursor, decided.next);
+            passOver(records, cursor, to);
+            cursor = to;
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                {
+                  cursor,
+                  steps: records,
+                  status: cursor >= records.length ? "done" : "running",
+                },
+                run,
+                owner,
+              ))
+            )
+              return currentOutcome(input.tenantId, input.runId);
+            continue;
+          }
           const allowed =
             initiator !== null &&
             (await canUse(initiator, record.agentId).catch(() => false));
@@ -960,6 +1279,7 @@ export function createPipelineStore(options: {
             // The park is over — whether the person approved or the queue is simply driving the step again.
             // Leaving it would make the run claim to be waiting on a decision that has been made.
             approvalId: undefined,
+            question: undefined,
           };
           if (
             !(await writeRun(
@@ -979,31 +1299,20 @@ export function createPipelineStore(options: {
             return currentOutcome(input.tenantId, input.runId);
           }
 
+          const earlier = records.slice(0, cursor);
           const result = await executeStep({
             tenantId: input.tenantId,
             agentId: record.agentId,
-            instruction: `${record.instruction}\n\n任务：${run.instruction}${
-              record.inputKeys
-                ? `\n\n此步骤的输入：\n${JSON.stringify(Object.fromEntries(record.inputKeys.map((key) => [key, run.inputs[key] ?? records.slice(0, cursor).find((step) => step.outputKey === key)?.output ?? "（此输入未产生）"])))}`
-                : prior.length > 0
-                  ? `\n\n前面步骤的产出：\n${prior
-                      .map((line, index) => `${index + 1}. ${line}`)
-                      .join("\n")}`
-                  : ""
-            }${
-              missing.length > 0
-                ? `\n\n注意：${missing.join("、")} 这几步没有产出（被跳过或已失败），下面的结论里不要假装它们发生过。`
-                : ""
-            }`,
+            instruction: stepInstruction({
+              record,
+              task: run.instruction,
+              inputs: run.inputs,
+              earlier,
+              prior,
+              missing,
+            }),
             prior: record.inputKeys
-              ? record.inputKeys.map(
-                  (key) =>
-                    run.inputs[key] ??
-                    records
-                      .slice(0, cursor)
-                      .find((step) => step.outputKey === key)?.output ??
-                    "（此输入未产生）",
-                )
+              ? record.inputKeys.map((key) => readKey(key, run.inputs, earlier))
               : prior,
             initiatedBy: initiator,
             runId: input.runId,
@@ -1019,7 +1328,10 @@ export function createPipelineStore(options: {
               output: result.output,
             };
             prior.push(result.output);
-            cursor += 1;
+            // WF7: on along the step's own route; the steps a jump passes over are branch-skipped.
+            const to = routeAfter(records, cursor);
+            passOver(records, cursor, to);
+            cursor = to;
             if (
               !(await writeRun(
                 input.tenantId,
@@ -1041,11 +1353,13 @@ export function createPipelineStore(options: {
 
           if (result.status === "awaiting_action") {
             const approvalId = result.approvalId;
+            const question = approvalId ? undefined : result.question?.trim();
             records[cursor] = {
               // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
               ...records[cursor]!,
               state: "awaiting_action",
               ...(approvalId ? { approvalId } : {}),
+              ...(question ? { question } : {}),
             };
             if (
               !(await writeRun(
@@ -1194,8 +1508,20 @@ export function createPipelineStore(options: {
           "运行中的流程只能跳过当前步骤。请等它停下再编辑后续步骤。",
         );
       }
-      records[at] = { ...closed, state: "skipped" };
-      const cursor = at === run.cursor ? run.cursor + 1 : run.cursor;
+      // WF7: a decision runs no coworker and is evaluated when it is reached; skipping it would
+      // leave the run with no way to know which branch the person meant.
+      if (closed.kind === "decision") {
+        throw new PipelineValidationError(
+          "条件判断步骤不能跳过；运行到它时会自动判断走哪个分支。",
+        );
+      }
+      records[at] = { ...closed, state: "skipped", skipReason: "person" };
+      let cursor = run.cursor;
+      if (at === run.cursor) {
+        // On along the skipped step's own route, as if it had finished.
+        cursor = routeAfter(records, at);
+        passOver(records, at, cursor);
+      }
       const done = cursor >= records.length;
       if (
         !(await writeRun(
@@ -1309,6 +1635,11 @@ export function createPipelineStore(options: {
       output?: string;
       /** Why the step did not produce one: declined, or the replayed turn failed. */
       error?: string;
+      /**
+       * WF8: false records the answer and returns, leaving the rest of the plan to the caller's own
+       * driver, so a person's answer is not held open while the crew works through what follows.
+       */
+      drive?: boolean;
     }): Promise<RunOutcome> {
       const run = await readRun(input.tenantId, input.runId);
       if (!run) throw new PipelineNotFoundError("这个工作区里没有这次运行。");
@@ -1336,6 +1667,7 @@ export function createPipelineStore(options: {
           state: "failed",
           error: input.error,
           approvalId: undefined,
+          question: undefined,
         };
         if (
           !(await writeRun(
@@ -1364,8 +1696,11 @@ export function createPipelineStore(options: {
         state: "done",
         output,
         approvalId: undefined,
+        question: undefined,
       };
-      const next = cursor + 1;
+      // WF7: on along the parked step's own route, as `advance` would have gone.
+      const next = routeAfter(records, cursor);
+      passOver(records, cursor, next);
       if (
         !(await writeRun(
           input.tenantId,
@@ -1389,6 +1724,8 @@ export function createPipelineStore(options: {
        * off `awaiting_action`, which is the fact that says a person is no longer being asked.
        */
       if (next < records.length) {
+        if (input.drive === false)
+          return { status: "running", cursor: next, steps: records };
         return store.advance({
           tenantId: input.tenantId,
           runId: input.runId,

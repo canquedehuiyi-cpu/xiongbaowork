@@ -46,6 +46,24 @@ export type AgentProfile = {
    */
   persona: Persona | null;
   /**
+   * The coworker's 工作手册 (story ROLE1, the "Bible"), sent in full after the persona. Null means none.
+   *
+   * Optional on the type only so profiles written by hand in tests before it existed still check;
+   * the store always sets it, and this and the two fields below.
+   */
+  bible?: string | null;
+  /**
+   * The role template the identity, persona and Bible were last taken from, at that template's
+   * version. Null means none. Kept after the coworker is edited: a screen compares contents to say so.
+   */
+  roleTemplate?: { id: string; version: number } | null;
+  /**
+   * Whether a role template may be applied to this coworker (ROLE1, D4). False for a `built_in` one,
+   * the 分身 included: an edit of a `built_in` coworker's role description is copied over its
+   * `configuration.systemPrompt`, so a template would replace the prompt it runs on.
+   */
+  acceptsRoleTemplate?: boolean;
+  /**
    * Whether this agent holds a credential for calling tools back.
    *
    * A boolean, never the token: the token exists in a readable form once, in the response that issued
@@ -95,6 +113,11 @@ export type CreateAgentInput = Pick<
    */
   persona?: Persona;
   /**
+   * The coworker's 工作手册 (ROLE1). Absent on an update leaves it where it is; null clears it; text
+   * (at most 8000 characters) replaces it. Never written into a `built_in` coworker's systemPrompt.
+   */
+  bible?: string | null;
+  /**
    * The seed the coworker's abstract avatar is drawn from.
    *
    * Absent on a create means the new id, which is what every coworker got before the seed could be
@@ -102,4 +125,12 @@ export type CreateAgentInput = Pick<
    * boring-avatars turns into one, so the parser keeps it to a short run of safe characters.
    */
   avatarSeed?: string;
+};
+
+/** The role content a template hands a coworker (ROLE1): identity, persona and Bible, nothing else. */
+export type AgentRoleContent = {
+  title: string;
+  roleDescription: string;
+  persona: Persona;
+  bible: string | null;
 };

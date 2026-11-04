@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
+  type DeviceRoot,
   devicePairCodes,
   OFFLINE_AFTER_MS,
   registeredDevices,
@@ -34,7 +35,59 @@ export type DeviceRecord = {
   platform: string | null;
   lastSeenAt: Date | null;
   online: boolean;
+  /** The read-only folders the machine offers (story F1, stage 2): a reference and a name, no path. */
+  roots: DeviceRoot[];
 };
+
+/**
+ * A folder as a report keeps it: the stored `DeviceRoot`, and, when the machine's owner registered it
+ * for a project they let coworkers write in (story RES2, decision D3), its mode. No mode is `read`,
+ * which is what every folder F1 offers and what an older runner reports.
+ */
+export type ReportedDeviceRoot = DeviceRoot & { mode?: "read" | "write" };
+
+/** At most this many folders are kept from one report; the runner offers at most 20. */
+export const DEVICE_ROOT_LIMIT = 50;
+/** The runner's reference shape: `fld_` and 128 random bits in base64url. */
+const ROOT_REF = /^fld_[A-Za-z0-9_-]{22}$/;
+
+/**
+ * A runner's report of its folders, as this server keeps it, or undefined when the frame carried no
+ * report at all (an older runner), which leaves what is stored alone.
+ *
+ * Whatever the machine sent is untrusted input from a device, so each entry is kept only when its
+ * reference has the runner's shape and its name is text of at most 60 characters (with its mode,
+ * `read` or `write`, when the runner said one: story RES2, decision D3), and a reference
+ * named twice is kept once. Anything else is dropped rather than failing the heartbeat: a machine
+ * with one odd entry is still online. A field that looks like a path is never read, so a runner
+ * that sent one would not get it stored.
+ */
+export function reportedRoots(
+  value: unknown,
+): ReportedDeviceRoot[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const kept: ReportedDeviceRoot[] = [];
+  for (const entry of value) {
+    if (kept.length >= DEVICE_ROOT_LIMIT) break;
+    const { ref, name, mode } = (entry ?? {}) as {
+      ref?: unknown;
+      name?: unknown;
+      mode?: unknown;
+    };
+    if (typeof ref !== "string" || !ROOT_REF.test(ref)) continue;
+    if (typeof name !== "string") continue;
+    const shown = name.trim();
+    if (!shown || [...shown].length > 60) continue;
+    if (kept.some((root) => root.ref === ref)) continue;
+    // A mode is kept only when it is one of the two the runner knows; anything else is read-only.
+    kept.push(
+      mode === "write" || mode === "read"
+        ? { ref, name: shown, mode }
+        : { ref, name: shown },
+    );
+  }
+  return kept;
+}
 
 export type DeviceStore = {
   /** A code for the person's screen, minted under their own tenant. */
@@ -72,7 +125,12 @@ export type DeviceStore = {
     target: { tenantId: string; deviceId: string },
     credentialVersion?: string,
   ) => Promise<boolean>;
-  heartbeat: (tenantId: string, deviceId: string) => Promise<void>;
+  /** Presence, and, when the frame carried one, the machine's report of its folders. */
+  heartbeat: (
+    tenantId: string,
+    deviceId: string,
+    roots?: DeviceRoot[],
+  ) => Promise<void>;
   remove: (tenantId: string, id: string) => Promise<boolean>;
 };
 
@@ -158,6 +216,7 @@ const record = (row: {
   name: string;
   platform: string | null;
   lastSeenAt: Date | null;
+  roots?: DeviceRoot[] | null;
   createdAt?: Date;
 }): DeviceRecord => ({
   id: row.id,
@@ -165,6 +224,7 @@ const record = (row: {
   name: row.name,
   platform: row.platform,
   lastSeenAt: row.lastSeenAt,
+  roots: reportedRoots(row.roots) ?? [],
   online:
     row.lastSeenAt !== null &&
     Date.now() - row.lastSeenAt.getTime() < OFFLINE_AFTER_MS,
@@ -383,11 +443,15 @@ export function createDeviceStore(
       return Boolean(row);
     },
 
-    async heartbeat(tenantId, deviceId) {
+    async heartbeat(tenantId, deviceId, roots) {
       await runAsTenant(tenantId, () =>
         database
           .update(registeredDevices)
-          .set({ lastSeenAt: new Date(), updatedAt: new Date() })
+          .set({
+            lastSeenAt: new Date(),
+            updatedAt: new Date(),
+            ...(roots ? { roots } : {}),
+          })
           .where(
             and(
               eq(registeredDevices.tenantId, tenantId),

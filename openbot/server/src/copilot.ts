@@ -67,6 +67,7 @@ import {
   TenantContextError,
 } from "./tenant/context";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
+import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 
 /**
@@ -97,12 +98,19 @@ type RegisteredBuiltInAgent = {
   systemPrompt: string;
   /** Who this coworker is, as its owner wrote it. Absent or empty sends no section. See ticket 014. */
   persona?: Persona | null;
+  /** Its 工作手册 (story ROLE1), sent whole after the persona. Absent or blank sends no section. */
+  bible?: string | null;
   /**
    * What the person asking declared about where their material lives, when this Bot is their own
    * 分身 (story F1). Set per build by {@link buildAgents} from {@link LoadAvatarSources}, never from
    * the row, so it is always the asker's and always current. Absent or empty sends no section.
    */
   avatarSources?: readonly AvatarSourceForPrompt[];
+  /**
+   * The project this coworker works in on the asker's machine (story RES2), set per build by
+   * {@link buildAgents} from {@link LoadCurrentProject}. Absent sends no section.
+   */
+  currentProject?: ProjectForPrompt | null;
 };
 
 type RegisteredRemoteAgentFacts = {
@@ -163,7 +171,27 @@ export type AgentStandingProfile = {
   roleDescription: string;
   /** Carried for a remote coworker too, because the standing role is the whole of its instruction. */
   persona?: Persona | null;
+  /** And its 工作手册 (ROLE1), for the same reason. */
+  bible?: string | null;
 };
+
+/**
+ * The coworker's 工作手册 as a prompt section, or null when there is none (story ROLE1, D3).
+ *
+ * Sent whole — at most 8000 characters, so no retrieval — after the persona and before whose
+ * instructions it works under. The owner wrote it, like the persona, so it carries no untrusted
+ * envelope; it is reference material, and the closing line puts the person's explicit request above
+ * it, the way the persona defers to the job.
+ */
+export function bibleGuidance(bible: string | null | undefined): string | null {
+  const text = bible?.trim();
+  if (!text) return null;
+  return [
+    "你的工作手册（由你的所有者编写）：",
+    text,
+    "手册是参考资料，与本人当前的明确要求冲突时，以本人要求为准。",
+  ].join("\n\n");
+}
 
 /**
  * The coworker's job, as one system message.
@@ -187,6 +215,7 @@ export function standingRoleMessage(
       ...(personaGuidance(profile.persona)
         ? [personaGuidance(profile.persona)]
         : []),
+      ...(bibleGuidance(profile.bible) ? [bibleGuidance(profile.bible)] : []),
       "This standing role applies in every channel. Treat channel messages as task-specific instructions within it.",
       /*
        * Here rather than in the package, because for a remote Bot the standing role is the only
@@ -266,6 +295,7 @@ type RuntimeAgentRow = {
   title: string;
   roleDescription: string;
   persona?: Persona | null;
+  bible?: string | null;
 };
 
 export function registeredAgentFromRow(
@@ -286,6 +316,8 @@ export function registeredAgentFromRow(
           type: "built_in",
           systemPrompt: trimmedSystemPrompt,
           persona: row.persona ?? null,
+          // Only when one was written (ROLE1): a coworker without a handbook reads as before.
+          ...(row.bible ? { bible: row.bible } : {}),
         }
       : null;
   }
@@ -365,8 +397,17 @@ export function standingInstructionsGuidance(
   ].join("\n\n");
 }
 
-/** One information source a person declared for their 分身, as its prompt carries it (story F1). */
-export type AvatarSourceForPrompt = { label: string; note: string };
+/**
+ * One information source a person gave their 分身, as its prompt carries it (story F1).
+ *
+ * `root` is set for a local folder (stage 2): the opaque reference of a read-only folder on the
+ * person's own paired machine, which the 分身 passes to the file tools. Absent for a declaration.
+ */
+export type AvatarSourceForPrompt = {
+  label: string;
+  note: string;
+  root?: string;
+};
 
 /**
  * The information sources of the Bot being built, when it is the asker's own 分身.
@@ -380,6 +421,15 @@ export type AvatarSourceForPrompt = { label: string; note: string };
 export type LoadAvatarSources = (
   agentId: string,
 ) => Promise<readonly AvatarSourceForPrompt[]>;
+
+/**
+ * The current project of the Bot being built on the machine its actions go to (story RES2), or null.
+ * A closure bound to one person like {@link LoadAvatarSources}, and read on every build, so a project
+ * picked or changed applies to the next run.
+ */
+export type LoadCurrentProject = (
+  agentId: string,
+) => Promise<ProjectForPrompt | null>;
 
 /**
  * What the person told their 分身 about where their material is (story F1, stage 1).
@@ -402,21 +452,51 @@ export function avatarSourcesGuidance(
   sources: readonly AvatarSourceForPrompt[] | null | undefined,
 ): string | null {
   if (!sources || sources.length === 0) return null;
-  return [
-    "The person you represent has told you where their own material lives. These are information sources they declared: a name and a note in their own words. A declaration gives you no access to the source itself. When a question depends on one of them, say which source the answer would come from and ask the person for the relevant content, or say plainly that you cannot see it. Never claim to have read a source you were only told about.",
-    JSON.stringify(
-      withUntrustedNotice(
-        {
-          sources: sources.map((source) => ({
-            label: source.label,
-            note: source.note,
-          })),
-        },
-        "information source declaration",
-        ["sources"],
+  const declared = sources.filter((source) => source.root === undefined);
+  const folders = sources.filter((source) => source.root !== undefined);
+  const parts: string[] = [];
+  if (declared.length > 0) {
+    parts.push(
+      "The person you represent has told you where their own material lives. These are information sources they declared: a name and a note in their own words. A declaration gives you no access to the source itself. When a question depends on one of them, say which source the answer would come from and ask the person for the relevant content, or say plainly that you cannot see it. Never claim to have read a source you were only told about.",
+      JSON.stringify(
+        withUntrustedNotice(
+          {
+            sources: declared.map((source) => ({
+              label: source.label,
+              note: source.note,
+            })),
+          },
+          "information source declaration",
+          ["sources"],
+        ),
       ),
-    ),
-  ].join("\n\n");
+    );
+  }
+  /*
+   * A POINTER, NEVER THE FILES (stage 2). Each folder is a name, the person's note and the reference
+   * the file tools take; nothing of what is in it is put here. Reading it is a tool call through the
+   * gateway, so every file read is decided, audited and held by the approval gate like any other, and
+   * the folder is read-only on the machine, so the 分身 is told not to try anything else.
+   */
+  if (folders.length > 0) {
+    parts.push(
+      "The person you represent has shared read-only folders on their own computer with you. You can list one with computer_list_files and read a file in it with computer_read_file, passing that folder's root (for example root=fld_…) and a path relative to the folder. Read only what the question needs, and say which folder and file an answer came from. These folders cannot be written to, changed or used to run commands; do not try. If the computer is offline, the tools are missing, or a read is refused, say so instead of guessing what the files contain. Never claim to have read a file you did not read.",
+      JSON.stringify(
+        withUntrustedNotice(
+          {
+            folders: folders.map((source) => ({
+              label: source.label,
+              note: source.note,
+              root: source.root,
+            })),
+          },
+          "information source local folder",
+          ["folders"],
+        ),
+      ),
+    );
+  }
+  return parts.join("\n\n");
 }
 
 export function builtInAgentConfiguration(
@@ -479,7 +559,9 @@ export function builtInAgentConfiguration(
 
   const standing = standingInstructionsGuidance(standingInstructions);
   const sources = avatarSourcesGuidance(agent.avatarSources);
+  const project = projectGuidance(agent.currentProject);
   const persona = personaGuidance(agent.persona);
+  const bible = bibleGuidance(agent.bible);
 
   return {
     model: planModel ?? agentModel ?? `${model.provider}/${model.defaultModel}`,
@@ -499,9 +581,13 @@ export function builtInAgentConfiguration(
       agent.systemPrompt,
       // Who it is, before whose preferences it is working under and before what it holds.
       ...(persona ? [persona] : []),
+      // Its handbook, right after who it is (ROLE1): written by the same owner, read as reference.
+      ...(bible ? [bible] : []),
       ...(standing ? [standing] : []),
       // The 分身's declared sources, beside the person's instructions: both are about who it works for.
       ...(sources ? [sources] : []),
+      // Where its files and commands run (RES2): the person's choice, so beside who it works for.
+      ...(project ? [project] : []),
       /*
        * Unconditional, unlike the two below it.
        *
@@ -653,6 +739,8 @@ export async function buildAgents(
    * every deployment did before sources existed. Appended last, positionally.
    */
   loadAvatarSources?: LoadAvatarSources,
+  /** The current project of each built-in Bot (story RES2). Appended last; absent tells none. */
+  loadCurrentProject?: LoadCurrentProject,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -708,10 +796,28 @@ export async function buildAgents(
             });
           }
         }
+        let currentProject: ProjectForPrompt | null = null;
+        if (agent.type === "built_in" && loadCurrentProject) {
+          try {
+            currentProject = await loadCurrentProject(agent.id);
+          } catch {
+            // The section is lost for one run; the gateway still decides every action by the binding.
+            console.error({
+              error: "current_project_read_failed",
+              context: { operation: "loadCurrentProject" },
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
         const built = await buildAgent(
           // Carried on the Bot rather than as one more positional argument, like its persona.
-          agent.type === "built_in" && avatarSources.length > 0
-            ? { ...agent, avatarSources }
+          agent.type === "built_in" &&
+            (avatarSources.length > 0 || currentProject)
+            ? {
+                ...agent,
+                ...(avatarSources.length > 0 ? { avatarSources } : {}),
+                ...(currentProject ? { currentProject } : {}),
+              }
             : agent,
           model,
           apiKey,
@@ -2027,6 +2133,8 @@ export async function resolveRuntimeAgents(
   resolveAgentModel?: AgentModelResolver,
   /** The asker's 分身's information sources. Appended last; see {@link buildAgents}. */
   loadAvatarSources?: LoadAvatarSources,
+  /** Each built-in Bot's current project (story RES2). Appended last; see {@link buildAgents}. */
+  loadCurrentProject?: LoadCurrentProject,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -2064,6 +2172,7 @@ export async function resolveRuntimeAgents(
     loadPersonalMemory,
     resolveAgentModel,
     loadAvatarSources,
+    loadCurrentProject,
   );
 }
 
@@ -2209,6 +2318,8 @@ export function createRequestAgents(
    * actor through `identifyActor`, like the instructions: whose 分身 it is is the session's to say.
    */
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources,
+  /** Each Bot's current project (story RES2), per actor like the sources. Appended last. */
+  loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject,
 ) {
   return async ({ request }: { request: Request }) => {
     const actor = await identifyActor(request);
@@ -2235,6 +2346,7 @@ export function createRequestAgents(
       loadPersonalMemoryForActor?.(actor.id),
       resolveAgentModel,
       loadAvatarSourcesForActor?.(actor.id),
+      loadCurrentProjectForActor?.(actor.id),
     );
   };
 }
@@ -2370,6 +2482,8 @@ export function mountCopilotRuntime(
    * below for the reason `loadInstructionsForActor` is. Appended last. Absent means none is told.
    */
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources,
+  /** Each Bot's current project (story RES2), on both paths below. Appended last. */
+  loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject,
 ): MountedCopilotRuntime {
   /*
    * The roster, read in the frame of the person it is for, wherever the Bot is built. The request
@@ -2441,6 +2555,7 @@ export function mountCopilotRuntime(
       loadPersonalMemoryForActor?.(actor.id),
       resolveAgentModel,
       loadAvatarSourcesForActor?.(actor.id),
+      loadCurrentProjectForActor?.(actor.id),
     );
     return agents[input.botId] ?? null;
   };
@@ -2516,6 +2631,7 @@ export function mountCopilotRuntime(
       loadPersonalMemoryForActor,
       resolveAgentModel,
       loadAvatarSourcesForActor,
+      loadCurrentProjectForActor,
     ) as never,
   };
 

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   WAKERFLOW_CONFLICT_MESSAGE,
@@ -14,18 +14,27 @@ import {
 } from "../../../shared/wakerflows";
 import type { Database } from "../db/client";
 import {
+  flowConfirmations,
+  flowRunEvents,
+  flowRunRetries,
   groupTaskRuns,
   groupTaskTemplates,
   wakerFlowRequests,
   wakerFlows,
+  wakerFlowVersions,
   wakerGroupMembers,
   wakerGroups,
 } from "../db/schema";
 import {
+  type PipelineEventWriter,
   PipelineNotFoundError,
+  type PipelineRunTransition,
+  PipelineStepForbiddenError,
   type PipelineStore,
   PipelineValidationError,
+  type StepRecord,
 } from "../pipeline/store";
+import { stepBudget } from "../pipeline/decision";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
@@ -36,7 +45,7 @@ import {
   FlowPlanFormatError,
 } from "./generator";
 import type { FlowModelResolver } from "./model";
-import { flowInputs, wakerFlowPlanSchema } from "./plan";
+import { compiledSteps, flowInputs, wakerFlowPlanSchema } from "./plan";
 
 /**
  * The WakerFlow store (spec D10, stories WF1/WF3/WF4).
@@ -166,6 +175,343 @@ export type WakerFlowRunSummary = {
   parentTaskId: string | null;
   createdAt: string;
 };
+
+/** One saved version of a Flow, as the version list shows it: no plan, only what tells them apart. */
+export type WakerFlowVersionSummary = {
+  revision: number;
+  name: string;
+  stepCount: number;
+  modelRef: string | null;
+  templateId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
+/** One saved version with the whole plan it was saved with. */
+export type WakerFlowVersion = WakerFlowVersionSummary & {
+  plan: WakerFlowPlan;
+};
+
+/** A revision this Flow never had, or one of a Flow this workspace cannot see. */
+export class WakerFlowVersionNotFoundError extends WakerFlowError {
+  constructor() {
+    super(404, "这个 WakerFlow 没有这个版本。");
+    this.name = "WakerFlowVersionNotFoundError";
+  }
+}
+
+/** One recorded state change of a run (WF8, spec §3.4). The payload never holds a step's output (D10). */
+export type WakerFlowRunEvent = {
+  sequence: number;
+  type: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+/** A step that stopped on a question, and what became of it (WF8, spec §3.3). */
+export type WakerFlowConfirmation = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  question: string;
+  inputs: Record<string, string>;
+  status: "pending" | "answered" | "skipped";
+  answer: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A question this run never asked, or one of a run this workspace cannot see. */
+export class WakerFlowConfirmationNotFoundError extends WakerFlowError {
+  constructor() {
+    super(404, "这里没有这个提问。");
+    this.name = "WakerFlowConfirmationNotFoundError";
+  }
+}
+
+/** The question was already answered or skipped, by this request with other content or by another. */
+export class WakerFlowConfirmationSettledError extends WakerFlowError {
+  constructor() {
+    super(409, "这个提问已经处理过了，请刷新后查看。");
+    this.name = "WakerFlowConfirmationSettledError";
+  }
+}
+
+const MAX_ANSWER = 10000;
+const MAX_EVENT_PAGE = 100;
+/** What a step parked without a question of its own is shown as. */
+const DEFAULT_QUESTION = "这一步在等你的回答。";
+
+/** A failure's reason as an event keeps it: the first line, bounded, never the step's output. */
+function errorSummary(error: string | undefined): string | undefined {
+  if (!error) return undefined;
+  const line = Array.from(error.split("\n")[0] ?? "");
+  return line.length > 200 ? `${line.slice(0, 199).join("")}…` : line.join("");
+}
+
+/** What a step read when it stopped: its declared inputs, from the run's inputs or earlier outputs. */
+function stepInputs(
+  steps: StepRecord[],
+  index: number,
+  inputs: Record<string, string>,
+): Record<string, string> {
+  const step = steps[index];
+  if (!step?.inputKeys) return {};
+  return Object.fromEntries(
+    step.inputKeys.map((key) => [
+      key,
+      inputs[key] ??
+        steps.slice(0, index).find((earlier) => earlier.outputKey === key)
+          ?.output ??
+        "（此输入未产生）",
+    ]),
+  );
+}
+
+const STEP_EVENT: Partial<Record<StepRecord["state"], string>> = {
+  running: "step_started",
+  done: "step_done",
+  awaiting_action: "step_parked",
+  skipped: "step_skipped",
+  failed: "step_failed",
+};
+const RUN_EVENT: Record<string, string> = {
+  done: "run_done",
+  failed: "run_failed",
+  aborted: "run_aborted",
+};
+
+/**
+ * The events one run transition means, in order: each step whose state moved, then the run's own end.
+ *
+ * `correlation_id` is unique per run (0088's index): the step's card reference (the run id for the
+ * run's own events), then the event type and the run revision the change produced, so a step that
+ * starts and finishes, or parks twice, is two distinct facts, and the same change is never recorded
+ * twice. The payload is the state, an error's summary and lengths, never a step's output (D10).
+ */
+export function flowRunEventsOf(transition: PipelineRunTransition): {
+  type: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+}[] {
+  const { runId, revision, before, after } = transition;
+  if (!before)
+    return [
+      {
+        type: "run_started",
+        correlationId: `${runId}:run_started:${revision}`,
+        payload: {
+          status: after.status,
+          stepCount: after.steps.length,
+          // Where it starts: 0, or the failed step a retry starts from.
+          cursor: after.cursor,
+        },
+      },
+    ];
+  const out: ReturnType<typeof flowRunEventsOf> = [];
+  after.steps.forEach((step, index) => {
+    const from = before.steps[index]?.state;
+    if (from === step.state) return;
+    let type = STEP_EVENT[step.state];
+    if (!type) return;
+    // A parked step that is now done was answered: by the person, or by the approval it waited on.
+    if (type === "step_done" && from === "awaiting_action")
+      type = "step_answered";
+    const payload: Record<string, unknown> = {
+      stepId: step.id,
+      index,
+      state: step.state,
+      from: from ?? null,
+    };
+    if (step.state === "done" && step.kind !== "decision")
+      payload.outputLength = (step.output ?? "").length;
+    if (step.state === "skipped" && step.skipReason)
+      payload.skipReason = step.skipReason;
+    if (step.state === "failed") payload.error = errorSummary(step.error);
+    if (step.state === "awaiting_action") {
+      payload.waitingOn = step.approvalId ? "approval" : "question";
+      if (step.approvalId) payload.approvalId = step.approvalId;
+    }
+    out.push({
+      type,
+      correlationId: `${step.runRef ?? `${runId}/${step.id}`}:${type}:${revision}`,
+      payload,
+    });
+    // WF7 (spec §3.3): which branch a decision took — its label and the branch's position (-1 is
+    // `otherwise`). Never the values it read.
+    if (step.kind === "decision" && step.state === "done" && step.branch)
+      out.push({
+        type: "branch_taken",
+        correlationId: `${runId}/${step.id}:branch_taken:${revision}`,
+        payload: {
+          stepId: step.id,
+          index,
+          label: step.branch.label,
+          branch: step.branch.index,
+        },
+      });
+  });
+  const ended = RUN_EVENT[after.status];
+  if (ended && before.status !== after.status)
+    out.push({
+      type: ended,
+      correlationId: `${runId}:${ended}:${revision}`,
+      payload: { status: after.status, cursor: after.cursor },
+    });
+  return out;
+}
+
+/**
+ * WF8: the pipeline's event writer for WakerFlow runs (spec §3.4 E-A and §3.3).
+ *
+ * Inside the transaction of the change it records: every event the change means goes into
+ * `flow_run_events`, and a step that stopped on a question (parked with no approval row, and with the
+ * question its step runner reported) becomes one `pending` row of `flow_confirmations` with the
+ * question and the inputs it was reading. A park on an approval writes no confirmation: the approval
+ * inbox is the one place to answer it (D5).
+ */
+export const flowRunEventWriter: PipelineEventWriter = async (
+  tx,
+  transition,
+) => {
+  const events = flowRunEventsOf(transition);
+  if (events.length === 0) return;
+  await tx.insert(flowRunEvents).values(
+    events.map((event) => ({
+      tenantId: transition.tenantId,
+      flowId: transition.flowId,
+      runId: transition.runId,
+      correlationId: event.correlationId,
+      type: event.type,
+      payload: event.payload,
+    })),
+  );
+  // Only a park that says it is a question: a step waiting on a device or a sign-in is not one, and
+  // an answer typed for it would stand in for work that never happened.
+  const asks = transition.after.steps.flatMap((step, index) =>
+    step.state === "awaiting_action" &&
+    !step.approvalId &&
+    step.question &&
+    transition.before?.steps[index]?.state !== "awaiting_action"
+      ? [{ step, index }]
+      : [],
+  );
+  if (asks.length === 0) return;
+  await tx.insert(flowConfirmations).values(
+    asks.map(({ step, index }) => ({
+      id: randomUUID(),
+      tenantId: transition.tenantId,
+      flowId: transition.flowId,
+      runId: transition.runId,
+      nodeId: step.id,
+      question: { text: step.question ?? DEFAULT_QUESTION },
+      inputs: stepInputs(transition.after.steps, index, transition.inputs),
+    })),
+  );
+};
+
+const confirmationColumns = {
+  id: flowConfirmations.id,
+  runId: flowConfirmations.runId,
+  nodeId: flowConfirmations.nodeId,
+  question: flowConfirmations.question,
+  inputs: flowConfirmations.inputs,
+  status: flowConfirmations.status,
+  answer: flowConfirmations.answer,
+  requestId: flowConfirmations.requestId,
+  createdAt: flowConfirmations.createdAt,
+  updatedAt: flowConfirmations.updatedAt,
+};
+
+type ConfirmationRow = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  question: unknown;
+  inputs: unknown;
+  status: string;
+  answer: string | null;
+  requestId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function confirmation(row: ConfirmationRow): WakerFlowConfirmation {
+  const question = row.question as { text?: unknown } | null;
+  return {
+    id: row.id,
+    runId: row.runId,
+    nodeId: row.nodeId,
+    question:
+      typeof question?.text === "string" ? question.text : DEFAULT_QUESTION,
+    inputs: (row.inputs ?? {}) as Record<string, string>,
+    status: (["pending", "answered", "skipped"].includes(row.status)
+      ? row.status
+      : "pending") as WakerFlowConfirmation["status"],
+    answer: row.answer,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** A retry of a failed run from its failed step, as the retry ledger records it (WF8, spec §3.5). */
+export type WakerFlowRetry = {
+  id: string;
+  requestId: string;
+  sourceRunId: string;
+  newRunId: string;
+  /** The step the new run starts at: the one that failed. */
+  nodeId: string;
+  /** `prepared` until the new run is driven, then `ready`; `unknown` when a restart came between. */
+  status: "prepared" | "ready" | "unknown" | "cancelled";
+};
+
+/** The request kind the retry ledger's fingerprints are made with. */
+export const RETRY = "retry";
+const RETRY_NOT_FAILED_MESSAGE = "只有失败的运行可以从失败的步骤重试。";
+const RETRY_TAKEN_MESSAGE = "这次运行已经重试过了，请查看重试产生的运行。";
+const RETRY_DEFINITION_GONE_MESSAGE =
+  "这次运行使用的流程定义已不存在，无法从失败的步骤重试，请重新运行。";
+
+function retryOutcome(row: {
+  id: string;
+  requestId: string;
+  sourceRunId: string;
+  newRunId: string;
+  nodeId: string;
+  status: string;
+}): WakerFlowRetry {
+  return {
+    id: row.id,
+    requestId: row.requestId,
+    sourceRunId: row.sourceRunId,
+    newRunId: row.newRunId,
+    nodeId: row.nodeId,
+    status: (["prepared", "ready", "unknown", "cancelled"].includes(row.status)
+      ? row.status
+      : "unknown") as WakerFlowRetry["status"],
+  };
+}
+
+const retryColumns = {
+  id: flowRunRetries.id,
+  requestId: flowRunRetries.requestId,
+  sourceRunId: flowRunRetries.sourceRunId,
+  newRunId: flowRunRetries.newRunId,
+  nodeId: flowRunRetries.nodeId,
+  status: flowRunRetries.status,
+  fingerprint: flowRunRetries.fingerprint,
+};
+
+function uniqueViolation(error: unknown): boolean {
+  for (let at: unknown = error; at; at = (at as { cause?: unknown }).cause) {
+    const state = at as { errno?: unknown; code?: unknown };
+    if (String(state.errno) === "23505" || String(state.code) === "23505")
+      return true;
+  }
+  return false;
+}
 
 export type WakerFlowStore = ReturnType<typeof createWakerFlowStore>;
 
@@ -347,6 +693,36 @@ function outcome(row: RequestRow): WakerFlowRequestOutcome {
   };
 }
 
+const versionSummaryColumns = {
+  revision: wakerFlowVersions.revision,
+  name: sql<string>`coalesce(${wakerFlowVersions.plan}->>'name', '')`,
+  stepCount: sql<number>`coalesce(jsonb_array_length(${wakerFlowVersions.plan}->'steps'), 0)::int`,
+  modelRef: wakerFlowVersions.modelRef,
+  templateId: wakerFlowVersions.templateId,
+  createdBy: wakerFlowVersions.createdBy,
+  createdAt: wakerFlowVersions.createdAt,
+};
+
+function versionSummary(row: {
+  revision: number;
+  name: string;
+  stepCount: number;
+  modelRef: string | null;
+  templateId: string | null;
+  createdBy: string | null;
+  createdAt: Date;
+}): WakerFlowVersionSummary {
+  return {
+    revision: row.revision,
+    name: row.name,
+    stepCount: Number(row.stepCount),
+    modelRef: row.modelRef,
+    templateId: row.templateId,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export function createWakerFlowStore(options: {
   database: Database;
   /** WF-C: a run is the existing pipeline's run of the compiled template, driven by its `advance`. */
@@ -458,7 +834,84 @@ export function createWakerFlowStore(options: {
     );
   };
 
-  return {
+  /**
+   * Answer or skip one pending question, once. The row moves off `pending` under a condition, so of
+   * two submissions (a double press, two people) exactly one wins; a repeat of the winning request
+   * reads back the same outcome, and anything else is a 409. Only then is the run moved, and only if
+   * it is still parked on that very step, so a repeat cannot answer a later question with this one.
+   */
+  async function settle(
+    tenantId: string,
+    id: string,
+    runId: string,
+    confirmationId: string,
+    outcome: {
+      status: "answered" | "skipped";
+      requestId: string;
+      answer: string | null;
+    },
+  ): Promise<WakerFlowConfirmation> {
+    await ownRun(tenantId, id, runId);
+    if (!isUuid(confirmationId)) throw new WakerFlowConfirmationNotFoundError();
+    const mine = and(
+      eq(flowConfirmations.tenantId, tenantId),
+      eq(flowConfirmations.id, confirmationId),
+      eq(flowConfirmations.runId, runId),
+      eq(flowConfirmations.flowId, id),
+    );
+    const [won] = await runAsTenant(tenantId, async () =>
+      database
+        .update(flowConfirmations)
+        .set({
+          status: outcome.status,
+          answer: outcome.answer,
+          requestId: outcome.requestId,
+          updatedAt: new Date(),
+        })
+        .where(and(mine, eq(flowConfirmations.status, "pending")))
+        .returning(confirmationColumns),
+    );
+    let row: ConfirmationRow | undefined = won;
+    if (!row) {
+      const [existing] = await runAsTenant(tenantId, async () =>
+        database
+          .select(confirmationColumns)
+          .from(flowConfirmations)
+          .where(mine),
+      );
+      if (!existing) throw new WakerFlowConfirmationNotFoundError();
+      const repeat =
+        existing.requestId === outcome.requestId &&
+        existing.status === outcome.status &&
+        existing.answer === outcome.answer;
+      if (!repeat) throw new WakerFlowConfirmationSettledError();
+      row = existing;
+    }
+    const settled = row;
+    const run = await options.pipeline.inspect({ tenantId, runId });
+    const parked =
+      run?.status === "awaiting_action" &&
+      (run.steps as StepRecord[])[run.cursor]?.id === settled.nodeId;
+    if (parked) {
+      if (outcome.status === "answered")
+        await options.pipeline.resume({
+          tenantId,
+          runId,
+          output: outcome.answer ?? "",
+          drive: false,
+        });
+      else
+        await options.pipeline.skip({
+          tenantId,
+          runId,
+          stepId: settled.nodeId,
+        });
+      drive({ tenantId, runId });
+    }
+    return confirmation(settled);
+  }
+
+  const store = {
     async create(tenantId: string, input: WakerFlowCreateInput) {
       const idea = typeof input.idea === "string" ? input.idea.trim() : "";
       if (idea.length > 4000)
@@ -562,13 +1015,8 @@ export function createWakerFlowStore(options: {
           );
         }
       }
-      const steps = plan.steps.map((step) => ({
-        id: step.id,
-        agentId: step.agentId,
-        instruction: step.instruction,
-        inputKeys: [...step.inputKeys],
-        outputKey: step.outputKey,
-      }));
+      // WF7: each member's role and prompt goes ahead of that coworker's steps (D2).
+      const steps = compiledSteps(plan);
 
       const row = await runAsTenant(tenantId, () =>
         database.transaction(async (tx) => {
@@ -670,11 +1118,93 @@ export function createWakerFlowStore(options: {
               and(eq(wakerFlows.id, id), eq(wakerFlows.tenantId, tenantId)),
             )
             .returning(columns);
+          // WF8: the whole definition this Save made, kept for the version list and for a rollback.
+          // In the same transaction, so a version exists exactly when its revision does.
+          if (saved)
+            await tx.insert(wakerFlowVersions).values({
+              tenantId,
+              flowId: id,
+              revision: saved.revision,
+              plan,
+              modelRef: saved.modelRef,
+              templateId: saved.templateId,
+              createdBy: actor,
+            });
           return saved;
         }),
       );
       if (!row) throw new WakerFlowNotFoundError();
       return shape(row);
+    },
+
+    /** WF8: the saved versions of this Flow, newest first, without their plans. */
+    async versions(
+      tenantId: string,
+      id: string,
+    ): Promise<WakerFlowVersionSummary[]> {
+      if (!(await visibleFlow(tenantId, id)))
+        throw new WakerFlowNotFoundError();
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select(versionSummaryColumns)
+          .from(wakerFlowVersions)
+          .where(
+            and(
+              eq(wakerFlowVersions.tenantId, tenantId),
+              eq(wakerFlowVersions.flowId, id),
+            ),
+          )
+          .orderBy(desc(wakerFlowVersions.revision)),
+      );
+      return rows.map(versionSummary);
+    },
+
+    /** WF8: one saved version of this Flow, with its whole plan. */
+    async version(
+      tenantId: string,
+      id: string,
+      revision: number,
+    ): Promise<WakerFlowVersion> {
+      if (!(await visibleFlow(tenantId, id)))
+        throw new WakerFlowNotFoundError();
+      if (!Number.isInteger(revision) || revision < 1)
+        throw new WakerFlowVersionNotFoundError();
+      const [row] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ ...versionSummaryColumns, plan: wakerFlowVersions.plan })
+          .from(wakerFlowVersions)
+          .where(
+            and(
+              eq(wakerFlowVersions.tenantId, tenantId),
+              eq(wakerFlowVersions.flowId, id),
+              eq(wakerFlowVersions.revision, revision),
+            ),
+          )
+          .limit(1),
+      );
+      if (!row) throw new WakerFlowVersionNotFoundError();
+      return { ...versionSummary(row), plan: row.plan };
+    },
+
+    /**
+     * WF8: roll back to a saved version, which is saving that version's plan (and model) again. It
+     * goes through the whole of `save`: fenced on the revision the person was looking at, every
+     * member asked again (I6), a new template, the next revision. History is never rewritten, so
+     * the restore is itself a new version, and a run already going keeps the template it started on.
+     */
+    async restore(
+      tenantId: string,
+      actor: string,
+      id: string,
+      revision: number,
+      input: { revision: number },
+    ): Promise<WakerFlow> {
+      const version = await store.version(tenantId, id, revision);
+      return store.save(tenantId, actor, id, {
+        revision: input.revision,
+        plan: version.plan,
+        modelRef: version.modelRef,
+      });
     },
 
     /**
@@ -1050,10 +1580,11 @@ export function createWakerFlowStore(options: {
         );
       }
       // Refused before the claim, so a workspace at its ceiling is left with no row to explain.
+      // WF7 D4: counted by the steps that can run on the longest path, not the steps written.
       await options.quota?.assertCapacity(
         tenantId,
         "tasksPerMonth",
-        plan.steps.length + 1,
+        stepBudget(plan.steps) + 1,
       );
 
       const claimed = await runAsTenant(tenantId, () =>
@@ -1202,10 +1733,356 @@ export function createWakerFlowStore(options: {
       return options.pipeline.abort({ tenantId, runId });
     },
 
+    /**
+     * WF8: the recorded state changes of a run of this Flow, oldest first, `limit` (at most 100,
+     * default 50) after the `after` sequence. `next` is the sequence to ask after for the next page,
+     * or null when this page reached the end.
+     */
+    async events(
+      tenantId: string,
+      id: string,
+      runId: string,
+      page: { after?: number; limit?: number } = {},
+    ): Promise<{ events: WakerFlowRunEvent[]; next: number | null }> {
+      await ownRun(tenantId, id, runId);
+      const after =
+        Number.isSafeInteger(page.after) && (page.after ?? 0) > 0
+          ? (page.after as number)
+          : 0;
+      const limit =
+        Number.isSafeInteger(page.limit) && (page.limit ?? 0) > 0
+          ? Math.min(page.limit as number, MAX_EVENT_PAGE)
+          : 50;
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select({
+            sequence: flowRunEvents.sequence,
+            type: flowRunEvents.type,
+            correlationId: flowRunEvents.correlationId,
+            payload: flowRunEvents.payload,
+            createdAt: flowRunEvents.createdAt,
+          })
+          .from(flowRunEvents)
+          .where(
+            and(
+              eq(flowRunEvents.tenantId, tenantId),
+              eq(flowRunEvents.runId, runId),
+              eq(flowRunEvents.flowId, id),
+              gt(flowRunEvents.sequence, BigInt(after)),
+            ),
+          )
+          .orderBy(asc(flowRunEvents.sequence))
+          .limit(limit + 1),
+      );
+      const shown = rows.slice(0, limit).map((row) => ({
+        sequence: Number(row.sequence),
+        type: row.type,
+        correlationId: row.correlationId,
+        payload: (row.payload ?? {}) as Record<string, unknown>,
+        createdAt: row.createdAt.toISOString(),
+      }));
+      return {
+        events: shown,
+        next:
+          rows.length > limit
+            ? (shown[shown.length - 1]?.sequence ?? null)
+            : null,
+      };
+    },
+
+    /**
+     * WF8: retry a failed run from the step that failed (spec §3.5, D6, D7), once per request id.
+     *
+     * The new run uses the SOURCE run's template, not the Flow's current one, so its definition is the
+     * one that failed (D7; a newer plan is a new run). The steps before the failed one are carried over
+     * with their outputs and never run again; the failed step runs again from the start, which may
+     * repeat whatever it did to the world before it failed (D6: the page asks first). Only the steps
+     * from there on are counted against the month and asked about (I6); a coworker the person can no
+     * longer use refuses the retry, naming the steps.
+     *
+     * The ledger row is written in the transaction that registers the new run, `prepared`, and becomes
+     * `ready` once the run is driven; a restart in between leaves it `prepared`, and recovery settles it
+     * `unknown` without driving anything (`recovery.ts`). A repeat of the request id answers from the
+     * row; the same id for another run is a 409, and so is a second retry of the same run.
+     */
+    async retry(
+      tenantId: string,
+      actor: string,
+      id: string,
+      runId: string,
+      input: { requestId: string },
+    ): Promise<WakerFlowRetry> {
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      const fingerprint = createHash("sha256")
+        .update(canonical({ kind: RETRY, flowId: id, sourceRunId: runId }))
+        .digest("hex");
+      const readRetry = async (
+        where: ReturnType<typeof and>,
+      ): Promise<(WakerFlowRetry & { fingerprint: string }) | null> => {
+        const [row] = await runAsTenant(tenantId, async () =>
+          database
+            .select(retryColumns)
+            .from(flowRunRetries)
+            .where(where)
+            .limit(1),
+        );
+        return row
+          ? { ...retryOutcome(row), fingerprint: row.fingerprint }
+          : null;
+      };
+      const byRequest = () =>
+        readRetry(
+          and(
+            eq(flowRunRetries.tenantId, tenantId),
+            eq(flowRunRetries.requestId, input.requestId),
+          ),
+        );
+      const answer = (row: WakerFlowRetry & { fingerprint: string }) => {
+        if (row.fingerprint !== fingerprint)
+          throw new WakerFlowRequestConflictError();
+        const { fingerprint: _, ...outcome } = row;
+        return outcome;
+      };
+      const repeated = await byRequest();
+      if (repeated) return answer(repeated);
+
+      await ownRun(tenantId, id, runId);
+      const flow = await visibleFlow(tenantId, id);
+      if (!flow) throw new WakerFlowNotFoundError();
+      const [source] = await runAsTenant(tenantId, async () =>
+        database
+          .select({
+            status: groupTaskRuns.status,
+            cursor: groupTaskRuns.cursor,
+            steps: groupTaskRuns.steps,
+            templateId: groupTaskRuns.templateId,
+            inputs: groupTaskRuns.inputs,
+          })
+          .from(groupTaskRuns)
+          .where(
+            and(
+              eq(groupTaskRuns.tenantId, tenantId),
+              eq(groupTaskRuns.id, runId),
+            ),
+          )
+          .limit(1),
+      );
+      if (!source) throw new WakerFlowRunNotFoundError();
+      if (source.status !== "failed")
+        throw new WakerFlowValidationError(RETRY_NOT_FAILED_MESSAGE);
+      const steps = (
+        Array.isArray(source.steps) ? source.steps : []
+      ) as StepRecord[];
+      const failedAt = steps.findIndex((step) => step.state === "failed");
+      const from =
+        failedAt >= 0 ? failedAt : Math.min(source.cursor, steps.length - 1);
+      const failedStep = steps[from];
+      if (!failedStep)
+        throw new WakerFlowValidationError(RETRY_NOT_FAILED_MESSAGE);
+      if (!source.templateId)
+        throw new WakerFlowNotRunnableError(RETRY_DEFINITION_GONE_MESSAGE);
+      const templateId = source.templateId;
+      const earlier = await readRetry(
+        and(
+          eq(flowRunRetries.tenantId, tenantId),
+          eq(flowRunRetries.sourceRunId, runId),
+        ),
+      );
+      if (earlier) throw new WakerFlowNotRunnableError(RETRY_TAKEN_MESSAGE);
+      const carried = steps.slice(0, from).map((step) => ({
+        state: step.state,
+        ...(step.output === undefined ? {} : { output: step.output }),
+        // WF7: why a carried step was skipped, and which branch a carried decision took.
+        ...(step.skipReason === undefined
+          ? {}
+          : { skipReason: step.skipReason }),
+        ...(step.branch === undefined ? {} : { branch: step.branch }),
+      }));
+      if (
+        carried.some(
+          (step) => step.state !== "done" && step.state !== "skipped",
+        )
+      )
+        throw new WakerFlowValidationError(RETRY_NOT_FAILED_MESSAGE);
+      // The Flow's revision when the source run started: the version that compiled its template.
+      const [version] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ revision: wakerFlowVersions.revision })
+          .from(wakerFlowVersions)
+          .where(
+            and(
+              eq(wakerFlowVersions.tenantId, tenantId),
+              eq(wakerFlowVersions.flowId, id),
+              eq(wakerFlowVersions.templateId, templateId),
+            ),
+          )
+          .limit(1),
+      );
+      const definitionRevision = Math.max(
+        1,
+        version?.revision ?? flow.revision,
+      );
+      const remaining = stepBudget(steps, from);
+      // Refused before anything is registered: only the steps that will run are counted.
+      await options.quota?.assertCapacity(
+        tenantId,
+        "tasksPerMonth",
+        remaining + 1,
+      );
+
+      const newRunId = randomUUID();
+      try {
+        await options.pipeline.start({
+          tenantId,
+          templateId,
+          flowId: id,
+          inputs: source.inputs ?? {},
+          task: flow.name,
+          initiatedBy: actor,
+          runId: newRunId,
+          seed: { cursor: from, records: carried },
+          register: async (tx, registered) => {
+            await tx.insert(flowRunRetries).values({
+              tenantId,
+              requestId: input.requestId,
+              flowId: id,
+              sourceRunId: runId,
+              sourceRevision: flow.revision,
+              definitionRevision,
+              correlationId: `${runId}:retry`,
+              nodeId: failedStep.id,
+              newRunId: registered,
+              fingerprint,
+            });
+            await tx.insert(flowRunEvents).values({
+              tenantId,
+              flowId: id,
+              runId,
+              correlationId: `${runId}:run_retried:${registered}`,
+              type: "run_retried",
+              payload: {
+                newRunId: registered,
+                fromStep: failedStep.id,
+                index: from,
+              },
+            });
+          },
+        });
+      } catch (error) {
+        if (uniqueViolation(error)) {
+          // A twin registered first: the card this attempt opened stands for nothing, and is closed.
+          await options.board
+            .finished({ tenantId, runRef: newRunId, failed: true })
+            .catch(() => undefined);
+          const twin = await byRequest();
+          if (twin) return answer(twin);
+          throw new WakerFlowNotRunnableError(RETRY_TAKEN_MESSAGE);
+        }
+        if (error instanceof PipelineStepForbiddenError)
+          throw new WakerFlowValidationError(error.message);
+        if (error instanceof PipelineNotFoundError)
+          throw new WakerFlowNotRunnableError(RETRY_DEFINITION_GONE_MESSAGE);
+        if (error instanceof PipelineValidationError)
+          throw new WakerFlowValidationError(error.message);
+        throw error;
+      }
+      drive({ tenantId, runId: newRunId });
+      await runAsTenant(tenantId, async () =>
+        database
+          .update(flowRunRetries)
+          .set({ status: "ready" })
+          .where(
+            and(
+              eq(flowRunRetries.tenantId, tenantId),
+              eq(flowRunRetries.requestId, input.requestId),
+              eq(flowRunRetries.status, "prepared"),
+            ),
+          ),
+      );
+      const settled = await byRequest();
+      if (!settled) throw new WakerFlowRunNotFoundError();
+      return answer(settled);
+    },
+
+    /** WF8: the questions a run of this Flow stopped on, oldest first, with what became of each. */
+    async confirmations(
+      tenantId: string,
+      id: string,
+      runId: string,
+    ): Promise<WakerFlowConfirmation[]> {
+      await ownRun(tenantId, id, runId);
+      const rows = await runAsTenant(tenantId, async () =>
+        database
+          .select(confirmationColumns)
+          .from(flowConfirmations)
+          .where(
+            and(
+              eq(flowConfirmations.tenantId, tenantId),
+              eq(flowConfirmations.runId, runId),
+              eq(flowConfirmations.flowId, id),
+            ),
+          )
+          .orderBy(asc(flowConfirmations.createdAt)),
+      );
+      return rows.map(confirmation);
+    },
+
+    /**
+     * WF8: answer a question a step stopped on (spec §3.3). The answer becomes that step's output, the
+     * steps after it read it as usual, and the run is driven on in the background.
+     */
+    async answer(
+      tenantId: string,
+      id: string,
+      runId: string,
+      confirmationId: string,
+      input: { requestId: string; answer: string },
+    ): Promise<WakerFlowConfirmation> {
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      const answer = typeof input.answer === "string" ? input.answer : "";
+      if (!answer.trim()) throw new WakerFlowValidationError("请填写回答。");
+      if (answer.length > MAX_ANSWER)
+        throw new WakerFlowValidationError(`回答不能超过 ${MAX_ANSWER} 字。`);
+      return settle(tenantId, id, runId, confirmationId, {
+        status: "answered",
+        requestId: input.requestId,
+        answer,
+      });
+    },
+
+    /**
+     * WF8: skip a question a step stopped on. The step is recorded as skipped (never cleared), later
+     * steps that read its output see 「（此输入未产生）」, and the run is driven on in the background.
+     */
+    async skipConfirmation(
+      tenantId: string,
+      id: string,
+      runId: string,
+      confirmationId: string,
+      input: { requestId: string },
+    ): Promise<WakerFlowConfirmation> {
+      if (!isUuid(input.requestId))
+        throw new WakerFlowValidationError(
+          "缺少有效的请求编号，请刷新后重试。",
+        );
+      return settle(tenantId, id, runId, confirmationId, {
+        status: "skipped",
+        requestId: input.requestId,
+        answer: null,
+      });
+    },
+
     /** The planning model picker; 501 without a resolver. */
     async modelChoices(tenantId: string) {
       if (!options.models) throw new WakerFlowUnavailableError();
       return options.models.choices(tenantId);
     },
   };
+  return store;
 }

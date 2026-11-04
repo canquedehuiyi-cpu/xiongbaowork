@@ -5,6 +5,7 @@ import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
 import { AvatarSourcesPanel } from "@/components/avatar/avatar-sources";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
+import { ProjectPicker } from "@/components/projects/project-picker";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
 import {
@@ -144,6 +145,7 @@ function WakerDetailPage() {
       <ModelLine profile={profile} />
 
       <AvatarSourcesSection profile={profile} />
+      <ProjectSection profile={profile} />
       <DutiesSection profile={profile} />
       <RunningTasksSection agentId={profile.id} />
       <SkillGrantsSection agentId={profile.id} />
@@ -173,10 +175,29 @@ function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
   if (!profile.mine || sources.data?.agentId !== profile.id) return null;
   return (
     <PageSection
-      description="告诉分身你的资料放在哪里、是什么。这里只登记文字说明，分身不会因此读取任何文件。"
+      description="告诉分身你的资料放在哪里、是什么。文字声明只是说明，分身不会因此读取任何文件；本地文件夹是你电脑上交给分身只读查看的文件夹。"
       title="信息来源"
     >
       <AvatarSourcesPanel />
+    </PageSection>
+  );
+}
+
+/**
+ * 当前项目 (story RES2): the project this coworker works in on the person's machine, picked here or
+ * beside the conversation. Only on a coworker the person manages: picking a project is a person's
+ * act (decision D8), and somebody else's coworker is not theirs to point at their files.
+ */
+function ProjectSection({ profile }: { profile: AgentProfile }) {
+  if (!profile.canManage) return null;
+  return (
+    <PageSection
+      description="它在你电脑上干活时所在的项目。不选项目时，它在自己的工作区里执行文件和命令。项目在「能力与资源」里管理。"
+      title="当前项目"
+    >
+      <div className="mt-3">
+        <ProjectPicker agentId={profile.id} />
+      </div>
     </PageSection>
   );
 }

@@ -9,8 +9,9 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { PlanEditor } from "@/components/wakerflow/plan-editor";
 import type { AgentProfile } from "@/lib/agents/queries";
 import {
   laterRunReading,
@@ -206,6 +207,11 @@ function serve(handle: Handler = () => undefined) {
       call.method === "GET"
     )
       return Response.json({ runs: [] });
+    // WF8: a run's timeline and questions, empty unless a test says otherwise.
+    if (call.path.includes("/events?"))
+      return Response.json({ events: [], next: null });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({ confirmations: [] });
     return Response.json({ error: "unexpected" }, { status: 500 });
   }) as typeof fetch;
 }
@@ -578,4 +584,403 @@ test("an ended run is never moved back to running by a later reading", () => {
     topic: "请填写 会议主题。",
   });
   expect(runInputProblems(plan, { topic: "复盘" })).toEqual({});
+});
+
+/*
+ * WF8: typed Flow inputs. The editor declares a type, a default and a select's options; the run
+ * panel enters each type its own way and sends strings.
+ */
+test("the editor sets a type, options and a default, and a select without options cannot be saved", async () => {
+  const puts: unknown[] = [];
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (init?.method === "PUT") {
+      puts.push(body);
+      return Response.json({ flow: flow({ plan: body.plan, revision: 4 }) });
+    }
+    return Response.json(
+      { error: `unexpected ${String(input)}` },
+      { status: 500 },
+    );
+  }) as typeof fetch;
+  const saved: WakerFlow[] = [];
+  const view = render(
+    <PlanEditor
+      coworkers={[{ id: "agent-a", name: "阿记" }]}
+      flowId={FLOW_ID}
+      onReload={() => {}}
+      onSaved={(next) => saved.push(next)}
+      plan={plan}
+      revision={3}
+    />,
+  );
+  const user = userEvent.setup({ document: view.container.ownerDocument });
+  const type = view.getByLabelText("第 2 个输入的类型") as HTMLSelectElement;
+  expect(Array.from(type.options).map((option) => option.textContent)).toEqual([
+    "单行文本",
+    "多行文本",
+    "数字",
+    "下拉选择",
+    "开关",
+  ]);
+  fireEvent.change(type, { target: { value: "select" } });
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  expect(
+    await view.findByText("下拉输入「补充说明」至少需要一个选项。"),
+  ).toBeDefined();
+  expect(puts).toEqual([]);
+
+  await user.type(view.getByLabelText("第 2 个输入的选项"), "简短{Enter}详细");
+  fireEvent.change(view.getByLabelText("第 2 个输入的默认值"), {
+    target: { value: "详细" },
+  });
+  await user.type(view.getByLabelText("第 2 个输入的说明"), "篇幅");
+  // A number's default must be a number.
+  fireEvent.change(view.getByLabelText("第 1 个输入的类型"), {
+    target: { value: "number" },
+  });
+  await user.type(view.getByLabelText("第 1 个输入的默认值"), "很多");
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  expect(
+    await view.findByText("「会议主题」的默认值无效：会议主题 需要填写数字。"),
+  ).toBeDefined();
+  expect(puts).toEqual([]);
+
+  const fallback = view.getByLabelText("第 1 个输入的默认值");
+  await user.clear(fallback);
+  await user.type(fallback, "3");
+  await user.click(view.getByRole("button", { name: "保存计划" }));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect((puts[0] as { plan: WakerFlowPlan }).plan.inputs).toEqual([
+    {
+      key: "topic",
+      label: "会议主题",
+      required: true,
+      type: "number",
+      default: "3",
+    },
+    {
+      key: "notes",
+      label: "补充说明",
+      required: false,
+      type: "select",
+      description: "篇幅",
+      default: "详细",
+      options: ["简短", "详细"],
+    },
+  ]);
+  expect(saved).toHaveLength(1);
+});
+
+test("the run form renders each type its own way and sends strings", async () => {
+  const typed: WakerFlowPlan = {
+    ...plan,
+    inputs: [
+      { key: "topic", label: "会议主题", required: true, type: "textarea" },
+      { key: "count", label: "人数", required: true, type: "number" },
+      {
+        key: "tone",
+        label: "语气",
+        required: false,
+        type: "select",
+        options: ["正式", "轻松"],
+        default: "轻松",
+      },
+      {
+        key: "urgent",
+        label: "加急",
+        required: true,
+        type: "boolean",
+        description: "加急会跳过复核",
+      },
+    ],
+  };
+  serve((call) => {
+    if (call.path === `/api/wakerflows/${FLOW_ID}` && call.method === "GET")
+      return Response.json({ flow: flow({ plan: typed }) });
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "POST"
+    )
+      return Response.json(
+        startAnswer((call.body as { requestId: string }).requestId),
+      );
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({ run: run("running") });
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+
+  const topic = await view.findByLabelText("会议主题（必填）");
+  expect(topic.tagName).toBe("TEXTAREA");
+  const count = view.getByLabelText("人数（必填）") as HTMLInputElement;
+  expect(count.getAttribute("type")).toBe("number");
+  const tone = view.getByLabelText("语气（选填）") as HTMLSelectElement;
+  expect(tone.tagName).toBe("SELECT");
+  expect(Array.from(tone.options).map((option) => option.value)).toEqual([
+    "",
+    "正式",
+    "轻松",
+  ]);
+  expect(tone.value).toBe("轻松");
+  const urgent = view.getByLabelText("加急（必填）") as HTMLInputElement;
+  expect(urgent.getAttribute("role")).toBe("switch");
+  expect(urgent.checked).toBe(false);
+  expect(view.getByText("加急会跳过复核")).toBeDefined();
+
+  await user.click(view.getByRole("button", { name: "运行" }));
+  expect(await view.findByText("请填写 人数。")).toBeDefined();
+  expect(runPosts()).toEqual([]);
+
+  await user.type(topic, "季度复盘{Enter}只谈 Q3");
+  await user.type(count, "12");
+  await user.click(urgent);
+  await user.click(view.getByRole("button", { name: "运行" }));
+  await waitFor(() => expect(runPosts()).toHaveLength(1));
+  const post = runPosts()[0];
+  if (!post) throw new Error("No run request was sent.");
+  expect((post.body as { inputs: unknown }).inputs).toEqual({
+    topic: "季度复盘\n只谈 Q3",
+    count: "12",
+    tone: "轻松",
+    urgent: "true",
+  });
+});
+
+test("runInputProblems checks each type and a default stands in for an empty required input", () => {
+  const typed: WakerFlowPlan = {
+    ...plan,
+    inputs: [
+      { key: "count", label: "人数", required: true, type: "number" },
+      {
+        key: "tone",
+        label: "语气",
+        required: true,
+        type: "select",
+        options: ["正式"],
+        default: "正式",
+      },
+    ],
+  };
+  expect(runInputProblems(typed, { count: "abc" })).toEqual({
+    count: "人数 需要填写数字。",
+  });
+  expect(runInputProblems(typed, { count: "3", tone: "随意" })).toEqual({
+    tone: "语气 需要从选项中选择。",
+  });
+  expect(runInputProblems(typed, { count: "3" })).toEqual({});
+  // The automation form's rule: no default stands in for a required value.
+  expect(runInputProblems(typed, { count: "3" }, { defaults: false })).toEqual({
+    tone: "请填写 语气。",
+  });
+});
+
+/*
+ * WF8-7: a step parked on a question is answered or skipped from the run's detail, a step parked on an
+ * approval links to the approvals page instead, and a failed run is retried from its failed step only
+ * after the page says which step will run again.
+ */
+const CONFIRMATION_ID = "77777777-7777-4777-8777-777777777777";
+const NEW_RUN_ID = "88888888-8888-4888-8888-888888888888";
+
+const parkedRun = (step2: Partial<WakerFlowRun["steps"][number]>) =>
+  run("awaiting_action", {
+    steps: [
+      { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+      { ...plan.steps[1]!, state: "awaiting_action", ...step2 },
+    ],
+  });
+
+test("a step waiting on a question is answered from the run, once, and the run reads on", async () => {
+  let answered = false;
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({
+        runs: [summary(answered ? "done" : "awaiting_action")],
+      });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({
+        run: answered
+          ? run("done", {
+              cursor: 2,
+              steps: [
+                { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+                { ...plan.steps[1]!, state: "done", output: "只看 Q3" },
+              ],
+            })
+          : parkedRun({ question: "要覆盖哪个季度？" }),
+      });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({
+        confirmations: [
+          {
+            id: CONFIRMATION_ID,
+            runId: RUN_ID,
+            nodeId: "step_2",
+            question: "要覆盖哪个季度？",
+            inputs: { agenda: "1. 回顾 2. 计划" },
+            status: answered ? "answered" : "pending",
+            answer: answered ? "只看 Q3" : null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      });
+    if (call.path.endsWith(`/confirmations/${CONFIRMATION_ID}/answer`)) {
+      answered = true;
+      return Response.json({ confirmation: { id: CONFIRMATION_ID } });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("等待处理"));
+  expect(await view.findByText("这一步在问你：要覆盖哪个季度？")).toBeDefined();
+  // An empty answer is not sent.
+  await user.click(view.getByRole("button", { name: "提交回答" }));
+  expect(view.getByText("请填写回答。")).toBeDefined();
+  await user.type(view.getByLabelText("你的回答"), "只看 Q3");
+  await user.click(view.getByRole("button", { name: "提交回答" }));
+  await waitFor(() =>
+    expect(
+      calls.filter((entry) => entry.path.endsWith("/answer")),
+    ).toHaveLength(1),
+  );
+  const sent = calls.find((entry) => entry.path.endsWith("/answer"));
+  if (!sent) throw new Error("No answer was sent.");
+  expect(sent.path).toBe(
+    `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}/confirmations/${CONFIRMATION_ID}/answer`,
+  );
+  expect(sent.body).toMatchObject({ answer: "只看 Q3" });
+  expect(typeof (sent.body as { requestId?: unknown }).requestId).toBe(
+    "string",
+  );
+  expect(await view.findByText("只看 Q3", { exact: false })).toBeDefined();
+  await waitFor(() =>
+    expect(view.queryByRole("button", { name: "提交回答" })).toBeNull(),
+  );
+});
+
+test("跳过 skips the question, and a step waiting on an approval only links to the approvals page", async () => {
+  let approval = false;
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({ runs: [summary("awaiting_action")] });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({
+        run: approval
+          ? parkedRun({ approvalId: "approval-1" })
+          : parkedRun({ question: "要覆盖哪个季度？" }),
+      });
+    if (call.path.endsWith("/confirmations") && call.method === "GET")
+      return Response.json({
+        confirmations: approval
+          ? []
+          : [
+              {
+                id: CONFIRMATION_ID,
+                runId: RUN_ID,
+                nodeId: "step_2",
+                question: "要覆盖哪个季度？",
+                inputs: {},
+                status: "pending",
+                answer: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            ],
+      });
+    if (call.path.endsWith(`/confirmations/${CONFIRMATION_ID}/skip`)) {
+      approval = true;
+      return Response.json({ confirmation: { id: CONFIRMATION_ID } });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("等待处理"));
+  await user.click(await view.findByRole("button", { name: "跳过这一步" }));
+  await waitFor(() =>
+    expect(calls.filter((entry) => entry.path.endsWith("/skip"))).toHaveLength(
+      1,
+    ),
+  );
+  // Now parked on an approval: no answer box here, only the way to where it is answered.
+  const link = await view.findByRole("link", { name: "去审批" });
+  expect(link.getAttribute("href")).toBe("/approvals");
+  expect(view.queryByRole("button", { name: "提交回答" })).toBeNull();
+});
+
+test("从失败步骤重试 names the step that runs again before anything is sent, then opens the new run", async () => {
+  let retried = false;
+  const failedRun = run("failed", {
+    cursor: 1,
+    steps: [
+      { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+      { ...plan.steps[1]!, state: "failed", error: "清单生成超时" },
+    ],
+  });
+  serve((call) => {
+    if (
+      call.path === `/api/wakerflows/${FLOW_ID}/runs` &&
+      call.method === "GET"
+    )
+      return Response.json({
+        runs: retried
+          ? [{ ...summary("done"), id: NEW_RUN_ID }, summary("failed")]
+          : [summary("failed")],
+      });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${RUN_ID}`)
+      return Response.json({ run: failedRun });
+    if (call.path === `/api/wakerflows/${FLOW_ID}/runs/${NEW_RUN_ID}`)
+      return Response.json({
+        run: run("done", {
+          id: NEW_RUN_ID,
+          cursor: 2,
+          steps: [
+            { ...plan.steps[0]!, state: "done", output: "1. 回顾 2. 计划" },
+            { ...plan.steps[1]!, state: "done", output: "会前清单已生成" },
+          ],
+        }),
+      });
+    if (call.path.endsWith(`/runs/${RUN_ID}/retry`)) {
+      retried = true;
+      return Response.json({
+        retry: {
+          id: "retry-1",
+          requestId: (call.body as { requestId: string }).requestId,
+          sourceRunId: RUN_ID,
+          newRunId: NEW_RUN_ID,
+          nodeId: "step_2",
+          status: "ready",
+        },
+      });
+    }
+    return undefined;
+  });
+  const { view, user } = draw(`/wakerflows/${FLOW_ID}`);
+  await user.click(await view.findByText("失败"));
+  expect(view.getByText("失败的那一步会重新执行一次。")).toBeDefined();
+  await user.click(await view.findByRole("button", { name: "从失败步骤重试" }));
+  const dialog = view.getByRole("alertdialog", { name: "确认从失败步骤重试" });
+  expect(dialog.textContent).toContain(
+    "将从第 2 步「根据议程写会前清单」重新执行",
+  );
+  expect(dialog.textContent).toContain("可能会再发生一次");
+  const retries = () => calls.filter((entry) => entry.path.endsWith("/retry"));
+  expect(retries()).toEqual([]);
+  await user.click(view.getByRole("button", { name: "取消" }));
+  expect(retries()).toEqual([]);
+
+  await user.click(view.getByRole("button", { name: "从失败步骤重试" }));
+  await user.click(view.getByRole("button", { name: "确认重试" }));
+  await waitFor(() => expect(retries()).toHaveLength(1));
+  // The new run is the one now open, with step 2 done.
+  expect(
+    await view.findByText("会前清单已生成", { exact: false }),
+  ).toBeDefined();
 });

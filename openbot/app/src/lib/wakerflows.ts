@@ -2,27 +2,59 @@ import { queryOptions } from "@tanstack/react-query";
 import { client, RequestError } from "@/lib/client";
 import type {
   FlowModelChoice,
-  WakerFlow,
+  WakerFlowBranch,
   WakerFlowCandidate,
-  WakerFlowGenerationResult,
-  WakerFlowPlan,
+  WakerFlowInput,
+  WakerFlowInputType,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
+  WakerFlowStepKind,
+  WakerFlow as StoredWakerFlow,
+  WakerFlowGenerationResult as StoredWakerFlowGenerationResult,
+  WakerFlowPlan as StoredWakerFlowPlan,
+  WakerFlowWorkerStep,
 } from "../../../shared/wakerflows";
 
 export type {
   FlowModelChoice,
-  WakerFlow,
   WakerFlowCandidate,
-  WakerFlowGenerationResult,
-  WakerFlowPlan,
+  WakerFlowInput,
+  WakerFlowInputType,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
 };
+
+/**
+ * The plan as these screens edit and show it: coworker steps only.
+ *
+ * WF7 adds decisions, nested Flows and tool calls to the stored plan (`shared/wakerflows.ts`), and the
+ * server refuses every kind it cannot run yet on Save, so until the flowchart editor lands a saved
+ * plan holds worker steps only and this is what it is.
+ */
+export type WakerFlowPlan = Omit<StoredWakerFlowPlan, "steps"> & {
+  steps: WakerFlowWorkerStep[];
+};
+export type WakerFlow = Omit<StoredWakerFlow, "plan"> & {
+  plan: WakerFlowPlan | null;
+};
+export type WakerFlowGenerationResult = Omit<
+  StoredWakerFlowGenerationResult,
+  "plan"
+> & { plan: WakerFlowPlan };
 export {
   WAKERFLOW_CONFLICT_MESSAGE,
+  WAKERFLOW_INPUT_TYPES,
   WAKERFLOW_SUGGESTIONS,
 } from "../../../shared/wakerflows";
+
+/** How each input type is named in the editor. */
+export const INPUT_TYPE_LABEL: Record<WakerFlowInputType, string> = {
+  text: "单行文本",
+  textarea: "多行文本",
+  number: "数字",
+  select: "下拉选择",
+  boolean: "开关",
+};
 
 /**
  * The browser's side of the WakerFlow API (spec D10, stories WF1-WF3; server routes in
@@ -73,6 +105,15 @@ export type WakerFlowRunStep = {
   instruction: string;
   inputKeys?: string[];
   outputKey?: string;
+  /** WF7: absent is a coworker's turn. */
+  kind?: WakerFlowStepKind;
+  next?: string;
+  branches?: WakerFlowBranch[];
+  otherwise?: string;
+  /** WF7: `branch` is a step no taken path reached; `person` a person's skip. */
+  skipReason?: "branch" | "person";
+  /** WF7: the branch a finished decision took (`index` -1 is `otherwise`). */
+  branch?: { label: string; index: number };
   state:
     | "pending"
     | "running"
@@ -84,6 +125,10 @@ export type WakerFlowRunStep = {
   taskId?: string;
   output?: string;
   error?: string;
+  /** Set while the step waits on an approval: the approvals page is where it is answered (D5). */
+  approvalId?: string;
+  /** Set while the step waits on a question it asked (WF8). */
+  question?: string;
 };
 
 /** One run of a Flow, as `GET /api/wakerflows/:id/runs/:runId` answers it. */
@@ -131,27 +176,121 @@ export function laterRunReading<T extends { status: string }>(
 }
 
 /**
- * The run form's checks before anything is sent: each required input filled, nothing over the
- * server's bounds. Keyed by input key; empty means the run may start. The server stays the authority
- * (`server/src/wakerflows/plan.ts` `flowInputs`).
+ * Why a filled value is not a value of the input's type, or null. The same rules and the same words
+ * as the server's `flowInputs` (`server/src/wakerflows/plan.ts`), which stays the authority.
  */
-export function runInputProblems(
-  plan: WakerFlowPlan,
+export function inputValueProblem(
+  input: WakerFlowInput,
+  value: string,
+): string | null {
+  switch (input.type ?? "text") {
+    case "number": {
+      const trimmed = value.trim();
+      return trimmed !== "" && Number.isFinite(Number(trimmed))
+        ? null
+        : `${input.label} 需要填写数字。`;
+    }
+    case "boolean":
+      return value === "true" || value === "false"
+        ? null
+        : `${input.label} 只能是 true（是）或 false（否）。`;
+    case "select":
+      return (input.options ?? []).includes(value)
+        ? null
+        : `${input.label} 需要从选项中选择。`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * What a form for these inputs starts with: each input's default, and a required switch starts at
+ * "否" so that leaving it alone is an answer. Everything else starts empty.
+ */
+export function initialInputValues(
+  inputs: WakerFlowInput[],
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const input of inputs) {
+    if (input.default !== undefined && input.default !== "")
+      values[input.key] = input.default;
+    else if (input.type === "boolean" && input.required)
+      values[input.key] = "false";
+  }
+  return values;
+}
+
+/** Only declared inputs, and only what was filled: the server refuses a name it did not declare. */
+export function filledInputValues(
+  inputs: WakerFlowInput[],
   values: Record<string, string>,
 ): Record<string, string> {
+  const filled: Record<string, string> = {};
+  for (const input of inputs) {
+    const value = values[input.key] ?? "";
+    if (value.trim()) filled[input.key] = value;
+  }
+  return filled;
+}
+
+/**
+ * The run form's checks before anything is sent: each required input filled, each filled value one
+ * its type accepts, nothing over the server's bounds. Keyed by input key; empty means the run may
+ * start. The server stays the authority (`server/src/wakerflows/plan.ts` `flowInputs`).
+ *
+ * `defaults: false` is the automation form's rule: a required input must carry its own value there,
+ * because a Flow changed later is reported rather than filled in from a default.
+ */
+export function runInputProblems(
+  plan: Pick<WakerFlowPlan, "inputs">,
+  values: Record<string, string>,
+  options: { defaults?: boolean } = {},
+): Record<string, string> {
+  const fillDefaults = options.defaults ?? true;
   const problems: Record<string, string> = {};
   let total = 0;
   for (const input of plan.inputs) {
     const value = values[input.key] ?? "";
     total += value.length;
-    if (input.required && !value.trim())
-      problems[input.key] = `请填写 ${input.label}。`;
-    else if (value.length > 10000)
+    const hasDefault =
+      fillDefaults && input.default !== undefined && input.default !== "";
+    if (!value.trim()) {
+      if (input.required && !hasDefault)
+        problems[input.key] = `请填写 ${input.label}。`;
+      continue;
+    }
+    if (value.length > 10000) {
       problems[input.key] = `${input.label} 不能超过 10000 字。`;
+      continue;
+    }
+    const problem = inputValueProblem(input, value);
+    if (problem) problems[input.key] = problem;
   }
   if (total > 20000 && plan.inputs[0])
     problems[plan.inputs[0].key] ??= "流程输入合计不能超过 20000 字。";
   return problems;
+}
+
+/**
+ * The plan as Save sends it. The editor keeps a select's options as the lines being typed, so a new
+ * empty line can be started; here they are trimmed and the empty ones dropped, an empty description
+ * or default is left out, and options are kept only on a select.
+ */
+export function planForSave(plan: WakerFlowPlan): WakerFlowPlan {
+  return {
+    ...plan,
+    inputs: plan.inputs.map((input) => {
+      const { description, default: fallback, options, ...rest } = input;
+      const cleaned: WakerFlowInput = { ...rest };
+      if (description?.trim()) cleaned.description = description.trim();
+      if (fallback !== undefined && fallback !== "") cleaned.default = fallback;
+      if (input.type === "select")
+        cleaned.options = (options ?? [])
+          .map((option) => option.trim())
+          .filter(Boolean);
+      return cleaned;
+    }),
+  };
 }
 
 export type WakerFlowGenerateInput = {
@@ -170,7 +309,189 @@ export const wakerFlowKeys = {
   runs: (id: string) => ["wakerflows", "runs", id] as const,
   run: (id: string, runId: string) =>
     ["wakerflows", "runs", id, runId] as const,
+  versions: (id: string) => ["wakerflows", "versions", id] as const,
+  confirmations: (id: string, runId: string) =>
+    ["wakerflows", "confirmations", id, runId] as const,
 };
+
+/** One recorded state change of a run (WF8). The payload never carries a step's output. */
+export type WakerFlowRunEvent = {
+  sequence: number;
+  type: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+/** A question a step stopped on, and what became of it (WF8). */
+export type WakerFlowConfirmation = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  question: string;
+  inputs: Record<string, string>;
+  status: "pending" | "answered" | "skipped";
+  answer: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A retry of a failed run from its failed step (WF8). */
+export type WakerFlowRetry = {
+  id: string;
+  requestId: string;
+  sourceRunId: string;
+  newRunId: string;
+  nodeId: string;
+  status: "prepared" | "ready" | "unknown" | "cancelled";
+};
+
+const runAt = (id: string, runId: string) =>
+  `${at(id)}/runs/${encodeURIComponent(runId)}`;
+
+/** One page of a run's events, oldest first, after `after`; `next` is null on the last page. */
+export async function listWakerFlowRunEvents(
+  id: string,
+  runId: string,
+  page: { after: number; limit: number },
+): Promise<{ events: WakerFlowRunEvent[]; next: number | null }> {
+  const response = await client(
+    `${runAt(id, runId)}/events?after=${page.after}&limit=${page.limit}`,
+    { fallback: "运行记录没能加载。" },
+  );
+  const body = (await response.json().catch(() => null)) as {
+    events?: unknown;
+    next?: unknown;
+  } | null;
+  return {
+    events: Array.isArray(body?.events)
+      ? (body.events as WakerFlowRunEvent[])
+      : [],
+    next: typeof body?.next === "number" ? body.next : null,
+  };
+}
+
+export function listWakerFlowConfirmations(id: string, runId: string) {
+  return client<WakerFlowConfirmation[]>(
+    `${runAt(id, runId)}/confirmations`,
+    "confirmations",
+    { fallback: "这一步的提问没能加载。" },
+  );
+}
+
+export function answerWakerFlowConfirmation(
+  id: string,
+  runId: string,
+  confirmationId: string,
+  input: { requestId: string; answer: string },
+) {
+  return client<WakerFlowConfirmation>(
+    `${runAt(id, runId)}/confirmations/${encodeURIComponent(confirmationId)}/answer`,
+    "confirmation",
+    { method: "POST", body: input, fallback: "回答没能提交。" },
+  );
+}
+
+export function skipWakerFlowConfirmation(
+  id: string,
+  runId: string,
+  confirmationId: string,
+  input: { requestId: string },
+) {
+  return client<WakerFlowConfirmation>(
+    `${runAt(id, runId)}/confirmations/${encodeURIComponent(confirmationId)}/skip`,
+    "confirmation",
+    { method: "POST", body: input, fallback: "没能跳过这一步。" },
+  );
+}
+
+/** Retry a failed run from the step that failed; the request id makes a repeat safe. */
+export function retryWakerFlowRun(
+  id: string,
+  runId: string,
+  input: { requestId: string },
+) {
+  return client<WakerFlowRetry>(`${runAt(id, runId)}/retry`, "retry", {
+    method: "POST",
+    body: input,
+    fallback: "没能从失败的步骤重试。",
+  });
+}
+
+/** How the timeline names one event, in the person's words. */
+export function runEventLabel(event: WakerFlowRunEvent): string {
+  const payload = event.payload;
+  const index = typeof payload.index === "number" ? payload.index + 1 : null;
+  const stepName = index === null ? "这一步" : `第 ${index} 步`;
+  switch (event.type) {
+    case "run_started":
+      return typeof payload.cursor === "number" && payload.cursor > 0
+        ? `从第 ${payload.cursor + 1} 步开始运行`
+        : "开始运行";
+    case "step_started":
+      return `${stepName}开始`;
+    case "step_done":
+      return `${stepName}完成`;
+    case "step_parked":
+      return payload.waitingOn === "approval"
+        ? `${stepName}等待审批`
+        : `${stepName}等待回答`;
+    case "step_answered":
+      return `${stepName}已回答`;
+    case "step_skipped":
+      return `${stepName}已跳过`;
+    case "step_failed":
+      return typeof payload.error === "string" && payload.error
+        ? `${stepName}失败：${payload.error}`
+        : `${stepName}失败`;
+    case "run_done":
+      return "运行完成";
+    case "run_failed":
+      return "运行失败";
+    case "run_aborted":
+      return "运行已停止";
+    case "run_retried":
+      return typeof payload.index === "number"
+        ? `已从第 ${payload.index + 1} 步重试`
+        : "已重试";
+    default:
+      return event.type;
+  }
+}
+
+/** One saved version of a Flow, as `GET /api/wakerflows/:id/versions` lists it (WF8). */
+export type WakerFlowVersionSummary = {
+  /** The Flow's revision after that Save: what the page calls 第 N 版. */
+  revision: number;
+  name: string;
+  stepCount: number;
+  modelRef: string | null;
+  templateId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
+export function listWakerFlowVersions(id: string) {
+  return client<WakerFlowVersionSummary[]>(`${at(id)}/versions`, "versions", {
+    fallback: "版本记录没能加载。",
+  });
+}
+
+/**
+ * Roll back to a saved version: the server saves that version's plan again as a new revision. A
+ * 409 means the page was not looking at the newest revision; the caller offers to refresh.
+ */
+export function restoreWakerFlowVersion(
+  id: string,
+  revision: number,
+  input: { revision: number },
+) {
+  return client<WakerFlow>(
+    `${at(id)}/versions/${encodeURIComponent(String(revision))}/restore`,
+    "flow",
+    { method: "POST", body: input, fallback: "没能恢复这个版本。" },
+  );
+}
 
 export function listWakerFlows() {
   return client<WakerFlow[]>(BASE, "flows", {
@@ -370,6 +691,31 @@ export function planProblems(plan: WakerFlowPlan): Record<string, string> {
     if (!label) fail(`inputs.${index}.label`, "请填写输入的显示名称。");
     else if (label.length > 160)
       fail(`inputs.${index}.label`, "显示名称不能超过 160 字。");
+    if ((input.description ?? "").trim().length > 200)
+      fail(`inputs.${index}.description`, "输入说明不能超过 200 字。");
+    const shown = input.label.trim() || input.key;
+    if (input.type === "select") {
+      const options = input.options ?? [];
+      if (options.length === 0)
+        fail(
+          `inputs.${index}.options`,
+          `下拉输入「${shown}」至少需要一个选项。`,
+        );
+      else if (options.length > 20)
+        fail(`inputs.${index}.options`, `下拉输入「${shown}」最多 20 个选项。`);
+      else if (options.some((option) => option.length > 80))
+        fail(`inputs.${index}.options`, "每个下拉选项不能超过 80 字。");
+      else if (new Set(options).size !== options.length)
+        fail(`inputs.${index}.options`, `下拉输入「${shown}」的选项重复。`);
+    }
+    if (input.default !== undefined && input.default.trim() !== "") {
+      const problem = inputValueProblem(
+        { ...input, label: shown },
+        input.default,
+      );
+      if (problem)
+        fail(`inputs.${index}.default`, `「${shown}」的默认值无效：${problem}`);
+    }
   });
 
   if (plan.steps.length === 0) fail("steps", "计划里至少要有一个步骤。");
