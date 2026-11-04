@@ -15,6 +15,7 @@ import type { ZodType } from "zod";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";
 import { HandoffPanel } from "@/components/agents/handoff-panel";
+import { AgentRolePanel } from "@/components/roles/role-editor";
 import { RoutinesList } from "@/components/routines/routines-list";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,7 +125,7 @@ export function AgentDialog({
 
 const SECTIONS = [
   { id: "general", name: "基本信息", icon: IconUser },
-  { id: "persona", name: "人设", icon: IconBrain },
+  { id: "persona", name: "角色", icon: IconBrain },
   { id: "access", name: "权限", icon: IconPuzzle },
   { id: "connection", name: "连接", icon: IconPlugConnected },
   { id: "handoff", name: "交接", icon: IconArrowsExchange },
@@ -264,7 +265,7 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
             {section === "general" ? (
               <GeneralSection agentId={agentId} profile={profile} />
             ) : section === "persona" ? (
-              <PersonaSection agentId={agentId} profile={profile} />
+              <RoleSection agentId={agentId} profile={profile} />
             ) : section === "access" ? (
               <AccessSection agentId={agentId} />
             ) : section === "connection" ? (
@@ -296,9 +297,12 @@ export function useProfileSave(agentId: string, profile: AgentProfile) {
   const updateAgent = useMutation(updateAgentMutationOptions(queryClient));
   const save = ({
     platformModelRef,
+    bible,
     ...patch
   }: Partial<AgentFormValues> & {
     persona?: Persona;
+    /** The 工作手册 (ROLE1): absent leaves it, null clears it. Not a form field either. */
+    bible?: string | null;
     /**
      * The platform pool binding (stories H1, K1), with `modelRef`'s three-way: absent leaves it,
      * null clears it. Not a form field, so it rides beside the form's input rather than through it.
@@ -323,6 +327,7 @@ export function useProfileSave(agentId: string, profile: AgentProfile) {
           ...patch,
         }),
         ...(platformModelRef === undefined ? {} : { platformModelRef }),
+        ...(bible === undefined ? {} : { bible }),
       },
     });
   return { save, saving: updateAgent.isPending };
@@ -761,6 +766,36 @@ function ConnectionSection({
           hasToken={profile.hasCallbackToken}
         />
       ) : null}
+    </>
+  );
+}
+
+/**
+ * 角色 (story ROLE1): the 工作手册 and the template it came from above, the persona below. The
+ * persona editor is remounted when the persona changes underneath it — a template applied — so its
+ * draft never holds the text the template just replaced.
+ */
+function RoleSection({
+  agentId,
+  profile,
+}: {
+  agentId: string;
+  profile: AgentProfile;
+}) {
+  const { save } = useProfileSave(agentId, profile);
+  return (
+    <>
+      <AgentRolePanel
+        agentId={agentId}
+        onSaveBible={(bible) => save({ bible })}
+        profile={profile}
+      />
+      <Separator />
+      <PersonaSection
+        agentId={agentId}
+        key={JSON.stringify(profile.persona)}
+        profile={profile}
+      />
     </>
   );
 }
