@@ -1,5 +1,5 @@
 import type { DeviceChannel } from "./channel";
-import type { DeviceOwner, DeviceStore } from "./store";
+import { type DeviceOwner, type DeviceStore, reportedRoots } from "./store";
 
 /**
  * The frames a runner sends, and what the server does with them.
@@ -86,7 +86,9 @@ export async function runnerMessage(
   }
   const { tenantId, deviceId } = ws.data.runner;
   if (frame.type === "heartbeat") {
-    await store.heartbeat(tenantId, deviceId);
+    // A runner that offers read-only folders lists them on every beat (story F1, stage 2): a
+    // reference and a name each, checked in `reportedRoots`. A beat without the field changes none.
+    await store.heartbeat(tenantId, deviceId, reportedRoots(frame.roots));
     ws.send(JSON.stringify({ type: "ack" }));
     void channel.flush({ tenantId, deviceId }).catch(() => undefined);
     return;
