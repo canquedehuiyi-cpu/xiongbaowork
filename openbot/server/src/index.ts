@@ -80,6 +80,7 @@ import {
   DEPLOYMENT_INITIATOR,
   PERSON_INITIATOR,
   recordAuditEvent,
+  recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
 import { startRetentionSweeps } from "./audit-retention";
@@ -225,6 +226,7 @@ import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import { createDeviceRoutes, createRunnerRoutes } from "./devices/routes";
 import { createDeviceScreens } from "./devices/screen";
+import { createDeviceTakeovers } from "./devices/takeover";
 import { computerProviderFor, createDeviceSelector } from "./devices/selection";
 import { runnerClose, runnerMessage, runnerOpen } from "./devices/socket";
 import { createDeviceStore, type DeviceOwner } from "./devices/store";
@@ -539,6 +541,29 @@ await startupLifecycle.run(async (startup) => {
    */
   const deviceScreens = createDeviceScreens({
     notify: (target, frame) => deviceChannel.notify(target, frame),
+    holderOf: (target, botId) => deviceTakeovers.holder(target, botId),
+    onViewerGone: (watch) => deviceTakeovers.viewerGone(watch),
+  });
+  /*
+   * Who holds the wheel of a coworker's browser on one of those machines. The gateway asks it before
+   * every action it would send there, and a person whose last screen closes hands the wheel back.
+   */
+  const deviceTakeovers = createDeviceTakeovers({
+    stillWatching: (target, botId, userId) =>
+      deviceScreens.watching(target, botId, userId),
+    // In the device's own tenant: the handback happened on the owner's machine, to the owner's Bot.
+    onReleasedOnDisconnect: ({ target, botId, userId }) =>
+      void recordPersonAuditEvent(bootAuditStore, target.tenantId, {
+        eventType: "computer.control_released",
+        targetType: "computer",
+        targetId: botId,
+        payload: {
+          bot: botId,
+          actor: userId,
+          device: target.deviceId,
+          reason: "The person's live screen closed, so control went back to the coworker.",
+        },
+      }).catch(() => undefined),
   });
   /*
    * What this tenant's plan allows, read from their own subscription.
@@ -972,6 +997,7 @@ await startupLifecycle.run(async (startup) => {
           ? {
               transport: createRunnerTransport(deviceChannel),
               resolveDevice: deviceForBot,
+              deviceTakeovers,
             }
           : {}),
         auditStore: bootAuditStore,
