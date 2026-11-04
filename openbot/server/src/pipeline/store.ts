@@ -13,7 +13,10 @@ import {
   type PipelineStepStateRow,
   stepIsSettled,
 } from "../db/schema/pipeline";
-import { WAKERFLOW_MAX_STEPS } from "../../../shared/wakerflows";
+import {
+  WAKERFLOW_MAX_NESTING,
+  WAKERFLOW_MAX_STEPS,
+} from "../../../shared/wakerflows";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
@@ -205,7 +208,44 @@ function passOver(records: StepRecord[], from: number, to: number) {
 }
 
 /** The kinds this orchestrator runs; any other is failed closed rather than guessed at. */
-const RUNNABLE_KINDS = new Set(["worker", "decision"]);
+const RUNNABLE_KINDS = new Set(["worker", "decision", "flow"]);
+
+/** How deep runs may nest (D10): a run at this depth may not start another. */
+const MAX_NESTING = WAKERFLOW_MAX_NESTING;
+
+/**
+ * WF7 (spec §3.4): starting the child run of a `flow` step, which only the WakerFlow layer can do
+ * (it holds the pinned versions and the Flow's input rules). Attached by `createWakerFlowStore`;
+ * without it a `flow` step fails closed.
+ */
+export type NestedFlowRunner = {
+  /**
+   * Start the child of this parent step, or answer the one it already has. A refusal the person can
+   * act on is thrown as {@link NestedFlowRefusal}, and nothing is created.
+   */
+  start(input: {
+    tenantId: string;
+    parentRunId: string;
+    parentStepId: string;
+    /** The parent step's card, which the child's own card is filed under. */
+    parentTaskId?: string;
+    targetFlowId: string;
+    targetRevision: number;
+    /** The child's inputs, read from the parent's inputs and outputs through `inputMap`. */
+    inputs: Record<string, string>;
+    initiatedBy: string;
+  }): Promise<{ runId: string }>;
+  /** Drive a run without holding the caller (the WakerFlow store's own `drive`). */
+  drive(run: { tenantId: string; runId: string }): void;
+};
+
+/** Why a nested Flow did not start, in the person's language. */
+export class NestedFlowRefusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NestedFlowRefusal";
+  }
+}
 
 /** The value one declared key reads: the run's input, an earlier step's output, or the gap. */
 function readKey(
@@ -293,6 +333,9 @@ type RunRow = {
   advanceOwner: string | null;
   inputs: Record<string, string>;
   flowId: string | null;
+  /** WF7: the run and step that started this one, when it is a nested Flow's run. */
+  parentRunId: string | null;
+  parentStepId: string | null;
   /** What this process last wrote, so the next change is compared with it and not with the read. */
   written?: { status: string; steps: StepRecord[] };
 };
@@ -372,6 +415,8 @@ export function createPipelineStore(options: {
         advanceOwner: groupTaskRuns.advanceOwner,
         inputs: groupTaskRuns.inputs,
         flowId: groupTaskRuns.flowId,
+        parentRunId: groupTaskRuns.parentRunId,
+        parentStepId: groupTaskRuns.parentStepId,
       })
       .from(groupTaskRuns)
       .where(
@@ -415,6 +460,8 @@ export function createPipelineStore(options: {
       advanceOwner: row.advanceOwner,
       inputs: row.inputs,
       flowId: row.flowId ?? null,
+      parentRunId: row.parentRunId ?? null,
+      parentStepId: row.parentStepId ?? null,
     };
   }
 
@@ -485,6 +532,112 @@ export function createPipelineStore(options: {
       status: expected.status,
       steps: [...(patch.steps ?? before.steps)],
     };
+    // WF7: a nested Flow's run that has just ended hands its outcome to the step waiting on it.
+    if (
+      expected.parentRunId &&
+      patch.status !== undefined &&
+      ["done", "failed", "aborted"].includes(patch.status)
+    )
+      await settleChild(tenantId, runId).catch((error: unknown) =>
+        console.error(
+          JSON.stringify({
+            type: "nested-flow-settle-failed",
+            runId,
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        ),
+      );
+    return true;
+  }
+
+  let nested: NestedFlowRunner | undefined;
+
+  /** How deep this run sits: 1 for a run nobody started, 2 for its child, and so on. */
+  async function depthOf(tenantId: string, run: RunRow): Promise<number> {
+    let depth = 1;
+    let parent = run.parentRunId;
+    while (parent && depth <= MAX_NESTING) {
+      const [row] = await runAsTenant(tenantId, async () =>
+        database
+          .select({ parentRunId: groupTaskRuns.parentRunId })
+          .from(groupTaskRuns)
+          .where(
+            and(
+              eq(groupTaskRuns.tenantId, tenantId),
+              eq(groupTaskRuns.id, parent as string),
+            ),
+          )
+          .limit(1),
+      );
+      depth += 1;
+      parent = row?.parentRunId ?? null;
+    }
+    return depth;
+  }
+
+  /**
+   * WF7 (spec §3.4 step 3): if this run is a child that has ended, and its parent is still parked on
+   * the step that started it, give that step the child's outcome and carry the parent on. `done`
+   * answers with the child's `resultKey` output (or its last finished step's); `failed` or `aborted`
+   * fails the parent step. Conditional on the parent's park, so a second delivery (the sweep after a
+   * restart, a replay) finds nothing to do and answers false.
+   */
+  async function settleChild(tenantId: string, childRunId: string) {
+    const child = await readRun(tenantId, childRunId);
+    if (!child?.parentRunId || !child.parentStepId) return false;
+    if (!["done", "failed", "aborted"].includes(child.status)) return false;
+    const parent = await readRun(tenantId, child.parentRunId);
+    if (!parent) return false;
+    const parked = parent.steps[parent.cursor];
+    if (
+      parent.status !== "awaiting_action" ||
+      parked?.id !== child.parentStepId ||
+      parked.childRunId !== childRunId
+    )
+      return false;
+    const name = parked.instruction;
+    let outcome: { output: string } | { error: string };
+    if (child.status === "done") {
+      const finished = child.steps.filter(
+        (step) =>
+          step.state === "done" &&
+          step.kind !== "decision" &&
+          typeof step.output === "string",
+      );
+      const result = parked.resultKey
+        ? finished.find((step) => step.outputKey === parked.resultKey)
+        : finished[finished.length - 1];
+      outcome =
+        typeof result?.output === "string"
+          ? { output: result.output }
+          : {
+              error: parked.resultKey
+                ? `${name}已完成，但没有产出 ${parked.resultKey}。`
+                : `${name}已完成，但没有任何产出。`,
+            };
+    } else if (child.status === "aborted") {
+      outcome = { error: `${name}已被中止，这一步没有结果。` };
+    } else {
+      const failed = child.steps.find((step) => step.state === "failed");
+      outcome = {
+        error: `${name}运行失败${
+          failed
+            ? `（第 ${child.steps.indexOf(failed) + 1} 步 ${failed.id}${failed.error ? `：${failed.error.split("\n")[0]}` : ""}）`
+            : ""
+        }。`,
+      };
+    }
+    const resumed = await store.resume({
+      tenantId,
+      runId: parent.id,
+      ...outcome,
+      drive: false,
+      parked: { stepId: parked.id, childRunId },
+    });
+    if (resumed.status === "running") {
+      if (nested) nested.drive({ tenantId, runId: parent.id });
+      else void store.advance({ tenantId, runId: parent.id }).catch(() => {});
+    }
     return true;
   }
 
@@ -815,6 +968,11 @@ export function createPipelineStore(options: {
        * when the run does (the retry ledger, whose row names this run).
        */
       register?: (tx: PipelineTransaction, runId: string) => Promise<void>;
+      /**
+       * WF7: this run is the child of a parent run's `flow` step. Its card is filed under that step's
+       * card when one is given, and the parent finds it again through the run row.
+       */
+      parent?: { runId: string; stepId: string; taskId?: string };
     }): Promise<{ runId: string; parentTaskId: string }> {
       // A malformed id is "not here" (spec D15), the same answer edit and delete give, not a cast error.
       if (!isUuid(input.templateId)) {
@@ -877,8 +1035,9 @@ export function createPipelineStore(options: {
       for (const [index, step] of declared.entries()) {
         // Steps a retry carries over already ran; only what will run is asked about.
         if (index < from) continue;
-        // A decision runs as nobody: the orchestrator evaluates it, no coworker is asked.
-        if (step.kind === "decision") continue;
+        // A decision runs as nobody: the orchestrator evaluates it, no coworker is asked. A nested
+        // Flow's own steps are asked when its child run starts, by that run's own `start`.
+        if (step.kind === "decision" || step.kind === "flow") continue;
         const allowed = await canUse(input.initiatedBy, step.agentId).catch(
           () => false,
         );
@@ -916,6 +1075,7 @@ export function createPipelineStore(options: {
         source: "group_run",
         runRef: runId,
         quotaUnits: remaining + 1,
+        ...(input.parent?.taskId ? { parentTaskId: input.parent.taskId } : {}),
       });
 
       const steps = declared.map<StepRecord>((step, index) => {
@@ -948,6 +1108,8 @@ export function createPipelineStore(options: {
         initiatedBy: input.initiatedBy,
         inputs: input.inputs ?? {},
         flowId: input.flowId ?? null,
+        parentRunId: input.parent?.runId ?? null,
+        parentStepId: input.parent?.stepId ?? null,
       };
       const { events } = options;
       const flowId = input.flowId;
@@ -1209,6 +1371,118 @@ export function createPipelineStore(options: {
             )
               return currentOutcome(input.tenantId, input.runId);
             continue;
+          }
+          if (kind === "flow") {
+            /*
+             * WF7 (spec §3.4): another Flow's run, started as the person who started this one, at the
+             * revision pinned on Save. This step parks (no approval row) holding the child's id, and
+             * the child hands its outcome back when it ends (`settleChild`).
+             */
+            const failStep = async (error: string, runRef?: string) => {
+              records[cursor] = {
+                // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
+                ...records[cursor]!,
+                state: "failed",
+                error,
+              };
+              if (
+                !(await writeRun(
+                  input.tenantId,
+                  input.runId,
+                  { cursor, status: "failed", steps: records },
+                  run,
+                  owner,
+                ))
+              )
+                return currentOutcome(input.tenantId, input.runId);
+              if (runRef) await closeCard(input.tenantId, runRef, true);
+              await closeParent(run, input.tenantId, true);
+              return { status: "failed" as const, cursor, steps: records };
+            };
+            // `return await`, not `return`: the `finally` below releases the claim, and must not run
+            // before the failure is written under it.
+            const depth = await depthOf(input.tenantId, run);
+            if (!nested || initiator === null)
+              return await failStep(
+                !nested
+                  ? `第 ${cursor + 1} 步是子流程，但这里不能运行子流程，没有执行。`
+                  : `这次运行没有记录发起人，第 ${cursor + 1} 步的子流程没有启动。`,
+              );
+            if (depth >= MAX_NESTING)
+              return await failStep(
+                `子流程最多嵌套 ${MAX_NESTING} 层；第 ${cursor + 1} 步会嵌套到第 ${depth + 1} 层，没有执行。`,
+              );
+            const runRef = record.runRef ?? newRunId();
+            const taskId =
+              record.taskId ??
+              (await board.opened({
+                tenantId: input.tenantId,
+                title: record.instruction,
+                source: "group_run",
+                runRef,
+                parentTaskId: run.parentTaskId ?? undefined,
+              }));
+            records[cursor] = { ...record, state: "running", runRef, taskId };
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                { cursor, status: "running", steps: records },
+                run,
+                owner,
+              ))
+            ) {
+              await closeCard(input.tenantId, runRef, true);
+              return currentOutcome(input.tenantId, input.runId);
+            }
+            const earlier = records.slice(0, cursor);
+            const childInputs: Record<string, string> = {};
+            for (const [name, key] of Object.entries(record.inputMap ?? {})) {
+              const value =
+                run.inputs[key] ??
+                earlier.find((step) => step.outputKey === key)?.output;
+              if (value !== undefined) childInputs[name] = value;
+            }
+            let child: { runId: string };
+            try {
+              child = await nested.start({
+                tenantId: input.tenantId,
+                parentRunId: input.runId,
+                parentStepId: record.id,
+                parentTaskId: taskId,
+                targetFlowId: record.targetFlowId ?? "",
+                targetRevision: record.targetRevision ?? 0,
+                inputs: childInputs,
+                initiatedBy: initiator,
+              });
+            } catch (error) {
+              return await failStep(
+                error instanceof NestedFlowRefusal
+                  ? error.message
+                  : `${record.instruction}没有启动：${error instanceof Error ? error.message.split("\n")[0] : String(error)}`,
+                runRef,
+              );
+            }
+            records[cursor] = {
+              // biome-ignore lint/style/noNonNullAssertion: the loop condition is this array's own length
+              ...records[cursor]!,
+              state: "awaiting_action",
+              childRunId: child.runId,
+            };
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                { cursor, status: "awaiting_action", steps: records },
+                run,
+                owner,
+              ))
+            )
+              return currentOutcome(input.tenantId, input.runId);
+            // A child that already ended (this step driven again) answers now; otherwise it is driven.
+            if (!(await settleChild(input.tenantId, child.runId)))
+              nested.drive({ tenantId: input.tenantId, runId: child.runId });
+            return currentOutcome(input.tenantId, input.runId);
           }
           const allowed =
             initiator !== null &&
@@ -1588,6 +1862,13 @@ export function createPipelineStore(options: {
       ) {
         return store.abort(input);
       }
+      // WF7: a nested Flow still running under this run is stopped with it (spec §3.4 step 4).
+      for (const record of run.steps) {
+        if (record.childRunId && !stepIsSettled(record.state))
+          await store
+            .abort({ tenantId: input.tenantId, runId: record.childRunId })
+            .catch(() => undefined);
+      }
       for (const record of run.steps) {
         if (record.runRef) {
           await board
@@ -1640,12 +1921,20 @@ export function createPipelineStore(options: {
        * driver, so a person's answer is not held open while the crew works through what follows.
        */
       drive?: boolean;
+      /** WF7: answer only if the run is still parked on this step, waiting on this child. */
+      parked?: { stepId: string; childRunId: string };
     }): Promise<RunOutcome> {
       const run = await readRun(input.tenantId, input.runId);
       if (!run) throw new PipelineNotFoundError("这个工作区里没有这次运行。");
       const records = [...run.steps];
       const cursor = run.cursor;
       const parked = records[cursor];
+      if (
+        input.parked &&
+        (parked?.id !== input.parked.stepId ||
+          parked.childRunId !== input.parked.childRunId)
+      )
+        return outcome(run);
       /*
        * A run that is not parked answers nothing.
        *
@@ -1782,7 +2071,55 @@ export function createPipelineStore(options: {
      * open cards closed with the run — is written down there.
      */
     async reapAbandoned(input: { olderThanMs: number }): Promise<number> {
-      return reapAbandonedPipelineRuns(database, board, input);
+      const reaped = await reapAbandonedPipelineRuns(database, board, input);
+      // WF7: this phase of the restart sweep is also where a parent left waiting on a child that
+      // has already ended is carried on (spec §3.4, 重启). Nothing is replayed.
+      const resumed = await store.resumeParentsOfEndedChildren();
+      return reaped + resumed;
+    },
+
+    /**
+     * WF7: attach the WakerFlow layer's way of starting a nested Flow's child run. Called once, by
+     * `createWakerFlowStore`, which is built after this store and on top of it.
+     */
+    attachNestedFlows(runner: NestedFlowRunner) {
+      nested = runner;
+    },
+
+    /** WF7: hand an ended child run's outcome to the parent step waiting on it; false if none was. */
+    async settleChild(input: { tenantId: string; runId: string }) {
+      return settleChild(input.tenantId, input.runId);
+    },
+
+    /**
+     * WF7 (spec §3.4, 重启): parents still parked on a `flow` step whose child has already ended —
+     * the process died between the child's last write and the parent's resume. Each is settled in
+     * the tenant on its own row, exactly as the live path would have; the child is never re-run, and
+     * the resume is conditional on the park, so a second sweep or replica finds nothing.
+     */
+    async resumeParentsOfEndedChildren(): Promise<number> {
+      const rows = await runAsTenant("platform", async () =>
+        database
+          .select({ id: groupTaskRuns.id, tenantId: groupTaskRuns.tenantId })
+          .from(groupTaskRuns)
+          .where(
+            and(
+              sql`${groupTaskRuns.parentRunId} is not null`,
+              sql`${groupTaskRuns.status} in ('done', 'failed', 'aborted')`,
+              // Spelled out, like `owningFlow`: the subquery must name the outer row's columns.
+              sql`exists (select 1 from "group_task_runs" as waiting_parent where waiting_parent.id = "group_task_runs"."parent_run_id" and waiting_parent.tenant_id = "group_task_runs"."tenant_id" and waiting_parent.status = 'awaiting_action')`,
+            ),
+          )
+          .limit(100),
+      );
+      let resumed = 0;
+      for (const row of rows) {
+        const settled = await runAsTenant(row.tenantId, () =>
+          settleChild(row.tenantId, row.id),
+        ).catch(() => false);
+        if (settled) resumed += 1;
+      }
+      return resumed;
     },
   };
 
