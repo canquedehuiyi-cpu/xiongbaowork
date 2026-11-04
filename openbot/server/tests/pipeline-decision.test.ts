@@ -7,6 +7,7 @@ import {
   routeAfter,
   stepBudget,
 } from "../src/pipeline/decision";
+import { confirmQuestion, type StepRecord } from "../src/pipeline/store";
 
 /**
  * WF7-2 (spec 2026-11-04-wf7 §3.3, §6.2): the decision step's evaluation, as a pure function. The
@@ -234,5 +235,113 @@ describe("routes and the month's budget", () => {
     const linear = [{ id: "a" }, { id: "b" }, { id: "c" }];
     expect(stepBudget(linear)).toBe(3);
     expect(stepBudget(linear, 1)).toBe(2);
+  });
+});
+
+describe("a confirmation step (WF8 §3.3)", () => {
+  test("asks a person, so it opens no card and costs nothing of the month's budget", () => {
+    const steps = [
+      { id: "draft" },
+      { id: "ask", kind: "confirm" as const },
+      { id: "publish" },
+    ];
+    expect(stepBudget(steps)).toBe(2);
+    expect(stepBudget(steps, 1)).toBe(1);
+    expect(stepBudget(steps, 2)).toBe(1);
+    // A run of nothing but a question reserves no step at all.
+    expect(stepBudget([{ id: "ask", kind: "confirm" as const }])).toBe(0);
+  });
+
+  test("on a branch, only the card-opening steps of the longest path count", () => {
+    // decide → ask (→ join) | b1 → b2 → join
+    const steps = [
+      {
+        id: "decide",
+        kind: "decision" as const,
+        branches: [{ label: "甲", when: "true", next: "ask" }],
+        otherwise: "b1",
+      },
+      { id: "ask", kind: "confirm" as const, next: "join" },
+      { id: "b1" },
+      { id: "b2" },
+      { id: "join" },
+    ];
+    expect(stepBudget(steps)).toBe(3);
+    expect(stepBudget(steps, 1)).toBe(1);
+  });
+
+  const earlierSteps = [
+    {
+      id: "draft",
+      agentId: "writer",
+      instruction: "起草",
+      outputKey: "drafted",
+      output: "草稿正文",
+      state: "done",
+    },
+    {
+      id: "polish",
+      agentId: "writer",
+      instruction: "润色",
+      outputKey: "polished",
+      state: "skipped",
+      skipReason: "person",
+    },
+  ] satisfies StepRecord[];
+
+  test("fills each declared {{key}} from the inputs and earlier outputs, as text", () => {
+    expect(
+      confirmQuestion({
+        record: {
+          instruction: "主题「{{ topic }}」的草稿是：{{drafted}}。可以发布吗？",
+          inputKeys: ["topic", "drafted"],
+        },
+        inputs: { topic: "发布会" },
+        earlier: earlierSteps,
+      }),
+    ).toBe("主题「发布会」的草稿是：草稿正文。可以发布吗？");
+  });
+
+  test("a value that is itself a placeholder is not filled a second time", () => {
+    expect(
+      confirmQuestion({
+        record: {
+          instruction: "{{topic}} / {{drafted}}",
+          inputKeys: ["topic", "drafted"],
+        },
+        inputs: { topic: "{{drafted}}" },
+        earlier: earlierSteps,
+      }),
+    ).toBe("{{drafted}} / 草稿正文");
+  });
+
+  test("a key with no value reads as missing, and an undeclared one is left as written", () => {
+    expect(
+      confirmQuestion({
+        record: {
+          instruction: "润色稿：{{polished}}；{{secret}}",
+          inputKeys: ["polished"],
+        },
+        inputs: { secret: "不该被读到" },
+        earlier: earlierSteps,
+      }),
+    ).toBe("润色稿：（此输入未产生）；{{secret}}");
+  });
+
+  test("is never empty and is bounded", () => {
+    expect(
+      confirmQuestion({
+        record: { instruction: "{{topic}}", inputKeys: ["topic"] },
+        inputs: { topic: "  " },
+        earlier: [],
+      }),
+    ).toBe("{{topic}}");
+    const long = confirmQuestion({
+      record: { instruction: "看一下：{{drafted}}", inputKeys: ["drafted"] },
+      inputs: { drafted: "长".repeat(30000) },
+      earlier: [],
+    });
+    expect(Array.from(long)).toHaveLength(20000);
+    expect(long.endsWith("…")).toBe(true);
   });
 });

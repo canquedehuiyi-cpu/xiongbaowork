@@ -49,7 +49,11 @@ export type PipelineStepRow = {
   instruction: string;
   inputKeys?: string[];
   outputKey?: string;
-  kind?: "worker" | "decision" | "flow" | "action";
+  /**
+   * `confirm` (WF8 §3.3): a question to a person, with no coworker (`""`) and no turn; its
+   * `instruction` is the question as written, `{{key}}` filled from `inputKeys` when it is reached.
+   */
+  kind?: "worker" | "decision" | "flow" | "action" | "confirm";
   /** The member's role and prompt in this Flow (D2), put ahead of the step's own instruction. */
   rolePrompt?: string;
   /** Jump forward to this step id (or `__end__`) when the step ends; absent is the next one. */

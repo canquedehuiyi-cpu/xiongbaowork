@@ -209,7 +209,13 @@ function passOver(records: StepRecord[], from: number, to: number) {
 }
 
 /** The kinds this orchestrator runs; any other is failed closed rather than guessed at. */
-const RUNNABLE_KINDS = new Set(["worker", "decision", "flow", "action"]);
+const RUNNABLE_KINDS = new Set([
+  "worker",
+  "decision",
+  "flow",
+  "action",
+  "confirm",
+]);
 
 /** How deep runs may nest (D10): a run at this depth may not start another. */
 const MAX_NESTING = WAKERFLOW_MAX_NESTING;
@@ -259,6 +265,37 @@ function readKey(
     earlier.find((step) => step.outputKey === key)?.output ??
     "（此输入未产生）"
   );
+}
+
+/** The longest a confirmation's question may be once its `{{key}}` is filled. */
+const MAX_FILLED_QUESTION = 20000;
+
+/**
+ * The question a `confirm` step asks (WF8 §3.3), as the person reads it: its template (the step's
+ * `instruction`) with each declared `{{key}}` replaced by that input or earlier output, as text and
+ * never evaluated. A key with no value reads 「（此输入未产生）」, as a worker's input does: a person
+ * can still answer a question with a gap in it. Bounded, and never empty, because an empty question
+ * is no question and would leave the run parked with nothing to answer.
+ */
+export function confirmQuestion(input: {
+  record: Pick<StepRecord, "instruction" | "inputKeys">;
+  inputs: Record<string, string>;
+  /** The run's steps before this one. */
+  earlier: StepRecord[];
+}): string {
+  const { record } = input;
+  const declared = new Set(record.inputKeys ?? []);
+  const filled = record.instruction.replace(
+    /\{\{\s*([^{}\s]*)\s*\}\}/g,
+    (match, key: string) =>
+      declared.has(key) ? readKey(key, input.inputs, input.earlier) : match,
+  );
+  const text =
+    filled.trim() || record.instruction.trim() || "这一步在等你的确认。";
+  const characters = Array.from(text);
+  return characters.length > MAX_FILLED_QUESTION
+    ? `${characters.slice(0, MAX_FILLED_QUESTION - 1).join("")}…`
+    : text;
 }
 
 /**
@@ -1042,8 +1079,14 @@ export function createPipelineStore(options: {
         // Steps a retry carries over already ran; only what will run is asked about.
         if (index < from) continue;
         // A decision runs as nobody: the orchestrator evaluates it, no coworker is asked. A nested
-        // Flow's own steps are asked when its child run starts, by that run's own `start`.
-        if (step.kind === "decision" || step.kind === "flow") continue;
+        // Flow's own steps are asked when its child run starts, by that run's own `start`. A
+        // confirmation asks a person, not a coworker.
+        if (
+          step.kind === "decision" ||
+          step.kind === "flow" ||
+          step.kind === "confirm"
+        )
+          continue;
         const allowed = await canUse(input.initiatedBy, step.agentId).catch(
           () => false,
         );
@@ -1488,6 +1531,38 @@ export function createPipelineStore(options: {
             // A child that already ended (this step driven again) answers now; otherwise it is driven.
             if (!(await settleChild(input.tenantId, child.runId)))
               nested.drive({ tenantId: input.tenantId, runId: child.runId });
+            return currentOutcome(input.tenantId, input.runId);
+          }
+          if (kind === "confirm") {
+            /*
+             * WF8 §3.3's confirmation node: the run asks a person. No card, no turn, no model, no I6
+             * question (nobody is dispatched), and no quota (`stepBudget` counts it as nothing). The
+             * step parks with no approval row, holding the filled question, which is exactly the park
+             * WF8's event writer turns into one `pending` row of `flow_confirmations` in this same
+             * transaction. The answer arrives through `resume` (the step's output is the answer) and
+             * a skip through `skip` (recorded as the person's), both from the WakerFlow layer. Parked
+             * at `awaiting_action`, the run is left alone by restart recovery and the reaper.
+             */
+            records[cursor] = {
+              ...record,
+              state: "awaiting_action",
+              approvalId: undefined,
+              question: confirmQuestion({
+                record,
+                inputs: run.inputs,
+                earlier: records.slice(0, cursor),
+              }),
+            };
+            if (
+              !(await writeRun(
+                input.tenantId,
+                input.runId,
+                { cursor, status: "awaiting_action", steps: records },
+                run,
+                owner,
+              ))
+            )
+              return currentOutcome(input.tenantId, input.runId);
             return currentOutcome(input.tenantId, input.runId);
           }
           const allowed =
