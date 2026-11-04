@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { createRunnerExecutor } from "../../runner/src/execute";
 import { createActionJournal } from "../../runner/src/journal";
+import { createRootRegistry } from "../../runner/src/roots";
 import { createDatabase } from "../src/db/client";
 import {
   devicePairCodes,
@@ -550,7 +551,11 @@ test("real runner sockets stop after removal, credential rotation, ban, or owner
  * one runs on the machine exactly once.
  */
 async function governedRunner(
-  options: { hostCommandsCap?: "allow" | "ask" | "never" } = {},
+  options: {
+    hostCommandsCap?: "allow" | "ask" | "never";
+    /** Story RES2: the coworker works in a writable project folder on the machine. */
+    project?: boolean;
+  } = {},
 ) {
   const { root, target } = await fixture();
   const botId = `${suite}-bot-${targets.length}`;
@@ -574,7 +579,13 @@ async function governedRunner(
     });
   }
   const service = createApprovalService(store);
-  const execute = createRunnerExecutor(root);
+  const projectFolder = join(root, "project");
+  await mkdir(projectFolder, { recursive: true });
+  const registry = options.project
+    ? createRootRegistry({ dataDir: join(root, "runner-data") })
+    : undefined;
+  const projectRoot = registry?.add("项目", projectFolder, "write");
+  const execute = createRunnerExecutor(root, undefined, registry);
   const journalPath = join(root, "runner-actions.sqlite");
   const journal = createActionJournal(journalPath);
   const channel = createDeviceChannel();
@@ -603,16 +614,32 @@ async function governedRunner(
     },
     transport: createRunnerTransport(channel),
     resolveDevice: async () => target,
+    ...(projectRoot
+      ? {
+          projects: {
+            resolve: async () => ({
+              ok: true as const,
+              projectId: `${botId}-project`,
+              rootRef: projectRoot.ref,
+              writable: true,
+            }),
+          },
+        }
+      : {}),
     auditStore: { insert: async () => undefined },
     policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
     approvalGate: service.gate,
   });
-  const context = (command: string): ApprovalContinuation => ({
+  const context = (
+    command: string,
+    toolName = "computer_run_command",
+    args: Record<string, unknown> = { command },
+  ): ApprovalContinuation => ({
     runId: `${botId}-run`,
     threadId: `${botId}-thread`,
     toolCallId: `${botId}-call-${command}`,
-    toolName: "computer_run_command",
-    args: { command },
+    toolName,
+    args,
     messages: [],
     state: {},
     context: [],
@@ -629,6 +656,20 @@ async function governedRunner(
             { command },
           ),
         ),
+      ),
+    );
+  const write = (path: string, contents: string) =>
+    runAsTenant(target.tenantId, () =>
+      withApprovalContext(
+        context(`write ${path}`, "computer_write_file", { path, contents }),
+        () =>
+          computerActionIdentity.run(`${botId}-call-write ${path}`, () =>
+            gateway.writeFile(
+              botId,
+              { id: target.tenantId, userId: target.tenantId },
+              { path, contents },
+            ),
+          ),
       ),
     );
   const journalRows = () => {
@@ -648,6 +689,8 @@ async function governedRunner(
     store,
     service,
     run,
+    write,
+    projectFolder,
     frames: () => frames,
     journalRows,
     close: () => {
@@ -752,6 +795,64 @@ test("SEC1: with the cap at ask, a harmless runner command waits for approval an
       runner.store.list(runner.target.tenantId),
     );
     expect(request?.action.policy?.source).toBe("host_command_cap");
+  } finally {
+    runner.close();
+  }
+});
+
+test("RES2: a dangerous command in the coworker's project folder waits for approval with no frame sent, then runs there exactly once", async () => {
+  const runner = await governedRunner({ project: true });
+  try {
+    await mkdir(join(runner.projectFolder, "build"));
+    await mkdir(join(runner.root, "build"));
+    const held = await runner.run("rm -rf build").catch((error: unknown) => error);
+    expect(held).toBeInstanceOf(HeadlessToolSuspension);
+    expect(runner.frames()).toBe(0);
+    expect(runner.journalRows()).toBe(0);
+    const [request] = await runAsTenant(runner.target.tenantId, () =>
+      runner.store.list(runner.target.tenantId),
+    );
+    expect(request?.action.policy).toMatchObject({
+      behaviour: "ask",
+      source: "dangerous_command",
+    });
+    await runAsTenant(runner.target.tenantId, () =>
+      runner.service.decide(
+        runner.target.tenantId,
+        request?.id as string,
+        "allow_once",
+      ),
+    );
+    await expect(runner.run("rm -rf build")).resolves.toMatchObject({
+      exitCode: 0,
+    });
+    expect(runner.frames()).toBe(1);
+    // It ran in the project's folder, not in the workspace.
+    await expect(stat(join(runner.projectFolder, "build"))).rejects.toThrow();
+    expect((await stat(join(runner.root, "build"))).isDirectory()).toBeTrue();
+  } finally {
+    runner.close();
+  }
+});
+
+test("RES2: writing a file that may hold secrets in the project folder asks first and sends nothing", async () => {
+  const runner = await governedRunner({ project: true });
+  try {
+    const held = await runner
+      .write(".env", "TOKEN=x\n")
+      .catch((error: unknown) => error);
+    expect(held).toBeInstanceOf(HeadlessToolSuspension);
+    expect(runner.frames()).toBe(0);
+    const [request] = await runAsTenant(runner.target.tenantId, () =>
+      runner.store.list(runner.target.tenantId),
+    );
+    expect(request?.action.policy?.source).toBe("sensitive_path");
+    await expect(stat(join(runner.projectFolder, ".env"))).rejects.toThrow();
+    // An ordinary file in the project is written there without asking.
+    await expect(runner.write("README.md", "# 项目\n")).resolves.toBeTruthy();
+    expect(await readFile(join(runner.projectFolder, "README.md"), "utf8")).toBe(
+      "# 项目\n",
+    );
   } finally {
     runner.close();
   }

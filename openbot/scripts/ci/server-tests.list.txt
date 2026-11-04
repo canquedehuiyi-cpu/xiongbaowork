@@ -284,6 +284,7 @@ tests/private-share-group.test.ts
 tests/proactive-store.integration.test.ts
 tests/proactive.test.ts
 tests/production-loader-boundary.test.ts
+tests/project-context.integration.test.ts
 tests/provider-error-run-error.test.ts
 tests/provider-oauth-lock-helper.test.ts
 tests/provider-oauth.test.ts

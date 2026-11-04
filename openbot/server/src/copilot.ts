@@ -67,6 +67,7 @@ import {
   TenantContextError,
 } from "./tenant/context";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
+import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 
 /**
@@ -105,6 +106,11 @@ type RegisteredBuiltInAgent = {
    * the row, so it is always the asker's and always current. Absent or empty sends no section.
    */
   avatarSources?: readonly AvatarSourceForPrompt[];
+  /**
+   * The project this coworker works in on the asker's machine (story RES2), set per build by
+   * {@link buildAgents} from {@link LoadCurrentProject}. Absent sends no section.
+   */
+  currentProject?: ProjectForPrompt | null;
 };
 
 type RegisteredRemoteAgentFacts = {
@@ -417,6 +423,15 @@ export type LoadAvatarSources = (
 ) => Promise<readonly AvatarSourceForPrompt[]>;
 
 /**
+ * The current project of the Bot being built on the machine its actions go to (story RES2), or null.
+ * A closure bound to one person like {@link LoadAvatarSources}, and read on every build, so a project
+ * picked or changed applies to the next run.
+ */
+export type LoadCurrentProject = (
+  agentId: string,
+) => Promise<ProjectForPrompt | null>;
+
+/**
  * What the person told their 分身 about where their material is (story F1, stage 1).
  *
  * BUILT-IN 分身 ONLY, AND AT RUN TIME. The 分身 is `built_in`, so neither its role description nor a
@@ -544,6 +559,7 @@ export function builtInAgentConfiguration(
 
   const standing = standingInstructionsGuidance(standingInstructions);
   const sources = avatarSourcesGuidance(agent.avatarSources);
+  const project = projectGuidance(agent.currentProject);
   const persona = personaGuidance(agent.persona);
   const bible = bibleGuidance(agent.bible);
 
@@ -570,6 +586,8 @@ export function builtInAgentConfiguration(
       ...(standing ? [standing] : []),
       // The 分身's declared sources, beside the person's instructions: both are about who it works for.
       ...(sources ? [sources] : []),
+      // Where its files and commands run (RES2): the person's choice, so beside who it works for.
+      ...(project ? [project] : []),
       /*
        * Unconditional, unlike the two below it.
        *
@@ -721,6 +739,8 @@ export async function buildAgents(
    * every deployment did before sources existed. Appended last, positionally.
    */
   loadAvatarSources?: LoadAvatarSources,
+  /** The current project of each built-in Bot (story RES2). Appended last; absent tells none. */
+  loadCurrentProject?: LoadCurrentProject,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -776,10 +796,28 @@ export async function buildAgents(
             });
           }
         }
+        let currentProject: ProjectForPrompt | null = null;
+        if (agent.type === "built_in" && loadCurrentProject) {
+          try {
+            currentProject = await loadCurrentProject(agent.id);
+          } catch {
+            // The section is lost for one run; the gateway still decides every action by the binding.
+            console.error({
+              error: "current_project_read_failed",
+              context: { operation: "loadCurrentProject" },
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
         const built = await buildAgent(
           // Carried on the Bot rather than as one more positional argument, like its persona.
-          agent.type === "built_in" && avatarSources.length > 0
-            ? { ...agent, avatarSources }
+          agent.type === "built_in" &&
+            (avatarSources.length > 0 || currentProject)
+            ? {
+                ...agent,
+                ...(avatarSources.length > 0 ? { avatarSources } : {}),
+                ...(currentProject ? { currentProject } : {}),
+              }
             : agent,
           model,
           apiKey,
@@ -2095,6 +2133,8 @@ export async function resolveRuntimeAgents(
   resolveAgentModel?: AgentModelResolver,
   /** The asker's 分身's information sources. Appended last; see {@link buildAgents}. */
   loadAvatarSources?: LoadAvatarSources,
+  /** Each built-in Bot's current project (story RES2). Appended last; see {@link buildAgents}. */
+  loadCurrentProject?: LoadCurrentProject,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -2132,6 +2172,7 @@ export async function resolveRuntimeAgents(
     loadPersonalMemory,
     resolveAgentModel,
     loadAvatarSources,
+    loadCurrentProject,
   );
 }
 
@@ -2277,6 +2318,8 @@ export function createRequestAgents(
    * actor through `identifyActor`, like the instructions: whose 分身 it is is the session's to say.
    */
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources,
+  /** Each Bot's current project (story RES2), per actor like the sources. Appended last. */
+  loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject,
 ) {
   return async ({ request }: { request: Request }) => {
     const actor = await identifyActor(request);
@@ -2303,6 +2346,7 @@ export function createRequestAgents(
       loadPersonalMemoryForActor?.(actor.id),
       resolveAgentModel,
       loadAvatarSourcesForActor?.(actor.id),
+      loadCurrentProjectForActor?.(actor.id),
     );
   };
 }
@@ -2438,6 +2482,8 @@ export function mountCopilotRuntime(
    * below for the reason `loadInstructionsForActor` is. Appended last. Absent means none is told.
    */
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources,
+  /** Each Bot's current project (story RES2), on both paths below. Appended last. */
+  loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject,
 ): MountedCopilotRuntime {
   /*
    * The roster, read in the frame of the person it is for, wherever the Bot is built. The request
@@ -2509,6 +2555,7 @@ export function mountCopilotRuntime(
       loadPersonalMemoryForActor?.(actor.id),
       resolveAgentModel,
       loadAvatarSourcesForActor?.(actor.id),
+      loadCurrentProjectForActor?.(actor.id),
     );
     return agents[input.botId] ?? null;
   };
@@ -2584,6 +2631,7 @@ export function mountCopilotRuntime(
       loadPersonalMemoryForActor,
       resolveAgentModel,
       loadAvatarSourcesForActor,
+      loadCurrentProjectForActor,
     ) as never,
   };
 
