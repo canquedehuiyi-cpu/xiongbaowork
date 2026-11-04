@@ -254,6 +254,7 @@ import { createOnboardingStore } from "./people/onboarding";
 import { createPeopleStore } from "./people/store";
 import { createPersonaRoutes } from "./personas/routes";
 import { createPersonaTemplateStore } from "./personas/store";
+import { createRoleGenerator } from "./roles/generator";
 import { createRoleTemplateRoutes } from "./roles/routes";
 import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import { createPipelineRoutes } from "./pipeline/routes";
@@ -4300,6 +4301,15 @@ await startupLifecycle.run(async (startup) => {
         database,
         profiles: agentProfileStore,
         official: () => officialRoleTemplates,
+        // Smart generation: the person's own model library only (D7), like WakerFlow planning.
+        models: createFlowModelResolver({
+          database,
+          encryptionKey: config.keyEncryptionKey,
+          allowPlatformModel: false,
+          outbound: modelOutbound,
+        }),
+        generator: createRoleGenerator(),
+        quota,
       }),
       config.singleUser
         ? createDevRequireUser()
