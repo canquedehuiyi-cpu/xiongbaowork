@@ -493,3 +493,62 @@ jobs:
           name: device-shell-${{ matrix.os }}-logs
           path: ${{ runner.temp }}/device-*.log
           if-no-files-found: ignore
+
+  # F2 stage 1: an UNSIGNED Linux installer of the device app, uploaded as an artifact for manual
+  # install tests (the clean-VM checks are manual, gate 7). No signing, notarization, updater or
+  # release here. The runner sidecar is compiled with the stage 0 flags; the Tauri CLI is the one
+  # desktop/bun.lock pins, installed from that frozen lockfile.
+  device-bundle-linux:
+    name: device app unsigned deb (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: openbot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: openbot/desktop-device/src-tauri
+          key: device-bundle
+      - name: Linux libraries Tauri builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      # The runner's own dependencies (playwright-core, agent-computer's yaml) for the compile.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Compile the runner sidecar
+        run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Bundle the unsigned deb
+        working-directory: openbot/desktop-device
+        run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
+      - name: Check the package installs and carries the runner
+        working-directory: openbot/desktop-device/src-tauri/target/release/bundle/deb
+        run: |
+          deb=$(ls *.deb)
+          dpkg-deb -f "$deb" Package Version Depends
+          test "$(dpkg-deb -f "$deb" Package)" = xiongbao-device
+          # Listed once: grep -q on a live pipe kills dpkg-deb with SIGPIPE, and pipefail fails the step.
+          contents=$(dpkg-deb -c "$deb")
+          grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
+          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          sudo dpkg --dry-run -i "$deb"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xiongbao-device-unsigned-deb
+          path: openbot/desktop-device/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
