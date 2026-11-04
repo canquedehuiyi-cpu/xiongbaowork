@@ -11,6 +11,7 @@ import {
   pluginGrants,
   subscriptions,
 } from "../db/schema";
+import { roleTemplates } from "../db/schema/roles";
 import { teamBotPublications } from "../db/schema/team-bots";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { asPlatform, currentTenant, isPersonTenant } from "../tenant/context";
@@ -34,6 +35,7 @@ import { canManageAgent } from "./profile-policy";
 import type {
   AgentActor,
   AgentProfile,
+  AgentRoleContent,
   CreateAgentInput,
   Persona,
 } from "./profile-types";
@@ -76,6 +78,13 @@ export type AgentProfileStore = {
        * different act with different consequences, and this is the creation path.
        */
       systemPrompt?: string;
+      /**
+       * The role template the form started from (ROLE1), recorded as the new coworker's source.
+       * Create-only for the reason `systemPrompt` is: an existing coworker takes a template through
+       * `applyRole`, which shows the person what it replaces. Not recorded on a `built_in` coworker
+       * (D4); the content the form sent is saved either way.
+       */
+      roleTemplate?: { id: string; version: number };
     },
     admit?: (transaction: Transaction) => Promise<void>,
   ): Promise<AgentProfile>;
@@ -111,6 +120,24 @@ export type AgentProfileStore = {
    * the route asking has no person to frame it, and the legacy unframed `system` answer sees neither.
    */
   agentForCallbackToken(hash: string): Promise<CallbackTokenHolder | null>;
+};
+
+/**
+ * The store with the one write role templates need (ROLE1). A separate type so the many stand-in
+ * stores tests build for `AgentProfileStore` need not grow a method they never call.
+ */
+export type AgentProfileStoreWithRoles = AgentProfileStore & {
+  /**
+   * Replace a coworker's identity, persona and Bible with a role template's, and record the template
+   * and version as its source (ROLE1 §3.3). Name, avatar, model, skills and everything else stay.
+   * Refused for a `built_in` coworker, the 分身 included (D4), and for one the actor may not manage.
+   */
+  applyRole(
+    actor: AgentActor,
+    id: string,
+    role: AgentRoleContent,
+    source: { id: string; version: number },
+  ): Promise<AgentProfile>;
 };
 
 export class AgentNotFoundError extends Error {
@@ -193,6 +220,24 @@ export class OwnerlessBotPrivateError extends Error {
   }
 }
 
+/** A role template offered to a `built_in` coworker, the 分身 included (ROLE1, D4). */
+export class RoleTemplateNotApplicableError extends Error {
+  constructor() {
+    super(
+      "内置员工（包括我的分身）不能套用角色模板：模板会替换它运行所用的系统提示词。手册仍可手工编辑。",
+    );
+    this.name = "RoleTemplateNotApplicableError";
+  }
+}
+
+/** A role template named as a new coworker's source that is not the creator's at that version. */
+export class RoleTemplateSourceError extends Error {
+  constructor() {
+    super("所选角色模板不存在或已被删除，请重新选择。");
+    this.name = "RoleTemplateSourceError";
+  }
+}
+
 export class ModelBindingNotApplicableError extends Error {
   constructor(id: string) {
     super(`Agent ${id} runs on another server, so its model is chosen there.`);
@@ -215,6 +260,11 @@ const joinedProjection = {
   modelRef: agentProfiles.modelRef,
   platformModelRef: agentProfiles.platformModelRef,
   persona: agentProfiles.persona,
+  bible: agentProfiles.bible,
+  roleTemplateId: agentProfiles.roleTemplateId,
+  roleTemplateVersion: agentProfiles.roleTemplateVersion,
+  // Only to answer whether a role template may be applied (D4); the type itself is not published.
+  type: agents.type,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
@@ -273,6 +323,12 @@ function mapProfile(
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
     persona: (row.persona as Persona | null) ?? null,
+    bible: row.bible ?? null,
+    roleTemplate:
+      row.roleTemplateId !== null && row.roleTemplateVersion !== null
+        ? { id: row.roleTemplateId, version: row.roleTemplateVersion }
+        : null,
+    acceptsRoleTemplate: row.type !== "built_in",
     // Whether a key is set, never which. The form needs to show "a key is set" so a person does not
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
     hasAuth: authFromConfiguration(row.configuration) !== null,
@@ -428,6 +484,30 @@ async function lockProfileReadRow(executor: DatabaseExecutor, id: string) {
     .from(agentProfiles)
     .where(eq(agentProfiles.agentId, id))
     .for("share");
+}
+
+/**
+ * The source columns for a role template the caller holds at that version, or a refusal.
+ *
+ * Read in the caller's frame on the caller's transaction: `role_templates` admits only its owner's
+ * own frame, so another person's template id reads as absent, the way a foreign model id does.
+ */
+async function roleTemplateSource(
+  executor: DatabaseExecutor,
+  source: { id: string; version: number },
+): Promise<{ roleTemplateId: string; roleTemplateVersion: number }> {
+  if (!Number.isInteger(source.version) || source.version < 1) {
+    throw new RoleTemplateSourceError();
+  }
+  const [template] = await executor
+    .select({ version: roleTemplates.version })
+    .from(roleTemplates)
+    .where(eq(roleTemplates.id, source.id))
+    .limit(1);
+  if (!template || template.version < source.version) {
+    throw new RoleTemplateSourceError();
+  }
+  return { roleTemplateId: source.id, roleTemplateVersion: source.version };
 }
 
 function requireManageable(actor: AgentActor, profile: AgentProfile) {
@@ -724,7 +804,7 @@ export function createAgentProfileStore(
    * agent with a key then simply cannot be created, which is better than storing it in the clear.
    */
   vault?: { store: CredentialStore; encryptionKey: string },
-): AgentProfileStore {
+): AgentProfileStoreWithRoles {
   const managedConfiguration = managedAgentAgUiUrl
     ? { endpoint: managedAgentAgUiUrl.toString() }
     : undefined;
@@ -820,6 +900,10 @@ export function createAgentProfileStore(
           avatarSeed: input.avatarSeed ?? id,
           visibility: input.visibility,
           persona: input.persona ?? null,
+          bible: input.bible ?? null,
+          ...(input.roleTemplate && endpoint
+            ? await roleTemplateSource(transaction, input.roleTemplate)
+            : {}),
         });
         // Both rows took this frame's stamp; a public Bot then moves to `team` in the same transaction.
         await settleStamp(
@@ -892,9 +976,15 @@ export function createAgentProfileStore(
            * `role_description`, cannot reach this code at all: `requireManageable` above throws
            * `ProtectedAgentError` for anything the package owns.
            */
+          /*
+           * And only when the role description actually changed (ROLE1). A save that leaves it as it
+           * was — the Bible written by hand, say — has nothing to move, and the 分身, whose
+           * systemPrompt was never its role description, keeps the prompt it runs on.
+           */
           const configuration = {
             ...previous,
-            ...(row?.type === "built_in"
+            ...(row?.type === "built_in" &&
+            input.roleDescription !== profile.roleDescription
               ? { systemPrompt: input.roleDescription }
               : {}),
             ...(input.endpoint ? { endpoint: input.endpoint } : {}),
@@ -1002,6 +1092,8 @@ export function createAgentProfileStore(
               ...(input.persona === undefined
                 ? {}
                 : { persona: input.persona }),
+              // The same three-way: absent leaves it, null clears it. Never copied into systemPrompt.
+              ...(input.bible === undefined ? {} : { bible: input.bible }),
               updatedAt,
             })
             .where(eq(agentProfiles.agentId, id))
@@ -1070,6 +1162,15 @@ export function createAgentProfileStore(
           visibility: "private",
           // The copy is meant to behave like the original, which is the persona as much as the role.
           persona: source.persona,
+          // And its handbook. Where those came from only for the template's own owner: somebody
+          // else's template is not one the copy's owner can ever read or update from.
+          bible: source.bible ?? null,
+          ...(source.roleTemplate && source.ownerUserId === actor.id
+            ? {
+                roleTemplateId: source.roleTemplate.id,
+                roleTemplateVersion: source.roleTemplate.version,
+              }
+            : {}),
         });
 
         const duplicate = await findAccessibleProfile(
@@ -1080,6 +1181,41 @@ export function createAgentProfileStore(
         if (!duplicate) throw new AgentNotFoundError(duplicateId);
         return duplicate;
       });
+    },
+
+    applyRole(actor, id, role, source) {
+      return database.transaction(
+        async (transaction) => {
+          await lockProfileMutationRows(transaction, id);
+          const profile = await findAccessibleProfile(transaction, actor, id);
+          if (!profile) throw new AgentNotFoundError(id);
+          requireManageable(actor, profile);
+          // D4: a `built_in` coworker runs on its systemPrompt, which a role description would replace.
+          if (!profile.acceptsRoleTemplate) {
+            throw new RoleTemplateNotApplicableError();
+          }
+          const columns = await roleTemplateSource(transaction, source);
+          exactlyOne(
+            await transaction
+              .update(agentProfiles)
+              .set({
+                title: role.title,
+                roleDescription: role.roleDescription,
+                persona: role.persona,
+                bible: role.bible,
+                ...columns,
+                updatedAt: new Date(),
+              })
+              .where(eq(agentProfiles.agentId, id))
+              .returning({ agentId: agentProfiles.agentId }),
+            id,
+          );
+          const updated = await findAccessibleProfile(transaction, actor, id);
+          if (!updated) throw new AgentNotFoundError(id);
+          return updated;
+        },
+        { isolationLevel: "read committed" },
+      );
     },
 
     setHidden(actor, id, hidden) {

@@ -302,6 +302,17 @@ describe("the sources routes", () => {
       status: 400,
       body: { error: "请给这个信息来源起个名字。" },
     });
+    // A kind that does not exist yet is refused; a local folder needs a machine's folder (stage 2,
+    // tests/avatar-local-folder.test.ts), so one without is refused as well.
+    expect(
+      await call(personA, "POST", "/", {
+        kind: "notebook",
+        label: "工作资料",
+      }),
+    ).toEqual({
+      status: 400,
+      body: { error: "目前只支持文字声明和本地文件夹这两种信息来源。" },
+    });
     expect(
       await call(personA, "POST", "/", {
         kind: "local_folder",
@@ -309,7 +320,7 @@ describe("the sources routes", () => {
       }),
     ).toEqual({
       status: 400,
-      body: { error: "目前只支持文字声明这一种信息来源。" },
+      body: { error: "请选择一台设备上的本地文件夹。" },
     });
     expect((await stateOf(personA)).sources).toHaveLength(2);
 

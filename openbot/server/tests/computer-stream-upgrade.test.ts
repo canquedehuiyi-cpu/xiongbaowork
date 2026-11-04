@@ -10,6 +10,7 @@ import {
   handleComputerStreamUpgrade,
 } from "../src/computer/stream-upgrade";
 import { createDatabase } from "../src/db/client";
+import { runnerAddress } from "../src/devices/channel";
 import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
 import { createDemonstrationRecorder } from "../src/demonstrations/recording";
@@ -205,4 +206,59 @@ test("a step of the owner's recording that arrives on the socket is saved in the
   } finally {
     await runAsTenant(owner, () => demonstrations.stop(owner, recording.id));
   }
+});
+
+/*
+ * F2 stage 2: a coworker whose computer is a tenant's own machine. Its screen is relayed from the
+ * runner's socket, so the upgrade dials nothing and carries only who is watching which device.
+ */
+function deviceDeps(deviceTenant: string) {
+  return {
+    ...deps(),
+    locate: async () =>
+      runnerAddress({ tenantId: deviceTenant, deviceId: "laptop-1" }),
+  };
+}
+
+test("the owner of a device-backed Bot is admitted to that device's screen, and nothing is dialled", async () => {
+  const server = fakeServer();
+  const answer = await handleComputerStreamUpgrade(
+    deviceDeps(owner),
+    streamRequest(owner),
+    server,
+  );
+  expect(answer).toBeUndefined();
+  expect(server.upgraded as unknown[]).toEqual([
+    {
+      screen: {
+        viewerTenant: owner,
+        userId: owner,
+        target: { tenantId: owner, deviceId: "laptop-1" },
+        botId: bot,
+      },
+    },
+  ]);
+});
+
+test("another tenant asking for the same device's screen is refused", async () => {
+  const server = fakeServer();
+  const answer = await handleComputerStreamUpgrade(
+    deviceDeps(owner),
+    streamRequest(stranger),
+    server,
+  );
+  expect(answer?.status).toBe(404);
+  expect(server.upgraded).toEqual([]);
+});
+
+test("a visible Bot located on another tenant's device is refused, not relayed", async () => {
+  const server = fakeServer();
+  const answer = await handleComputerStreamUpgrade(
+    deviceDeps(stranger),
+    streamRequest(owner),
+    server,
+  );
+  expect(answer?.status).toBe(404);
+  expect(await answer?.text()).toBe("There is no such Bot.");
+  expect(server.upgraded).toEqual([]);
 });

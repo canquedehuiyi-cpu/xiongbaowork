@@ -10,6 +10,7 @@ import {
   tasks,
   wakerFlowRequests,
   wakerFlows,
+  wakerGroupMembers,
   wakerGroups,
 } from "../src/db/schema";
 import {
@@ -533,4 +534,75 @@ test("a Flow with a run in flight cannot be deleted, and can be once the run is 
   }
   expect(await f.store.remove(f.tenantId, f.flow.id)).toBeTrue();
   expect(f.calls).toHaveLength(1);
+});
+
+test("several saved Flows in one workspace all run, and a plain crew's template beside them still runs", async () => {
+  const f = await fixture();
+  // Two more Flows in the same workspace, each compiled into its own crew and template.
+  const others = [];
+  for (const name of ["周报", "月报"]) {
+    const created = await f.store.create(f.tenantId, { idea: name });
+    others.push(
+      await f.store.save(f.tenantId, f.tenantId, created.id, {
+        revision: 0,
+        plan: { ...f.plan, name },
+      }),
+    );
+  }
+  for (const flow of [f.flow, ...others]) {
+    const request = await f.store.start(f.tenantId, f.tenantId, flow.id, {
+      requestId: randomUUID(),
+      revision: flow.revision,
+      inputs: { notes: `${flow.name}-内容` },
+    });
+    expect({ flow: flow.name, status: request.status }).toEqual({
+      flow: flow.name,
+      status: "completed",
+    });
+  }
+  await Promise.all(f.drives);
+
+  // A crew a person arranged, in the same workspace: listed, and runnable through the pipeline.
+  const [crew] = await runAsTenant(f.tenantId, () =>
+    database
+      .insert(wakerGroups)
+      .values({ tenantId: f.tenantId, name: `crew-${randomUUID()}` })
+      .returning({ id: wakerGroups.id }),
+  );
+  if (!crew) throw new Error("No crew.");
+  await runAsTenant(f.tenantId, () =>
+    database
+      .insert(wakerGroupMembers)
+      .values({ groupId: crew.id, agentId: f.member, position: "0" }),
+  );
+  const templateId = await f.pipeline.createTemplate({
+    tenantId: f.tenantId,
+    groupId: crew.id,
+    name: "普通流水线",
+    steps: [{ id: "only", agentId: f.member, instruction: "做一件事" }],
+  });
+  const listed = (await f.pipeline.listTemplates({ tenantId: f.tenantId })).map(
+    (template) => template.id,
+  );
+  expect(listed).toContain(templateId);
+  for (const flow of [f.flow, ...others])
+    expect(listed).not.toContain(flow.templateId);
+  const { runId } = await f.pipeline.start({
+    tenantId: f.tenantId,
+    templateId,
+    task: "普通任务",
+    initiatedBy: f.tenantId,
+  });
+  expect(
+    (await f.pipeline.advance({ tenantId: f.tenantId, runId })).status,
+  ).toBe("done");
+  // A Flow's own template is still not the generic API's to start.
+  await expect(
+    f.pipeline.start({
+      tenantId: f.tenantId,
+      templateId: f.flow.templateId ?? "",
+      task: "绕过 Flow",
+      initiatedBy: f.tenantId,
+    }),
+  ).rejects.toThrow("这个工作区里没有这条模板。");
 });

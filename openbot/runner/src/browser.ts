@@ -2,13 +2,19 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
-import type { BrowserContext, Page, chromium } from "playwright-core";
+import type {
+  BrowserContext,
+  CDPSession,
+  Page,
+  chromium,
+} from "playwright-core";
 import {
   cutAtCodeUnits,
   parseAriaSnapshot,
   type SnapshotElement,
 } from "../../agent-computer/src/aria-snapshot";
 import { chooseLivePage } from "../../agent-computer/src/live-page";
+import type { ScreencastClient } from "../../agent-computer/src/screencast-session";
 import { checkNavigationTarget } from "../../server/src/computer/target";
 
 /**
@@ -190,9 +196,28 @@ export type BrowserRequest = {
   signal?: AbortSignal;
 };
 
+/**
+ * A coworker's page as the live screen sees it: something to cast, and whether it is still there.
+ *
+ * Its own CDP session per cast, opened by the screen and detached by it, so watching never shares a
+ * session with the actions the gateway sends.
+ */
+export type LivePage = {
+  isClosed(): boolean;
+  screencastClient(): Promise<ScreencastClient>;
+};
+
 export type RunnerBrowser = {
   act: (request: BrowserRequest) => Promise<unknown>;
   close: () => Promise<void>;
+  /**
+   * The page this coworker's browser is showing right now, or nothing when it is not running.
+   *
+   * Never launches. A person opening the live screen is asking to watch what the coworker is doing,
+   * and starting a browser on somebody's laptop because a viewer connected would be the screen
+   * changing the machine it exists to show.
+   */
+  livePage: (identity: BrowserIdentity) => LivePage | undefined;
 };
 
 /** The parts of a page this module drives. Enough for a test to stand in for a browser. */
@@ -223,6 +248,7 @@ type OwnedPage = {
   pressKey(key: string): Promise<void>;
   insertText(text: string): Promise<void>;
   wheel(deltaY: number): Promise<void>;
+  screencastClient(): Promise<ScreencastClient>;
 };
 
 type OwnedContext = {
@@ -271,6 +297,21 @@ function pageText(): string {
     node.remove();
   }
   return clone.innerText ?? "";
+}
+
+/**
+ * `playwright-core`'s CDP session, seen as the structural one the shared screencast is written for.
+ *
+ * The same adapter `agent-computer/src/screencast.ts` has for `playwright`; it cannot be imported
+ * from there because that file names a package this process does not have.
+ */
+function screencastClientOf(session: CDPSession): ScreencastClient {
+  type Method = Parameters<CDPSession["send"]>[0];
+  return {
+    on: (event, listener) => session.on(event, listener),
+    send: (method, params) => session.send(method as Method, params as never),
+    detach: () => session.detach(),
+  };
 }
 
 export function ownedContextOf(context: BrowserContext): OwnedContext {
@@ -322,6 +363,8 @@ export function ownedContextOf(context: BrowserContext): OwnedContext {
       pressKey: (key) => page.keyboard.press(key),
       insertText: (text) => page.keyboard.insertText(text),
       wheel: (deltaY) => page.mouse.wheel(0, deltaY),
+      screencastClient: async () =>
+        screencastClientOf(await page.context().newCDPSession(page)),
     };
   };
 
@@ -1228,8 +1271,16 @@ export function createRunnerBrowser(
     return tail;
   }
 
+  function livePage(identity: BrowserIdentity): LivePage | undefined {
+    // `states.get`, not `stateOf`: a screen asking after a coworker this process never drove must not
+    // open the counter store, let alone a browser.
+    const context = states.get(profileKeyOf(identity))?.context;
+    return context ? chooseLivePage(context.pages()) : undefined;
+  }
+
   return {
     act,
+    livePage,
     async close(): Promise<void> {
       await Promise.all([...states.values()].map((state) => retire(state)));
       counters?.close();

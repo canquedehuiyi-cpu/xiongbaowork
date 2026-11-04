@@ -9,6 +9,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   pgEnum,
   pgPolicy,
   pgTable,
@@ -92,6 +93,19 @@ export const agentProfiles = pgTable(
      * other coworker is configured when it is created, and leaves this null.
      */
     configuredAt: timestamp("configured_at", { withTimezone: true }),
+    /**
+     * The coworker's 工作手册 (story ROLE1, the "Bible"): long-form background, procedures or a glossary
+     * its owner wrote, sent in full after the persona. At most 8000 characters; null means none.
+     */
+    bible: text("bible"),
+    /**
+     * The role template this coworker's identity, persona and Bible were last taken from, and that
+     * template's version at the time (story ROLE1). Both null or both set. No foreign
+     * key: `role_templates` is the owner's alone under row security while this row may be `team`'s,
+     * so a deleted template clears these in the application instead.
+     */
+    roleTemplateId: uuid("role_template_id"),
+    roleTemplateVersion: integer("role_template_version"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -104,6 +118,18 @@ export const agentProfiles = pgTable(
     check(
       "agent_profiles_single_model_binding",
       sql`${table.modelRef} IS NULL OR ${table.platformModelRef} IS NULL`,
+    ),
+    check(
+      "agent_profiles_bible_length",
+      sql`${table.bible} IS NULL OR char_length(${table.bible}) <= 8000`,
+    ),
+    check(
+      "agent_profiles_role_template_pair",
+      sql`(${table.roleTemplateId} IS NULL) = (${table.roleTemplateVersion} IS NULL)`,
+    ),
+    check(
+      "agent_profiles_role_template_version",
+      sql`${table.roleTemplateVersion} IS NULL OR ${table.roleTemplateVersion} > 0`,
     ),
   ],
 );

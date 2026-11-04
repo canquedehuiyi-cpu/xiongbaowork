@@ -92,6 +92,11 @@ type Props = {
   driving: boolean;
   /** Called with a human-readable reason when the stream cannot be established. */
   onProblem?: (problem: string | null) => void;
+  /**
+   * What the screen is doing when it is not a picture. A coworker on the tenant's own machine can be
+   * watched before its browser is open; the screen says "idle" then, and starts by itself.
+   */
+  onStatus?: (state: "idle" | "casting") => void;
   retryKey?: number;
 };
 
@@ -105,6 +110,7 @@ export function LiveScreen({
   computerId,
   driving,
   onProblem,
+  onStatus,
   retryKey = 0,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -119,6 +125,9 @@ export function LiveScreen({
   const latestFrameId = useRef(0);
   const [connected, setConnected] = useState(false);
   const inputReady = useRef(false);
+  /** Read through a ref, so a caller's new callback does not reopen the socket. */
+  const statusRef = useRef(onStatus);
+  statusRef.current = onStatus;
   const previouslyDriving = useRef(driving);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: explicit Retry restarts this connection.
@@ -197,10 +206,16 @@ export function LiveScreen({
         width?: number;
         height?: number;
         error?: string;
+        state?: unknown;
       };
       if (typeof message.type !== "string") return;
       if (message.type === "error") {
         onProblem?.(message.error ?? "屏幕没能显示出来。");
+        return;
+      }
+      if (message.type === "status") {
+        if (message.state === "idle" || message.state === "casting")
+          statusRef.current?.(message.state);
         return;
       }
       if (message.type !== "frame" || !message.data) return;

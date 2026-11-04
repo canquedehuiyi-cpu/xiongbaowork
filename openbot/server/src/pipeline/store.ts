@@ -190,9 +190,15 @@ function isUuid(value: string) {
  * pipeline API must not list them, add steps to them, or start them behind the Flow's back.
  */
 const owningFlow = () =>
+  /*
+   * Spelled out, not interpolated: used as a select field, drizzle writes a column without its table,
+   * which turned this into `"group_id" = "group_id"` inside the subquery (the Flow's own column on both
+   * sides), so any Flow of the workspace "owned" every template, a plain crew's template could not be
+   * started, and of two Flows only one could run.
+   */
   sql<
     string | null
-  >`(select ${wakerFlows.id} from ${wakerFlows} where ${wakerFlows.groupId} = ${groupTaskTemplates.groupId} limit 1)`;
+  >`(select owned_flow.id from ${wakerFlows} as owned_flow where owned_flow.group_id = "group_task_templates"."group_id" limit 1)`;
 
 type RunRow = {
   id: string;
