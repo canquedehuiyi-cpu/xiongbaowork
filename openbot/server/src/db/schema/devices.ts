@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   pgTable,
   text,
@@ -6,6 +8,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { jsonb } from "./json";
 import { tenantId } from "./tenant";
 
 const createdAt = () =>
@@ -52,6 +55,13 @@ export const registeredDevices = pgTable(
      * restart or lost packet is needed for that to become true.
      */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /**
+     * The read-only folders this machine offers, as its last heartbeat reported them (story F1, stage
+     * 2, migration 0132): an opaque reference the runner made and the name its owner chose. Never a
+     * path; that stays on the machine. An older runner reports nothing and this stays empty.
+     */
+    // This module's `jsonb`, which stores the array as an array (see json.ts), not as a string.
+    roots: jsonb("roots").$type<DeviceRoot[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -61,8 +71,15 @@ export const registeredDevices = pgTable(
       table.deviceId,
     ),
     index("registered_devices_tenant_idx").on(table.tenantId),
+    check(
+      "registered_devices_roots_shape",
+      sql`jsonb_typeof(${table.roots}) = 'array' AND jsonb_array_length(${table.roots}) <= 50`,
+    ),
   ],
 );
+
+/** One read-only folder a machine offers: its opaque reference and its owner's name for it. */
+export type DeviceRoot = { ref: string; name: string };
 
 /** How long a device may be silent before the screen calls it offline. */
 export const OFFLINE_AFTER_MS = 60_000;

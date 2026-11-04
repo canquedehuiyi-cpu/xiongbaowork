@@ -25,6 +25,10 @@ import {
   recordAuditEvent,
 } from "../audit";
 import { isRunnerAddress, runnerAddress } from "../devices/channel";
+import {
+  DEVICE_HUMAN_HAS_CONTROL,
+  type DeviceTakeovers,
+} from "../devices/takeover";
 import { withUntrustedNotice } from "../untrusted-content";
 import { computerActionIdentity } from "./action-identity";
 import {
@@ -32,6 +36,7 @@ import {
   type ComputerTransport,
   ComputerUnavailableError,
   createComputerTransport,
+  HumanHasControlError,
   StaleSnapshotError,
 } from "./client";
 import { HeadlessToolSuspension } from "./headless-tools";
@@ -94,6 +99,9 @@ import {
   type StoredSnapshot,
 } from "./snapshot-store";
 
+/** The rule a takeover refusal names on its audit row, so an operator can count them apart. */
+export const DEVICE_TAKEOVER_RULE = "device.takeover";
+
 export class ActionRefusedError extends Error {
   /** The rule that refused it, so the surface can show which one and an operator can find it. */
   readonly rule: string | null;
@@ -133,6 +141,31 @@ export type ComputerGatewayOptions = {
   resolveDevice?: (
     botId: string,
   ) => Promise<{ tenantId: string; deviceId: string } | null>;
+  /**
+   * The person's read-only folders on their own machines (story F1, stage 2).
+   *
+   * A file read or listing that names a `root` is carried to the machine that folder is on, whichever
+   * computer this Bot otherwise uses, and only when `resolve` answers one: in practice, only a
+   * person's own 分身, in that person's run, for a folder one of its active sources names. Absent
+   * means no folder can be named here at all, and a call that names one is refused. The transport is
+   * the runner's, even in a deployment whose coworkers use a container.
+   */
+  folders?: {
+    resolve: (
+      botId: string,
+      actorId: string,
+      root: string,
+    ) => Promise<{ tenantId: string; deviceId: string } | null>;
+    transport: ComputerTransport;
+  };
+  /**
+   * Who holds the wheel of a Bot's browser on a tenant's own machine (F2 stage 2).
+   *
+   * Asked for every governed action that resolves to a device: while a person holds it, or has been
+   * asked to, the Bot's action is refused here, before anything is sent to the machine. The handover
+   * calls answer from it too, because a device has no control state of its own to post to.
+   */
+  deviceTakeovers?: DeviceTakeovers;
   approvalGate?: ApprovalGate;
   provider: ComputerProvider;
   auditStore: AuditStore;
@@ -360,6 +393,19 @@ export function createComputerGateway(
     return verdict.url;
   }
 
+  /**
+   * The machine whose takeover state answers this Bot's handovers, or null for a container.
+   *
+   * Only with a takeover registry: without one a device-mode gateway keeps the old behaviour of
+   * posting the handover to the transport, which a runner refuses.
+   */
+  async function takeoverTarget(
+    botId: string,
+  ): Promise<{ tenantId: string; deviceId: string } | null> {
+    if (!options.deviceTakeovers || !options.resolveDevice) return null;
+    return options.resolveDevice(botId);
+  }
+
   async function get<T>(
     botId: string,
     path: string,
@@ -574,6 +620,11 @@ export function createComputerGateway(
       command?: string;
       /** The person's Stop, on its way to the browser. See the acting methods below. */
       signal?: AbortSignal;
+      /**
+       * The machine this call goes to when the call itself decided it (a read-only folder's), rather
+       * than this Bot's own computer. Named on the row and told to the gate in its place.
+       */
+      device?: { tenantId: string; deviceId: string };
     },
     run: (address?: string) => Promise<T>,
   ): Promise<T> {
@@ -659,9 +710,52 @@ export function createComputerGateway(
      * the approval gate. A resolver that fails is not "this deployment's container": in device mode
      * the action can only go to a machine, so the gate is told it is one (SEC1 D5, fail closed).
      */
-    const target = options.resolveDevice
-      ? await options.resolveDevice(botId).catch(() => "unknown" as const)
-      : null;
+    const target =
+      subject.device ??
+      (options.resolveDevice
+        ? await options.resolveDevice(botId).catch(() => "unknown" as const)
+        : null);
+    /*
+     * A person has the wheel of this Bot's browser on this machine: refused here, before the approval
+     * gate and before `run`, so nothing reaches the device at all (F2 stage 2).
+     *
+     * Not a policy verdict, and the row says so by naming its own rule. Nothing about the action is
+     * wrong; it is the wrong moment for the Bot to act, which is why the Bot is handed the same
+     * "a person has control" the container's computer answers with, and its turn waits for the
+     * handback instead of failing.
+     */
+    if (
+      target &&
+      target !== "unknown" &&
+      options.deviceTakeovers?.blocks(target, botId)
+    ) {
+      const handoff = options.deviceTakeovers.current(target, botId);
+      await write(auditStore, {
+        toolName,
+        botId,
+        actor,
+        element,
+        ref,
+        ...(subject.key ? { key: subject.key } : {}),
+        ...(subject.command ? { command: subject.command } : {}),
+        filePath,
+        pageUrl,
+        decision: {
+          allowed: false,
+          mode: decision.mode,
+          matched: DEVICE_TAKEOVER_RULE,
+          source: "deny",
+          forward: false,
+          reason: DEVICE_HUMAN_HAS_CONTROL,
+        },
+        device: target.deviceId,
+      });
+      throw new HumanHasControlError(
+        DEVICE_HUMAN_HAS_CONTROL,
+        handoff?.id,
+        handoff,
+      );
+    }
     await write(auditStore, {
       toolName,
       botId,
@@ -737,7 +831,11 @@ export function createComputerGateway(
           : subject.command
             ? "workspace"
             : hostOf(pageUrl) || "browser",
-        args: continuation?.args ?? { ...subject, signal: undefined },
+        args: continuation?.args ?? {
+          ...subject,
+          signal: undefined,
+          device: undefined,
+        },
         target: {
           pageUrl,
           ...(element ? { element, snapshotId } : {}),
@@ -806,6 +904,60 @@ export function createComputerGateway(
       : result;
   }
 
+  /**
+   * A read or a listing in one of the person's read-only folders (story F1, stage 2).
+   *
+   * The folder is resolved first, and an unknown one is refused before anything is decided or sent:
+   * there is no machine to name on a row and nothing to ask about. A known one goes through `govern`
+   * like every other file call, with the path the policy, the row and the approval gate see written
+   * as `<root>/<path>`. So the SEC1 sensitive-path floor matches a `.env` inside a folder exactly as it
+   * matches one in the workspace, an approval for a workspace folder does not cover a local one, and
+   * the row says which folder was read. Only the two reads exist: nothing here writes.
+   */
+  async function inFolder<T>(
+    toolName: "computer_read_file" | "computer_list_files",
+    botId: string,
+    actor: ActionActor,
+    root: string,
+    path: string | undefined,
+    route: "/files/read" | "/files/list",
+  ): Promise<T> {
+    const machine =
+      typeof root === "string" && options.folders
+        ? await options.folders.resolve(botId, actor.id, root)
+        : null;
+    if (!options.folders || !machine) {
+      throw new ComputerUnavailableError(
+        "That folder is not one of the person's shared folders, or it is no longer shared. Only the folders listed in your information sources can be read.",
+      );
+    }
+    const relative = path?.trim() ? path : ".";
+    const transport = options.folders.transport;
+    return govern(
+      toolName,
+      botId,
+      actor,
+      { filePath: `${root}/${relative}`, device: machine },
+      () =>
+        transport.post<T>(
+          runnerAddress(machine),
+          botId,
+          route,
+          { root, ...(path === undefined ? {} : { path }) },
+          undefined,
+          undefined,
+          computerActionIdentity.getStore()
+            ? JSON.stringify([
+                botId,
+                route,
+                root,
+                computerActionIdentity.getStore(),
+              ])
+            : undefined,
+        ),
+    );
+  }
+
   return {
     provider,
     locate,
@@ -832,10 +984,19 @@ export function createComputerGateway(
       reason: string,
       toolCallId?: string,
     ) {
-      const state = await post<ControlState>(botId, "/control/request", {
-        reason,
-        ...(toolCallId ? { toolCallId } : {}),
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).request(
+            device,
+            botId,
+            reason,
+            toolCallId ? "model" : "manual",
+            toolCallId,
+          )
+        : await post<ControlState>(botId, "/control/request", {
+            reason,
+            ...(toolCallId ? { toolCallId } : {}),
+          });
       await writeControlEvent(auditStore, "computer.help_requested", {
         botId,
         actor,
@@ -845,9 +1006,17 @@ export function createComputerGateway(
     },
 
     async takeControl(botId: string, actor: ActionActor, requestId: string) {
-      const state = await post<ControlState>(botId, "/control/take", {
-        requestId,
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).take(
+            device,
+            botId,
+            actor.id,
+            requestId,
+          )
+        : await post<ControlState>(botId, "/control/take", {
+            requestId,
+          });
       await writeControlEvent(auditStore, "computer.control_taken", {
         botId,
         actor,
@@ -859,9 +1028,16 @@ export function createComputerGateway(
     },
 
     async releaseControl(botId: string, actor: ActionActor, requestId: string) {
-      const state = await post<ControlState>(botId, "/control/release", {
-        requestId,
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).release(
+            device,
+            botId,
+            requestId,
+          )
+        : await post<ControlState>(botId, "/control/release", {
+            requestId,
+          });
       await writeControlEvent(auditStore, "computer.control_released", {
         botId,
         actor,
@@ -870,9 +1046,16 @@ export function createComputerGateway(
     },
 
     async cancelControl(botId: string, actor: ActionActor, requestId: string) {
-      const state = await post<ControlState>(botId, "/control/cancel", {
-        requestId,
-      });
+      const device = await takeoverTarget(botId);
+      const state = device
+        ? (options.deviceTakeovers as DeviceTakeovers).cancel(
+            device,
+            botId,
+            requestId,
+          )
+        : await post<ControlState>(botId, "/control/cancel", {
+            requestId,
+          });
       await writeControlEvent(auditStore, "computer.help_cancelled", {
         botId,
         actor,
@@ -880,7 +1063,14 @@ export function createComputerGateway(
       return state;
     },
 
-    control(botId: string, requestId?: string): Promise<ControlState> {
+    async control(botId: string, requestId?: string): Promise<ControlState> {
+      const device = await takeoverTarget(botId);
+      if (device)
+        return (options.deviceTakeovers as DeviceTakeovers).state(
+          device,
+          botId,
+          requestId,
+        );
       return get<ControlState>(
         botId,
         `/control${requestId ? `?requestId=${encodeURIComponent(requestId)}` : ""}`,
@@ -1180,6 +1370,19 @@ export function createComputerGateway(
      * those files it may read back is a real question for a deployment to be able to answer.
      */
     readFile(botId: string, actor: ActionActor, input: ReadFileInput) {
+      if (input.root !== undefined) {
+        return inFolder<ReadFileResult>(
+          "computer_read_file",
+          botId,
+          actor,
+          input.root,
+          input.path,
+          "/files/read",
+        ).then((result) =>
+          // The person's own files, but files all the same: what is in them is not an instruction.
+          withUntrustedNotice(result, "local folder file", ["text"]),
+        );
+      }
       return govern(
         "computer_read_file",
         botId,
@@ -1232,6 +1435,16 @@ export function createComputerGateway(
      * listing as well as from reads, which is the consistent answer.
      */
     listFiles(botId: string, actor: ActionActor, input: ListFilesInput) {
+      if (input.root !== undefined) {
+        return inFolder<ListFilesResult>(
+          "computer_list_files",
+          botId,
+          actor,
+          input.root,
+          input.path,
+          "/files/list",
+        );
+      }
       return govern(
         "computer_list_files",
         botId,
