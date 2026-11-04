@@ -920,6 +920,20 @@
       "breakpoints": true
     },
     {
+      "idx": 132,
+      "version": "7",
+      "when": 1793632200000,
+      "tag": "0132_device_roots",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1793632500000,
+      "tag": "0133_role_profiles",
+      "breakpoints": true
+    },
+    {
       "idx": 134,
       "version": "7",
       "when": 1793632800000,

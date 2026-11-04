@@ -5,7 +5,7 @@
  * is checked here is whether the request is well-formed at all, so a typo'd caller gets a 400
  * naming the field rather than a 502 that reads as a broken computer.
  */
-import type { InputMessage } from "./screencast";
+import type { InputMessage } from "./screencast-session";
 
 /** Long enough for an install, short enough that a hung command is not a hung Bot. */
 export const EXEC_DEFAULT_TIMEOUT_MS = 120_000;
