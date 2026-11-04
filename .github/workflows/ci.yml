@@ -467,6 +467,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      # The pairing form's rules and the sidecar build's names. Only bun:test and local files are
+      # imported, so nothing is installed.
+      - name: Bun tests (pairing form, sidecar build)
+        run: bun test > "$RUNNER_TEMP/device-bun.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        working-directory: openbot
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/device-bun.log" 'device shell Bun tests (${{ matrix.os }}, head only)'
+      - name: Print Bun test diagnostics (credentials masked)
+        if: failure()
+        working-directory: openbot
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/device-bun.log"
       - name: Rust tests (--locked)
         working-directory: openbot/desktop-device/src-tauri
         run: |
