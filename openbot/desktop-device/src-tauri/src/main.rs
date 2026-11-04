@@ -244,11 +244,17 @@ async fn list_roots(app: AppHandle) -> Result<Vec<roots::Root>, String> {
     folders(&app, roots::RootCommand::List)
 }
 
-/// Offer a folder, read only. The runner checks it again and refuses one over its own files.
+/// Offer a folder, `read` or `write` as the person at this computer chose (RES2 D3; only those two
+/// words are accepted). The runner checks it again and refuses one over its own files.
 #[tauri::command]
-async fn add_root(app: AppHandle, name: String, path: String) -> Result<Vec<roots::Root>, String> {
-    let (name, path) = roots::validate_add(&name, &path)?;
-    folders(&app, roots::RootCommand::Add { name, path })
+async fn add_root(
+    app: AppHandle,
+    name: String,
+    path: String,
+    mode: String,
+) -> Result<Vec<roots::Root>, String> {
+    let (name, path, mode) = roots::validate_add(&name, &path, &mode)?;
+    folders(&app, roots::RootCommand::Add { name, path, mode })
 }
 
 #[tauri::command]
