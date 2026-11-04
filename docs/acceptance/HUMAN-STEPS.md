@@ -124,8 +124,8 @@ CI 里一直有三个未签名包可以下载试装：`device app unsigned deb`�
 | D3 | 谁申请签名身份，密钥放在哪 | 决定走 12.2 的 A 还是 B，以及谁做 12.3 |
 | D4 | 首个版本是否必须已签名。**已决定（2026-11-04）：允许先发未签名内测版** | **不要设** `DEVICE_RELEASE_REQUIRE_SIGNED`：没签名的构建发成「未签名内测版」预发布，正式版仍必须签名。（若以后改成必须签名：设仓库变量 `DEVICE_RELEASE_REQUIRE_SIGNED=true`，没签名的构建会直接失败、不发布） |
 | D5 | 首发平台。**已决定（2026-11-04）：首发 Windows + Linux** | **不要设** `DEVICE_RELEASE_MACOS`，只发 Windows 和 Linux；暂不需要 Apple 身份，跳过 12.3。（以后加 macOS：设仓库变量 `DEVICE_RELEASE_MACOS=true`，只有 Apple 芯片的 dmg） |
-| D6 | 自动更新 | 没接 `tauri-plugin-updater`。发布说明会写"没有自动更新，新版需重新下载安装"，不需要 updater 密钥 |
-| D8 | 产品名和 identifier | 现在是占位的 `com.xiongbao.device`。macOS 的签名和公证都绑在 identifier 上，**首个签名版之前必须定下来**；改要走 PR，改 `openbot/desktop-device/src-tauri/tauri.conf.json` |
+| D6 | 自动更新 | **已决定（2026-11-04）：首版不做。** 没接 `tauri-plugin-updater`。发布说明会写"没有自动更新，新版需重新下载安装"，不需要 updater 密钥 |
+| D8 | 产品名和 identifier | **已决定（2026-11-04）：定为 `com.xiongbao.device`，不再是占位。** macOS 的签名和公证都绑在 identifier 上，首个签名版之后不要再改 |
 
 **不能用** `openbot/desktop/signing/azure-federation.json`：它指向上游仓库的签名身份。
 
