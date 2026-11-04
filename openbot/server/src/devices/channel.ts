@@ -60,6 +60,17 @@ export type DeviceChannel = {
   detach: (connectionId: string) => void;
   /** True when a frame can be written to this device from this process right now. */
   isReachable: (target: DispatchTarget) => boolean;
+  /**
+   * Whether this exact connection is still the device's live one: not detached, not revoked, not
+   * replaced by a reconnect. Answered from memory, for frames too frequent to ask the database about.
+   */
+  isAttached: (connectionId: string) => boolean;
+  /**
+   * Write one frame that is not an action — the live screen's start, stop and input — to the device's
+   * current socket. Nothing is waited for and nothing is queued: a screen frame for a machine that is
+   * away is stale by the time it returns. False when nothing could be written from this process.
+   */
+  notify: (target: DispatchTarget, frame: Record<string, unknown>) => boolean;
   /** Any reachable device of this tenant, for the selection that binds work to a machine. */
   reachableDevice: (tenantId: string) => string | null;
   /** Ask one machine to do something and wait for its answer. */
@@ -326,6 +337,27 @@ export function createDeviceChannel(options?: {
     isReachable(target) {
       const connectionId = byDevice.get(keyOf(target));
       return connectionId !== undefined && sockets.has(connectionId);
+    },
+
+    isAttached(connectionId) {
+      const identity = identities.get(connectionId);
+      return (
+        identity !== undefined &&
+        sockets.has(connectionId) &&
+        byDevice.get(keyOf(identity.target)) === connectionId
+      );
+    },
+
+    notify(target, frame) {
+      const connectionId = byDevice.get(keyOf(target));
+      const socket = connectionId ? sockets.get(connectionId) : undefined;
+      if (!socket) return false;
+      try {
+        socket.send(JSON.stringify(frame));
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     reachableDevice(tenantId) {
