@@ -732,7 +732,9 @@ test("the run form renders each type its own way and sends strings", async () =>
   await user.click(urgent);
   await user.click(view.getByRole("button", { name: "运行" }));
   await waitFor(() => expect(runPosts()).toHaveLength(1));
-  expect((runPosts()[0]?.body as { inputs: unknown }).inputs).toEqual({
+  const post = runPosts()[0];
+  if (!post) throw new Error("No run request was sent.");
+  expect((post.body as { inputs: unknown }).inputs).toEqual({
     topic: "季度复盘\n只谈 Q3",
     count: "12",
     tone: "轻松",
