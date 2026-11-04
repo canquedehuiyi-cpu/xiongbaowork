@@ -1615,6 +1615,13 @@ await startupLifecycle.run(async (startup) => {
    */
   const avatarSourceStore = createAvatarSourceStore(database, {
     /*
+     * Stage 3 (S3, S4): a notebook is attached through the person's knowledge base and a connector
+     * through the plugin store, so the 分身 reads them with the knowledge tools and the granted
+     * connector tools above, under the same bindings, grants, SEC1 rules and approval gate.
+     */
+    knowledge: knowledgeStore,
+    plugins: pluginStore,
+    /*
      * Spec §6.5: removing a local folder's source also asks its machine to forget the folder. Only
      * while the machine is connected, so it is never parked for a machine that is away: the forget is
      * a courtesy on top of the real guarantee, which is that the gateway no longer reads through a

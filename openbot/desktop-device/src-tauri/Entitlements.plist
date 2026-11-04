@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime exceptions for the device app on macOS (F2 stage 3). Tauri signs the app and the
+  runner sidecar with these (tauri.macos.conf.json). The sidecar is a `bun build compile` binary, and
+  JavaScriptCore's JIT needs the three code-signing exceptions below to run under the hardened
+  runtime notarization requires; without them the runner is killed at its first JIT allocation.
+  Nothing else is granted: no sandbox exceptions, no library-validation or dyld-environment opt-out.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-executable-page-protection</key>
+  <true/>
+</dict>
+</plist>
