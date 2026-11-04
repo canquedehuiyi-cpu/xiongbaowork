@@ -3,6 +3,7 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useState } from "react";
 import useMeasure from "react-use-measure";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { TemplatePicker } from "@/components/roles/role-editor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +43,7 @@ import {
   testAgentConnection,
 } from "@/lib/agents/queries";
 import { isComposing } from "@/lib/composing";
+import type { AnyRoleTemplate } from "@/lib/roles/queries";
 import { queryClient } from "@/query-client";
 
 /**
@@ -180,6 +182,22 @@ function CreateAgentWizard({
   }));
   /** Deliberately unanswered to start with: revealing endpoint fields is the point of asking. */
   const [kind, setKind] = useState<AgentKind | null>(null);
+  /*
+   * The role template this coworker starts from (ROLE1), if any: it prefills the identity, and its
+   * persona and 工作手册 are copied in. Only the person's own template is recorded as the source; an
+   * official one has no stored version to point back to.
+   */
+  const [template, setTemplate] = useState<AnyRoleTemplate | null>(null);
+  const pickTemplate = (picked: AnyRoleTemplate | null) => {
+    setTemplate(picked);
+    if (!picked) return;
+    setValues((current) => ({
+      ...current,
+      title: picked.profile.identity.title || current.title,
+      roleDescription:
+        picked.profile.identity.roleDescription || current.roleDescription,
+    }));
+  };
 
   const [connection, setConnection] = useState<ConnectionVerdict | null>(null);
   const [testing, setTesting] = useState(false);
@@ -247,7 +265,18 @@ function CreateAgentWizard({
       go(step + 1);
       return;
     }
-    const agent = await createAgent.mutateAsync(agentInputFrom(values));
+    const input = agentInputFrom(values);
+    const fromTemplate = template
+      ? {
+          ...input,
+          persona: template.profile.persona,
+          bible: template.profile.bible || null,
+          ...(template.official
+            ? {}
+            : { roleTemplate: { id: template.id, version: template.version } }),
+        }
+      : input;
+    const agent = await createAgent.mutateAsync(fromTemplate);
     onCreated(agent.id);
   };
 
@@ -317,6 +346,7 @@ function CreateAgentWizard({
                     {STEPS[step] === "identity" ? (
                       <IdentityStep
                         errors={identityErrors}
+                        onPickTemplate={pickTemplate}
                         onReroll={() => set("avatarSeed", randomAvatarSeed())}
                         set={set}
                         values={values}
@@ -411,11 +441,14 @@ function IdentityStep({
   errors,
   set,
   onReroll,
+  onPickTemplate,
 }: {
   values: AgentFormValues;
   errors: Partial<Record<IdentityField, string>>;
   /** Draw a different face. The preview and the eventual create both follow `values.avatarSeed`. */
   onReroll: () => void;
+  /** 从模板开始 (ROLE1): prefill from one of the person's templates or an official one. */
+  onPickTemplate: (template: AnyRoleTemplate | null) => void;
   set: <K extends keyof AgentFormValues>(
     key: K,
     value: AgentFormValues[K],
@@ -428,6 +461,7 @@ function IdentityStep({
         这里写的角色，在这位员工参与的每个频道里都生效。
       </QuestionnaireDescription>
       <FieldGroup>
+        <TemplatePicker onPick={onPickTemplate} />
         {values.avatarSeed ? (
           <Field>
             <FieldTitle>头像</FieldTitle>

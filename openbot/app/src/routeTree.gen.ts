@@ -24,6 +24,7 @@ import { Route as AuthedAppTasksRouteImport } from './routes/_authed/_app/tasks'
 import { Route as AuthedAppPlatformRouteImport } from './routes/_authed/_app/platform'
 import { Route as AuthedAppResourcesRouteImport } from './routes/_authed/_app/resources'
 import { Route as AuthedAppPlansRouteImport } from './routes/_authed/_app/plans'
+import { Route as AuthedAppRoleTemplatesRouteImport } from './routes/_authed/_app/role-templates'
 import { Route as AuthedAppWakersRouteImport } from './routes/_authed/_app/wakers'
 import { Route as AuthedAppPipelinesRouteImport } from './routes/_authed/_app/pipelines'
 import { Route as AuthedAppAutonomousRouteImport } from './routes/_authed/_app/autonomous'
@@ -125,6 +126,11 @@ const AuthedAppResourcesRoute = AuthedAppResourcesRouteImport.update({
 const AuthedAppPlansRoute = AuthedAppPlansRouteImport.update({
   id: '/plans',
   path: '/plans',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppRoleTemplatesRoute = AuthedAppRoleTemplatesRouteImport.update({
+  id: '/role-templates',
+  path: '/role-templates',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppWakersRoute = AuthedAppWakersRouteImport.update({
@@ -392,6 +398,7 @@ export interface FileRoutesByFullPath {
   '/platform': typeof AuthedAppPlatformRoute
   '/resources': typeof AuthedAppResourcesRoute
   '/plans': typeof AuthedAppPlansRoute
+  '/role-templates': typeof AuthedAppRoleTemplatesRoute
   '/wakers': typeof AuthedAppWakersRoute
   '/pipelines': typeof AuthedAppPipelinesRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
@@ -449,6 +456,7 @@ export interface FileRoutesByTo {
   '/platform': typeof AuthedAppPlatformRoute
   '/resources': typeof AuthedAppResourcesRoute
   '/plans': typeof AuthedAppPlansRoute
+  '/role-templates': typeof AuthedAppRoleTemplatesRoute
   '/wakers': typeof AuthedAppWakersRoute
   '/pipelines': typeof AuthedAppPipelinesRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
@@ -510,6 +518,7 @@ export interface FileRoutesById {
   '/_authed/_app/platform': typeof AuthedAppPlatformRoute
   '/_authed/_app/resources': typeof AuthedAppResourcesRoute
   '/_authed/_app/plans': typeof AuthedAppPlansRoute
+  '/_authed/_app/role-templates': typeof AuthedAppRoleTemplatesRoute
   '/_authed/_app/wakers': typeof AuthedAppWakersRoute
   '/_authed/_app/pipelines': typeof AuthedAppPipelinesRoute
   '/_authed/_app/autonomous': typeof AuthedAppAutonomousRoute
@@ -572,6 +581,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/resources'
     | '/plans'
+    | '/role-templates'
     | '/wakers'
     | '/pipelines'
     | '/autonomous'
@@ -629,6 +639,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/resources'
     | '/plans'
+    | '/role-templates'
     | '/wakers'
     | '/pipelines'
     | '/autonomous'
@@ -840,6 +851,13 @@ declare module '@tanstack/react-router' {
       path: '/plans'
       fullPath: '/plans'
       preLoaderRoute: typeof AuthedAppPlansRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/role-templates': {
+      id: '/_authed/_app/role-templates'
+      path: '/role-templates'
+      fullPath: '/role-templates'
+      preLoaderRoute: typeof AuthedAppRoleTemplatesRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/wakers': {
@@ -1232,6 +1250,7 @@ interface AuthedAppRouteChildren {
   AuthedAppRoutinesRoute: typeof AuthedAppRoutinesRoute
   AuthedAppSkillsRoute: typeof AuthedAppSkillsRoute
   AuthedAppTeamBotsRoute: typeof AuthedAppTeamBotsRoute
+  AuthedAppRoleTemplatesRoute: typeof AuthedAppRoleTemplatesRoute
   AuthedAppIndexRoute: typeof AuthedAppIndexRoute
   AuthedAppBotsAgentIdRoute: typeof AuthedAppBotsAgentIdRoute
   AuthedAppAssembleAgentIdRoute: typeof AuthedAppAssembleAgentIdRoute
@@ -1256,6 +1275,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppPlatformRoute: AuthedAppPlatformRoute,
   AuthedAppResourcesRoute: AuthedAppResourcesRoute,
   AuthedAppPlansRoute: AuthedAppPlansRoute,
+  AuthedAppRoleTemplatesRoute: AuthedAppRoleTemplatesRoute,
   AuthedAppWakersRoute: AuthedAppWakersRoute,
   AuthedAppPipelinesRoute: AuthedAppPipelinesRoute,
   AuthedAppAutonomousRoute: AuthedAppAutonomousRoute,
