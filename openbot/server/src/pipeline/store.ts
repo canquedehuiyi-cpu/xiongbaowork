@@ -13,6 +13,7 @@ import {
   type PipelineStepStateRow,
   stepIsSettled,
 } from "../db/schema/pipeline";
+import { WAKERFLOW_MAX_STEPS } from "../../../shared/wakerflows";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
@@ -183,6 +184,60 @@ export class PipelineStepForbiddenError extends Error {
 /** How many steps one template may hold. A pipeline is a machine for spending turns, so the number that
  * bounds it has to live somewhere other than the person's patience. */
 const MAX_STEPS = 10;
+/**
+ * How many steps a run may hold. A WakerFlow's compiled template may hold up to 20 (WF7 D4), and it
+ * is written by the WakerFlow store, not by `createTemplate`; a crew's own templates stay at
+ * {@link MAX_STEPS}, which is checked when they are written.
+ */
+const MAX_RUN_STEPS = WAKERFLOW_MAX_STEPS;
+
+/** The value one declared key reads: the run's input, an earlier step's output, or the gap. */
+function readKey(
+  key: string,
+  inputs: Record<string, string>,
+  earlier: StepRecord[],
+): string {
+  return (
+    inputs[key] ??
+    earlier.find((step) => step.outputKey === key)?.output ??
+    "（此输入未产生）"
+  );
+}
+
+/**
+ * What one coworker is told for one step: its role in this Flow (WF7 D2, first, so it frames the
+ * rest), the step's own instruction, the task, what it reads, and which earlier steps produced
+ * nothing. Pure, so the order is pinned by a test rather than by reading a template literal.
+ */
+export function stepInstruction(input: {
+  record: StepRecord;
+  task: string;
+  inputs: Record<string, string>;
+  /** The run's steps before this one. */
+  earlier: StepRecord[];
+  /** Outputs of earlier steps, in order (read when the step declares no inputs). */
+  prior: string[];
+  /** Ids of the earlier steps that were skipped or failed. */
+  missing: string[];
+}): string {
+  const { record } = input;
+  const role = record.rolePrompt?.trim()
+    ? `本流程中你的角色：${record.rolePrompt.trim()}\n\n`
+    : "";
+  return `${role}${record.instruction}\n\n任务：${input.task}${
+    record.inputKeys
+      ? `\n\n此步骤的输入：\n${JSON.stringify(Object.fromEntries(record.inputKeys.map((key) => [key, readKey(key, input.inputs, input.earlier)])))}`
+      : input.prior.length > 0
+        ? `\n\n前面步骤的产出：\n${input.prior
+            .map((line, index) => `${index + 1}. ${line}`)
+            .join("\n")}`
+        : ""
+  }${
+    input.missing.length > 0
+      ? `\n\n注意：${input.missing.join("、")} 这几步没有产出（被跳过或已失败），下面的结论里不要假装它们发生过。`
+      : ""
+  }`;
+}
 
 /** `groupTaskTemplates.group_id` is a uuid, and Postgres answers a malformed one with a 22P02 that
  * reaches the person as a 500. Ask about the shape before the database does. */
@@ -770,9 +825,9 @@ export function createPipelineStore(options: {
       const declared = Array.isArray(template.steps)
         ? (template.steps as PipelineStep[])
         : [];
-      if (declared.length > MAX_STEPS) {
+      if (declared.length > MAX_RUN_STEPS) {
         throw new PipelineValidationError(
-          `一条流水线最多 ${MAX_STEPS} 步，这条有 ${declared.length} 步。`,
+          `一条流水线最多 ${MAX_RUN_STEPS} 步，这条有 ${declared.length} 步。`,
         );
       }
       /*
@@ -1130,31 +1185,20 @@ export function createPipelineStore(options: {
             return currentOutcome(input.tenantId, input.runId);
           }
 
+          const earlier = records.slice(0, cursor);
           const result = await executeStep({
             tenantId: input.tenantId,
             agentId: record.agentId,
-            instruction: `${record.instruction}\n\n任务：${run.instruction}${
-              record.inputKeys
-                ? `\n\n此步骤的输入：\n${JSON.stringify(Object.fromEntries(record.inputKeys.map((key) => [key, run.inputs[key] ?? records.slice(0, cursor).find((step) => step.outputKey === key)?.output ?? "（此输入未产生）"])))}`
-                : prior.length > 0
-                  ? `\n\n前面步骤的产出：\n${prior
-                      .map((line, index) => `${index + 1}. ${line}`)
-                      .join("\n")}`
-                  : ""
-            }${
-              missing.length > 0
-                ? `\n\n注意：${missing.join("、")} 这几步没有产出（被跳过或已失败），下面的结论里不要假装它们发生过。`
-                : ""
-            }`,
+            instruction: stepInstruction({
+              record,
+              task: run.instruction,
+              inputs: run.inputs,
+              earlier,
+              prior,
+              missing,
+            }),
             prior: record.inputKeys
-              ? record.inputKeys.map(
-                  (key) =>
-                    run.inputs[key] ??
-                    records
-                      .slice(0, cursor)
-                      .find((step) => step.outputKey === key)?.output ??
-                    "（此输入未产生）",
-                )
+              ? record.inputKeys.map((key) => readKey(key, run.inputs, earlier))
               : prior,
             initiatedBy: initiator,
             runId: input.runId,

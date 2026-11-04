@@ -2,27 +2,45 @@ import { queryOptions } from "@tanstack/react-query";
 import { client, RequestError } from "@/lib/client";
 import type {
   FlowModelChoice,
-  WakerFlow,
+  WakerFlowBranch,
   WakerFlowCandidate,
-  WakerFlowGenerationResult,
   WakerFlowInput,
   WakerFlowInputType,
-  WakerFlowPlan,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
+  WakerFlowStepKind,
+  WakerFlow as StoredWakerFlow,
+  WakerFlowGenerationResult as StoredWakerFlowGenerationResult,
+  WakerFlowPlan as StoredWakerFlowPlan,
+  WakerFlowWorkerStep,
 } from "../../../shared/wakerflows";
 
 export type {
   FlowModelChoice,
-  WakerFlow,
   WakerFlowCandidate,
-  WakerFlowGenerationResult,
   WakerFlowInput,
   WakerFlowInputType,
-  WakerFlowPlan,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
 };
+
+/**
+ * The plan as these screens edit and show it: coworker steps only.
+ *
+ * WF7 adds decisions, nested Flows and tool calls to the stored plan (`shared/wakerflows.ts`), and the
+ * server refuses every kind it cannot run yet on Save, so until the flowchart editor lands a saved
+ * plan holds worker steps only and this is what it is.
+ */
+export type WakerFlowPlan = Omit<StoredWakerFlowPlan, "steps"> & {
+  steps: WakerFlowWorkerStep[];
+};
+export type WakerFlow = Omit<StoredWakerFlow, "plan"> & {
+  plan: WakerFlowPlan | null;
+};
+export type WakerFlowGenerationResult = Omit<
+  StoredWakerFlowGenerationResult,
+  "plan"
+> & { plan: WakerFlowPlan };
 export {
   WAKERFLOW_CONFLICT_MESSAGE,
   WAKERFLOW_INPUT_TYPES,
@@ -87,6 +105,15 @@ export type WakerFlowRunStep = {
   instruction: string;
   inputKeys?: string[];
   outputKey?: string;
+  /** WF7: absent is a coworker's turn. */
+  kind?: WakerFlowStepKind;
+  next?: string;
+  branches?: WakerFlowBranch[];
+  otherwise?: string;
+  /** WF7: `branch` is a step no taken path reached; `person` a person's skip. */
+  skipReason?: "branch" | "person";
+  /** WF7: the branch a finished decision took (`index` -1 is `otherwise`). */
+  branch?: { label: string; index: number };
   state:
     | "pending"
     | "running"

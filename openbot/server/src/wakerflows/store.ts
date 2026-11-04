@@ -44,7 +44,7 @@ import {
   FlowPlanFormatError,
 } from "./generator";
 import type { FlowModelResolver } from "./model";
-import { flowInputs, wakerFlowPlanSchema } from "./plan";
+import { compiledSteps, flowInputs, wakerFlowPlanSchema } from "./plan";
 
 /**
  * The WakerFlow store (spec D10, stories WF1/WF3/WF4).
@@ -999,13 +999,8 @@ export function createWakerFlowStore(options: {
           );
         }
       }
-      const steps = plan.steps.map((step) => ({
-        id: step.id,
-        agentId: step.agentId,
-        instruction: step.instruction,
-        inputKeys: [...step.inputKeys],
-        outputKey: step.outputKey,
-      }));
+      // WF7: each member's role and prompt goes ahead of that coworker's steps (D2).
+      const steps = compiledSteps(plan);
 
       const row = await runAsTenant(tenantId, () =>
         database.transaction(async (tx) => {

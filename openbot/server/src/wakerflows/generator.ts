@@ -4,7 +4,16 @@ import {
   type WakerFlowCandidate,
   type WakerFlowPlan,
 } from "../../../shared/wakerflows";
-import { wakerFlowPlanSchema } from "./plan";
+import { createWakerFlowPlanSchema } from "./plan";
+
+/**
+ * WF7 D9: planning makes coworker steps in order. Decisions, nested Flows, tool calls and jumps are
+ * added by a person in the editor, never by the model, whatever the Save schema accepts.
+ */
+const generatedPlanSchema = createWakerFlowPlanSchema({
+  kinds: ["worker"],
+  jumps: false,
+});
 
 /**
  * Natural-language planning for a WakerFlow (spec D10, story WF3).
@@ -184,7 +193,7 @@ export function createFlowGenerator(
         throw new FlowGenerationUncertainError();
       }
       if (caller.aborted) throw new FlowGenerationCancelledError();
-      const parsed = wakerFlowPlanSchema.safeParse(firstJsonObject(text));
+      const parsed = generatedPlanSchema.safeParse(firstJsonObject(text));
       if (!parsed.success) throw new FlowPlanFormatError();
       const offered = new Set(input.members.map((member) => member.agentId));
       if (parsed.data.members.some((member) => !offered.has(member.agentId)))
