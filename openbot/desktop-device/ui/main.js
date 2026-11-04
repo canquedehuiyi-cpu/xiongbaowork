@@ -1,4 +1,9 @@
-import { addFolder, describeFolders, removeFolder } from "./folders.js";
+import {
+  addFolder,
+  describeFolders,
+  removeFolder,
+  WRITE_WARNING,
+} from "./folders.js";
 import { describeState, screenFor, submitPairing } from "./pairing.js";
 
 const invoke = window.__TAURI__.core.invoke;
@@ -62,6 +67,11 @@ function renderFolders(roots) {
       const row = document.createElement("li");
       const label = document.createElement("span");
       label.textContent = item.name;
+      const mode = document.createElement("span");
+      mode.className = "mode";
+      mode.textContent = item.mode;
+      mode.dataset.writable = String(item.writable);
+      label.append(mode);
       const path = document.createElement("span");
       path.className = "path";
       path.textContent = item.path;
@@ -90,11 +100,23 @@ async function refreshFolders() {
   }
 }
 
+/** The warning is shown only while the write box is ticked; unticked (read only) is the default. */
+function renderWriteWarning() {
+  const ticked = $("folder-write").checked;
+  $("folder-write-warning").textContent = ticked ? WRITE_WARNING : "";
+  $("folder-write-warning").hidden = !ticked;
+}
+$("folder-write").addEventListener("change", renderWriteWarning);
+
 $("folder-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("folder-error").textContent = "";
   const result = await addFolder(
-    { name: $("folder-name").value, path: $("folder-path").value },
+    {
+      name: $("folder-name").value,
+      path: $("folder-path").value,
+      write: $("folder-write").checked,
+    },
     invoke,
   );
   if ("error" in result) {
@@ -103,6 +125,9 @@ $("folder-form").addEventListener("submit", async (event) => {
   }
   $("folder-name").value = "";
   $("folder-path").value = "";
+  // Back to read only after each add, so the next folder is not made writable by accident.
+  $("folder-write").checked = false;
+  renderWriteWarning();
   renderFolders(result.roots);
 });
 
