@@ -1,51 +1,64 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client, RequestError } from "@/lib/client";
-import type {
-  FlowModelChoice,
-  WakerFlowBranch,
-  WakerFlowCandidate,
-  WakerFlowInput,
-  WakerFlowInputType,
-  WakerFlowRequestStatus,
-  WakerFlowSaveInput,
-  WakerFlowStepKind,
-  WakerFlow as StoredWakerFlow,
-  WakerFlowGenerationResult as StoredWakerFlowGenerationResult,
-  WakerFlowPlan as StoredWakerFlowPlan,
-  WakerFlowWorkerStep,
+import {
+  type FlowModelChoice,
+  stepAgentId,
+  stepKind,
+  stepOutputKey,
+  stepReads,
+  stepTargets,
+  WAKERFLOW_END,
+  WAKERFLOW_MAX_BRANCHES,
+  WAKERFLOW_MAX_STEPS,
+  type WakerFlow,
+  type WakerFlowBranch,
+  type WakerFlowCandidate,
+  type WakerFlowGenerationResult,
+  type WakerFlowInput,
+  type WakerFlowInputType,
+  type WakerFlowPlan,
+  type WakerFlowRequestStatus,
+  type WakerFlowSaveInput,
+  type WakerFlowStep,
+  type WakerFlowStepKind,
 } from "../../../shared/wakerflows";
 
 export type {
   FlowModelChoice,
+  WakerFlow,
+  WakerFlowBranch,
   WakerFlowCandidate,
+  WakerFlowGenerationResult,
   WakerFlowInput,
   WakerFlowInputType,
+  WakerFlowPlan,
   WakerFlowRequestStatus,
   WakerFlowSaveInput,
+  WakerFlowStep,
+  WakerFlowStepKind,
 };
-
-/**
- * The plan as these screens edit and show it: coworker steps only.
- *
- * WF7 adds decisions, nested Flows and tool calls to the stored plan (`shared/wakerflows.ts`), and the
- * server refuses every kind it cannot run yet on Save, so until the flowchart editor lands a saved
- * plan holds worker steps only and this is what it is.
- */
-export type WakerFlowPlan = Omit<StoredWakerFlowPlan, "steps"> & {
-  steps: WakerFlowWorkerStep[];
-};
-export type WakerFlow = Omit<StoredWakerFlow, "plan"> & {
-  plan: WakerFlowPlan | null;
-};
-export type WakerFlowGenerationResult = Omit<
-  StoredWakerFlowGenerationResult,
-  "plan"
-> & { plan: WakerFlowPlan };
 export {
+  isWorkerStep,
+  stepAgentId,
+  stepKind,
+  stepOutputKey,
+  stepReads,
+  stepTargets,
   WAKERFLOW_CONFLICT_MESSAGE,
+  WAKERFLOW_END,
   WAKERFLOW_INPUT_TYPES,
+  WAKERFLOW_MAX_BRANCHES,
+  WAKERFLOW_STEP_KINDS,
   WAKERFLOW_SUGGESTIONS,
 } from "../../../shared/wakerflows";
+
+/** How each step kind is named in the editor and the flowchart (WF7). */
+export const STEP_KIND_LABEL: Record<WakerFlowStepKind, string> = {
+  worker: "员工步骤",
+  decision: "条件判断",
+  flow: "子流程",
+  action: "动作",
+};
 
 /** How each input type is named in the editor. */
 export const INPUT_TYPE_LABEL: Record<WakerFlowInputType, string> = {
@@ -101,8 +114,10 @@ export type WakerFlowRunStatus =
 /** One step of a run: the plan's step, plus where it got to and what it produced. */
 export type WakerFlowRunStep = {
   id: string;
-  agentId: string;
-  instruction: string;
+  /** WF7: empty for a decision or a nested Flow, which run as no coworker of their own. */
+  agentId?: string;
+  /** What the step is called on the run's view (a decision's or nested Flow's is generated). */
+  instruction?: string;
   inputKeys?: string[];
   outputKey?: string;
   /** WF7: absent is a coworker's turn. */
@@ -114,6 +129,12 @@ export type WakerFlowRunStep = {
   skipReason?: "branch" | "person";
   /** WF7: the branch a finished decision took (`index` -1 is `otherwise`). */
   branch?: { label: string; index: number };
+  /** WF7: a nested Flow's child, and the Flow and version it runs. */
+  targetFlowId?: string;
+  targetRevision?: number;
+  childRunId?: string;
+  /** WF7: an action's MCP tool. */
+  tool?: string;
   state:
     | "pending"
     | "running"
@@ -279,6 +300,10 @@ export function runInputProblems(
 export function planForSave(plan: WakerFlowPlan): WakerFlowPlan {
   return {
     ...plan,
+    // WF7: an empty member prompt is no prompt.
+    members: plan.members.map(({ prompt, ...member }) =>
+      prompt?.trim() ? { ...member, prompt } : member,
+    ),
     inputs: plan.inputs.map((input) => {
       const { description, default: fallback, options, ...rest } = input;
       const cleaned: WakerFlowInput = { ...rest };
@@ -435,11 +460,19 @@ export function runEventLabel(event: WakerFlowRunEvent): string {
     case "step_parked":
       return payload.waitingOn === "approval"
         ? `${stepName}等待审批`
-        : `${stepName}等待回答`;
+        : payload.waitingOn === "child_flow"
+          ? `${stepName}等待子流程`
+          : `${stepName}等待回答`;
     case "step_answered":
       return `${stepName}已回答`;
     case "step_skipped":
-      return `${stepName}已跳过`;
+      return payload.skipReason === "branch"
+        ? `${stepName}分支未选中`
+        : `${stepName}已跳过`;
+    case "branch_taken":
+      return typeof payload.label === "string"
+        ? `${stepName}走「${payload.label}」分支`
+        : `${stepName}选定分支`;
     case "step_failed":
       return typeof payload.error === "string" && payload.error
         ? `${stepName}失败：${payload.error}`
@@ -719,36 +752,222 @@ export function planProblems(plan: WakerFlowPlan): Record<string, string> {
   });
 
   if (plan.steps.length === 0) fail("steps", "计划里至少要有一个步骤。");
-  if (plan.steps.length > 10) fail("steps", "计划里最多 10 个步骤。");
+  if (plan.steps.length > WAKERFLOW_MAX_STEPS)
+    fail("steps", `计划里最多 ${WAKERFLOW_MAX_STEPS} 个步骤。`);
   const steps = new Set<string>();
   plan.steps.forEach((step, index) => {
     if (!PLAN_KEY_PATTERN.test(step.id))
       fail(`steps.${index}.id`, "步骤编号无效。");
     else if (steps.has(step.id)) fail(`steps.${index}.id`, "步骤编号重复。");
     steps.add(step.id);
-    if (!members.has(step.agentId))
+    const agent = stepAgentId(step);
+    if (agent !== undefined && !members.has(agent))
       fail(`steps.${index}.agentId`, "步骤只能交给计划中的员工。");
-    const instruction = step.instruction.trim();
-    if (!instruction)
-      fail(`steps.${index}.instruction`, "请写明这一步要做什么。");
-    else if (instruction.length > 8000)
-      fail(`steps.${index}.instruction`, "步骤说明不能超过 8000 字。");
-    if (step.inputKeys.length > 30)
-      fail(`steps.${index}.inputKeys`, "一个步骤最多读取 30 项输入。");
-    if (new Set(step.inputKeys).size !== step.inputKeys.length)
-      fail(`steps.${index}.inputKeys`, "步骤输入名称重复。");
-    for (const input of step.inputKeys) {
-      if (!available.has(input))
-        fail(
-          `steps.${index}.inputKeys`,
-          `输入 ${input} 尚未产生；只能读取流程输入或前面步骤的输出。`,
-        );
+    if (step.kind === undefined || step.kind === "worker") {
+      const instruction = step.instruction.trim();
+      if (!instruction)
+        fail(`steps.${index}.instruction`, "请写明这一步要做什么。");
+      else if (instruction.length > 8000)
+        fail(`steps.${index}.instruction`, "步骤说明不能超过 8000 字。");
     }
-    if (!PLAN_KEY_PATTERN.test(step.outputKey))
-      fail(`steps.${index}.outputKey`, KEY_MESSAGE);
-    else if (available.has(step.outputKey))
-      fail(`steps.${index}.outputKey`, "步骤输出不能覆盖已有输入或输出。");
-    available.add(step.outputKey);
+    if (step.kind === "decision") {
+      if (step.branches.length === 0)
+        fail(`steps.${index}.branches`, "判断至少需要一个分支。");
+      if (step.branches.length > WAKERFLOW_MAX_BRANCHES)
+        fail(
+          `steps.${index}.branches`,
+          `一个判断最多 ${WAKERFLOW_MAX_BRANCHES} 个分支。`,
+        );
+      const labels = new Set<string>();
+      step.branches.forEach((branch, at) => {
+        const label = branch.label.trim();
+        if (!label)
+          fail(`steps.${index}.branches.${at}.label`, "请填写分支名称。");
+        else if (label.length > 40)
+          fail(
+            `steps.${index}.branches.${at}.label`,
+            "分支名称不能超过 40 字。",
+          );
+        else if (labels.has(label))
+          fail(
+            `steps.${index}.branches.${at}.label`,
+            "同一个判断里的分支名称不能重复。",
+          );
+        labels.add(label);
+        const when = branch.when.trim();
+        if (!when)
+          fail(`steps.${index}.branches.${at}.when`, "请填写分支条件。");
+        else if (when.length > 500)
+          fail(
+            `steps.${index}.branches.${at}.when`,
+            "分支条件不能超过 500 字。",
+          );
+      });
+    }
+    if (step.kind === "flow" && !step.targetFlowId)
+      fail(`steps.${index}.targetFlowId`, "请选择要嵌套的子流程。");
+    if (step.kind === "action") {
+      if (!/^[^/\s]+\/\S+$/.test(step.tool))
+        fail(`steps.${index}.tool`, "请填写要调用的工具（服务/工具名）。");
+      for (const [name, value] of Object.entries(step.args)) {
+        if (!/^[A-Za-z0-9_.-]{1,64}$/.test(name))
+          fail(`steps.${index}.args`, "参数名称无效。");
+        if (value.length > 10000)
+          fail(`steps.${index}.args`, "单个参数不能超过 10000 字。");
+      }
+    }
+    const reads = stepReads(step);
+    if (reads.length > 30)
+      fail(`steps.${index}.inputKeys`, "一个步骤最多读取 30 项输入。");
+    if (step.kind !== "flow" && new Set(reads).size !== reads.length)
+      fail(`steps.${index}.inputKeys`, "步骤输入名称重复。");
+    const produced = stepOutputKey(step);
+    if (produced !== undefined) {
+      if (!PLAN_KEY_PATTERN.test(produced))
+        fail(`steps.${index}.outputKey`, KEY_MESSAGE);
+      else if (available.has(produced))
+        fail(`steps.${index}.outputKey`, "步骤输出不能覆盖已有输入或输出。");
+      available.add(produced);
+    }
   });
+  routeProblems(plan, fail);
   return problems;
+}
+
+/**
+ * The route checks of P-A, the server's own (`server/src/wakerflows/plan.ts`): every jump goes to a
+ * later step or the end, every step is reachable, and a step reads only what every path to it
+ * produced. The steps are in topological order (every edge points forward), so one pass suffices.
+ */
+function routeProblems(
+  plan: WakerFlowPlan,
+  fail: (path: string, message: string) => void,
+) {
+  const count = plan.steps.length;
+  const position = new Map(plan.steps.map((step, index) => [step.id, index]));
+  const inputs = plan.inputs.map((input) => input.key);
+  const must: (Set<string> | null)[] = plan.steps.map(() => null);
+  const may: Set<string>[] = plan.steps.map(() => new Set());
+  if (count > 0) {
+    must[0] = new Set(inputs);
+    may[0] = new Set(inputs);
+  }
+  plan.steps.forEach((step, index) => {
+    const paths =
+      step.kind === "decision"
+        ? [
+            ...step.branches.map(
+              (_, at) => `steps.${index}.branches.${at}.next`,
+            ),
+            `steps.${index}.otherwise`,
+          ]
+        : [`steps.${index}.next`];
+    const successors: number[] = [];
+    stepTargets(step).forEach((jump, at) => {
+      const path = paths[at] ?? `steps.${index}.next`;
+      if (jump === undefined) successors.push(index + 1);
+      else if (jump === WAKERFLOW_END) successors.push(count);
+      else {
+        const to = position.get(jump);
+        if (to === undefined) fail(path, `跳转目标 ${jump} 不存在。`);
+        else if (to <= index)
+          fail(path, `只能跳到后面的步骤；${jump} 不在这一步之后。`);
+        else successors.push(to);
+      }
+    });
+    const certain = must[index];
+    if (!certain) {
+      fail(`steps.${index}`, `没有任何路径会走到步骤 ${step.id}。`);
+      return;
+    }
+    const field = step.kind === "flow" ? "inputMap" : "inputKeys";
+    for (const read of stepReads(step)) {
+      if (certain.has(read)) continue;
+      fail(
+        `steps.${index}.${field}`,
+        may[index]?.has(read)
+          ? `输入 ${read} 只在部分分支中产生；走到这一步的其他路径上没有它。`
+          : `输入 ${read} 尚未产生；只能读取流程输入或前面步骤的输出。`,
+      );
+    }
+    const produced = stepOutputKey(step);
+    for (const next of successors) {
+      if (next >= count) continue;
+      const exitCertain = new Set(certain);
+      const exitMaybe = new Set(may[index]);
+      if (produced) {
+        exitCertain.add(produced);
+        exitMaybe.add(produced);
+      }
+      const before = must[next];
+      must[next] = before
+        ? new Set([...before].filter((name) => exitCertain.has(name)))
+        : exitCertain;
+      for (const name of exitMaybe) may[next]?.add(name);
+    }
+  });
+}
+
+/**
+ * Where the step at `index` may jump (P-A, D8): only the steps after it, and the end. The editor
+ * offers exactly these, so a backward jump cannot be chosen at all.
+ */
+export function jumpChoices(
+  steps: WakerFlowStep[],
+  index: number,
+): { value: string; label: string }[] {
+  return [
+    ...steps.slice(index + 1).map((step, offset) => ({
+      value: step.id,
+      label: `第 ${index + offset + 2} 步（${step.id}）`,
+    })),
+    { value: WAKERFLOW_END, label: "结束流程" },
+  ];
+}
+
+/** A fresh step of `kind`, keeping the id (and the coworker, where the kind has one). */
+export function stepOfKind(
+  kind: WakerFlowStepKind,
+  id: string,
+  agentId: string,
+  nextId: string | undefined,
+): WakerFlowStep {
+  switch (kind) {
+    case "decision":
+      return {
+        id,
+        kind: "decision",
+        inputKeys: [],
+        branches: [
+          { label: "是", when: "true", next: nextId ?? WAKERFLOW_END },
+        ],
+        otherwise: nextId ?? WAKERFLOW_END,
+      };
+    case "flow":
+      return {
+        id,
+        kind: "flow",
+        targetFlowId: "",
+        targetRevision: 1,
+        inputMap: {},
+        outputKey: "",
+      };
+    case "action":
+      return {
+        id,
+        kind: "action",
+        agentId,
+        tool: "",
+        args: {},
+        inputKeys: [],
+        outputKey: "",
+      };
+    default:
+      return { id, agentId, instruction: "", inputKeys: [], outputKey: "" };
+  }
+}
+
+/** The kind of a step as the editor names it. */
+export function stepKindLabel(step: { kind?: string }): string {
+  return STEP_KIND_LABEL[stepKind(step)];
 }
