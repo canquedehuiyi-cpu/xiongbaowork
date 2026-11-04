@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
 import { supplySecret } from "@/lib/computers/control";
 import {
   readPageFrame,
@@ -259,6 +260,17 @@ export function ComputerView({
   const pageVisible = usePageVisible();
   const [previewRef, previewIntersecting] = useElementVisible<HTMLElement>();
   const driving = control?.holder === "human" && !control.transitioning;
+  /**
+   * The Bot's browser is on the tenant's own machine (F2). Its screen is relayed from the device, so
+   * it can be watched live without anybody taking the wheel, before the browser has even opened.
+   */
+  const onDevice = control?.device;
+  /** The device said the coworker has no page open yet; cleared when the cast starts. */
+  const [screenIdle, setScreenIdle] = useState(false);
+  const onScreenStatus = useCallback(
+    (state: "idle" | "casting") => setScreenIdle(state === "idle"),
+    [],
+  );
   /** Read by the polling loop without restarting it on control changes. */
   const drivingRef = useRef(false);
   drivingRef.current = driving;
@@ -408,7 +420,8 @@ export function ComputerView({
    * gets the live socket whatever is on it, because once a person is driving the stream is the truth
    * about the page and a placeholder over it would be the view arguing with them.
    */
-  const showLiveScreen = !settled && (showScreen || driving);
+  const showLiveScreen =
+    !settled && (showScreen || driving || Boolean(onDevice));
   /**
    * Whether the wheel in somebody's hands is the wheel THIS tile is showing.
    *
@@ -565,6 +578,7 @@ export function ComputerView({
         {!settled ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
             <span className="text-xs text-muted-foreground">
+              {onDevice ? "在你自己的设备上。" : null}
               {!control
                 ? "正在确认谁在操作…"
                 : control.transitioning
@@ -573,10 +587,21 @@ export function ComputerView({
                     ? "由你操作。打开屏幕即可点击和输入。"
                     : "由员工操作。"}
             </span>
-            <ComputerControlButton
-              computerId={computerId}
-              onTakeControl={() => setExpanded(true)}
-            />
+            <div className="flex items-start gap-2">
+              {onDevice ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExpanded(true)}
+                >
+                  查看实时画面
+                </Button>
+              ) : null}
+              <ComputerControlButton
+                computerId={computerId}
+                onTakeControl={() => setExpanded(true)}
+              />
+            </div>
           </div>
         ) : null}
       </figure>
@@ -636,8 +661,14 @@ export function ComputerView({
                         computerId={computerId}
                         driving={driving}
                         onProblem={setStreamProblem}
+                        onStatus={onScreenStatus}
                         retryKey={retryKey}
                       />
+                      {screenIdle && !streamProblem ? (
+                        <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-white/80">
+                          员工还没有在这台设备上打开页面。它一打开，画面就会出现在这里。
+                        </div>
+                      ) : null}
                       {/*
                         A live screen that ends reports why through `onProblem`, and this is the
                         branch that is mounted when it does. Without drawing it here the message
@@ -705,6 +736,11 @@ export function ComputerView({
                             员工需要你。
                           </strong>{" "}
                           {control.reason}
+                        </span>
+                      ) : null}
+                      {onDevice ? (
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          实时画面来自你的设备 {onDevice.deviceId}
                         </span>
                       ) : null}
                     </span>

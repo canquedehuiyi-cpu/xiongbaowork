@@ -27,6 +27,8 @@ import type { TurnRunner } from "../routines/runner";
 import { deliverableRefOf, type TaskProjector } from "../tasks/projector";
 import { assertPersonTenant, runAsTenant } from "../tenant/context";
 import { markUntrusted } from "../untrusted-content";
+import { automationFlowInputs } from "../wakerflows/plan";
+import type { WakerFlowPlan } from "../../../shared/wakerflows";
 import type { WakerFlowStore } from "../wakerflows/store";
 import type { AutomationFiring, AutomationStore } from "./store";
 import type { AutomationEvent } from "./sweep";
@@ -46,6 +48,9 @@ export const AUTOMATION_FLOW_GONE =
 export const AUTOMATION_FLOW_NOT_READY =
   "这个 WakerFlow 还没有保存成可运行的版本，请先在 WakerFlow 里保存。";
 export const AUTOMATION_FLOW_NOT_STARTED = "WakerFlow 没能启动。";
+/** D4: the Flow was changed after the automation was saved, and its saved inputs no longer fit. */
+export const AUTOMATION_FLOW_INPUTS_CHANGED =
+  "WakerFlow 的输入已变更，请编辑自动任务";
 
 const MAX_NOTIFIED_REASON = 160;
 
@@ -108,10 +113,29 @@ export type WakerAutomationExecutorDeps = {
   wakerflows?: Pick<WakerFlowStore, "inspect" | "start">;
 };
 
+/** Why the saved inputs do not fit the plan, in the run panel's own words, or null when they do. */
+function flowInputsProblem(
+  plan: WakerFlowPlan,
+  inputs: Record<string, string> | undefined,
+): string | null {
+  try {
+    automationFlowInputs(plan, inputs ?? {});
+    return null;
+  } catch (error) {
+    return error instanceof Error && /[一-鿿]/.test(error.message)
+      ? error.message
+      : "流程输入格式不正确。";
+  }
+}
+
 /**
  * AUT3: the save-time half of a WakerFlow target, for the store's target registry. A flow is
  * accepted only if it is one of the caller's own, and already saved into a runnable version: the
  * same "ready" the WakerFlow page shows. `tenantId` is the caller's frame, never the request's.
+ *
+ * WF8: the inputs the automation will run with are checked against the plan as it is now, with the
+ * run panel's rules, so an automation that could never start is refused here rather than at its
+ * first firing.
  */
 export function wakerflowAutomationTarget(
   flows: Pick<WakerFlowStore, "inspect">,
@@ -121,8 +145,10 @@ export function wakerflowAutomationTarget(
     async verify(target, { tenantId }) {
       const flow = await flows.inspect(tenantId, target.flowId);
       if (!flow) throw new AutomationRefusedError("找不到这个 WakerFlow。");
-      if (flow.status !== "ready")
+      if (flow.status !== "ready" || !flow.plan)
         throw new AutomationRefusedError(AUTOMATION_FLOW_NOT_READY);
+      const problem = flowInputsProblem(flow.plan, target.inputs);
+      if (problem) throw new AutomationRefusedError(problem);
     },
   };
 }
@@ -317,7 +343,7 @@ export function createWakerAutomationExecutor(
     }
 
     if (target.kind === "wakerflow") {
-      await runFlow(target.flowId);
+      await runFlow(target.flowId, target.inputs ?? {});
       return;
     }
     if (agentId === null) return;
@@ -328,8 +354,15 @@ export function createWakerAutomationExecutor(
      * firing: a ban or a full month is `skipped`; a flow that is gone, unsaved, refuses its inputs or
      * could not be started is a failure the breaker counts; registered and driving is `succeeded`.
      * The firing's id is the request id, so a repeat of this firing can never start a second run.
+     *
+     * WF8 (D4): the saved inputs go to the run exactly as saved. A Flow changed since, so that they
+     * no longer fit (a new required input, a removed one, a value its new type refuses), fails the
+     * firing with the reason before any run is asked for; nothing is dropped or filled in.
      */
-    async function runFlow(flowId: string): Promise<void> {
+    async function runFlow(
+      flowId: string,
+      inputs: Record<string, string>,
+    ): Promise<void> {
       const flows = deps.wakerflows;
       if (!flows) return;
       try {
@@ -353,8 +386,13 @@ export function createWakerAutomationExecutor(
           await fail(AUTOMATION_FLOW_GONE);
           return;
         }
-        if (flow.status !== "ready") {
+        if (flow.status !== "ready" || !flow.plan) {
           await fail(AUTOMATION_FLOW_NOT_READY);
+          return;
+        }
+        const problem = flowInputsProblem(flow.plan, inputs);
+        if (problem) {
+          await fail(`${AUTOMATION_FLOW_INPUTS_CHANGED}：${problem}`);
           return;
         }
         // The month's ceiling is the run-start path's own (one task per step, plus the run's card).
@@ -362,7 +400,7 @@ export function createWakerAutomationExecutor(
           ownerUserId,
           ownerUserId,
           flowId,
-          { requestId: firing.id, revision: flow.revision, inputs: {} },
+          { requestId: firing.id, revision: flow.revision, inputs },
         ));
       } catch (error) {
         if (error instanceof QuotaExceeded) {
