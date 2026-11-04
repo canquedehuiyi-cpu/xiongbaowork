@@ -1345,7 +1345,7 @@ describe("a Bot moved to team keeps its owner's child rows", () => {
       await tx`insert into knowledge_bindings (owner_user_id, agent_id, notebook_id, access_mode) values (${owner}, ${childBot}, ${notebook}, 'read_only')`;
       await tx`insert into knowledge_binding_heads (owner_user_id, agent_id) values (${owner}, ${childBot})`;
       project = randomUUID();
-      await tx`insert into resource_projects (id, device_id, scope, agent_id, name, source) values (${project}, ${device}, 'agent', ${childBot}, 'Repo', '{}'::jsonb)`;
+      await tx`insert into resource_projects (id, device_id, scope, agent_id, name, source) values (${project}, ${device}, 'agent', ${childBot}, 'Repo', '{"kind":"local","rootRef":"fld_AAAAAAAAAAAAAAAAAAAAAA","label":"Repo","writable":false}'::jsonb)`;
       await tx`insert into project_context_bindings (device_id, agent_id, project_id) values (${device}, ${childBot}, ${project})`;
     });
 

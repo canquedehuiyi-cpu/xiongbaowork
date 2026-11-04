@@ -24,10 +24,20 @@ import {
  * absolute path stays in `runner-roots.json` beside the token, because a folder's path names the
  * person, their clients and their projects, and the server has no use for any of that.
  *
- * READ ONLY. A root is reached through `createWorkspace`, the same three-layer confinement the
- * workspace uses (no absolute paths, no `..`, no symlink out), and only its `list` and `read` are
- * ever called. Writes, commands and anything else that names a root are refused by the executor
- * before this module is asked (`execute.ts`).
+ * READ ONLY UNLESS ITS OWNER SAID OTHERWISE. A root is reached through `createWorkspace`, the same
+ * three-layer confinement the workspace uses (no absolute paths, no `..`, no symlink out). A folder is
+ * registered `read` unless the owner registered it `write` (story RES2, decision D3: a project they
+ * let coworkers change, chosen here on the machine with `--root-mode write`, never by the server).
+ * A `read` root is only ever listed and read; its `write` is never handed out, and the executor
+ * refuses writes, commands and anything else that names one before this module is asked
+ * (`execute.ts`). A `write` root is written to only when the server's own frame also says the project
+ * is writable, so the server can make a folder stricter and never wider.
+ *
+ * A GIT PROJECT'S CLONE IS A ROOT TOO (story RES2, §3.3). The runner clones it into
+ * `<dataDir>/runner-projects/<ref>/`, beside the workspace and never inside it, and registers it here
+ * with `origin: "git"` and mode `write`, because it is this machine's own copy rather than a folder
+ * of the owner's. A clone is not one of the owner's folders: it is not reported on the heartbeat, not
+ * listed by `--list-roots`, not counted against the folder limit, and not removed by name.
  *
  * NEVER OVER THE RUNNER'S OWN FILES. A root may not be, contain, or sit inside the data directory, the
  * state file or the browser profiles: those hold the device token and the owner's signed-in
@@ -35,11 +45,35 @@ import {
  * that points into them is refused by the confinement like any other link out.
  */
 
-/** What the server is told about a root: never its path. */
-export type ReportedRoot = { ref: string; name: string };
+/** Whether a root may be written to. `read` unless its owner registered it otherwise (D3). */
+export type RootMode = "read" | "write";
+
+/**
+ * What the server is told about a root: never its path. The mode is said only when it is `write`, so
+ * every folder F1 offers is reported exactly as before.
+ */
+export type ReportedRoot = { ref: string; name: string; mode?: "write" };
 
 /** A root as this machine keeps it. */
-export type RegisteredRoot = ReportedRoot & { path: string; addedAt: string };
+export type RegisteredRoot = {
+  ref: string;
+  name: string;
+  path: string;
+  addedAt: string;
+  /** Absent is `read`. */
+  mode?: "write";
+  /** Absent is one of the owner's folders; `git` is a project clone this runner made. */
+  origin?: "git";
+};
+
+/** One root, opened: the workspace's confinement over its folder, and what may be done there. */
+export type OpenRoot = Pick<Workspace, "list" | "read"> & {
+  mode: RootMode;
+  /** The folder on this machine. Used to run a command there; never sent anywhere. */
+  path: string;
+  /** Only on a `write` root. */
+  write?: Workspace["write"];
+};
 
 /** A refusal a person can act on. Chinese, because the device app shows it as it stands. */
 export class RootRegistryError extends Error {
@@ -51,6 +85,10 @@ export class RootRegistryError extends Error {
 
 /** The file beside the token that holds the roots. */
 export const ROOTS_FILE = "runner-roots.json";
+/** Where project clones live, beside the workspace and never inside it. */
+export const PROJECTS_DIR = "runner-projects";
+/** A machine holds at most this many projects (decision D10), so at most this many clones. */
+export const MAX_CLONES = 50;
 /** Enough for a person's working folders, few enough to carry on every heartbeat. */
 export const MAX_ROOTS = 20;
 /** Characters (code points), the same ceiling as an information source's name on the server. */
@@ -83,9 +121,21 @@ function real(path: string): string {
 
 export type RootRegistry = {
   readonly file: string;
+  /** The owner's folders. */
   list: () => RegisteredRoot[];
   reported: () => ReportedRoot[];
-  add: (name: string, path: string) => RegisteredRoot;
+  add: (name: string, path: string, mode?: RootMode) => RegisteredRoot;
+  /** The folder a clone with this reference lives in, whether or not it exists yet. */
+  clonePath: (ref: string) => string;
+  /** A clone this runner already made, by reference, or undefined. */
+  clone: (ref: string) => RegisteredRoot | undefined;
+  /** The reference a new clone will use. */
+  mintCloneRef: () => string;
+  /**
+   * Register a clone this runner just made in `clonePath(ref)`. The path is always that one, never
+   * a folder a caller chose, so a frame from the server cannot register a folder of its choosing.
+   */
+  registerClone: (ref: string, name: string) => RegisteredRoot;
   /** By reference or by name. False when there is nothing by that name to remove. */
   remove: (refOrName: string) => boolean;
   /**
@@ -94,7 +144,7 @@ export type RootRegistry = {
    * Looked up on every call rather than held: a root removed a moment ago is unknown on the next
    * read, without a restart.
    */
-  open: (ref: string) => Pick<Workspace, "list" | "read">;
+  open: (ref: string) => OpenRoot;
 };
 
 /**
@@ -110,8 +160,11 @@ export function createRootRegistry(options: {
 }): RootRegistry {
   const file = join(options.dataDir, ROOTS_FILE);
   const privatePaths = [file, ...(options.privatePaths ?? [])].map(real);
+  const projectsDir = join(options.dataDir, PROJECTS_DIR);
+  const clonePath = (ref: string) => join(projectsDir, ref);
 
-  const list = (): RegisteredRoot[] => {
+  /** Every root, the owner's folders and this runner's clones. */
+  const all = (): RegisteredRoot[] => {
     let parsed: unknown;
     try {
       parsed = JSON.parse(readFileSync(file, "utf8"));
@@ -121,15 +174,27 @@ export function createRootRegistry(options: {
     }
     const roots = (parsed as { roots?: unknown })?.roots;
     if (!Array.isArray(roots)) return [];
-    return roots.filter(
-      (root): root is RegisteredRoot =>
-        isRootRef(root?.ref) &&
-        typeof root?.name === "string" &&
-        typeof root?.path === "string" &&
-        isAbsolute(root.path) &&
-        typeof root?.addedAt === "string",
-    );
+    return roots
+      .filter(
+        (root): root is RegisteredRoot =>
+          isRootRef(root?.ref) &&
+          typeof root?.name === "string" &&
+          typeof root?.path === "string" &&
+          isAbsolute(root.path) &&
+          typeof root?.addedAt === "string" &&
+          // A clone is only ever the folder this runner made for it, whatever the file says.
+          (root?.origin !== "git" || root.path === clonePath(root.ref)),
+      )
+      .map(({ ref, name, path, addedAt, mode, origin }) => ({
+        ref,
+        name,
+        path,
+        addedAt,
+        ...(mode === "write" ? { mode } : {}),
+        ...(origin === "git" ? { origin } : {}),
+      }));
   };
+  const list = () => all().filter((root) => root.origin !== "git");
 
   /** Written whole, to a temporary file renamed over the old one, and private like the token. */
   const save = (roots: RegisteredRoot[]) => {
@@ -149,9 +214,46 @@ export function createRootRegistry(options: {
   return {
     file,
     list,
-    reported: () => list().map(({ ref, name }) => ({ ref, name })),
+    reported: () =>
+      list().map(({ ref, name, mode }) =>
+        mode === "write" ? { ref, name, mode } : { ref, name },
+      ),
+    clonePath,
+    clone: (ref) =>
+      isRootRef(ref)
+        ? all().find((root) => root.origin === "git" && root.ref === ref)
+        : undefined,
+    mintCloneRef: () => mintRef(),
 
-    add(name, path) {
+    registerClone(ref, name) {
+      if (!isRootRef(ref)) throw new RootRegistryError("项目引用不对。");
+      const roots = all();
+      const existing = roots.find((root) => root.ref === ref);
+      if (existing) {
+        if (existing.origin !== "git")
+          throw new RootRegistryError("这个引用已经属于一个本地文件夹。");
+        return existing;
+      }
+      if (roots.filter((root) => root.origin === "git").length >= MAX_CLONES)
+        throw new RootRegistryError(`每台设备最多 ${MAX_CLONES} 个项目副本。`);
+      const shown = [...name.trim()].slice(0, ROOT_NAME_LIMIT).join("") || ref;
+      const root: RegisteredRoot = {
+        ref,
+        name: shown,
+        path: clonePath(ref),
+        addedAt: new Date().toISOString(),
+        mode: "write",
+        origin: "git",
+      };
+      save([...roots, root]);
+      return root;
+    },
+
+    add(name, path, mode = "read") {
+      if (mode !== "read" && mode !== "write")
+        throw new RootRegistryError(
+          "文件夹的权限只能是只读（read）或读写（write）。",
+        );
       const shown = name.trim();
       if (!shown) throw new RootRegistryError("请给这个文件夹起个名字。");
       if ([...shown].length > ROOT_NAME_LIMIT) {
@@ -179,6 +281,11 @@ export function createRootRegistry(options: {
         );
       }
       const roots = list();
+      if (within(projectsDir, folder) || within(folder, projectsDir)) {
+        throw new RootRegistryError(
+          "这个文件夹包含或位于设备端自己的数据目录（里面有设备令牌和浏览器登录状态），不能添加。",
+        );
+      }
       if (roots.length >= MAX_ROOTS) {
         throw new RootRegistryError(`最多添加 ${MAX_ROOTS} 个本地文件夹。`);
       }
@@ -201,20 +308,23 @@ export function createRootRegistry(options: {
         name: shown,
         path: folder,
         addedAt: new Date().toISOString(),
+        ...(mode === "write" ? { mode } : {}),
       };
-      save([...roots, root]);
+      save([...all(), root]);
       return root;
     },
 
     remove(refOrName) {
       const wanted = refOrName.trim();
-      const roots = list();
-      // A reference names exactly one root; anything else is a name, compared as `add` compares.
+      const roots = all();
+      // A reference names exactly one root; anything else is a name, compared as `add` compares, and
+      // a name only ever names one of the owner's folders, never a clone.
       const byRef = REF.test(wanted);
       const kept = roots.filter((root) =>
         byRef
           ? root.ref !== wanted
-          : root.name.toLowerCase() !== wanted.toLowerCase(),
+          : root.origin === "git" ||
+            root.name.toLowerCase() !== wanted.toLowerCase(),
       );
       if (kept.length === roots.length) return false;
       save(kept);
@@ -223,16 +333,30 @@ export function createRootRegistry(options: {
 
     open(ref) {
       const root = isRootRef(ref)
-        ? list().find((entry) => entry.ref === ref)
+        ? all().find((entry) => entry.ref === ref)
         : undefined;
       if (!root) {
         throw new RootRegistryError(
           "This machine has no folder by that reference. It may have been removed on the machine.",
         );
       }
-      // The same confinement and the same per-read limits as the workspace; only the reads exist.
+      // The same confinement and the same per-read limits as the workspace. A `read` root has no
+      // `write` at all, so no caller can reach one by mistake.
       const workspace = createWorkspace(root.path);
-      return { list: workspace.list, read: workspace.read };
+      return root.mode === "write"
+        ? {
+            list: workspace.list,
+            read: workspace.read,
+            write: workspace.write,
+            mode: "write",
+            path: root.path,
+          }
+        : {
+            list: workspace.list,
+            read: workspace.read,
+            mode: "read",
+            path: root.path,
+          };
     },
   };
 }
