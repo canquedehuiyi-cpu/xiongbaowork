@@ -2068,6 +2068,14 @@ export function createPipelineStore(options: {
     },
 
     /**
+     * WF7: which run, if any, has an action step waiting on this approval. Read in the platform frame
+     * like {@link runHoldingApproval}; the caller asserts the run's owner and resumes in that frame.
+     */
+    async actionHoldingApproval(input: { approvalId: string }) {
+      return store.runHoldingApproval({ ...input, kind: "action" });
+    },
+
+    /**
      * WF7: carry on an action step parked on this approval, after the person decided it.
      *
      * The step is driven again with the same identity it asked with (its card reference, its thread
@@ -2116,7 +2124,10 @@ export function createPipelineStore(options: {
      */
     async runHoldingApproval(input: {
       approvalId: string;
+      /** WF7: only a run whose step holding the approval is of this kind (an action step). */
+      kind?: "action";
     }): Promise<{ tenantId: string; runId: string } | null> {
+      const kind = input.kind;
       const [row] = await runAsTenant("platform", async () =>
         database
           .select({ id: groupTaskRuns.id, tenantId: groupTaskRuns.tenantId })
@@ -2133,7 +2144,9 @@ export function createPipelineStore(options: {
                * match. Measured, not guessed -- and the same double-encoding the shared `db/schema/json`
                * helper exists to avoid, arriving from the other side.
                */
-              sql`exists (select 1 from jsonb_array_elements(${groupTaskRuns.steps}) as step where step->>'approvalId' = ${input.approvalId})`,
+              kind
+                ? sql`exists (select 1 from jsonb_array_elements(${groupTaskRuns.steps}) as step where step->>'approvalId' = ${input.approvalId} and step->>'kind' = ${kind})`
+                : sql`exists (select 1 from jsonb_array_elements(${groupTaskRuns.steps}) as step where step->>'approvalId' = ${input.approvalId})`,
             ),
           )
           .limit(1),

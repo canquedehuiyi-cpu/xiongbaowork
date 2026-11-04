@@ -2753,31 +2753,49 @@ await startupLifecycle.run(async (startup) => {
                  * gate consumes the decision once (or refuses it). It has no conversation to resume.
                  * In this owner's frame only, as the crew resume below (G01-E R10, R14).
                  */
-                const parkedAction = await pipelineStore.runHoldingApproval({
+                const parkedAction = await pipelineStore.actionHoldingApproval({
                   approvalId: input.approvalId,
                 });
-                if (
-                  parkedAction &&
-                  parkedAction.tenantId === input.ownerUserId &&
-                  (await runAsTenant(parkedAction.tenantId, () =>
+                let actionTenant: string | undefined;
+                if (parkedAction) {
+                  try {
+                    actionTenant = assertPersonTenant(
+                      parkedAction.tenantId,
+                      input.ownerUserId,
+                    );
+                  } catch (error) {
+                    if (!(error instanceof TenantContextError)) throw error;
+                    console.warn(
+                      JSON.stringify({
+                        type: "parked-action-owner-mismatch",
+                        approvalId: input.approvalId,
+                        runId: parkedAction.runId,
+                      }),
+                    );
+                  }
+                }
+                if (parkedAction && actionTenant) {
+                  const tenant = actionTenant;
+                  const resumed = await runAsTenant(tenant, () =>
                     pipelineStore.resumeAction({
-                      tenantId: parkedAction.tenantId,
+                      tenantId: tenant,
                       runId: parkedAction.runId,
                       approvalId: input.approvalId,
                     }),
-                  ))
-                ) {
-                  if (
-                    !(await approvalQueue.finish({
-                      kind: item.kind,
-                      key: item.key,
-                      owner: approvalOwner,
-                    }))
-                  )
-                    throw new Error(
-                      "The approval work lease was lost before completion.",
-                    );
-                  return;
+                  );
+                  if (resumed) {
+                    if (
+                      !(await approvalQueue.finish({
+                        kind: item.kind,
+                        key: item.key,
+                        owner: approvalOwner,
+                      }))
+                    )
+                      throw new Error(
+                        "The approval work lease was lost before completion.",
+                      );
+                    return;
+                  }
                 }
                 const resumeDependencies: ApprovalResumeDependencies = {
                   // Asked before the action runs: with Use Bots off, or the Bot's model off the allowlist,

@@ -429,7 +429,7 @@ test("an action that needs approval parks with the approval's id; approved, the 
     f.approvals.decide(f.tenantId, approvalId, "allow_once"),
   );
   // What the approval queue does for a crew's action step (`index.ts`).
-  const holder = await f.pipeline.runHoldingApproval({ approvalId });
+  const holder = await f.pipeline.actionHoldingApproval({ approvalId });
   expect(holder).toEqual({ tenantId: f.tenantId, runId });
   expect(
     await runAsTenant(f.tenantId, () =>
@@ -490,6 +490,22 @@ test("ADR-0001 lock: the deployment runs worker steps only through createPipelin
   expect(wiring).toContain("actions: createActionStepRunner({");
   expect(wiring).toContain("guardTurn: (input) => guardBotTurn(input),");
   expect(wiring).toContain("refusal: (input) => headlessTurnRefusal(input),");
+  // The approval worker asserts an action run's owner and resumes it in that frame (G01-E R10, R14),
+  // beside the crew resume it leaves exactly as it was.
+  const lookup = source.indexOf("pipelineStore.actionHoldingApproval(");
+  expect(lookup).toBeGreaterThan(-1);
+  expect(lookup).toBeLessThan(
+    source.indexOf("pipelineStore.runHoldingApproval("),
+  );
+  const window = source.slice(lookup, lookup + 2500);
+  expect(window).toMatch(
+    /assertPersonTenant\(\s*parkedAction\.tenantId,\s*input\.ownerUserId,?\s*\)/,
+  );
+  expect(window).toContain('type: "parked-action-owner-mismatch"');
+  expect(window).toMatch(
+    /runAsTenant\(tenant, \(\) =>\s*pipelineStore\.resumeAction\(\{\s*tenantId: tenant,/,
+  );
+  expect(source.match(/pipelineStore\.resumeAction\(/g)?.length).toBe(1);
   // The orchestrator hands a worker step to `executeStep` and an action step to `actions`, nothing else.
   const pipeline = readFileSync(
     new URL("../src/pipeline/store.ts", import.meta.url),
